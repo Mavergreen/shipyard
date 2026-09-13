@@ -219,6 +219,11 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     case "$d" in
       *[!A-Za-z0-9._/+-]*) continue ;;
     esac
+    # platform: ask about "$d/", not "$d". A .gitignore pattern written `build/updater/` matches a
+    #           DIRECTORY, and git can only tell a nonexistent path is one if the query says so.
+    #           Build output is exactly the thing that does not exist in a fresh checkout, so
+    #           querying without the slash would have failed every correctly-ignored repo the
+    #           moment this ran in CI.
     git check-ignore -q "$d/" 2>/dev/null && continue
     fail "$d is a build output directory this repo writes, but .gitignore does not cover it — one \`git add -A\` commits the build tree, and a stale CMakeCache keeps resolving a package that has been renamed away" \
          "add $d/ to .gitignore (any pattern that covers it; the family does not share one spelling)"
@@ -230,6 +235,7 @@ fi
 #       it. Cannot-verify (no PyYAML) still FAILS -- SKILL.md "Cannot-verify is a FAILURE, never a
 #       pass."
 if [ -n "$CI_FILES" ] && command -v python3 >/dev/null 2>&1; then
+  # platform: GitHub's macOS runner python3 ships without PyYAML.
   if ! python3 -c 'import yaml' >/dev/null 2>&1; then
     fail "python3 has no PyYAML — cannot verify that the workflows parse, so a duplicate key would ship unseen" \
          "install it (python3 -m pip install pyyaml); shipyard's .github/actions/install does this for CI"

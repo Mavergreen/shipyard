@@ -26,12 +26,9 @@
 set -eu
 [ "$#" -ge 1 ] || { echo "assert_pkg_installs_in_place: need at least one .pkg" >&2; exit 2; }
 
-# platform: counts <bundle ...> children of a named element in a PackageInfo. Splitting on '<' turns
-#           the XML -- whether pretty-printed or one line -- into one token per tag, so the element's
-#           open/close and its <bundle> children are inspectable without an XML parser. The [ >]
-#           guards matter: they keep <bundle-version> (the element scanned for) from being mistaken
-#           for a <bundle> child, and keep a <bundle> child from matching the sibling
-#           <bundle-version> token ("bundle-version", not "bundle ").
+# platform: a PackageInfo's XML may be pretty-printed or written as one line, and its
+#           <bundle-version> element name shares the "bundle" prefix with the <bundle> children
+#           counted here.
 count_bundles() {  # $1=PackageInfo  $2=element
   tr '<' '\n' < "$1" | awk -v e="$2" '
     $0 ~ "^" e "[ >]"      { inside = 1; next }   # <e> or <e ...>  (NOT self-closing <e/>)

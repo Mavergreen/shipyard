@@ -3,9 +3,7 @@
 # platform: presence gate for the "two menu-bar icons after an update" bug: a postinstall that
 #           (re)launches a GUI menu-bar app MUST also stop the prior instance, or macOS runs both.
 #           This behavior is dynamic -- there is no artifact to inspect like a PackageInfo -- so this
-#           lints the postinstall script the pkg actually ships. Checked by PRESENCE, not order: a
-#           postinstall that both launches and stops is almost certainly stopping first (that is the
-#           entire point), and presence-checking avoids brittle shell order-of-operations parsing.
+#           lints the postinstall script the pkg actually ships.
 #           "Relaunches a GUI menu-bar app" means `open -a` of an app, or a
 #           `launchctl asuser ... launchctl load` of a per-user agent (the systray's LaunchAgent) --
 #           the shared update-check agent loads via `launchctl bootstrap gui/` or

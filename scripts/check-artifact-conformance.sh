@@ -121,14 +121,12 @@ while read -r kind file ver enclosure length minos; do
   fi
 done < "$facts"
 
-# platform: an enclosure URL carries the release tag. If it names another release, Sparkle serves
-#           users a different build than the one just published -- the feed and the release silently
-#           disagree, and every other check still passes because both artifacts are individually fine.
+# platform: an enclosure URL carries the release tag.
 while read -r kind file url; do
   [ "$kind" = enclosure-url ] || continue
   case "$url" in
     */download/"$expected"/*) : ;;
-    *) fail enclosure-url "$file points outside this release: $url" "$file" ;;
+    *) fail enclosure-url "$file points outside this release: $url -- Sparkle would silently serve users a different build than the one just published, and every other check here still passes because both artifacts are individually fine" "$file" ;;
   esac
 done < "$facts"
 

@@ -63,10 +63,10 @@ msc_scripts() {
 }
 
 # platform: 10.9's BSD sort has no -V, so any script relying on it works in CI and dies on the
-#           platform this family targets. Promoted here from assert_appcast_upgradeable.sh, which
-#           had grown a private copy rather than call previous-release-tag.sh; one comparator now
-#           serves both, so "which tag is highest" cannot drift between them. A version is in the
-#           comparator's orderable domain iff it is purely dotted-numeric.
+#           platform this family targets. A version is in the comparator's orderable domain iff it
+#           is purely dotted-numeric.
+# spec: scripts/assert_appcast_upgradeable.sh -- one comparator serves both this and
+#       previous-release-tag.sh, so "which tag is highest" cannot drift between them.
 numeric() {
   case "$1" in ''|.*|*.|*..*|*[!0-9.]*) return 1;; *) return 0;; esac
 }

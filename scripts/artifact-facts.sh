@@ -4,8 +4,10 @@
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files.
-# platform: runs at PACKAGE TIME, on macOS, where pkgutil exists and the artifacts do -- not in the
-#           conventions gate, which reads a repo in seconds and gates every PR.
+# platform: runs at PACKAGE TIME, on macOS, where pkgutil exists and the artifacts do.
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Artifact
+#       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
+#       reads a repo in seconds and gates every PR.
 set -eu
 dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"

@@ -26,9 +26,10 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 bullets="$tmp/bullets"
 : > "$bullets"
-# spec: tests/ingredient-notes-test.sh "the header contract" -- a key that only became DERIVED
-#       (still assigned, no longer literal) is real information but not evidence anything MOVED;
-#       collected separately and appended only once a real move already earned the section.
+# spec: tests/ingredient-notes-test.sh "A pin that became DERIVED must not be announced as removed"
+#       -- a key that only became derived (still assigned, no longer literal) is real information
+#       but not evidence anything MOVED; collected separately and appended only once a real move
+#       already earned the section.
 derived="$tmp/derived"
 : > "$derived"
 

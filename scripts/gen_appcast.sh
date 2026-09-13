@@ -20,9 +20,11 @@
 #          `sign_update -s <key> <pkg>` prints -- passed in, so this script needs no signing key and
 #          stays a pure text transform, unit-testable via --render-notes.
 # platform: Sparkle 1.x shows the <description> in a WebView, which treats the CDATA as HTML; feeding
-#           it raw Markdown collapsed the notes into one line-joined blob. The renderer is
-#           deliberately dependency-free (pure awk, no pandoc/cmark) so it runs identically on the
-#           10.9 dev box's BSD/BWK awk and on a modern CI runner.
+#           it raw Markdown collapsed the notes into one line-joined blob.
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "The build must
+#       also run natively ON 10.9" -- the renderer is deliberately dependency-free (pure awk, no
+#       pandoc/cmark) so it runs identically on the 10.9 dev box's BSD/BWK awk and on a modern CI
+#       runner.
 set -eu
 
 md_to_html() {
