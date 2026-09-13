@@ -1,10 +1,4 @@
 #!/bin/sh
-# reconcile.yml: the reusable backstop that notices a declared state was never realised.
-#
-# An event-driven release has exactly one chance to happen (a push, a tag) -- if that one chance is
-# lost (concurrency eviction, a failed dispatch), nothing else ever asks again. This workflow runs on
-# a schedule, renders main's declared state, and asks release-needed.sh whether any release already
-# carries that digest -- deliberately cheap (ubuntu, no build) so a quiet night costs one API call.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"

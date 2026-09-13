@@ -1,30 +1,26 @@
 #!/bin/sh
-# The replacement check 10 recommends for `lipo -archs` must actually be equivalent, on BOTH the
-# platform that lacks -archs and the platform CI runs on. Asserting the rule's advice, not the rule:
-# a lint that names a fix nobody verified is how the next 10.9 gap gets introduced by the fix for the
-# last one.
-#
-#   10.9  -> -archs is fatal, so only the -info idiom is exercised (it must still yield real archs).
-#   Tahoe -> both exist, so the idiom's output must EQUAL what -archs prints.
+# spec: check-family-conventions.sh check 10's `lipo -archs` replacement advice must actually be
+#       equivalent, on BOTH the platform that lacks -archs (10.9) and the platform CI runs on
+#       (Tahoe) -- asserting the rule's advice, not the rule, since a lint that names a fix
+#       nobody verified is how the next 10.9 gap gets introduced by the fix for the last one.
 set -eu
 command -v lipo >/dev/null 2>&1 || { echo "no lipo -- skipping"; exit 77; }
 
-# A binary every macOS has, and a fat one where possible: the idiom must handle both the "Non-fat
-# file: X is architecture: a" and "Architectures in the fat file: X are: a b" spellings.
+# platform: lipo -info's output takes two different spellings depending on whether the input is
+#           fat ("Architectures in the fat file: X are: a b") or thin ("Non-fat file: X is
+#           architecture: a"); the idiom must handle both.
 bin=/bin/sh
 [ -x "$bin" ] || { echo "no $bin -- skipping"; exit 77; }
 
-# A static ARCHIVE is the case that broke the first version of this advice, and the case that
-# actually occurs in the family (mavericks-golang checks libMacportsLegacySupport.a). For a .a,
-# 10.9's lipo prints "input file X is not a fat file" to STDOUT *before* the real line:
-#
-#     input file /tmp/liba.a is not a fat file
-#     Non-fat file: /tmp/liba.a is architecture: x86_64
-#
-# A plain s/.*: // passes that first line straight through, so an exact comparison sees
-# "input file ... is not a fat file x86_64" and fails. sed -n ...p prints only lines that matched.
-# A thin EXECUTABLE does not reproduce this -- it prints one clean line -- which is precisely why
-# testing one would have missed the bug.
+# platform: 10.9's lipo, given a static ARCHIVE (the case mavericks-golang hits checking
+#           libMacportsLegacySupport.a, and the case that broke the first version of this
+#           advice), prints "input file X is not a fat file" to STDOUT *before* the real line
+#           ("input file /tmp/liba.a is not a fat file" then
+#           "Non-fat file: /tmp/liba.a is architecture: x86_64"). A plain s/.*: // passes that
+#           first line straight through, so an exact comparison sees "input file ... is not a
+#           fat file x86_64" and fails; sed -n ...p prints only lines that matched. A thin
+#           EXECUTABLE does not reproduce this (one clean line), which is precisely why testing
+#           one alone would have missed the bug.
 w="$(mktemp -d "${TMPDIR:-/tmp}/lipo-idiom.XXXXXX")"
 if printf 'int f(void){return 0;}\n' | cc -arch x86_64 -x c -c -o "$w/f.o" - 2>/dev/null &&
    ar rcs "$w/libf.a" "$w/f.o" 2>/dev/null; then
@@ -42,11 +38,9 @@ esac
 
 if lipo -archs "$bin" >/dev/null 2>&1; then   # portability-ok: this test exists to compare against -archs where it exists
   archs="$(lipo -archs "$bin" 2>/dev/null)"   # portability-ok: this test exists to compare against -archs where it exists
-  # Compare as SETS: -info separates with spaces and can leave a trailing one, -archs need not agree
-  # on order or padding, and neither promises a stable sequence.
   norm() { tr ' ' '\n' | sed '/^$/d' | sort | tr '\n' ' '; }
   a="$(printf '%s' "$idiom" | norm)"; b="$(printf '%s' "$archs" | norm)"
-  [ "$a" = "$b" ] || { echo "FAIL: idiom '$a' != lipo -archs '$b'"; exit 1; }   # portability-ok: this test exists to compare against -archs where it exists
+  [ "$a" = "$b" ] || { echo "FAIL: idiom '$a' != lipo -archs '$b' -- compared as SETS since -info separates with spaces and can leave a trailing one, -archs need not agree on order or padding, and neither promises a stable sequence"; exit 1; }   # portability-ok: this test exists to compare against -archs where it exists
   echo "PASS: lipo-archs-idiom (-archs present; idiom matches: $a)"
 else
   echo "PASS: lipo-archs-idiom (no -archs here, as on 10.9; idiom yields: $idiom)"   # portability-ok: this test exists to compare against -archs where it exists

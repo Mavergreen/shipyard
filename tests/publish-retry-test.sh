@@ -1,12 +1,6 @@
 #!/bin/sh
-# publish-release.yml must not strand a DRAFT when an upload fails. action-gh-release publishes (and
-# mints the tag) only after every upload succeeds, and does not retry one that fails -- so golang's
-# 1.26.8-mavericks.3 sat as a tagless draft after one dropped connection. The workflow therefore:
-#   - retries the publish, with the SAME inputs every time (a retry that publishes something else is
-#     not a retry);
-#   - clears this tag's draft before each retry, so every attempt starts clean;
-#   - lets only the LAST attempt fail the job (continue-on-error on the others);
-#   - and when that last attempt fails, deletes the draft and fails -- it never leaves one behind.
+# spec: SKILL.md "Release notes" section, "A failed upload must not strand a draft" -- the golang
+#       1.26.8-mavericks.3 incident and the retry design this asserts are documented there.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$here/../.github/workflows/publish-release.yml"

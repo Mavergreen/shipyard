@@ -1,10 +1,8 @@
 #!/bin/sh
-# publish-release.yml must validate the body it is about to publish. The gate checks a repo's wiring
-# on its PR (check-family-conventions.sh clause 14); this is the one place EVERY release passes
-# through -- a hand-tagged release, a re-dispatch of an old build, a repo that never had the gate --
-# so it is the only check a body regression cannot route around. It must also run in the right place:
-# after release-assets.sh proves dist/$NOTES exists and is non-empty (a worse error otherwise), and
-# before the first publish attempt (a validation that runs after publishing checks nothing).
+# spec: check-family-conventions.sh clause 14 gates a repo's wiring at PR time; publish-release.yml
+#       itself is the one place EVERY release passes through -- hand-tagged, re-dispatched, or from a
+#       repo that never had the PR gate -- so it is the only check a body regression cannot route
+#       around.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$here/../.github/workflows/publish-release.yml"
@@ -96,22 +94,19 @@ print("ok: check-release-notes.sh runs on dist/$NOTES against $VERSION, after re
       "before the checksum block, and before the first publish attempt")
 PY
 
-# The behaviour itself, against the real script, on the two bodies that mattered historically: a
-# hand-rolled body from a repo that never adopted the shared generator, and an empty body (tailscale
-# published one on EVERY release, forever, before Plan 1 closed that hole).
 S="$here/../scripts/check-release-notes.sh"
 T="$(mktemp -d "${TMPDIR:-/tmp}/pns.XXXXXX")"
 trap 'rm -rf "$T"' EXIT
 
 printf '## %s\n\nAutomated release.\n' 9.9p2-mavericks.6 > "$T/hand.md"
 if sh "$S" "$T/hand.md" 9.9p2-mavericks.6 >/dev/null 2>&1; then
-  echo "FAIL: a hand-rolled body (no '### What changed') must not pass"; exit 1
+  echo "FAIL: a hand-rolled body from a repo that never adopted the shared generator (no '### What changed') must not pass"; exit 1
 fi
 echo "ok: a hand-rolled body is refused"
 
 : > "$T/empty.md"
 if sh "$S" "$T/empty.md" 9.9p2-mavericks.6 >/dev/null 2>&1; then
-  echo "FAIL: an empty body must not pass"; exit 1
+  echo "FAIL: an empty body must not pass -- tailscale published one on EVERY release, forever, before this check closed the hole"; exit 1
 fi
 echo "ok: an empty body is refused"
 

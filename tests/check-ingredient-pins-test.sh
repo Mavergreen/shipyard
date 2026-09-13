@@ -1,5 +1,4 @@
 #!/bin/sh
-# The guard: a pin nothing describes is the failure mode a single source can't prevent.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/check-ingredient-pins.sh"
@@ -12,10 +11,8 @@ printf '1.26.5-mavericks.1\n' > components/golang/version
 printf 'REF=v1.102.0\n'       > components/tailscale/version
 git add -A; git commit -qm base
 
-# no caller -> passes trivially (legacysupport has no ingredients)
-sh "$S" >/dev/null || { echo "FAIL no-caller should pass"; exit 1; }
+sh "$S" >/dev/null || { echo "FAIL: no caller (legacysupport has no ingredients) should pass trivially"; exit 1; }
 
-# sound declaration -> passes
 cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
 on:
   push:
@@ -27,7 +24,6 @@ jobs:
 YML
 sh "$S" >/dev/null || { echo "FAIL sound declaration should pass"; exit 1; }
 
-# a glob matching nothing -> fails loudly (a typo would otherwise thin the notes silently)
 cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
 on:
   push:
@@ -37,9 +33,8 @@ jobs:
     with:
       own-upstream-paths: ""
 YML
-if sh "$S" >/dev/null 2>&1; then echo "FAIL empty expansion should fail"; exit 1; fi
+if sh "$S" >/dev/null 2>&1; then echo "FAIL: a glob matching nothing must fail loudly, or a typo would thin the notes silently -- empty expansion should fail"; exit 1; fi
 
-# every watched path being own-upstream -> nothing left to describe; fails
 cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
 on:
   push:
@@ -49,10 +44,8 @@ jobs:
     with:
       own-upstream-paths: components/tailscale/version
 YML
-if sh "$S" >/dev/null 2>&1; then echo "FAIL all-excluded should fail"; exit 1; fi
+if sh "$S" >/dev/null 2>&1; then echo "FAIL: every watched path being own-upstream leaves nothing to describe -- all-excluded should fail"; exit 1; fi
 
-# an untracked file never enters the list (expansion is over tracked files), so this still passes --
-# documenting the behaviour rather than demanding a failure.
 cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
 on:
   push:
@@ -63,10 +56,8 @@ jobs:
       own-upstream-paths: ""
 YML
 printf 'x\n' > untracked.txt
-sh "$S" >/dev/null || { echo "FAIL untracked-but-unmatched should still pass"; exit 1; }
+sh "$S" >/dev/null || { echo "FAIL: an untracked file never enters the list, since expansion is over tracked files -- untracked-but-unmatched should still pass"; exit 1; }
 
-# the swift-repo own-upstream form ("path:KEY") must not be tested as a git path with the key still
-# attached -- pins.env:SWIFT_VERSION is never a tracked file, only pins.env is.
 printf 'SWIFT_VERSION=6.3.3\nOTHER_PIN=x\n' > pins.env
 git add pins.env; git commit -qm "add pins.env"
 cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
@@ -78,6 +69,6 @@ jobs:
     with:
       own-upstream-paths: pins.env:SWIFT_VERSION
 YML
-sh "$S" >/dev/null || { echo "FAIL path:KEY own-upstream form should pass (pins.env is tracked)"; exit 1; }
+sh "$S" >/dev/null || { echo "FAIL: the swift-repo own-upstream form (path:KEY) must not be tested as a git path with the key still attached, since pins.env:SWIFT_VERSION is never a tracked file, only pins.env is -- path:KEY own-upstream form should pass"; exit 1; }
 
 echo "PASS: check-ingredient-pins"

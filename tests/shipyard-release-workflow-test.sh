@@ -1,12 +1,7 @@
 #!/bin/sh
-# shipyard must publish itself with the tooling from the COMMIT BEING BUILT, never from @v1.
-#
-# Otherwise it ships a version using the previous version's publish path and cannot catch a defect in
-# the tooling it is shipping. That is not hypothetical: on 2026-09-09 a defect in conventions check 7d
-# reached fifteen repos through @v1 and reddened two of them within the hour.
-#
-# This is the rule most likely to be quietly reverted -- @v1 is what every OTHER repo writes, and it
-# looks equally correct here -- and its failure mode stays invisible until the tooling is broken.
+# spec: SKILL.md "shipyard: consume its facilities" -- "A repo that ships the tooling publishes
+#       itself with the commit under test, not with @v1", and the 2026-09-09 conventions-check-7d
+#       incident that rule prevents a repeat of.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$here/../.github/workflows/release.yml"

@@ -1,26 +1,28 @@
 #!/bin/sh
-# Prove sign_and_appcast.sh assembles the EdDSA enclosure attrs (edSignature from the signer's bare
-# base64 signature + length from the pkg), renders version + notes, and emits the appcast. Uses a stub
-# signer -- the real ed25519-sign lives in mavericks-ed25519; this exercises the orchestration, not the
-# crypto (so no compiler or network fetch needed).
+# spec: mavericks-ed25519 carries the real ed25519-sign; this stubs the signer so the test
+#       exercises sign_and_appcast.sh's orchestration, not the crypto (no compiler or network
+#       fetch needed).
 set -eu
-# ctest passes the source root (see add_test in CMakeLists.txt). Called bare -- as the shared test
-# runner does when it globs tests/*.sh -- there is no root to test against: 77 = SKIP, not a failure.
+# spec: scripts/run-repo-tests.sh -- exit 77 is the family's SKIP idiom, not a failure. Called
+#       bare, as the shared runner does when it globs tests/*.sh, there is no root to test
+#       against; ctest itself always supplies the source root (see add_test in CMakeLists.txt).
 [ "$#" -ge 1 ] || { echo "no source root given (ctest supplies it) -- skipping" >&2; exit 77; }
 ROOT="$1"
 T=$(mktemp -d "${TMPDIR:-/tmp}/mav-signappcast.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 
-# stub ed25519-sign: -f - <file> (key on stdin) -> a fixed, well-formed base64 signature on stdout.
-# (How the key reaches the signer is tests/sign_and_appcast_key.bats's concern.)
+# spec: how the key reaches the signer (-f - <file>, key on stdin) is
+#       tests/sign_and_appcast_key.bats's concern -- this stub only returns a fixed, well-formed
+#       base64 signature.
 SIG="c3R1YnNpZ25hdHVyZWZvcnRlc3Rpbmdvbmx5QUFBQUFBQUFBQUFBQUFBQUFBQUFBQT09"
 cat > "$T/sign" <<EOF
 #!/bin/sh
 echo "$SIG"
 EOF
 chmod +x "$T/sign"
-# ...and ed25519-verify beside it, where sign_and_appcast.sh looks. This test is about the appcast,
-# not about trust (tests/sign_and_appcast_trust.bats), so it always verifies, against --pubkey.
+# spec: ed25519-verify sits beside the signer, where sign_and_appcast.sh looks. This test is
+#       about the appcast, not about trust (tests/sign_and_appcast_trust.bats), so it always
+#       verifies, against --pubkey.
 printf '#!/bin/sh\nexit 0\n' > "$T/ed25519-verify"
 chmod +x "$T/ed25519-verify"
 

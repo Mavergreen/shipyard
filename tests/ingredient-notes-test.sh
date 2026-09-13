@@ -1,5 +1,4 @@
 #!/bin/sh
-# ingredient-notes.sh: render which pins moved since the previous release, per pin shape.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/ingredient-notes.sh"
@@ -21,15 +20,12 @@ SH
 printf 'line one\nline two\nline three\n' > vendor/cacert.pem
 git add -A; git commit -qm base; git tag 20260727-mavericks.2
 
-# nothing changed yet -> no section at all (callers append unconditionally)
 out="$(sh "$S" 20260727-mavericks.2 components/golang/version versions.sh)"
-[ -z "$out" ] || { echo "FAIL unchanged: got '$out'"; exit 1; }
+[ -z "$out" ] || { echo "FAIL: nothing changed yet must produce no section at all, since callers append unconditionally: got '$out'"; exit 1; }
 
-# no previous tag -> nothing
 out="$(sh "$S" "" components/golang/version)"
 [ -z "$out" ] || { echo "FAIL no-prev: got '$out'"; exit 1; }
 
-# now move every shape at once
 printf '1.26.5-mavericks.1\n' > components/golang/version
 printf '28.6.1\n'             > components/docker-cli/version
 cat > versions.sh <<'SH'
@@ -49,47 +45,35 @@ printf '%s\n' "$out" | grep -q '^### Build ingredients$' \
   || { echo "FAIL header: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'Changed since 20260727-mavericks.2:' \
   || { echo "FAIL baseline: $out"; exit 1; }
-# whole-file pins are named by component directory
 printf '%s\n' "$out" | grep -qx -- '- \*\*golang\*\*: 1.26.4-mavericks.3 -> 1.26.5-mavericks.1' \
-  || { echo "FAIL whole-file: $out"; exit 1; }
+  || { echo "FAIL: whole-file pins must be named by component directory: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*docker-cli\*\*: 28.6.0 -> 28.6.1' \
   || { echo "FAIL second pin: $out"; exit 1; }
-# shell assignments are named by key, matched by name not line number
 printf '%s\n' "$out" | grep -qx -- '- \*\*MLS_VERSION\*\*: 1.5.1-mavericks.1 -> 1.5.2-mavericks.1' \
-  || { echo "FAIL assignment: $out"; exit 1; }
-# a 64-char hash pair communicates nothing: shorten it
+  || { echo "FAIL: shell assignments must be named by key, matched by name not line number: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*CA_SHA256\*\*: 3ff344e30b9b... -> 9a1c72b4aa0f...' \
-  || { echo "FAIL hash shortening: $out"; exit 1; }
-# an unchanged assignment in a changed file is not mentioned
+  || { echo "FAIL: a 64-char hash pair communicates nothing and must be shortened: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'MACOS_MIN' \
-  && { echo "FAIL unchanged key leaked: $out"; exit 1; }
-# COMPUTED assignments are derivations, not pinned inputs: a rewritten $(...) or `...` value is a
-# code change, and reporting it as an ingredient change is noise (and misleading).
+  && { echo "FAIL: an unchanged assignment in a changed file must not be mentioned: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'GO_VERSION' \
-  && { echo "FAIL computed \$() value reported as an ingredient: $out"; exit 1; }
+  && { echo "FAIL: COMPUTED assignments are derivations, not pinned inputs -- a rewritten \$(...) value is a code change, and reporting it is noise and misleading -- computed \$() value reported as an ingredient: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'PKG_VERSION' \
-  && { echo "FAIL computed backtick value reported as an ingredient: $out"; exit 1; }
-# opaque multi-line blob: report that it moved, with sizes
+  && { echo "FAIL: COMPUTED assignments are derivations, not pinned inputs -- a rewritten \`...\` value is a code change too -- computed backtick value reported as an ingredient: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q -- '- \*\*vendor/cacert.pem\*\*: updated (' \
-  || { echo "FAIL opaque: $out"; exit 1; }
-# a pin absent at the previous release
+  || { echo "FAIL: an opaque multi-line blob must report that it moved, with sizes: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*lazydocker\*\*: added (0.24.1)' \
-  || { echo "FAIL added: $out"; exit 1; }
-# a pin that STOPPED being pinned: an input no longer declared is a real change, and walking only the
-# new file's keys would silently omit it (golang dropped GO_SRC_SHA512 exactly this way).
+  || { echo "FAIL: a pin absent at the previous release must say added: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*GO_SRC_SHA512\*\*: removed' \
-  || { echo "FAIL removed key not reported: $out"; exit 1; }
-# ASCII only -- these notes get embedded in appcast XML
+  || { echo "FAIL: a pin that STOPPED being pinned is a real change -- walking only the new file's keys would silently omit it (golang dropped GO_SRC_SHA512 exactly this way) -- removed key not reported: $out"; exit 1; }
 printf '%s\n' "$out" | LC_ALL=C grep -q '[^ -~]' \
-  && { echo "FAIL non-ASCII output: $out"; exit 1; }
+  && { echo "FAIL: output must be ASCII only, since these notes get embedded in appcast XML: $out"; exit 1; }
 
-# a missing pin path is skipped, not fatal
 out="$(sh "$S" 20260727-mavericks.2 components/golang/version nosuch/file 2>/dev/null)"
-printf '%s\n' "$out" | grep -q 'golang' || { echo "FAIL missing-path skip: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'golang' || { echo "FAIL: a missing pin path must be skipped, not fatal: $out"; exit 1; }
 
-# --- patch pins ---------------------------------------------------------------------------------
-# A .patch IS an ingredient (it is baked into the product), but "updated (N -> M bytes)" says nothing
-# useful about one. Report what a reader can act on: the subject line, and how much moved.
+# spec: a .patch IS an ingredient (it is baked into the product), but "updated (N -> M bytes)"
+#       says nothing useful about one -- report what a reader can act on: the subject line, and
+#       how much moved.
 work2="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work2"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -112,11 +96,8 @@ cat > patches/0002-plain.patch <<'PATCH'
 PATCH
 git add -A; git commit -qm base; git tag 1.0.0-mavericks.1
 
-# content moves, subject unchanged
 printf '+another line\n' >> patches/0001-keyserver.patch
-# a patch with no Subject: header still reports a line delta
 printf '+extra\n' >> patches/0002-plain.patch
-# a brand-new patch
 cat > patches/0003-new.patch <<'PATCH'
 Subject: [PATCH] modernize the tls stack
 ---
@@ -127,14 +108,12 @@ out="$(sh "$S" 1.0.0-mavericks.1 patches/0001-keyserver.patch patches/0002-plain
 printf '%s\n' "$out" | grep -q -- '- \*\*0001-keyserver.patch\*\*: updated ("boot2docker: fetch kernel keys over HTTPS", +1/-0 lines)' \
   || { echo "FAIL patch updated: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q -- '- \*\*0002-plain.patch\*\*: updated (+1/-0 lines)' \
-  || { echo "FAIL subject-less patch: $out"; exit 1; }
+  || { echo "FAIL: a patch with no Subject: header must still report a line delta: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q -- '- \*\*0003-new.patch\*\*: added ("modernize the tls stack")' \
   || { echo "FAIL patch added: $out"; exit 1; }
-# a patch is never reported as a byte-size delta
 printf '%s\n' "$out" | grep -q 'bytes' \
-  && { echo "FAIL patch reported as opaque bytes: $out"; exit 1; }
+  && { echo "FAIL: a patch must never be reported as a byte-size delta: $out"; exit 1; }
 
-# a rewritten patch that changes what it DOES: say so, old subject -> new subject
 cat > patches/0001-keyserver.patch <<'PATCH'
 From abc123 Mon Sep 17 00:00:00 2001
 Subject: [PATCH] boot2docker: import kernel keys from a pinned bundle
@@ -143,15 +122,14 @@ Subject: [PATCH] boot2docker: import kernel keys from a pinned bundle
 PATCH
 out="$(sh "$S" 1.0.0-mavericks.1 patches/0001-keyserver.patch)"
 printf '%s\n' "$out" | grep -q -- '- \*\*0001-keyserver.patch\*\*: "boot2docker: fetch kernel keys over HTTPS" -> "boot2docker: import kernel keys from a pinned bundle"' \
-  || { echo "FAIL patch subject change: $out"; exit 1; }
+  || { echo "FAIL: a rewritten patch that changes what it DOES must say so, old subject -> new subject: $out"; exit 1; }
 cd "$work"; rm -rf "$work2"
 
-# --- G1: rendering is decided by CONTENT, not by filename extension ------------------------------
-# The swift-toolchain regression: pins.env holds the exact same KEY=VALUE shape as pins.sh under a
-# different extension, but the dispatch was `case "$path" in *.sh)`, so pins.env fell through to the
-# generic byte-delta branch. A rewritten DERIVED expression (VERSION="$(cat VERSION)" ->
-# VERSION="$(sh resolve-version.sh)") is a code change, not an ingredient move -- assignments()'s
-# literal-only rule already knows this for .sh, and pins.env must get exactly the same answer.
+# spec: the swift-toolchain regression -- pins.env holds the exact same KEY=VALUE shape as pins.sh
+#       under a different extension, but the dispatch was `case "$path" in *.sh)`, so pins.env
+#       fell through to the generic byte-delta branch. Rendering must be decided by CONTENT, not
+#       by filename extension: a rewritten DERIVED expression is a code change, not an ingredient
+#       move, and pins.env must get exactly the same answer as .sh.
 work3="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work3"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -162,7 +140,6 @@ ENV
 cp pins.env pins.sh
 git add -A; git commit -qm base; git tag base
 
-# only the derived VERSION expression is rewritten -- no literal pin moved
 cat > pins.env <<'ENV'
 SWIFT_VERSION="6.3.3"
 VERSION="$(MAVERICKS_ROOT="$HERE" sh "$SHIPYARD/resolve-version.sh")"
@@ -176,29 +153,26 @@ out_sh="$(sh "$S" base pins.sh)"
 [ "$out_env" = "$out_sh" ] \
   || { echo "FAIL G1: identical bytes disagree by extension: env='$out_env' sh='$out_sh'"; exit 1; }
 
-# a REAL literal key move in a .env file must still be reported, per key -- content dispatch must not
-# just make everything opaque
 cat > pins.env <<'ENV'
 SWIFT_VERSION="6.3.4"
 VERSION="$(MAVERICKS_ROOT="$HERE" sh "$SHIPYARD/resolve-version.sh")"
 ENV
 out_env2="$(sh "$S" base pins.env)"
 printf '%s\n' "$out_env2" | grep -qx -- '- \*\*SWIFT_VERSION\*\*: 6.3.3 -> 6.3.4' \
-  || { echo "FAIL G1 pins.env real move not reported per-key: $out_env2"; exit 1; }
+  || { echo "FAIL: a REAL literal key move in a .env file must still be reported, per key -- content dispatch must not just make everything opaque: G1 pins.env real move not reported per-key: $out_env2"; exit 1; }
 printf '%s\n' "$out_env2" | grep -q 'bytes' \
   && { echo "FAIL G1 pins.env: still using the opaque byte-delta fallback: $out_env2"; exit 1; }
 cd "$work"; rm -rf "$work3"
 
-# --- G2: a "path:KEY" pin argument excludes just that KEY, not the whole file --------------------
-# ingredient-pins.sh (fixed for G2) now emits "pins.env:SWIFT_VERSION" for a swift-shaped repo's own-
-# upstream key. This script must honour that suffix: SWIFT_VERSION (the repo's own upstream) must
-# never appear as a moved ingredient, while a real ingredient key in the SAME file still must.
+# spec: ingredient-pins.sh emits "pins.env:SWIFT_VERSION" for a swift-shaped repo's own-upstream
+#       key (a "path:KEY" pin argument that excludes just that KEY, not the whole file). This
+#       script must honour that suffix: SWIFT_VERSION must never appear as a moved ingredient,
+#       while a real ingredient key in the SAME file still must.
 work4="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work4"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
 printf 'SWIFT_VERSION="6.3.3"\nLLVM_SHA="aaaa"\n' > pins.env
 git add -A; git commit -qm base; git tag base
-# both the own-upstream key AND a real ingredient key move in the same release
 printf 'SWIFT_VERSION="6.3.4"\nLLVM_SHA="bbbb"\n' > pins.env
 out="$(sh "$S" base pins.env:SWIFT_VERSION)"
 printf '%s\n' "$out" | grep -q 'SWIFT_VERSION' \
@@ -207,16 +181,15 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*LLVM_SHA\*\*: aaaa -> bbbb' \
   || { echo "FAIL G2: real ingredient key LLVM_SHA in the same file was dropped: $out"; exit 1; }
 cd "$work"; rm -rf "$work4"
 
-# --- G1 review round, CRITICAL 1: a real blob (base64 padding) must not false-positive as KV ------
-# is_kv_pins()'s first cut allowed a lowercase-tolerant key class, which matches base64 PADDING lines
-# in a real vendor/cacert.pem ("dZWAUWpLMKawYqGT8ZvYzsRjdT9ZR7E=", "MrY=", "IhNzbM8m9Yop5w==") as
-# one-line "assignments" -- reported as build ingredients (with the key itself as a bogus "added"
-# value, since oldv is always empty) on the next CA-bundle refresh. Uppercase-only NARROWED but did
-# not CLOSE this class: an all-caps-and-digit padding line ("MK9=") still matches an uppercase-only
-# key with an empty value -- the reviewer measured ~0.46 expected such lines per real CA-bundle
-# refresh, i.e. even odds of resurrecting this exact false claim a third time. The value must hold
-# at least one non-"=" character (padding is only ever "=" characters, at the end; no real pin's
-# value is empty or all-"=").
+# spec: is_kv_pins()'s first cut allowed a lowercase-tolerant key class, which matches base64
+#       PADDING lines in a real vendor/cacert.pem as one-line "assignments" -- reported as build
+#       ingredients (with the key itself as a bogus "added" value, since oldv is always empty) on
+#       the next CA-bundle refresh. Uppercase-only NARROWED but did not CLOSE this class: an
+#       all-caps-and-digit padding line ("MK9=") still matches an uppercase-only key with an
+#       empty value -- the reviewer measured ~0.46 expected such lines per real CA-bundle refresh,
+#       i.e. even odds of resurrecting this exact false claim a third time. The value must hold
+#       at least one non-"=" character (padding is only ever "=" characters, at the end; no real
+#       pin's value is empty or all-"=").
 work5="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work5"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -239,8 +212,8 @@ printf '%s\n' "$out" | grep -qi 'MrY\|dZWAUWpL\|IhNzbM8m9Yop5w\|MK9\|added\b' \
   && { echo "FAIL CRITICAL1: base64 padding line(s) leaked as a bogus ingredient bullet: $out"; exit 1; }
 cd "$work"; rm -rf "$work5"
 
-# ...and the other direction: the value-must-have-content guard must not cost a single real pin.
-# Every real family KV pin the reviewer's table names must still render per-key.
+# spec: the other direction -- the value-must-have-content guard must not cost a single real pin.
+#       Every real family KV pin the reviewer's table names must still render per-key.
 work5b="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work5b"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -289,12 +262,12 @@ printf '%s\n' "$out" | grep -q -- 'updated (' \
   && { echo "FAIL both-directions: a real KV pin fell through to the opaque byte-delta fallback: $out"; exit 1; }
 cd "$work"; rm -rf "$work5b"
 
-# --- G1 review round, CRITICAL 2: components/*/version bullets must always carry the component name
-# container-tools' real shape: SIX components share the same REPO=/REF=/DIGEST=/BASE= key names.
-# Renovate can bump two components in the same release (docker-cli + docker-compose): a bare "REF"/
-# "DIGEST" bullet with no component identity is ambiguous at best and misattributed at worst.
-# Prefix ALWAYS for this pin shape, not only when this run happens to be ambiguous -- an unprefixed
-# bullet that reads fine today silently becomes wrong the day a second component moves.
+# spec: container-tools' real shape is SIX components sharing the same REPO=/REF=/DIGEST=/BASE=
+#       key names. Renovate can bump two components in the same release (docker-cli +
+#       docker-compose): a bare "REF"/"DIGEST" bullet with no component identity is ambiguous at
+#       best and misattributed at worst. Prefix ALWAYS for this pin shape, not only when this run
+#       happens to be ambiguous -- an unprefixed bullet that reads fine today silently becomes
+#       wrong the day a second component moves.
 work6="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work6"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -319,9 +292,10 @@ printf '%s\n' "$out" | grep -q -- '- \*\*DIGEST\*\*:' \
   && { echo "FAIL CRITICAL2: an unprefixed, ambiguous DIGEST bullet leaked: $out"; exit 1; }
 cd "$work"; rm -rf "$work6"
 
-# --- G1 review round, ALSO FIX: exclkey uses the LONGEST match, like pins.sh and repackage-decision.sh
-# ${arg#*:} (shortest) would leave the own-upstream KEY itself carrying a stray colon undetected if a
-# path ever had one; ${arg##*:} (longest) is what pins.sh and repackage-decision.sh both use.
+# spec: exclkey must use the LONGEST match, like pins.sh and repackage-decision.sh --
+#       ${arg#*:} (shortest) would leave the own-upstream KEY itself carrying a stray colon
+#       undetected if a path ever had one; ${arg##*:} (longest) is what pins.sh and
+#       repackage-decision.sh both use.
 work7="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work7"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -333,10 +307,10 @@ printf '%s\n' "$out" | grep -q 'SWIFT_VERSION' \
   && { echo "FAIL longest-match exclkey: SWIFT_VERSION leaked: $out"; exit 1; }
 cd "$work"; rm -rf "$work7"
 
-# --- G1 review round, ALSO FIX: a brand-new KV pin file must also honour exclkey -----------------
-# A first-time pins.env (absent at the previous release) used to print a single "added" bullet with
-# the file's first line as its value -- which could BE the own-upstream key's own literal value. A
-# newly-introduced KV file must render per-key, excluding $exclkey, exactly like an existing one.
+# spec: a first-time pins.env (absent at the previous release) used to print a single "added"
+#       bullet with the file's first line as its value -- which could BE the own-upstream key's
+#       own literal value. A newly-introduced KV file must render per-key, excluding $exclkey,
+#       exactly like an existing one.
 work8="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work8"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -349,15 +323,15 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*LLVM_SHA\*\*: added (aaaa)' \
   || { echo "FAIL new-file exclkey: the real ingredient key LLVM_SHA was dropped: $out"; exit 1; }
 cd "$work"; rm -rf "$work8"
 
-# --- G1 review round: a .sh pin with NO assignment lines at all -- DELIBERATE CHOICE --------------
-# Before content-based dispatch, EVERY .sh file always took the per-key branch regardless of content,
-# so a .sh with zero KEY=VALUE lines produced NO bullet at all when its bytes changed (assignments()
-# extracts nothing from either side, so the diff is empty). Content-based dispatch now falls through
-# such a file to the opaque byte-delta branch instead. DECISION: prefer the byte delta. This whole fix
-# exists because release-notes.sh's own doctrine is "a release that says less than the truth is the
-# defect this removes" (see its header) -- a file explicitly watched as a pin that changed and says
-# NOTHING is the same silent-gap shape, just through dispatch instead of a broken hook. A vague-but-
-# honest "updated (N -> M bytes)" is strictly more truthful than silence.
+# spec: DELIBERATE CHOICE -- before content-based dispatch, EVERY .sh file always took the
+#       per-key branch regardless of content, so a .sh with zero KEY=VALUE lines produced NO
+#       bullet at all when its bytes changed (assignments() extracts nothing from either side, so
+#       the diff is empty). Content-based dispatch now falls through such a file to the opaque
+#       byte-delta branch instead: release-notes.sh's own doctrine is "a release that says less
+#       than the truth is the defect this removes" (see its header) -- a file explicitly watched
+#       as a pin that changed and says NOTHING is the same silent-gap shape, just through dispatch
+#       instead of a broken hook. A vague-but-honest "updated (N -> M bytes)" is strictly more
+#       truthful than silence.
 work9="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work9"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -369,13 +343,12 @@ printf '%s\n' "$out" | grep -q -- '- \*\*noop.sh\*\*: updated (' \
   || { echo "FAIL .sh-no-assignments: expected a byte delta (deliberate choice), got: $out"; exit 1; }
 cd "$work"; rm -rf "$work9"
 
-# --- a pin that became DERIVED must not be announced as removed ---------------------------------
-# assignments() deliberately drops any value carrying $ or a backtick -- rewriting a derivation is a
-# code change, not an ingredient move -- but the removal walk used to read "absent from the literal
-# set" as "removed": SWIFT_TAG going from swift-6.3.3-RELEASE to "swift-${SWIFT_VERSION}-RELEASE"
-# (exactly the family's derive-never-repeat convention) was reported as a removed pin, which is
-# false -- the build still uses SWIFT_TAG, just no longer as a literal. GONE, which really does stop
-# being assigned, must still say "removed"; LLVM_BRANCH, unchanged, must produce no bullet at all.
+# spec: assignments() deliberately drops any value carrying $ or a backtick -- rewriting a
+#       derivation is a code change, not an ingredient move -- but the removal walk used to read
+#       "absent from the literal set" as "removed": SWIFT_TAG going from swift-6.3.3-RELEASE to
+#       "swift-${SWIFT_VERSION}-RELEASE" (exactly the family's derive-never-repeat convention) was
+#       reported as a removed pin, which is false -- the build still uses SWIFT_TAG, just no
+#       longer as a literal. A pin that became DERIVED must not be announced as removed.
 work10="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work10"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -404,11 +377,11 @@ printf '%s\n' "$out" | grep -q 'LLVM_BRANCH' \
   && { echo "FAIL derived: an unchanged key must produce no bullet: $out"; exit 1; }
 cd "$work"; rm -rf "$work10"
 
-# --- the now-derived bullet must still carry the component-name prefix --------------------------
-# CRITICAL2 (above) already guards the moved and added forms of a components/*/version bullet against
-# shipping unprefixed; the now-derived form is the only other bullet shape that pin file can produce,
-# and it shipped without the same guard. DIGEST moves for real (so the section opens at all); REF
-# becomes derived and must still read "widget / REF", not a bare "REF".
+# spec: CRITICAL2 (above) already guards the moved and added forms of a components/*/version
+#       bullet against shipping unprefixed; the now-derived form is the only other bullet shape
+#       that pin file can produce, and it shipped without the same guard. DIGEST moves for real
+#       (so the section opens at all); REF becomes derived and must still read "widget / REF",
+#       not a bare "REF".
 work11="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work11"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -431,10 +404,11 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*widget / REF\*\*: still used, now comp
   || { echo "FAIL label-prefix: derived bullet is missing its component-name prefix: $out"; exit 1; }
 cd "$work"; rm -rf "$work11"
 
-# --- exclkey (the "path:KEY" own-upstream exclusion) must suppress the DERIVED branch too --------
-# The removal walk's exclkey skip was already proven for the "removed" branch (G2 above); the newly
-# split "now derived" branch is a second place the same skip can be silently dropped. SWIFT_VERSION is
-# this repo's own upstream (excluded); it becomes derived here and must still not appear at all.
+# spec: the removal walk's exclkey skip was already proven for the "removed" branch (G2 above);
+#       the newly split "now derived" branch is a second place the same skip can be silently
+#       dropped, so exclkey (the "path:KEY" own-upstream exclusion) must suppress it too.
+#       SWIFT_VERSION is this repo's own upstream (excluded); it becomes derived here and must
+#       still not appear at all.
 work12="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work12"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -448,7 +422,7 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*LLVM_SHA\*\*: aaaa -> bbbb' \
   || { echo "FAIL exclkey-derived: real ingredient key in the same file was dropped: $out"; exit 1; }
 cd "$work"; rm -rf "$work12"
 
-# ...and the REMOVED branch, for the same exclkey, so the two branches cannot silently disagree.
+# spec: and the REMOVED branch, for the same exclkey, so the two branches cannot silently disagree.
 work13="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work13"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -462,9 +436,9 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*LLVM_SHA\*\*: aaaa -> bbbb' \
   || { echo "FAIL exclkey-removed: real ingredient key in the same file was dropped: $out"; exit 1; }
 cd "$work"; rm -rf "$work13"
 
-# --- the now-derived bullet's OLD value must still be shortened, like every other hash-shaped pin ---
-# TOOLCHAIN_SHA moves from a 40-char hex literal to a derived expression; OTHER_KEY moves for real (so
-# the section opens). The 40-char old value must render as shorten() would for any other hash pin.
+# spec: TOOLCHAIN_SHA moves from a 40-char hex literal to a derived expression; OTHER_KEY moves
+#       for real (so the section opens). The now-derived bullet's OLD value must still be
+#       shortened, like every other hash-shaped pin, and render as shorten() would.
 work14="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work14"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -484,11 +458,11 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*TOOLCHAIN_SHA\*\*: still used, now com
   || { echo "FAIL shorten-derived: the derived bullet's old hex value was not shortened: $out"; exit 1; }
 cd "$work"; rm -rf "$work14"
 
-# --- RULING E: a derive-only refactor (no pin actually moved) must print NOTHING at all ----------
-# This script's own header contract says "Prints NOTHING when no pin moved" -- a "still used, now
-# computed" bullet is real information about a key, but it is not evidence that anything MOVED, so it
-# must never open the "### Build ingredients" section by itself. Only SWIFT_TAG changes shape here;
-# SWIFT_VERSION (the only literal) is untouched, so nothing actually moved.
+# spec: RULING E -- this script's own header contract says "Prints NOTHING when no pin moved". A
+#       "still used, now computed" bullet is real information about a key, but it is not evidence
+#       that anything MOVED, so a derive-only refactor (no pin actually moved) must never open the
+#       "### Build ingredients" section by itself. Only SWIFT_TAG changes shape here;
+#       SWIFT_VERSION (the only literal) is untouched, so nothing actually moved.
 work15="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work15"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -505,7 +479,8 @@ out="$(sh "$S" base versions.sh)"
 [ -z "$out" ] \
   || { echo "FAIL ruling-E: a derive-only refactor must print nothing at all: $out"; exit 1; }
 
-# ...but once a REAL pin also moves in the same release, the section opens and carries BOTH bullets.
+# spec: but once a REAL pin also moves in the same release, the section must open and carry BOTH
+#       bullets.
 cat > versions.sh <<'SH'
 SWIFT_VERSION=6.3.4
 SWIFT_TAG="swift-${SWIFT_VERSION}-RELEASE"
@@ -519,15 +494,14 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*SWIFT_TAG\*\*: still used, now compute
   || { echo "FAIL ruling-E: the derived bullet must still ride along once the section is open: $out"; exit 1; }
 cd "$work"; rm -rf "$work15"
 
-# --- FINDING 1: assigned_keys() must share assignments()'s value-has-content guard ---------------
-# assigned_keys() answers "is this key still assigned at all", and it MUST agree with assignments()
-# on what counts as an assignment line in the first place, or the two functions drift on the exact
-# question this task is about. A key emptied to KEY= (or KEY="") is not "still assigned" just because
-# a bare `KEY=` line matches the sed pattern -- it is GONE, identically to a line disappearing
-# outright. Without the guard, CA_SHA256 going from a real hash to CA_SHA256= renders a false "still
-# used, now computed rather than pinned" bullet instead of "removed" -- the same false claim this
-# whole task exists to delete, now pointing the other way. SWIFT_VERSION moves for real so the
-# section opens.
+# spec: assigned_keys() answers "is this key still assigned at all", and it MUST agree with
+#       assignments() on what counts as an assignment line in the first place, or the two
+#       functions drift on the exact question this task is about. A key emptied to KEY= (or
+#       KEY="") is not "still assigned" just because a bare `KEY=` line matches the sed pattern --
+#       it is GONE, identically to a line disappearing outright. Without the guard, CA_SHA256
+#       going from a real hash to CA_SHA256= renders a false "still used, now computed rather
+#       than pinned" bullet instead of "removed". SWIFT_VERSION moves for real so the section
+#       opens.
 work16="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work16"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -549,11 +523,12 @@ printf '%s\n' "$out" | grep -q 'CA_SHA256.*still used' \
   && { echo "FAIL guard: a key with no real value was falsely reported as still assigned/derived: $out"; exit 1; }
 cd "$work"; rm -rf "$work16"
 
-# --- TASK 7: a DIGEST that moved together with its REF restates it; alone, it is real news --------
-# container-tools pins six components as REPO=/REF=/DIGEST= triples. A Renovate bump moves REF and
-# DIGEST together, so every bump used to print two bullets, the second a pair of truncated hashes
-# telling the reader nothing the REF bullet did not. But a DIGEST that moves ALONE is upstream
-# re-tagging the same ref -- genuinely worth telling someone -- so it must still be reported.
+# spec: container-tools pins six components as REPO=/REF=/DIGEST= triples. A Renovate bump moves
+#       REF and DIGEST together, so every bump used to print two bullets, the second a pair of
+#       truncated hashes telling the reader nothing the REF bullet did not -- a DIGEST that moved
+#       together with its REF restates it and must not be printed. But a DIGEST that moves ALONE
+#       is upstream re-tagging the same ref, genuinely worth telling someone, so it must still be
+#       reported.
 work17="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work17"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -575,8 +550,6 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*docker-cli / REF\*\*: v29.7.0 -> v29.8
 printf '%s\n' "$out" | grep -q 'DIGEST' \
   && { echo "FAIL task7-together: a DIGEST that moved with its REF restates it: $out"; exit 1; }
 
-# ...but a DIGEST that moves ALONE (REF unchanged) is upstream re-tagging the same ref, and must
-# still be reported like any other moved pin.
 cat > components/docker-cli/version <<'SH'
 REPO=https://github.com/docker/cli.git
 REF=v29.8.0

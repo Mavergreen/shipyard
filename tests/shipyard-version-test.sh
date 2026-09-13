@@ -1,7 +1,6 @@
 #!/bin/sh
-# shipyard-version.sh: the LINE is committed (UPSTREAM_VERSION); the PATCH is the commit count, so a
-# new commit is necessarily a new version. This is what UPSTREAM_VERSION alone could not do: it sat at
-# 1.0.5 across 13 commits that each shipped to fifteen repos through the moving @v1 tag.
+# spec: SKILL.md "shipyard: consume its facilities" -- shipyard's own version is
+#       <UPSTREAM_VERSION>.<commit count>, so a new commit is necessarily a new version.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/shipyard-version.sh"
@@ -23,31 +22,25 @@ out="$(sh scripts/shipyard-version.sh)"
 [ "$(printf '%s\n' "$out" | sed -n 's/^TAG=//p')" = "v1.0.3" ] \
   || { echo "FAIL: TAG should be v1.0.3; got: $out"; exit 1; }
 
-# One more commit is one more version. This is the whole point.
 echo more > f; git add -A; git commit -qm c3
 [ "$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')" = "1.0.4" ] \
-  || { echo "FAIL: a new commit must produce a new version"; exit 1; }
+  || { echo "FAIL: one more commit must be one more version -- that is the whole point"; exit 1; }
 
-# A deliberate line bump keeps the count climbing, so versions stay monotonic across lines.
 printf '2.0\n' > UPSTREAM_VERSION; git add -A; git commit -qm 'line 2.0'
 [ "$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')" = "2.0.5" ] \
-  || { echo "FAIL: a line bump must not restart the patch"; exit 1; }
+  || { echo "FAIL: a deliberate line bump must not restart the patch, so versions stay monotonic across lines"; exit 1; }
 
-# A full version left in UPSTREAM_VERSION is the mistake this replaces -- refuse it loudly rather
-# than silently emitting 1.0.5.7.
 mkrepo "$work/b" 1.0.5 2
 if sh scripts/shipyard-version.sh >/dev/null 2>&1; then
-  echo "FAIL: UPSTREAM_VERSION with a patch component should be refused"; exit 1
+  echo "FAIL: a full version left in UPSTREAM_VERSION is the mistake this replaces -- refuse it loudly rather than silently emitting 1.0.5.7"; exit 1
 fi
 sh scripts/shipyard-version.sh 2>&1 | grep -qi 'line' \
   || { echo "FAIL: the refusal should say UPSTREAM_VERSION holds the LINE"; exit 1; }
 
-# A shallow clone has HEAD but not the history behind it: `rev-list --count` would silently return 1,
-# colliding with the already-published v1.0.1. Refuse rather than mint a wrong, immutable tag.
 git clone -q --depth 1 "file://$work/a" "$work/shallow"
 cd "$work/shallow"
 if sh scripts/shipyard-version.sh >/dev/null 2>&1; then
-  echo "FAIL: a shallow clone should be refused, not guessed at"; exit 1
+  echo "FAIL: a shallow clone has HEAD but not the history behind it, so rev-list --count would silently return 1 and collide with the already-published v1.0.1 -- refuse rather than mint a wrong, immutable tag"; exit 1
 fi
 sh scripts/shipyard-version.sh 2>&1 | grep -qi 'shallow' \
   || { echo "FAIL: the refusal should say the clone is shallow"; exit 1; }

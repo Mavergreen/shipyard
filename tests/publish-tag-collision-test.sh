@@ -1,13 +1,8 @@
 #!/bin/sh
-# publish-release.yml must REFUSE to publish a version whose tag already exists, and say so -- unless
-# the run was triggered by that very tag. What the guard DECIDES is tests/assert_tag_publishable.bats;
-# this asserts the wiring: the guard exists, calls that script, and runs before the publish step.
-#
-# It cannot instead bump N and retry: the version is baked into the artifacts before publish
-# (pkgbuild --version, the pkg filename, and the appcast's <sparkle:version>, which
-# assert_appcast_upgradeable.sh compares against the tag history). Relabeling would ship a release
-# whose contents contradict its name. Rebuilding is the only correct recovery, and that is a
-# re-dispatch.
+# spec: SKILL.md "Release workflow" -- the version is baked into pkgbuild --version, the pkg
+#       filename, and the appcast's <sparkle:version>, so a tag collision must rebuild
+#       (re-dispatch) and must never be relabeled. What the guard DECIDES is
+#       tests/assert_tag_publishable.bats; this asserts only the wiring.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$here/../.github/workflows/publish-release.yml"
