@@ -50,6 +50,9 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   the commit count (`scripts/shipyard-version.sh`), publishes a GitHub Release for the immutable
   `vX.Y.Z`, and fast-forwards `@v1` to that commit. So a shipyard change reaches consumers by **pushing
   `main`** — never move `@v1` by hand, and there's no separate "publish" step to run.
+  **The fast-forward happens only AFTER the publish succeeds**, and is a separate job that `needs:` it:
+  `@v1` must never name a version that failed to release, because fifteen repos would consume it within
+  minutes of the move.
 - **After `install@v1`, use `$SHIPYARD_SCRIPTS`** — the action exports the installed scripts dir. Do NOT
   re-derive it with `SH="$(cat "$HOME/.cmake/packages/MavericksShipyard/"* | head -1)/scripts"`;
   that incantation appeared 11 times across the family before it was exported once. (It remains valid
@@ -587,6 +590,10 @@ A release is the realisation of a declared state, not the side effect of an even
 publish" means: not "did something happen" but "does a release already carry this exact state" —
 which is why publishing is idempotent rather than triggered.
 
+**The declared state EXCLUDES the source tree.** That is what makes "a push causes CI feedback and
+almost never a release" a *property of the design* rather than a rule somebody has to remember: an
+ordinary commit moves no declared input, so it renders the same digest and publishes nothing.
+
 - **A product declares its state in a `## Declared state` section of `INGREDIENTS.md`**:
   `- <name>: <path>` or `- <name>: <path>:<KEY>`, one entry per line, names **canonical** so renaming
   a pin file can't move the digest. Exactly one entry must be named `upstream` — the upstream version
@@ -622,7 +629,15 @@ which is why publishing is idempotent rather than triggered.
   keeps them in agreement — `check-artifact-conformance.sh`'s `notes` check (see Release notes, "Three
   enforcement layers", above) now asserts that equality at package time. The reason stands regardless: a
   10.9 user's Sparkle update dialog should show the same notes the Release page shows, and a marker
-  added later would leave it one line short of that. `release-needed.sh --digest D --version V [--repo R]`
+  added later would leave it one line short of that. **The marker is appended as its OWN paragraph —
+  the blank line above it is load-bearing, not cosmetic.** Markdown joins consecutive lines, so a
+  marker welded to the footer's last line renders in that same dialog as one run-on sentence ending in
+  a raw 64-character hash: `Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5
+  ModernMavericks-State: v1:sha256:3f78…`. And the marker's *shape* is read by one family rule
+  (`lib.sh`'s `state_marker`), never re-implemented per caller: while the reader and the writer
+  disagreed, an older-format marker was "nothing recorded" to `release-needed.sh` and "a CONFLICTING
+  record" to `release-state-record.sh`, which exits 3 — every migrated repo red, nightly, with no
+  self-healing path. `release-needed.sh --digest D --version V [--repo R]`
   answers whether that state is already out — `PUBLISH`, `SKIP=already-released/<tag>`, or
   `SKIP=unreadable-marker/<tag>` when some release records a marker in a format this shipyard cannot
   read (see the wire-format rule below). Drafts are excluded; a `gh` failure is a failure, never a
@@ -712,6 +727,12 @@ which is why publishing is idempotent rather than triggered.
   published release), and deletes it after the last failure too. **Recovery is "Re-run failed jobs"**
   — the build artifacts are kept and the tag is still free — unless the caller's `main` gained a
   workflow change since the run started (the tag then 403s; re-dispatch).
+- **A repo that ships the tooling publishes itself with the commit under test, not with `@v1`.**
+  shipyard's own `release.yml` reaches `publish-release.yml` and `scan-for-key.yml` by a local `uses:`
+  path, and pins their inner checkout to the same commit (`shipyard-ref`). Publishing through `@v1`
+  would ship a version using the *previous* version's tooling, which by construction cannot catch a
+  defect in the tooling being shipped. The same reasoning applies to any repo whose release artifacts
+  are what the release process runs on.
 - **An existing tag refuses the publish — except the tag that triggered the run.** Two runs can compute
   the same `-mavericks.(N+1)` and both build it; the loser must not publish and must not relabel (the
   version is already baked into the pkg and the appcast), so it re-dispatches. But a run started by a
@@ -976,6 +997,17 @@ toolchain and automerges. Two things to wire deliberately:
   fix repairs any `release-on-bump.yml` that relies on a pushed tag). CI-only bumps (`.github/**` action
   `uses:`) aren't in the caller's `paths:`, so they never repackage. This automates the `-mavericks.N` axis,
   driven by a dependency instead of a hand-run `local_release`.
+- **Name that caller `.github/workflows/repackage-on-ingredient-bump.yml`.** The notes generator reads
+  the caller to learn this repo's ingredient pins, and the conventional path wins outright — a repo
+  that names it something else falls through to *discovery*, and discovery that finds more than one
+  candidate stops the release rather than guessing (an earlier-sorting decoy once reported its own
+  paths as the ingredients that moved: confidently wrong notes, the worse of the two failure shapes).
+  A candidate is recognised by **naming the reusable workflow on a line that is not a comment** — not
+  by a line matching `uses:.*<filename>`, because `uses: >-` with the URI on the continuation line is
+  a genuine call that puts the two on different lines, and anchoring on `uses:` read a wired-up repo
+  as having no caller and shipped "packaging changes only" over a real libressl bump, at exit 0.
+  Existence at the conventional path is only a name: a scaffolded placeholder that calls nothing falls
+  through the same content test rather than claiming this repo is wired up when it is not.
 - **In a committed-`VERSION` repo, derive the repackage's N from TAGS, not from `VERSION`.** A
   dispatch-cut version is published without being committed back (the tag is minted by
   `action-gh-release` via `tag_name` + `target_commitish`), so reading N from the file recomputes the
@@ -988,8 +1020,13 @@ toolchain and automerges. Two things to wire deliberately:
   per-key bullets for `KEY=VALUE` pins (literals only — a rewritten `$(...)` is a code change, not an
   ingredient change — and it reports keys that were *removed*), subject + `+N/-M lines` for `*.patch`
   pins (a patch is baked into the product, and a byte count says nothing about one), and a size delta
-  for other opaque blobs.
-  `previous-release-tag.sh` supplies the baseline (`sort -V`, so 1.102.0 > 1.98.8) and
+  for other opaque blobs. A pin under `components/<name>/` is **always** prefixed with its component
+  name (`- **golang / REF**: …`), never only when this run happens to be ambiguous: those files share
+  one set of key names (`REPO`/`REF`/`DIGEST`/`BASE`), so a bare `REF` bullet that reads fine today is
+  silently misattributed the day a second component moves in the same release.
+  `previous-release-tag.sh` supplies the baseline (ordering by `lib.sh`'s `ver_cmp`, so 1.102.0 >
+  1.98.8 and N=10 > N=9 — **not `sort -V`**, which 10.9's BSD sort does not have: with `-V` the script
+  worked in CI and died on the platform the family targets) and
   `ingredient-pins.sh` the pin list — **derived from the caller's own `paths:` minus
   `own-upstream-paths`**, so the repackage trigger and the notes cannot drift. Append the section to the
   notes file and publish that ONE file as both the appcast `--notes-file` and the Release `body_path`
@@ -1264,6 +1301,21 @@ was replaced by `:`. A gate a maintainer reddens by writing the rule down is the
 | If `lines/` exists, every `lines/<id>/UPSTREAM_VERSION` has its OWN **capped** Renovate manager | An uncapped line walks onto the next major it was never built for; an unmanaged line goes stale silently; one manager spanning lines cannot cap each |
 | A Renovate manager whose captured pin ends in `-mavericks.N` has a `regex:` versioning that captures N | Default versioning coerces `-mavericks.N` away, so every repackage compares equal and the pin never moves — silently, with the dep listed as tracked. swift-runtime missed three swift-toolchain releases this way |
 | **14.** Some workflow calls `release-notes.sh` (not just names it) to build the body, on a non-comment line; the body is never hand-written into `RELEASE_NOTES.md`; no workflow passes `--generate-notes` | This is the check that replaced five hand-rolled shapes: six products published "Automated release for Mac OS X 10.9 (Mavericks)." as their entire notes — every release, including Renovate repackages whose only reason to exist was an ingredient bump — and tailscale published an empty body. Check 5 above only asks whether *some* notes reached the release; this asks whether they came from the one shared generator, checked on the PR, where a human can still fix it cheaply. The publisher (`check-release-notes.sh`, below) checks the body's SHAPE at release time — this checks the WIRING before that |
+| A `packageRules` entry touching `automerge` carries a `description` saying why | The family default is ship-if-green. An exception is legitimate only where a bad bump would BUILD FINE AND BE WRONG (swift-toolchain: a minor Swift bump needs `LLVM_BRANCH` to follow, which no regex can infer). Unexplained, an exception is indistinguishable from drift |
+| `build/version.sh` is **not** git-ignored, where the repo uses the wrappers | The version wrappers live in COMMITTED `build/*.sh`. A too-broad ignore (`build/`, `build*/`) makes `git add` skip them without a word: everything works locally and only CI's fresh checkout fails, far from the cause. Ignore build OUTPUT dirs (`/_build/`, `build-*/`, `build/work/`) — never `build/` itself |
+| Every build output dir the repo writes IS ignored | The mirror of the above. tailscale configured its updater with `cmake -S updater -B build/updater`, a path the shared presets never name, so nothing connected it to `.gitignore`: 7.4MB of CMake output sat untracked AND unignored, one `git add -A` from being committed, its stale `CMakeCache.txt` still resolving a package renamed away months earlier. The family will not agree on one spelling and does not need to — the gate asks the REPO where it writes (every `cmake … -B <dir>` in its workflows and committed shell, plus every `binaryDir` in a committed `CMakePresets.json`) |
+| No shell construct the 10.9 base system lacks (`check-shell-portability.sh`) | These are invisible to CI by construction: they work on the runner and fail on the platform every repo here targets, so the machine that would catch them is the one machine CI never uses. shipyard shipped two (`sort -V`, a bare `mktemp -d`) and reached all seven repos through `@v1` before anyone noticed — one of them turning release notes silently empty rather than erroring |
+**Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
+have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,
+rather than skipping. A gate that passes when it did not run is the exact rot the gate exists to
+prevent, and it is indistinguishable from a compliant repo in the log. The same rule applies to a
+check's *output*: an "ok" that also means "there were no records to compare" is a check nobody can
+trust the day the records stop shipping, so say what was compared.
+
+**shipyard must satisfy every convention it exports.** It could not before it had a `release.yml` of
+its own — the gate exits early in a repo with none — which is how a defect in check 7d stayed
+invisible in the one repo whose files contain example `cmake … -B` command lines, until it reddened
+two consumers within the hour it shipped.
 
 Wire it with the reusable workflow — three lines, and it never changes when a check is added:
 
@@ -1313,7 +1365,9 @@ in the same commit.
 3. `build/lib.sh` (`upstream_version()`), `build/version.sh`, `build/release-notes-file.sh` — copy from
    legacysupport/golang.
 4. `release.yml`: pick a release model; three triggers; `ver` step with the non-main guard; `gh release
-   create`; `cancel-in-progress: false` if auto-cutting.
+   create`; the `concurrency:` block from "Release workflow" above — group keyed on `github.run_id`,
+   `cancel-in-progress` naming `pull_request`. (Not `cancel-in-progress: false`: it protects the
+   RUNNING run, not the QUEUED one, and the gate rejects it.)
 5. `release-notes/README.md`; `build/upstream-release-notes-url.sh` (a port: where upstream's notes
    for a version live — see Release notes); Sparkle updater target; `SPARKLE_PRIVATE_KEY` secret.
 6. Choose the upstream-verification method; note it if it deviates from a sibling.
