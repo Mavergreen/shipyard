@@ -1404,7 +1404,10 @@ tracked `*.sh` and `*.yml`; exits 0 clean, 1 on any untagged or unrecognised com
 so a check that fired the day it landed would redden every consumer at once — a repo adopts by sweeping
 its own tree and committing its own `comment-reasons`; until then check 15 exits 0 in that repo,
 silently. A repo that wants one declared exception states it under `INGREDIENTS.md`'s `## Conformance
-deviations` (`- comments: <reason>`), the same grammar `check-artifact-conformance.sh` already reads.
+deviations`, in the same `- comments: <reason>` line shape `check-artifact-conformance.sh` already
+reads — but not its grammar: that checker's `<check>:<glob>` scoping is rejected here, not honoured, so
+the deviation is repo-wide, takes no glob, and a scoped form (`- comments:vendor/* …`) fails the gate
+rather than narrowing it.
 
 ## Family conventions (checked, not just written down)
 
