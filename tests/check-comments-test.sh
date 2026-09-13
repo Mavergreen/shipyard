@@ -52,6 +52,48 @@ ok tagged_continuation <<'EOF'
 . ./lib.sh
 EOF
 
+# spec: scripts/check-comments.sh -- "spec:" is a pointer to the authority, not a restatement of
+#       it, and the TAG LINE ITSELF (never a continuation) must carry something locatable: a
+#       path, a known-extension filename, a YYYY-MM-DD name, or a numbered decision/check.
+ok spec_citation_path <<'EOF'
+#!/bin/sh
+# spec: docs/superpowers/specs/2026-09-12-comments-cite-a-reason-design.md decision 2
+echo hi
+EOF
+
+ok spec_citation_check <<'EOF'
+#!/bin/sh
+# spec: check 14
+echo hi
+EOF
+
+ok spec_citation_dated_decision <<'EOF'
+#!/bin/sh
+# spec: 2026-09-12 decision 3
+echo hi
+EOF
+
+bad spec_citation_prose_only 'needs a locatable citation' <<'EOF'
+#!/bin/sh
+# spec: this is why the fixture is shaped this way
+echo hi
+EOF
+
+# spec: scripts/check-comments.sh -- "platform:" is unaffected by the citation rule: it states a
+#       fact rather than pointing at one, so free-form prose stays correct there.
+ok platform_pure_prose <<'EOF'
+#!/bin/sh
+# platform: this is a pure prose platform fact with no citation of any kind in it
+echo hi
+EOF
+
+ok spec_citation_with_continuation <<'EOF'
+#!/bin/sh
+# spec: check 14 -- the citation is here, on this line
+#       and this continuation is free-form prose with no citation in it at all
+echo hi
+EOF
+
 # spec: scripts/package-pkg.sh writes its generated script inside a <<'PRE' heredoc with 15
 #       comment lines in it -- those are payload, not commentary, and flagging or deleting them
 #       would ship a broken pkg.
@@ -102,6 +144,53 @@ ok heredoc_after_quoted_fake <<'EOF'
 printf 'x<<EOF' > f <<'REAL'
 # this line is payload, not commentary, and must not be flagged
 REAL
+EOF
+
+# spec: scripts/check-comments.sh -- a shell cannot open a heredoc from a comment, so the scanner
+#       must not either. tests/check-comments-test.sh line 80's own "spec:" line, documenting
+#       the ORIGINAL bug shape in prose, carries the quoted example plus an incidental possessive
+#       elsewhere on the same line, and that extra apostrophe shifted the quote-parity count to
+#       EVEN, fooling the counting-only fix into treating the quoted example as a real heredoc.
+bad comment_quoted_marker 'platform:' <<'EOF'
+#!/bin/sh
+# documenting publish-release.yml's bug shape: echo 'files<<EOF' is the trigger
+echo hi
+# an untagged comment after a comment-embedded QUOTED marker
+EOF
+
+bad comment_unquoted_marker 'platform:' <<'EOF'
+#!/bin/sh
+# see <<EOF below for the unquoted shape, still inside a comment
+echo hi
+# an untagged comment after a comment-embedded UNQUOTED marker
+EOF
+
+# spec: scripts/check-comments.sh -- a canary, not just an instance: assert that a violation
+#       AFTER any line containing "<<WORD" (comment or code, quoted or not) is still reported,
+#       unless that line legitimately opens a real heredoc. Add a new "<<"-containing shape here
+#       whenever a fresh blind spot turns up, rather than only patching the one just found.
+bad canary_comment_quoted 'canary comment quoted' <<'EOF'
+#!/bin/sh
+# echo 'x<<EOF' is quoted, inside a comment
+# canary comment quoted
+EOF
+
+bad canary_comment_unquoted 'canary comment unquoted' <<'EOF'
+#!/bin/sh
+# see <<EOF for the unquoted shape, inside a comment
+# canary comment unquoted
+EOF
+
+bad canary_code_quoted_single 'canary code quoted single' <<'EOF'
+#!/bin/sh
+echo 'x<<EOF'
+# canary code quoted single
+EOF
+
+bad canary_code_quoted_double 'canary code quoted double' <<'EOF'
+#!/bin/sh
+echo "x<<EOF"
+# canary code quoted double
 EOF
 
 bad untagged 'platform:' <<'EOF'

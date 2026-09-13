@@ -60,7 +60,17 @@ for f in $files; do
       if (line == heredoc) heredoc = ""
       next
     }
-    {
+    # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a shell cannot open a heredoc
+    #       from a comment, so this must not either. A "#" line documenting the ORIGINAL bug in
+    #       prose can itself contain a quoted example of the bug shape, plus an incidental
+    #       contraction or possessive elsewhere on the same line -- and that extra, unrelated
+    #       quote character shifts the quote-parity count below to EVEN, fooling it into treating
+    #       the quoted example as a real heredoc. Counting quotes better cannot fix that; only
+    #       excluding comment lines from heredoc-open detection entirely can. This check must
+    #       come BEFORE the quote-aware scan below, and only when not already inside a heredoc
+    #       body -- a "#" line that IS heredoc payload (package-pkg.sh writes whole scripts,
+    #       comments and all, inside one) keeps being skipped by the block above.
+    !/^[ \t]*#/ {
       # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a "<<WORD" sitting inside a
       #       quoted string, such as a bare word followed by <<EOF inside an echo argument, is
       #       not a heredoc and must not be read as one: the real incident silently ate ~120
@@ -110,6 +120,25 @@ for f in $files; do
       sub(/^[ \t]*#[ \t]*/, "", line)
       tag = line; sub(/:.*$/, "", tag)
       if (line ~ /^[a-z][a-z0-9_-]*:/ && tag in ok) {
+        # spec: 2026-09-13-comments-cite-a-reason spec-citation-tightening -- "spec:" is defined
+        #       as a POINTER to the authority, not a restatement of it: one line, no argument, no
+        #       prose. 111 of 202 "spec:" tags in tests/ turned out to be the original comment
+        #       with a four-character prefix, which the OLD rule accepted because it only checked
+        #       the prefix -- the closed set drifting into a catch-all, the exact failure closing
+        #       it was meant to prevent. So the TAG LINE ITSELF (never its continuations, which
+        #       stay free-form prose) must contain something locatable: a path, a bare filename
+        #       with a known extension, a YYYY-MM-DD spec name, or a numbered decision/check.
+        #       "platform:" is unaffected -- it states a fact, not a pointer, so prose is correct
+        #       there.
+        if (tag == "spec") {
+          rest = line; sub(/^spec:[ \t]*/, "", rest)
+          if (rest !~ /[^ \t\/]+\/[^ \t\/]+|\.(sh|yml|md|cmake|bats)|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]|check[ \t]+[0-9]+[a-z]*|decision[ \t]+[0-9]+|ruling[ \t]+[0-9]+|[A-Z][A-Za-z0-9]*-[A-Za-z0-9]+-[0-9]+/) {
+            printf "%s:%d: %s\n    spec: needs a locatable citation -- e.g. \"# spec: docs/superpowers/specs/2026-09-12-comments-cite-a-reason-design.md decision 2\"\n", FNAME, FNR, $0
+            bad++
+            intag = 0
+            next
+          }
+        }
         intag = 1; match($0, /^[ \t]*#[ \t]*/); tagcol = RLENGTH + 1; next
       }
       if (intag == 1) {
