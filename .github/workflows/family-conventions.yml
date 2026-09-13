@@ -1,11 +1,6 @@
 name: family-conventions
 
-# Reusable: the family conventions gate. A consumer adds a three-line caller job and gets every check
-# in scripts/check-family-conventions.sh, including ones added later -- the caller never changes.
-#
-# It checks out shipyard itself rather than expecting $SHIPYARD_SCRIPTS, so it works in repos that do
-# not consume shipyard's CMake side at all (swift-toolchain builds and mirrors; it has no install
-# step, no updater, no .pkg). A gate only some repos can run is not a family convention.
+# spec: modernmavericks-conventions SKILL.md, "Family conventions" -- "Wire it with the reusable workflow"
 
 on:
   workflow_call:

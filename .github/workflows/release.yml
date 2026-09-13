@@ -1,13 +1,5 @@
 name: release
 
-# shipyard is consumed through a MOVING tag: fifteen repos pin @v1, and every push to main reaches
-# them within minutes. Until now nothing recorded WHICH shipyard that was -- UPSTREAM_VERSION sat at
-# 1.0.5 across 13 content changes, so an install could not be told apart from a month-old one, and a
-# bad @v1 could not be pinned away from. Every push therefore cuts a version now.
-#
-# tag.yml used to own the tags. It is gone: one workflow owns both the immutable vX.Y.Z tag and the
-# moving @vX, so the two cannot disagree about what @v1 points at.
-
 on:
   push:
     branches: [main]
@@ -15,8 +7,6 @@ on:
 permissions:
   contents: write
 
-# A run that can publish is alone in its group and is cancelled by nothing (conventions check 1b).
-# Here EVERY push publishes, so there is no cancellable half but pull_request.
 concurrency:
   group: >-
     release-${{ github.event_name == 'pull_request'
@@ -61,24 +51,15 @@ jobs:
       - name: Standalone test suites
         run: sh scripts/run-repo-tests.sh
 
-      # shipyard must satisfy every convention it exports. It could not before: with no release.yml
-      # the gate exited early here, which is how check 7d's defect stayed invisible in the one repo
-      # whose files contain example `cmake ... -B` command lines.
       - name: Our own conventions gate
         run: sh scripts/check-family-conventions.sh
 
-      # The release asset is a pkg that installs the payload on either kind of box and keeps itself
-      # current. There is no tarball: nothing consumed it, and GitHub attaches source archives to
-      # every tag for free.
-      - name: Build both updater slices
+      - name: Build both updater slices (native x86_64/10.9, cross arm64)
         run: |
           set -eu
-          # Two configures, not two targets: CMAKE_OSX_ARCHITECTURES and the deployment target are
-          # directory-scoped, and arm64 has no 10.9. Same shape as mavericks-golang's updater and
-          # updater-cross. This runner is arm64, so x86_64/10.9 is the cross build here -- it is still
-          # the "native" slice in the pkg's sense: the one that runs on the 10.9 box.
-          # /usr/bin/clang, as every family updater build pins: the Apple toolchain, whatever else the
-          # runner image puts on PATH.
+          # platform: CMAKE_OSX_ARCHITECTURES and the deployment target are directory-scoped, so this
+          #           needs two configures, not two targets -- and arm64 has no 10.9. /usr/bin/clang
+          #           pins the Apple toolchain regardless of what else the runner image puts on PATH.
           cmake -S . -B "$RUNNER_TEMP/upd-native" -DSHIPYARD_BUILD_UPDATER=ON \
             -DMAVERICKS_ALLOW_GENERIC_ICON=ON -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9
@@ -93,9 +74,9 @@ jobs:
           set -eu
           v='${{ steps.ver.outputs.version }}'
           mkdir -p dist
-          # The payload is `cmake --install`'s layout, from its own configure: MAVERICKS_NO_USER_REGISTRY
-          # keeps this install from re-pointing the runner's registry (the self-install step above set
-          # it) at a staging prefix. The pkg's postinstall registers the INSTALLED payload instead.
+          # platform: MAVERICKS_NO_USER_REGISTRY keeps this configure from re-pointing the runner's
+          #           CMake user package registry (the self-install step above set it) at a staging
+          #           prefix; the pkg's postinstall registers the INSTALLED payload instead.
           cmake -S . -B "$RUNNER_TEMP/payload-build" -DMAVERICKS_NO_USER_REGISTRY=ON
           cmake --install "$RUNNER_TEMP/payload-build" --prefix "$RUNNER_TEMP/payload-prefix"
           sh scripts/package-pkg.sh \
@@ -104,22 +85,12 @@ jobs:
             --app-cross  "$RUNNER_TEMP/upd-cross/MavericksShipyardCrossUpdater.app" \
             --version "$v" \
             --out "dist/mavericks-shipyard-$v.pkg"
-          # What the installer will DO on a box that has the previous version: no relocation to a
-          # locally built updater, no skipped overwrite.
           sh scripts/assert_pkg_installs_in_place.sh "dist/mavericks-shipyard-$v.pkg"
 
       - name: Release notes
         run: |
           set -eu
           v='${{ steps.ver.outputs.version }}'
-          # Notes are optional per release; the generator guarantees a non-empty body, generating a
-          # default when release-notes/<TAG>.md is absent (shipyard has no committed notes, and with
-          # a release per push it should not grow them for routine changes).
-          #
-          # Called directly (no wrapper): shipyard DOES publish a floored .pkg of itself --
-          # package-pkg.sh builds it through set_install_floor.sh, whose MIN_OS defaults to (and
-          # self-checks) 10.9.5 -- so the notes must state the floor this repo's own appcast enforces,
-          # same as every other repo.
           sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "v$v" --version "$v" \
             --product Shipyard --min-os 10.9.5 --out dist/RELEASE_NOTES.md
           [ -s dist/RELEASE_NOTES.md ] || { echo "::error::release notes came back empty"; exit 1; }
@@ -131,7 +102,6 @@ jobs:
         run: |
           set -eu
           v='${{ steps.ver.outputs.version }}'
-          # The same notes the Release body gets, so Sparkle and the Release page tell one story.
           sh scripts/sign_and_appcast.sh \
             --channel-title "Mavericks Shipyard" \
             --version "$v" \
@@ -139,14 +109,10 @@ jobs:
             --notes-file dist/RELEASE_NOTES.md \
             --pkg "dist/mavericks-shipyard-$v.pkg" \
             > dist/appcast.xml
-          # A client on the previous release must SEE this one as an upgrade. shipyard tags vX.Y.Z,
-          # which the gate's default -mavericks.N scope cannot see -- without --tag-glob it would find
-          # no previous release and skip the ordering check on every release. 'v*.*.*' also keeps the
-          # moving major tag (v1) out of it.
+          # spec: modernmavericks-conventions SKILL.md, "A self-upstream repo gets a real baseline
+          #       too, via --tag-glob" -- this is the worked example the rule book names.
           sh scripts/assert_appcast_upgradeable.sh --appcast dist/appcast.xml --version "v$v" --tag-glob 'v*.*.*'
 
-      # Do the artifacts about to be published agree with each other and with the family's schemes?
-      # Where shipyard legitimately departs from them, INGREDIENTS.md says so and why.
       - name: Artifact conformance
         run: |
           set -eu
@@ -154,14 +120,12 @@ jobs:
           sh scripts/artifact-facts.sh dist "$v" | sh scripts/check-artifact-conformance.sh
           ls -l dist
 
-      # INSTALL the pkg here: this runner is the only Apple Silicon box that sees it before a developer's
-      # does, and the 10.9 box can neither build nor exercise the arm64 slice. The way this goes wrong is
-      # silent -- if Installer ran the scripts under Rosetta, the postinstall would keep the x86_64
-      # updater and delete the arm64 one with every gate above still green -- so the slices and payload
-      # are HARD-asserted. The runner is ephemeral, so installing into / costs nothing.
-      #
-      # Registration is only WARNED on. It runs as the console user through their login shell, and this
-      # runner's login environment is not a developer's: a miss here is signal, not a release blocker.
+      # platform: if Installer ran the scripts under Rosetta, the postinstall would keep the x86_64
+      #           updater and delete the arm64 one with every gate above still green -- this runner is
+      #           the only Apple Silicon box that sees the pkg before a developer's, and the 10.9 box
+      #           can neither build nor exercise the arm64 slice, so the slices and payload are
+      #           HARD-asserted here. Registration is only WARNED on: it runs as the console user
+      #           through their login shell, and this runner's login environment is not a developer's.
       - name: Install smoke (the pkg, on Apple Silicon)
         timeout-minutes: 10
         run: |
@@ -183,7 +147,7 @@ jobs:
           [ ! -e "$apps/MavericksShipyardUpdater.app" ] || fail "MavericksShipyardUpdater.app (x86_64) survived on Apple Silicon"
           [ -f "$payload/MavericksShipyardConfig.cmake" ] || fail "$payload/MavericksShipyardConfig.cmake is missing"
           [ -f "$payload/scripts/register-with-cmake.sh" ] || fail "$payload/scripts/register-with-cmake.sh is missing"
-          # lipo -info, not -archs (10.9's lipo has no -archs; the portability gate bans the idiom).
+          # platform: lipo -info, not -archs -- 10.9's lipo has no -archs (check-shell-portability.sh bans it).
           exe="/Library/Application Support/ModernMavericks/MavericksShipyardCrossUpdater.app/Contents/MacOS/MavericksShipyardCrossUpdater"
           lipo -info "$exe" | grep -q 'is architecture: arm64$' || fail "the remaining updater is not a thin arm64 executable: $(lipo -info "$exe" 2>&1)"
           reg="$HOME/.cmake/packages/MavericksShipyard/mavericks-shipyard"
@@ -205,10 +169,6 @@ jobs:
           name: shipyard-dist
           path: dist
 
-  # Before anything is published: no log of this run, and no file about to be released, carries a
-  # piece of the signing key (publish-release.yml looks for this job's record on any signed release).
-  # Local path + shipyard-ref for the same reason as publish below: scan with the scanner being
-  # shipped, not the previous one.
   scan:
     needs: build
     if: always()        # a build that fails after signing left logs too; scan them
@@ -222,9 +182,6 @@ jobs:
     secrets:
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
 
-  # Local `uses:` path -> THIS commit's publish workflow, and shipyard-ref pins the inner checkout of
-  # release-assets.sh to the same commit. Publishing with @v1 would ship a version using the previous
-  # version's tooling, unable to catch a defect in the tooling being shipped.
   publish:
     needs: [build, scan]
     permissions:
@@ -235,8 +192,6 @@ jobs:
       artifact: shipyard-dist
       shipyard-ref: ${{ github.sha }}
 
-  # Consumers pin @v1 (moving) or @vX.Y.Z (exact). Moved only after publish succeeds, so @v1 never
-  # points at a version that failed to release.
   major-tag:
     needs: [build, publish]
     runs-on: ubuntu-latest

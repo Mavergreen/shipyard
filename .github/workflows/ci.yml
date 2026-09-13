@@ -1,21 +1,8 @@
 name: CI
 
-# shipyard had no CI at all: the repo that tells the family "tests that exist must run" ran none of
-# its own. That matters more here than anywhere else — these scripts reach all seven product repos
-# through the moving @v1 tag, so a break here ships everywhere before anyone notices.
-#
-# Two invocations because there are two kinds of test:
-#   - ctest drives the parameterized ones (add_test passes each a source/config dir)
-#   - run-repo-tests.sh takes the standalone tests/*-test.sh and *.bats suites
-# The overlap is harmless: the ctest-owned scripts exit 77 (SKIP) when called without their argument.
-
 on:
   push:
-    branches-ignore: [main]   # main belongs to release.yml, which runs this same suite before it
-                              # publishes. Two workflows running it on main meant "the repo is red"
-                              # and "we published" were decided independently: ci.yml failed on four
-                              # consecutive commits while release.yml shipped v1.0.126 through .131
-                              # from those very trees.
+    branches-ignore: [main]   # spec: tests/shipyard-workflow-coupling-test.sh (only one workflow may run the suite on main)
   pull_request:
     branches: [main]          # the `test` job here is main's required status check
 
@@ -29,25 +16,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0      # shipyard-version.sh derives the patch from the commit count and
-                              # REFUSES a shallow clone rather than silently returning 1.0.1. Without
-                              # this the failure lands far from its cause: "installed package says
-                              # '1.0', derived version is ''", in a cmake test, nowhere near here.
+          fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
 
-      # Installs shipyard (this repo) and, incidentally, bats — which is what makes the *.bats
-      # suites below actually run instead of reporting SKIP.
-      - name: Install mavericks-shipyard (self)
+      - name: Install mavericks-shipyard (self) -- and bats, so the *.bats suites below can run
         uses: ./.github/actions/install
 
-      # The workflow-parse gate (check-family-conventions.sh check 8) needs PyYAML, and the macOS
-      # runner's python3 has none -- which is what reddened every run here for a month. It is
-      # provisioned in THIS job rather than in .github/actions/install because the need is local to
-      # shipyard: consumers reach that gate through family-conventions.yml, which runs on
-      # ubuntu-latest, whose python3 already has PyYAML. Putting it in the install action would have
-      # run a pip install in all seven consumers' release jobs to fix a problem none of them have.
-      # setup-python (not the system python3) so pip is not PEP 668 externally-managed; safe here
-      # because this job is ours -- inside the composite install action it would have prepended a
-      # Python to PATH for every later step in a CONSUMER's job.
+      # spec: this job's own PyYAML, not .github/actions/install's -- consumers reach the
+      #       workflow-parse gate through family-conventions.yml on ubuntu-latest, whose python3
+      #       already has PyYAML, so provisioning it in the shared install action would run a needless
+      #       pip install in every consumer's release job. setup-python, not the system python3, so
+      #       pip is not PEP 668 externally-managed.
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'

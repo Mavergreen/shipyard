@@ -1,34 +1,16 @@
 name: scan-for-key
 
-# Reusable: prove that no log of this run, and no file about to be released, carries any piece of the
-# Sparkle signing key -- before anything is published. A public repo's Actions logs are public, and
-# GitHub masks only the literal secret: a trace, a slice, a hex dump or a re-encoding goes out as-is.
-# scan_for_key.py looks for every 12-byte window of the key's secret half in all of those forms and
-# reports where, never what.
-#
-# Call it from a product's release.yml between the job that signs and publish-release.yml, gated the
-# same way publish is -- but under always(), so a run that FAILS after signing is scanned too. Its logs
-# are just as public, and were written while the key was in use (swift-runtime's first org-key bridge
-# stopped on a missing notes file right after signing, and nothing scanned it):
-#
-#   scan:
-#     needs: [build]
-#     if: always() && needs.build.outputs.publish == 'yes'
-#     permissions: { actions: read, contents: read }   # actions: read = this run's job logs
-#     uses: ModernMavericks/shipyard/.github/workflows/scan-for-key.yml@v1
-#     with: { artifact: <the artifact publish-release.yml publishes> }
-#     secrets: { SPARKLE_PRIVATE_KEY: "${{ secrets.SPARKLE_PRIVATE_KEY }}" }
-#   publish:
-#     needs: [build, scan]
-#
-# It is its own workflow, not a step of publish-release.yml, because reading job logs needs
-# `actions: read` and a called workflow may not ask for more than its caller grants: every product
-# calls publish-release.yml with `contents: write` alone. On a pass this uploads the sparkle-key-scan
-# artifact; publish-release.yml looks for it on any signed release (scripts/require_key_scan.sh).
-#
-# What it cannot do: un-show what a log already showed. A hit stops the release within minutes of the
-# leak; the key must then be treated as public. The prevention is upstream of this -- the key never
-# reaches a command line or a trace (tests/sign_and_appcast_key.bats) -- and this proves it held.
+# usage: modernmavericks-conventions SKILL.md, "Sparkle updater" names this the family's proof that
+#        no log or released file carries the signing key, and points here for the snippet:
+#        scan:
+#          needs: [build]
+#          if: always() && needs.build.outputs.publish == 'yes'
+#          permissions: { actions: read, contents: read }   # actions: read = this run's job logs
+#          uses: ModernMavericks/shipyard/.github/workflows/scan-for-key.yml@v1
+#          with: { artifact: <the artifact publish-release.yml publishes> }
+#          secrets: { SPARKLE_PRIVATE_KEY: "${{ secrets.SPARKLE_PRIVATE_KEY }}" }
+#        publish:
+#          needs: [build, scan]
 
 on:
   workflow_call:
@@ -60,8 +42,9 @@ jobs:
           ref: ${{ inputs.shipyard-ref }}
           path: .shipyard
 
-      # By pattern, so a build that failed before uploading its artifact still gets its LOGS scanned:
-      # a name that matches nothing fails the step, a pattern that matches nothing downloads nothing.
+      # platform: download-artifact matched by pattern, not name -- a name that matches nothing fails
+      #           the step, but a pattern that matches nothing downloads nothing, so a build that
+      #           failed before uploading its artifact still gets its LOGS scanned below.
       - uses: actions/download-artifact@v8
         with:
           pattern: ${{ inputs.artifact }}
@@ -77,8 +60,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: sh .shipyard/scripts/fetch_run_logs.sh "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" logs
 
-      # The key is only ever in this step's environment, read by the scanner; the shell never expands
-      # it, and the scanner prints where it found a piece, never the piece.
+      # platform: the key lives only in this step's own environment, read by the scanner -- the shell
+      #           never expands it, and the scanner prints WHERE it found a piece, never the piece.
       - name: Scan the logs and the release files for the signing key
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}

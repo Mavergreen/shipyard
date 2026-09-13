@@ -1,15 +1,6 @@
 name: publish-release
 
-# Reusable: the one way the family publishes. The caller hands over a version and the artifact holding
-# its assets plus RELEASE_NOTES.md; this downloads them, regenerates SHA256SUMS, and creates or updates
-# the release with those notes as its body.
-#
-# It owns checksums and the body on purpose. Both were per-repo before, and both were silently omitted:
-# tailscale published an empty Release body on EVERY release (including hand-tagged ones that had a
-# committed notes file), and swift-runtime set no body at all.
-#
-# action-gh-release, not `gh release create`: tag_name + target_commitish mint the tag inline, which
-# the dispatch-cut repos require -- a GITHUB_TOKEN-pushed tag triggers nothing.
+# spec: modernmavericks-conventions SKILL.md, "Publishing a release"
 
 on:
   workflow_call:
@@ -61,12 +52,10 @@ jobs:
           name: ${{ inputs.artifact }}
           path: dist
 
-      # A signed release must come with scan-for-key.yml's record that this run's logs and files were
-      # scanned for the signing key. That scan runs in the caller's own job (it needs actions: read,
-      # which this workflow may not ask for); this is where its absence shows, for every product.
-      # By pattern, not name: a name that matches nothing fails the step (and paints a red
-      # annotation on a green run); a pattern that matches nothing downloads nothing, and
-      # require_key_scan.sh decides whether that is acceptable.
+      # platform: download-artifact matched by pattern, not name -- a name that matches nothing fails
+      #           the step (a red annotation on what may be a legitimately unsigned release); a
+      #           pattern that matches nothing downloads nothing, and require_key_scan.sh below
+      #           decides whether that absence is acceptable.
       - name: Look for the signing-key scan
         uses: actions/download-artifact@v8
         with:
@@ -85,26 +74,16 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          # Fails loudly when the notes are missing or empty -- publishing is where the notes promise
-          # is kept, so an empty body stops the release rather than shipping quietly.
           files="$(sh .shipyard/scripts/release-assets.sh dist "$NOTES")"
-          # release-assets.sh proves the file EXISTS and is non-empty. This proves it is a release
-          # body: a title naming this exact version, a "### What changed" section, no empty section.
-          # The conventions gate (check-family-conventions.sh clause 14) checks a repo's wiring on its
-          # PR; this is the one point every release passes through -- a hand-tagged release, a
-          # re-dispatch of an old build, a repo that never had the gate -- so a body that regressed
-          # after that PR still cannot ship. It also catches the invisible case: a notes file copied
-          # under a new tag, which passes every other check and announces its predecessor.
           sh .shipyard/scripts/check-release-notes.sh "dist/$NOTES" "$VERSION"
           if [ "$CHECKSUMS" = true ]; then
             ( cd dist && printf '%s\n' "$files" | sed 's|^dist/||' | xargs shasum -a 256 > SHA256SUMS )
-            # Verify what we just wrote. Generating a checksum file and publishing it unread means the
-            # one artifact nobody can check by eye is the one nobody checked at all -- and a truncated
-            # or partial write looks exactly like a valid file until someone downloads it.
+            # spec: a checksum file nobody re-verifies is the one artifact nobody checked at all -- a
+            #       truncated or partial write looks exactly like a valid file until someone downloads
+            #       it, so this re-reads and verifies what was just written, and (below) confirms it
+            #       covers exactly the assets attached -- neither a missing nor an extra entry.
             ( cd dist && shasum -a 256 -c SHA256SUMS ) \
               || { echo "::error::SHA256SUMS does not verify against the files it names"; exit 1; }
-            # ...and it must cover exactly the assets being attached: an entry for a file we are not
-            # publishing, or an asset with no entry, is a checksum file that lies by omission.
             want="$(printf '%s\n' "$files" | sed 's|^dist/||' | sort)"
             got="$(sed 's/^[0-9a-f]*  //' dist/SHA256SUMS | sort)"
             [ "$want" = "$got" ] \
@@ -116,9 +95,6 @@ jobs:
           echo "=== body ==="; cat "dist/$NOTES"
           { echo 'files<<EOF'; printf '%s\n' "$files"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
 
-      # May this release be created, or is its tag already taken? The one allowed collision is a run
-      # TRIGGERED BY its own pushed tag -- which always finds that tag, because the tag started it.
-      # Refusing that left every tag-published repo unable to release (clang had no other path).
       - name: Refuse an already-taken tag
         env:
           VER: ${{ inputs.version }}
@@ -130,13 +106,6 @@ jobs:
           sh .shipyard/scripts/assert_tag_publishable.sh \
             "$VER" "https://github.com/$REPO" "$REF_TYPE" "$REF_NAME" "$SHA"
 
-      # Up to three attempts, each from a clean slate. action-gh-release creates the release as a DRAFT,
-      # uploads, and only then publishes it -- which is when the tag is minted -- and it does not retry a
-      # failed upload. So one dropped connection stranded a draft with no tag: golang's
-      # 1.26.8-mavericks.3 lost its native .pkg to "other side closed", and nothing downstream could see
-      # it, because to a tag-reading world it did not exist. Between attempts every draft of THIS tag is
-      # deleted (delete-draft-release.sh touches nothing published and nothing of another tag), and if
-      # the last attempt fails too, the draft goes with it and the error says what to do.
       - name: A first release needs a README a human has read
         env:
           REPO: ${{ github.repository }}
@@ -144,18 +113,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
-          # Only the FIRST release is gated: a repo that has published before has a README somebody
-          # shipped. "Has published before" means it HAS A RELEASE -- ask the Releases API, not the
-          # tag list. An earlier version of this step tested "does any tag exist", and that is wrong
-          # in a way that fails open: a repo carrying an unrelated tag -- a `backup/*` from a rebase,
-          # an annotation, anything a human pushed once -- would look like it had already published
-          # and the gate would silently switch itself off, which is the worst behaviour available to
-          # a guard. Three such tags were found sitting in one family checkout.
-          #
-          # This job checks out shipyard, never the calling repo, so there is no working tree to
-          # inspect. GH_TOKEN is the job's own token: the API read would work unauthenticated on a
-          # public repo, but runners share outbound IPs and the unauthenticated limit is 60/hour,
-          # so an authenticated read is the difference between a guard and a coin flip.
           n="$(gh api "repos/$REPO/releases?per_page=1" --jq 'length' 2>/dev/null || echo FAILED)"
           case "$n" in
             0) : ;;   # never released -- the gate applies
@@ -168,9 +125,6 @@ jobs:
               exit 0
               ;;
           esac
-          # Fetch the README AT THE COMMIT BEING RELEASED, not at the default branch's head: the
-          # release is cut from target_commitish, and that is the README the release will be read
-          # beside. A missing README is the script's to refuse, so an empty fetch still runs it.
           url="https://raw.githubusercontent.com/$REPO/$SHA/README.md"
           if curl -fsSL "$url" -o first-release-readme.md; then
             :
@@ -234,8 +188,8 @@ jobs:
           files: ${{ steps.assets.outputs.files }}
 
       - name: Nothing was published -- remove the draft
-        # Keyed on attempt 1, not attempt 3: a cleanup step that fails between attempts skips the rest,
-        # and must still not leave its draft behind.
+        # spec: keyed on attempt 1's outcome, not attempt 3's -- a cleanup step that fails between
+        #       attempts skips the rest, and must still not leave its draft behind.
         if: failure() && steps.publish1.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}

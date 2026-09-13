@@ -655,7 +655,11 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   read (see the wire-format rule below). Drafts are excluded; a `gh` failure is a failure, never a
   decision. `reconcile.yml` is the nightly backstop that calls both and dispatches the real release
   workflow when nothing realises the declared state — it reads and dispatches only
-  (`contents: read`, `actions: write`) and never writes a release body.
+  (`contents: read`, `actions: write`) and never writes a release body. **Deliberately cheap**: a
+  quiet night costs one API call per repo, not a build — a scheduled job that built each product to
+  check it would be fourteen macOS builds a night. And **idempotent by construction**: the dispatched
+  run recomputes the same digest and stops if the release turned up in between, so a reconcile run
+  racing a push-triggered release cannot double-publish.
 - **A version match is NEVER a state match, and `release-needed.sh` does not look at the version.**
   `version.sh auto` returns the *existing* tag's `N` whenever the upstream already has one, so it maps
   every declared state of a given upstream to **one** version. An earlier cut inferred
@@ -717,7 +721,18 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   A new repo ships that line; a human reads the README, makes it say what the project is, and
   deletes it. The gate keys on the substring `not been read or edited by a human`, so the wording
   around it is yours. Only the first release is gated — "has released before" is read as "has any
-  tag" — because a repo that has published has a README somebody shipped. Nothing inspects git
+  release" (the Releases API, `gh api repos/<repo>/releases?per_page=1`), because a repo that has
+  published has a README somebody shipped. **Not "has any tag"**: an earlier version of the check
+  tested that, and it fails open — a repo carrying an unrelated tag (a `backup/*` from a rebase, an
+  old annotation, anything a human pushed once) looks like it has already published and the gate
+  silently switches itself off, the worst behaviour available to a guard. Three such tags were found
+  sitting in one family checkout. This job checks out shipyard, never the calling repo, so there is
+  no working tree to read locally; `GH_TOKEN` is the job's own token, because the unauthenticated
+  API limit (60/hour) is shared across every runner's outbound IP and an authenticated read is the
+  difference between a guard and a coin flip. The README itself is fetched at the commit being
+  released (`target-commitish`, defaulting to `github.sha`), not the default branch's head — the
+  release is cut from that commit, and that is the README the release will be read beside; a missing
+  README is the underlying script's to refuse, so an empty fetch still runs it. Nothing inspects git
   authorship: it cannot tell a human's edit from an assistant committing a human's words, and the
   publish job has no checkout of your repo to inspect anyway. The point is narrow and worth it — the
   README is the page every visitor lands on, and nobody reads their own front door until something
@@ -1126,7 +1141,9 @@ signal (see the auto-merge intent above — fix runtime regressions in `-maveric
   bytes, hex, and standard/url-safe base64 at each byte alignment (`scan_for_key.py`, which reports
   where, never what). A hit stops the release; the key must then be treated as public. The job runs
   under `always()` (plus the publish condition): a run that fails *after* signing left public logs
-  written while the key was in use, and they are scanned too. It is a
+  written while the key was in use, and they are scanned too — swift-runtime's first org-key bridge
+  stopped on a missing notes file right after signing, and without `always()` nothing would have
+  scanned it. It is a
   separate workflow because reading logs needs `actions: read` and a called workflow can't ask for
   more than its caller grants — adding it to `publish-release.yml` would break every product's
   publish. `publish-release.yml` instead looks for the scan's record on any signed release

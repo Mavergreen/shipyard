@@ -1,10 +1,7 @@
 name: repackage-on-ingredient-bump
 
-# Reusable: a consumer calls this on push to main (filtered to its ingredient pin paths). If an
-# ingredient pin changed and the repo's own upstream did NOT, DISPATCH the consumer's release
-# workflow — workflow_dispatch IS triggerable by GITHUB_TOKEN, unlike a pushed tag — with
-# local_release=true, so the consumer computes -mavericks.(N+1) and publishes inline. New-upstream
-# (N=1) stays the repo's own job.
+# spec: modernmavericks-conventions SKILL.md, "Consuming a ModernMavericks toolchain + auto-propagation"
+#       -- "Auto-propagation via the shared reusable workflow (dispatch, NOT tag)"
 
 on:
   workflow_call:
@@ -53,8 +50,8 @@ jobs:
           SCR="$(cat "$HOME/.cmake/packages/MavericksShipyard/"* | head -1)/scripts"
           before="$BEFORE"; case "$before" in ''|0000000000000000000000000000000000000000) before="HEAD~1";; esac
           CHANGED="$(git diff --name-only "$before" HEAD)"; export CHANGED
-          # The RESOLVED rev, not the raw event field: a path:KEY entry needs to read the file as it
-          # was, and github.event.before is all-zeros on a first push.
+          # platform: github.event.before is all-zeros on a first push -- export the RESOLVED rev
+          #           instead, since a path:KEY entry needs to read the file as it was then.
           BEFORE="$before"; export BEFORE
           out="$(sh "$SCR/repackage-decision.sh")"
           echo "decision: $out"
