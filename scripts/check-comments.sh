@@ -19,7 +19,8 @@ alt="$(tr '\n' '|' < "$REASONS" | sed 's/|$//')"
 _tmp="${TMPDIR:-/tmp}"
 countfile="$(mktemp "${_tmp%/}/check-comments-count.XXXXXX")"
 listfile="$(mktemp "${_tmp%/}/check-comments-list.XXXXXX")"
-trap 'rm -f "$countfile" "$listfile"' EXIT
+rawfile="$(mktemp "${_tmp%/}/check-comments-raw.XXXXXX")"
+trap 'rm -f "$countfile" "$listfile" "$rawfile"' EXIT
 
 if [ "$#" -gt 0 ]; then
   # spec: SKILL.md "Comments cite a reason" -- a path NAMED on the command
@@ -37,7 +38,17 @@ if [ "$#" -gt 0 ]; then
     printf '%s\n' "$f" >> "$listfile"
   done
 else
-  (cd "$ROOT" && git ls-files '*.sh' '*.yml') | sed "s|^|${ROOT%/}/|" > "$listfile"
+  # platform: a bare "( ... )" subshell's exit status does not survive a pipe under set -e,
+  #           and & and \ are metacharacters in a sed replacement -- either one can turn a
+  #           failed or mangled listing into an empty one, exit 0.
+  if ! git -C "$ROOT" ls-files '*.sh' '*.yml' > "$rawfile"; then
+    echo "check-comments: git ls-files failed in $ROOT -- refusing to report clean having examined nothing" >&2
+    exit 2
+  fi
+  : > "$listfile"
+  while IFS= read -r rel; do
+    printf '%s/%s\n' "${ROOT%/}" "$rel" >> "$listfile"
+  done < "$rawfile"
 fi
 
 rc=0

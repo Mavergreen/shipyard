@@ -284,6 +284,27 @@ rc=0
 grep -q "named.sh:3:" "$w/spacedrepo.out" \
   || { echo "FAIL spaced-repo: expected the untagged comment at line 3 to be named: $(cat "$w/spacedrepo.out")"; exit 1; }
 
+nongit="$w/not a git checkout"
+mkdir -p "$nongit/scripts"
+printf 'platform\nspec\n' > "$nongit/comment-reasons"
+printf '#!/bin/sh\nx=1\n' > "$nongit/scripts/clean.sh"
+rc=0
+( cd "$nongit" && sh "$S" ) > "$w/nongit.out" 2>&1 || rc=$?
+[ "$rc" -ne 0 ] \
+  || { echo "FAIL nongit: a working directory that is not a git repo must not report clean having examined nothing -- git ls-files fails there, and the default listing must not swallow that behind a pipeline: expected nonzero exit, got 0: $(cat "$w/nongit.out")"; exit 1; }
+
+amprepo="$w/repo & co"
+mkdir -p "$amprepo/scripts"
+printf 'platform\nspec\n' > "$amprepo/comment-reasons"
+printf '#!/bin/sh\nx=1\n# untagged in a checkout whose path contains an ampersand\n' > "$amprepo/scripts/named.sh"
+( cd "$amprepo" && git init -q . && git add -A ) >/dev/null 2>&1
+rc=0
+( cd "$amprepo" && sh "$S" ) > "$w/amprepo.out" 2>&1 || rc=$?
+[ "$rc" -eq 1 ] \
+  || { echo "FAIL amp-repo: a checkout path containing & must still be scanned -- sed reads & as 'the whole match' in a replacement, mangling every path and skipping every file: expected exit 1, got $rc: $(cat "$w/amprepo.out")"; exit 1; }
+grep -q "named.sh:3:" "$w/amprepo.out" \
+  || { echo "FAIL amp-repo: expected the untagged comment at line 3 to be named: $(cat "$w/amprepo.out")"; exit 1; }
+
 countcheck="$w/countcheck.sh"
 printf '#!/bin/sh\n# one\necho 1\n# two\necho 2\n# three\necho 3\n' > "$countcheck"
 sh "$S" "$countcheck" > "$w/countcheck.out" 2>&1 || true
