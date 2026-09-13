@@ -6,12 +6,11 @@
 #          Anything else -- a raw SHA, a branch, an unreleased tag -- names no release and FAILS
 #          rather than invent a number; the caller falls back to the line and says why.
 # platform: a GitHub Action's own checkout is a TARBALL with no .git, so shipyard-version.sh's
-#           commit-count derivation cannot run there -- every consumer's installed shipyard reported
-#           "1.0", the anonymous install this script exists to end. The ref the consumer pinned is
-#           the one piece of identity that survives.
+#           commit-count derivation cannot run there.
 # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "shipyard: consume
-#       its facilities, never hand-roll them" -- a committed stamp is not an option either: check 7
-#       fails a tracked VERSION.
+#       its facilities, never hand-roll them" -- resolving from the pinned ref is what ends the
+#       anonymous install: every consumer's installed shipyard used to report "1.0" regardless of
+#       @<ref>. A committed stamp is not an option either: check 7 fails a tracked VERSION.
 set -eu
 ref="${1:?resolve-action-version: ref required}"
 url="${2:-https://github.com/ModernMavericks/shipyard}"

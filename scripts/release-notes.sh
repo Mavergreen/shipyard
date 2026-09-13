@@ -217,9 +217,8 @@ if [ -n "$PREV" ]; then
     #       follows": the rule binds anything appended after this generator hands the file off too
     #       (the release-doctrine session's `ModernMavericks-State:` marker is the live case), which
     #       is why it is written down here even though this file cannot enforce that append itself.
-    # platform: `[ -s "$f" ] && cmd` is this codebase's established idiom elsewhere in this file, but
-    #           as the LAST command of a script or function it returns non-zero under `set -e` and
-    #           aborts the caller when footer_tmp is empty -- written as an `if` here instead.
+    # platform: `[ -s "$f" ] && cmd`, as the LAST command of a script or function, returns non-zero
+    #           under `set -e` and aborts the caller when the test is false.
     if [ -s "$footer_tmp" ]; then
       printf '\n' >> "$footer_tmp"
     fi

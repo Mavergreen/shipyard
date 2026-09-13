@@ -9,11 +9,11 @@
 #          only ever fire on a scan that did not run or did not pass.
 # platform: reading job logs needs `actions: read`, and a called GitHub Actions workflow may not ask
 #           for more than its caller grants -- every product calls this one with `contents: write`
-#           alone, so the scan cannot live in publish-release.yml itself without breaking every
-#           publish in the family at once.
+#           alone.
 # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Sparkle updater"
-#       -- scan-for-key.yml is the separate workflow this constraint forces; this script is where its
-#       absence becomes visible on publish.
+#       -- scan-for-key.yml is the separate workflow this constraint forces, since the scan cannot
+#       live in publish-release.yml itself without breaking every publish in the family at once;
+#       this script is where its absence becomes visible on publish.
 set -eu
 [ "$#" -eq 2 ] || { echo "usage: require_key_scan.sh DIST RECORD_DIR" >&2; exit 2; }
 DIST="$1"; RECORD="$2/sparkle-key-scan.txt"

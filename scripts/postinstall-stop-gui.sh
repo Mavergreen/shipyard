@@ -7,7 +7,10 @@
 # platform: launchd's own unload does not reliably kill a process that ignores SIGTERM, and `open -a`
 #           / a fresh agent load then starts the new instance beside the survivor -- an update leaves
 #           the OLD instance running beside the NEW one ("two menu-bar icons until I quit the old
-#           one"). TERM, then a guaranteed KILL; scoped to the console user (a per-user GUI process).
+#           one").
+# platform: `pkill -f` matches a process's own recorded command line, which still reads the OLD
+#           Contents/MacOS/<exec> path even after the .app on disk is renamed -- a renamed bundle's
+#           already-running instance keeps its original invocation path until it exits.
 # spec: tests/assert_gui_relaunch_safe.bats "helper: sourcing defines mav_stop_gui_instance" -- no
 #       `exit` and mav_-prefixed vars, so sourcing this file cannot disturb the caller.
 mav_stop_gui_instance() {  # $1 = Contents/MacOS/<exec>   $2 = console uid

@@ -81,6 +81,13 @@ out="$(sh "$S" 9.9p3-mavericks.2)"
   out="$(sh "$S")"
   [ "$out" = 1.5.2-mavericks.1 ] \
     || { echo "FAIL v-collision: outside --tag-glob, a leading 'v' must NOT be stripped -- mavericks-legacysupport ships a stray v1.5.2-mavericks.1 beside the real 1.5.2-mavericks.1, and stripping it would let the two collide/compare as the same release, or surface the stray one as the baseline instead of the real tag: got '$out'"; exit 1; }
-)
+  out="$(sh "$S" 1.5.2-mavericks.1)"
+  [ -z "$out" ] \
+    || { echo "FAIL v-collision (excluded): the no-exclude call above cannot tell 'v stripped' from 'v not stripped' -- git lists the real tag first, so it leads either way, and the stray's equal key only ties (never wins). Excluding the real tag, how this script is actually called when publishing, isolates the stray: with the real tag excluded, a leading 'v' must still not be stripped, or the stray v1.5.2-mavericks.1 surfaces as the baseline in place of NONE: got '$out'"; exit 1; }
+) || exit 1
+# platform: bash 3.2 (macOS's /bin/sh) does not propagate a bare subshell's nonzero exit under
+#           set -e -- the subshell above can print FAIL and exit 1 internally while the script
+#           carries on and reports PASS regardless. `|| exit 1` checks the status explicitly instead
+#           of relying on errexit to see it.
 
 echo "PASS: previous-release-tag"

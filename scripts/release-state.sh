@@ -117,10 +117,12 @@ while IFS="$(printf '\t')" read -r name spec || [ -n "$name" ]; do
   printf '%s=%s\n' "$name" "$value" >> "$lines"
 done < "$decl"
 
-# platform: LC_ALL=C, so the order is byte order on every box, forever -- this line IS the wire
-#           format (see tests/release-state-test.sh for the glibc-vs-BSD collation divergence this
-#           guards against: the digest is computed on macOS at build time and on glibc in the
-#           nightly reconcile).
+# platform: LC_ALL=C makes `sort` order by raw byte value on every box, forever -- glibc's own
+#           locale collation (en_US.UTF-8) orders some names differently than that, while macOS's
+#           BSD sort is byte order in every locale it has.
+# spec: tests/release-state-test.sh -- this line IS the wire format: the digest is computed on
+#       macOS at build time and on glibc in the nightly reconcile, so a byte-order regression here
+#       is a two-host disagreement about whether a state was released.
 rendered="$(LC_ALL=C sort < "$lines")"
 
 if [ "$RENDER" = yes ]; then printf '%s\n' "$rendered"; exit 0; fi

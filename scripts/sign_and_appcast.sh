@@ -18,10 +18,10 @@
 #          verifies against the public half of whatever key it was handed.
 # platform: a public repo's Actions logs are public, and GitHub masks only the literal secret -- a
 #           shell trace prints every expanded command, and argv is visible to anything that can list
-#           processes. So the private key reaches the signer only on its stdin
-#           (`printenv SPARKLE_PRIVATE_KEY |`), never expanded into a command.
+#           processes.
 # spec: tests/sign_and_appcast_key.bats -- runs this script under `sh -x` and fails on any piece of
-#       the key in the output.
+#       the key in the output. The private key reaches the signer only on its stdin
+#       (`printenv SPARKLE_PRIVATE_KEY |`), never expanded into a command.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 
@@ -52,8 +52,7 @@ printenv SPARKLE_PRIVATE_KEY | grep -q . \
 if [ -z "$SIGNER" ]; then
   command -v gh >/dev/null 2>&1 || { echo "sign_and_appcast: no --signer, and gh unavailable to fetch ed25519-sign" >&2; exit 1; }
   # platform: an unauthenticated `gh api` releases call is anonymous (60 req/hr) and 403s under CI
-  #           load. In a workflow, export GH_TOKEN: ${{ github.token }} on this step (public
-  #           cross-repo read still works).
+  #           load.
   if [ -z "${GH_TOKEN:-}" ] && [ -z "${GITHUB_TOKEN:-}" ] && ! gh auth status >/dev/null 2>&1; then
     echo "sign_and_appcast: gh is unauthenticated; set GH_TOKEN (e.g. GH_TOKEN: \${{ github.token }}) so the ed25519-sign fetch isn't rate-limited" >&2
     exit 1

@@ -22,8 +22,7 @@ case "$line" in
 esac
 
 # platform: `--is-shallow-repository` needs git >= 2.15 (2017); that floor is safe for every runner
-#           and dev box in this family, so we use it rather than the more portable (but uglier)
-#           fallback of testing for a `shallow` file in the git dir.
+#           and dev box in this family.
 if [ "$(git -C "$root" rev-parse --is-shallow-repository)" = "true" ]; then
   echo "shipyard-version: $root is a shallow clone; the commit count is meaningless there. Fetch full history (fetch-depth: 0 in CI, or 'git fetch --unshallow' locally) and retry." >&2
   exit 1

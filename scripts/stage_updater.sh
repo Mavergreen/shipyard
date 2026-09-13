@@ -52,6 +52,7 @@ mkdir -p "$STAGE$APPDIR" "$STAGE/Library/LaunchAgents"
 rm -rf "$STAGE$APPDIR/$appbase"
 cp -R "$APP" "$STAGE$APPDIR/"
 
+# platform: `#` as the sed delimiter -- labels and abs paths never contain it.
 sed -e "s#@MAVERICKS_AGENT_LABEL@#$LABEL#g" \
     -e "s#@MAVERICKS_UPDATER_INSTALLED_EXEC@#$installed_exec#g" \
     "$TPL/updatecheck.plist.in" > "$STAGE/Library/LaunchAgents/$LABEL.plist"
