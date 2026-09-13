@@ -52,6 +52,16 @@ ok tagged_continuation <<'EOF'
 . ./lib.sh
 EOF
 
+ok unbounded_tagged_block <<'EOF'
+#!/bin/sh
+# platform: the first line carries the tag
+#           and the second, third, fourth and fifth lines are argument carrying no platform
+#           fact whatsoever, which the gate accepts, because a tag binds the indented lines
+#           beneath it and nothing counts them. This is the accepted limit, pinned here so the
+#           spec's "honest limit" paragraph describes the code instead of an intention.
+echo hi
+EOF
+
 # spec: scripts/check-comments.sh -- "spec:" is a pointer to the authority, not a restatement of
 #       it, and the TAG LINE ITSELF (never a continuation) must carry something locatable: a
 #       path, a known-extension filename, a YYYY-MM-DD name, or a numbered decision/check.
