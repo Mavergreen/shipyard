@@ -394,6 +394,10 @@ if [ -n "$CI_FILES" ]; then
          "build the body with release-notes.sh; --generate-notes cannot say which ingredient moved"
   fi
 
+  # platform: a flag and its value are separated by a space OR an "=", and grep and sed see only
+  #           the characters, so the separator below is a character class rather than a literal
+  #           space. Demanding one of the two is also what keeps --out-dir and --output from
+  #           matching as --out.
   strip_arg() {  # $1 = the flag itself, e.g. '--out'; prints each value it is given, unquoted, once
     # shellcheck disable=SC2086  # CI_FILES is a deliberate word-split list of paths
     grep -hv '^[[:space:]]*#' $CI_FILES 2>/dev/null \

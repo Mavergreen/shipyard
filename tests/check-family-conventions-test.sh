@@ -624,6 +624,14 @@ grep -q '^ *--out \\$' "$work/g17/.github/workflows/release.yml" \
   || { echo "FAIL test setup did not produce a line-wrapped --out"; exit 1; }
 (cd "$work/g17" && sh "$S" >/dev/null) || { echo "FAIL a line-wrapped --out value should pass"; exit 1; }
 
+mkrepo "$work/g18"
+sed -e 's|--out dist/RELEASE_NOTES\.md|--out=dist/RELEASE_NOTES.md|' \
+    "$work/ok/.github/workflows/release.yml" > "$work/g18/.github/workflows/release.yml"
+grep -q -e '--out=dist/RELEASE_NOTES\.md' "$work/g18/.github/workflows/release.yml" \
+  || { echo "FAIL test setup did not produce an --out=VALUE form"; exit 1; }
+(cd "$work/g18" && sh "$S" >/dev/null) \
+  || { echo "FAIL --out=VALUE is the same command as --out VALUE, and a repo that writes the equals form must not be told it reads a notes file the generator does not write: the flag/value separator is a character class, not a literal space"; exit 1; }
+
 # spec: scripts/check-family-conventions.sh -- the same on the reading side, which wraps just as legally. A block scalar, because that
 #       is where a wrapped shell command can legally live: folding a plain `run:` scalar over two
 #       lines would change what the shell is handed, and a fixture has to be a repo someone could
