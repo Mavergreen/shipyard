@@ -815,4 +815,17 @@ printf '%s\n' "$out" | grep -q -- '- comments: <reason>' \
 printf '%s\n' "$out" | grep -q 'DECLARED DEVIATION' \
   && { echo "FAIL: a scoped deviation must not also be announced as accepted: $out"; exit 1; }
 
+mkrepo "$work/cm6"
+mkdir -p "$work/cm6/scripts"
+printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm6/scripts/x.sh"
+printf 'platform\nspec\n' > "$work/cm6/comment-reasons"
+printf '# Build ingredients\n\n## Conformance deviations\n\n- comments :vendor/* upstream code, not ours to sweep\n' \
+  > "$work/cm6/INGREDIENTS.md"
+(cd "$work/cm6" && git add -A) >/dev/null 2>&1
+if out="$(cd "$work/cm6" && sh "$S" 2>&1)"; then echo "FAIL: a scoped comments deviation with a space before the colon was honoured -- the parser that accepts the deviation line tolerates that space, and the rejection must too: $out"; exit 1; fi
+printf '%s\n' "$out" | grep -q 'repo-wide' \
+  || { echo "FAIL: the rejection must say check 15's deviation is repo-wide, or the author just retries the same glob: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'DECLARED DEVIATION' \
+  && { echo "FAIL: a scoped deviation must not also be announced as accepted: $out"; exit 1; }
+
 echo "PASS: check-family-conventions"

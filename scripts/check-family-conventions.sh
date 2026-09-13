@@ -438,7 +438,7 @@ if [ -f "$SELF/check-comments.sh" ]; then
   deviation=""; devscope=""
   if [ -f INGREDIENTS.md ]; then
     devscope="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
-      | sed -n 's/^- *comments:\([^ :][^ :]*\).*$/\1/p' | head -1)"
+      | sed -n 's/^- *comments *:\([^ :][^ :]*\).*$/\1/p' | head -1)"
     deviation="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
       | sed -n 's/^- *comments *: *\(..*\)$/\1/p' | head -1)"
   fi
