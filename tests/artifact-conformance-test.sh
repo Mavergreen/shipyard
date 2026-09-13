@@ -498,6 +498,26 @@ rm -rf "$_sent"
 [ "$(printf '%s\n' "$_sent_facts" | tail -1)" = "end-of-facts" ] \
   || { echo "FAIL: artifact-facts.sh must end a successful run with the sentinel; got: $(printf '%s\n' "$_sent_facts" | tail -1)"; exit 1; }
 
+_ext="$(mktemp -d "${TMPDIR:-/tmp}/af-extract.XXXXXX")"
+mkdir -p "$_ext/dist"
+cat > "$_ext/dist/appcast.xml" <<'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <item>
+      <sparkle:version>1000</sparkle:version>
+      <sparkle:shortVersionString>1.0.0-mavericks.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>10.9.5</sparkle:minimumSystemVersion>
+      <enclosure url="https://example.com/d/1.0.0-mavericks.1/p.pkg" length="4096" sparkle:edSignature="x" />
+    </item>
+  </channel>
+</rss>
+XML
+_ext_facts="$(sh "$AF" "$_ext/dist" 1.0.0-mavericks.1 "$_ext")"
+rm -rf "$_ext"
+printf '%s\n' "$_ext_facts" | grep -qxF 'appcast appcast.xml 1.0.0-mavericks.1 p.pkg 4096 10.9.5' \
+  || { echo "FAIL: the identifying version and the OS floor are ELEMENTS while the URL and the length are enclosure ATTRIBUTES, so reading either from the wrong half yields unknown/0 -- and the element to read is shortVersionString, not <sparkle:version> 1000, which is the orderable comparison key and deliberately not the release version. Expected 'appcast appcast.xml 1.0.0-mavericks.1 p.pkg 4096 10.9.5', got: $_ext_facts"; exit 1; }
+
 # spec: RELEASE_NOTES.md -- END TO END, on the real failure rather than a fixture: the exact
 #       dist that regressed. An empty RELEASE_NOTES.md kills the producer before dist/*'s later
 #       entries (RELEASE_NOTES.md sorts first), so the appcast's unrelated description and its

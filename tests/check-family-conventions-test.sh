@@ -293,7 +293,7 @@ SH
 mkrepo "$work/bcomment"
 cat > "$work/bcomment/note.sh" <<'SH'
 #!/bin/sh
-# Historically we ran `cmake -S . -B legacy-build` here; see the notes for why we stopped.
+# Historically we ran cmake -S . -B legacy-build here; see the notes for why we stopped.
 exit 0
 SH
 (cd "$work/bcomment" && git add -A >/dev/null 2>&1; sh "$S" >/dev/null) || { echo "FAIL: a commented-out cmake line is not a build dir"; exit 1; }

@@ -14,8 +14,10 @@
 #            others      passed through to gen_appcast.sh
 #          After signing, assert_update_trusted.sh proves the clients ALREADY INSTALLED will accept
 #          the signature -- against the key in the live release's updater, not the repo's .pub -- and
-#          no appcast is emitted if they would not. The signer's own self-check cannot tell: it
-#          verifies against the public half of whatever key it was handed.
+#          no appcast is emitted if they would not.
+# platform: the signer's own self-check cannot answer that question -- it verifies against the
+#           public half of whatever key it was handed, so a signature made with a key no installed
+#           client trusts still passes it.
 # platform: a public repo's Actions logs are public, and GitHub masks only the literal secret -- a
 #           shell trace prints every expanded command, and argv is visible to anything that can list
 #           processes.

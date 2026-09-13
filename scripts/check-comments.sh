@@ -8,7 +8,6 @@
 #          stderr. Exit 0 clean, 1 if any violation was found, 2 on a usage
 #          error.
 set -eu
-SELF="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(pwd)"
 REASONS="$ROOT/comment-reasons"
 # spec: SKILL.md "Comments cite a reason" -- opt-in via comment-reasons keeps

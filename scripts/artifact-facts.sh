@@ -124,6 +124,7 @@ for f in "$dist"/*; do
       len="$(sed -n 's/.*<enclosure[^>]*length="\([^"]*\)".*/\1/p' "$f" | head -1)"
       printf 'appcast %s %s %s %s %s\n' "$b" "${ver:-unknown}" "${url##*/}" "${len:-0}" "${minos:-none}"
       [ -z "$url" ] || printf 'enclosure-url %s %s\n' "$b" "$url"
+      # platform: a CDATA body spans lines, and sed is line-oriented, so it cannot isolate one.
       # spec: tests/artifact-conformance-test.sh -- the <description> CDATA, digested. gen_appcast.sh
       #       wraps the rendered notes in a leading blank line and an injected <style> block that
       #       --render-notes never emits; both are stripped so this compares the NOTES against

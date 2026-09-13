@@ -25,6 +25,15 @@ launchctl asuser 501 launchctl load -w /Library/LaunchAgents/foo.systray.plist')
   [ "$status" -eq 0 ]
 }
 
+@test "the ok message claims presence, not order, because order is never checked" {
+  f="$(pi stop_after 'launchctl asuser 501 open -a "/Applications/Foo.app"
+pkill -TERM -U 501 -f Contents/MacOS/Foo')"
+  run sh "$GATE" "$f"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q 'presence, not order'
+  [ "${output#*before relaunching}" = "$output" ]
+}
+
 @test "open -a with NO stop: rejected" {
   f="$(pi bad_open 'launchctl asuser 501 open -a "/Applications/Foo.app"')"
   run sh "$GATE" "$f"

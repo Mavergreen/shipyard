@@ -29,7 +29,7 @@ for f in "$@"; do
     continue
   fi
   if grep -Eq 'mav_stop_gui_instance|pkill|launchctl[[:space:]]+unload' "$f"; then
-    echo "assert_gui_relaunch_safe: ok — ${f##*/} stops the old instance before relaunching"
+    echo "assert_gui_relaunch_safe: ok — ${f##*/} relaunches a GUI app and also stops an old instance (presence, not order: nothing here checks the stop comes first)"
   else
     echo "assert_gui_relaunch_safe: ${f##*/} relaunches a GUI app but never stops the old instance -- an update will leave two menu-bar icons; call mav_stop_gui_instance (postinstall-stop-gui.sh) first" >&2
     status=1
