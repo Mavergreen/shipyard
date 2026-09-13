@@ -430,15 +430,22 @@ fi
 #       cannot drift apart. Opt-in falls out of check-comments.sh itself: it exits 0 with no
 #       comment-reasons file, so a consumer inherits this check through @v1 but not its failure,
 #       until it sweeps its own tree and adds one. A swept repo that still wants ONE declared
-#       exception states it under INGREDIENTS.md "## Conformance deviations", the same shape
-#       check-artifact-conformance.sh already uses.
+#       exception states it under INGREDIENTS.md "## Conformance deviations" as
+#       "- comments: <reason>", and that switches the check off REPO-WIDE. The "<check>:<glob>"
+#       scoping that check-artifact-conformance.sh honours is NOT honoured here and is rejected
+#       rather than swallowed as part of the reason.
 if [ -f "$SELF/check-comments.sh" ]; then
-  deviation=""
+  deviation=""; devscope=""
   if [ -f INGREDIENTS.md ]; then
+    devscope="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
+      | sed -n 's/^- *comments:\([^ :][^ :]*\).*$/\1/p' | head -1)"
     deviation="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
       | sed -n 's/^- *comments *: *\(..*\)$/\1/p' | head -1)"
   fi
-  if [ -n "$deviation" ]; then
+  if [ -n "$devscope" ]; then
+    fail "INGREDIENTS.md scopes the comments deviation to \"$devscope\", but check 15's deviation is repo-wide and a glob is not honoured here" \
+         "write \"- comments: <reason>\" (a space after the colon) and accept that it switches comment checking off for the whole repo, or drop the deviation and tag the comments"
+  elif [ -n "$deviation" ]; then
     echo "check-family-conventions: comments: DECLARED DEVIATION -- $deviation"
   else
     sh "$SELF/check-comments.sh" \

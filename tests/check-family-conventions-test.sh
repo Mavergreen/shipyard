@@ -800,4 +800,19 @@ printf '# Build ingredients\n\n## Conformance deviations\n\n- comments: vendored
 (cd "$work/cm4" && git add -A) >/dev/null 2>&1
 (cd "$work/cm4" && sh "$S" >/dev/null) || { echo "FAIL: a declared deviation with a reason should pass"; exit 1; }
 
+mkrepo "$work/cm5"
+mkdir -p "$work/cm5/scripts"
+printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm5/scripts/x.sh"
+printf 'platform\nspec\n' > "$work/cm5/comment-reasons"
+printf '# Build ingredients\n\n## Conformance deviations\n\n- comments:vendor/* upstream code, not ours to sweep\n' \
+  > "$work/cm5/INGREDIENTS.md"
+(cd "$work/cm5" && git add -A) >/dev/null 2>&1
+if out="$(cd "$work/cm5" && sh "$S" 2>&1)"; then echo "FAIL: a scoped comments deviation was honoured -- the glob was swallowed as part of the reason and comment checking went off REPO-WIDE, which is exactly the drift nobody would ever notice: $out"; exit 1; fi
+printf '%s\n' "$out" | grep -q 'repo-wide' \
+  || { echo "FAIL: the rejection must say check 15's deviation is repo-wide, or the author just retries the same glob: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q -- '- comments: <reason>' \
+  || { echo "FAIL: the rejection must name what to write instead: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'DECLARED DEVIATION' \
+  && { echo "FAIL: a scoped deviation must not also be announced as accepted: $out"; exit 1; }
+
 echo "PASS: check-family-conventions"
