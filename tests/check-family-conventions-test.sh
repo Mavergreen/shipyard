@@ -179,7 +179,7 @@ PY
 # spec: tests may be run from a DIFFERENT workflow (tailscale runs ctest from ci.yml, not
 #       release.yml).
 mkrepo "$work/x"; grep -v 'run-repo-tests' "$work/ok/.github/workflows/release.yml" > "$work/x/.github/workflows/release.yml"
-printf 'name: CI\njobs:\n  build:\n    steps:\n      - run: ctest --preset cross\n' > "$work/x/.github/workflows/ci.yml"
+printf 'name: CI\njobs:\n  build:\n    steps:\n      - run: shipyard-ctest --preset cross\n' > "$work/x/.github/workflows/ci.yml"
 (cd "$work/x" && sh "$S" >/dev/null) || { echo "FAIL tests run from ci.yml should pass"; exit 1; }
 
 # spec: SKILL.md "Versioning" -- VERSION must not be committed. The shipped state lives in tags; a
@@ -236,7 +236,7 @@ JSON
 #       of fifteen repos spell their ignores differently and all are fine.
 mkrepo "$work/bo"
 cat >> "$work/bo/.github/workflows/release.yml" <<'YML'
-      - run: cmake -S updater -B build/updater
+      - run: shipyard-cmake -S updater -B build/updater
 YML
 if (cd "$work/bo" && sh "$S" >/dev/null 2>&1); then echo "FAIL: an unignored build output dir should fail"; exit 1; fi
 (cd "$work/bo" && sh "$S" 2>&1 | grep -q 'build/updater') || { echo "FAIL: should name the unignored path"; exit 1; }
@@ -244,7 +244,7 @@ if (cd "$work/bo" && sh "$S" >/dev/null 2>&1); then echo "FAIL: an unignored bui
 # spec: scripts/check-family-conventions.sh -- ignored, it must pass -- any spelling that actually covers the path is fine.
 mkrepo "$work/bok"
 cat >> "$work/bok/.github/workflows/release.yml" <<'YML'
-      - run: cmake -S updater -B build/updater
+      - run: shipyard-cmake -S updater -B build/updater
 YML
 printf 'build/updater/\n' >> "$work/bok/.gitignore"
 (cd "$work/bok" && git add -A >/dev/null 2>&1; sh "$S" >/dev/null) || { echo "FAIL: an ignored build output dir should pass"; exit 1; }
@@ -253,8 +253,8 @@ printf 'build/updater/\n' >> "$work/bok/.gitignore"
 #       leaving it.
 mkrepo "$work/boo"
 cat >> "$work/boo/.github/workflows/release.yml" <<'YML'
-      - run: cmake -S . -B "$RUNNER_TEMP/b"
-      - run: cmake -S . -B /tmp/build
+      - run: shipyard-cmake -S . -B "$RUNNER_TEMP/b"
+      - run: shipyard-cmake -S . -B /tmp/build
 YML
 (cd "$work/boo" && git add -A >/dev/null 2>&1; sh "$S" >/dev/null) || { echo "FAIL: an out-of-tree build dir needs no ignore"; exit 1; }
 
@@ -305,7 +305,7 @@ SH
 #       mid-pipe: the check then silently stops looking, and an unignored build dir later in the
 #       sweep goes unreported. Tracked files only.
 mkrepo "$work/buntracked"
-printf '#!/bin/sh\ncmake -S . -B never-committed-build\n' > "$work/buntracked/stray.sh"
+printf '#!/bin/sh\nshipyard-cmake -S . -B never-committed-build\n' > "$work/buntracked/stray.sh"
 printf 'binary-\000-junk\n' > "$work/buntracked/._decoy.sh"
 (cd "$work/buntracked" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: an UNTRACKED .sh must not be scanned as this repo's build"; exit 1; }
 (cd "$work/buntracked" && sh "$S" 2>&1 | grep -qi 'illegal byte sequence') && { echo "FAIL: a binary ._*.sh must not reach sed"; exit 1; }
@@ -827,5 +827,192 @@ printf '%s\n' "$out" | grep -q 'repo-wide' \
   || { echo "FAIL: the rejection must say check 15's deviation is repo-wide, or the author just retries the same glob: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'DECLARED DEVIATION' \
   && { echo "FAIL: a scoped deviation must not also be announced as accepted: $out"; exit 1; }
+# spec: SKILL.md "Family conventions" check 16 -- nothing tracked reads the CMake user package
+#       registry, because nothing writes it any more.
+mkrepo "$work/r16"; printf '#!/bin/sh\ncat "$HOME/.cmake/packages/MavericksShipyard/"*\n' > "$work/r16/build/x.sh"
+(cd "$work/r16" && git add -A) >/dev/null 2>&1
+if (cd "$work/r16" && sh "$S" >/dev/null 2>&1); then echo "FAIL 16: a registry read should fail"; exit 1; fi
+(cd "$work/r16" && sh "$S" 2>&1 | grep -q 'user package registry') || { echo "FAIL 16: should name the registry"; exit 1; }
+printf '\n## Conformance deviations\n- registry-read:build/x.sh: a shim that leaves with the flag day\n' >> "$work/r16/INGREDIENTS.md"
+(cd "$work/r16" && sh "$S" >/dev/null) || { echo "FAIL 16: a declared registry-read deviation should pass"; exit 1; }
+
+# spec: tests/shipyard-release-workflow-test.sh -- a test asserting the registry is GONE has to be
+#       able to name it, so check 16 reads what a repo SHIPS and not what it asserts about itself.
+mkrepo "$work/r16ok"
+printf '#!/bin/sh\ngrep -q "cmake/packages" out && { echo "the registry came back"; exit 1; }\n' \
+  > "$work/r16ok/tests/registry-gone-test.sh"
+printf '#!/bin/sh\n# We used to read "$HOME/.cmake/packages/MavericksShipyard"; msc.sh replaced it.\nexit 0\n' \
+  > "$work/r16ok/build/history.sh"
+(cd "$work/r16ok" && git add -A) >/dev/null 2>&1
+(cd "$work/r16ok" && sh "$S" >/dev/null) || { echo "FAIL 16: a test asserting the registry is gone, and a comment about it, should pass"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 17 -- a product's msc.sh is shipyard's canonical
+#       template, byte for byte.
+mkrepo "$work/m17"; cp "$here/../scripts/templates/msc.sh" "$work/m17/build/msc.sh"
+(cd "$work/m17" && git add -A) >/dev/null 2>&1
+(cd "$work/m17" && sh "$S" >/dev/null) || { echo "FAIL 17: the canonical msc.sh should pass"; exit 1; }
+echo '# a local tweak' >> "$work/m17/build/msc.sh"
+if (cd "$work/m17" && sh "$S" >/dev/null 2>&1); then echo "FAIL 17: a drifted msc.sh should fail"; exit 1; fi
+(cd "$work/m17" && sh "$S" 2>&1 | grep -q 'canonical msc.sh') || { echo "FAIL 17: should name the canonical msc.sh"; exit 1; }
+(cd "$work/m17" && sh "$S" 2>&1 | grep -q 'a local tweak') || { echo "FAIL 17: should show the first difference"; exit 1; }
+printf '\n## Conformance deviations\n- msc-template:build/msc.sh: exercising the deviation path\n' >> "$work/m17/INGREDIENTS.md"
+(cd "$work/m17" && sh "$S" >/dev/null) || { echo "FAIL 17: a declared msc-template deviation should pass"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 17 -- only TRACKED copies count, the rule 7c/7d already
+#       apply: an untracked build/msc.sh in a worktree is not what the repo ships, and failing on it
+#       would make the gate unrunnable for the person mid-way through fixing it.
+mkrepo "$work/m17u"
+printf '# a drifted scratch copy nobody committed\n' > "$work/m17u/build/msc.sh"
+(cd "$work/m17u" && sh "$S" >/dev/null) || { echo "FAIL 17: an UNTRACKED msc.sh must not fail the gate"; exit 1; }
+(cd "$work/m17u" && git add -A) >/dev/null 2>&1
+if (cd "$work/m17u" && sh "$S" >/dev/null 2>&1); then echo "FAIL 17: ...but once committed it counts"; exit 1; fi
+
+# platform: `cmp -s` against a nonexistent file is "different", so a template that MOVED would redden
+#           all fifteen repos at once with the real cause nowhere in the message. A missing template
+#           must name itself instead.
+mkrepo "$work/m17t"; cp "$here/../scripts/templates/msc.sh" "$work/m17t/build/msc.sh"
+(cd "$work/m17t" && git add -A) >/dev/null 2>&1
+fake="$work/fakeshipyard"; mkdir -p "$fake"
+for g in "$here"/../scripts/*.sh; do cp "$g" "$fake/"; done
+mkdir -p "$fake/templates"   # ...but no msc.sh in it
+out="$(cd "$work/m17t" && sh "$fake/check-family-conventions.sh" 2>&1 || true)"
+printf '%s\n' "$out" | grep -q 'canonical msc.sh at' \
+  || { echo "FAIL 17: a missing template must name the template, not the repo: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'is not shipyard' \
+  && { echo "FAIL 17: a missing template must NOT be reported as the repo's msc.sh being wrong"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 18 -- configure, test and package with
+#       shipyard-cmake/ctest/cpack, in workflows and in committed build scripts.
+mkrepo "$work/p18"; printf '      - run: cmake -S . -B "$RUNNER_TEMP/b"\n' >> "$work/p18/.github/workflows/release.yml"
+(cd "$work/p18" && git add -A) >/dev/null 2>&1
+if (cd "$work/p18" && sh "$S" >/dev/null 2>&1); then echo "FAIL 18: plain cmake in a workflow should fail"; exit 1; fi
+(cd "$work/p18" && sh "$S" 2>&1 | grep -q 'shipyard-cmake') || { echo "FAIL 18: should say shipyard-cmake"; exit 1; }
+mkrepo "$work/p18b"; printf '#!/bin/sh\ncd x && ctest --test-dir b\n' > "$work/p18b/build/t.sh"
+(cd "$work/p18b" && git add -A) >/dev/null 2>&1
+if (cd "$work/p18b" && sh "$S" >/dev/null 2>&1); then echo "FAIL 18: plain ctest in a build script should fail"; exit 1; fi
+mkrepo "$work/p18ok"; printf '      - run: shipyard-cmake -S . -B "$RUNNER_TEMP/b"   # not plain cmake\n' >> "$work/p18ok/.github/workflows/release.yml"
+printf '#!/bin/sh\n# cmake -S would be wrong here, but this is a comment\n' > "$work/p18ok/build/c.sh"
+(cd "$work/p18ok" && git add -A) >/dev/null 2>&1
+(cd "$work/p18ok" && sh "$S" >/dev/null) || { echo "FAIL 18: shipyard-cmake and comments should pass"; exit 1; }
+printf '\n## Conformance deviations\n- shipyard-cmake-only:build/t.sh: exercising the deviation path\n' >> "$work/p18b/INGREDIENTS.md"
+(cd "$work/p18b" && sh "$S" >/dev/null) || { echo "FAIL 18: a declared shipyard-cmake-only deviation should pass"; exit 1; }
+
+# spec: SKILL.md "Check 18" -- the shapes a whole-org survey turned up that are NOT an invocation.
+#       Each was a false positive on a first draft and would have put a compliant repo on the
+#       migration queue: CMake language in a probe heredoc; a prose word in a message, variable, URL
+#       or path; a longer identifier (cmake_policy, ctest_start); an assignment or a --flag value;
+#       and `(cmake --build <dir>)` inside an error message -- the survey's real catch, the only hit
+#       in container-tools, openssh and swift-runtime, three compliant files each telling a human
+#       what to run, flagged because the first draft read a bare `(` as command position.
+mkrepo "$work/p18ok2"
+cat > "$work/p18ok2/build/shapes.sh" <<'SH'
+#!/bin/sh
+printf '%s\n' 'cmake_minimum_required(VERSION 3.16)' 'project(p NONE)' > "$d/CMakeLists.txt"
+echo "install any cmake, then re-run"
+url=https://cmake.org/files/v4.4/cmake-4.4.3.tar.gz
+CMAKE_BIN=shipyard-cmake
+"$CMAKE_BIN" -S . -B b
+test -x /usr/local/bin/shipyard-ctest || echo "no ctest here"
+[ -f "$A" ] || { echo "build the shim first (cmake --build <dir>); need $A"; exit 2; }
+[ -d "$UPD_APP" ] || { echo "FATAL: updater not built at $UPD_APP (cmake --build build/updater)" >&2; exit 1; }
+[ -d "$SH" ] || { echo "shipyard not found"; echo "       install it (cmake --install) or set SHIPYARD_SCRIPTS." >&2; exit 4; }
+SH
+(cd "$work/p18ok2" && git add -A) >/dev/null 2>&1
+(cd "$work/p18ok2" && sh "$S" >/dev/null) || {
+  echo "FAIL 18: non-invocation shapes should pass:"; (cd "$work/p18ok2" && sh "$S" 2>&1 | grep 'plain cmake'); exit 1; }
+
+# spec: SKILL.md "Check 18" -- the tightening must not go so far that a real call hides behind a
+#       paren: a command substitution IS a call, and a subshell announces itself with the `&&` after
+#       the cd. The -B is out of tree so check 7d does not additionally demand a .gitignore for it,
+#       here or in THIS file, itself a tracked *.sh that 7d sweeps.
+for shape in 'v="$(cmake --version | head -1)"' '(cd sub && cmake -S . -B /tmp/b)'; do
+  mkrepo "$work/p18bad"
+  printf '#!/bin/sh\n%s\n' "$shape" > "$work/p18bad/build/call.sh"
+  (cd "$work/p18bad" && git add -A) >/dev/null 2>&1
+  if (cd "$work/p18bad" && sh "$S" >/dev/null 2>&1); then
+    echo "FAIL 18: a real call should still fail: $shape"; exit 1
+  fi
+  rm -rf "$work/p18bad"
+done
+
+# spec: SKILL.md "Check 18" -- the LIMIT of "prose is not a call". A quoted message or a heredoc
+#       whose text carries `;`, `&&` or a backtick immediately before the command still matches;
+#       separating those from a real call needs a shell parser. Asserted here so the limitation is a
+#       written rule rather than something a contributor rediscovers when an ordinary usage() block
+#       reddens a PR. lim18 <repo> <what> demands the repo fail ON CHECK 18, not merely fail: several
+#       of these fixtures also trip check 7d, so "exit != 0" alone would pass even if check 18 had
+#       stopped matching entirely.
+lim18() {
+  if (cd "$1" && sh "$S" >/dev/null 2>&1); then
+    echo "FAIL 18: $2 is (knowingly) still flagged -- assert it"; exit 1; fi
+  (cd "$1" && sh "$S" 2>&1 | grep -q 'runs plain cmake/ctest/cpack') \
+    || { echo "FAIL 18: $2 failed, but not on check 18 -- the assertion is not testing what it says"; exit 1; }
+}
+
+mkrepo "$work/p18lim"
+cat > "$work/p18lim/build/prose.sh" <<'SH'
+#!/bin/sh
+echo "to rebuild: cmake -S . -B /tmp/b; cmake --build /tmp/b"
+SH
+(cd "$work/p18lim" && git add -A) >/dev/null 2>&1
+lim18 "$work/p18lim" "a quoted message separated by ';'"
+
+mkrepo "$work/p18lim2"
+cat > "$work/p18lim2/build/prose.sh" <<'SH'
+#!/bin/sh
+echo "or: shipyard-cmake -S . -B /tmp/b && cmake --build /tmp/b"
+SH
+(cd "$work/p18lim2" && git add -A) >/dev/null 2>&1
+lim18 "$work/p18lim2" "a quoted message separated by '&&'"
+
+mkrepo "$work/p18lim3"
+printf '#!/bin/sh\nprintf %s\n' "'try \`cmake --version\` first\\n'" > "$work/p18lim3/build/prose.sh"
+(cd "$work/p18lim3" && git add -A) >/dev/null 2>&1
+lim18 "$work/p18lim3" "a backtick-quoted command in prose"
+
+mkrepo "$work/p18lim4"
+cat > "$work/p18lim4/build/prose.sh" <<'SH'
+#!/bin/sh
+usage() { cat <<EOF
+  cmake -S . -B build
+  cmake --build build
+EOF
+}
+SH
+(cd "$work/p18lim4" && git add -A) >/dev/null 2>&1
+lim18 "$work/p18lim4" "a usage() heredoc listing commands"
+
+# spec: SKILL.md "Check 18" -- the known false negatives, asserted for the same reason: a bare
+#       subshell, a path, a variable or a prefix command hides a real call from this check, and each
+#       is caught at configure time instead. Dropping the bare `(` from the separator class is what
+#       killed the three real false positives, so the miss is the deliberate price, NOT evidence that
+#       `(` means prose.
+mkrepo "$work/p18fn"
+cat > "$work/p18fn/build/hidden.sh" <<'SH'
+#!/bin/sh
+(cmake -S . -B /tmp/xyz)
+/usr/local/bin/cmake -S . -B /tmp/b
+"$CMAKE" -S . -B /tmp/b
+sudo cmake --install /tmp/b
+env FOO=1 cmake -S . -B /tmp/b
+command cmake -S . -B /tmp/b
+xcrun cmake -S . -B /tmp/b
+time cmake -S . -B /tmp/b
+SH
+(cd "$work/p18fn" && git add -A) >/dev/null 2>&1
+(cd "$work/p18fn" && sh "$S" >/dev/null) || {
+  echo "FAIL 18: the documented false negatives must stay documented -- if one now FAILS, the comment"
+  echo "         above check 18 (and the SKILL.md row) is out of date:"
+  (cd "$work/p18fn" && sh "$S" 2>&1 | grep 'plain cmake'); exit 1; }
+
+# platform: a step's `run:` is not necessarily a STRING -- YAML reads an unquoted `run: true` as a
+#           bool, and `(st.get("run") or "").splitlines()` then dies on it, taking the whole gate
+#           down with a traceback against a repo whose only sin is an odd-looking step.
+mkrepo "$work/p18yaml"
+printf '      - run: true\n      - run: 42\n' >> "$work/p18yaml/.github/workflows/release.yml"
+(cd "$work/p18yaml" && git add -A) >/dev/null 2>&1
+out="$(cd "$work/p18yaml" && sh "$S" 2>&1 || true)"
+printf '%s\n' "$out" | grep -qi 'Traceback' && { echo "FAIL 18: a non-string run: must not crash the gate: $out"; exit 1; }
+(cd "$work/p18yaml" && sh "$S" >/dev/null) || { echo "FAIL 18: a non-string run: should simply be skipped: $out"; exit 1; }
 
 echo "PASS: check-family-conventions"

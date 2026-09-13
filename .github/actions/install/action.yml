@@ -1,13 +1,26 @@
 name: Install mavericks-shipyard
 description: >
-  Configure + install mavericks-shipyard to a prefix so consumers find it via
-  find_package() / the CMake user package registry. shipyard does its own
-  installing -- a consumer just references this action at a pinned ref (that ref IS
-  the version pin); it should NOT clone + `cmake --install` shipyard by hand.
+  Provide shipyard and shipyard-cmake to a job. A consumer references this action at the ref it pins
+  (@v1 or @vX.Y.Z -- that ref IS the version) and gets exactly the pkg a developer installs: CI and dev
+  boxes run the same bytes. Consumers configure with shipyard-cmake; MavericksShipyardConfig.cmake
+  refuses any other cmake.
 
 inputs:
-  prefix:
-    description: Install prefix (self-registers in the user package registry). Default $HOME/.local.
+  source:
+    description: >
+      'release' (default): install the released pkg this action's ref names. 'build': shipyard's own
+      workflows only -- assemble shipyard-cmake from the cached CMake build plus this checkout.
+    required: false
+    default: release
+  cmake-tree:
+    description: >
+      source: build only. The universal CMake tree to assemble the prefix from -- the `tree` output of
+      shipyard's own .github/actions/shipyard-cmake, which the CALLING WORKFLOW runs. This action must
+      not run it itself: a `uses: ./...` inside a composite resolves against the CONSUMER's
+      GITHUB_WORKSPACE, and nested actions are prepared before step `if:` conditions are evaluated, so
+      every consumer would fail with "Can't find 'action.yml'" for a step that was never going to run
+      -- and shipyard's own CI could never reproduce it, because its workspace does have that path
+      (R-P1-19).
     required: false
     default: ""
 
@@ -17,45 +30,95 @@ runs:
     - shell: bash
       run: |
         set -eu
-        # platform: this action is checked out at github.action_path = <repo>/.github/actions/install;
-        #           the repo root (with CMakeLists.txt) is three levels up.
-        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
-        prefix="${{ inputs.prefix }}"; [ -n "$prefix" ] || prefix="$HOME/.local"
-
         # platform: bats must be installed BEFORE configuring -- shipyard's CMakeLists registers its
         #           shell-helper tests only when bats is present at that first configure, so
         #           installing it afterwards leaves those tests unregistered for the whole run.
         #           Installed from the platform package manager (checksummed bottle/package), never
         #           curl|sh.
-        if command -v bats >/dev/null 2>&1; then
-          echo "bats: $(command -v bats)"
-        elif command -v brew >/dev/null 2>&1; then
-          brew install bats-core && echo "bats: installed via brew"
-        elif command -v apt-get >/dev/null 2>&1; then
-          sudo apt-get update -qq && sudo apt-get install -y -qq bats && echo "bats: installed via apt"
-        else
-          echo "::warning::no bats and no package manager to install it; *.bats tests will be skipped"
-        fi
+        if command -v bats >/dev/null 2>&1; then echo "bats: $(command -v bats)"
+        elif command -v brew >/dev/null 2>&1; then brew install bats-core && echo "bats: installed via brew"
+        elif command -v apt-get >/dev/null 2>&1; then sudo apt-get update -qq && sudo apt-get install -y -qq bats && echo "bats: installed via apt"
+        else echo "::warning::no bats and no package manager to install it; *.bats tests will be skipped"; fi
 
-        # platform: a used action is unpacked as a tarball with no .git, so shipyard-version.sh cannot
-        #           count commits here -- stamp the version from the consumer's pinned ref instead,
-        #           before configuring, or CMake falls back to the bare line and every consumer's
-        #           install reports "1.0", indistinguishable from any other. Best-effort: an
-        #           unresolvable ref (a raw SHA, a branch) still installs, just less precisely.
-        if ver="$(sh "$root/scripts/resolve-action-version.sh" "${{ github.action_ref }}" 2>&1)"; then
-          printf '%s\n' "$ver" > "$root/VERSION"
-          echo "shipyard version: $ver (from ${{ github.action_ref }})"
-        else
-          echo "::warning::could not resolve a shipyard version from ref '${{ github.action_ref }}' ($ver); installing with the bare line"
-        fi
+    - if: inputs.source == 'build' && runner.os != 'macOS'
+      shell: bash
+      run: |
+        set -eu
+        echo "::error::source: build needs a macOS runner -- it builds the universal CMake from Kitware's source against an Apple toolchain. Consumers want the default (source: release)."
+        exit 1
 
-        cmake -S "$root" -B "$RUNNER_TEMP/msc-build"
-        cmake --install "$RUNNER_TEMP/msc-build" --prefix "$prefix"
-        echo "installed mavericks-shipyard -> $prefix (registered in the CMake user package registry)"
-
-        scripts="$(cat "$HOME/.cmake/packages/MavericksShipyard/"* 2>/dev/null | head -1)/scripts"
-        [ -d "$scripts" ] || scripts="$prefix/share/cmake/MavericksShipyard/scripts"
-        [ -d "$scripts" ] || { echo "::error::cannot locate installed shipyard scripts dir"; exit 1; }
+    - if: inputs.source == 'release' && runner.os == 'macOS'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -eu
+        # platform: this action is checked out at github.action_path = <repo>/.github/actions/install;
+        #           the repo root (with CMakeLists.txt) is three levels up.
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        ref='${{ github.action_ref }}'
+        ver="$(sh "$root/scripts/resolve-action-version.sh" "$ref")" \
+          || { echo "::error::'$ref' names no shipyard release -- pin ModernMavericks/shipyard/.github/actions/install@v1 (or an exact @vX.Y.Z)"; exit 1; }
+        d="$RUNNER_TEMP/shipyard-pkg"; mkdir -p "$d"
+        gh release download "v$ver" -R ModernMavericks/shipyard --pattern 'mavericks-shipyard-*.pkg' --dir "$d"
+        sudo installer -pkg "$d"/mavericks-shipyard-*.pkg -target /
+        /usr/local/bin/shipyard-cmake --version | head -1
+        scripts=/usr/local/mavericks-shipyard/share/cmake/MavericksShipyard/scripts
+        [ -d "$scripts" ] || { echo "::error::the shipyard pkg installed no scripts dir at $scripts"; exit 1; }
         echo "SHIPYARD_SCRIPTS=$scripts" >> "$GITHUB_ENV"
-        echo "SHIPYARD_SCRIPTS=$scripts"
+        echo "shipyard $ver installed; SHIPYARD_SCRIPTS=$scripts"
 
+    # spec: R-P1-18 -- there is no Linux pkg, and the jobs that land here do not want one: they run
+    #       shipyard's SHELL half on ubuntu-latest, where the point is that the job is cheap. Refusing
+    #       them would have broken every consumer of repackage-on-ingredient-bump.yml on the day this
+    #       action started installing a pkg. The scripts come from the action's OWN checkout, at the
+    #       ref the consumer pinned, so the shell half is still version-pinned, just not packaged.
+    - if: inputs.source == 'release' && runner.os != 'macOS'
+      shell: bash
+      run: |
+        set -eu
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        scripts="$root/scripts"
+        [ -f "$scripts/run-repo-tests.sh" ] || {
+          echo "::error::$scripts does not look like shipyard's scripts dir (no run-repo-tests.sh) -- the action's own checkout is not where this expected it"; exit 1; }
+        # spec: R-P1-23 -- MavericksShipyard_DIR, not CMAKE_PREFIX_PATH: package-scoped and EXACT, so
+        #       it can neither mis-resolve nor shadow another package the way a whole checkout on
+        #       CMAKE_PREFIX_PATH could. The config skips its shipyard-cmake refusal when the HOST is
+        #       not Apple, so find_package(MavericksShipyard) resolves here rather than being
+        #       rejected -- container-tools' two ubuntu-latest jobs need exactly that.
+        [ -f "$root/MavericksShipyardConfig.cmake" ] || {
+          echo "::error::$root holds no MavericksShipyardConfig.cmake -- find_package(MavericksShipyard) would not resolve on this runner"; exit 1; }
+        {
+          echo "SHIPYARD_SCRIPTS=$scripts"
+          echo "MavericksShipyard_DIR=$root"
+        } >> "$GITHUB_ENV"
+        echo "${RUNNER_OS:-this runner} is not macOS and shipyard has no Linux pkg yet, so nothing was installed. You get shipyard's shell half from the ref you pinned: SHIPYARD_SCRIPTS=$scripts, and find_package(MavericksShipyard) resolves via MavericksShipyard_DIR=$root. There is no shipyard-cmake here, so a configure that needs one must run on a macOS runner."
+
+    # spec: R-P1-19 -- THIS ACTION MUST CONTAIN NO `uses: ./...`. GitHub resolves a local action path
+    #       inside a composite against the CONSUMER's GITHUB_WORKSPACE, and prepares nested actions
+    #       BEFORE evaluating step `if:` conditions, so `source: build` being false would not spare
+    #       them: every consumer's job would die with "Can't find 'action.yml'", and shipyard's own CI
+    #       could not reproduce it. The caller runs the composite and passes its output in.
+    - if: inputs.source == 'build'
+      shell: bash
+      run: |
+        set -eu
+        tree='${{ inputs.cmake-tree }}'
+        [ -n "$tree" ] || {
+          echo "::error::source: build needs cmake-tree -- run shipyard's .github/actions/shipyard-cmake in the calling workflow and pass its 'tree' output in. (This action cannot run it: see the comment above this step.)"; exit 1; }
+        [ -x "$tree/bin/cmake" ] || { echo "::error::cmake-tree has no bin/cmake: $tree"; exit 1; }
+        p="$RUNNER_TEMP/shipyard-prefix"; rm -rf "$p"; cp -R "$tree" "$p"
+        "$p/bin/cmake" -S "$GITHUB_WORKSPACE" -B "$RUNNER_TEMP/shipyard-self-build" >/dev/null
+        "$p/bin/cmake" --install "$RUNNER_TEMP/shipyard-self-build" --prefix "$p" >/dev/null
+        b="$RUNNER_TEMP/shipyard-bin"; mkdir -p "$b"
+        for c in cmake ctest cpack; do ln -sf "$p/bin/$c" "$b/shipyard-$c"; done
+        echo "$b" >> "$GITHUB_PATH"
+        # spec: scripts/package-pkg.sh -- --cmake-tree refuses a tree holding anything outside
+        #       bin/doc/man/share, so SHIPYARD_CMAKE_TREE must be the UNTOUCHED tree: "$p" has
+        #       shipyard installed into it.
+        {
+          echo "SHIPYARD_SCRIPTS=$p/share/cmake/MavericksShipyard/scripts"
+          echo "SHIPYARD_CMAKE=$b/shipyard-cmake"
+          echo "SHIPYARD_CMAKE_TREE=$tree"
+        } >> "$GITHUB_ENV"
+        "$b/shipyard-cmake" --version | head -1

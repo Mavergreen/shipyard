@@ -1,5 +1,7 @@
 #!/bin/sh
 set -eu
+SC="${SHIPYARD_CMAKE:-$(command -v shipyard-cmake 2>/dev/null || true)}"
+[ -n "$SC" ] || { echo "SKIP: no shipyard-cmake (install the shipyard pkg, or set SHIPYARD_CMAKE)"; exit 77; }
 # spec: scripts/run-repo-tests.sh -- exit 77 is the family's SKIP idiom, not a failure. Called
 #       bare, as the shared runner does when it globs tests/*.sh, there is nothing to include;
 #       ctest itself always supplies the source dir (see add_test).
@@ -19,7 +21,7 @@ project(u LANGUAGES $langs)
 list(APPEND CMAKE_MODULE_PATH "$SRC")
 include(Mavericks)
 EOF
-  cmake -S "$d" -B "$d/b" -DCMAKE_C_COMPILER=$CC -DCMAKE_OBJC_COMPILER=$CC -DCMAKE_CXX_COMPILER=${CC}++ "$@" >/dev/null 2>&1 \
+  "$SC" -S "$d" -B "$d/b" -DCMAKE_C_COMPILER=$CC -DCMAKE_OBJC_COMPILER=$CC -DCMAKE_CXX_COMPILER=${CC}++ "$@" >/dev/null 2>&1 \
     || { echo "FAIL: include(Mavericks) must be universally includable with no MAVERICKS_REQUIRE_LANGS (the gate auto-scopes to the enabled languages) -- failed for LANGUAGES $langs"; exit 1; }
 }
 
@@ -38,7 +40,7 @@ if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR NOT CMAKE_OSX_DEPLOYMENT_TARG
   message(FATAL_ERROR "umbrella changed arch/target to [\${CMAKE_OSX_ARCHITECTURES}]/[\${CMAKE_OSX_DEPLOYMENT_TARGET}]")
 endif()
 EOF
-cmake -S "$d" -B "$d/b" -DCMAKE_C_COMPILER=$CC -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 >/dev/null 2>&1 \
+"$SC" -S "$d" -B "$d/b" -DCMAKE_C_COMPILER=$CC -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 >/dev/null 2>&1 \
   || { echo "FAIL: include(Mavericks) must not touch a project's CMAKE_OSX_* -- umbrella not multi-arch safe (clobbered arm64/12.0)"; exit 1; }
 
 echo "umbrella-langs OK"

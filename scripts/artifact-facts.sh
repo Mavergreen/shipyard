@@ -9,6 +9,7 @@
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
 #       reads a repo in seconds and gates every PR.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
 dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"
 root="${3:-$(pwd)}"
@@ -44,12 +45,20 @@ if [ -d "$root/lines" ]; then
 fi
 
 # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Conformance
-#       deviations" -- declared under "## Conformance deviations" as "- <check>: <reason>"; a
-#       deviation IS a product fact, so it belongs with the other product facts, not a file of its
-#       own that could disagree with them.
+#       deviations" -- declared under "## Conformance deviations" as "- <check>[:<glob>]: <reason>";
+#       a deviation IS a product fact, so it belongs with the other product facts, not a file of its
+#       own that could disagree with them. ONE parser reads them -- deviations.sh -- because the
+#       conventions gate honours the same declarations, and two regexes for one grammar drift apart
+#       silently.
 if [ -f "$root/INGREDIENTS.md" ]; then
-  sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" \
-    | sed -n 's/^- *\([a-z][a-z0-9_-]*\)\(:[^ :]*\)\{0,1\} *: *\(..*\)$/deviation \1\2 \3/p'
+  # platform: not a pipeline -- deviations.sh exits 1 on an entry with no reason, and a pipeline
+  #           reports the `while`'s status instead, turning "this declaration is malformed" into
+  #           "there are no deviations".
+  _devs="$(sh "$SELF/deviations.sh" "$root")" || exit 1
+  [ -z "$_devs" ] || printf '%s\n' "$_devs" | while read -r _check _glob _reason; do
+    if [ "$_glob" = '*' ]; then printf 'deviation %s %s\n' "$_check" "$_reason"
+    else printf 'deviation %s:%s %s\n' "$_check" "$_glob" "$_reason"; fi
+  done
 fi
 
 for f in "$dist"/*; do

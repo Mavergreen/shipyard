@@ -24,34 +24,30 @@ project(MavericksShipyard VERSION ${_MSC_VERSION} LANGUAGES NONE)
 # and compiles nothing, so `cmake --install` works on a box with no ObjC compiler -- and the payload
 # stays buildable where there is no Objective-C at all. Only the pkg job turns this on.
 #
-# One target, configured TWICE (x86_64/10.9 and arm64) rather than two targets: CMAKE_OSX_ARCHITECTURES
-# and the deployment target are directory-scoped, and arm64 has no 10.9. mavericks-golang does the
-# same with build/updater and build/updater-cross.
+# Built once per arch (x86_64/10.9 and arm64/11.0) rather than a single fat build: CMAKE_OSX_ARCHITECTURES
+# and the deployment target are directory-scoped, and a fat CMAKE_OSX_ARCHITECTURES can't carry two
+# floors -- arm64 has no 10.9. The two single-arch builds share the same NAME and BUNDLE_ID and are
+# merged into ONE universal .app by scripts/lipo-merge-tree.sh in the release, not picked between.
 option(SHIPYARD_BUILD_UPDATER "Build the Sparkle updater app (needed only to package the pkg)" OFF)
 if(SHIPYARD_BUILD_UPDATER)
   enable_language(OBJC)
+  # Every slice embeds Sparkle's FAT framework, so the two single-arch builds carry an identical
+  # framework and lipo-merge-tree.sh only has to merge the updater's own executable.
+  set(ENV{MAVERICKS_SPARKLE_ARCH} all)
   include("${CMAKE_CURRENT_SOURCE_DIR}/MavericksSparkle.cmake")
 
-  # The two slices are staged into ONE pkg (Task 3), so same-named .app bundles would overwrite each
-  # other -- unlike mavericks-golang's updater, which builds one variant per invocation into its own
-  # dir. Give each slice its own target NAME (mirroring mavericks-golang's GoUpdater/GoCrossUpdater)
-  # as well as its own bundle-id suffix, matching mavericks-clang's identifiers.
-  set(_upd_name "MavericksShipyardUpdater")
-  set(_upd_suffix "")
-  if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
-    set(_upd_name "MavericksShipyardCrossUpdater")
-    set(_upd_suffix "-cross")
-  endif()
-
+  # ONE universal app (spec 2026-09-11): built once per arch -- x86_64/10.9 and arm64/11.0, since a
+  # deployment floor is per-configure and arm64 has no 10.9 -- and merged by lipo-merge-tree.sh in the
+  # release. Same name and bundle id for both builds, so the merge is of one app, not two.
   mavericks_add_updater_app(
-    NAME ${_upd_name}
+    NAME MavericksShipyardUpdater
     PRODUCT_NAME "Mavericks Shipyard"
-    BUNDLE_ID "dev.modernmavericks.mavericks-shipyard${_upd_suffix}"
+    BUNDLE_ID "dev.modernmavericks.mavericks-shipyard"
     FEED_URL "https://github.com/ModernMavericks/shipyard/releases/latest/download/appcast.xml"
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "MavShipyardUpdater"
     CONFIRM_TITLE "Mavericks Shipyard updated"
-    CONFIRM_BODY "The shared CMake modules and scripts in /usr/local/mavericks-shipyard were updated."
+    CONFIRM_BODY "Mavericks Shipyard and shipyard-cmake in /usr/local/mavericks-shipyard were updated."
     RELAUNCH_MARKER "/tmp/.mavericks-shipyard-updater-relaunched"
     ALLOW_GENERIC
     # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification. shipyard has no UI.
@@ -62,8 +58,11 @@ endif()
 # installs itself as a find_package() config package so consumers can just:
 #   find_package(MavericksShipyard REQUIRED)
 #   include(Mavericks)
-# instead of vendoring a submodule. Install to a prefix your cmake searches
-# (e.g. a pkgsrc package -> /opt/pkg), or pass -DCMAKE_PREFIX_PATH=<prefix>.
+# instead of vendoring a submodule. Consumers find this package through
+# shipyard-cmake (it lives in the same prefix as this install) -- there is no
+# user package registry to write. `cmake --install` here is for developing
+# shipyard itself: point shipyard-cmake at the result with
+# -DCMAKE_PREFIX_PATH=<that prefix>.
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -96,22 +95,8 @@ write_basic_package_version_file(
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfigVersion.cmake"
   DESTINATION "${_dest}")
 
-# Self-register in the per-user CMake package registry so consumers find this
-# with a bare `find_package(MavericksShipyard)` -- no CMAKE_PREFIX_PATH, no
-# submodule, wherever you chose to --prefix install it. find_package consults
-# ~/.cmake/packages/<Name>/ by default. Set MAVERICKS_NO_USER_REGISTRY to skip
-# (e.g. a system/CI install that shouldn't touch $HOME).
-option(MAVERICKS_NO_USER_REGISTRY "Do not register in the user package registry" OFF)
-if(NOT MAVERICKS_NO_USER_REGISTRY)
-  install(CODE "
-    set(_reg \"\$ENV{HOME}/.cmake/packages/MavericksShipyard\")
-    file(MAKE_DIRECTORY \"\${_reg}\")
-    file(WRITE \"\${_reg}/mavericks-shipyard\" \"\${CMAKE_INSTALL_PREFIX}/${_dest}\")
-    message(STATUS \"Registered MavericksShipyard -> \${CMAKE_INSTALL_PREFIX}/${_dest} (user package registry)\")
-  ")
-endif()
-
-# Self-tests for the shared shell helpers. `cmake -S . -B build && ctest --test-dir build`.
+# Self-tests for the shared shell helpers.
+# `shipyard-cmake -S . -B build && shipyard-ctest --test-dir build`.
 enable_testing()
 find_program(BATS_EXECUTABLE bats)
 if(BATS_EXECUTABLE)
@@ -138,6 +123,11 @@ add_test(NAME standalone-include
 # MAVERICKS_REQUIRE_LANGS), LANGUAGES NONE no-op, and multi-arch safe.
 add_test(NAME umbrella-langs
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/umbrella-langs.sh ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Both configure a scratch consumer through shipyard-cmake (MavericksShipyardConfig.cmake
+# refuses any other cmake) and exit 77 to SKIP when none is reachable -- a box that hasn't
+# installed the shipyard pkg. Without this, ctest counts a 77 exit as Failed, not Skipped.
+set_tests_properties(standalone-include umbrella-langs PROPERTIES SKIP_RETURN_CODE 77)
 
 # Prove stage_updater.sh stages an updater .app + LaunchAgent and renders the templates.
 add_test(NAME stage-updater

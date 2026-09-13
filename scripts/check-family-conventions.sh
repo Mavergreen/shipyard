@@ -457,6 +457,112 @@ else
        "check out the whole repo (family-conventions.yml does), not just this one script"
 fi
 
+# spec: scripts/deviations.sh -- ONE parser for the "## Conformance deviations" grammar, shared with
+#       check-artifact-conformance.sh, so a declared exception cannot mean two things.
+if ! DEVS="$(sh "$SELF/deviations.sh" .)"; then
+  fail "INGREDIENTS.md declares a conformance deviation with no reason" "give every '- <check>[:<glob>]:' entry its reason on the same line"
+fi
+deviated() {  # $1 = check name, $2 = path: 0 if a declared deviation covers it
+  printf '%s\n' "$DEVS" | { while read -r c g _; do
+    [ "$c" = "$1" ] || continue
+    # shellcheck disable=SC2254  # $g is a glob on purpose
+    case "$2" in $g) exit 0;; esac
+  done; exit 1; }
+}
+
+# spec: SKILL.md "Family conventions" check 16 -- nothing tracked may read the CMake user package
+#       registry. tests/ is excluded for the same reason check 18 excludes it: a test that asserts the
+#       registry is GONE has to name it, and a sweep that cannot tell an assertion from a usage would
+#       report that proof as the violation. What a repo SHIPS is what is checked, so a COMMENT naming
+#       the registry is prose, not a read. This check's own fail message may not spell the full path
+#       either, or the gate matches itself -- a first draft reported shipyard as the family's worst
+#       offender that way.
+for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*.bats' 2>/dev/null | grep -v '^tests/'); do
+  # platform: the pattern must not be a literal occurrence of itself, or this gate is its own first
+  #           offender. "package[s]" is the `ps | grep [f]oo` idiom; the bracket changes nothing about
+  #           what it matches.
+  grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -q '\.cmake/package[s]' || continue
+  deviated registry-read "$f" && continue
+  fail "$f reads the CMake user package registry (the ~/.cmake export(PACKAGE) tree), which nothing writes any more" \
+       "source msc.sh (it asks shipyard-cmake and exports SHIPYARD_SCRIPTS), or use \$SHIPYARD_SCRIPTS in CI"
+done
+
+# spec: SKILL.md "Family conventions" check 17 -- a product's msc.sh must equal shipyard's canonical
+#       template byte for byte. TRACKED copies only, the same rule checks 7c/7d apply: an untracked
+#       build/msc.sh in a developer's worktree is not what the repo ships, and failing on it would
+#       make the gate unrunnable for exactly the person mid-way through fixing it.
+_tmpl="$SELF/templates/msc.sh"
+if [ ! -f "$_tmpl" ]; then
+  # platform: `cmp -s` with a missing operand is "different", so comparing against a template that
+  #           MOVED would tell all fifteen repos at once that their msc.sh is not canonical, with the
+  #           one true cause nowhere in the message. Name the template instead.
+  fail "cannot find shipyard's canonical msc.sh at $_tmpl — the shipyard checkout is incomplete, or the template moved" \
+       "check out the whole repo (family-conventions.yml does); if the template moved, this check must move with it"
+else
+  for f in build/msc.sh msc.sh; do
+    git ls-files --error-unmatch "$f" >/dev/null 2>&1 || continue
+    deviated msc-template "$f" && continue
+    cmp -s "$f" "$_tmpl" && continue
+    # platform: a literal newline in a BSD sed replacement is an error, so the newline lives in the
+    #           printf format string and sed only adds the indent.
+    _diff="$(diff "$_tmpl" "$f" 2>/dev/null | head -6 | sed 's/^/    /')"
+    fail "$(printf '%s is not shipyard'\''s canonical msc.sh\n%s' "$f" "$_diff")" \
+         "copy it from shipyard: cp \"\$SHIPYARD_SCRIPTS/templates/msc.sh\" $f   (never edit your copy -- change the template)"
+  done
+fi
+
+# spec: SKILL.md "Family conventions" check 18 -- configure, test and package with shipyard-cmake /
+#       shipyard-ctest / shipyard-cpack. It reads lines, not shell syntax; SKILL.md's "Check 18" notes
+#       state the deliberate blind spot (a bare "(" before the command), the shapes that still count
+#       as a call inside quotes and heredocs, and the known false negatives. Every one of them is
+#       pinned by tests/check-family-conventions-test.sh, so the list cannot quietly go stale.
+cmdlist="$(mktemp "${TMPDIR:-/tmp}/conventions-cmds.XXXXXX")"
+TAB="$(printf '\t')"
+{
+  if [ -n "$CI_FILES" ] && python3 -c 'import yaml' >/dev/null 2>&1; then
+    # shellcheck disable=SC2086  # deliberate word-split list of paths
+    python3 - $CI_FILES <<'PYEOF'
+import sys, yaml
+for p in sys.argv[1:]:
+    try:
+        wf = yaml.safe_load(open(p)) or {}
+    except Exception:
+        continue          # check 8 owns "this workflow does not parse"; do not report it twice
+    if not isinstance(wf, dict):
+        continue
+    for job in (wf.get("jobs") or {}).values():
+        if not isinstance(job, dict):
+            continue
+        for st in (job.get("steps") or []):
+            if not isinstance(st, dict):
+                continue
+            # `run:` is not necessarily a string. YAML reads an unquoted `run: true` as a BOOL, and
+            # `or ""` keeps a True -- which then has no .splitlines() and takes the whole gate down
+            # with a traceback pointing at stdin. Ask what it IS.
+            run = st.get("run")
+            if not isinstance(run, str):
+                continue
+            for line in run.splitlines():
+                print("%s\t%s" % (p, line))
+PYEOF
+  fi
+  for f in $(git ls-files -- '*.sh' 2>/dev/null | grep -v '^tests/'); do
+    sed "s|^|$f$TAB|" "$f"
+  done
+} > "$cmdlist"
+while IFS="$TAB" read -r f line; do
+  case "$(printf '%s' "$line" | sed 's/^[[:space:]]*//')" in '#'*|'') continue;; esac
+  # spec: SKILL.md "Check 18" -- command position is line start, a separator (; & | or a backtick),
+  #       "$(", or then/do/exec. A bare "(" is deliberately NOT command position: a whole-org survey
+  #       found three compliant repos whose only hit was `... || { echo "not built (cmake --build
+  #       <dir>)"; }`. A `(cd x && cmake ...)` still matches, on the "&".
+  printf '%s\n' "$line" | grep -Eq '(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^then|^do|^exec)[[:space:]]*(cmake|ctest|cpack)([[:space:]]|$)' || continue
+  deviated shipyard-cmake-only "$f" && continue
+  fail "$f runs plain cmake/ctest/cpack: $(printf '%s' "$line" | sed 's/^[[:space:]]*//' | cut -c1-70)" \
+       "use shipyard-cmake / shipyard-ctest / shipyard-cpack -- MavericksShipyardConfig.cmake refuses any other cmake"
+done < "$cmdlist"
+rm -f "$cmdlist"
+
 [ "$status" -eq 0 ] && echo "check-family-conventions: ok"
 
 exit "$status"

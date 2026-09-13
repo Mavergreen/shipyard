@@ -1,17 +1,21 @@
 #!/bin/sh
-#   usage: package-pkg.sh --payload DIR --app-native APP --app-cross APP --version V --out PKG
-#          package-pkg.sh --emit-postinstall FILE    (for tests)
+#   usage: package-pkg.sh --cmake-tree DIR --shipyard-prefix DIR --app APP --version V --out PKG
 #          package-pkg.sh --emit-preinstall FILE     (for tests)
-#          Packages shipyard: the payload, BOTH updater slices, and a postinstall that picks one. The
-#          postinstall is shipyard's own (not stage_updater.sh --scripts-out), because it must also
-#          pick an arch and register with cmake; it sources an agent-load fragment rendered by
-#          --snippet-out, one fragment PER SLICE since each has its label baked in. A preinstall
-#          clears the payload dir first, so files dropped from a newer payload go away. The updater is
-#          a stopgap until Mavericks Lineup exists; registration logic stays in
-#          register-with-cmake.sh, which the postinstall merely calls.
+#          Packages shipyard as ONE prefix -- /usr/local/mavericks-shipyard holding shipyard's own
+#          CMake (bin/{cmake,ctest,cpack}, share/cmake-X.Y) and shipyard itself
+#          (share/cmake/MavericksShipyard) -- plus /usr/local/bin/shipyard-{cmake,ctest,cpack}
+#          symlinked into it, and one universal updater. A preinstall clears the product dir first:
+#          Installer never deletes a file a newer payload no longer carries, so every CMake bump
+#          would otherwise leave the old share/cmake-X.Y behind. The updater is a stopgap until
+#          Mavericks Lineup exists.
+# spec: 2026-09-11 -- a cmake always searches its own install prefix, and finds that prefix through a
+#       symlink, so shipyard-cmake finds shipyard with no registry, no PATH change and no
+#       CMAKE_PREFIX_PATH, and MavericksShipyardConfig.cmake refuses every other cmake.
+#       /usr/local/bin is on macOS's default PATH (/etc/paths) and the three names are ours alone, so
+#       nothing shared is written into.
 # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "On-target/
-#       off-target parity" -- shipyard's own .pkg is the worked example: both slices ship in one pkg
-#       because developing under Mavericks and developing under modern macOS are equally
+#       off-target parity" -- shipyard's own .pkg is the worked example: one artifact serves both
+#       boxes because developing under Mavericks and developing under modern macOS are equally
 #       first-class, and two pkgs would make someone choose, silently wrong when they choose badly.
 #       --host-arch x86_64,arm64 is BOTH arches -- without arm64, Installer on Apple Silicon offers
 #       Rosetta for a pkg with scripts and runs them translated, the very prompt this pkg exists to
@@ -19,175 +23,156 @@
 # spec: tests/shipyard-package-pkg-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-PAYLOAD=""; APP_NATIVE=""; APP_CROSS=""; VER=""; OUT=""; EMIT=""; EMIT_PRE=""
+TREE=""; SPREFIX=""; APP=""; VER=""; OUT=""; EMIT_PRE=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --payload) PAYLOAD="$2"; shift 2;;
-    --app-native) APP_NATIVE="$2"; shift 2;;
-    --app-cross) APP_CROSS="$2"; shift 2;;
+    --cmake-tree) TREE="${2%/}"; shift 2;;
+    --shipyard-prefix) SPREFIX="${2%/}"; shift 2;;
+    --app) APP="${2%/}"; shift 2;;
     --version) VER="$2"; shift 2;;
     --out) OUT="$2"; shift 2;;
-    --emit-postinstall) EMIT="$2"; shift 2;;
     --emit-preinstall) EMIT_PRE="$2"; shift 2;;
     *) echo "package-pkg: unknown option $1" >&2; exit 2;;
   esac
 done
 
 ID="dev.modernmavericks.mavericks-shipyard"
-PAYLOAD_DIR="/usr/local/mavericks-shipyard"
+PREFIX_DIR="/usr/local/mavericks-shipyard"
 APPDIR="/Library/Application Support/ModernMavericks"
-NATIVE_APP="MavericksShipyardUpdater.app"
-CROSS_APP="MavericksShipyardCrossUpdater.app"
-NATIVE_LABEL="dev.modernmavericks.mavericks-shipyard-updatecheck"
-CROSS_LABEL="dev.modernmavericks.mavericks-shipyard-cross-updatecheck"
+APP_NAME="MavericksShipyardUpdater.app"
+LABEL="dev.modernmavericks.mavericks-shipyard-updatecheck"
 
-emit_postinstall() {  # $1 = destination file
-  {
-    cat <<'HEAD'
-#!/bin/sh
-# Rendered by package-pkg.sh -- do not edit here.
-#
-# Load the updater matching THIS machine, remove the other, then point cmake at the payload.
-#
-# Both slices ship in this pkg so neither kind of developer is second-class: no Rosetta prompt on
-# Apple Silicon, and nothing to choose wrong. Only the matching agent may run.
-#
-# Never fails the install: every step is best-effort, and the payload is already on disk by now.
-HEAD
-    printf "PAYLOAD_DIR='%s'\nAPPDIR='%s'\n" "$PAYLOAD_DIR" "$APPDIR"
-    printf "NATIVE_APP='%s'\nNATIVE_LABEL='%s'\n" "$NATIVE_APP" "$NATIVE_LABEL"
-    printf "CROSS_APP='%s'\nCROSS_LABEL='%s'\n" "$CROSS_APP" "$CROSS_LABEL"
-    cat <<'POST'
-set -u
-# $3 is the target volume: "/" for the boot volume, giving ROOT="". Every installed path goes through
-# ROOT, so an install to another volume touches that volume (and a test can use a fixture root).
-ROOT="${3:-/}"; ROOT="${ROOT%/}"
-PAYLOAD="$ROOT$PAYLOAD_DIR"
-
-# Ask the HARDWARE, not `uname -m`. Under Rosetta uname -m says x86_64 on Apple Silicon, and Installer
-# runs a pkg's scripts under Rosetta whenever the Distribution does not declare arm64 -- so a uname
-# test keeps the x86_64 slice on exactly the box it must not. hw.optional.arm64 is 1 on Apple Silicon
-# even when translated. Intel answers 0; 10.9 has no such name (an error, no output). Both are native.
-case "$(sysctl -n hw.optional.arm64 2>/dev/null)" in
-  1) keep=cross;  drop_label=$NATIVE_LABEL; drop_app=$NATIVE_APP ;;
-  *) keep=native; drop_label=$CROSS_LABEL;  drop_app=$CROSS_APP ;;  # Intel, 10.9, or no answer
-esac
-
-# REMOVE the other slice, not merely skip loading it: launchd autoloads everything in
-# /Library/LaunchAgents at the next login, which would run the wrong updater (on arm64, a Rosetta
-# prompt) whatever this script does now.
-rm -f "$ROOT/Library/LaunchAgents/$drop_label.plist" \
-  || echo "mavericks-shipyard: could not remove $ROOT/Library/LaunchAgents/$drop_label.plist" >&2
-rm -rf "$ROOT$APPDIR/$drop_app" \
-  || echo "mavericks-shipyard: could not remove $ROOT$APPDIR/$drop_app" >&2
-
-# The agent-load fragments are rendered by shipyard's own stage_updater.sh, so every product loads its
-# agent the same way. Sourced, not run: they define MAV_* and contain no exit.
-AGENT_LOAD="$(dirname "$0")/agent-load-$keep.sh"
-[ -f "$AGENT_LOAD" ] && . "$AGENT_LOAD"
-
-# Registration is BEST-EFFORT: shipyard's shell scripts work with no cmake at all, and swift-toolchain
-# consumes only that half. A cmake-less box still gets a working install; the script says what is
-# missing and how to finish later.
-#
-# It runs AS THE CONSOLE USER, through their login shell (-i). This postinstall is root with
-# Installer's minimal PATH, where no pkgsrc/Homebrew/CMake.app cmake lives, and root's HOME: run
-# directly it would register nothing, or write a root-owned entry nobody's cmake reads. "Whatever
-# cmake is on PATH" can only mean the developer's PATH. The logic stays in register-with-cmake.sh, not
-# here, so recovery by hand runs the same code.
-register="$PAYLOAD/scripts/register-with-cmake.sh"
-user=$(stat -f %Su /dev/console 2>/dev/null || true)
-case "$user" in
-  ''|root|_*)  # nobody at the console (loginwindow is root; _* are system accounts)
-    echo "mavericks-shipyard: no one is logged in, so cmake registration was skipped."
-    echo "    to finish, as yourself: sh \"$register\" \"$PAYLOAD\""
-    ;;
-  *)
-    # </dev/null: a login profile that prompts must not hang the install waiting for input.
-    sudo -u "$user" -i sh "$register" "$PAYLOAD" </dev/null || true
-    ;;
-esac
-exit 0
-POST
-  } > "$1"
-  chmod +x "$1"
-}
-
-# spec: tests/shipyard-package-pkg-test.sh -- the preinstall spells out PAYLOAD_DIR literally rather
-#       than interpolating it, so a destructive rm -rf is never one empty variable away from "$ROOT"
-#       alone; the test's fixture path must match it exactly or drift goes unnoticed.
+# spec: tests/shipyard-package-pkg-test.sh -- a destructive path must not be one empty variable away
+#       from "$ROOT" alone, so the preinstall spells it out literally and the test's fixture pins the
+#       same path.
 emit_preinstall() {  # $1 = destination file
   cat > "$1" <<'PRE'
 #!/bin/sh
 # Rendered by package-pkg.sh -- do not edit here.
 #
-# Clear the payload dir before Installer lays down the new one. Installer only adds and overwrites; it
-# never deletes a file that a newer payload no longer carries. So a script removed or renamed in
-# shipyard would keep working on every dev box that ever installed it, while CI (which installs from
-# source) fails -- the drift this pkg exists to end. The dir is product-owned (spec decision 2: a
-# self-contained tree, not a shared namespace), so nothing but shipyard lives there; the cost is that
-# anything hand-placed inside it is lost on update.
-#
-# The path is a FIXED constant under the target volume, never built from a variable that could be
-# empty, so this cannot remove anything but that one dir. With no target volume at all ($3 unset,
-# which Installer never does) it removes nothing rather than assume "/".
+# Clear the product dir before Installer lays down the new one. Installer only adds and overwrites; it
+# never deletes a file a newer payload no longer carries -- a removed script would keep working here
+# while CI fails, and every CMake bump would leave the old share/cmake-X.Y behind. The dir is
+# product-owned, so nothing but shipyard lives there. The path is a FIXED constant under the target
+# volume, never built from a variable that could be empty; with no target volume ($3 unset, which
+# Installer never does) this removes nothing rather than assume "/".
 #
 # Never fails the install: whatever this cannot remove, the payload still overwrites.
 [ -n "${3:-}" ] || { echo "mavericks-shipyard: preinstall got no target volume; removing nothing" >&2; exit 0; }
 ROOT="${3%/}"
 rm -rf "$ROOT/usr/local/mavericks-shipyard" \
   || echo "mavericks-shipyard: could not clear $ROOT/usr/local/mavericks-shipyard; files dropped from this version may linger" >&2
+
+# ONE-TIME MIGRATION off the two-updater design (spec 2026-09-11, R-P1-24).
+#
+# Up to v1.0.151 the pkg carried two updaters and its postinstall deleted the one that did not match
+# the box: an Apple Silicon machine was left running MavericksShipyardCrossUpdater.app under
+# dev.modernmavericks.mavericks-shipyard-cross-updatecheck. This version ships ONE universal updater
+# under the plain name, and Installer never removes a file a newer payload does not carry -- so
+# without this, every existing arm64 install would quietly run TWO Sparkle updaters against the same
+# appcast, daily, forever. Nobody would see it; both would "work".
+#
+# Names spelled out in full, as with the rm -rf above: a destructive path must not be one empty
+# variable away from "$ROOT" alone. Best-effort throughout -- a box that cannot unload the agent must
+# still get the new version.
+#
+# DELETABLE once no v1.0.151-or-earlier install survives. Nothing else refers to these names.
+#
+# The unload only happens when installing to the BOOT volume ($3 = "/", so ROOT is ""): launchctl
+# talks to the running system, and unloading a job because a file of the same name exists on some
+# other disk would be wrong. Installing elsewhere still removes the files; the agent on that volume
+# was never loaded from here anyway. Mirrors updater/agent-load.in's load, in reverse: bootstrap is
+# 10.11+, and on 10.9 the fallback must run as the console user, because a root postinstall's own
+# launchctl talks to root's session and not the Aqua one.
+if [ -z "$ROOT" ] && [ -f /Library/LaunchAgents/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist ]; then
+  mav_uid=$(stat -f %u /dev/console 2>/dev/null || echo 0)
+  mav_user=$(stat -f %Su /dev/console 2>/dev/null || echo root)
+  if [ "${mav_uid:-0}" -gt 0 ] && [ "$mav_user" != root ]; then
+    launchctl bootout gui/"$mav_uid" /Library/LaunchAgents/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist 2>/dev/null \
+      || sudo -u "$mav_user" launchctl unload -w /Library/LaunchAgents/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist 2>/dev/null \
+      || true
+  fi
+fi
+rm -f "$ROOT/Library/LaunchAgents/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist" \
+  || echo "mavericks-shipyard: could not remove the superseded cross-updater LaunchAgent; it would keep checking the same appcast alongside the new updater" >&2
+rm -rf "$ROOT/Library/Application Support/ModernMavericks/MavericksShipyardCrossUpdater.app" \
+  || echo "mavericks-shipyard: could not remove the superseded MavericksShipyardCrossUpdater.app" >&2
 exit 0
 PRE
   chmod +x "$1"
 }
 
-if [ -n "$EMIT" ] || [ -n "$EMIT_PRE" ]; then
-  [ -z "$EMIT" ] || emit_postinstall "$EMIT"
-  [ -z "$EMIT_PRE" ] || emit_preinstall "$EMIT_PRE"
-  exit 0
-fi
+if [ -n "$EMIT_PRE" ]; then emit_preinstall "$EMIT_PRE"; exit 0; fi
 
-: "${PAYLOAD:?package-pkg: --payload required}"
-: "${APP_NATIVE:?package-pkg: --app-native required}"
-: "${APP_CROSS:?package-pkg: --app-cross required}"
+: "${TREE:?package-pkg: --cmake-tree required}"
+: "${SPREFIX:?package-pkg: --shipyard-prefix required}"
+: "${APP:?package-pkg: --app required}"
 : "${VER:?package-pkg: --version required}"
 : "${OUT:?package-pkg: --out required}"
 
-# platform: a trailing slash would make cp -R copy the bundle's CONTENTS instead of the bundle.
-APP_NATIVE="${APP_NATIVE%/}"; APP_CROSS="${APP_CROSS%/}"
-
-check_app() {  # $1 = flag  $2 = path given  $3 = required basename
-  [ "$(basename "$2")" = "$3" ] \
-    || { echo "package-pkg: $1 must be a $3 (the postinstall looks for that name); got $2" >&2; exit 2; }
-  [ -d "$2" ] || { echo "package-pkg: $1: no such app: $2" >&2; exit 1; }
-}
-check_app --app-native "$APP_NATIVE" "$NATIVE_APP"
-check_app --app-cross "$APP_CROSS" "$CROSS_APP"
-for f in MavericksShipyardConfig.cmake scripts/register-with-cmake.sh; do
-  [ -f "$PAYLOAD/$f" ] || { echo "package-pkg: --payload has no $f: $PAYLOAD" >&2; exit 1; }
+[ "$(basename "$APP")" = "$APP_NAME" ] \
+  || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
+[ -d "$APP" ] || { echo "package-pkg: no such app: $APP" >&2; exit 1; }
+for f in bin/cmake bin/ctest bin/cpack; do
+  [ -x "$TREE/$f" ] || { echo "package-pkg: --cmake-tree has no $f: $TREE" >&2; exit 1; }
 done
+require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-separated
+  _flag="$1"; _dir="$2"; _allowed="$3"
+  for _e in "$_dir"/* "$_dir"/.*; do
+    [ -e "$_e" ] || continue                        # an unmatched glob stays literal
+    _b="$(basename "$_e")"
+    case "$_b" in
+      .|..) continue ;;
+      ._*) continue ;;                              # stripped from the stage below, so it never ships
+    esac
+    _ok=no
+    for _a in $_allowed; do
+      if [ "$_b" = "$_a" ]; then _ok=yes; fi
+    done
+    [ "$_ok" = yes ] || {
+      echo "package-pkg: $_flag has an unexpected top-level entry: $_b" >&2
+      echo "    everything at the root of $_dir is installed into $PREFIX_DIR, and the payload is" >&2
+      echo "    specified exactly (spec 2026-09-11 decision 1): $_allowed" >&2
+      echo "    move $_dir/$_b elsewhere, or add it to the payload deliberately" >&2
+      exit 1
+    }
+  done
+}
+# spec: 2026-09-11 decision 1 -- both roots BECOME the product prefix verbatim, so the enumeration of
+#       the payload is a gate rather than a description: a stray shipyard-cmake-tree.tar.gz left
+#       beside the tree it was made from shipped a copy of the whole payload inside the payload, and
+#       nothing complained. `man` is allowed though our bootstrap does not build it -- CMake installs
+#       man pages there when Sphinx is present, and a doc-enabled build must not become a packaging
+#       failure.
+require_only --cmake-tree "$TREE" "bin doc man share"
+[ -f "$SPREFIX/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake" ] \
+  || { echo "package-pkg: --shipyard-prefix has no share/cmake/MavericksShipyard: $SPREFIX" >&2; exit 1; }
+# spec: CMakeLists.txt -- every install() targets ${CMAKE_INSTALL_DATADIR}/cmake/MavericksShipyard,
+#       so `share` is the only thing that may be here; anything else means a build dir, a source tree
+#       or a shared prefix was passed by mistake.
+require_only --shipyard-prefix "$SPREFIX" "share"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-pkg.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 STAGE="$WORK/stage"; SCR="$WORK/scripts"
-mkdir -p "$STAGE$PAYLOAD_DIR" "$SCR" "$WORK/component" "$(dirname "$OUT")"
-COPYFILE_DISABLE=1 cp -R "$PAYLOAD"/. "$STAGE$PAYLOAD_DIR/"
+mkdir -p "$STAGE$PREFIX_DIR" "$STAGE/usr/local/bin" "$SCR" "$WORK/component" "$(dirname "$OUT")"
+COPYFILE_DISABLE=1 cp -R "$TREE"/. "$STAGE$PREFIX_DIR/"
+COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
+# platform: the link targets are RELATIVE, so they resolve on whatever volume Installer lays them
+#           down on.
+ln -s ../mavericks-shipyard/bin/cmake "$STAGE/usr/local/bin/shipyard-cmake"
+ln -s ../mavericks-shipyard/bin/ctest "$STAGE/usr/local/bin/shipyard-ctest"
+ln -s ../mavericks-shipyard/bin/cpack "$STAGE/usr/local/bin/shipyard-cpack"
 
-sh "$SELF/stage_updater.sh" --stage "$STAGE" --app "$APP_NATIVE" --app-dir "$APPDIR" \
-  --agent-label "$NATIVE_LABEL" --snippet-out "$SCR/agent-load-native.sh"
-sh "$SELF/stage_updater.sh" --stage "$STAGE" --app "$APP_CROSS" --app-dir "$APPDIR" \
-  --agent-label "$CROSS_LABEL" --snippet-out "$SCR/agent-load-cross.sh"
-
+sh "$SELF/stage_updater.sh" --stage "$STAGE" --app "$APP" --app-dir "$APPDIR" \
+  --agent-label "$LABEL" --scripts-out "$SCR"
 emit_preinstall "$SCR/preinstall"
-emit_postinstall "$SCR/postinstall"
 
-# platform: AppleDouble sidecars an NFS/shared stage sprays would otherwise ship as payload.
+# platform: an NFS or otherwise shared stage sprays AppleDouble "._*" sidecars, which would ship as
+#           payload.
 find "$STAGE" -name '._*' -delete 2>/dev/null || true
 
-# spec: tests/build_component_pkg.bats -- pkgbuild makes a payload holding .app bundles relocatable
-#       and version-checked by default, so a developer with a locally built updater elsewhere on
-#       disk (same bundle id) would get this payload installed INTO that build dir;
-#       build_component_pkg.sh turns both off.
+# platform: pkgbuild makes a payload holding a .app relocatable and version-checked, so a locally
+#           built updater elsewhere on disk would capture it; build_component_pkg.sh does not.
 comp="$WORK/component/mavericks-shipyard.pkg"
 sh "$SELF/build_component_pkg.sh" --root "$STAGE" --identifier "$ID" --version "$VER" \
   --install-location / --scripts "$SCR" --out "$comp" >&2

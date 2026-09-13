@@ -13,13 +13,19 @@ concurrency:
 jobs:
   test:
     runs-on: macos-26   # the CMake modules gate on Apple clang; Linux cannot exercise them
+    timeout-minutes: 90     # source-build mode builds CMake twice on a cache miss
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
 
-      - name: Install mavericks-shipyard (self) -- and bats, so the *.bats suites below can run
+      - id: cm
+        uses: ./.github/actions/shipyard-cmake
+      - name: Install mavericks-shipyard (self, source-build) -- and bats, so the *.bats suites below can run
         uses: ./.github/actions/install
+        with:
+          source: build
+          cmake-tree: ${{ steps.cm.outputs.tree }}
 
       # spec: this job's own PyYAML, not .github/actions/install's -- consumers reach the
       #       workflow-parse gate through family-conventions.yml on ubuntu-latest, whose python3
@@ -34,8 +40,92 @@ jobs:
 
       - name: ctest (parameterized suites)
         run: |
-          cmake -S . -B build
-          ctest --test-dir build --output-on-failure
+          shipyard-cmake -S . -B build
+          shipyard-ctest --test-dir build --output-on-failure
 
       - name: Standalone test suites
         run: sh scripts/run-repo-tests.sh
+
+  # spec: R-P1-17 -- this job builds (or restores) the universal shipyard-cmake and publishes it as a
+  #       run artifact so it can be run on a real 10.9 box, the only proof the x86_64 slice works
+  #       there; and it REHEARSES release.yml's whole packaging path. release.yml runs only on a push
+  #       to main, so the packaging and install-smoke steps below would otherwise first execute during
+  #       the flag-day push -- the one push that must not be a rehearsal.
+  shipyard-cmake:
+    runs-on: macos-26
+    timeout-minutes: 90     # a cache miss builds CMake twice
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
+      - id: cm
+        uses: ./.github/actions/shipyard-cmake
+      - name: Install mavericks-shipyard (self, source-build)
+        uses: ./.github/actions/install
+        with:
+          source: build
+          cmake-tree: ${{ steps.cm.outputs.tree }}
+
+      # spec: scripts/package-pkg.sh -- $SHIPYARD_CMAKE_TREE, never the prefix install@v1 assembled:
+      #       that prefix has shipyard installed into it, and this artifact is the bare CMake tree a
+      #       10.9 box can unpack and run.
+      - name: Pack the tree
+        run: tar -czf "$RUNNER_TEMP/shipyard-cmake-tree.tar.gz" -C "$SHIPYARD_CMAKE_TREE" .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: shipyard-cmake-tree
+          path: ${{ runner.temp }}/shipyard-cmake-tree.tar.gz
+
+      # spec: .github/workflows/release.yml -- the same two-arch build and merge it does, stated in
+      #       full on its copy of this step.
+      - name: Build the universal updater
+        run: |
+          set -eu
+          for a in "x86_64 10.9" "arm64 11.0"; do
+            set -- $a
+            shipyard-cmake -S . -B "$RUNNER_TEMP/upd-$1" -DSHIPYARD_BUILD_UPDATER=ON \
+              -DMAVERICKS_ALLOW_GENERIC_ICON=ON -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
+              -DCMAKE_OSX_ARCHITECTURES="$1" -DCMAKE_OSX_DEPLOYMENT_TARGET="$2"
+            shipyard-cmake --build "$RUNNER_TEMP/upd-$1"
+          done
+          sh scripts/lipo-merge-tree.sh \
+            --a "$RUNNER_TEMP/upd-x86_64/MavericksShipyardUpdater.app" \
+            --b "$RUNNER_TEMP/upd-arm64/MavericksShipyardUpdater.app" \
+            --out "$RUNNER_TEMP/MavericksShipyardUpdater.app" \
+            --require-archs "x86_64 arm64"
+          # spec: R-P1-22 -- NOT re-signed; release.yml's copy of this step states it in full.
+          exe="$RUNNER_TEMP/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater"
+          archs="$(lipo -info "$exe" | sed -n 's/.*: //p')"
+          case " $archs " in *" x86_64 "*) ;; *) echo "::error::the merged updater has no x86_64 slice: $archs"; exit 1;; esac
+          case " $archs " in *" arm64 "*) ;; *) echo "::error::the merged updater has no arm64 slice: $archs"; exit 1;; esac
+          echo "merged updater: $archs"
+
+      - name: Package
+        run: |
+          set -eu
+          v="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"
+          echo "rehearsing the pkg for $v"
+          mkdir -p "$RUNNER_TEMP/dist"
+          shipyard-cmake -S . -B "$RUNNER_TEMP/payload-build"
+          shipyard-cmake --install "$RUNNER_TEMP/payload-build" --prefix "$RUNNER_TEMP/payload-prefix"
+          sh scripts/package-pkg.sh \
+            --cmake-tree "$SHIPYARD_CMAKE_TREE" \
+            --shipyard-prefix "$RUNNER_TEMP/payload-prefix" \
+            --app "$RUNNER_TEMP/MavericksShipyardUpdater.app" \
+            --version "$v" \
+            --out "$RUNNER_TEMP/dist/mavericks-shipyard-$v.pkg"
+          sh scripts/assert_pkg_installs_in_place.sh "$RUNNER_TEMP/dist/mavericks-shipyard-$v.pkg"
+
+      - name: Install smoke (the rehearsed pkg)
+        timeout-minutes: 10
+        run: |
+          set -eu
+          bad=0
+          sudo installer -pkg "$RUNNER_TEMP"/dist/mavericks-shipyard-*.pkg -target / || bad=1
+          want="$(sed -n 's/^CMAKE_VERSION=//p' cmake.pin)"
+          sh scripts/assert-installed-shipyard.sh --cmake-version "$want" --root / || bad=1
+          if [ "$bad" -ne 0 ]; then
+            echo "---- /var/log/install.log, the pkg's scripts ----"
+            sudo grep -E 'preinstall|postinstall|mavericks-shipyard' /var/log/install.log | tail -n 100 || true
+          fi
+          [ "$bad" -eq 0 ] || exit 1

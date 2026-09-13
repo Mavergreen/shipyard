@@ -20,4 +20,14 @@ else
   echo "SKIP: cannot fetch Sparkle here; opt-in path not exercised"; exit 77
 fi
 
+# spec: 2026-09-11 -- one universal updater, so no per-arch target name or bundle id survives.
+if grep -q 'CrossUpdater\|-cross' "$root/CMakeLists.txt"; then
+  echo "FAIL: CMakeLists.txt still defines a -cross updater slice; there is one universal app now"; exit 1
+fi
+# spec: scripts/lipo-merge-tree.sh -- pin the VALUE, not the bare name: grepping for the name alone
+#       would stay green if someone narrowed MAVERICKS_SPARKLE_ARCH to a single arch, and the merge
+#       would then have two different Sparkle frameworks to reconcile instead of one executable.
+grep -q 'MAVERICKS_SPARKLE_ARCH} all)' "$root/CMakeLists.txt" \
+  || { echo "FAIL: MAVERICKS_SPARKLE_ARCH must be pinned to 'all' -- both per-arch builds must embed the identical fat Sparkle framework so the merge only has the executable left to lipo"; exit 1; }
+
 echo "PASS: shipyard-updater-optin"

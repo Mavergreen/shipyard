@@ -1,190 +1,192 @@
 #!/bin/sh
-# spec: SKILL.md "On-target/off-target parity" -- the pkg must install on BOTH kinds of box and
-#       pick its own updater; shipping two pkgs would make someone choose, silently wrong when
-#       they choose badly, so one pkg carries both slices and the postinstall decides.
-# spec: scripts/package-pkg.sh -- BEHAVIORAL, not grep. An earlier cut of this test grepped the
-#       postinstall for `uname -m` and `arm64` and passed a postinstall that loaded the x86_64
-#       agent on every box. So this RUNS the postinstall the way Installer does ($1 pkg, $2
-#       install location, $3 target volume) against a fixture volume holding both slices, with
-#       sysctl/uname/stat/sudo stubbed, and checks what it actually did. The preinstall gets the
-#       same treatment against its own fixture volume.
+# spec: 2026-09-11 decision 1 -- the pkg is ONE prefix holding shipyard's own CMake and shipyard
+#       itself, three uniquely named commands in /usr/local/bin, and one universal updater. No
+#       registration, no arch picking.
 set -eu
-here="$(cd "$(dirname "$0")" && pwd)"
-root="$(cd "$here/.." && pwd)"
+here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 S="$root/scripts/package-pkg.sh"
 [ -f "$S" ] || { echo "FAIL: no scripts/package-pkg.sh"; exit 1; }
+w="$(mktemp -d "${TMPDIR:-/tmp}/pkg-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
+code() { grep -v '^[[:space:]]*#' "$S"; }   # the script minus its comments
+PREFIX=usr/local/mavericks-shipyard
 
-work="$(mktemp -d "${TMPDIR:-/tmp}/pkgpost.XXXXXX")"; trap 'rm -rf "$work"' EXIT
-
-NATIVE_LABEL=dev.modernmavericks.mavericks-shipyard-updatecheck
-CROSS_LABEL=dev.modernmavericks.mavericks-shipyard-cross-updatecheck
-NATIVE_APP=MavericksShipyardUpdater.app
-CROSS_APP=MavericksShipyardCrossUpdater.app
-APPDIR="Library/Application Support/ModernMavericks"
-PAYLOAD=usr/local/mavericks-shipyard
-
-# spec: scripts/package-pkg.sh -- the postinstall is the part with logic worth testing; emit and
-#       exercise it without building a real pkg (pkgbuild needs a full payload and minutes; this
-#       needs neither).
-scr="$work/scripts"; mkdir -p "$scr"
-sh "$S" --emit-postinstall "$scr/postinstall" || { echo "FAIL: --emit-postinstall failed"; exit 1; }
-[ -s "$scr/postinstall" ] || { echo "FAIL: empty postinstall"; exit 1; }
-
-for slice in native cross; do
-  printf 'echo %s >> "%s"\n' "$slice" "$work/sourced.log" > "$scr/agent-load-$slice.sh"
+[ "$(code | grep -c -- '--host-arch x86_64,arm64')" = 1 ] || { echo "FAIL: the Distribution must declare BOTH architectures and exactly those -- without arm64, Installer on Apple Silicon offers Rosetta for a pkg with scripts and runs them translated; only one arch would stop the pkg installing on the other box -- package-pkg.sh must pass --host-arch x86_64,arm64 exactly once"; exit 1; }
+# spec: R-P1-24 -- the superseded machinery is gone, but CrossUpdater is NOT on this list: the
+#       preinstall has to name it once, to delete it off boxes that installed the two-updater design.
+#       Once, and only to remove -- never to stage or install one.
+for gone in register-with-cmake sysctl agent-load-cross uname; do
+  code | grep -q -- "$gone" && { echo "FAIL: package-pkg.sh still mentions $gone"; exit 1; }
+done
+[ "$(code | grep -c '^rm -rf .*CrossUpdater')" = 1 ] \
+  || { echo "FAIL: the preinstall must remove MavericksShipyardCrossUpdater.app exactly once (rm -rf); got $(code | grep -c '^rm -rf .*CrossUpdater')"; exit 1; }
+stray="$(code | grep 'CrossUpdater' | grep -vE '^rm -rf |^[[:space:]]*\|\| echo ' || true)"
+[ -z "$stray" ] || { echo "FAIL: CrossUpdater appears outside its one-time removal: $stray"; exit 1; }
+for c in cmake ctest cpack; do
+  code | grep -q "shipyard-$c" || { echo "FAIL: package-pkg.sh never creates /usr/local/bin/shipyard-$c"; exit 1; }
+  code | grep -q "ln -s ../mavericks-shipyard/bin/$c" \
+    || { echo "FAIL: shipyard-$c must be a RELATIVE symlink (ln -s ../mavericks-shipyard/bin/$c) -- an absolute /usr/local/mavericks-shipyard/bin/$c target points at the boot volume no matter which volume Installer is writing to, so an install to any other volume gets three dead links"; exit 1; }
 done
 
-# platform: sysctl hw.optional.arm64 is the forced "hardware": 1 (Apple Silicon), 0 (Intel on a
-#           modern macOS), or absent (10.9 has no such name: nothing on stdout, an error, exit 1
-#           on its own). uname -m always says x86_64, which is what it says under Rosetta -- where
-#           Installer runs a package's scripts on Apple Silicon unless the Distribution declares
-#           arm64 -- so a postinstall that trusts uname -m picks the wrong slice. Stubs go first
-#           on PATH: sudo only records its argv -- one [arg] per argument, so a word-split or a
-#           dropped quote shows up as a mismatch. sysctl and stat answer ONLY the exact question
-#           the postinstall must ask; anything else is logged and exits 97, so a regression to
-#           `stat -f %u` (a uid, not a name) or to another sysctl cannot pass on a stub that
-#           ignores its arguments.
-bin="$work/bin"; mkdir -p "$bin"
-cat > "$bin/sysctl" <<'EOF'
-#!/bin/sh
-if [ "$#" -ne 2 ] || [ "$1" != -n ] || [ "$2" != hw.optional.arm64 ]; then
-  echo "sysctl $*" >> "$FAKE_STUB_ERRORS"; exit 97
-fi
-case "$FAKE_ARM64" in
-  absent) echo "second level name optional in hw.optional.arm64 is invalid" >&2; exit 1 ;;
-  *) echo "$FAKE_ARM64" ;;
-esac
-EOF
-cat > "$bin/uname" <<'EOF'
-#!/bin/sh
-echo x86_64
-EOF
-cat > "$bin/stat" <<'EOF'
-#!/bin/sh
-if [ "$#" -ne 3 ] || [ "$1" != -f ] || [ "$2" != %Su ] || [ "$3" != /dev/console ]; then
-  echo "stat $*" >> "$FAKE_STUB_ERRORS"; exit 97
-fi
-echo "$FAKE_USER"
-EOF
-cat > "$bin/sudo" <<'EOF'
-#!/bin/sh
-for a in "$@"; do printf '[%s]' "$a"; done >> "$FAKE_SUDO_LOG"
-echo >> "$FAKE_SUDO_LOG"
-exit "${FAKE_SUDO_RC:-0}"
-EOF
-chmod +x "$bin/sysctl" "$bin/uname" "$bin/stat" "$bin/sudo"
+sh "$S" --emit-preinstall "$w/preinstall"
+[ -s "$w/preinstall" ] || { echo "FAIL: --emit-preinstall wrote nothing"; exit 1; }
 
-lay_down_volume() {  # $1 = volume root; a target volume with both slices' payload just laid down
+AGENTS=Library/LaunchAgents
+APPS="Library/Application Support/ModernMavericks"
+LEGACY_PLIST="$AGENTS/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist"
+LEGACY_APP="$APPS/MavericksShipyardCrossUpdater.app"
+
+lay_down_previous() {  # $1 = volume root: a previous install plus the neighbours it must not touch
   rm -rf "$1"
-  mkdir -p "$1/Library/LaunchAgents" "$1/$PAYLOAD/scripts" \
-           "$1/$APPDIR/$NATIVE_APP/Contents/MacOS" "$1/$APPDIR/$CROSS_APP/Contents/MacOS"
-  : > "$1/Library/LaunchAgents/$NATIVE_LABEL.plist"
-  : > "$1/Library/LaunchAgents/$CROSS_LABEL.plist"
-  : > "$1/$PAYLOAD/scripts/register-with-cmake.sh"
+  mkdir -p "$1/$PREFIX/bin" "$1/usr/local/mavericks-shipyard-other" "$1/usr/local/other" "$1/usr/local/bin"
+  touch "$1/$PREFIX/bin/cmake" "$1/$PREFIX/dropped-in-a-newer-version" \
+        "$1/usr/local/mavericks-shipyard-other/keep" "$1/usr/local/other/keep" "$1/usr/local/bin/keep"
 }
 
-run_postinstall() {  # runs the postinstall as Installer would. $1 = hw.optional.arm64 (1|0|absent)  $2 = console user  $3 = target volume as passed in $3; sets $rc, $out, $sourced, $sudo_argv, $stub_errors
-  : > "$work/sourced.log"; : > "$work/sudo.log"; : > "$work/stub-errors.log"
-  rc=0
-  out="$(PATH="$bin:$PATH" FAKE_ARM64="$1" FAKE_USER="$2" FAKE_SUDO_LOG="$work/sudo.log" \
-         FAKE_STUB_ERRORS="$work/stub-errors.log" \
-         sh "$scr/postinstall" /fake/mavericks-shipyard.pkg "$3" "$3" 2>&1)" || rc=$?
-  sourced="$(cat "$work/sourced.log")"
-  sudo_argv="$(cat "$work/sudo.log")"
-  stub_errors="$(cat "$work/stub-errors.log")"
+# spec: R-P1-24 -- what v1.0.151 left on an Apple Silicon box: the CROSS updater and its agent, kept
+#       by the old postinstall's arch pick. Laid down beside the neighbours that must survive,
+#       including the plain-named pair this version installs, whose names differ by one word.
+lay_down_legacy() {  # $1 = volume root
+  mkdir -p "$1/$AGENTS" "$1/$APPS/$(basename "$LEGACY_APP")/Contents/MacOS" \
+           "$1/$APPS/MavericksShipyardUpdater.app/Contents/MacOS" "$1/$APPS/SomeOtherProduct.app"
+  touch "$1/$LEGACY_PLIST" \
+        "$1/$LEGACY_APP/Contents/MacOS/MavericksShipyardCrossUpdater" \
+        "$1/$AGENTS/dev.modernmavericks.mavericks-shipyard-updatecheck.plist" \
+        "$1/$AGENTS/dev.modernmavericks.something-else.plist" \
+        "$1/$APPS/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater" \
+        "$1/$APPS/SomeOtherProduct.app/keep"
 }
-
-fail() { echo "FAIL: $*"; [ -z "${out:-}" ] || printf '%s\n' "$out" | sed 's/^/    | /'; exit 1; }
-
-# platform: launchd autoloads anything in /Library/LaunchAgents at the next login, so merely not
-#           loading the other slice's agent now is not enough -- each slice must load the
-#           matching agent and ONLY it, remove the other, and register as the console user
-#           through their login shell. The postinstall is root with Installer's minimal PATH, so
-#           "whatever cmake is on PATH" can only mean the developer's PATH, and HOME must be
-#           theirs.
-check_slice() {  # $1 = hw.optional.arm64  $2 = slice kept  $3 = label kept  $4 = app kept  $5 = label dropped  $6 = app dropped  $7 = volume arg
-  vol="$work/vol"; lay_down_volume "$vol"
-  run_postinstall "$1" alice "$7"
-  [ "$rc" -eq 0 ] || fail "$1: postinstall exited $rc"
-  [ -z "$stub_errors" ] || fail "$1: asked a stub the wrong question: $stub_errors"
-  [ "$sourced" = "$2" ] || fail "$1: sourced '$sourced', want exactly '$2'"
-  [ ! -e "$vol/Library/LaunchAgents/$5.plist" ] || fail "$1: the other slice's agent is still installed; launchd will load it at login"
-  [ ! -e "$vol/$APPDIR/$6" ] || fail "$1: the other slice's app is still installed"
-  [ -f "$vol/Library/LaunchAgents/$3.plist" ] || fail "$1: removed its own agent"
-  [ -d "$vol/$APPDIR/$4" ] || fail "$1: removed its own app"
-  want="[-u][alice][-i][sh][$vol/$PAYLOAD/scripts/register-with-cmake.sh][$vol/$PAYLOAD]"
-  [ "$sudo_argv" = "$want" ] || fail "$1: sudo got '$sudo_argv', want '$want'"
-}
-# platform: Apple Silicon keeps the arm64 slice even though uname -m (stubbed as under Rosetta)
-#           says x86_64.
-check_slice 1      cross  "$CROSS_LABEL"  "$CROSS_APP"  "$NATIVE_LABEL" "$NATIVE_APP" "$work/vol"
-# platform: Intel on a modern macOS answers 0. This call also passes the volume with a trailing
-#           slash ("/" is what Installer passes for the boot volume), which must not double up
-#           into "//usr/local/...".
-check_slice 0      native "$NATIVE_LABEL" "$NATIVE_APP" "$CROSS_LABEL"  "$CROSS_APP"  "$work/vol/"
-# platform: 10.9 has no hw.optional.arm64 at all -- an error and no output must mean native, not
-#           a failed install.
-check_slice absent native "$NATIVE_LABEL" "$NATIVE_APP" "$CROSS_LABEL"  "$CROSS_APP"  "$work/vol"
-
-lay_down_volume "$work/vol"
-run_postinstall absent root "$work/vol"
-[ "$rc" -eq 0 ] || fail "console user root: postinstall exited $rc"
-[ -z "$sudo_argv" ] || fail "console user root: nobody at the console (loginwindow, a remote install) means no developer to register for, and registering as root would write a root-owned entry nobody's cmake reads -- sudo must not be called; got '$sudo_argv'"
-printf '%s' "$out" | grep -q "sh \"$work/vol/$PAYLOAD/scripts/register-with-cmake.sh\" \"$work/vol/$PAYLOAD\"" \
-  || fail "console user root: skipping registration must SAY how to finish -- the output must name the recovery command"
-
-lay_down_volume "$work/vol"
-FAKE_SUDO_RC=1; export FAKE_SUDO_RC
-run_postinstall 1 alice "$work/vol"
-unset FAKE_SUDO_RC
-[ "$rc" -eq 0 ] || fail "registration is BEST-EFFORT (shipyard's scripts half works with no cmake at all, and swift-toolchain consumes only that half) -- a failed registration must not fail the install; postinstall exited $rc"
-
-mkdir -p "$work/apps/$NATIVE_APP" "$work/apps/$CROSS_APP" "$work/payload/scripts"
-if out="$(sh "$S" --payload "$work/payload" --app-native "$work/apps/$CROSS_APP" \
-            --app-cross "$work/apps/$NATIVE_APP" --version 0.0.0 --out "$work/x.pkg" 2>&1)"; then
-  fail "the postinstall hardcodes the two .app names, so the packager must refuse any others -- a swapped pair would ship the x86_64 updater under the arm64 name and bring the Rosetta prompt straight back: swapped --app-native/--app-cross must be refused"
-fi
-printf '%s' "$out" | grep -q "$NATIVE_APP" || fail "the refusal must name the expected app"
-
-# spec: scripts/package-pkg.sh explains the --host-arch flag in prose, so match non-comment
-#       lines only.
-out=""
-host_arch="$(grep -v '^[[:space:]]*#' "$S" | grep -o -- '--host-arch[[:space:]]*[^[:space:]]*' || true)"
-[ "$host_arch" = "--host-arch x86_64,arm64" ] \
-  || fail "the Distribution must declare BOTH architectures and exactly those -- without arm64, Installer on Apple Silicon offers Rosetta for a pkg with scripts and runs them translated; only one arch would stop the pkg installing on the other box -- package-pkg.sh must pass exactly --host-arch x86_64,arm64 to set_install_floor.sh; got '${host_arch:-nothing}'"
-
-sh "$S" --emit-preinstall "$scr/preinstall" || { echo "FAIL: --emit-preinstall failed"; exit 1; }
-[ -s "$scr/preinstall" ] || { echo "FAIL: empty preinstall"; exit 1; }
-lay_down_previous() {  # $1 = volume root: a previous install, plus a neighbour under usr/local
-  rm -rf "$1"
-  mkdir -p "$1/$PAYLOAD/scripts" "$1/usr/local/mavericks-shipyard-other" "$1/usr/local/bin"
-  : > "$1/$PAYLOAD/scripts/renamed-away.sh"
-  : > "$1/usr/local/mavericks-shipyard-other/keep"
-  : > "$1/usr/local/bin/keep"
-}
-for volarg in "$work/pre" "$work/pre/"; do
-  lay_down_previous "$work/pre"
-  rc=0; out="$(sh "$scr/preinstall" /fake/mavericks-shipyard.pkg "$volarg" "$volarg" 2>&1)" || rc=$?
-  [ "$rc" -eq 0 ] || fail "preinstall ($volarg) exited $rc"
-  [ ! -e "$work/pre/$PAYLOAD" ] || fail "preinstall ($volarg) left the previous payload dir -- Installer only adds and overwrites, and a removed script that still works on a dev box is a script that fails only in CI, so dropped files would linger"
-  [ -f "$work/pre/usr/local/mavericks-shipyard-other/keep" ] || fail "preinstall ($volarg) removed a sibling of the payload dir"
-  [ -f "$work/pre/usr/local/bin/keep" ] || fail "preinstall ($volarg) removed something else under usr/local"
+# platform: Installer passes "/" for the boot volume, so a trailing slash must not double up into
+#           "//usr/local/..." -- and a path without one must work too. Only one of the two was
+#           covered before.
+for volarg in "$w/vol" "$w/vol/"; do
+  lay_down_previous "$w/vol"
+  rc=0; out="$(sh "$w/preinstall" /fake.pkg "$volarg" "$volarg" 2>&1)" || rc=$?
+  [ "$rc" -eq 0 ] || { echo "FAIL: preinstall ($volarg) exited $rc: $out"; exit 1; }
+  [ ! -e "$w/vol/$PREFIX" ] || { echo "FAIL: preinstall ($volarg) must remove the product dir"; exit 1; }
+  [ -f "$w/vol/usr/local/mavericks-shipyard-other/keep" ] \
+    || { echo "FAIL: preinstall ($volarg) removed mavericks-shipyard-other, a prefix SIBLING"; exit 1; }
+  [ -f "$w/vol/usr/local/other/keep" ] && [ -f "$w/vol/usr/local/bin/keep" ] \
+    || { echo "FAIL: preinstall ($volarg) removed a neighbour under usr/local"; exit 1; }
 done
-rm -rf "$work/pre"; mkdir -p "$work/pre/usr/local"
-rc=0; out="$(sh "$scr/preinstall" /fake/mavericks-shipyard.pkg "$work/pre" "$work/pre" 2>&1)" || rc=$?
-[ "$rc" -eq 0 ] || fail "preinstall on a first install (nothing there yet) exited $rc"
-lay_down_previous "$work/pre"; chmod 555 "$work/pre/usr/local"
-rc=0; out="$(sh "$scr/preinstall" /fake/mavericks-shipyard.pkg "$work/pre" "$work/pre" 2>&1)" || rc=$?
-chmod 755 "$work/pre/usr/local"
-[ "$rc" -eq 0 ] || fail "a failed removal must not fail the install, since the payload overwrites what it can either way; preinstall exited $rc"
-cat > "$bin/rm" <<'EOF'
+
+# spec: R-P1-24 -- Installer never removes what a newer payload no longer carries, so without this
+#       one-time migration an existing arm64 install would run TWO Sparkle updaters against one
+#       appcast, daily, forever -- invisibly, because both would work.
+for volarg in "$w/vol" "$w/vol/"; do
+  lay_down_previous "$w/vol"; lay_down_legacy "$w/vol"
+  rc=0; out="$(sh "$w/preinstall" /fake.pkg "$volarg" "$volarg" 2>&1)" || rc=$?
+  [ "$rc" -eq 0 ] || { echo "FAIL: preinstall ($volarg) with the legacy pair present exited $rc: $out"; exit 1; }
+  [ ! -e "$w/vol/$LEGACY_PLIST" ] \
+    || { echo "FAIL: preinstall ($volarg) left the superseded cross-updater LaunchAgent; it would keep checking the same appcast"; exit 1; }
+  [ ! -e "$w/vol/$LEGACY_APP" ] \
+    || { echo "FAIL: preinstall ($volarg) left MavericksShipyardCrossUpdater.app"; exit 1; }
+  [ -f "$w/vol/$AGENTS/dev.modernmavericks.mavericks-shipyard-updatecheck.plist" ] \
+    || { echo "FAIL: preinstall ($volarg) removed THIS version's own LaunchAgent"; exit 1; }
+  [ -f "$w/vol/$APPS/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater" ] \
+    || { echo "FAIL: preinstall ($volarg) removed MavericksShipyardUpdater.app, the updater this version installs"; exit 1; }
+  [ -f "$w/vol/$AGENTS/dev.modernmavericks.something-else.plist" ] \
+    || { echo "FAIL: preinstall ($volarg) removed another product's LaunchAgent"; exit 1; }
+  [ -f "$w/vol/$APPS/SomeOtherProduct.app/keep" ] \
+    || { echo "FAIL: preinstall ($volarg) removed another product's app"; exit 1; }
+  [ -d "$w/vol/$APPS" ] || { echo "FAIL: preinstall ($volarg) removed the shared ModernMavericks app dir"; exit 1; }
+done
+
+lay_down_previous "$w/vol"
+mkdir -p "$w/vol/$AGENTS" "$w/vol/$APPS"
+rc=0; out="$(sh "$w/preinstall" /fake.pkg "$w/vol" "$w/vol" 2>&1)" || rc=$?
+[ "$rc" -eq 0 ] || { echo "FAIL: preinstall with no legacy pair to remove must exit 0; got $rc: $out"; exit 1; }
+[ -z "$out" ] || { echo "FAIL: preinstall with nothing to migrate must say nothing; got: $out"; exit 1; }
+
+rm -rf "$w/vol"; mkdir -p "$w/vol/usr/local"
+rc=0; out="$(sh "$w/preinstall" /fake.pkg "$w/vol" "$w/vol" 2>&1)" || rc=$?
+[ "$rc" -eq 0 ] || { echo "FAIL: a first install (nothing to remove) must exit 0; got $rc: $out"; exit 1; }
+
+# platform: an unwritable PARENT is what makes rm -rf fail; the dir's own mode is not enough.
+lay_down_previous "$w/vol"; chmod 555 "$w/vol/usr/local"
+rc=0; out="$(sh "$w/preinstall" /fake.pkg "$w/vol" "$w/vol" 2>&1)" || rc=$?
+chmod 755 "$w/vol/usr/local"
+[ "$rc" -eq 0 ] || { echo "FAIL: a removal it cannot do must not fail the install; preinstall exited $rc: $out"; exit 1; }
+if [ "$(id -u)" = 0 ]; then
+  echo "note: running as root, where chmod 555 cannot block rm -rf -- the failed-removal case ran but proved nothing"
+else
+  [ -d "$w/vol/$PREFIX" ] || { echo "FAIL: the unwritable parent did not block the removal, so exit 0 proved nothing"; exit 1; }
+  printf '%s\n' "$out" | grep -q 'could not clear' \
+    || { echo "FAIL: a removal it could not do must SAY so; got '$out'"; exit 1; }
+fi
+
+# platform: with $3 unset a broken guard would reach for an unanchored /usr/local/mavericks-shipyard
+#           -- this machine's (or the runner's) OWN install -- so rm is stubbed for this case rather
+#           than run for real.
+mkdir -p "$w/stub"
+cat > "$w/stub/rm" <<'STUB'
 #!/bin/sh
 for a in "$@"; do printf '[%s]' "$a"; done >> "$FAKE_RM_LOG"
-EOF
-chmod +x "$bin/rm"; : > "$work/rm.log"
-rc=0; out="$(PATH="$bin:$PATH" FAKE_RM_LOG="$work/rm.log" sh "$scr/preinstall" 2>&1)" || rc=$?
-/bin/rm -f "$bin/rm"
-[ "$rc" -eq 0 ] || fail "preinstall with no target volume exited $rc"
-[ ! -s "$work/rm.log" ] || fail "no target volume at all is not \"/\" -- with nothing to anchor the path, preinstall must remove nothing: removed $(cat "$work/rm.log")"
+printf '\n' >> "$FAKE_RM_LOG"
+STUB
+chmod +x "$w/stub/rm"
+FAKE_RM_LOG="$w/rm.log"; export FAKE_RM_LOG
+# platform: an empty log is also what a stub that never intercepted anything looks like, so a stub
+#           that stopped being found would pass this test while a REAL rm ran. Prove PATH reaches it
+#           first, through a fresh `sh` so no inherited command hash can shadow it.
+: > "$FAKE_RM_LOG"
+( PATH="$w/stub:$PATH"; export PATH; sh -c 'rm -rf "$1"' _ "$w/never-existed" )
+grep -q 'never-existed' "$FAKE_RM_LOG" \
+  || { echo "FAIL: the rm stub is not the rm a script gets, so the no-target-volume case proves nothing"; exit 1; }
+: > "$FAKE_RM_LOG"
+mkdir -p "$w/vol/$PREFIX"
+( PATH="$w/stub:$PATH"; export PATH; sh "$w/preinstall" ) >/dev/null 2>&1 \
+  || { echo "FAIL: preinstall with no \$3 must exit 0"; exit 1; }
+[ ! -s "$FAKE_RM_LOG" ] || { echo "FAIL: with no target volume the preinstall must remove nothing; it tried $(cat "$FAKE_RM_LOG")"; exit 1; }
+[ -d "$w/vol/$PREFIX" ] || { echo "FAIL: with no target volume the preinstall must remove nothing"; exit 1; }
+
+for missing in --cmake-tree --shipyard-prefix --app --version --out; do
+  args="--cmake-tree $w/t --shipyard-prefix $w/p --app $w/MavericksShipyardUpdater.app --version 1.0.0 --out $w/o.pkg"
+  args="$(printf '%s' "$args" | sed "s|$missing [^ ]*||")"
+  # shellcheck disable=SC2086
+  if err="$(sh "$S" $args 2>&1 >/dev/null)"; then echo "FAIL: $missing must be required"; exit 1; fi
+  printf '%s\n' "$err" | grep -q -- "$missing" \
+    || { echo "FAIL: the refusal for a missing $missing must name it; got '$err'"; exit 1; }
+done
+mkdir -p "$w/Other.app"
+if sh "$S" --cmake-tree "$w/t" --shipyard-prefix "$w/p" --app "$w/Other.app" --version 1.0.0 --out "$w/o.pkg" >/dev/null 2>&1; then
+  echo "FAIL: an app not named MavericksShipyardUpdater.app must be refused"; exit 1
+fi
+
+# spec: 2026-09-11 decision 1 -- both --cmake-tree and --shipyard-prefix BECOME the product prefix
+#       verbatim, so a stray file beside a tree (the tarball it was unpacked from, a .DS_Store, a
+#       build dir) would otherwise install into /usr/local/mavericks-shipyard.
+mkfixture() {  # $1 = dir: a tree, a shipyard prefix and an app that all pass every other check
+  rm -rf "$1"
+  mkdir -p "$1/tree/bin" "$1/tree/doc" "$1/tree/man" "$1/tree/share" \
+           "$1/sp/share/cmake/MavericksShipyard" "$1/app/MavericksShipyardUpdater.app"
+  for c in cmake ctest cpack; do printf '#!/bin/sh\n' > "$1/tree/bin/$c"; chmod +x "$1/tree/bin/$c"; done
+  : > "$1/sp/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake"
+  : > "$1/notadir"
+}
+# platform: --out under a plain FILE, so a fixture that passes every input check stops at the first
+#           mkdir after them -- exercising the checks without pkgbuild, and without a special case
+#           for valid input.
+run_pkg() {  # $1 = fixture dir; sets $rc and $err
+  rc=0
+  err="$(sh "$S" --cmake-tree "$1/tree" --shipyard-prefix "$1/sp" \
+    --app "$1/app/MavericksShipyardUpdater.app" --version 1.0.0 --out "$1/notadir/o.pkg" 2>&1 >/dev/null)" || rc=$?
+}
+mkfixture "$w/fa"; run_pkg "$w/fa"
+[ "$rc" -ne 0 ] || { echo "FAIL: the fixture was built to stop at --out; it did not fail at all"; exit 1; }
+if printf '%s\n' "$err" | grep -q 'unexpected top-level entry'; then
+  echo "FAIL: bin/doc/man/share are the payload; none may be refused as unexpected; got '$err'"; exit 1
+fi
+mkfixture "$w/fb"; : > "$w/fb/tree/shipyard-cmake-tree.tar.gz"; run_pkg "$w/fb"
+[ "$rc" -ne 0 ] || { echo "FAIL: a stray file at the --cmake-tree root must be refused"; exit 1; }
+printf '%s\n' "$err" | grep -q 'shipyard-cmake-tree.tar.gz' \
+  || { echo "FAIL: the refusal must name the stray entry; got '$err'"; exit 1; }
+printf '%s\n' "$err" | grep -q -- '--cmake-tree' \
+  || { echo "FAIL: the refusal must name the flag that carried it; got '$err'"; exit 1; }
+mkfixture "$w/fc"; mkdir -p "$w/fc/sp/build"; run_pkg "$w/fc"
+[ "$rc" -ne 0 ] || { echo "FAIL: a stray dir at the --shipyard-prefix root must be refused"; exit 1; }
+printf '%s\n' "$err" | grep -q 'build' \
+  || { echo "FAIL: the refusal must name the stray entry; got '$err'"; exit 1; }
+printf '%s\n' "$err" | grep -q -- '--shipyard-prefix' \
+  || { echo "FAIL: the refusal must name the flag that carried it; got '$err'"; exit 1; }
 
 echo "PASS: shipyard-package-pkg"
