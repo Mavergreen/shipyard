@@ -57,7 +57,7 @@ EOF
 #       path, a known-extension filename, a YYYY-MM-DD name, or a numbered decision/check.
 ok spec_citation_path <<'EOF'
 #!/bin/sh
-# spec: docs/superpowers/specs/2026-09-12-comments-cite-a-reason-design.md decision 2
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md decision 2
 echo hi
 EOF
 
@@ -265,5 +265,9 @@ grep -q '^3 comments cite no reason$' "$w/countcheck.out" \
   || { echo "FAIL countcheck: expected trailing count '3 comments cite no reason', got: $(cat "$w/countcheck.out")"; exit 1; }
 grep -q 'comments cite no reason' "$w/shebang.out" \
   && { echo "FAIL shebang: the count line must appear only when something was found, but a clean file printed one: $(cat "$w/shebang.out")"; exit 1; }
+
+dangling="$( (cd "$here/.." && git ls-files -z '*.sh' '*.yml' | xargs -0 grep -n -E 'docs/superpower[s]|[.]superpower[s]/') || true )"
+[ -z "$dangling" ] \
+  || { echo "FAIL dangling-citation: the spec and plan directories named on those lines are gitignored, so the citation resolves for nobody -- not for the fourteen consumers that receive these scripts through @v1, and not for a fresh clone of shipyard. Cite something tracked (SKILL.md, a test, a script): $dangling"; exit 1; }
 
 echo "PASS: check-comments"

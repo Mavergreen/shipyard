@@ -11,7 +11,7 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(pwd)"
 REASONS="$ROOT/comment-reasons"
-# spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- opt-in via comment-reasons keeps
+# spec: SKILL.md "Comments cite a reason" -- opt-in via comment-reasons keeps
 #       14 consumer repos green until each has swept; the path is the REPO's, never shipyard's
 #       installed prefix, since consumers run this script from there.
 [ -f "$REASONS" ] || exit 0
@@ -23,7 +23,7 @@ listfile="$(mktemp "${_tmp%/}/check-comments-list.XXXXXX")"
 trap 'rm -f "$countfile" "$listfile"' EXIT
 
 if [ "$#" -gt 0 ]; then
-  # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a path NAMED on the command
+  # spec: SKILL.md "Comments cite a reason" -- a path NAMED on the command
   #       line is the caller's claim that it exists. Tasks 3-6 drive this script with globbed
   #       lists (scripts/[a-m]*.sh); a typo'd or non-matching glob would otherwise land here as
   #       an empty argument list that quietly scans nothing -- exit 0, no output, indistinguishable
@@ -47,13 +47,13 @@ while IFS= read -r f; do
   awk -v FNAME="$f" -v ALT="$alt" -v COUNTFILE="$countfile" '
     BEGIN { split(ALT, r, "|"); for (i in r) ok[r[i]] = 1 }
 
-    # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- counting occurrences of a
+    # spec: SKILL.md "Comments cite a reason" -- counting occurrences of a
     #       one-character needle without a separate loop at every call site: replace each with
     #       itself and let gsub report how many substitutions it made.
     function sq_count(s,   c) { c = s; return gsub(/'"'"'/, "&", c) }
     function dq_count(s,   c) { c = s; return gsub(/"/, "&", c) }
 
-    # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a heredoc body is payload, not
+    # spec: SKILL.md "Comments cite a reason" -- a heredoc body is payload, not
     #       commentary: package-pkg.sh writes a whole script inside one. Track the terminator
     #       and skip until it closes.
     heredoc != "" {
@@ -61,7 +61,7 @@ while IFS= read -r f; do
       if (line == heredoc) heredoc = ""
       next
     }
-    # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a shell cannot open a heredoc
+    # spec: SKILL.md "Comments cite a reason" -- a shell cannot open a heredoc
     #       from a comment, so this must not either. A "#" line documenting the ORIGINAL bug in
     #       prose can itself contain a quoted example of the bug shape, plus an incidental
     #       contraction or possessive elsewhere on the same line -- and that extra, unrelated
@@ -72,7 +72,7 @@ while IFS= read -r f; do
     #       body -- a "#" line that IS heredoc payload (package-pkg.sh writes whole scripts,
     #       comments and all, inside one) keeps being skipped by the block above.
     !/^[ \t]*#/ {
-      # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a "<<WORD" sitting inside a
+      # spec: SKILL.md "Comments cite a reason" -- a "<<WORD" sitting inside a
       #       quoted string, such as a bare word followed by <<EOF inside an echo argument, is
       #       not a heredoc and must not be read as one: the real incident silently ate ~120
       #       lines of a workflow file this way, exit 0, no output, indistinguishable from
@@ -104,7 +104,7 @@ while IFS= read -r f; do
     !/^[ \t]*#/ { intag = 0; inusage = 0; next }
 
     /^[ \t]*#[ \t]*shellcheck/ { next }
-    # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a continuation is recognized by
+    # spec: SKILL.md "Comments cite a reason" -- a continuation is recognized by
     #       indentation of its content past the label, not by the column of the leading "#":
     #       that character sits in column 1 for every left-margin comment, tag line and
     #       continuation alike, so comparing it never distinguishes them. What must be compared
@@ -134,7 +134,7 @@ while IFS= read -r f; do
         if (tag == "spec") {
           rest = line; sub(/^spec:[ \t]*/, "", rest)
           if (rest !~ /[^ \t\/]+\/[^ \t\/]+|\.(sh|yml|md|cmake|bats)|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]|check[ \t]+[0-9]+[a-z]*|decision[ \t]+[0-9]+|ruling[ \t]+[0-9]+|[A-Z][A-Za-z0-9]*-[A-Za-z0-9]+-[0-9]+/) {
-            printf "%s:%d: %s\n    spec: needs a locatable citation -- e.g. \"# spec: docs/superpowers/specs/2026-09-12-comments-cite-a-reason-design.md decision 2\"\n", FNAME, FNR, $0
+            printf "%s:%d: %s\n    spec: needs a locatable citation -- e.g. \"# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md check 15\"\n", FNAME, FNR, $0
             bad++
             intag = 0
             next

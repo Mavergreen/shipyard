@@ -757,7 +757,7 @@ printf '%s\n' "$out" | grep -q 'check-family-conventions: ok' \
   && { echo "FAIL a failing run printed ok: $out"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 15 -- delegates to check-comments.sh, so these
-#       fixtures prove the WIRING, not the scanner (task-1-brief.md's own tests already cover the
+#       fixtures prove the WIRING, not the scanner (tests/check-comments-test.sh already covers the
 #       scanner's rules in detail). comment-reasons here mirrors this repo's own root file
 #       (platform, spec) so the fixture reasons match what check-comments.sh actually ships with.
 mkrepo "$work/cm1"
@@ -777,7 +777,7 @@ printf 'platform\nspec\n' > "$work/cm2/comment-reasons"
 (cd "$work/cm2" && git add -A) >/dev/null 2>&1
 (cd "$work/cm2" && sh "$S" >/dev/null) || { echo "FAIL: a comment tagged # platform: should pass"; exit 1; }
 
-# spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- check-comments.sh itself exits 0 with
+# spec: SKILL.md "Comments cite a reason" -- check-comments.sh itself exits 0 with
 #       no comment-reasons file; this fixture is the load-bearing proof that the WIRING preserves
 #       that opt-in. check-family-conventions.sh runs in 14 consumers through a moving @v1 tag --
 #       without this passing, the day check 15 lands is the day all 14 go red on an untagged

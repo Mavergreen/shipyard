@@ -11,7 +11,7 @@
 #       declared state, not an event" -- the only writer of a release body outside the publish path:
 #       appends one line and preserves every other byte, is idempotent, and a conflicting digest
 #       stops it with exit 3 rather than overwriting.
-# spec: docs/superpowers/specs/2026-09-12-release-doctrine-design.md ruling 16 -- marking each
+# spec: SKILL.md "A release is a declared state, not an event" (ruling 16) -- marking each
 #       existing release once, with the digest computed from what it actually contains, is exact
 #       where inferring backward from a version match was a guess that lost a release.
 # spec: tests/release-state-record-test.sh -- append/idempotent/conflict, both targets, the

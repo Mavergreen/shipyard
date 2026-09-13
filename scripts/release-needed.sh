@@ -6,7 +6,7 @@
 #            SKIP=already-released/<tag>    a published release carries this digest
 #            SKIP=unreadable-marker/<tag>   no match, and <tag> records a marker this shipyard cannot
 #                                            read -- NOT "no marker"
-# spec: docs/superpowers/specs/2026-09-12-release-doctrine-design.md ruling 16 -- the answer depends
+# spec: SKILL.md "A release is a declared state, not an event" (ruling 16) -- the answer depends
 #       only on the digest, never the version. A pre-migration release's state is computed from its
 #       own tree (release-state.sh --ref) and recorded once, rather than inferred backward from
 #       version equality, which silently lost a release.

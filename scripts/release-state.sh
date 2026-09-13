@@ -10,7 +10,7 @@
 #       declared state, not an event" -- a release realises a declared state, not the side effect of
 #       an event; declared state EXCLUDES the source tree, which is what makes "a push causes
 #       feedback and almost never a release" a property of the design.
-# spec: docs/superpowers/specs/2026-09-12-release-doctrine-design.md "Failure modes" -- the rendering
+# spec: SKILL.md "A release is a declared state, not an event" -- the rendering
 #       is a WIRE FORMAT (hence the v1: prefix and the golden test: a format bump means recompute,
 #       never republish) and ruling 16 (--ref recomputes a pre-migration release's digest from the
 #       tag that actually released it, rather than guessing from a version match, which lost one).
