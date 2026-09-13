@@ -4,8 +4,9 @@ here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/check-family-conventions.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/family-conventions.XXXXXX")"; trap 'rm -rf "$work"' EXIT  # template: 10.9 BSD mktemp requires one
 
-# spec: the baseline is a repo that satisfies EVERY check, so each case below can turn exactly one
-#       thing off. Since check 14 the release body has to come from the shared generator, so the
+# spec: scripts/check-family-conventions.sh -- the baseline is a repo that satisfies EVERY
+#       check, so each case below can turn exactly one thing off. Since check 14 the release
+#       body has to come from the shared generator, so the
 #       baseline calls release-notes.sh and hands the publisher the very path it was given as
 #       --out; a fixture that still hand-waved `--notes-file "$NOTES"` would fail 14 in thirty
 #       unrelated cases.
@@ -31,8 +32,9 @@ YML
   printf '# Build ingredients\n' > "$1/INGREDIENTS.md"
   printf '{"extends":["github>ModernMavericks/shipyard"]}\n' > "$1/.github/renovate.json"
   printf '#!/bin/sh\nexit 0\n' > "$1/tests/a-test.sh"
-  # spec: a compliant repo commits UPSTREAM_VERSION and gitignores VERSION (a build product), and
-  #       the gate asks git what is tracked -- so the fixture has to be a real checkout. It also
+  # spec: scripts/check-family-conventions.sh -- a compliant repo commits UPSTREAM_VERSION and
+  #       gitignores VERSION (a build product), and the gate asks git what is tracked -- so the
+  #       fixture has to be a real checkout. It also
   #       says where upstream's own release notes live, for a release that ships a new upstream.
   printf '1.0.0\n' > "$1/UPSTREAM_VERSION"
   printf '/VERSION\n' > "$1/.gitignore"
@@ -68,7 +70,7 @@ PY
 if (cd "$work/cr" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a single-group concurrency block should fail"; exit 1; fi
 (cd "$work/cr" && sh "$S" 2>&1 | grep -qiE 'queued|pending|supersede') || { echo "FAIL: should explain the queued-run eviction"; exit 1; }
 
-# spec: and the block the family actually ships must pass. Only pull_request supersedes (keyed
+# spec: scripts/check-family-conventions.sh -- and the block the family actually ships must pass. Only pull_request supersedes (keyed
 #       per ref, so a force-push replaces its own predecessor); a branch push, a tag and a
 #       dispatch are each keyed per RUN and alone in their group. Folded across lines, because
 #       that is how it is written in the repos.
@@ -84,7 +86,7 @@ open(p,'w').write(s)
 PY
 (cd "$work/cok" && sh "$S" >/dev/null) || { echo "FAIL: the shipped concurrency block should pass"; exit 1; }
 
-# spec: and so must the gate reject, by name, the shape this family actually ran until
+# spec: scripts/check-family-conventions.sh -- and so must the gate reject, by name, the shape this family actually ran until
 #       2026-09-09: dispatches herded into one shared literal group with
 #       cancel-in-progress:false. It mentions github.event_name, so a check that only asks "does
 #       the group distinguish events?" waves it straight through -- yet it is the exact
@@ -102,7 +104,7 @@ PY
 if (cd "$work/cold" && sh "$S" >/dev/null 2>&1); then echo "FAIL: the old shared-dispatch-group shape should fail"; exit 1; fi
 (cd "$work/cold" && sh "$S" 2>&1 | grep -qiE 'run_id|per run|alone') || { echo "FAIL: should say publishing runs must be keyed per run"; exit 1; }
 
-# spec: a group that IS per-run but still lets a publish be cancelled is only half the rule.
+# spec: scripts/check-family-conventions.sh -- a group that IS per-run but still lets a publish be cancelled is only half the rule.
 mkrepo "$work/chalf"
 python3 - "$work/chalf/.github/workflows/release.yml" <<'PY'
 import sys
@@ -129,7 +131,7 @@ printf '{"extends":["github>ModernMavericks/shipyard"],"ignoreTests":false}\n' >
 if (cd "$work/r" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a Renovate key restating the preset's own value is redundant and should fail"; exit 1; fi
 (cd "$work/r" && sh "$S" 2>&1 | grep -qi ignoreTests) || { echo "FAIL should name the key"; exit 1; }
 
-# spec: but the SAME key with a DIFFERENT value is a deliberate override, not drift. A repo with
+# spec: scripts/check-family-conventions.sh -- but the SAME key with a DIFFERENT value is a deliberate override, not drift. A repo with
 #       no build to gate legitimately opts back into blind automerge with ignoreTests:true; the
 #       gate must allow it.
 mkrepo "$work/r2"
@@ -139,7 +141,7 @@ printf '{"extends":["github>ModernMavericks/shipyard"],"ignoreTests":true}\n' > 
 mkrepo "$work/n"; grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/n/.github/workflows/release.yml"
 if (cd "$work/n" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a release that publishes no notes should fail"; exit 1; fi
 
-# spec: an automerge exception must say WHY. The family default is ship-if-green (patch, minor
+# spec: scripts/check-family-conventions.sh -- an automerge exception must say WHY. The family default is ship-if-green (patch, minor
 #       and major alike); a repo restricts automerge only where a bad bump would build fine and
 #       be wrong -- the case a green build cannot catch. Unexplained, that is indistinguishable
 #       from drift.
@@ -159,7 +161,7 @@ printf '%s\n' '{"extends":["github>ModernMavericks/shipyard"],"packageRules":[{"
   > "$work/am3/.github/renovate.json"
 (cd "$work/am3" && sh "$S" >/dev/null) || { echo "FAIL: a rule that does NOT touch automerge (e.g. allowedVersions) needs no such reason, should pass"; exit 1; }
 
-# spec: a repo that publishes via the shared workflow satisfies the notes check: the caller has
+# spec: scripts/check-family-conventions.sh -- a repo that publishes via the shared workflow satisfies the notes check: the caller has
 #       no --notes-file or body_path of its own, because publish-release.yml owns the body (and
 #       fails on an empty one, which is stronger than what this check can see).
 mkrepo "$work/p"
@@ -202,7 +204,7 @@ mkrepo "$work/v4"; rm "$work/v4/UPSTREAM_VERSION"
 if out="$(cd "$work/v4" && sh "$S" 2>&1)"; then echo "FAIL: no upstream input at all means nothing can derive a version, so it should say so rather than let CI discover it -- should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'UPSTREAM_VERSION' || { echo "FAIL should name UPSTREAM_VERSION: $out"; exit 1; }
 
-# spec: a repo whose upstream is DERIVED from its pin (ed25519: the pinned commit's date;
+# spec: scripts/check-family-conventions.sh -- a repo whose upstream is DERIVED from its pin (ed25519: the pinned commit's date;
 #       tailscale: the upstream's own VERSION.txt) has no committed UPSTREAM_VERSION and must
 #       still pass.
 mkrepo "$work/v5"; rm "$work/v5/UPSTREAM_VERSION"
@@ -210,7 +212,7 @@ mkdir -p "$work/v5/build"; printf '#!/bin/sh\n: > UPSTREAM_VERSION\n' > "$work/v
 (cd "$work/v5" && git add -A) >/dev/null 2>&1
 (cd "$work/v5" && sh "$S" >/dev/null) || { echo "FAIL derived upstream should pass"; exit 1; }
 
-# spec: parallel upstream lines (golang) keep one UPSTREAM_VERSION per line. Check 7b additionally
+# spec: scripts/check-family-conventions.sh -- parallel upstream lines (golang) keep one UPSTREAM_VERSION per line. Check 7b additionally
 #       demands each line carry its OWN capped Renovate manager, so the fixture has to look like
 #       golang really does -- an anchored managerFilePatterns plus an allowedVersions cap keeping
 #       the line off the next minor.
@@ -239,7 +241,7 @@ YML
 if (cd "$work/bo" && sh "$S" >/dev/null 2>&1); then echo "FAIL: an unignored build output dir should fail"; exit 1; fi
 (cd "$work/bo" && sh "$S" 2>&1 | grep -q 'build/updater') || { echo "FAIL: should name the unignored path"; exit 1; }
 
-# spec: ignored, it must pass -- any spelling that actually covers the path is fine.
+# spec: scripts/check-family-conventions.sh -- ignored, it must pass -- any spelling that actually covers the path is fine.
 mkrepo "$work/bok"
 cat >> "$work/bok/.github/workflows/release.yml" <<'YML'
       - run: cmake -S updater -B build/updater
@@ -247,7 +249,7 @@ YML
 printf 'build/updater/\n' >> "$work/bok/.gitignore"
 (cd "$work/bok" && git add -A >/dev/null 2>&1; sh "$S" >/dev/null) || { echo "FAIL: an ignored build output dir should pass"; exit 1; }
 
-# spec: a build that already leaves the tree needs no ignore at all -- that is the point of
+# spec: scripts/check-family-conventions.sh -- a build that already leaves the tree needs no ignore at all -- that is the point of
 #       leaving it.
 mkrepo "$work/boo"
 cat >> "$work/boo/.github/workflows/release.yml" <<'YML'
@@ -256,7 +258,7 @@ cat >> "$work/boo/.github/workflows/release.yml" <<'YML'
 YML
 (cd "$work/boo" && git add -A >/dev/null 2>&1; sh "$S" >/dev/null) || { echo "FAIL: an out-of-tree build dir needs no ignore"; exit 1; }
 
-# spec: `grep -B 3` is not a build directory. The gate reads only cmake's -B, or it invents
+# spec: scripts/check-family-conventions.sh -- `grep -B 3` is not a build directory. The gate reads only cmake's -B, or it invents
 #       failures.
 mkrepo "$work/bgrep"
 cat >> "$work/bgrep/.github/workflows/release.yml" <<'YML'
@@ -264,7 +266,7 @@ cat >> "$work/bgrep/.github/workflows/release.yml" <<'YML'
 YML
 (cd "$work/bgrep" && git add -A >/dev/null 2>&1; sh "$S" >/dev/null) || { echo "FAIL: grep -B must not be read as a build dir"; exit 1; }
 
-# spec: a committed CMakePresets.json names binaryDirs too; those are build output just the same.
+# spec: scripts/check-family-conventions.sh -- a committed CMakePresets.json names binaryDirs too; those are build output just the same.
 mkrepo "$work/bpre"
 printf '{"version":6,"configurePresets":[{"name":"n","binaryDir":"${sourceDir}/build-native"}]}\n' \
   > "$work/bpre/CMakePresets.json"
@@ -286,7 +288,7 @@ cat > "$work/bvend/.shipyard/scripts/check-family-conventions.sh" <<'SH'
 SH
 (cd "$work/bvend" && git add -A >/dev/null 2>&1; sh "$S" >/dev/null) || { echo "FAIL: a vendored .shipyard/ must not be read as this repo's build"; exit 1; }
 
-# spec: and a COMMENT in the repo's own shell that merely mentions a cmake command line is prose,
+# spec: scripts/check-family-conventions.sh -- and a COMMENT in the repo's own shell that merely mentions a cmake command line is prose,
 #       not a build. Only a line that actually runs cmake names a directory.
 mkrepo "$work/bcomment"
 cat > "$work/bcomment/note.sh" <<'SH'
@@ -308,12 +310,12 @@ printf 'binary-\000-junk\n' > "$work/buntracked/._decoy.sh"
 (cd "$work/buntracked" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: an UNTRACKED .sh must not be scanned as this repo's build"; exit 1; }
 (cd "$work/buntracked" && sh "$S" 2>&1 | grep -qi 'illegal byte sequence') && { echo "FAIL: a binary ._*.sh must not reach sed"; exit 1; }
 
-# spec: but once committed, the very same file counts.
+# spec: scripts/check-family-conventions.sh -- but once committed, the very same file counts.
 (cd "$work/buntracked" && git add stray.sh >/dev/null 2>&1)
 if (cd "$work/buntracked" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a COMMITTED build script's dir must be required to be ignored"; exit 1; fi
 (cd "$work/buntracked" && sh "$S" 2>&1 | grep -q 'never-committed-build') || { echo "FAIL: should name the tracked script's build dir"; exit 1; }
 
-# spec: workflow YAML must parse with DUPLICATE KEYS REJECTED. A second `with:` on one step is
+# spec: scripts/check-family-conventions.sh -- workflow YAML must parse with DUPLICATE KEYS REJECTED. A second `with:` on one step is
 #       valid YAML (last key wins) and ordinary parsers accept it, but GitHub refuses to run the
 #       workflow: the run shows up named after the file path, "likely failed because of a
 #       workflow file issue", with no step logs at all. swift-runtime shipped exactly that.
@@ -328,7 +330,7 @@ printf 'name: x\non: [push]\njobs:\n  a:\n   steps:\n  - bad indent\n' > "$work/
 if out="$(cd "$work/y2" && sh "$S" 2>&1)"; then echo "FAIL: malformed YAML should fail too, naming the file"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'broken.yml' || { echo "FAIL should name the file: $out"; exit 1; }
 
-# spec: when PyYAML itself is missing, the gate must NAME the absent dependency rather than dump
+# spec: scripts/check-family-conventions.sh -- when PyYAML itself is missing, the gate must NAME the absent dependency rather than dump
 #       a ModuleNotFoundError traceback at a repo that is fully compliant. GitHub's macOS runner
 #       python3 ships without PyYAML, so this reported a bare "FAIL compliant repo should pass" on
 #       every CI run for a month, pointing at the repo instead of at the one `pip install` that
@@ -344,7 +346,7 @@ if printf '%s\n' "$out" | grep -qi 'Traceback'; then
   echo "FAIL should not dump a traceback: $out"; exit 1
 fi
 
-# spec: the 10.9-portability lint runs as part of this gate, so every consumer gets it from the
+# spec: scripts/check-family-conventions.sh -- the 10.9-portability lint runs as part of this gate, so every consumer gets it from the
 #       @v1 they already pin. Asserted HERE and not only in shell-portability-test.sh because the
 #       wiring is the part that can rot: check-shell-portability.sh could keep passing its own
 #       tests while this gate quietly stopped calling it, and nothing would go red.
@@ -370,14 +372,14 @@ printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|--
 if out="$(cd "$work/r2" && sh "$S" 2>&1)"; then echo "FAIL untracked ingredient should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -qi 'customManager\|renovate' || { echo "FAIL should name the fix: $out"; exit 1; }
 
-# spec: but a genuinely UNTRACKABLE input (no datasource exists -- golang's CA bundle) is allowed
+# spec: scripts/check-family-conventions.sh -- but a genuinely UNTRACKABLE input (no datasource exists -- golang's CA bundle) is allowed
 #       when it says so. The rule is "wire it or explain why you cannot", not "never write ❌".
 mkrepo "$work/r3"
 printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| CA bundle | `vendor/cacert.pem` | ❌ **untrackable — manual refresh** (see below) | watched path |\n' \
   > "$work/r3/INGREDIENTS.md"
 (cd "$work/r3" && sh "$S" >/dev/null) || { echo "FAIL declared-untrackable should pass"; exit 1; }
 
-# spec: a release shipping a new upstream links upstream's notes: the repo commits the hook that
+# spec: scripts/check-family-conventions.sh -- a release shipping a new upstream links upstream's notes: the repo commits the hook that
 #       says where, or says in INGREDIENTS.md why there is nothing to link.
 mkrepo "$work/u1"; (cd "$work/u1" && git rm -q --cached build/upstream-release-notes-url.sh && rm -r build)
 if out="$(cd "$work/u1" && sh "$S" 2>&1)"; then echo "FAIL no hook and no reason should fail"; exit 1; fi
@@ -391,7 +393,7 @@ mkrepo "$work/u2"; (cd "$work/u2" && mkdir scripts && git mv build/upstream-rele
 [ -f "$work/u2/scripts/upstream-release-notes-url.sh" ] && [ ! -e "$work/u2/build/upstream-release-notes-url.sh" ] \
   || { echo "FAIL fixture: hook did not move to scripts/"; exit 1; }
 (cd "$work/u2" && sh "$S" >/dev/null) || { echo "FAIL: the swift repos keep their scripts, and so the hook, in scripts/ -- a hook there should pass"; exit 1; }
-# spec: a hook that exists but is not committed is the trap: a .gitignore'd build/ drops it
+# spec: scripts/check-family-conventions.sh -- a hook that exists but is not committed is the trap: a .gitignore'd build/ drops it
 #       without a word (macports-legacy-support ignores build/ wholesale), and CI's fresh
 #       checkout never sees it.
 mkrepo "$work/u3"; (cd "$work/u3" && git rm -q --cached build/upstream-release-notes-url.sh && printf 'build/\n' >> .gitignore)
@@ -439,7 +441,7 @@ json.dump(c, open(p, "w"))
 PY
 (cd "$work/mv" && git add -A) >/dev/null 2>&1
 (cd "$work/mv" && sh "$S" >/dev/null) || { echo "FAIL a -mavericks.N pin with the family versioning should pass"; exit 1; }
-# spec: but a regex that matches the version without capturing N is the same bug, spelled
+# spec: scripts/check-family-conventions.sh -- but a regex that matches the version without capturing N is the same bug, spelled
 #       differently.
 mkrepo "$work/mv2"
 printf '6.3.3-mavericks.1\n' > "$work/mv2/components-version"
@@ -447,7 +449,7 @@ printf '%s\n' '{"extends":["github>ModernMavericks/shipyard"],"customManagers":[
   > "$work/mv2/.github/renovate.json"
 (cd "$work/mv2" && git add -A) >/dev/null 2>&1
 if (cd "$work/mv2" && sh "$S" >/dev/null 2>&1); then echo "FAIL versioning that ignores N should fail"; exit 1; fi
-# spec: and a pin that is NOT a -mavericks.N release needs nothing (openssh's own upstream, tag
+# spec: scripts/check-family-conventions.sh -- and a pin that is NOT a -mavericks.N release needs nothing (openssh's own upstream, tag
 #       form).
 mkrepo "$work/mv3"
 printf 'V_9_9_P2\n' > "$work/mv3/components-version"
@@ -480,7 +482,7 @@ sed -e 's|sh "$SHIPYARD_SCRIPTS/release-notes\.sh" .*|sh "$SHIPYARD_SCRIPTS/chec
 if out="$(cd "$work/g1b" && sh "$S" 2>&1)"; then echo "FAIL check-release-notes.sh must not count as the generator"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'no workflow builds the release body' || { echo "FAIL should fail for the missing generator, not something else: $out"; exit 1; }
 
-# spec: a hand-written body is the exact regression this check exists for, in the printf-redirect
+# spec: scripts/check-family-conventions.sh -- a hand-written body is the exact regression this check exists for, in the printf-redirect
 #       shape.
 mkrepo "$work/g2"
 sed -e 's|sh "$SHIPYARD_SCRIPTS/release-notes\.sh" .*|printf "## %s\\n\\nAutomated release.\\n" "$FULL" > dist/RELEASE_NOTES.md|' \
@@ -510,7 +512,7 @@ YML
 if out="$(cd "$work/g3b" && sh "$S" 2>&1)"; then echo "FAIL a hand-written body outside dist/ should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'hand-writes the release body' || { echo "FAIL should say it is hand-written: $out"; exit 1; }
 
-# spec: but COPYING the generated body somewhere else is reading it, not writing it. A repo
+# spec: scripts/check-family-conventions.sh -- but COPYING the generated body somewhere else is reading it, not writing it. A repo
 #       staging the file into an artifact does exactly this, and flagging it would fail a correct
 #       repo.
 mkrepo "$work/g3c"
@@ -519,7 +521,7 @@ cat >> "$work/g3c/.github/workflows/release.yml" <<'YML'
 YML
 (cd "$work/g3c" && sh "$S" >/dev/null) || { echo "FAIL copying the generated body OUT must not be read as hand-writing it"; exit 1; }
 
-# spec: GitHub's autogenerated notes are a commit list, not the Sparkle <description> a 10.9 user
+# spec: scripts/check-family-conventions.sh -- GitHub's autogenerated notes are a commit list, not the Sparkle <description> a 10.9 user
 #       reads. It satisfies check 5, which is exactly why 14 has to reject it by name.
 mkrepo "$work/g4"
 cat >> "$work/g4/.github/workflows/release.yml" <<'YML'
@@ -528,7 +530,7 @@ YML
 if out="$(cd "$work/g4" && sh "$S" 2>&1)"; then echo "FAIL --generate-notes should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -qi 'autogenerated' || { echo "FAIL should name the autogenerated body: $out"; exit 1; }
 
-# spec: the appcast must read the file the generator wrote, or the Release page and the update
+# spec: scripts/check-family-conventions.sh -- the appcast must read the file the generator wrote, or the Release page and the update
 #       dialog tell two different stories.
 mkrepo "$work/g5"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file release-notes/README.md|' \
@@ -537,7 +539,7 @@ if out="$(cd "$work/g5" && sh "$S" 2>&1)"; then echo "FAIL a notes file the gene
 printf '%s\n' "$out" | grep -q 'the generator does not write' || { echo "FAIL should say the generator does not write it: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'release-notes/README.md' || { echo "FAIL should name the offending path: $out"; exit 1; }
 
-# spec: now the four shapes the REAL repos use, each of which a plausible check gets wrong.
+# spec: scripts/check-family-conventions.sh -- now the four shapes the REAL repos use, each of which a plausible check gets wrong.
 #       magic-trackpad2 stages its body at build/RELEASE_NOTES.md and QUOTES the value. A check
 #       anchored on dist/ fails it; a character class that excludes the quote captures an EMPTY
 #       value and fails it too (and swift-runtime, which quotes a dist/ path).
@@ -547,7 +549,7 @@ sed -e 's|--out dist/RELEASE_NOTES\.md|--out build/RELEASE_NOTES.md|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g6/.github/workflows/release.yml"
 (cd "$work/g6" && sh "$S" >/dev/null) || { echo "FAIL a quoted build/ notes path should pass"; exit 1; }
 
-# spec: and the quote must actually be STRIPPED, not merely survived. A pattern that excludes the
+# spec: scripts/check-family-conventions.sh -- and the quote must actually be STRIPPED, not merely survived. A pattern that excludes the
 #       quote from the value captures an EMPTY string, which word-splits away to nothing and
 #       leaves the subset loop with no members at all -- so the case above would keep passing for
 #       entirely the wrong reason, with the comparison silently switched off for the two repos
@@ -576,7 +578,7 @@ YML
 if out="$(cd "$work/g7b" && sh "$S" 2>&1)"; then echo "FAIL a packaging --out must not vouch for a non-.md notes file"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'dist/tool.pkg' || { echo "FAIL should name the non-.md notes file: $out"; exit 1; }
 
-# spec: the comparison is between WHOLE values. A --notes-file that is a strict SUFFIX of a real
+# spec: scripts/check-family-conventions.sh -- the comparison is between WHOLE values. A --notes-file that is a strict SUFFIX of a real
 #       --out value is a genuinely different file, and a substring match would wave it through.
 mkrepo "$work/g5c"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file NOTES.md|' \
@@ -584,7 +586,7 @@ sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file NOTES.md|' \
 if out="$(cd "$work/g5c" && sh "$S" 2>&1)"; then echo "FAIL a notes file that is only a SUFFIX of the --out path should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'notes-file NOTES.md' || { echo "FAIL should name the suffix path: $out"; exit 1; }
 
-# spec: a repo that routes ONE path through a variable is more self-consistent than one spelling
+# spec: scripts/check-family-conventions.sh -- a repo that routes ONE path through a variable is more self-consistent than one spelling
 #       it twice, and the two sides simply cannot be compared as text. Failing it would tell a
 #       correct repo to "pass the same path release-notes.sh was given as --out" -- which it did.
 #       Unresolvable values are skipped.
@@ -594,14 +596,14 @@ sed -e 's|--out dist/RELEASE_NOTES\.md|--out "$NOTES"|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g12/.github/workflows/release.yml"
 (cd "$work/g12" && sh "$S" >/dev/null) || { echo "FAIL a notes path routed through a variable should pass"; exit 1; }
 
-# spec: and a workflow expression the same way. Unskipped, the value stops at the first space and
+# spec: scripts/check-family-conventions.sh -- and a workflow expression the same way. Unskipped, the value stops at the first space and
 #       the failure message named the garbage '${{'.
 mkrepo "$work/g12b"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file "${{ steps.notes.outputs.path }}"|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g12b/.github/workflows/release.yml"
 (cd "$work/g12b" && sh "$S" >/dev/null) || { echo "FAIL a notes path from a workflow expression should pass"; exit 1; }
 
-# spec: but skipping the unresolvable ones must not switch the comparison off: a LITERAL mismatch
+# spec: scripts/check-family-conventions.sh -- but skipping the unresolvable ones must not switch the comparison off: a LITERAL mismatch
 #       in the same repo still fails.
 mkrepo "$work/g12c"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file "$NOTES" --notes-file release-notes/README.md|' \
@@ -609,7 +611,7 @@ sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file "$NOTES" --notes-file re
 if out="$(cd "$work/g12c" && sh "$S" 2>&1)"; then echo "FAIL a literal mismatch alongside a variable one should still fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'release-notes/README.md' || { echo "FAIL should name the literal mismatch: $out"; exit 1; }
 
-# spec: a flag and its value need not share a line. Reproduced against openssh's real main by
+# spec: scripts/check-family-conventions.sh -- a flag and its value need not share a line. Reproduced against openssh's real main by
 #       changing nothing but whitespace: the captured --out value became the backslash, the .md
 #       filter dropped it, and the repo was told to "pass the same path release-notes.sh was
 #       given as --out" -- which it did. No repo wraps this way today, so this is a cosmetic
@@ -622,7 +624,7 @@ grep -q '^ *--out \\$' "$work/g17/.github/workflows/release.yml" \
   || { echo "FAIL test setup did not produce a line-wrapped --out"; exit 1; }
 (cd "$work/g17" && sh "$S" >/dev/null) || { echo "FAIL a line-wrapped --out value should pass"; exit 1; }
 
-# spec: the same on the reading side, which wraps just as legally. A block scalar, because that
+# spec: scripts/check-family-conventions.sh -- the same on the reading side, which wraps just as legally. A block scalar, because that
 #       is where a wrapped shell command can legally live: folding a plain `run:` scalar over two
 #       lines would change what the shell is handed, and a fixture has to be a repo someone could
 #       really write.
@@ -635,7 +637,7 @@ cat >> "$work/g17b/.github/workflows/release.yml" <<'YML'
 YML
 (cd "$work/g17b" && sh "$S" >/dev/null) || { echo "FAIL a line-wrapped --notes-file value should pass"; exit 1; }
 
-# spec: and joining the continuation must not be a way to switch the comparison off: a WRONG
+# spec: scripts/check-family-conventions.sh -- and joining the continuation must not be a way to switch the comparison off: a WRONG
 #       path, wrapped, still fails and is still named. Without this, "wrapped values are skipped"
 #       would pass the two cases above while checking nothing.
 mkrepo "$work/g17c"
@@ -648,7 +650,7 @@ YML
 if out="$(cd "$work/g17c" && sh "$S" 2>&1)"; then echo "FAIL a wrapped notes path the generator never wrote should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'release-notes/README.md' || { echo "FAIL should name the wrapped mismatch: $out"; exit 1; }
 
-# spec: 1password, ed25519, signal-desktop and swift-toolchain pass no --notes-file at all: they
+# spec: scripts/check-family-conventions.sh -- 1password, ed25519, signal-desktop and swift-toolchain pass no --notes-file at all: they
 #       stage no appcast from the notes. The subset loop is then empty, which is correct and not
 #       a gap.
 mkrepo "$work/g8"
@@ -659,7 +661,7 @@ cat >> "$work/g8/.github/workflows/release.yml" <<'YML'
 YML
 (cd "$work/g8" && sh "$S" >/dev/null) || { echo "FAIL a repo that stages no appcast from the notes should pass"; exit 1; }
 
-# spec: porthole's feed-porthole moving-tag release passes a bare --notes "<text>" to gh release.
+# spec: scripts/check-family-conventions.sh -- porthole's feed-porthole moving-tag release passes a bare --notes "<text>" to gh release.
 #       That is a feed pointer, not a product release body, and failing it would redden a
 #       correct repo. golang does the same for each go-line feed.
 mkrepo "$work/g9"
@@ -670,7 +672,7 @@ cat >> "$work/g9/.github/workflows/release.yml" <<'YML'
 YML
 (cd "$work/g9" && sh "$S" >/dev/null) || { echo "FAIL a bare --notes on a moving-tag feed release must not fail"; exit 1; }
 
-# spec: golang renders TWO appcasts from one body. The comparison is between SETS, so the same
+# spec: scripts/check-family-conventions.sh -- golang renders TWO appcasts from one body. The comparison is between SETS, so the same
 #       path read twice is one member, not a duplicate to complain about.
 mkrepo "$work/g10"
 cat >> "$work/g10/.github/workflows/release.yml" <<'YML'
@@ -680,7 +682,7 @@ cat >> "$work/g10/.github/workflows/release.yml" <<'YML'
 YML
 (cd "$work/g10" && sh "$S" >/dev/null) || { echo "FAIL two appcasts from one body should pass"; exit 1; }
 
-# spec: prose about a rule is not the rule being obeyed or broken. This family documents its
+# spec: scripts/check-family-conventions.sh -- prose about a rule is not the rule being obeyed or broken. This family documents its
 #       conventions in the very workflows they govern, so every clause here false-POSITIVES on
 #       comments unless comment lines are dropped: appending any ONE of these four to openssh's
 #       real main reddened it, and @v1 would have carried that to twelve repos within minutes. A
@@ -696,7 +698,7 @@ cat >> "$work/g13/.github/workflows/release.yml" <<'YML'
 YML
 (cd "$work/g13" && sh "$S" >/dev/null) || { echo "FAIL comments describing the banned shapes must not fail a correct repo"; exit 1; }
 
-# spec: and the other direction, which is the reason to filter in ci_mentions rather than only
+# spec: scripts/check-family-conventions.sh -- and the other direction, which is the reason to filter in ci_mentions rather than only
 #       where a false positive stung: a repo whose ONLY mention of the generator is a comment is
 #       not wired up. magic-trackpad2 carries five such comment mentions beside its one real
 #       invocation, so an unfiltered clause 1 kept printing "ok" with that invocation replaced by
@@ -707,7 +709,7 @@ sed 's|sh "$SHIPYARD_SCRIPTS/release-notes\.sh" .*|# TODO: rewire sh "$SHIPYARD_
 if out="$(cd "$work/g14" && sh "$S" 2>&1)"; then echo "FAIL a generator mentioned only in a comment is not wired up"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'no workflow builds the release body' || { echo "FAIL should say the generator is not called: $out"; exit 1; }
 
-# spec: and the residual the filter deliberately accepts, which is load-bearing rather than a
+# spec: scripts/check-family-conventions.sh -- and the residual the filter deliberately accepts, which is load-bearing rather than a
 #       tolerated wart: container-tools writes
 #       `--out dist/RELEASE_NOTES.md   # becomes the Release body`. A line that carries CODE plus
 #       a trailing comment is not a comment line, and dropping it would drop a real --out.
@@ -716,7 +718,7 @@ sed 's|--out dist/RELEASE_NOTES\.md|--out dist/RELEASE_NOTES.md   # becomes the 
   "$work/ok/.github/workflows/release.yml" > "$work/g15/.github/workflows/release.yml"
 (cd "$work/g15" && sh "$S" >/dev/null) || { echo "FAIL a trailing inline comment must not hide a real --out"; exit 1; }
 
-# spec: the comment filter lives in ci_mentions, so checks 2, 5 and 12 get it too -- a comment
+# spec: scripts/check-family-conventions.sh -- the comment filter lives in ci_mentions, so checks 2, 5 and 12 get it too -- a comment
 #       should not vouch for wiring anywhere. A repo whose only mention of the test runner is a
 #       comment has unrun tests.
 mkrepo "$work/g16"
@@ -725,7 +727,7 @@ sed 's|- run: sh "$SHIPYARD_SCRIPTS/run-repo-tests\.sh"|# we should run: sh "$SH
 if out="$(cd "$work/g16" && sh "$S" 2>&1)"; then echo "FAIL a test runner mentioned only in a comment should fail check 2"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'no workflow runs them' || { echo "FAIL should say the tests are not run: $out"; exit 1; }
 
-# spec: a check-14 failure must ACCUMULATE like every other, not abort the run: this gate reports
+# spec: scripts/check-family-conventions.sh -- a check-14 failure must ACCUMULATE like every other, not abort the run: this gate reports
 #       all its failures at once, and a check 14 that killed the script under set -eu would take
 #       the "ok" guard and any future check 15 with it. So a repo that breaks 14 AND an earlier
 #       check must report both.
@@ -736,7 +738,7 @@ out="$(cd "$work/g11" && sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'INGREDIENTS.md' || { echo "FAIL check 3 should still be reported: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'the generator does not write' || { echo "FAIL check 14 should still be reported: $out"; exit 1; }
 
-# spec: a failing run must NOT also print "ok". The success line used to sit mid-script, so
+# spec: scripts/check-family-conventions.sh -- a failing run must NOT also print "ok". The success line used to sit mid-script, so
 #       checks appended after it (7, 8, 9) printed "check-family-conventions: ok" and THEN failed
 #       -- the exact "output says it passed while it did not" shape these gates exist to prevent.
 mkrepo "$work/ok2"

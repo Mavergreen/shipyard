@@ -88,8 +88,8 @@ r="$w/r"
 $GIT init -q "$r"
 printf '1.2.3\n' > "$r/UPSTREAM_VERSION"
 printf 'CMAKE_VERSION=4.4.3\nOTHER=ignored\n' > "$r/pins.env"
-# spec: the pre-migration past, faithfully -- at the tag there is no "## Declared state" section
-#       AT ALL.
+# spec: INGREDIENTS.md -- the pre-migration past, faithfully: at the tag there is no
+#       "## Declared state" section AT ALL.
 printf '%s\n' '# Build ingredients' '' 'prose only' > "$r/INGREDIENTS.md"
 $GIT -C "$r" add -A
 $GIT -C "$r" commit -q -m 'the release that predates this design'
@@ -151,9 +151,9 @@ printf 'AB=3\nA_UNDER_B=2\nA_DASH_B=1\nA_ONE=0\n' > "$w/n/pins.env"
 got="$(sh "$S" --root "$w/n" --render)"
 want="$(printf 'a-b=1\na1=0\na_b=2\nab=3\nupstream=1.2.3')"
 [ "$got" = "$want" ] || { echo "FAIL: the rendering must be in byte order -- the bytes ARE the wire format, and a hash mismatch only ever says \"differs\": got '$got'"; exit 1; }
-# spec: the expected value above is a hand-written literal, so prove independently that it IS
-#       byte order rather than merely what the script happens to print: sort the same lines, C
-#       locale, and compare.
+# platform: the expected value above is a hand-written literal, so prove independently that it
+#           IS byte order rather than merely what the script happens to print: sort the same
+#           lines, C locale, and compare.
 byte="$(printf '%s\n' 'ab=3' 'a_b=2' 'a-b=1' 'a1=0' 'upstream=1.2.3' | LC_ALL=C sort)"
 [ "$want" = "$byte" ] || { echo "FAIL the expected rendering is not byte order: '$want' vs '$byte'"; exit 1; }
 

@@ -4,8 +4,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/delete-draft-release.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/delete-draft.XXXXXX")"; trap 'rm -rf "$work"' EXIT  # template: 10.9 BSD mktemp requires one
 
-# spec: real `gh api ... --paginate` prints one JSON array per page, concatenated -- the stub
-#       mimics that by catting $GH_PAGES, which holds two page arrays.
+# platform: real `gh api ... --paginate` prints one JSON array per page, concatenated -- the
+#           stub mimics that by catting $GH_PAGES, which holds two page arrays.
 mkdir -p "$work/bin"
 cat > "$work/bin/gh" <<'SH'
 #!/bin/sh

@@ -2,12 +2,12 @@
 # spec: SKILL.md "On-target/off-target parity" -- the pkg must install on BOTH kinds of box and
 #       pick its own updater; shipping two pkgs would make someone choose, silently wrong when
 #       they choose badly, so one pkg carries both slices and the postinstall decides.
-# spec: BEHAVIORAL, not grep -- an earlier cut of this test grepped the postinstall for `uname -m`
-#       and `arm64` and passed a postinstall that loaded the x86_64 agent on every box. So this
-#       RUNS the postinstall the way Installer does ($1 pkg, $2 install location, $3 target
-#       volume) against a fixture volume holding both slices, with sysctl/uname/stat/sudo
-#       stubbed, and checks what it actually did. The preinstall gets the same treatment against
-#       its own fixture volume.
+# spec: scripts/package-pkg.sh -- BEHAVIORAL, not grep. An earlier cut of this test grepped the
+#       postinstall for `uname -m` and `arm64` and passed a postinstall that loaded the x86_64
+#       agent on every box. So this RUNS the postinstall the way Installer does ($1 pkg, $2
+#       install location, $3 target volume) against a fixture volume holding both slices, with
+#       sysctl/uname/stat/sudo stubbed, and checks what it actually did. The preinstall gets the
+#       same treatment against its own fixture volume.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
@@ -23,26 +23,27 @@ CROSS_APP=MavericksShipyardCrossUpdater.app
 APPDIR="Library/Application Support/ModernMavericks"
 PAYLOAD=usr/local/mavericks-shipyard
 
-# spec: the postinstall is the part with logic worth testing; emit and exercise it without
-#       building a real pkg (pkgbuild needs a full payload and minutes; this needs neither).
+# spec: scripts/package-pkg.sh -- the postinstall is the part with logic worth testing; emit and
+#       exercise it without building a real pkg (pkgbuild needs a full payload and minutes; this
+#       needs neither).
 scr="$work/scripts"; mkdir -p "$scr"
 sh "$S" --emit-postinstall "$scr/postinstall" || { echo "FAIL: --emit-postinstall failed"; exit 1; }
 [ -s "$scr/postinstall" ] || { echo "FAIL: empty postinstall"; exit 1; }
 
-# spec: stand-ins for the two rendered agent-load fragments; each records that it was sourced.
 for slice in native cross; do
   printf 'echo %s >> "%s"\n' "$slice" "$work/sourced.log" > "$scr/agent-load-$slice.sh"
 done
 
-# spec: stubs first on PATH. sudo only records its argv -- one [arg] per argument, so a
-#       word-split or a dropped quote shows up as a mismatch. sysctl and stat answer ONLY the
-#       exact question the postinstall must ask; anything else is logged and exits 97, so a
-#       regression to `stat -f %u` (a uid, not a name) or to another sysctl cannot pass on a stub
-#       that ignores its arguments. sysctl hw.optional.arm64 is the forced "hardware": 1 (Apple
-#       Silicon), 0 (Intel on a modern macOS), or absent (10.9 has no such name: nothing on
-#       stdout, an error, exit 1). uname -m always says x86_64, which is what it says under
-#       Rosetta -- where Installer runs a package's scripts on Apple Silicon unless the
-#       Distribution declares arm64 -- so a postinstall that trusts uname -m picks the wrong slice.
+# platform: sysctl hw.optional.arm64 is the forced "hardware": 1 (Apple Silicon), 0 (Intel on a
+#           modern macOS), or absent (10.9 has no such name: nothing on stdout, an error, exit 1
+#           on its own). uname -m always says x86_64, which is what it says under Rosetta -- where
+#           Installer runs a package's scripts on Apple Silicon unless the Distribution declares
+#           arm64 -- so a postinstall that trusts uname -m picks the wrong slice. Stubs go first
+#           on PATH: sudo only records its argv -- one [arg] per argument, so a word-split or a
+#           dropped quote shows up as a mismatch. sysctl and stat answer ONLY the exact question
+#           the postinstall must ask; anything else is logged and exits 97, so a regression to
+#           `stat -f %u` (a uid, not a name) or to another sysctl cannot pass on a stub that
+#           ignores its arguments.
 bin="$work/bin"; mkdir -p "$bin"
 cat > "$bin/sysctl" <<'EOF'
 #!/bin/sh
@@ -95,11 +96,12 @@ run_postinstall() {  # runs the postinstall as Installer would. $1 = hw.optional
 
 fail() { echo "FAIL: $*"; [ -z "${out:-}" ] || printf '%s\n' "$out" | sed 's/^/    | /'; exit 1; }
 
-# spec: each slice must load the matching agent and ONLY it, remove the other (launchd autoloads
-#       anything in /Library/LaunchAgents at the next login, so merely not loading it now is not
-#       enough), and register as the console user through their login shell -- the postinstall is
-#       root with Installer's minimal PATH, so "whatever cmake is on PATH" can only mean the
-#       developer's PATH, and HOME must be theirs.
+# platform: launchd autoloads anything in /Library/LaunchAgents at the next login, so merely not
+#           loading the other slice's agent now is not enough -- each slice must load the
+#           matching agent and ONLY it, remove the other, and register as the console user
+#           through their login shell. The postinstall is root with Installer's minimal PATH, so
+#           "whatever cmake is on PATH" can only mean the developer's PATH, and HOME must be
+#           theirs.
 check_slice() {  # $1 = hw.optional.arm64  $2 = slice kept  $3 = label kept  $4 = app kept  $5 = label dropped  $6 = app dropped  $7 = volume arg
   vol="$work/vol"; lay_down_volume "$vol"
   run_postinstall "$1" alice "$7"
@@ -144,7 +146,8 @@ if out="$(sh "$S" --payload "$work/payload" --app-native "$work/apps/$CROSS_APP"
 fi
 printf '%s' "$out" | grep -q "$NATIVE_APP" || fail "the refusal must name the expected app"
 
-# spec: non-comment lines only, since the script explains the flag in prose.
+# spec: scripts/package-pkg.sh explains the --host-arch flag in prose, so match non-comment
+#       lines only.
 out=""
 host_arch="$(grep -v '^[[:space:]]*#' "$S" | grep -o -- '--host-arch[[:space:]]*[^[:space:]]*' || true)"
 [ "$host_arch" = "--host-arch x86_64,arm64" ] \
@@ -174,7 +177,6 @@ lay_down_previous "$work/pre"; chmod 555 "$work/pre/usr/local"
 rc=0; out="$(sh "$scr/preinstall" /fake/mavericks-shipyard.pkg "$work/pre" "$work/pre" 2>&1)" || rc=$?
 chmod 755 "$work/pre/usr/local"
 [ "$rc" -eq 0 ] || fail "a failed removal must not fail the install, since the payload overwrites what it can either way; preinstall exited $rc"
-# spec: rm is stubbed here so a broken guard records a call instead of touching this machine.
 cat > "$bin/rm" <<'EOF'
 #!/bin/sh
 for a in "$@"; do printf '[%s]' "$a"; done >> "$FAKE_RM_LOG"

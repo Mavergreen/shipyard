@@ -121,14 +121,6 @@ printf '%s\n' "$out" | grep -qx 'pins.env:SWIFT_VERSION' \
 printf '%s\n' "$out" | grep -qx 'other.txt' \
   && { echo "FAIL block-scalar: other.txt should be excluded whole, got '$out'"; exit 1; }
 
-# spec: the reader once terminated inblock only on a column-0 line, but every sibling key under
-#       the same `with:` (dispatch-workflow:, dispatch-field:, ...) is itself indented -- so it
-#       (and its VALUE) got swallowed into the own-upstream token list. That is only cosmetic
-#       when the leaked tokens don't coincide with a real watched path -- but here the sibling's
-#       value ("other.txt") IS a real watched path, so the old reader wrongly excluded it
-#       entirely, purely because of an unrelated sibling key three lines below the block. A real
-#       YAML parser ends the block at the first line no MORE indented than "own-upstream-paths:"
-#       itself; this reader must match that exactly.
 cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
 on:
   push:
@@ -147,6 +139,6 @@ out="$(sh "$S")"
 printf '%s\n' "$out" | grep -qx 'pins.env:SWIFT_VERSION' \
   || { echo "FAIL block-scalar sibling keys: pins.env:SWIFT_VERSION missing, got '$out'"; exit 1; }
 printf '%s\n' "$out" | grep -qx 'other.txt' \
-  || { echo "FAIL block-scalar sibling keys: other.txt wrongly excluded by a sibling key's value, got '$out'"; exit 1; }
+  || { echo "FAIL: a real YAML parser ends the block scalar at the first line no MORE indented than \"own-upstream-paths:\" itself -- the reader once terminated inblock only on a column-0 line, so a sibling key's own VALUE (here \"other.txt\", a real watched path) got swallowed into the own-upstream token list and wrongly excluded: block-scalar sibling keys: other.txt wrongly excluded by a sibling key's value, got '$out'"; exit 1; }
 
 echo "PASS: ingredient-pins"

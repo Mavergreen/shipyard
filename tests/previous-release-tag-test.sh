@@ -45,17 +45,10 @@ out="$(sh "$S" --tag-glob 'v*.*.*' v1.0.192)"
 [ "$out" = v1.0.191 ] \
   || { echo "FAIL: self-upstream tag shapes (shipyard/magic-trackpad2's vX.Y.Z) match no *-mavericks.* glob, so without --tag-glob every release would report \"no baseline\" and drop its compare link: got '$out'"; exit 1; }
 
-# spec: the moving major tag v1 (tagged earlier in this file, so it's already in the repo) is a
-#       real tag in shipyard and must never be chosen as a baseline: a compare link against it
-#       says "everything since whenever v1 last moved," which is not a release. 'v*.*.*' -- not
-#       'v[0-9]*' -- is what keeps it out: requiring three dot-separated components means a bare
-#       "v1" or "v2" alias never matches the glob at all, so it never even reaches the comparator
-#       (ver_cmp alone would NOT reliably exclude it: with only v1 and v2 in scope and v2
-#       excluded, "the max of what remains" is v1).
 git tag v2
 out="$(sh "$S" --tag-glob 'v*.*.*' v2)"
 [ "$out" != v1 ] \
-  || { echo "FAIL: the glob itself must do the work -- even excluding v2 (the only other tag that could let v1 \"win by default\"), the result must still not be v1: got '$out'"; exit 1; }
+  || { echo "FAIL: the moving major tag v1 is a real tag in shipyard and must never be chosen as a baseline (a compare link against it says \"everything since whenever v1 last moved,\" which is not a release) -- 'v*.*.*' not 'v[0-9]*' is what keeps it out, since requiring three dot-separated components means a bare \"v1\" or \"v2\" alias never even reaches the comparator; the glob itself must do the work -- even excluding v2 (the only other tag that could let v1 \"win by default\"), the result must still not be v1: got '$out'"; exit 1; }
 
 git tag 20260802.4; git tag 20260802.5
 git tag feed-porthole            # not a release tag; must be ignored (never matches [0-9]*)

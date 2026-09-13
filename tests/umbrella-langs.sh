@@ -6,6 +6,7 @@ set -eu
 [ "$#" -ge 1 ] || { echo "no source dir given (ctest supplies it) -- skipping" >&2; exit 77; }
 SRC="${1:?usage: umbrella-langs.sh <mavericks-shipyard source dir>}"
 T=$(mktemp -d "${TMPDIR:-/tmp}/umbrella-langs.XXXXXX"); trap 'rm -rf "$T"' EXIT
+# platform: /usr/bin/clang is present on 10.9 and modern macOS alike.
 CC=/usr/bin/clang
 [ -x "$CC" ] || { echo "SKIP: no Apple clang at $CC"; exit 0; }
 

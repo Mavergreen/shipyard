@@ -1,11 +1,11 @@
 #!/bin/sh
-# spec: find_package(MavericksShipyard) has to work under WHATEVER cmake is on PATH, so discovery
-#       cannot depend on the payload living in a directory that cmake happens to search.
-#       CMAKE_SYSTEM_PREFIX_PATH is a property of the cmake BINARY -- it varies per machine and
-#       can change under us -- so register-with-cmake.sh tells cmake where the payload is instead
-#       of hoping it looks there. That is also what frees the payload to live in a product-owned
-#       /usr/local/mavericks-shipyard instead of squatting in the shared /usr/local/share/cmake,
-#       which pkgsrc and Homebrew also write into.
+# platform: find_package(MavericksShipyard) has to work under WHATEVER cmake is on PATH, so
+#           discovery cannot depend on the payload living in a directory that cmake happens to
+#           search. CMAKE_SYSTEM_PREFIX_PATH is a property of the cmake BINARY -- it varies per
+#           machine and can change under us -- so register-with-cmake.sh tells cmake where the
+#           payload is instead of hoping it looks there. That is also what frees the payload to
+#           live in a product-owned /usr/local/mavericks-shipyard instead of squatting in the
+#           shared /usr/local/share/cmake, which pkgsrc and Homebrew also write into.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/register-with-cmake.sh"

@@ -50,11 +50,11 @@ no 9.9p2-mavericks.6 "stale version in title" "9.9p2-mavericks.6" <<'EOF'
 - Repackage.
 EOF
 
-# spec: a leading "v" is not part of the version -- shipyard's tag is v1.0.209, but its generated
-#       title has no "v" (release.yml calls release-notes.sh with --tag "v$v" --version "$v", so
-#       the title is built from the bare "$v"). previous-release-tag.sh already strips "v" before
-#       keying, for the same reason: "v" and bare are one version spelled two ways, not two
-#       versions.
+# spec: release.yml calls release-notes.sh with --tag "v$v" --version "$v" -- a leading "v" is
+#       not part of the version. shipyard's tag is v1.0.209, but its generated title has no "v"
+#       (the title is built from the bare "$v"). previous-release-tag.sh already strips "v"
+#       before keying, for the same reason: "v" and bare are one version spelled two ways, not
+#       two versions.
 ok v1.0.209 "title bare, checked version v-prefixed" <<'EOF'
 ## Shipyard 1.0.209
 
@@ -98,9 +98,9 @@ no 9.9p2-mavericks.6 "empty What changed" "empty" <<'EOF'
 - **libressl**: 3.8.2 -> 3.9.2
 EOF
 
-# spec: an empty ### section followed by a further ## heading must still be caught -- the ##
-#       branch that resets tracking for a new top-level heading must not skip the
-#       pending-empty-section check.
+# spec: scripts/check-release-notes.sh -- an empty ### section followed by a further ## heading
+#       must still be caught: the ## branch that resets tracking for a new top-level heading
+#       must not skip the pending-empty-section check.
 no 9.9p2-mavericks.6 "empty section before a further ## heading" "empty" <<'EOF'
 ## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)
 

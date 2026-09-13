@@ -1,7 +1,7 @@
 #!/bin/sh
-# spec: the checker consumes a fact stream so it can be tested without fabricating real .pkg
-#       files; the extraction that produces those facts is exercised for real in CI at package
-#       time.
+# spec: scripts/check-artifact-conformance.sh consumes a fact stream so it can be tested without
+#       fabricating real .pkg files; the extraction that produces those facts
+#       (scripts/artifact-facts.sh) is exercised for real in CI at package time.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/check-artifact-conformance.sh"
@@ -70,10 +70,10 @@ ok "a tools product with no updater ships no appcast, and that is fine" 'expecte
 pkg ed25519-20221003-mavericks.2.pkg 20221003-mavericks.2 10.9.5 dev.modernmavericks.ed25519
 asset ed25519-20221003-mavericks.2.pkg 10'
 
-# spec: a component .pkg (PackageInfo, no Distribution) has no os-version floor by construction --
-#       floors are a productbuild concept. Its effective minimum lives in the appcast that ships
-#       it. golang's cross product is exactly this: it TARGETS 10.9 but RUNS on 11.0+, so
-#       demanding 10.9.5 of it would be wrong.
+# platform: a component .pkg (PackageInfo, no Distribution) has no os-version floor by
+#           construction -- floors are a productbuild concept. Its effective minimum lives in
+#           the appcast that ships it. golang's cross product is exactly this: it TARGETS 10.9
+#           but RUNS on 11.0+, so demanding 10.9.5 of it would be wrong.
 ok "a component pkg whose appcast declares the minimum" 'expected 1.26.5-mavericks.5
 pkg golang-cross.pkg 1.26.5-mavericks.5 none dev.modernmavericks.golang.go126-cross
 appcast appcast-cross.xml 1.26.5-mavericks.5 golang-cross.pkg 10 11.0
@@ -107,9 +107,10 @@ deviation floor targets 10.9 rather than running on it
 pkg p.pkg 1.0.0-mavericks.1 11.0 com.example.thing
 asset p.pkg 10'
 
-# spec: swift-toolchain republishes swift.org's .pkg verbatim so the correspondence with
-#       download.swift.org stays checkable. Its version, floor and identifier are UPSTREAM's and
-#       must stay that way -- but that must not excuse the artifacts we do build alongside it.
+# spec: scripts/check-artifact-conformance.sh's scoped deviations -- swift-toolchain
+#       republishes swift.org's .pkg verbatim so the correspondence with download.swift.org
+#       stays checkable. Its version, floor and identifier are UPSTREAM's and must stay that way
+#       -- but that must not excuse the artifacts we do build alongside it.
 MIRROR='expected 6.3.3-mavericks.2
 deviation version:upstream-swift-*.pkg mirrored verbatim from swift.org; the version is upstream own
 deviation floor:upstream-swift-*.pkg same mirror
@@ -123,9 +124,10 @@ deviation version:upstream-swift-*.pkg mirrored verbatim from swift.org
 pkg ours.pkg 6.3.3-mavericks.1 10.9.5 dev.modernmavericks.swift
 asset ours.pkg 10'
 
-# spec: an enclosure URL carries the release tag. If it names another release, Sparkle serves
-#       users a different build than the one just published -- the feed and the release silently
-#       disagree, and every other check still passes because both artifacts are individually fine.
+# platform: an enclosure URL carries the release tag. If it names another release, Sparkle
+#           serves users a different build than the one just published -- the feed and the
+#           release silently disagree, and every other check still passes because both
+#           artifacts are individually fine.
 ok "an enclosure pointing at this release" 'expected 1.26.5-mavericks.5
 pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
 appcast appcast.xml 1.26.5-mavericks.5 p.pkg 10 10.9.5
@@ -140,9 +142,9 @@ enclosure-url appcast.xml https://github.com/ModernMavericks/golang/releases/dow
 asset p.pkg 10
 asset appcast.xml 700'
 
-# spec: where a repo ships parallel upstream lines, the line IS the product: go126 and go127 must
-#       not share an identifier, or two products claim one install and the updater cannot tell
-#       them apart.
+# spec: SKILL.md "Multiple upstream lines (tracks)" -- side-by-side coexistence forces per-line
+#       functional identifiers: go126 and go127 must not share an identifier, or two products
+#       claim one install and the updater cannot tell them apart.
 ok "identifiers carrying their line" 'expected 1.26.5-mavericks.5
 line 126
 pkg native.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
@@ -161,10 +163,11 @@ ok "a single-line product (a repo with no lines) is not asked the line question"
 pkg p.pkg 1.5.2-mavericks.2 10.9.5 dev.modernmavericks.legacysupport
 asset p.pkg 10'
 
-# spec: the artifacts cannot answer this -- golang's native .pkg carries the CA bundle and the
-#       shim, its cross .pkg legitimately does not (cross-built apps look at the native prefix).
-#       "Same shim, same CA" is a claim about INPUTS, so each variant records what it used and
-#       conformance compares the records.
+# spec: scripts/check-artifact-conformance.sh's build-info records -- the artifacts cannot
+#       answer this: golang's native .pkg carries the CA bundle and the shim, its cross .pkg
+#       legitimately does not (cross-built apps look at the native prefix). "Same shim, same CA"
+#       is a claim about INPUTS, so each variant records what it used and conformance compares
+#       the records.
 ok "variants agreeing on their ingredients" 'expected 1.26.5-mavericks.5
 build-info build-info-native.txt mls_version 1.5.2-mavericks.2
 build-info build-info-native.txt ca_sha256 3ff344e30b9b
@@ -207,9 +210,9 @@ build-info build-info-cross.txt mls_version 1.5.2-mavericks.1
 pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
 asset n.pkg 10'
 
-# spec: "ok" must not be indistinguishable from "compared nothing". A check whose silence means
-#       both "agreed" and "there was nothing to look at" cannot be trusted the day the records
-#       stop shipping.
+# spec: scripts/check-artifact-conformance.sh -- "ok" must not be indistinguishable from
+#       "compared nothing". A check whose silence means both "agreed" and "there was nothing to
+#       look at" cannot be trusted the day the records stop shipping.
 out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
 build-info build-info-a.txt commit abc
 build-info build-info-b.txt commit abc
@@ -274,10 +277,11 @@ appcast-notes appcast.xml bbbb2222'
 no "notes: an appcast-notes fact with no notes-render is not silently skipped" "notes" 'expected 9.9p2-mavericks.6
 appcast-notes appcast.xml aaaa1111'
 
-# spec: not a hand-written fixture -- a fixture that does not match what the renderer actually
-#       emits would let this check pass while proving nothing about the real coupling. Build a
-#       real notes file, render a real appcast from it with gen_appcast.sh (the same tool a
-#       release uses), then ask artifact-facts.sh for both digests.
+# spec: scripts/gen_appcast.sh + scripts/artifact-facts.sh -- not a hand-written fixture. A
+#       fixture that does not match what the renderer actually emits would let this check pass
+#       while proving nothing about the real coupling. Build a real notes file, render a real
+#       appcast from it with gen_appcast.sh (the same tool a release uses), then ask
+#       artifact-facts.sh for both digests.
 GA="$here/../scripts/gen_appcast.sh"
 _nr="$(mktemp -d "${TMPDIR:-/tmp}/af-notes.XXXXXX")"
 mkdir -p "$_nr/dist"
@@ -305,8 +309,9 @@ _appcast_digest="$(printf '%s\n' "$_facts" | sed -n 's/^appcast-notes [^ ]* \(..
 [ "$_render_digest" = "$_appcast_digest" ] \
   || { echo "FAIL: notes-render and appcast-notes digests should agree for a real rendered pair; got '$_render_digest' vs '$_appcast_digest'"; exit 1; }
 
-# spec: a REAL appcast with its <description> emptied must extract as "no digest". Not a
-#       hand-written appcast: start from the real one just built and remove only its CDATA
+# spec: scripts/artifact-facts.sh -- a REAL appcast with its <description> emptied must extract
+#       as "no digest". Not a hand-written appcast: start from the real one just built and
+#       remove only its CDATA
 #       content, leaving the <description></description> tags in place. This is the specific
 #       shape that distinguishes "probe for a CDATA section" from "probe for a <description> tag"
 #       (the latter would find the empty tags present, compute a digest of nothing, and fail for
@@ -329,9 +334,9 @@ _nodesc_line="$(printf '%s\n' "$_nodesc_facts" | grep '^appcast-notes ')"
   || { echo "FAIL: an emptied <description> should emit 'appcast-notes appcast.xml' with no digest field; got: $_nodesc_line"; exit 1; }
 no "notes: a real appcast with an emptied description fails" "notes" "$_nodesc_facts"
 
-# spec: a REAL appcast built from genuinely DIFFERENT notes must be detected as a mismatch. Two
-#       real renders, not a hand-typed hash: this pins the digest computation's sensitivity to
-#       actual content, not just its plumbing.
+# spec: scripts/artifact-facts.sh -- a REAL appcast built from genuinely DIFFERENT notes must be
+#       detected as a mismatch. Two real renders, not a hand-typed hash: this pins the digest
+#       computation's sensitivity to actual content, not just its plumbing.
 cat > "$_nr/dist/RELEASE_NOTES_B.md" <<'NOTES'
 ## Summary
 
@@ -353,7 +358,8 @@ _b_digest="$(printf '%s\n' "$_mismatch_facts" | sed -n 's/^appcast-notes [^ ]* \
   || { echo "FAIL: rendering two genuinely different notes files should not produce equal digests"; exit 1; }
 no "notes: a real appcast rendered from DIFFERENT notes is a mismatch" "notes" "$_mismatch_facts"
 
-# spec: the style line must be stripped by TAG, not by its literal CSS text. Change the injected
+# spec: scripts/artifact-facts.sh -- the style line must be stripped by TAG, not by its literal
+#       CSS text. Change the injected
 #       <style>...</style> line's content in a real appcast (same tag, different CSS) and confirm
 #       the digests still agree. If the extraction ever regresses to matching gen_appcast.sh's
 #       specific "Helvetica Neue" string instead of the <style ...>...</style> shape, this is what
@@ -372,7 +378,8 @@ _css_appcast_digest="$(printf '%s\n' "$_css_facts" | sed -n 's/^appcast-notes [^
 
 rm -rf "$_nr"
 
-# spec: the style-line strip must be anchored, so it cannot over-strip real content. esc()
+# spec: scripts/artifact-facts.sh -- the style-line strip must be anchored, so it cannot
+#       over-strip real content. esc()
 #       HTML-escapes '<' before any of our own tags are injected, so no notes-derived line can
 #       ever start with a literal "<style" -- but a legitimate content line CAN contain that
 #       substring somewhere in the MIDDLE (e.g. prose mentioning an inline style). Hand-built, not
@@ -410,8 +417,9 @@ rm -rf "$_m14"
 [ "$_m14_digest" = "$_m14_expected" ] \
   || { echo "FAIL: the boilerplate <style> line should be stripped but a mid-line '<style' occurrence in real content must survive; got '$_m14_digest', expected '$_m14_expected'"; exit 1; }
 
-# spec: a renderer failure must not be swallowed into a quiet sha256-of-empty. `render-notes |
-#       shasum` (a pipeline) would let gen_appcast.sh's own refusal of an empty notes file exit
+# spec: scripts/artifact-facts.sh -- a renderer failure must not be swallowed into a quiet
+#       sha256-of-empty. `render-notes | shasum` (a pipeline) would let gen_appcast.sh's own
+#       refusal of an empty notes file exit
 #       non-zero while the pipeline's LAST command (shasum) still exits 0, so set -eu never fires
 #       and artifact-facts.sh would keep going with a notes-render fact for nothing at all -- one
 #       of two ways "both sides empty, therefore equal, therefore pass" could happen.
@@ -429,8 +437,8 @@ grep -qi 'render-notes' "$_empty_out" \
   || { echo "FAIL: artifact-facts.sh's failure on an empty notes file should name the renderer; got: $(cat "$_empty_out")"; rm -rf "$_empty"; rm -f "$_empty_out"; exit 1; }
 rm -rf "$_empty"; rm -f "$_empty_out"
 
-# spec: refusing the producer's known-bad exits is not enough -- the consumers run
-#       `artifact-facts.sh dist "$VER" | check-artifact-conformance.sh` and a pipeline's exit
+# platform: refusing the producer's known-bad exits is not enough -- the consumers run
+#           `artifact-facts.sh dist "$VER" | check-artifact-conformance.sh` and a pipeline's exit
 #       status is its LAST command's, with no consumer setting pipefail. The producer's exit
 #       status is DISCARDED; dying only TRUNCATES the stream, and every check in the checker is a
 #       "stay quiet when there are no records" check. So the checker requires the sentinel a
@@ -442,8 +450,9 @@ pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
 asset p.pkg 10' | sh "$S" 2>&1)" \
   && { echo "FAIL: a stream with no end-of-facts sentinel must not pass; got: $_trunc_out"; exit 1; }
 
-# spec: an `abort` record means the producer gave up, so the stream is untrustworthy no matter
-#       what else it carries -- including a sentinel. The two normally cannot coexist (a producer
+# spec: scripts/check-artifact-conformance.sh -- an `abort` record means the producer gave up,
+#       so the stream is untrustworthy no matter what else it carries -- including a sentinel.
+#       The two normally cannot coexist (a producer
 #       that aborts never reaches its sentinel), so a stream with both has a completion marker
 #       that did not come from a completed run: a dist/ file whose NAME contains a newline splits
 #       its own `asset` record and forges a bare `end-of-facts`. Keying only on the sentinel read
@@ -453,22 +462,24 @@ _ab="$(printf 'expected 1.0.0-mavericks.1\nabort gen_appcast.sh --render-notes f
 printf '%s\n' "$_ab" | grep -q 'aborted' \
   || { echo "FAIL: an aborted stream must name the producer's reason; got: $_ab"; exit 1; }
 
-# spec: and the forged-sentinel shape itself, as a real dist/ would emit it.
+# spec: scripts/check-artifact-conformance.sh -- and the forged-sentinel shape itself, as a
+#       real dist/ would emit it.
 _fg="$(printf 'expected 1.0.0-mavericks.1\nasset A\nend-of-facts\nZ 0\nasset RELEASE_NOTES.md 0\nabort gen_appcast.sh --render-notes failed for RELEASE_NOTES.md\n' | sh "$S" 2>&1)" \
   && { echo "FAIL: a forged end-of-facts must not pass while an abort is present; got: $_fg"; exit 1; }
 printf '%s\n' "$_trunc_out" | grep -qi 'incomplete' \
   || { echo "FAIL: a truncated stream should say it is incomplete; got: $_trunc_out"; exit 1; }
 
-# spec: the human-readable cause must survive the pipe. "The stream stopped" is true and useless;
-#       the operator needs to read WHY, which is what the producer's `abort` record carries.
+# spec: scripts/check-artifact-conformance.sh -- the human-readable cause must survive the
+#       pipe. "The stream stopped" is true and useless; the operator needs to read WHY, which is
+#       what the producer's `abort` record carries.
 _abort_out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
 abort gen_appcast.sh --render-notes failed for RELEASE_NOTES.md' | sh "$S" 2>&1)" \
   && { echo "FAIL: a stream carrying an abort record must not pass; got: $_abort_out"; exit 1; }
 printf '%s\n' "$_abort_out" | grep -qi 'render-notes failed for RELEASE_NOTES.md' \
   || { echo "FAIL: the checker should surface the abort reason; got: $_abort_out"; exit 1; }
 
-# spec: a deviation must not be able to switch this off. Deviations are emitted EARLY (from
-#       INGREDIENTS.md, before dist/ is walked) so they SURVIVE a truncation -- a product could
+# spec: INGREDIENTS.md -- a deviation must not be able to switch this off. Deviations are
+#       emitted EARLY (before dist/ is walked) so they SURVIVE a truncation -- a product could
 #       otherwise declare its way out of the one check that notices every other check was
 #       skipped.
 _dev_out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
@@ -477,7 +488,8 @@ pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
 asset p.pkg 10' | sh "$S" 2>&1)" \
   && { echo "FAIL: a deviation must not excuse a truncated stream; got: $_dev_out"; exit 1; }
 
-# spec: and the producer really does end a successful run with it, as the LAST line.
+# spec: scripts/artifact-facts.sh -- and the producer really does end a successful run with it,
+#       as the LAST line.
 _sent="$(mktemp -d "${TMPDIR:-/tmp}/af-sentinel.XXXXXX")"
 mkdir -p "$_sent/dist"
 printf 'a\n' > "$_sent/dist/some-asset.txt"
@@ -486,9 +498,10 @@ rm -rf "$_sent"
 [ "$(printf '%s\n' "$_sent_facts" | tail -1)" = "end-of-facts" ] \
   || { echo "FAIL: artifact-facts.sh must end a successful run with the sentinel; got: $(printf '%s\n' "$_sent_facts" | tail -1)"; exit 1; }
 
-# spec: END TO END, on the real failure rather than a fixture -- the exact dist that regressed. An
-#       empty RELEASE_NOTES.md kills the producer before dist/*'s later entries (RELEASE_NOTES.md
-#       sorts first), so the appcast's unrelated description and its enclosure naming a file in
+# spec: RELEASE_NOTES.md -- END TO END, on the real failure rather than a fixture: the exact
+#       dist that regressed. An empty RELEASE_NOTES.md kills the producer before dist/*'s later
+#       entries (RELEASE_NOTES.md sorts first), so the appcast's unrelated description and its
+#       enclosure naming a file in
 #       ANOTHER release were never even described -- and the checker printed "conformance: ok".
 #       Piped exactly as release.yml pipes it, with no pipefail, this must now be loud.
 _e2e="$(mktemp -d "${TMPDIR:-/tmp}/af-e2e.XXXXXX")"
@@ -514,8 +527,8 @@ _e2e_out="$(sh "$AF" "$_e2e/dist" 9.9p2-mavericks.6 "$_e2e" 2>/dev/null | sh "$S
 printf '%s\n' "$_e2e_out" | grep -qi 'render-notes' \
   || { rm -rf "$_e2e"; echo "FAIL: the end-to-end failure should name the cause; got: $_e2e_out"; exit 1; }
 
-# spec: and a NORMAL dist still passes end to end, so the sentinel is not just a way to fail
-#       everything.
+# spec: scripts/artifact-facts.sh -- and a NORMAL dist still passes end to end, so the sentinel
+#       is not just a way to fail everything.
 mkdir -p "$_e2e/good"
 cat > "$_e2e/good/RELEASE_NOTES.md" <<'NOTES'
 ## Summary
@@ -524,10 +537,10 @@ A real body.
 
 - Fixed a thing
 NOTES
-# spec: a .tgz rather than a .pkg -- a text file with a .pkg name would be reported `unreadable`
-#       by pkgutil and fail for a reason this fixture is not about. What it proves is that a
-#       COMPLETE run reaches the sentinel and the checker accepts it -- the pkg records have their
-#       own fixtures above.
+# platform: a text file with a .pkg name would be reported `unreadable` by pkgutil and fail for
+#           a reason this fixture is not about, so it uses a .tgz instead. What it proves is
+#           that a COMPLETE run reaches the sentinel and the checker accepts it -- the pkg
+#           records have their own fixtures above.
 printf 'payload\n' > "$_e2e/good/thing-9.9p2-mavericks.6.tgz"
 _good_len="$(wc -c < "$_e2e/good/thing-9.9p2-mavericks.6.tgz" | tr -d ' ')"
 sh "$GA" "Test Channel" "9.9p2-mavericks.6" \

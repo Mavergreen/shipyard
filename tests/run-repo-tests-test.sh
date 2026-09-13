@@ -1,5 +1,6 @@
 #!/bin/sh
-# spec: exit 77 is the SKIP idiom container-tools already uses for its boot-proof.
+# spec: scripts/run-repo-tests.sh -- exit 77 is the SKIP idiom container-tools already uses for
+#       its boot-proof.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/run-repo-tests.sh"

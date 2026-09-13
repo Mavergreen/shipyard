@@ -124,9 +124,9 @@ if grep -q 'v0:sha256:deadbeef' "$w/n15"; then echo "FAIL the unreadable marker 
 grep -q '^- a thing$' "$w/n15" || { echo "FAIL replacing lost a bullet"; exit 1; }
 grep -q '^## 9.9.9-mavericks.2$' "$w/n15" || { echo "FAIL replacing lost the heading"; exit 1; }
 
-# spec: the escape must actually escape -- the blocked answer is reproducible, and the rewritten
-#       body is what unblocks it. Asserting the write without asserting the unblocking is how a
-#       dead-end instruction ships in the first place.
+# spec: scripts/release-needed.sh -- the escape must actually escape, so the blocked answer is
+#       reproduced here and the rewritten body is what unblocks it. Asserting the write without
+#       asserting the unblocking is how a dead-end instruction ships in the first place.
 before="$(MAVERICKS_RELEASES="9.9.9-mavericks.2${TAB}v0:sha256:deadbeef" \
   sh "$RN" --digest "$D1" --version 9.9.9-mavericks.3 2>/dev/null)"
 [ "$before" = "SKIP=unreadable-marker/9.9.9-mavericks.2" ] \
@@ -168,10 +168,10 @@ sh "$S" --tag t --digest "$D1" --replace-unreadable --body-file "$w/u21" --out "
   || { echo "FAIL: TWO unreadable markers must leave ONE readable one -- one marker per body is the invariant, and a stale unreadable line is litter in notes users read: did not collapse to one"; exit 1; }
 grep -q "^ModernMavericks-State: $D1\$" "$w/n21" || { echo "FAIL the surviving marker is not the new one"; exit 1; }
 
-# spec: THE FIRST READABLE MARKER WINS, not simply the first. An unreadable line ABOVE a valid
-#       digest used to decide, which made this body "a conflicting record" to this script and
-#       (worse) an unreadable one to release-needed.sh -- so a state demonstrably already
-#       released, two lines further down, blocked publishing forever.
+# spec: scripts/release-needed.sh -- THE FIRST READABLE MARKER WINS, not simply the first. An
+#       unreadable line ABOVE a valid digest used to decide, which made this body "a conflicting
+#       record" to this script and (worse) an unreadable one to release-needed.sh -- so a state
+#       demonstrably already released, two lines further down, blocked publishing forever.
 printf 'ModernMavericks-State: v0:stale\n\nnotes\n\nModernMavericks-State: %s\n' "$D1" > "$w/u22"
 rc=0
 out="$(sh "$S" --tag t --digest "$D1" --body-file "$w/u22" --out "$w/n22" 2>/dev/null)" || rc=$?

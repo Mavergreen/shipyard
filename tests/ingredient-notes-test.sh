@@ -71,9 +71,9 @@ printf '%s\n' "$out" | LC_ALL=C grep -q '[^ -~]' \
 out="$(sh "$S" 20260727-mavericks.2 components/golang/version nosuch/file 2>/dev/null)"
 printf '%s\n' "$out" | grep -q 'golang' || { echo "FAIL: a missing pin path must be skipped, not fatal: $out"; exit 1; }
 
-# spec: a .patch IS an ingredient (it is baked into the product), but "updated (N -> M bytes)"
-#       says nothing useful about one -- report what a reader can act on: the subject line, and
-#       how much moved.
+# spec: scripts/ingredient-notes.sh -- a .patch IS an ingredient (it is baked into the product),
+#       but "updated (N -> M bytes)" says nothing useful about one -- report what a reader can
+#       act on: the subject line, and how much moved.
 work2="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work2"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -181,15 +181,16 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*LLVM_SHA\*\*: aaaa -> bbbb' \
   || { echo "FAIL G2: real ingredient key LLVM_SHA in the same file was dropped: $out"; exit 1; }
 cd "$work"; rm -rf "$work4"
 
-# spec: is_kv_pins()'s first cut allowed a lowercase-tolerant key class, which matches base64
-#       PADDING lines in a real vendor/cacert.pem as one-line "assignments" -- reported as build
-#       ingredients (with the key itself as a bogus "added" value, since oldv is always empty) on
-#       the next CA-bundle refresh. Uppercase-only NARROWED but did not CLOSE this class: an
-#       all-caps-and-digit padding line ("MK9=") still matches an uppercase-only key with an
-#       empty value -- the reviewer measured ~0.46 expected such lines per real CA-bundle refresh,
-#       i.e. even odds of resurrecting this exact false claim a third time. The value must hold
-#       at least one non-"=" character (padding is only ever "=" characters, at the end; no real
-#       pin's value is empty or all-"=").
+# platform: a real vendor/cacert.pem's base64 PADDING lines ("MrY=", "MK9=") look exactly like
+#           one-line KEY=VALUE "assignments" to a lowercase- or uppercase-tolerant key class --
+#           is_kv_pins()'s first cut matched them and reported them as build ingredients (with
+#           the key itself as a bogus "added" value, since oldv is always empty). Uppercase-only
+#           narrowed but did not close this class: an all-caps-and-digit padding line ("MK9=")
+#           still matches an uppercase-only key with an empty value -- the reviewer measured
+#           ~0.46 expected such lines per real CA-bundle refresh, i.e. even odds of resurrecting
+#           this exact false claim a third time. The value must hold at least one non-"="
+#           character (padding is only ever "=" characters, at the end; no real pin's value is
+#           empty or all-"=").
 work5="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work5"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -212,8 +213,9 @@ printf '%s\n' "$out" | grep -qi 'MrY\|dZWAUWpL\|IhNzbM8m9Yop5w\|MK9\|added\b' \
   && { echo "FAIL CRITICAL1: base64 padding line(s) leaked as a bogus ingredient bullet: $out"; exit 1; }
 cd "$work"; rm -rf "$work5"
 
-# spec: the other direction -- the value-must-have-content guard must not cost a single real pin.
-#       Every real family KV pin the reviewer's table names must still render per-key.
+# spec: scripts/ingredient-notes.sh -- the other direction: the value-must-have-content guard
+#       must not cost a single real pin. Every real family KV pin the reviewer's table names must
+#       still render per-key.
 work5b="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work5b"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -262,8 +264,9 @@ printf '%s\n' "$out" | grep -q -- 'updated (' \
   && { echo "FAIL both-directions: a real KV pin fell through to the opaque byte-delta fallback: $out"; exit 1; }
 cd "$work"; rm -rf "$work5b"
 
-# spec: container-tools' real shape is SIX components sharing the same REPO=/REF=/DIGEST=/BASE=
-#       key names. Renovate can bump two components in the same release (docker-cli +
+# spec: scripts/ingredient-notes.sh -- container-tools' real shape is SIX components sharing the
+#       same REPO=/REF=/DIGEST=/BASE= key names. Renovate can bump two components in the same
+#       release (docker-cli +
 #       docker-compose): a bare "REF"/"DIGEST" bullet with no component identity is ambiguous at
 #       best and misattributed at worst. Prefix ALWAYS for this pin shape, not only when this run
 #       happens to be ambiguous -- an unprefixed bullet that reads fine today silently becomes
@@ -307,10 +310,10 @@ printf '%s\n' "$out" | grep -q 'SWIFT_VERSION' \
   && { echo "FAIL longest-match exclkey: SWIFT_VERSION leaked: $out"; exit 1; }
 cd "$work"; rm -rf "$work7"
 
-# spec: a first-time pins.env (absent at the previous release) used to print a single "added"
-#       bullet with the file's first line as its value -- which could BE the own-upstream key's
-#       own literal value. A newly-introduced KV file must render per-key, excluding $exclkey,
-#       exactly like an existing one.
+# spec: scripts/ingredient-notes.sh -- a first-time pins.env (absent at the previous release)
+#       used to print a single "added" bullet with the file's first line as its value -- which
+#       could BE the own-upstream key's own literal value. A newly-introduced KV file must
+#       render per-key, excluding $exclkey, exactly like an existing one.
 work8="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work8"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -343,8 +346,9 @@ printf '%s\n' "$out" | grep -q -- '- \*\*noop.sh\*\*: updated (' \
   || { echo "FAIL .sh-no-assignments: expected a byte delta (deliberate choice), got: $out"; exit 1; }
 cd "$work"; rm -rf "$work9"
 
-# spec: assignments() deliberately drops any value carrying $ or a backtick -- rewriting a
-#       derivation is a code change, not an ingredient move -- but the removal walk used to read
+# spec: scripts/ingredient-notes.sh -- assignments() deliberately drops any value carrying $ or
+#       a backtick, since rewriting a derivation is a code change, not an ingredient move -- but
+#       the removal walk used to read
 #       "absent from the literal set" as "removed": SWIFT_TAG going from swift-6.3.3-RELEASE to
 #       "swift-${SWIFT_VERSION}-RELEASE" (exactly the family's derive-never-repeat convention) was
 #       reported as a removed pin, which is false -- the build still uses SWIFT_TAG, just no
@@ -404,11 +408,11 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*widget / REF\*\*: still used, now comp
   || { echo "FAIL label-prefix: derived bullet is missing its component-name prefix: $out"; exit 1; }
 cd "$work"; rm -rf "$work11"
 
-# spec: the removal walk's exclkey skip was already proven for the "removed" branch (G2 above);
-#       the newly split "now derived" branch is a second place the same skip can be silently
-#       dropped, so exclkey (the "path:KEY" own-upstream exclusion) must suppress it too.
-#       SWIFT_VERSION is this repo's own upstream (excluded); it becomes derived here and must
-#       still not appear at all.
+# spec: scripts/ingredient-notes.sh -- the removal walk's exclkey skip was already proven for
+#       the "removed" branch (G2 above); the newly split "now derived" branch is a second place
+#       the same skip can be silently dropped, so exclkey (the "path:KEY" own-upstream exclusion)
+#       must suppress it too. SWIFT_VERSION is this repo's own upstream (excluded); it becomes
+#       derived here and must still not appear at all.
 work12="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work12"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -422,7 +426,8 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*LLVM_SHA\*\*: aaaa -> bbbb' \
   || { echo "FAIL exclkey-derived: real ingredient key in the same file was dropped: $out"; exit 1; }
 cd "$work"; rm -rf "$work12"
 
-# spec: and the REMOVED branch, for the same exclkey, so the two branches cannot silently disagree.
+# spec: scripts/ingredient-notes.sh -- and the REMOVED branch, for the same exclkey, so the two
+#       branches cannot silently disagree.
 work13="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work13"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -436,9 +441,9 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*LLVM_SHA\*\*: aaaa -> bbbb' \
   || { echo "FAIL exclkey-removed: real ingredient key in the same file was dropped: $out"; exit 1; }
 cd "$work"; rm -rf "$work13"
 
-# spec: TOOLCHAIN_SHA moves from a 40-char hex literal to a derived expression; OTHER_KEY moves
-#       for real (so the section opens). The now-derived bullet's OLD value must still be
-#       shortened, like every other hash-shaped pin, and render as shorten() would.
+# spec: scripts/ingredient-notes.sh's shorten() -- TOOLCHAIN_SHA moves from a 40-char hex
+#       literal to a derived expression; OTHER_KEY moves for real (so the section opens). The
+#       now-derived bullet's OLD value must still be shortened, like every other hash-shaped pin.
 work14="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work14"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -458,11 +463,12 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*TOOLCHAIN_SHA\*\*: still used, now com
   || { echo "FAIL shorten-derived: the derived bullet's old hex value was not shortened: $out"; exit 1; }
 cd "$work"; rm -rf "$work14"
 
-# spec: RULING E -- this script's own header contract says "Prints NOTHING when no pin moved". A
-#       "still used, now computed" bullet is real information about a key, but it is not evidence
-#       that anything MOVED, so a derive-only refactor (no pin actually moved) must never open the
-#       "### Build ingredients" section by itself. Only SWIFT_TAG changes shape here;
-#       SWIFT_VERSION (the only literal) is untouched, so nothing actually moved.
+# spec: scripts/ingredient-notes.sh's own header contract says "Prints NOTHING when no pin
+#       moved" (ruling E). A "still used, now computed" bullet is real information about a key,
+#       but it is not evidence that anything MOVED, so a derive-only refactor (no pin actually
+#       moved) must never open the "### Build ingredients" section by itself. Only SWIFT_TAG
+#       changes shape here; SWIFT_VERSION (the only literal) is untouched, so nothing actually
+#       moved.
 work15="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work15"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -479,8 +485,6 @@ out="$(sh "$S" base versions.sh)"
 [ -z "$out" ] \
   || { echo "FAIL ruling-E: a derive-only refactor must print nothing at all: $out"; exit 1; }
 
-# spec: but once a REAL pin also moves in the same release, the section must open and carry BOTH
-#       bullets.
 cat > versions.sh <<'SH'
 SWIFT_VERSION=6.3.4
 SWIFT_TAG="swift-${SWIFT_VERSION}-RELEASE"
@@ -494,8 +498,9 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*SWIFT_TAG\*\*: still used, now compute
   || { echo "FAIL ruling-E: the derived bullet must still ride along once the section is open: $out"; exit 1; }
 cd "$work"; rm -rf "$work15"
 
-# spec: assigned_keys() answers "is this key still assigned at all", and it MUST agree with
-#       assignments() on what counts as an assignment line in the first place, or the two
+# spec: scripts/ingredient-notes.sh -- assigned_keys() answers "is this key still assigned at
+#       all", and it MUST agree with assignments() on what counts as an assignment line in the
+#       first place, or the two
 #       functions drift on the exact question this task is about. A key emptied to KEY= (or
 #       KEY="") is not "still assigned" just because a bare `KEY=` line matches the sed pattern --
 #       it is GONE, identically to a line disappearing outright. Without the guard, CA_SHA256

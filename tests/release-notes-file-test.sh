@@ -15,9 +15,10 @@ printf 'x\n' > UPSTREAM_VERSION
 git add -A; git commit -qm base
 export MAVERICKS_ROOT="$w"
 
-# spec: the calls below use a SELF-upstream tag (TAG == FULL, no "-mavericks." axis) so as to
-#       sidestep the generator's hook/tag/ingredient machinery entirely, which is exactly right
-#       for a test of the WRAPPER's own plumbing rather than the generator's.
+# spec: release-notes-file.sh -- the calls below use a SELF-upstream tag (TAG == FULL, no
+#       "-mavericks." axis) so as to sidestep the generator's hook/tag/ingredient machinery
+#       entirely, which is exactly right for a test of the WRAPPER's own plumbing rather than
+#       the generator's.
 sh "$S" 20260911.1 20260911.1 Porthole >"$w/out.log" 2>"$w/err.log"
 [ "$(wc -l < "$w/out.log" | tr -d ' ')" = 1 ] \
   || { echo "FAIL stdout: expected exactly one line"; cat -A "$w/out.log"; exit 1; }
@@ -92,9 +93,9 @@ rm -rf "$lw"
 
 echo "PASS: release-notes-file (--line pass-through)"
 
-# spec: the wrapper creates its temp file BEFORE calling the generator; with no trap, a generator
-#       die() (any of the many fatal gaps release-notes.sh now enforces) left a zero-byte temp
-#       file behind forever.
+# spec: release-notes-file.sh creates its temp file BEFORE calling the generator; with no trap,
+#       a generator die() (any of the many fatal gaps release-notes.sh now enforces) left a
+#       zero-byte temp file behind forever.
 tw="$(mktemp -d "${TMPDIR:-/tmp}/rnf-trap.XXXXXX")"
 nogit="$tw/nogit-root"; mkdir -p "$nogit"
 if ( cd "$nogit" && MAVERICKS_ROOT="$nogit" TMPDIR="$tw" \

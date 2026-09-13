@@ -1,9 +1,7 @@
 #!/bin/sh
-# spec: install@v1 configures shipyard from the ACTION's checkout, which the runner unpacks as a
-#       tarball with no .git -- so shipyard-version.sh cannot count commits and CMake falls back
-#       to the bare line. Every consumer's installed shipyard therefore reported "1.0", which is
-#       exactly the unidentifiable install this script exists to end, by resolving the version
-#       from the ref the consumer pinned instead.
+# spec: SKILL.md "shipyard: consume its facilities" -- a GitHub Action's own checkout has no
+#       .git, so shipyard-version.sh's commit-count derivation cannot run inside install@v1; this
+#       script resolves the version from the ref the consumer pinned instead.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/resolve-action-version.sh"

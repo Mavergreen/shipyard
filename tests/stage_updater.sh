@@ -8,8 +8,8 @@ ROOT="$1"
 T=$(mktemp -d "${TMPDIR:-/tmp}/mav-stageupd.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 
-# spec: the install dir contains a SPACE, as the real one does -- this pins that the rendered
-#       paths survive it.
+# platform: the install dir contains a SPACE, as the real one does -- this pins that the
+#           rendered paths survive it.
 APPDIR="/Library/Application Support/ModernMavericks"
 LABEL=dev.modernmavericks.test-updatecheck
 APP="$T/TestUpdater.app"

@@ -1,7 +1,7 @@
 #!/bin/sh
-# spec: mavericks-ed25519 carries the real ed25519-sign; this stubs the signer so the test
-#       exercises sign_and_appcast.sh's orchestration, not the crypto (no compiler or network
-#       fetch needed).
+# spec: scripts/sign_and_appcast.sh -- mavericks-ed25519 carries the real ed25519-sign; this
+#       stubs the signer so the test exercises this script's orchestration, not the crypto (no
+#       compiler or network fetch needed).
 set -eu
 # spec: scripts/run-repo-tests.sh -- exit 77 is the family's SKIP idiom, not a failure. Called
 #       bare, as the shared runner does when it globs tests/*.sh, there is no root to test
@@ -11,9 +11,9 @@ ROOT="$1"
 T=$(mktemp -d "${TMPDIR:-/tmp}/mav-signappcast.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 
-# spec: how the key reaches the signer (-f - <file>, key on stdin) is
-#       tests/sign_and_appcast_key.bats's concern -- this stub only returns a fixed, well-formed
-#       base64 signature.
+# spec: tests/sign_and_appcast_key.bats -- how the key reaches the signer (-f - <file>, key on
+#       stdin) is that file's concern; this stub only returns a fixed, well-formed base64
+#       signature.
 SIG="c3R1YnNpZ25hdHVyZWZvcnRlc3Rpbmdvbmx5QUFBQUFBQUFBQUFBQUFBQUFBQUFBQT09"
 cat > "$T/sign" <<EOF
 #!/bin/sh

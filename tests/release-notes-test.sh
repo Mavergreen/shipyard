@@ -39,7 +39,8 @@ gen() {  # $1 = repo, $2 = tag/version, rest = extra args
       --product OpenSSH --min-os 10.9.5 --out "$r/OUT.md" "$@" )
 }
 
-# spec: a new upstream must name the upstream, link its notes, and say what it replaced.
+# spec: scripts/release-notes.sh -- a new upstream must name the upstream, link its notes, and
+#       say what it replaced.
 r="$work/new"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 )
 gen "$r" 9.9p2-mavericks.1 >/dev/null
@@ -51,7 +52,8 @@ grep -q 'Requires Mac OS X 10.9.5 or later' "$r/OUT.md" || { echo "FAIL new: flo
 sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 9.9p2-mavericks.1 >/dev/null \
   || { echo "FAIL new: own output fails the shape check"; exit 1; }
 
-# spec: an ingredient repackage must name the pin that moved, and the baseline it moved from.
+# spec: scripts/release-notes.sh -- an ingredient repackage must name the pin that moved, and
+#       the baseline it moved from.
 r="$work/ing"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 )
 printf '3.9.2\n' > "$r/components/libressl/version"
@@ -63,7 +65,8 @@ grep -q '9.9p2-mavericks.1\.\{0,\}9.9p2-mavericks.2' "$r/OUT.md" \
   || grep -q 'compare/9.9p2-mavericks.1' "$r/OUT.md" || { echo "FAIL ing: compare link"; exit 1; }
 grep -q 'Upstream release notes' "$r/OUT.md" && { echo "FAIL ing: a repackage must not claim a new upstream"; exit 1; }
 
-# spec: a packaging-only release has no upstream change and no pin moved.
+# spec: scripts/release-notes.sh -- a packaging-only release has no upstream change and no pin
+#       moved.
 r="$work/pkgonly"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 && echo x >> build/upstream-release-notes-url.sh \
     && git commit -qam "ci: unrelated" && git tag 9.9p2-mavericks.2 )
@@ -71,7 +74,8 @@ gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q 'packaging changes only' "$r/OUT.md" || { echo "FAIL pkgonly: kind"; cat "$r/OUT.md"; exit 1; }
 grep -q '### Build ingredients' "$r/OUT.md" && { echo "FAIL pkgonly: no pin moved, no section"; exit 1; }
 
-# spec: committed prose must be slotted in verbatim, never rewritten.
+# spec: scripts/release-notes.sh -- committed prose must be slotted in verbatim, never
+#       rewritten.
 r="$work/prose"; mkrepo "$r"
 printf 'Hand-written paragraph.\n\n- a bullet a human wrote\n' > "$r/release-notes/9.9p2-mavericks.1.md"
 ( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
@@ -80,7 +84,8 @@ grep -q 'Hand-written paragraph.' "$r/OUT.md" || { echo "FAIL prose: not include
 grep -q '^- a bullet a human wrote$' "$r/OUT.md" || { echo "FAIL prose: mangled"; exit 1; }
 grep -q '^### What changed$' "$r/OUT.md" || { echo "FAIL prose: generated sections dropped"; exit 1; }
 
-# spec: self-upstream has no -mavericks axis, so no upstream claim and a plain title.
+# spec: scripts/release-notes.sh -- self-upstream has no -mavericks axis, so no upstream claim
+#       and a plain title.
 r="$work/self"; mkrepo "$r"; rm "$r/build/upstream-release-notes-url.sh"
 printf 'No upstream release notes: this repo is its own upstream.\n' > "$r/INGREDIENTS.md"
 ( cd "$r" && git add -A && git commit -qm self && git tag 20260802.5 )
@@ -105,9 +110,9 @@ grep -q '^- Release of Porthole 20260802.6\.$' "$r/OUT.md" \
 grep -q '^\[All changes since 20260802\.5\](.*compare/20260802\.5\.\.\.20260802\.6)$' "$r/OUT.md" \
   || { echo "FAIL selfglob: compare link missing"; cat "$r/OUT.md"; exit 1; }
 
-# spec: the date-shaped case above alone leaves the v-shaped branch of SELF_GLOB (shipyard/
-#       magic-trackpad2) uncovered: deleting the v[0-9]* case from release-notes.sh's SELF_GLOB
-#       derivation left the whole suite green until this was added.
+# spec: scripts/release-notes.sh's SELF_GLOB derivation -- the date-shaped case above alone
+#       leaves the v-shaped branch (shipyard/magic-trackpad2) uncovered: deleting the v[0-9]*
+#       case left the whole suite green until this was added.
 r="$work/selfvglob"; mkrepo "$r"
 ( cd "$r" && git tag v0.5.1 && git tag v0.5.2 )
 gen "$r" v0.5.3 --product MagicTrackpad2 --min-os 10.9 >/dev/null
@@ -134,9 +139,10 @@ printf 'No upstream release notes: upstream publishes none.\n' > "$r/INGREDIENTS
 ( cd "$r" && git add -A && git commit -qm declare )
 gen "$r" 9.9p2-mavericks.1 >/dev/null || { echo "FAIL nohook+declared: should pass"; exit 1; }
 
-# spec: whether this repo owns an upstream-notes hook and whether this RELEASE is even due an
-#       upstream link are independent questions, and the second is answerable from the tags
-#       alone. Resolving the hook first conflated them: every hookless repo reported "new
+# spec: scripts/release-notes.sh -- whether this repo owns an upstream-notes hook and whether
+#       this RELEASE is even due an upstream link are independent questions, and the second is
+#       answerable from the tags alone. Resolving the hook first conflated them: every hookless
+#       repo reported "new
 #       upstream" regardless of its tags, so the fleet preview found 1password's -mavericks.2,
 #       swift-toolchain's -mavericks.4 and container-tools' -mavericks.23 -- all of them the Nth
 #       repackage of an upstream already shipped N-1 times -- classified as brand-new upstreams.
@@ -159,7 +165,8 @@ grep -q 'Repackage of upstream OpenSSH 9.9p2' "$r/OUT.md" \
 grep -q 'New upstream' "$r/OUT.md" \
   && { echo "FAIL nohook-repack: claims a new upstream over an upstream already shipped"; cat "$r/OUT.md"; exit 1; }
 
-# spec: and the declared-reason variant must not turn that false claim into a GREEN one.
+# spec: scripts/release-notes.sh -- and the declared-reason variant must not turn that false
+#       claim into a GREEN one.
 printf 'No upstream release notes: upstream publishes none.\n' > "$r/INGREDIENTS.md"
 ( cd "$r" && git add -A && git commit -qm declare )
 gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL nohook-repack+declared: should pass"; exit 1; }
@@ -168,8 +175,9 @@ grep -q 'Repackage of upstream OpenSSH 9.9p2' "$r/OUT.md" \
 grep -q 'New upstream' "$r/OUT.md" \
   && { echo "FAIL nohook-repack+declared: a declared reason must not license a false new-upstream claim"; cat "$r/OUT.md"; exit 1; }
 
-# spec: a shallow clone hides the tags, so the kind cannot be decided, and this must be fatal. The
-#       assertion checks the MESSAGE, not just a nonzero exit: with the shallow guard removed,
+# spec: scripts/upstream-notes.sh -- a shallow clone hides the tags, so the kind cannot be
+#       decided, and this must be fatal. The assertion checks the MESSAGE, not just a nonzero
+#       exit: with the shallow guard removed,
 #       this fixture still exits 1 (via upstream-notes.sh's own shallow-clone bail, mapped to the
 #       catch-all die), so "some die fired" is not enough to prove the shallow guard itself is
 #       doing anything.
@@ -186,9 +194,9 @@ shallow_out="$(cd "$sr" && MAVERICKS_ROOT="$sr" sh "$S" --tag 9.9p2-mavericks.2 
 printf '%s\n' "$shallow_out" | grep -qi shallow \
   || { echo "FAIL shallow: cause not named as shallow: $shallow_out"; exit 1; }
 
-# spec: a non-shallow checkout can still hide tags (git clone --no-tags) -- the shallow guard
-#       above does not fire here at all -- so a repackage (-mavericks.2) must not be silently read
-#       as a first release with no baseline.
+# platform: a non-shallow checkout can still hide tags (git clone --no-tags) -- the shallow
+#           guard above does not fire here at all -- so a repackage (-mavericks.2) must not be
+#           silently read as a first release with no baseline.
 r="$work/notags"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 )
 nr="$work/notags-clone"
@@ -197,9 +205,9 @@ if ( cd "$nr" && MAVERICKS_ROOT="$nr" sh "$S" --tag 9.9p2-mavericks.2 --version 
        --product OpenSSH --out "$nr/OUT.md" ) >/dev/null 2>&1; then
   echo "FAIL notags: -mavericks.2 with no visible upstream tags should be fatal"; exit 1
 fi
-# spec: but -mavericks.1 with no visible tags stays a legitimate first release (or a not-yet-tagged
-#       dispatch-cut build): the plan accepts that false negative rather than block every real
-#       first release.
+# spec: scripts/release-notes.sh -- but -mavericks.1 with no visible tags stays a legitimate
+#       first release (or a not-yet-tagged dispatch-cut build): the plan accepts that false
+#       negative rather than block every real first release.
 if ! ( cd "$nr" && MAVERICKS_ROOT="$nr" GITHUB_SERVER_URL=https://github.com \
        GITHUB_REPOSITORY=ModernMavericks/mavericks-openssh sh "$S" \
        --tag 9.9p2-mavericks.1 --version 9.9p2-mavericks.1 \
@@ -207,11 +215,11 @@ if ! ( cd "$nr" && MAVERICKS_ROOT="$nr" GITHUB_SERVER_URL=https://github.com \
   echo "FAIL notags: -mavericks.1 with no visible upstream tags should still succeed"; exit 1
 fi
 
-# spec: golang ships parallel lines; 1.26.7's baseline must be 1.26.5 (same line), not 1.27.0 (a
-#       newer line that shipped in between) -- --line must scope the baseline to its own line, not
-#       the numerically-highest tag. Both spellings of --line must work: the human-friendly "1.26"
-#       (the original bug: previous-release-tag.sh takes a GLOB, so the bare prefix matched
-#       nothing) and the already-a-glob "1.26.*".
+# spec: scripts/previous-release-tag.sh takes a GLOB -- golang ships parallel lines; 1.26.7's
+#       baseline must be 1.26.5 (same line), not 1.27.0 (a newer line that shipped in between) --
+#       --line must scope the baseline to its own line, not the numerically-highest tag. Both
+#       spellings of --line must work: the human-friendly "1.26" (the original bug: a bare prefix
+#       matched nothing) and the already-a-glob "1.26.*".
 r="$work/golang"; mkrepo "$r"
 ( cd "$r" && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 )
 for line in "1.26" "1.26.*"; do
@@ -307,8 +315,9 @@ grep -q '3.8.2 -> 3.9.2' "$r/OUT.md" \
 grep -q 'CMakeLists.txt' "$r/OUT.md" \
   && { echo "FAIL decoytrap: decoy caller's unrelated path leaked into the ingredient section"; cat "$r/OUT.md"; exit 1; }
 
-# spec: `uses: >-` with the reusable workflow's URI on the CONTINUATION line is valid YAML and a
-#       real call, but the word `uses:` and the filename are then on different lines, so a
+# platform: `uses: >-` with the reusable workflow's URI on the CONTINUATION line is valid YAML
+#           and a real call, but the word `uses:` and the filename are then on different lines,
+#           so a
 #       `uses:.*<filename>` regex never matches. This repo IS wired up and its libressl pin really
 #       moved; reading it as "no caller" ships "packaging changes only" at exit 0 -- the exact
 #       original openssh bug, silently, for nothing but a formatting choice. A genuinely-wired
@@ -337,12 +346,13 @@ grep -q '### Build ingredients' "$r/OUT.md" \
 grep -q '3.8.2 -> 3.9.2' "$r/OUT.md" \
   || { echo "FAIL foldedcaller: a real libressl bump must not read as packaging-only"; cat "$r/OUT.md"; exit 1; }
 
-# spec: decoytrap above is guarded by two rules at once (the default-path preference AND the
-#       comment filter), so deleting either one alone leaves it passing -- it proves nothing about
-#       the comment filter by itself. Here there is no file at the conventional path at all, so
-#       only the comment filter stands between the earlier-sorting decoy and the real caller:
-#       without it aaa-release.yml wins discovery outright and the notes report ITS path instead
-#       of the libressl bump that actually moved. A comment mention must not win DISCOVERY either,
+# spec: aaa-release.yml -- decoytrap above is guarded by two rules at once (the default-path
+#       preference AND the comment filter), so deleting either one alone leaves it passing -- it
+#       proves nothing about the comment filter by itself. Here there is no file at the
+#       conventional path at all, so only the comment filter stands between the earlier-sorting
+#       decoy and the real caller: without it aaa-release.yml wins discovery outright and the
+#       notes report ITS path instead of the libressl bump that actually moved. A comment
+#       mention must not win DISCOVERY either,
 #       not just the default-path race.
 r="$work/commentonly"; mkrepo "$r"
 mv "$r/.github/workflows/repackage-on-ingredient-bump.yml" "$r/.github/workflows/renovate-repackage.yml"
@@ -369,8 +379,9 @@ grep -q '3.8.2 -> 3.9.2' "$r/OUT.md" \
 grep -q 'CMakeLists.txt' "$r/OUT.md" \
   && { echo "FAIL commentonly: the decoy's unrelated path leaked into the ingredient section"; cat "$r/OUT.md"; exit 1; }
 
-# spec: with no workflow at the conventional path, an earlier-sorting file naming the reusable
-#       workflow on a NON-comment line is indistinguishable from the real caller by content: it
+# spec: scripts/release-notes.sh's caller discovery -- with no workflow at the conventional
+#       path, an earlier-sorting file naming the reusable workflow on a NON-comment line is
+#       indistinguishable from the real caller by content: it
 #       yields pins of its own, and a genuine caller written as a folded scalar is the weaker
 #       textual match. Picking the first in glob order shipped the decoy's own file as "the
 #       ingredient that moved" and dropped the real libressl bump -- confidently wrong notes.
@@ -402,7 +413,8 @@ printf '%s\n' "$out" | grep -q 'aaa-release.yml' \
 printf '%s\n' "$out" | grep -q 'renovate-repackage.yml' \
   || { echo "FAIL twocallers: the die must name the candidates: $out"; exit 1; }
 
-# spec: a release that is BOTH a new upstream AND an ingredient repackage must show both
+# spec: scripts/release-notes.sh -- a release that is BOTH a new upstream AND an ingredient
+#       repackage must show both
 #       sections, with the upstream content FIRST. Neither existing case covers this: `new` above
 #       is a first release with no baseline (so no ingredient diff is even possible), and `ing`
 #       above is a same-upstream repackage that explicitly asserts NO upstream claim. A real
@@ -423,8 +435,9 @@ i="$(grep -n '### Build ingredients' "$r/OUT.md" | cut -d: -f1)"
 [ -n "$u" ] && [ -n "$i" ] && [ "$u" -lt "$i" ] \
   || { echo "FAIL combo: upstream content should precede ingredients"; cat "$r/OUT.md"; exit 1; }
 
-# spec: the only remaining `|| true` on a fact-bearing call -- a nonzero exit from
-#       previous-release-tag.sh (e.g. it cannot list tags) used to be swallowed into PREV="",
+# spec: scripts/previous-release-tag.sh -- the only remaining `|| true` on a fact-bearing call:
+#       a nonzero exit from this script (e.g. it cannot list tags) used to be swallowed into
+#       PREV="",
 #       which reads exactly like a genuine first release, silently dropping the ingredient
 #       section and the compare link on a release that may have both. An EMPTY result must stay
 #       legitimate; only a NONZERO exit is fatal, so this stubs the script to fail outright rather
@@ -450,8 +463,9 @@ r="$work/args"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 )
 if ( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag 9.9p2-mavericks.1 --version 9.9p2-mavericks.1 \
        --out "$r/OUT.md" ) >/dev/null 2>&1; then echo "FAIL args: --product must be required"; exit 1; fi
 
-# spec: a release with no --min-os floor and no compare link (e.g., swift-toolchain in a fixture
-#       with no remote). The old code printed the footer rule unconditionally and then
+# spec: scripts/release-notes.sh -- a release with no --min-os floor and no compare link (e.g.,
+#       swift-toolchain in a fixture with no remote). The old code printed the footer rule
+#       unconditionally and then
 #       conditionally appended the floor/link, so a body with neither ended in a dangling <hr>
 #       and nothing after it -- the footer '---' must not be emitted with nothing after it.
 r="$work/nofooter"; mkdir -p "$r/release-notes"
@@ -466,14 +480,16 @@ grep -q -- '^---$' "$r/OUT.md" \
 sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 1.0.0 >/dev/null \
   || { echo "FAIL G3: no-footer body should still pass the family shape check"; exit 1; }
 
-# spec: but when a floor line applies, the rule must still be emitted, right above it.
+# spec: scripts/release-notes.sh -- but when a floor line applies, the rule must still be
+#       emitted, right above it.
 r="$work/withfooter"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 )
 gen "$r" 9.9p2-mavericks.1 >/dev/null
 grep -q -- '^---$' "$r/OUT.md" || { echo "FAIL G3: footer rule missing when a floor line applies"; cat "$r/OUT.md"; exit 1; }
 
-# spec: "126" is the shape a human reaches for (it's golang's own product id, GO_LINE) but the
-#       line glob is a PREFIX of the real tags (1.26.7-mavericks.N), so it must be "1.26" -- "126"
+# spec: scripts/release-notes.sh -- "126" is the shape a human reaches for (it's golang's own
+#       product id, GO_LINE) but the line glob is a PREFIX of the real tags
+#       (1.26.7-mavericks.N), so it must be "1.26" -- "126"
 #       matches nothing. The existing "no visible tags" guard above only checks $UP-mavericks.*
 #       (1.26.7-mavericks.*, which this fixture's own tag satisfies), so it does not cover this:
 #       LINE is the one input it never looks at. Without this check PREV comes back empty, the
@@ -495,15 +511,16 @@ gen "$r" 1.26.7-mavericks.2 --product Go --line 1.26 --min-os 10.9.5 >/dev/null
 grep -q 'compare/1\.26\.7-mavericks\.1\.\.\.1\.26\.7-mavericks\.2' "$r/OUT.md" \
   || { echo "FAIL linefatal: a correct --line still yields a compare link"; cat "$r/OUT.md"; exit 1; }
 
-# spec: N=1 is a genuine first release of a line and has no baseline, so an unmatched --line must
-#       NOT be fatal for it -- that IS what a first release of a new line looks like.
+# spec: scripts/release-notes.sh -- N=1 is a genuine first release of a line and has no
+#       baseline, so an unmatched --line must NOT be fatal for it -- that IS what a first release
+#       of a new line looks like.
 r="$work/linefatal-first"; mkrepo "$r"
 gen "$r" 1.27.0-mavericks.1 --product Go --line 1.27 --min-os 10.9.5 >/dev/null
 grep -q '^## Go 1.27.0 for Mavericks' "$r/OUT.md" \
   || { echo "FAIL linefatal-first: first release of a line still generates"; cat "$r/OUT.md"; exit 1; }
 
-# spec: markdown joins consecutive lines into ONE <p> (that is correct Markdown), but
-#       gen_appcast.sh's renderer is what a 10.9 user's Sparkle dialog actually shows, and
+# spec: scripts/gen_appcast.sh's renderer is what a 10.9 user's Sparkle dialog actually shows.
+#       Markdown joins consecutive lines into ONE <p> (that is correct Markdown), but
 #       release-notes.sh used to emit the floor line and the compare link back-to-back with no
 #       blank line between them. Rendered, that is one run-on sentence whose second half is a
 #       link ("Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5"). An
@@ -520,9 +537,10 @@ printf '%s\n' "$html" | grep -q '<p>Requires Mac OS X 10\.9\.5 or later\.</p>' \
 printf '%s\n' "$html" | grep -q 'or later\..*<a href' \
   && { echo "FAIL footerpara: the compare link is welded onto the install-floor sentence"; printf '%s\n' "$html"; exit 1; }
 
-# spec: a trailing machine-readable marker (the release-doctrine session appends one before
-#       packaging) must also stand alone rather than trailing a sentence a human is reading.
-#       release-notes.sh cannot enforce this on an append that happens afterwards in a different
+# spec: scripts/release-notes.sh -- a trailing machine-readable marker (the release-doctrine
+#       session appends one before packaging) must also stand alone rather than trailing a
+#       sentence a human is reading. This script cannot enforce that on an append that happens
+#       afterwards in a different
 #       repository's script -- it can only get its OWN footer right -- so this simulates that
 #       append and checks the marker does not fuse to it either.
 printf 'ModernMavericks-State: v1:sha256:3f786850e387550fdab836ed7e6dc881de23001b\n' >> "$r/OUT.md"

@@ -52,6 +52,15 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   `cmake --install` is now for **developing shipyard itself**, not for consuming it. CI is unaffected:
   `install@v1` still builds from source and stamps the version it installs.
 
+  **A GitHub Action's own checkout has no `.git`.** The runner unpacks an action as a tarball, not a
+  clone, so anything inside `install@v1` that tries to derive a version by counting commits
+  (`shipyard-version.sh`'s normal method) finds no repository and silently falls back to the bare
+  line — every consumer's installed shipyard once reported `"1.0"` this way, an unidentifiable
+  install. `scripts/resolve-action-version.sh` is the fix: it resolves the version from the *ref the
+  consumer pinned* (`@v1`, `@v1.2.3`) against the remote instead of trying to derive it from commits
+  that were never checked out. Any action that needs to know its own version, not just shipyard's,
+  hits this same wall.
+
   If you install shipyard on a box with no cmake, the shell scripts still work and the CMake side is
   skipped with a message. Install a cmake — any cmake — then run
   `sh /usr/local/mavericks-shipyard/scripts/register-with-cmake.sh /usr/local/mavericks-shipyard`, or
