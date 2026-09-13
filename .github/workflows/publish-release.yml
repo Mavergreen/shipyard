@@ -78,16 +78,12 @@ jobs:
           sh .shipyard/scripts/check-release-notes.sh "dist/$NOTES" "$VERSION"
           if [ "$CHECKSUMS" = true ]; then
             ( cd dist && printf '%s\n' "$files" | sed 's|^dist/||' | xargs shasum -a 256 > SHA256SUMS )
-            # spec: a checksum file nobody re-verifies is the one artifact nobody checked at all -- a
-            #       truncated or partial write looks exactly like a valid file until someone downloads
-            #       it, so this re-reads and verifies what was just written, and (below) confirms it
-            #       covers exactly the assets attached -- neither a missing nor an extra entry.
             ( cd dist && shasum -a 256 -c SHA256SUMS ) \
-              || { echo "::error::SHA256SUMS does not verify against the files it names"; exit 1; }
+              || { echo "::error::SHA256SUMS does not verify against the files it names -- a truncated or partial write looks exactly like a valid file until someone downloads it, so this re-reads and verifies what was just written rather than trusting it unread"; exit 1; }
             want="$(printf '%s\n' "$files" | sed 's|^dist/||' | sort)"
             got="$(sed 's/^[0-9a-f]*  //' dist/SHA256SUMS | sort)"
             [ "$want" = "$got" ] \
-              || { echo "::error::SHA256SUMS covers $got; the assets are $want"; exit 1; }
+              || { echo "::error::SHA256SUMS covers $got; the assets are $want -- it must cover exactly the assets attached, neither a missing nor an extra entry"; exit 1; }
             files="$files
           dist/SHA256SUMS"
           fi
@@ -188,9 +184,7 @@ jobs:
           files: ${{ steps.assets.outputs.files }}
 
       - name: Nothing was published -- remove the draft
-        # spec: keyed on attempt 1's outcome, not attempt 3's -- a cleanup step that fails between
-        #       attempts skips the rest, and must still not leave its draft behind.
-        if: failure() && steps.publish1.outcome == 'failure'
+        if: failure() && steps.publish1.outcome == 'failure'   # keyed on attempt 1, not attempt 3: a cleanup step that fails between attempts skips the rest, and must still not leave its draft behind
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
