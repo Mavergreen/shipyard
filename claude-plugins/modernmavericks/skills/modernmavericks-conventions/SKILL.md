@@ -763,6 +763,13 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   published release), and deletes it after the last failure too. **Recovery is "Re-run failed jobs"**
   — the build artifacts are kept and the tag is still free — unless the caller's `main` gained a
   workflow change since the run started (the tag then 403s; re-dispatch).
+  **The final cleanup step must key on the FIRST attempt's outcome, not the last.** If it checked
+  `steps.publish3.outcome == 'failure'` instead, a failure in an *intermediate* step (the
+  draft-delete-and-sleep between attempts, not the publish attempt itself) leaves `publish3` at
+  `skipped`, never `failure` — so that condition is silently false, cleanup never runs, and a draft
+  from the first attempt is left stranded with nothing to show for it. Keying on `publish1.outcome`
+  together with `failure()` catches every path that could have created a draft, not just the one
+  where the last attempt is the one that failed.
 - **A repo that ships the tooling publishes itself with the commit under test, not with `@v1`.**
   shipyard's own `release.yml` reaches `publish-release.yml` and `scan-for-key.yml` by a local `uses:`
   path, and pins their inner checkout to the same commit (`shipyard-ref`). Publishing through `@v1`

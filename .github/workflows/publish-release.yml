@@ -184,7 +184,10 @@ jobs:
           files: ${{ steps.assets.outputs.files }}
 
       - name: Nothing was published -- remove the draft
-        if: failure() && steps.publish1.outcome == 'failure'   # keyed on attempt 1, not attempt 3: a cleanup step that fails between attempts skips the rest, and must still not leave its draft behind
+        # spec: modernmavericks-conventions SKILL.md, "A failed upload must not strand a draft" --
+        #       keyed on the FIRST attempt's outcome, not the last, or an intermediate failure
+        #       leaves this condition silently false and a draft stranded.
+        if: failure() && steps.publish1.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
