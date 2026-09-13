@@ -76,6 +76,34 @@ cat > out <<-'PRE'
 	PRE
 EOF
 
+# THE REGRESSION: a "<<WORD" sitting inside a quoted STRING is not a heredoc, and everything
+# after it in the file must still be scanned. The real incident (publish-release.yml's
+# `{ echo 'files<<EOF'; }`) made the scanner treat "EOF" as a real heredoc terminator with no
+# matching close, silently swallowing ~120 lines of genuine comments for the rest of the file --
+# exit 0, no output, indistinguishable from "this file is clean". This is the assertion that
+# would have caught it: the comments AFTER the quoted fake marker must still be reported.
+bad quoted_marker_single 'platform:' <<'EOF'
+#!/bin/sh
+{ echo 'files<<EOF'; }
+# an untagged comment
+# and another
+EOF
+
+bad quoted_marker_double 'platform:' <<'EOF'
+#!/bin/sh
+echo "files<<EOF"
+# an untagged comment after a double-quoted fake heredoc marker
+EOF
+
+# A real heredoc opened on the SAME line as a quoted fake must still open -- the fake marker
+# earlier on the line must not suppress it, and must not itself be mistaken for the real one.
+ok heredoc_after_quoted_fake <<'EOF'
+#!/bin/sh
+printf 'x<<EOF' > f <<'REAL'
+# this line is payload, not commentary, and must not be flagged
+REAL
+EOF
+
 bad untagged 'platform:' <<'EOF'
 #!/bin/sh
 # this explains what the next line does

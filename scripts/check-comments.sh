@@ -46,6 +46,12 @@ for f in $files; do
   awk -v FNAME="$f" -v ALT="$alt" -v COUNTFILE="$countfile" '
     BEGIN { split(ALT, r, "|"); for (i in r) ok[r[i]] = 1 }
 
+    # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- counting occurrences of a
+    #       one-character needle without a separate loop at every call site: replace each with
+    #       itself and let gsub report how many substitutions it made.
+    function sq_count(s,   c) { c = s; return gsub(/'"'"'/, "&", c) }
+    function dq_count(s,   c) { c = s; return gsub(/"/, "&", c) }
+
     # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a heredoc body is payload, not
     #       commentary: package-pkg.sh writes a whole script inside one. Track the terminator
     #       and skip until it closes.
@@ -54,11 +60,33 @@ for f in $files; do
       if (line == heredoc) heredoc = ""
       next
     }
-    /<<-?[ ]*'"'"'?[A-Za-z_][A-Za-z0-9_]*'"'"'?/ {
-      t = $0
-      sub(/^.*<<-?[ ]*/, "", t); gsub(/'"'"'/, "", t)
-      sub(/[ \t].*$/, "", t)
-      if (t != "") { heredoc = t; next }
+    {
+      # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a "<<WORD" sitting inside a
+      #       quoted string, such as a bare word followed by <<EOF inside an echo argument, is
+      #       not a heredoc and must not be read as one: the real incident silently ate ~120
+      #       lines of a workflow file this way, exit 0, no output, indistinguishable from
+      #       clean. Full shell quoting is a parser problem and
+      #       out of scope, but the common shapes are not -- for every "<<" candidate on the
+      #       line, count the quote characters that come before it and accept it as real only
+      #       when neither kind has an odd (still-open) count there. When a real operator and a
+      #       quoted fake share one line, the LAST real one wins: that is the one the shell
+      #       actually opens.
+      line = $0
+      lastreal = 0; searchfrom = 1
+      while ((p = index(substr(line, searchfrom), "<<")) > 0) {
+        pos = searchfrom + p - 1
+        prefix = substr(line, 1, pos - 1)
+        if (sq_count(prefix) % 2 == 0 && dq_count(prefix) % 2 == 0 &&
+            substr(line, pos) ~ /^<<-?[ ]*'"'"'?[A-Za-z_][A-Za-z0-9_]*'"'"'?/)
+          lastreal = pos
+        searchfrom = pos + 2
+      }
+      if (lastreal > 0) {
+        t = substr(line, lastreal)
+        sub(/^<<-?[ ]*/, "", t); gsub(/'"'"'/, "", t)
+        sub(/[ \t].*$/, "", t)
+        if (t != "") { heredoc = t; next }
+      }
     }
 
     FNR == 1 && /^#!/ { next }
