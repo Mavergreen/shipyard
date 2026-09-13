@@ -748,4 +748,48 @@ out="$(cd "$work/ok2" && sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'check-family-conventions: ok' \
   && { echo "FAIL a failing run printed ok: $out"; exit 1; }
 
+# spec: SKILL.md "Family conventions" check 15 -- delegates to check-comments.sh, so these
+#       fixtures prove the WIRING, not the scanner (task-1-brief.md's own tests already cover the
+#       scanner's rules in detail). comment-reasons here mirrors this repo's own root file
+#       (platform, spec) so the fixture reasons match what check-comments.sh actually ships with.
+mkrepo "$work/cm1"
+mkdir -p "$work/cm1/scripts"
+printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm1/scripts/x.sh"
+printf 'platform\nspec\n' > "$work/cm1/comment-reasons"
+(cd "$work/cm1" && git add -A) >/dev/null 2>&1
+if out="$(cd "$work/cm1" && sh "$S" 2>&1)"; then echo "FAIL: an untagged comment, with comment-reasons present, should fail"; exit 1; fi
+printf '%s\n' "$out" | grep -qi 'cite a reason' || { echo "FAIL should name what to cite: $out"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh -- the same fixture, tagged, must pass: the check is
+#       satisfied by a reason, not by removing the comment.
+mkrepo "$work/cm2"
+mkdir -p "$work/cm2/scripts"
+printf '#!/bin/sh\n# platform: a fact about the platform or a tool\nexit 0\n' > "$work/cm2/scripts/x.sh"
+printf 'platform\nspec\n' > "$work/cm2/comment-reasons"
+(cd "$work/cm2" && git add -A) >/dev/null 2>&1
+(cd "$work/cm2" && sh "$S" >/dev/null) || { echo "FAIL: a comment tagged # platform: should pass"; exit 1; }
+
+# spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- check-comments.sh itself exits 0 with
+#       no comment-reasons file; this fixture is the load-bearing proof that the WIRING preserves
+#       that opt-in. check-family-conventions.sh runs in 14 consumers through a moving @v1 tag --
+#       without this passing, the day check 15 lands is the day all 14 go red on an untagged
+#       comment nobody there has swept yet.
+mkrepo "$work/cm3"
+mkdir -p "$work/cm3/scripts"
+printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm3/scripts/x.sh"
+(cd "$work/cm3" && git add -A) >/dev/null 2>&1
+(cd "$work/cm3" && sh "$S" >/dev/null) || { echo "FAIL: no comment-reasons file at all must pass despite an untagged comment -- this is the opt-in promise"; exit 1; }
+
+# spec: SKILL.md "Conformance deviations" -- the same declared-exception shape
+#       check-artifact-conformance.sh already uses, reused here for a swept repo that still wants
+#       ONE stated exception rather than fixing the comment.
+mkrepo "$work/cm4"
+mkdir -p "$work/cm4/scripts"
+printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm4/scripts/x.sh"
+printf 'platform\nspec\n' > "$work/cm4/comment-reasons"
+printf '# Build ingredients\n\n## Conformance deviations\n\n- comments: vendored verbatim from upstream, reformatting it would defeat the point of a byte-for-byte mirror\n' \
+  > "$work/cm4/INGREDIENTS.md"
+(cd "$work/cm4" && git add -A) >/dev/null 2>&1
+(cd "$work/cm4" && sh "$S" >/dev/null) || { echo "FAIL: a declared deviation with a reason should pass"; exit 1; }
+
 echo "PASS: check-family-conventions"

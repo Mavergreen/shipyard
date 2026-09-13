@@ -421,6 +421,31 @@ if [ -n "$CI_FILES" ]; then
   done
 fi
 
+# spec: SKILL.md "Family conventions" check 15 -- every comment cites a reason (# platform: or
+#       # spec:); delegates to check-comments.sh so the family's rule and shipyard's own scanner
+#       cannot drift apart. Opt-in falls out of check-comments.sh itself: it exits 0 with no
+#       comment-reasons file, so a consumer inherits this check through @v1 but not its failure,
+#       until it sweeps its own tree and adds one. A swept repo that still wants ONE declared
+#       exception states it under INGREDIENTS.md "## Conformance deviations", the same shape
+#       check-artifact-conformance.sh already uses.
+if [ -f "$SELF/check-comments.sh" ]; then
+  deviation=""
+  if [ -f INGREDIENTS.md ]; then
+    deviation="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
+      | sed -n 's/^- *comments *: *\(..*\)$/\1/p' | head -1)"
+  fi
+  if [ -n "$deviation" ]; then
+    echo "check-family-conventions: comments: DECLARED DEVIATION -- $deviation"
+  else
+    sh "$SELF/check-comments.sh" \
+      || fail "a comment cites no reason (see the lines named above)" \
+              "cite one: # platform: <a fact about the platform or a tool>, or # spec: <a locatable pointer>"
+  fi
+else
+  fail "cannot find check-comments.sh next to this gate -- the shipyard checkout is incomplete" \
+       "check out the whole repo (family-conventions.yml does), not just this one script"
+fi
+
 [ "$status" -eq 0 ] && echo "check-family-conventions: ok"
 
 exit "$status"
