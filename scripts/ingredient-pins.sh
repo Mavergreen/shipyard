@@ -1,24 +1,23 @@
 #!/bin/sh
-# Print this repo's build-ingredient pin paths, one per line.
-#
-# Source of truth is the repo's OWN repackage caller: the paths it watches are the ingredient pins,
-# minus own-upstream-paths (a new upstream is not an ingredient). Deriving the list here instead of
-# maintaining a second copy is what makes the repackage trigger and the release notes impossible to
-# drift apart. Globs are expanded against tracked files, so 'components/**' becomes real paths.
-# A repo with no caller (no ingredients) prints nothing and exits 0.
-#
-# own-upstream-paths entries come in the same two forms repackage-decision.sh understands: a bare PATH
-# excludes that whole file, and a "path:KEY" entry (the swift repos' shape: every pin lives in one
-# pins.env/build.sh, and only SWIFT_VERSION is their own upstream) excludes just that KEY, printed
-# here as "path:KEY" so ingredient-notes.sh can exclude the same one key while still reporting the
-# file's other, genuinely-ingredient keys.
 #   usage: ingredient-pins.sh [caller-workflow-path]
+#          Prints this repo's build-ingredient pin paths, one per line. Source of truth is the
+#          repo's OWN repackage caller: the paths it watches are the ingredient pins, minus
+#          own-upstream-paths (a new upstream is not an ingredient). Deriving the list here instead
+#          of maintaining a second copy is what makes the repackage trigger and the release notes
+#          impossible to drift apart. Globs are expanded against tracked files, so 'components/**'
+#          becomes real paths. A repo with no caller (no ingredients) prints nothing and exits 0.
+#          own-upstream-paths entries come in the same two forms repackage-decision.sh understands:
+#          a bare PATH excludes that whole file, and a "path:KEY" entry (the swift repos' shape:
+#          every pin lives in one pins.env/build.sh, and only SWIFT_VERSION is their own upstream)
+#          excludes just that KEY, printed here as "path:KEY" so ingredient-notes.sh can exclude the
+#          same one key while still reporting the file's other, genuinely-ingredient keys.
 set -eu
 caller="${1:-.github/workflows/repackage-on-ingredient-bump.yml}"
 [ -f "$caller" ] || exit 0
 
-# Both YAML forms the family uses:  paths: ['a', 'b']  and  paths:\n  - a  # comment
-# \047 is a single quote (awk source can't hold one inside a single-quoted shell argument).
+# spec: tests/ingredient-pins-test.sh -- both YAML forms the family uses: paths: ['a', 'b']  and
+#       paths:\n  - a  # comment. \047 is a single quote (awk source can't hold one inside a
+#       single-quoted shell argument).
 patterns="$(awk '
   /^[[:space:]]*paths:[[:space:]]*\[/ {
     line = $0; sub(/^[^[]*\[/, "", line); sub(/\].*$/, "", line)
@@ -38,20 +37,14 @@ patterns="$(awk '
 ' "$caller")"
 [ -n "$patterns" ] || exit 0
 
-# own-upstream-paths can be inline ("own-upstream-paths: pins.env:SWIFT_VERSION") OR a YAML block
-# scalar ("own-upstream-paths: |\n  pins.env:SWIFT_VERSION\n  other.txt"). repackage-decision.sh
-# never parses this itself -- GitHub Actions' own YAML engine resolves the `with:` input before that
-# script ever sees it as a plain env var -- so this hand-rolled reader is the only place the block
-# form needs handling, and it must resolve to the SAME token list a real YAML parser would, or a
-# caller written with `|` (unused by any family repo today, but valid YAML) would silently exclude
-# nothing while repackage-decision.sh still skips: two scripts, two answers, from the same file.
-#
-# A block scalar ends at the first line whose indent is <= the block KEY's own indent -- not at
-# column 0. Every sibling key under the same `with:` (dispatch-workflow:, dispatch-field:, ...) is
-# itself indented, so terminating only on column 0 swallows them into the token list: a real YAML
-# parser stops at the first line no more indented than "own-upstream-paths:" itself, and this must
-# match it exactly or the first repo to write a sibling key after the block form gets a silently
-# wrong exclusion set.
+# spec: tests/ingredient-pins-test.sh -- own-upstream-paths can be inline
+#       ("own-upstream-paths: pins.env:SWIFT_VERSION") OR a YAML block scalar
+#       ("own-upstream-paths: |\n  pins.env:SWIFT_VERSION\n  other.txt"); this hand-rolled reader
+#       must resolve to the SAME token list a real YAML parser would, since repackage-decision.sh
+#       gets the resolved value from GitHub Actions' own YAML engine, never this parse. A block
+#       scalar ends at the first line whose indent is <= the block KEY's own indent, not at column 0
+#       -- a sibling key under the same `with:` is itself indented, so terminating only on column 0
+#       would swallow it into the token list.
 own="$(awk '
   /^[[:space:]]*own-upstream-paths:[[:space:]]*[|>]/ {
     match($0, /^[[:space:]]*/); keyindent = RLENGTH
@@ -79,12 +72,11 @@ own="$(awk '
   }
 ' "$caller" | tr -d '"'"'"'')"
 
-# Expand each pattern against tracked files. GitHub's '**' and sh's '*' both cross directory
-# separators in a case pattern, so '**' collapses to '*'.
-#
-# set -f is load-bearing: unquoted $patterns is word-split AND pathname-expanded, so 'components/**'
-# would silently become the DIRECTORY names it matches on disk (components/golang, ...) instead of
-# staying a pattern. Noglob leaves `case` matching untouched, which is where globbing belongs here.
+# spec: tests/ingredient-pins-test.sh -- GitHub's '**' and sh's '*' both cross directory separators
+#       in a case pattern, so '**' collapses to '*'. set -f is load-bearing: unquoted $patterns is
+#       word-split AND pathname-expanded, so 'components/**' would silently become the DIRECTORY
+#       names it matches on disk instead of staying a pattern; noglob leaves `case` matching
+#       untouched, which is where globbing belongs here.
 set -f
 for f in $(git ls-files); do
   for p in $patterns; do

@@ -1,36 +1,22 @@
 #!/bin/sh
-# Gate: no shell construct that the 10.9 base system lacks, in the scripts this family ships.
-#
-# These all share one shape: they work on a CI runner and fail on the platform the family exists to
-# support. CI is therefore structurally incapable of catching them, which is how two of them shipped
-# from shipyard itself and reached every consumer through @v1:
-#
-#   - `sort -V` in previous-release-tag.sh: 10.9's sort exits 2 printing nothing, and
-#     release-notes-file.sh swallows that (`2>/dev/null || true`) into an EMPTY "changed since"
-#     baseline. Release notes silently diffed against nothing. Green in CI the whole time.
-#   - a bare `mktemp -d` in run-repo-tests.sh and 12 test files: 10.9 mktemp demands a template, so
-#     the test runner died on its own logfile and the suite could not START on 10.9.
-#
-# It also bans the assertion forms that CANNOT FAIL there, which is worse than failing: a bare
-# `[[ ]]` mid-test (bash < 4.1 -- 10.9's /bin/bash, which pkgsrc's bats runs under -- does not let it
-# fail the test) and a bare `! cmd` (no bash lets errexit see it). ed25519's suite carried fourteen of
-# the first kind and one test that only passed on `env`'s usage error; all of them green on 10.9.
-# A `! cmd` line continued with a trailing backslash is skipped: a line-based lint cannot see whether
-# the `|| fail` is on the next line (porthole's are), so there it trusts the author.
-#
-# Adding a rule is one line in the table. Each rule carries a SAMPLE it must still match, asserted
-# before any scan: a lint whose pattern quietly stopped matching is green forever AND stops anyone
-# from looking, which is strictly worse than no lint.
-#
-# Scans the repo's git-TRACKED *.sh and *.bats (so vendored or fetched upstream trees, which we do
-# not get to rewrite, are out of scope), or exactly the files named on the command line. .bats counts
-# because it IS shell: the first cut of this lint checked only *.sh and therefore reported ed25519
-# clean while tests/version.bats died on a bare `mktemp -d` in its setup() -- a green lint sitting
-# next to the exact bug it exists to catch.
 #   usage: check-shell-portability.sh [file ...]
+#          Gate: no shell construct that the 10.9 base system lacks, in the scripts this family
+#          ships. Scans the repo's git-TRACKED *.sh and *.bats (so vendored or fetched upstream
+#          trees, which we do not get to rewrite, are out of scope), or exactly the files named on
+#          the command line. The rule table below is one row per construct:
+#            pattern<TAB>sample-it-must-match<TAB>what<TAB>what to do instead
+# platform: these all share one shape: they work on a CI runner and fail on the platform the family
+#           exists to support, so CI is structurally incapable of catching them -- which is how two
+#           of them shipped from shipyard itself and reached every consumer through @v1 (`sort -V` in
+#           previous-release-tag.sh silently emptied a release-notes baseline; a bare `mktemp -d` in
+#           run-repo-tests.sh and 12 test files meant the suite could not START on 10.9). It also
+#           bans the assertion forms that CANNOT FAIL there, worse than failing: a bare `[[ ]]`
+#           mid-test (bash < 4.1, 10.9's /bin/bash, which pkgsrc's bats runs under, does not let it
+#           fail the test) and a bare `! cmd` (no bash lets errexit see it). .bats counts as shell
+#           too: the first cut of this lint checked only *.sh and reported ed25519 clean while
+#           tests/version.bats died on exactly this bare `mktemp -d`.
 set -eu
 
-# pattern<TAB>sample-it-must-match<TAB>what<TAB>what to do instead
 rulesfile="$(mktemp "${TMPDIR:-/tmp}/shell-portability.XXXXXX")"
 trap 'rm -f "$rulesfile"' EXIT
 cat > "$rulesfile" <<'RULES'
@@ -44,7 +30,8 @@ RULES
 TAB="$(printf '\t')"
 status=0
 
-# Every rule must still match its own sample, or the lint is dead rather than clean.
+# spec: tests/shell-portability-test.sh -- every rule must still match its own sample, or the lint
+#       is dead rather than clean: a pattern that quietly stopped matching would stay green forever.
 while IFS="$TAB" read -r pat sample what instead; do
   [ -n "$pat" ] || continue
   printf '%s\n' "$sample" | grep -qE "$pat" || {
@@ -64,17 +51,16 @@ else
   exit 1
 fi
 
-# Full-line comments are stripped first, so the prose explaining a ban is not itself a violation.
-# A line carrying `portability-ok:` plus a reason is exempt too -- the same escape hatch, and the same
-# obligation to justify it, as the `# shellcheck disable=... # <reason>` lines already in this tree.
-# It exists mainly for the lint's OWN test fixtures, which must contain violations to be worth
-# anything; a reason is required so silencing one stays a visible choice in review rather than a
-# quiet deletion. sed preserves the line count, so grep -n still reports the real line number.
+# spec: tests/shell-portability-test.sh -- full-line comments are stripped first, so the prose
+#       explaining a ban is not itself a violation. A line carrying `portability-ok:` plus a reason
+#       is exempt too -- the same escape hatch, and the same obligation to justify it, as this tree's
+#       `# shellcheck disable=... # <reason>` lines -- mainly for the lint's OWN test fixtures, which
+#       must contain violations to be worth anything. sed preserves the line count, so grep -n still
+#       reports the real line number.
 while IFS="$TAB" read -r pat sample what instead; do
   [ -n "$pat" ] || continue
   for f in $files; do
     [ -f "$f" ] || continue
-    # This file's own rule table holds the samples, which are by construction violations.
     [ "$(basename "$f")" = "$(basename "$0")" ] && continue
     hits="$(sed -e 's/^[[:space:]]*#.*//' -e '/portability-ok:[[:space:]]*[^[:space:]]/s/.*//' "$f" | grep -nE "$pat" || true)"
     [ -n "$hits" ] || continue

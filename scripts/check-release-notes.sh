@@ -1,15 +1,14 @@
 #!/bin/sh
-# Is this file the family's release body for this exact version?
-#
-# The shape is small on purpose -- it has to pass for every product, from a Go toolchain to a kext --
-# so it asserts only what a reader is entitled to: the release says which version it is, and says what
-# changed. Six products published "Automated release for Mac OS X 10.9 (Mavericks)." as their entire
-# notes, for every release including Renovate-driven repackages whose only reason to exist was an
-# ingredient bump; that body passes no check here.
-#
-# Used twice: release-notes.sh self-checks what it just generated, and publish-release.yml checks what
-# it is about to publish -- so a repo that regresses to a hand-rolled body still cannot ship one.
 #   usage: check-release-notes.sh <file> <version>
+#          Is this file the family's release body for this exact version? Used twice: release-notes.sh
+#          self-checks what it just generated, and publish-release.yml checks what it is about to
+#          publish -- so a repo that regresses to a hand-rolled body still cannot ship one.
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Release notes" --
+#       the shape is small on purpose (it has to pass for every product, from a Go toolchain to a
+#       kext), so it asserts only what a reader is entitled to: the release says which version it is,
+#       and says what changed. Six products once published "Automated release for Mac OS X 10.9
+#       (Mavericks)." as their entire notes, for every release including Renovate-driven repackages
+#       whose only reason to exist was an ingredient bump; that body passes no check here.
 set -eu
 f="${1:?check-release-notes: notes file required}"
 ver="${2:?check-release-notes: version required}"
@@ -26,18 +25,13 @@ case "$first" in
   *) fail "the first line of $f is not a '## ' title: $first" ;;
 esac
 
-# The title must name THIS version. A copied file under a new tag is otherwise invisible: every other
-# check passes, and the release announces its predecessor.
-#
-# A leading "v" is not part of the version -- shipyard's tag is v1.0.209 but its generated title reads
-# "## Shipyard 1.0.209", same as previous-release-tag.sh already strips "v" before keying and
-# comparison_key() already treats the dotted-numeric part as the version. Accept either spelling of
-# the version this check was CALLED with; a stale one (a copied file's own predecessor) still fails,
-# whether or not it carries the same "v".
-#
-# Guarded with [ -n "$bare" ]: a glob alternative built from an empty string, `*""*`, matches ANY
-# string in every shell tested here -- so a degenerate "v" version would silently turn this whole
-# check into a no-op instead of failing loudly. Never let a derived pattern go untested for empty.
+# spec: tests/check-release-notes-test.sh -- the title must name THIS version, or a copied file
+#       under a new tag is invisible (every other check passes, and the release announces its
+#       predecessor). A leading "v" is not part of the version -- shipyard's tag is v1.0.209 but its
+#       generated title reads "## Shipyard 1.0.209" -- so either spelling is accepted; a stale
+#       version still fails either way. Guarded with [ -n "$bare" ]: a glob alternative built from an
+#       empty string, `*""*`, matches ANY string in every shell tested here, so a degenerate "v"
+#       version would silently turn this whole check into a no-op instead of failing loudly.
 named=false
 case "$first" in *"$ver"*) named=true ;; esac
 bare="${ver#v}"
@@ -49,10 +43,11 @@ fi
 grep -q '^### What changed[[:space:]]*$' "$f" \
   || fail "$f has no '### What changed' section; every release says what changed, even a repackage"
 
-# A heading with nothing under it is worse than no heading: it promises a section and delivers none.
-# The '## ' title line is not itself a section requiring a body -- it is validated separately above --
-# so it only resets tracking; '### ' subsections are what must have non-blank content before the next
-# heading, a '---' rule, or end of file.
+# spec: tests/check-release-notes-test.sh -- a heading with nothing under it is worse than no
+#       heading: it promises a section and delivers none. The '## ' title line is not itself a
+#       section requiring a body (validated separately above), so it only resets tracking; '### '
+#       subsections are what must have non-blank content before the next heading, a '---' rule, or
+#       end of file.
 t="$(mktemp "${TMPDIR:-/tmp}/crn.XXXXXX")"
 trap 'rm -f "$t"' EXIT
 awk '

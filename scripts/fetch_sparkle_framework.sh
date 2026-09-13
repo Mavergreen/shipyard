@@ -1,14 +1,14 @@
 #!/bin/sh
-# Fetch + cache + checksum-verify the PREBUILT Sparkle 1.27.3 framework (the last Sparkle that runs
-# on 10.9; LC_VERSION_MIN_MACOSX 10.9 verified on-device for the x86_64 slice). The release framework
-# is fat x86_64+arm64. Produces a per-arch thinned copy and prints its path.
-#
-#   MAVERICKS_SPARKLE_ARCH=x86_64 (default): 10.9 Intel updater slice.
-#   MAVERICKS_SPARKLE_ARCH=arm64            : native Apple-Silicon updater slice (min-11).
-#   MAVERICKS_SPARKLE_ARCH=all              : leave fat (both).
-#
-# The fetched fat framework is cached UNMUTATED; per-arch thinned copies live beside it, so different
-# callers/arches don't stomp each other. Sparkle bytes are never committed -- build-time fetch.
+#   usage: fetch_sparkle_framework.sh
+#          Fetches + caches + checksum-verifies the PREBUILT Sparkle 1.27.3 framework, producing a
+#          per-arch thinned copy and printing its path. Sparkle bytes are never committed --
+#          build-time fetch. The fetched fat framework is cached UNMUTATED; per-arch thinned copies
+#          live beside it, so different callers/arches don't stomp each other.
+#            MAVERICKS_SPARKLE_ARCH=x86_64 (default): 10.9 Intel updater slice.
+#            MAVERICKS_SPARKLE_ARCH=arm64            : native Apple-Silicon updater slice (min-11).
+#            MAVERICKS_SPARKLE_ARCH=all              : leave fat (both).
+# platform: 1.27.3 is the last Sparkle that runs on 10.9 (LC_VERSION_MIN_MACOSX 10.9 verified
+#           on-device for the x86_64 slice); the release framework itself is fat x86_64+arm64.
 set -eu
 . "$(dirname "$0")/mavericks_fetch.sh"
 

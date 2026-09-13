@@ -1,9 +1,10 @@
 #!/bin/sh
-# Fetch + cache + checksum-verify MacOSX10.9.sdk. Prints the SDK root on stdout.
-# Used ONLY to cross-build for 10.9 from a modern host (a native 10.9 box uses
-# its own system SDK). Apple SDK bytes are never committed -- this is a build-time
-# fetch. The cache default is per-machine and durable: TMPDIR gets purged by macOS
-# (stranding the path CMake cached at configure time).
+#   usage: fetch_sdk.sh
+#          Fetches + caches + checksum-verifies MacOSX10.9.sdk. Prints the SDK root on stdout. Used
+#          ONLY to cross-build for 10.9 from a modern host (a native 10.9 box uses its own system
+#          SDK). Apple SDK bytes are never committed -- this is a build-time fetch. The cache default
+#          is per-machine and durable: TMPDIR gets purged by macOS (stranding the path CMake cached
+#          at configure time).
 set -eu
 . "$(dirname "$0")/mavericks_fetch.sh"
 CACHE="${MAVERICKS_SDK_CACHE:-$HOME/Library/Caches/mavericks-sdk}"
@@ -12,18 +13,18 @@ SHA="${MAVERICKS_SDK_SHA256:-fcf88ce8ff0dd3248b97f4eb81c7909f2cc786725de277f4d05
 SDK="$CACHE/MacOSX10.9.sdk"
 if [ ! -d "$SDK" ]; then
   mav_fetch_pinned "$URL" "$SHA" "$CACHE" "MacOSX10.9.sdk.tar.xz"
-  # Modern ld (Xcode 15+) warns for every ancient MH_DYLIB_STUB it reads. Where
-  # tapi exists (a modern host; never the 10.9 box), convert those stubs to .tbd
-  # once at extract time: same exported symbols, no warnings.
+  # platform: modern ld (Xcode 15+) warns for every ancient MH_DYLIB_STUB it reads. Where tapi
+  #           exists (a modern host; never the 10.9 box), convert those stubs to .tbd once at
+  #           extract time: same exported symbols, no warnings. Pinned to tbd-v4 (YAML): the default
+  #           v5 is JSON, which some downstream tools can't parse.
   if TAPI=$(xcrun --find tapi 2>/dev/null); then
     LIBDIRS="$SDK/usr/lib $SDK/System/Library/Frameworks"
     find $LIBDIRS -type f \( -name '*.dylib' -o ! -name '*.*' \) | while IFS= read -r f; do
       [ "$(otool -h "$f" 2>/dev/null | awk 'NR==4 {print $5}')" = 9 ] || continue
-      # Pin tbd-v4 (YAML): the default v5 is JSON, which some downstream tools can't parse.
       "$TAPI" stubify --filetype=tbd-v4 --delete-input-file "$f" 2>/dev/null || :  # unconvertible: keep stub
     done
-    # Re-point symlinks whose target was converted. Loop to fixpoint: chains like
-    # libc.dylib -> libSystem.dylib -> libSystem.B.dylib need multiple passes.
+    # platform: re-point symlinks whose target was converted. Loop to fixpoint: chains like
+    #           libc.dylib -> libSystem.dylib -> libSystem.B.dylib need multiple passes.
     changed=1
     while [ "$changed" = 1 ]; do
       changed=0

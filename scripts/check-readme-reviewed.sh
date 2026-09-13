@@ -1,23 +1,19 @@
 #!/bin/sh
-# Refuse a repo's FIRST EVER release until a human has edited its README. A generated README is
-# fine to develop against and wrong to publish: it is the page every visitor lands on, and nobody
-# reads their own project's front door until something forces them to. Publishing is that moment.
-#
-# The test is a marker line the generated README carries, in plain visible prose under the heading,
-# NOT an HTML comment -- so it renders on the repo's front page, where leaving it in place is
-# embarrassing rather than invisible. A human edits the README, deletes the line, and the gate
-# passes forever after. Nothing here inspects git history: authorship cannot distinguish a human's
-# edit from an assistant's commit of a human's words, and a shallow CI checkout has no history to
-# inspect anyway.
-#
-# Only the first release is gated. A repo that has published before has a README somebody shipped;
-# this convention exists to stop the first one going out unread, not to police later edits.
 #   usage: check-readme-reviewed.sh [readme-path]
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "A repo's FIRST
+#       EVER release needs a README a human has read" -- gated by a marker line the generated README
+#       carries, in plain visible prose under the heading (not an HTML comment) so leaving it in
+#       place is embarrassing rather than invisible; a human edits the README, deletes the line, and
+#       the gate passes forever after. Nothing here inspects git history: authorship cannot
+#       distinguish a human's edit from an assistant's commit of a human's words, and a shallow CI
+#       checkout has no history to inspect anyway. Only the FIRST release is gated -- a repo that has
+#       published before has a README somebody already shipped.
 set -eu
 readme="${1:-README.md}"
 
-# The substring the gate keys on, deliberately shorter than the sentence around it, so a repo can
-# word its own marker to taste without breaking the check.
+# spec: SKILL.md "A repo's FIRST EVER release needs a README a human has read" -- deliberately
+#       shorter than the sentence around it, so a repo can word its own marker to taste without
+#       breaking the check.
 MARKER='not been read or edited by a human'
 
 if [ ! -f "$readme" ]; then

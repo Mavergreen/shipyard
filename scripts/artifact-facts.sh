@@ -1,36 +1,24 @@
 #!/bin/sh
-# Emit the fact stream check-artifact-conformance.sh consumes, by inspecting a built dist/ directory
-# and the repo it came from. Deliberately thin: all judgement lives in the checker, so this can be read
-# in one sitting and the interesting logic stays testable without fabricating .pkg files.
-#
 #   usage: artifact-facts.sh <dist-dir> <version> [repo-root]
-#
-# Runs at PACKAGE TIME, on macOS, where pkgutil exists and the artifacts do -- not in the conventions
-# gate, which reads a repo in seconds and gates every PR.
+#          Emits the fact stream check-artifact-conformance.sh consumes, by inspecting a built dist/
+#          directory and the repo it came from. Deliberately thin: all judgement lives in the
+#          checker, so this can be read in one sitting and the interesting logic stays testable
+#          without fabricating .pkg files.
+# platform: runs at PACKAGE TIME, on macOS, where pkgutil exists and the artifacts do -- not in the
+#           conventions gate, which reads a repo in seconds and gates every PR.
 set -eu
 dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"
 root="${3:-$(pwd)}"
 
-# WHY THIS SCRIPT ENDS WITH A SENTINEL, and why every deliberate exit emits a record first.
-#
-# Every consumer runs us upstream of a pipe:
-#     sh artifact-facts.sh dist "$VER" | sh check-artifact-conformance.sh
-# A pipeline's exit status is its LAST command's, and no consumer sets pipefail (GitHub's default
-# `run:` shell is `bash -e {0}` -- errexit WITHOUT pipefail). So OUR exit status is DISCARDED: dying
-# here does not fail the step, it merely TRUNCATES the stream. Every check in the checker is a "stay
-# quiet when there are no records" check, and RELEASE_NOTES.md sorts first in dist/*, so a truncation
-# lands before any pkg, appcast, enclosure-url or build-info record is emitted -- and the checker
-# cheerfully prints "conformance: ok". A real dist with an empty RELEASE_NOTES.md, an appcast whose
-# description was unrelated text and an enclosure naming a file in another release passed exactly
-# that way; the whole layer was off in the 8 repos that run it.
-#
-# Fixing the enumerated cause (the --render-notes exits below) would not fix the SHAPE. So: a
-# successful run ends with `end-of-facts`, and the checker refuses a stream that lacks it. That
-# catches truncation from ANY cause -- a future `set -eu` death, a full disk, a signal -- not a list
-# of known-bad exits. `abort` carries the human-readable reason across the pipe so the operator reads
-# WHY rather than only "the stream stopped".
-abort() {  # $1 = why. A RECORD (so it survives the pipe) plus a line on stderr (for our own log).
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Artifact
+#       conformance", "A truncated fact stream fails" -- this producer runs upstream of a pipe with
+#       no pipefail, so dying here does not fail the step, it TRUNCATES the stream, and every check
+#       downstream is a "stay quiet with no records" check. A successful run therefore ends with
+#       `end-of-facts`, catching truncation from ANY cause; `abort` carries the human-readable reason
+#       across the pipe as a RECORD (so it survives) plus a line on stderr (for this script's own
+#       log), so the operator reads WHY rather than only "the stream stopped".
+abort() {  # $1 = why.
   printf 'abort %s\n' "$1"
   echo "artifact-facts: $1" >&2
   exit 1
@@ -38,12 +26,11 @@ abort() {  # $1 = why. A RECORD (so it survives the pipe) plus a line on stderr 
 
 printf 'expected %s\n' "$version"
 
-# A repo shipping parallel upstream lines names the line in every identity. The line is the NAME of the
-# lines/<X>/ directory whose UPSTREAM_VERSION matches this build's upstream -- the authoritative source,
-# not a guess from the version. That guess only worked for MINOR-based lines (golang: 1.26 -> 126); a
-# MAJOR-based line (clang 22, nodejs 24) collapses 22.1.1 -> "221" and no identifier carries it. Reading
-# the directory handles both, since versions.sh already refuses a line whose upstream disagrees. Fall
-# back to the old major.minor heuristic only if nothing matches (a committed VERSION that has drifted).
+# spec: tests/artifact-conformance-test.sh -- the line is the NAME of the lines/<X>/ directory whose
+#       UPSTREAM_VERSION matches this build's upstream, not a guess from the version: that guess only
+#       worked for MINOR-based lines (golang: 1.26 -> 126), and a MAJOR-based line (clang 22, nodejs
+#       24) collapses 22.1.1 -> "221", which no identifier carries. Falls back to the old
+#       major.minor heuristic only if nothing matches (a committed VERSION that has drifted).
 if [ -d "$root/lines" ]; then
   _up="${version%%-mavericks.*}"; _line=""
   for _d in "$root"/lines/*/; do
@@ -54,10 +41,10 @@ if [ -d "$root/lines" ]; then
   printf 'line %s\n' "$_line"
 fi
 
-# Declared deviations live in INGREDIENTS.md, under "## Conformance deviations", as
-#   - <check>: <reason>
-# A deviation IS a product fact, which is why it belongs with the other product facts rather than in a
-# file of its own that could disagree with them.
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Conformance
+#       deviations" -- declared under "## Conformance deviations" as "- <check>: <reason>"; a
+#       deviation IS a product fact, so it belongs with the other product facts, not a file of its
+#       own that could disagree with them.
 if [ -f "$root/INGREDIENTS.md" ]; then
   sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" \
     | sed -n 's/^- *\([a-z][a-z0-9_-]*\)\(:[^ :]*\)\{0,1\} *: *\(..*\)$/deviation \1\2 \3/p'
@@ -70,33 +57,30 @@ for f in "$dist"/*; do
 
   case "$b" in
     *.pkg)
-      # pkgutil is the only way to read what the .pkg actually declares; a filename is a claim, not a
-      # fact, and the whole point here is to compare claims against what shipped.
+      # platform: pkgutil is the only way to read what the .pkg actually declares; a filename is a
+      #           claim, not a fact.
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
       if pkgutil --expand "$f" "$x/x" >/dev/null 2>&1; then
         if [ -f "$x/x/Distribution" ]; then
-          # A product archive: version, floor and identity all live in Distribution.
+          # platform: a product archive: version, floor and identity all live in Distribution.
           ver="$(sed -n 's/.*<pkg-ref[^>]*version="\([^"]*\)".*/\1/p' "$x/x/Distribution" | head -1)"
           floor="$(sed -n 's/.*<os-version[^>]*min="\([^"]*\)".*/\1/p' "$x/x/Distribution" | head -1)"
           ident="$(sed -n 's/.*<pkg-ref[^>]*id="\([^"]*\)".*/\1/p' "$x/x/Distribution" | head -1)"
         else
-          # A component package: PackageInfo carries version and identity, and there is NO floor to
-          # read -- that is structural, not a defect. The checker requires an appcast to declare the
-          # minimum instead.
-          # Anchor on a SPACE before the attribute name: `[^>]*version="` also matches
-          # generator-version="InstallCmds-864.1 (25E246)", whose value contains a space and so shifts
-          # every field of the record after it -- corrupting the floor and identifier as well.
-          # Restrict to the <pkg-info> element AND anchor on a space before the attribute. Without the
-          # element restriction, line 1's <?xml version="1.0"?> matches first; without the space
-          # anchor, generator-version="InstallCmds-864.1 (25E246)" matches and its embedded space
-          # shifts every later field. Both bugs read as artifact defects rather than parser defects.
+          # platform: a component package: PackageInfo carries version and identity, and there is NO
+          #           floor to read -- that is structural, not a defect (the checker requires an
+          #           appcast to declare the minimum instead). Restricted to <pkg-info> and anchored
+          #           on a SPACE before the attribute name, or two real artifacts mis-parse: line 1's
+          #           <?xml version="1.0"?> would match first without the element restriction, and
+          #           generator-version="InstallCmds-864.1 (25E246)" (embedded space) would shift
+          #           every later field without the space anchor.
           ver="$(sed -n '/<pkg-info/ s/.*[[:space:]]version="\([^"]*\)".*/\1/p' "$x/x/PackageInfo" 2>/dev/null | head -1)"
           ident="$(sed -n '/<pkg-info/ s/.*[[:space:]]identifier="\([^"]*\)".*/\1/p' "$x/x/PackageInfo" 2>/dev/null | head -1)"
           floor=""
         fi
-        # The fact stream is whitespace-delimited, so a value containing a space would silently shift
-        # the fields after it. Collapse any to underscores: a mangled-looking value is a visible
-        # symptom, where a shifted record is an invisible one that fails the WRONG check.
+        # spec: tests/artifact-conformance-test.sh -- the fact stream is whitespace-delimited, so a
+        #       value containing a space would silently shift the fields after it; collapsed to
+        #       underscores instead, so a shifted record can't fail the WRONG check invisibly.
         printf 'pkg %s %s %s %s\n' "$b" \
           "$(printf '%s' "${ver:-unknown}" | tr -s '[:space:]' '_')" \
           "$(printf '%s' "${floor:-none}" | tr -s '[:space:]' '_')" \
@@ -107,16 +91,12 @@ for f in "$dist"/*; do
       rm -rf "$x"
       ;;
     RELEASE_NOTES.md)
-      # The digest of the RENDERED body, not the markdown: what the appcast carries is the HTML
-      # fragment, and comparing markdown to HTML would need a second renderer that could disagree
-      # with the real one. gen_appcast.sh --render-notes IS the real one (that is what the seam is
-      # for), so the two sides of this comparison cannot drift apart the way two parsers would.
-      #
-      # Captured, not piped straight into shasum: a pipeline's exit status is its LAST command's, so
-      # `render-notes | shasum` would let a renderer failure (gen_appcast.sh refuses empty notes, for
-      # instance) print nothing on stdout, run under set -eu without tripping it, and silently digest
-      # to sha256-of-empty -- one of two ways this comparison could pass by both sides being broken
-      # the same way. Check success and non-emptiness explicitly before digesting.
+      # spec: tests/artifact-conformance-test.sh -- the digest is of the RENDERED body, not the
+      #       markdown: what the appcast carries is the HTML fragment, and gen_appcast.sh
+      #       --render-notes is the same renderer that builds it, so the two sides of the comparison
+      #       cannot drift the way two independent parsers would. Captured rather than piped straight
+      #       into shasum: `render-notes | shasum` would let a renderer failure print nothing on
+      #       stdout without tripping set -eu, and silently digest to sha256-of-empty.
       render="$(sh "$(dirname "$0")/gen_appcast.sh" --render-notes "$f")" \
         || abort "gen_appcast.sh --render-notes failed for $b"
       [ -n "$render" ] \
@@ -124,31 +104,29 @@ for f in "$dist"/*; do
       printf 'notes-render %s %s\n' "$b" "$(printf '%s\n' "$render" | shasum -a 256 | cut -d' ' -f1)"
       ;;
     build-info*)
-      # What this variant was built FROM (see build-info.sh). One fact per key so the checker can
-      # compare a single key across variants without parsing files itself.
+      # spec: SKILL.md "Artifact conformance", "Record what a variant was built FROM" -- one fact
+      #       per key so the checker can compare a single key across variants without parsing files
+      #       itself.
       sed -n 's/^\([a-z][a-z0-9_]*\)=\(..*\)$/\1 \2/p' "$f" \
         | while read -r k v; do printf 'build-info %s %s %s\n' "$b" "$k" "$v"; done
       ;;
     *appcast*.xml)
-      # The version that IDENTIFIES the release (and must match the .pkg, tag and floor) is the human
-      # shortVersionString. <sparkle:version> is a separate NUMERIC comparison key (X.Y.Z.N) that Sparkle
-      # can actually order -- deliberately NOT equal to the "-mavericks.N" release version (see
-      # MavericksSparkle.cmake / gen_appcast.sh), so conformance reads shortVersionString here.
-      # These, and the minimum system version, are ELEMENTS; the enclosure attributes carry only URL/length/sig.
+      # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "The Sparkle
+      #       comparison version must be dotted-numeric AND monotonic" -- the version that IDENTIFIES
+      #       the release is the human shortVersionString; <sparkle:version> is a separate NUMERIC
+      #       comparison key Sparkle can order, deliberately NOT equal to the "-mavericks.N" release
+      #       version, so conformance reads shortVersionString here.
       ver="$(sed -n 's|.*<sparkle:shortVersionString>\([^<]*\)<.*|\1|p' "$f" | head -1)"
       minos="$(sed -n 's|.*<sparkle:minimumSystemVersion>\([^<]*\)<.*|\1|p' "$f" | head -1)"
       url="$(sed -n 's/.*<enclosure[^>]*url="\([^"]*\)".*/\1/p' "$f" | head -1)"
       len="$(sed -n 's/.*<enclosure[^>]*length="\([^"]*\)".*/\1/p' "$f" | head -1)"
       printf 'appcast %s %s %s %s %s\n' "$b" "${ver:-unknown}" "${url##*/}" "${len:-0}" "${minos:-none}"
-      # The full URL as its own fact: the basename answers "does this asset exist", the URL answers
-      # "does this feed point into THIS release".
       [ -z "$url" ] || printf 'enclosure-url %s %s\n' "$b" "$url"
-      # The <description> CDATA, digested. gen_appcast.sh wraps the rendered notes in a leading blank
-      # line and an injected <style> block (see its heredoc) that --render-notes never emits; strip
-      # both with awk (the content spans lines, so a line-oriented sed can't isolate it) so this
-      # compares the NOTES against notes-render, not gen_appcast's own CDATA wrapping. Emitted with no
-      # digest when the appcast has no description at all -- the checker treats that as a failure,
-      # because the description is what a 10.9 user reads in the update dialog, not something to skip.
+      # spec: tests/artifact-conformance-test.sh -- the <description> CDATA, digested. gen_appcast.sh
+      #       wraps the rendered notes in a leading blank line and an injected <style> block that
+      #       --render-notes never emits; both are stripped so this compares the NOTES against
+      #       notes-render, not gen_appcast's own CDATA wrapping. Emitted with no digest when the
+      #       appcast has no description at all -- the checker treats that as a failure.
       desc="$(awk '
         /<!\[CDATA\[/ { inside = 1; sub(/.*<!\[CDATA\[/, ""); }
         inside {
@@ -165,7 +143,4 @@ for f in "$dist"/*; do
   esac
 done
 
-# The completion sentinel, and nothing after it: reaching this line is the ONLY way it is printed, so
-# its presence in the stream means every record above it was emitted. See the abort() block above for
-# why a truncated stream cannot be caught any other way.
 printf 'end-of-facts\n'

@@ -1,33 +1,30 @@
 #!/bin/sh
-# Generate the Sparkle appcast.xml for ONE release, to stdout.
-#
-#   gen_appcast.sh <channel-title> <version> <pkg-url> <min-os> <notes-file> <enclosure-attrs>
-#   gen_appcast.sh --render-notes <notes-file>      # emit just the HTML fragment (test seam)
-#
-# Release notes (docs/release-notes/vX.Y.Z.md) are rendered from Markdown to HTML and inlined into the
-# <description> CDATA. Sparkle 1.x shows the <description> in a WebView, which treats the CDATA as HTML;
-# feeding it raw Markdown collapsed the notes into one line-joined blob, so we convert here.
-#
-# The renderer is deliberately dependency-free (pure awk) so it runs identically on the 10.9 dev box's
-# BSD/BWK awk and on a modern CI runner -- NO pandoc/cmark. It handles exactly the subset our notes use:
-#   `## Heading`            -> <h2>Heading</h2>
-#   `### Heading`           -> <h3>Heading</h3>       (the generated upstream/ingredient sections)
-#   contiguous `- ` bullets -> <ul><li>...</li></ul>   (continuation lines fold into the item)
-#   `[text](scheme:url)`    -> <a href="...">text</a>  (upstream-notes.sh links upstream's notes)
-#   `**bold**`              -> <strong>bold</strong>
-#   `*italic*`              -> <em>italic</em>
-#   `---` on its own line   -> <hr>                     (release-notes.sh's footer rule)
-#   blank-line-separated prose (incl. the trailing `Requires...`) -> <p>...</p>
-#
-# <enclosure-attrs> is the `sparkle:edSignature="..." length="..."` string that `sign_update -s <key>
-# <pkg>` prints -- passed in, so THIS script needs no signing key (sign_update is a modern Swift binary
-# that can't run on the 10.9 box) and stays a pure text transform, unit-testable via --render-notes.
-#
-# Fails if the notes file is missing or empty: the notes ARE the release's <description>, and a
-# release with no notes is a mistake we want to catch (mirrors the CI + pre-push gate).
+#   usage: gen_appcast.sh <channel-title> <version> <pkg-url> <min-os> <notes-file> <enclosure-attrs>
+#          gen_appcast.sh --render-notes <notes-file>      # emit just the HTML fragment (test seam)
+#          Generates the Sparkle appcast.xml for ONE release, to stdout. Fails if the notes file is
+#          missing or empty: the notes ARE the release's <description>.
+#          Release notes (docs/release-notes/vX.Y.Z.md) are rendered from Markdown to a subset of
+#          HTML, inlined into the <description> CDATA:
+#            `## Heading`            -> <h2>Heading</h2>
+#            `### Heading`           -> <h3>Heading</h3>       (the generated upstream/ingredient
+#                                                                sections)
+#            contiguous `- ` bullets -> <ul><li>...</li></ul>  (continuation lines fold into the
+#                                                                item)
+#            `[text](scheme:url)`    -> <a href="...">text</a> (upstream-notes.sh links upstream's
+#                                                                notes)
+#            `**bold**`              -> <strong>bold</strong>
+#            `*italic*`              -> <em>italic</em>
+#            `---` on its own line   -> <hr>                   (release-notes.sh's footer rule)
+#            blank-line-separated prose (incl. the trailing `Requires...`) -> <p>...</p>
+#          <enclosure-attrs> is the `sparkle:edSignature="..." length="..."` string that
+#          `sign_update -s <key> <pkg>` prints -- passed in, so this script needs no signing key and
+#          stays a pure text transform, unit-testable via --render-notes.
+# platform: Sparkle 1.x shows the <description> in a WebView, which treats the CDATA as HTML; feeding
+#           it raw Markdown collapsed the notes into one line-joined blob. The renderer is
+#           deliberately dependency-free (pure awk, no pandoc/cmark) so it runs identically on the
+#           10.9 dev box's BSD/BWK awk and on a modern CI runner.
 set -eu
 
-# Render a Markdown notes file to an HTML fragment on stdout. Pure awk; see the subset above.
 md_to_html() {
   awk '
     function esc(s) {                       # HTML-escape before we inject our own tags
@@ -39,8 +36,8 @@ md_to_html() {
     function inline(s,   r, before, m, i) { # links, **bold**, *italic* (BWK awk: no gensub backrefs)
       s = esc(s)
       r = ""
-      # Only a scheme-qualified target is a link, so prose like "[the docs] (later)" stays prose.
-      # The URL was escaped above, which is exactly what an href attribute wants (&amp;).
+      # spec: tests/gen_appcast.bats "leaves brackets that are not a link alone" -- only a
+      #       scheme-qualified target is a link, so prose like "[the docs] (later)" stays prose.
       while (match(s, /\[[^]]+\]\([a-z]+:[^) ]+\)/)) {
         before = substr(s, 1, RSTART - 1)
         m = substr(s, RSTART + 1, RLENGTH - 2)          # text](url
@@ -115,19 +112,18 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 [ $# -eq 6 ] || { echo "usage: gen_appcast.sh <channel-title> <version> <pkg-url> <min-os> <notes-file> <enclosure-attrs>" >&2; exit 2; }
 CHANNEL_TITLE="$1"; VER="$2"; URL="$3"; MINOS="$4"; NOTES_FILE="$5"; ENCLOSURE_ATTRS="$6"
 
-# Sparkle's SUStandardVersionComparator can't order the "-mavericks.N" suffix (it reads 1.2.3-mavericks.3
-# and .4 as EQUAL), so <sparkle:version> -- the value it COMPARES against the app's CFBundleVersion -- must
-# be numeric-only. Turn "-mavericks." into ".", e.g. 1.102.0-mavericks.4 -> 1.102.0.4. Also normalize an
-# OpenSSH-portable-style "pN" patch (X.YpZ, where pZ INCREASES the version) to ".N": 9.9p2 -> 9.9.2, which
-# is order-preserving (9.9p2 < 9.10p1 stays 9.9.2 < 9.10.1). The human string stays in
-# <sparkle:shortVersionString>. The derivation itself is lib.sh's comparison_key(); MavericksSparkle.cmake mirrors it.
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "The Sparkle
+#       comparison version must be dotted-numeric AND monotonic" -- SUStandardVersionComparator can't
+#       order the "-mavericks.N" suffix (it reads 1.2.3-mavericks.3 and .4 as EQUAL), so
+#       <sparkle:version> must be numeric-only; the human string stays in shortVersionString. The
+#       derivation itself is lib.sh's comparison_key(); MavericksSparkle.cmake mirrors it.
 BUILD_VER=$(comparison_key "$VER")
 
-# Fail if the derived key is not purely dotted-numeric (X.Y.Z.N): SUStandardVersionComparator only
-# totally orders that domain, and every "update says I'm up to date" bug lived OUTSIDE it (a stray
-# letter or an unstripped "-mavericks." makes two versions compare EQUAL). Catch it here, at the source
-# every product's appcast flows through, rather than discovering it live weeks later. The monotonic
-# "> previous release" half is assert_appcast_upgradeable.sh, which needs the prior release to compare.
+# spec: tests/gen_appcast.bats -- fail closed if the derived key is not purely dotted-numeric
+#       (X.Y.Z.N): SUStandardVersionComparator only totally orders that domain, and every "update
+#       says I'm up to date" bug lived outside it. Caught here, at the source every product's appcast
+#       flows through. The monotonic "> previous release" half is
+#       assert_appcast_upgradeable.sh, which needs the prior release to compare.
 case "$BUILD_VER" in
   ''|.*|*.|*..*|*[!0-9.]*)
     echo "gen_appcast: sparkle:version '$BUILD_VER' (from version '$VER') is not purely dotted-numeric --" >&2
@@ -138,7 +134,7 @@ esac
 [ -f "$NOTES_FILE" ] || { echo "release notes not found: $NOTES_FILE" >&2; exit 1; }
 [ -s "$NOTES_FILE" ] || { echo "release notes empty: $NOTES_FILE" >&2; exit 1; }
 
-# RFC-822 pubDate in UTC (Sparkle sorts items by it).
+# platform: Sparkle sorts appcast items by pubDate, which it expects as RFC-822, in UTC.
 PUBDATE=$(date -u "+%a, %d %b %Y %H:%M:%S +0000")
 
 cat <<XML
