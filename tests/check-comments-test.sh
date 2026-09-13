@@ -106,4 +106,26 @@ f="$w/loc.sh"; printf '#!/bin/sh\nx=1\n# untagged\n' > "$f"
 sh "$S" "$f" > "$w/loc.out" 2>&1 || true
 grep -q "loc.sh:3:" "$w/loc.out" || { echo "FAIL location: want loc.sh:3:, got $(cat "$w/loc.out")"; exit 1; }
 
+# A path NAMED on the command line that does not exist is a usage error, not a silent skip: a
+# caller's typo'd or non-matching glob (scripts/[a-m]*.sh) must not produce exit 0 with no
+# output, which would be indistinguishable from "this directory is clean".
+missing="$w/does-not-exist.sh"
+rc=0
+sh "$S" "$missing" > "$w/missing.out" 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL missing-path: expected exit 2, got $rc: $(cat "$w/missing.out")"; exit 1; }
+[ -s "$w/missing.out" ] || { echo "FAIL missing-path: expected non-empty output naming the path, got nothing"; exit 1; }
+grep -q "does-not-exist.sh" "$w/missing.out" || { echo "FAIL missing-path: output does not name the path: $(cat "$w/missing.out")"; exit 1; }
+
+# The trailing count is what later sweeps drive their work from: it must count VIOLATIONS (not
+# lines of output), appear only when something was found, and stay silent on a clean file.
+countcheck="$w/countcheck.sh"
+printf '#!/bin/sh\n# one\necho 1\n# two\necho 2\n# three\necho 3\n' > "$countcheck"
+sh "$S" "$countcheck" > "$w/countcheck.out" 2>&1 || true
+got="$(grep -cE ':[0-9]+: ' "$w/countcheck.out")"
+[ "$got" -eq 3 ] || { echo "FAIL countcheck: expected 3 violations, saw $got: $(cat "$w/countcheck.out")"; exit 1; }
+grep -q '^3 comments cite no reason$' "$w/countcheck.out" \
+  || { echo "FAIL countcheck: expected trailing count '3 comments cite no reason', got: $(cat "$w/countcheck.out")"; exit 1; }
+grep -q 'comments cite no reason' "$w/shebang.out" \
+  && { echo "FAIL shebang: a clean file printed a count line: $(cat "$w/shebang.out")"; exit 1; }
+
 echo "PASS: check-comments"
