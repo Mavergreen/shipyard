@@ -72,6 +72,7 @@ while IFS= read -r f; do
     #       body -- a "#" line that IS heredoc payload (package-pkg.sh writes whole scripts,
     #       comments and all, inside one) keeps being skipped by the block above.
     !/^[ \t]*#/ {
+      if ($0 ~ /[^ \t]/) sawcode = 1
       # spec: SKILL.md "Comments cite a reason" -- a "<<WORD" sitting inside a
       #       quoted string, such as a bare word followed by <<EOF inside an echo argument, is
       #       not a heredoc and must not be read as one: the real incident silently ate ~120
@@ -109,7 +110,15 @@ while IFS= read -r f; do
     #       that character sits in column 1 for every left-margin comment, tag line and
     #       continuation alike, so comparing it never distinguishes them. What must be compared
     #       is where the text after "#" begins.
-    /^[ \t]*#[ \t]*usage:/ { inusage = 1; match($0, /^[ \t]*#[ \t]*/); usecol = RLENGTH + 1; next }
+    /^[ \t]*#[ \t]*usage:/ {
+      if (sawcode == 1) {
+        printf "%s:%d: %s\n    a usage: block must come before the first line of code -- the exemption covers a header contract; anywhere else it is unlimited untagged prose under a four-letter word. Move it to the top, or cite a reason\n", FNAME, FNR, $0
+        bad++
+        inusage = 0
+        next
+      }
+      inusage = 1; match($0, /^[ \t]*#[ \t]*/); usecol = RLENGTH + 1; next
+    }
     inusage == 1 {
       match($0, /^[ \t]*#[ \t]*/)
       if (RLENGTH + 1 > usecol) next

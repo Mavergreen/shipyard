@@ -1,5 +1,3 @@
-name: scan-for-key
-
 # usage: modernmavericks-conventions SKILL.md, "Sparkle updater" names this the family's proof that
 #        no log or released file carries the signing key, and points here for the snippet:
 #        scan:
@@ -11,6 +9,8 @@ name: scan-for-key
 #          secrets: { SPARKLE_PRIVATE_KEY: "${{ secrets.SPARKLE_PRIVATE_KEY }}" }
 #        publish:
 #          needs: [build, scan]
+
+name: scan-for-key
 
 on:
   workflow_call:

@@ -33,6 +33,25 @@ ok usage_block <<'EOF'
 set -eu
 EOF
 
+ok usage_block_after_blank_lines <<'EOF'
+#!/bin/sh
+
+#   usage: thing.sh --flag VALUE
+#          --flag   what it does
+set -eu
+EOF
+
+bad usage_block_mid_file 'before the first line of code' <<'EOF'
+#!/bin/sh
+set -eu
+run_it
+
+#   usage: this is not a contract, it is four hundred words of rationale parked behind a
+#          four-letter word, and until now the gate exempted every line of it
+#          because "# usage:" appeared somewhere in the file
+exit 0
+EOF
+
 ok tagged_platform <<'EOF'
 #!/bin/sh
 # platform: 10.9's BSD mktemp rejects a bare -d
