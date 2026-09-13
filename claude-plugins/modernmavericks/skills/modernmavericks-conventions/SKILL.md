@@ -15,6 +15,18 @@ that copying one repo can't teach.
 say so in a comment or PR describing why.** A silent deviation reads as a mistake; a documented one reads
 as a decision.
 
+**On-target/off-target parity: developing UNDER Mavericks and developing under modern macOS are
+equally first-class, and a design that degrades either side is rejected on those grounds.** This is a
+standing constraint on designs, not a preference to trade away when one side is cheaper — and the
+cheaper option is usually the one that degrades. It applies wherever a design could serve one kind of
+developer better than the other: what a `.pkg` installs, what a script assumes about its host, which
+box a test can run on, which arch an artifact carries. Where the two genuinely cannot be served by one
+artifact, ship one artifact that decides *for* the developer rather than two that make them choose:
+**choosing wrong is silent**, and the person who chose wrong is the one least able to notice. shipyard's
+own `.pkg` is the worked example — it carries both updater slices and a postinstall that picks by
+hardware, because an x86_64-only updater would be cheaper and match every other family product while
+prompting for Rosetta on Apple Silicon.
+
 ## Canonical templates (copy these, not the others)
 
 The family has an older/simpler variant and a current/mature variant. **Start from the mature one.**
