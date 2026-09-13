@@ -833,6 +833,15 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   build TARGETS 10.9 but RUNS on 11.0+ (see Artifact conformance, "structure matters more than it
   looks") — the notes describe one variant, the appcast enforces each variant's own truth, and they
   are allowed to disagree on purpose.
+- **Every footer line gets a blank line BEFORE it, never after the line it follows.** `gen_appcast.sh`'s
+  `md_to_html` joins consecutive non-blank lines into one `<p>` — correct Markdown — so a compare link
+  written directly under the floor line renders in the Sparkle dialog as one run-on sentence whose
+  second half is a link (`Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5`).
+  That shipped in every release from the generator's landing until it was fixed. The rule binds
+  anything appended **after** the generator hands the file off, in another repo's script — the
+  `ModernMavericks-State:` marker above is the live case — and the separator is emitted only when
+  something already precedes it, since a footer that opens with a blank line renders an empty leading
+  `<p>`.
 - **The shape, in order:** title, the committed `release-notes/<TAG>.md` prose verbatim when present,
   `### What changed`, `### Build ingredients` when a pin moved, then a footer (the floor line, a
   compare link). Prose stays optional and is never rewritten; a release with none still says what
@@ -1241,7 +1250,17 @@ cuts the stream short, and every check here is a "stay quiet when there are no r
 stream that lacks it (no deviation can excuse that one, since deviations are emitted early enough to
 survive a truncation); a deliberate give-up emits `abort <reason>` first, so the operator reads why.
 A dist with an empty `RELEASE_NOTES.md` once printed "conformance: ok" while its appcast described
-other notes and pointed at another release's file.
+other notes and pointed at another release's file — one added `exit 1` had switched the whole
+conformance layer off in the 8 repos that run it.
+
+**The general rule, because this bites anywhere, not only here: never let a fallible producer's exit
+status travel through a pipe you rely on.** POSIX `sh` has no `pipefail` and GitHub's default `run:`
+shell is `bash -e {0}` — errexit *without* pipefail — so a producer that dies upstream of a pipe
+neither fails the step nor announces itself; it just makes its output shorter. Either **capture and
+check** before consuming (`x="$(producer)" || abort …; [ -n "$x" ] || abort …`, which is why
+`artifact-facts.sh` does not write `render-notes | shasum`: that would digest sha256-of-empty and
+pass) or **end the stream with a sentinel** the consumer refuses to do without. A check that can go
+quiet without going red is not a check.
 
 ## A "transitional" decision without an exit task is a permanent one
 
@@ -1322,7 +1341,10 @@ have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails a
 rather than skipping. A gate that passes when it did not run is the exact rot the gate exists to
 prevent, and it is indistinguishable from a compliant repo in the log. The same rule applies to a
 check's *output*: an "ok" that also means "there were no records to compare" is a check nobody can
-trust the day the records stop shipping, so say what was compared.
+trust the day the records stop shipping, so say what was compared. And **a pattern derived at runtime
+must be guarded against being empty**: a glob alternative built from an empty string — `*""*` —
+matches *every* string in every shell tested here, so one degenerate input turns the whole check into
+a silent no-op rather than a loud failure.
 
 **shipyard must satisfy every convention it exports.** It could not before it had a `release.yml` of
 its own — the gate exits early in a repo with none — which is how a defect in check 7d stayed
