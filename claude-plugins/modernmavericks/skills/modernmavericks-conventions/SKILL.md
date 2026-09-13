@@ -1333,6 +1333,79 @@ had written down when the transition ends, so it did not.
 - Corollary for spec wording: prefer "call the library function" over
   "delegate to existing code". Ambiguity in a plan is executed, not queried.
 
+## Comments cite a reason, or they don't exist
+
+**Default: no comment.** Prefer making the code say it instead — a named function, a named variable, a
+test whose FAIL message is the sentence you were about to write in a comment. A comment is the one
+artifact in a repo that can be confidently wrong while every test stays green: code that's wrong fails
+something, a comment that's wrong misleads the next reader indefinitely and no gate ever looks at it.
+
+**The test that decides: only things that can't be expressed as tests.** Two shapes an author reaches
+for a comment to justify, and the conversion for each:
+
+- *"This looks redundant, but it's load-bearing"* → write the mutation-verified test that fails when the
+  line is deleted, then delete the comment. **Mutation-verify it, don't just read it**: break the
+  behaviour the comment was protecting and confirm the test actually goes red. This is not optional —
+  three tests in this convention's own rollout could not fail as first written, and every one was found
+  by breaking the behaviour, not by re-reading the test.
+- *A wire-format or compatibility warning* ("this must stay in sync with…", "a stale value here reads as
+  valid") → write the golden test that pins the format, then delete the comment.
+
+**A conversion moves the knowledge, it does not drop it.** The *why* goes into the new test's FAIL
+message, so it's still there the moment someone needs it — a test that fails with only "assertion
+failed" has thrown the comment's content away as surely as deleting it would have.
+
+**When a comment survives that question, it cites one of two reasons — the set is closed, and only
+Amitai extends it:**
+
+- **`# platform:`** — an external fact about the platform or a tool, and only that: BSD `mktemp` needs a
+  template, `lipo -archs` is absent on 10.9, Rosetta's `uname -m` lies, `gh release list --json` has no
+  `body` field. Free prose on the tag line. The *decision* such a fact justifies is not this comment —
+  it belongs in a `fail()`/FAIL message, its own separately-cited `# spec:`, or nowhere. Packing "…and
+  that's why we do X" onto the same line is exactly how a closed set drifts into a catch-all.
+- **`# spec:`** — a pointer to where a decision lives, and the **tag line itself must carry a locatable
+  citation**: a path, a filename with a known extension, a `YYYY-MM-DD` date, or a numbered
+  decision/check/ruling (`check 14`, `decision 3`). Continuation lines, indented under the tag, stay
+  free prose — only the first line is checked. This is enforced, not aspirational: a review found 111 of
+  202 `# spec:` tags under `tests/` were the original untagged comment with a four-character prefix
+  bolted on — the closed set drifting into the catch-all it exists to prevent — and the tag-line rule
+  closed it (2026-09-13).
+
+An unrecognised tag fails the gate, and the failure says so directly: **propose a new reason to Amitai,
+do not invent a tag.**
+
+**No budget, no density target.** There is no per-file cap, no ratio, no repo-wide ceiling. A cap
+rewards cramming several facts onto one line, and it makes deleting a *needed* comment the cheapest way
+to pass a count. Rarity is supposed to come from the friction of citing a real reason, plus review — not
+from a number.
+
+**Exempt, structurally: shebangs, machine directives, `# usage:` blocks, and heredoc bodies** — `#!`,
+`# shellcheck …`, a `# usage:` block, and the payload of a heredoc (`package-pkg.sh` writes a whole
+script inside one; a shell can't open a heredoc from inside a comment, so the scanner doesn't read one
+as commentary either). **These are limitations, not sanctioned homes for prose that would fail as a
+whole-line comment.** An inline trailing comment (`cmd # because…`) sits outside the gate for the same
+reason: finding a `#` reliably inside a shell line needs a parser, not a regex, and that gap is tolerated
+rather than offered as a place to move rationale that couldn't earn its own `# platform:`/`# spec:`
+line. `# usage:` blocks are exempt because they carry the *contract* a reader needs before running a
+script — what to pass, what comes back — not because they're a home for design rationale; a few have
+absorbed some anyway, and nothing mechanical catches it. Say it plainly: this is the one exemption
+nobody can police.
+
+**The gate checks that a reason is cited, never that it's true.** All three false claims that prompted
+this convention — a parser claim, a conformance-checker claim, a stale-marker claim, each wrong and each
+sounding authoritative — would have passed a citation check outright. Truth still costs a reviewer; this
+convention buys back volume, not correctness.
+
+**Enforced by `scripts/check-comments.sh`, run as check 15 below.** Optional paths, defaulting to every
+tracked `*.sh` and `*.yml`; exits 0 clean, 1 on any untagged or unrecognised comment, 2 on a usage error
+(a path named on the command line that isn't a readable file — a typo'd glob must not read as "clean").
+**It is opt-in, by a repo-local `comment-reasons` file** (one recognised tag per line: `platform`,
+`spec`). `check-family-conventions.sh` runs in all fourteen consumer repos through the moving `@v1` tag,
+so a check that fired the day it landed would redden every consumer at once — a repo adopts by sweeping
+its own tree and committing its own `comment-reasons`; until then check 15 exits 0 in that repo,
+silently. A repo that wants one declared exception states it under `INGREDIENTS.md`'s `## Conformance
+deviations` (`- comments: <reason>`), the same grammar `check-artifact-conformance.sh` already reads.
+
 ## Family conventions (checked, not just written down)
 
 `sh "$SHIPYARD_SCRIPTS/check-family-conventions.sh"` runs in every product repo's CI and **fails the build**
@@ -1349,6 +1422,12 @@ release-notes/README.md dist/RELEASE_NOTES.md` turned a correct openssh red, and
 comment-only mentions of `release-notes.sh` kept the gate printing "ok" after its one real invocation
 was replaced by `:`. A gate a maintainer reddens by writing the rule down is the check-7d failure of
 2026-09-09 again, and `@v1` carries either direction to twelve other repos within minutes.
+
+**This table is the checks' authority, not the script's comments.** `check-family-conventions.sh` used
+to label each check with its own numbered `# 1.`, `# 2.` header; the comments sweep (2026-09-13) removed
+them along with every other unreasoned comment in the file. A check is now identified by its `fail()`
+message and, where it needs to cite an authority, a `# spec: SKILL.md "Family conventions" check N`
+pointing back into the row below — so this table, not the script, is where a check number is defined.
 
 | Check | Why it is a gate |
 |---|---|
@@ -1369,6 +1448,7 @@ was replaced by `:`. A gate a maintainer reddens by writing the rule down is the
 | **7c.** `build/version.sh` is **not** git-ignored, where the repo uses the wrappers | The version wrappers live in COMMITTED `build/*.sh`. A too-broad ignore (`build/`, `build*/`) makes `git add` skip them without a word: everything works locally and only CI's fresh checkout fails, far from the cause. Ignore build OUTPUT dirs (`/_build/`, `build-*/`, `build/work/`) — never `build/` itself |
 | **7d.** Every build output dir the repo writes IS ignored | The mirror of the above. tailscale configured its updater with `cmake -S updater -B build/updater`, a path the shared presets never name, so nothing connected it to `.gitignore`: 7.4MB of CMake output sat untracked AND unignored, one `git add -A` from being committed, its stale `CMakeCache.txt` still resolving a package renamed away months earlier. The family will not agree on one spelling and does not need to — the gate asks the REPO where it writes (every `cmake … -B <dir>` in its workflows and committed shell, plus every `binaryDir` in a committed `CMakePresets.json`) |
 | **10.** No shell construct the 10.9 base system lacks (`check-shell-portability.sh`) | These are invisible to CI by construction: they work on the runner and fail on the platform every repo here targets, so the machine that would catch them is the one machine CI never uses. shipyard shipped two (`sort -V`, a bare `mktemp -d`) and reached all seven repos through `@v1` before anyone noticed — one of them turning release notes silently empty rather than erroring |
+| **15.** Every comment cites `# platform:` or `# spec:`, delegated to `check-comments.sh`; **opt-in**, only in a repo with its own `comment-reasons` file | See "Comments cite a reason", above, for the full rule. Three false claims that reached review — each confidently wrong, each living in a comment rather than in code — are the reason this check exists at all: a comment is the one artifact that stays wrong while every test passes. Opt-in so `@v1` reaching all fourteen consumers doesn't redden a repo that hasn't swept yet; a swept repo states one declared exception under `INGREDIENTS.md`'s `## Conformance deviations` (`- comments: <reason>`) |
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,
 rather than skipping. A gate that passes when it did not run is the exact rot the gate exists to
@@ -1428,17 +1508,21 @@ in the same commit.
    PR check exists (or set `ignoreTests: true` if no build). For *prompt* automerge, enable **Allow
    auto-merge** AND add **branch protection requiring the build check** — both are needed (see the
    Renovate section for the exact commands and the typo-blocks-all-merges caveat).
-2. `UPSTREAM_VERSION` (bare); `/VERSION` in `.gitignore`.
-3. `build/lib.sh` (`upstream_version()`), `build/version.sh`, `build/release-notes-file.sh` — copy from
+2. `comment-reasons` (one recognised tag per line: `platform`, `spec`), from the first commit — see
+   "Comments cite a reason", above. A new project has no comment debt to sweep, so it does not start by
+   writing file headers explaining what the code does and sweeping them out later; it starts with the
+   file in place and check 15 already green.
+3. `UPSTREAM_VERSION` (bare); `/VERSION` in `.gitignore`.
+4. `build/lib.sh` (`upstream_version()`), `build/version.sh`, `build/release-notes-file.sh` — copy from
    legacysupport/golang.
-4. `release.yml`: pick a release model; three triggers; `ver` step with the non-main guard; `gh release
+5. `release.yml`: pick a release model; three triggers; `ver` step with the non-main guard; `gh release
    create`; the `concurrency:` block from "Release workflow" above — group keyed on `github.run_id`,
    `cancel-in-progress` naming `pull_request`. (Not `cancel-in-progress: false`: it protects the
    RUNNING run, not the QUEUED one, and the gate rejects it.)
-5. `release-notes/README.md`; `build/upstream-release-notes-url.sh` (a port: where upstream's notes
+6. `release-notes/README.md`; `build/upstream-release-notes-url.sh` (a port: where upstream's notes
    for a version live — see Release notes); Sparkle updater target; `SPARKLE_PRIVATE_KEY` secret.
-6. Choose the upstream-verification method; note it if it deviates from a sibling.
-7. If the repo bakes in build ingredients (anything it's built WITH, not the upstream it ports): make
+7. Choose the upstream-verification method; note it if it deviates from a sibling.
+8. If the repo bakes in build ingredients (anything it's built WITH, not the upstream it ports): make
    each pin a **file**, give each a Renovate customManager, add the `repackage-on-ingredient-bump`
    caller, and record the lot in `INGREDIENTS.md` — including any ingredient you deliberately left
    untracked and why. No file-based ingredient pins → no caller (say that in `INGREDIENTS.md` too).
@@ -1448,7 +1532,7 @@ in the same commit.
    on: no `concurrency:`; test files nothing runs; no `INGREDIENTS.md`; a Renovate key the preset
    already sets; a release that publishes no notes body; a release body not built by `release-notes.sh`
    (check 14 — `--generate-notes` no longer passes).
-8. Check in `.claude/settings.json` pointing at the `modernmavericks` marketplace (hosted in
+10. Check in `.claude/settings.json` pointing at the `modernmavericks` marketplace (hosted in
    `mavericks-shipyard`) so contributors' agents load these conventions — do NOT copy the SKILL.md:
    ```json
    {"extraKnownMarketplaces": {"modernmavericks": {"source": {"source": "github", "repo": "ModernMavericks/shipyard"}}},
@@ -1482,7 +1566,7 @@ in the same commit.
    - refresh is suppressed — `DISABLE_AUTOUPDATER`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, a
      seeded plugin dir, managed settings blocking the marketplace, or being offline.
    Docs: code.claude.com/docs/en/discover-plugins, /plugins-reference, /plugin-marketplaces.
-10. Declare release state (see "A release is a declared state, not an event" above): add a
+11. Declare release state (see "A release is a declared state, not an event" above): add a
     `## Declared state` section to `INGREDIENTS.md` (`- upstream: UPSTREAM_VERSION`, or the version
     file the product commits if it is its own source); call `release-state-record.sh --notes-file
     dist/RELEASE_NOTES.md --digest "$(release-state.sh)"` in the build job, BEFORE

@@ -34,6 +34,23 @@ shipyard itself carries no `## Declared state` section. Its version is
 on every push, and every push already publishes by design. Adopting the digest path here would only
 describe that status quo more slowly -- it is shipyard's declared exception, not a pattern to copy.
 
+## Comment-reasons surface
+
+`comment-reasons` and `scripts/check-comments.sh` ship as of this release, run as check 15 in
+`check-family-conventions.sh`. Consumers reach both the same way they reach everything else here:
+through the moving `@v1` tag. A consumer adopts the check by sweeping its own tree and committing its
+own `comment-reasons` (one recognised tag per line — `platform`, `spec`); check 15 exits 0, silently, in
+a repo that has not swept yet. A repo that wants one declared exception states it under `## Conformance
+deviations` below (`- comments: <reason>`), the same grammar `check-artifact-conformance.sh` already
+reads. What the two tolerated reasons are, and the test that decides whether a comment is warranted at
+all, is documented in the conventions skill ("Comments cite a reason").
+
+**That grammar has a second reader.** `artifact-facts.sh` also parses this file's `## Conformance
+deviations` section, so a `- comments: <reason>` line surfaces twice — once as a deviation for
+`check-family-conventions.sh`, once as a `deviation comments <reason>` record in the artifact fact
+stream. Harmless, since the conformance checker only consults records for checks it evaluates, but the
+two subsystems share one namespace under one header.
+
 ## Conformance deviations
 
 `check-artifact-conformance.sh` holds each release's artifacts to the family's schemes. Two of them
