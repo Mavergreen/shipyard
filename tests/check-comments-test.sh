@@ -233,6 +233,28 @@ sh "$S" "$missing" > "$w/missing.out" 2>&1 || rc=$?
 grep -q "does-not-exist.sh" "$w/missing.out" \
   || { echo "FAIL missing-path: the usage-error output must name the path, or a typo cannot be diagnosed: $(cat "$w/missing.out")"; exit 1; }
 
+spaced="$w/has space"
+mkdir -p "$spaced"
+printf '#!/bin/sh\nx=1\n# untagged in a path that contains a space\n' > "$spaced/named.sh"
+rc=0
+sh "$S" "$spaced/named.sh" > "$w/spacedarg.out" 2>&1 || rc=$?
+[ "$rc" -eq 1 ] \
+  || { echo "FAIL spaced-arg: a named path containing a space must still be scanned -- a word-split file list resolves none of it and reports clean, the silent-no-op every consumer with a spaced checkout would get: expected exit 1, got $rc: $(cat "$w/spacedarg.out")"; exit 1; }
+grep -q "named.sh:3:" "$w/spacedarg.out" \
+  || { echo "FAIL spaced-arg: expected the untagged comment at line 3 to be named: $(cat "$w/spacedarg.out")"; exit 1; }
+
+spacedrepo="$w/repo with space"
+mkdir -p "$spacedrepo/scripts"
+printf 'platform\nspec\n' > "$spacedrepo/comment-reasons"
+printf '#!/bin/sh\nx=1\n# untagged in a checkout whose path contains a space\n' > "$spacedrepo/scripts/named.sh"
+( cd "$spacedrepo" && git init -q . && git add -A ) >/dev/null 2>&1
+rc=0
+( cd "$spacedrepo" && sh "$S" ) > "$w/spacedrepo.out" 2>&1 || rc=$?
+[ "$rc" -eq 1 ] \
+  || { echo "FAIL spaced-repo: the default git-ls-files listing must survive a checkout path containing a space -- macOS paths have them constantly, and a gate that scanned nothing reports clean: expected exit 1, got $rc: $(cat "$w/spacedrepo.out")"; exit 1; }
+grep -q "named.sh:3:" "$w/spacedrepo.out" \
+  || { echo "FAIL spaced-repo: expected the untagged comment at line 3 to be named: $(cat "$w/spacedrepo.out")"; exit 1; }
+
 countcheck="$w/countcheck.sh"
 printf '#!/bin/sh\n# one\necho 1\n# two\necho 2\n# three\necho 3\n' > "$countcheck"
 sh "$S" "$countcheck" > "$w/countcheck.out" 2>&1 || true

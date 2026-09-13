@@ -17,6 +17,11 @@ REASONS="$ROOT/comment-reasons"
 [ -f "$REASONS" ] || exit 0
 alt="$(tr '\n' '|' < "$REASONS" | sed 's/|$//')"
 
+_tmp="${TMPDIR:-/tmp}"
+countfile="$(mktemp "${_tmp%/}/check-comments-count.XXXXXX")"
+listfile="$(mktemp "${_tmp%/}/check-comments-list.XXXXXX")"
+trap 'rm -f "$countfile" "$listfile"' EXIT
+
 if [ "$#" -gt 0 ]; then
   # spec: 2026-09-12-comments-cite-a-reason task-1-brief.md -- a path NAMED on the command
   #       line is the caller's claim that it exists. Tasks 3-6 drive this script with globbed
@@ -30,18 +35,14 @@ if [ "$#" -gt 0 ]; then
       echo "check-comments: not a readable file: $f" >&2
       exit 2
     fi
+    printf '%s\n' "$f" >> "$listfile"
   done
-  files="$*"
 else
-  files="$(cd "$ROOT" && git ls-files '*.sh' '*.yml' | sed "s|^|$ROOT/|")"
+  (cd "$ROOT" && git ls-files '*.sh' '*.yml') | sed "s|^|${ROOT%/}/|" > "$listfile"
 fi
 
-_tmp="${TMPDIR:-/tmp}"
-countfile="$(mktemp "${_tmp%/}/check-comments-count.XXXXXX")"
-trap 'rm -f "$countfile"' EXIT
-
 rc=0
-for f in $files; do
+while IFS= read -r f; do
   [ -f "$f" ] || continue
   awk -v FNAME="$f" -v ALT="$alt" -v COUNTFILE="$countfile" '
     BEGIN { split(ALT, r, "|"); for (i in r) ok[r[i]] = 1 }
@@ -160,7 +161,7 @@ for f in $files; do
       }
     }
   ' "$f" || rc=1
-done
+done < "$listfile"
 
 n=0
 [ -s "$countfile" ] && n="$(awk '{s += $1} END { print s + 0 }' "$countfile")"
