@@ -69,4 +69,18 @@ out="$(sh "$S" 9.9p3-mavericks.2)"
 [ "$out" = 9.9p3-mavericks.1 ] \
   || { echo "FAIL: every existing positional call must still mean what it meant (fresh tags here, not reused from above, so this cannot pass by accident): got '$out'"; exit 1; }
 
+(
+  work2="$(mktemp -d "${TMPDIR:-/tmp}/previous-release-tag-vcollide.XXXXXX")"
+  trap 'rm -rf "$work2"' EXIT
+  cd "$work2"
+  git init -q -b main .
+  git config user.email t@example.com; git config user.name tester
+  echo hi > f; git add f; git commit -qm base
+  git tag v1.5.2-mavericks.1
+  git tag 1.5.2-mavericks.1
+  out="$(sh "$S")"
+  [ "$out" = 1.5.2-mavericks.1 ] \
+    || { echo "FAIL v-collision: outside --tag-glob, a leading 'v' must NOT be stripped -- mavericks-legacysupport ships a stray v1.5.2-mavericks.1 beside the real 1.5.2-mavericks.1, and stripping it would let the two collide/compare as the same release, or surface the stray one as the baseline instead of the real tag: got '$out'"; exit 1; }
+)
+
 echo "PASS: previous-release-tag"

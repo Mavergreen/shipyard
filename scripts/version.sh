@@ -1,13 +1,13 @@
 #!/bin/sh
-# Derive the full version (<upstream>-mavericks.N), its tag, and whether to release.
-#   auto  (default): new upstream (no tag yet) -> N=1, RELEASE=yes; else current N, RELEASE=no.
-#   local          : N = maxExistingN + 1, RELEASE=yes  (an independent repackage).
-# N resets to 1 automatically whenever UPSTREAM_VERSION changes (a new upstream has no tags yet).
-# Tag set comes from `git tag`, or from $MAVERICKS_TAGS (newline-separated) when set (tests).
-#
-# One implementation for the family: the three repo copies this replaces were byte-identical in logic
-# and differed only in comment wording and the name of their root variable. Repos keep a thin wrapper
-# so `sh build/version.sh auto`, their tests, and versions.sh all still work.
+#   usage: version.sh [auto|local]
+#          Derives the full version (<upstream>-mavericks.N), its tag, and whether to release.
+#            auto  (default): new upstream (no tag yet) -> N=1, RELEASE=yes; else current N,
+#                  RELEASE=no.
+#            local          : N = maxExistingN + 1, RELEASE=yes  (an independent repackage).
+#          N resets to 1 automatically whenever UPSTREAM_VERSION changes (a new upstream has no tags
+#          yet). Tag set comes from `git tag`, or from $MAVERICKS_TAGS (newline-separated) when set
+#          (tests).
+# spec: tests/version-lib-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # sets MAVERICKS_ROOT if unset; provides upstream_version()

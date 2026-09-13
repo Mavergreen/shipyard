@@ -1,22 +1,21 @@
 #!/bin/sh
-# Link upstream's own release notes, as a markdown section for the release notes (Sparkle appcast
-# <description> + GitHub Release body), when this release ships an upstream version that no earlier
-# release shipped. A -mavericks.1 exists to deliver someone else's changes, and until now its notes
-# named the new version without saying where to read what changed.
-#
-# WHERE upstream publishes notes is per-repo, so the repo answers it: build/upstream-release-notes-url.sh
-# (or scripts/…) <upstream-version> prints ONE URL. Usually a printf; tailscale's finds a date anchor.
-# A script rather than a URL template because some upstreams cannot be addressed by version alone.
-#
-# Prints NOTHING for a repackage, for a repo without the hook (not adopted yet, or a self-upstream
-# repo with no -mavericks axis), or when the hook fails -- so callers append unconditionally. Never
-# fails a release: notes are prose. Runs only when notes are generated (CI, or a dev box).
-#   usage: upstream-notes.sh <version>          (<upstream>-mavericks.N)
-#
-# "New upstream" is decided from the tags, not from the previous release: no OTHER
-# <upstream>-mavericks.* tag may exist. Comparing against the previous release gets parallel lines
-# wrong (golang's 1.26.7-mavericks.2 follows a 1.27.0 and is still a repackage), and excluding the
-# version's own tag lets a tag-triggered build, whose tag already exists, still count as new.
+#   usage: upstream-notes.sh [--url-only] <version>          (<upstream>-mavericks.N)
+#          Links upstream's own release notes, as a markdown section for the release notes (Sparkle
+#          appcast <description> + GitHub Release body), when this release ships an upstream version
+#          that no earlier release shipped. WHERE upstream publishes notes is per-repo, so the repo
+#          answers it: build/upstream-release-notes-url.sh (or scripts/…) <upstream-version> prints
+#          ONE URL.
+#          Default mode prints NOTHING for a repackage, for a repo without the hook, or when the hook
+#          fails -- so callers append unconditionally; it never fails a release. --url-only instead
+#          reports which case it was on exit: 3 = no link is due (a repackage), 4 = this repo has no
+#          hook, 5 = the hook is broken (or tags are unknowable), so a caller that cares can tell a
+#          missing link from a broken one.
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "A new upstream
+#       links upstream's own notes" -- decides whether a link is due (from the tags, never the
+#       previous release, since parallel lines make the previous release's upstream not comparable)
+#       BEFORE it even looks for the hook, so a repackage never needs one to exist; signal-desktop
+#       shipped a new upstream with no link and nothing red because that ordering was reversed.
+# spec: tests/upstream-notes-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # sets MAVERICKS_ROOT if unset
@@ -26,28 +25,14 @@ if [ "${1:-}" = "--url-only" ]; then url_only=yes; shift; fi
 ver="${1:?upstream-notes: version required}"
 up="${ver%%-mavericks.*}"
 
-# Exit codes matter only in --url-only mode, where a caller decides whether a gap is fatal:
-#   3 = no link is due (a repackage)   4 = this repo has no hook   5 = the hook is broken
-# In the default section mode every one of these is still "print nothing, exit 0": appending a section
-# unconditionally is the whole point of that mode.
 bail() {  # $1 = --url-only exit code, $2 = message
   [ "$url_only" = yes ] || { echo "upstream-notes: $2" >&2; exit 0; }
   echo "upstream-notes: $2" >&2; exit "$1"
 }
 
-# WHETHER A LINK IS DUE IS DECIDED BEFORE WHERE IT WOULD COME FROM. These are independent questions
-# -- "did this release change the upstream?" is answered by the tags alone -- and resolving the hook
-# first conflated them: a repo with no hook reported 4 ("no hook") for EVERY release, including the
-# Nth repackage of an upstream that N-1 earlier releases already shipped. Callers act on that code, so
-# a hookless repo's repackage was either refused outright (a release that owes no link blocked for
-# want of the hook that would produce one) or, where INGREDIENTS.md declared a reason, published green
-# with "New upstream: X" over a release that changed no upstream at all. The fleet preview found three
-# repos in exactly that state. A repackage is due no link from anywhere, so it never needs to know
-# whether a hook exists; only a genuine new upstream does, and it still gets 4 when there is none.
-
-# Tags we cannot see must not read as "no earlier release", or every repackage gets called new. A
-# shallow clone has none (the family's release jobs use fetch-depth: 0 for exactly this), and a git
-# that refuses the repo lists none. (A pre-2.15 git echoes the unknown flag back, which is not "true".)
+# platform: a pre-2.15 (2017) git does not recognize `--is-shallow-repository` and echoes the flag
+#           back literally, so the comparison below tests for the literal string "true", never
+#           merely a nonempty answer.
 if [ "$(cd "$MAVERICKS_ROOT" && git rev-parse --is-shallow-repository 2>/dev/null)" = true ]; then
   bail 5 "$MAVERICKS_ROOT is a shallow clone, so its release tags are unknown (use fetch-depth: 0)"
 fi
@@ -58,9 +43,6 @@ for t in $tags; do
   [ "$t" = "$ver" ] || bail 3 "$ver is a repackage of $up; no upstream link is due"
 done
 
-# Only a new upstream reaches here, so only a new upstream can be missing a hook.
-# build/ where a repo keeps its scripts there, scripts/ where it keeps them there (the swift repos) --
-# the same two homes derive-upstream-version.sh already has.
 hook=""
 for d in build scripts; do
   if [ -f "$MAVERICKS_ROOT/$d/upstream-release-notes-url.sh" ]; then
@@ -76,7 +58,6 @@ case "$url" in
   http://*|https://*) ;;
   *) bail 5 "$hook printed no URL for $up; omitting the upstream section" ;;
 esac
-# One URL, nothing else: a second line or a space would render as a broken link, not as a warning.
 case "$url" in
   *[[:space:]]*|*")"*)
     bail 5 "$hook printed more than one URL for $up; omitting the upstream section" ;;

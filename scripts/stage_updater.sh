@@ -1,28 +1,23 @@
 #!/bin/sh
-# Stage a Sparkle updater .app + its daily-check LaunchAgent into a pkg payload root, and emit the
-# postinstall logic that loads the agent. Generalized from the divergent copies in mavericks-golang,
-# mavericks-swift and mavericks-magic-trackpad2: those hand-wrote a per-product LaunchAgent plist and
-# postinstall. Everything is rendered from the shared updater/*.in templates so each product supplies
-# only its label and paths.
-#
-# Usage:
-#   stage_updater.sh --stage ROOT --app UPDATER.app \
-#     --app-dir "/Library/Application Support/ModernMavericks" \
-#     --agent-label dev.modernmavericks.<product>-updatecheck \
-#     [--scripts-out DIR] [--snippet-out FILE]
-#
-#   --stage        payload root that pkgbuild --root will package
-#   --app          the built updater .app (its basename minus .app is the executable name)
-#   --app-dir      ABSOLUTE install dir for the .app; may contain spaces
-#   --agent-label  LaunchAgent Label; the installed plist is <label>.plist
-#   --scripts-out  dir to write a complete `postinstall` into (pass as --scripts to pkgbuild)
-#   --snippet-out  file to write JUST the agent-load fragment into, for a product that already has
-#                  its own postinstall to `.` it from. Same logic as the postinstall, one source.
-#
-# Both outputs are optional: pass whichever the product needs, or neither to stage payload only.
-#
-# There is deliberately NO manual-trigger shim in /usr/local/bin: the agent checks daily on its own,
-# and a command nobody documented is a command nobody runs.
+#   usage: stage_updater.sh --stage ROOT --app UPDATER.app \
+#            --app-dir "/Library/Application Support/ModernMavericks" \
+#            --agent-label dev.modernmavericks.<product>-updatecheck \
+#            [--scripts-out DIR] [--snippet-out FILE]
+#          Stages a Sparkle updater .app + its daily-check LaunchAgent into a pkg payload root, and
+#          emits the postinstall logic that loads the agent, rendered from the shared updater/*.in
+#          templates so each product supplies only its label and paths.
+#            --stage        payload root that pkgbuild --root will package
+#            --app          the built updater .app (its basename minus .app is the executable name)
+#            --app-dir      ABSOLUTE install dir for the .app; may contain spaces
+#            --agent-label  LaunchAgent Label; the installed plist is <label>.plist
+#            --scripts-out  dir to write a complete `postinstall` into (pass as --scripts to
+#                           pkgbuild)
+#            --snippet-out  file to write JUST the agent-load fragment into, for a product that
+#                           already has its own postinstall to `.` it from
+#          Both outputs are optional: pass whichever the product needs, or neither to stage payload
+#          only. There is deliberately NO manual-trigger shim in /usr/local/bin: the agent checks
+#          daily on its own, and a command nobody documented is a command nobody runs.
+# spec: tests/stage_updater.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 TPL="$SELF/../updater"
@@ -57,7 +52,6 @@ mkdir -p "$STAGE$APPDIR" "$STAGE/Library/LaunchAgents"
 rm -rf "$STAGE$APPDIR/$appbase"
 cp -R "$APP" "$STAGE$APPDIR/"
 
-# `#` as the sed delimiter -- labels and abs paths never contain it.
 sed -e "s#@MAVERICKS_AGENT_LABEL@#$LABEL#g" \
     -e "s#@MAVERICKS_UPDATER_INSTALLED_EXEC@#$installed_exec#g" \
     "$TPL/updatecheck.plist.in" > "$STAGE/Library/LaunchAgents/$LABEL.plist"

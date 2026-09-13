@@ -1,58 +1,18 @@
 #!/bin/sh
-# Has this declared state already been released? One line out; decides nothing about HOW to publish
-# (spec 2026-09-12).
-#
-#   PUBLISH                            no published release carries this digest
-#   SKIP=already-released/<tag>        a published release carries this digest
-#   SKIP=unreadable-marker/<tag>       no match, and <tag> records a marker in a format this shipyard
-#                                      cannot read. NOT "no marker": see below.
-#
-# THERE IS DELIBERATELY NO INFERENCE FROM THE VERSION (ruling 16). An earlier cut fell back to
-# version equality -- "no digest anywhere, but a release exists for the version this state maps to,
-# so it must already be released" -- and then backfilled the digest onto that release. version.sh's
-# `auto` mode returns the EXISTING tag's N whenever the upstream already has one, so it maps every
-# declared state of a given upstream to ONE version: an ingredient bump that had not been released
-# was declared released, and the backfill cemented it by writing the unreleased state's digest onto a
-# release that did not contain it. The fast path matched from then on and no later reconcile ever
-# looked again -- a release lost silently and permanently, the golang incident reproduced by the
-# machinery built to prevent it.
-#
-# The pre-migration hazard that fallback was protecting against is handled exactly instead, once, at
-# migration: `release-state.sh --ref <tag>` renders what that tag's own tree contained, and
-# `release-state-record.sh --tag <tag>` records it. Computed, not guessed.
-#
-# --version is still required and deliberately does NOT reach the answer. Keeping it lets the caller
-# be told which version will not be published, and makes the quadrant that proves ruling 16
-# expressible: same version, DIFFERENT digest -> PUBLISH. A version match is not a state match.
-#
-# An UNREADABLE marker is not an absent one. A release recording `v0:...`, or anything else this
-# shipyard's format does not cover, is evidence that somebody recorded a state here in a way we
-# cannot compare -- so treating it as "no marker" and publishing is precisely how a bump to v2 would
-# republish all 14 products. The spec's promise is recompute, never republish, so this refuses to
-# decide in the unsafe direction and says which tag needs recomputing. A release carrying a READABLE
-# digest that simply differs from ours is an ordinary earlier state and blocks nothing.
-#
-# WHERE THE RECORDS COME FROM, and why it is split in two. The fetch is the only code in this design
-# that touches the outside world, and it was the only code no test executed -- every case injected
-# the finished records, which short-circuits above it. Both of the bugs that hid there were the exact
-# failures this spec exists to prevent:
-#
-#   fetch_raw()          ONE `gh api` call, STATUS CHECKED. A gh failure is a failure (exit 1), never
-#                        a decision: auth expiry, a rate limit, a 5xx, a network blip and a renamed
-#                        repo all produce empty output, and empty output means PUBLISH. The previous
-#                        `gh ... 2>/dev/null | awk` discarded stderr and took awk's exit status,
-#                        because POSIX sh has no pipefail.
-#   transform_records()  PURE: raw API lines in, "<tag><TAB><digest-or-empty>" out. Tests inject at
-#                        THIS boundary ($MAVERICKS_RELEASES_RAW), so the code that parses the API's
-#                        shape is code the tests run. It was not, which is how `gh release list
-#                        --json tagName,body` shipped: `body` is a `gh release view` field, so the
-#                        call failed outright, every release read as absent, and the nightly backstop
-#                        would have answered PUBLISH in all 14 repos every night.
-#   $MAVERICKS_RELEASES  the finished records, newline-separated "<tag><TAB><digest-or-empty>", for
-#                        the decision-logic cases -- the same injection idiom version.sh uses for
-#                        $MAVERICKS_TAGS.
-#
 #   usage: release-needed.sh --digest v1:sha256:<hex> --version <full> [--repo OWNER/NAME]
+#          Has this declared state already been released? One line out; decides nothing about HOW to
+#          publish.
+#            PUBLISH                        no published release carries this digest
+#            SKIP=already-released/<tag>    a published release carries this digest
+#            SKIP=unreadable-marker/<tag>   no match, and <tag> records a marker this shipyard cannot
+#                                            read -- NOT "no marker"
+# spec: docs/superpowers/specs/2026-09-12-release-doctrine-design.md ruling 16 -- the answer depends
+#       only on the digest, never the version. A pre-migration release's state is computed from its
+#       own tree (release-state.sh --ref) and recorded once, rather than inferred backward from
+#       version equality, which silently lost a release.
+# spec: tests/release-needed-test.sh -- the four version/digest quadrants, the fetch/parse split at
+#       $MAVERICKS_RELEASES_RAW, and the draft/tab/shape-change edge cases the API boundary must
+#       survive.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"                    # state_marker(): the family's ONE reader of a recorded marker
@@ -68,7 +28,6 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$DIGEST" ] || { echo "release-needed: --digest required" >&2; exit 2; }
 [ -n "$VERSION" ] || { echo "release-needed: --version required" >&2; exit 2; }
-# A malformed digest can only be a caller bug, and "no match" would publish. Refuse instead.
 case "$DIGEST" in
   v1:sha256:*) state_digest_readable "$DIGEST" \
     || { echo "release-needed: --digest is not v1:sha256:<lowercase hex>: $DIGEST" >&2; exit 2; } ;;
@@ -79,18 +38,9 @@ TAB="$(printf '\t')"
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/release-needed.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
-# The RAW API shape: one line per release, "<tag><TAB><draft><TAB><body>", with the body escaped by
-# jq's @tsv -- every tab and newline inside it becomes a literal \t or \n, so a record is exactly one
-# line. That is the whole reason for choosing this shape: the old transform started a new record at
-# "^[^\t]+\t", so a body containing a tab invented a phantom record, attributed the digest to prose,
-# and left the real tag reading as digest-less.
 fetch_raw() {
   if [ -n "${MAVERICKS_RELEASES_RAW+x}" ]; then printf '%s\n' "$MAVERICKS_RELEASES_RAW"; return 0; fi
-  # One paginated REST call returns tag, body and the draft flag together, which keeps the backstop's
-  # "a quiet night is one API call" property. `gh release list --json` cannot: it has no body field.
   if [ -n "$REPO" ]; then p="repos/$REPO/releases"; else p="repos/{owner}/{repo}/releases"; fi
-  # $MAVERICKS_GH is the seam a test uses to inject a FAILING fetch. Not a stub on PATH: a stub on
-  # PATH is invisible at the call site and would shadow gh for anything else the script ran.
   "${MAVERICKS_GH:-gh}" api "$p?per_page=100" --paginate \
       --jq '.[] | [.tag_name, (.draft|tostring), (.body // "")] | @tsv' 2>"$work/gh-err" || {
     echo "release-needed: gh could not read $p -- refusing to decide" >&2
@@ -101,9 +51,6 @@ fetch_raw() {
   }
 }
 
-# A literal \t, \n, \r or \\ produced by jq's @tsv, put back. Deliberately NOT done in the `gh --jq`
-# filter: the marker rule below must stay the family's one rule (lib.sh state_marker), not gain a
-# second copy written in jq.
 unescape_tsv() {
   awk '{
     out = ""; n = length($0)
@@ -122,17 +69,12 @@ unescape_tsv() {
   }'
 }
 
-# Raw lines in, one "<tag><TAB><digest-or-empty>" per release out. The pure half.
 transform_records() {
   while IFS= read -r line || [ -n "$line" ]; do
     [ -n "$line" ] || continue
     tag="${line%%$TAB*}"
     rest="${line#*$TAB}"
     [ "$rest" != "$line" ] || continue          # no TAB at all: not a record
-    # AN EMPTY TAG IS A SHAPE CHANGE, NOT AN EMPTY RELEASE. @tsv renders a null or missing field as
-    # the empty string, so a renamed `.tag_name` silently empties the tag on EVERY record -- and
-    # skipping them all answers PUBLISH, in every repo, every night. That is precisely the class of
-    # failure the `body` field already caused once, in the one field that had no shape guard.
     [ -n "$tag" ] || {
       echo "release-needed: a release record has no tag: the raw API shape changed under us" >&2
       echo "    (@tsv renders a null or renamed field as empty, and dropping such records answers" >&2
@@ -142,10 +84,6 @@ transform_records() {
     draft="${rest%%$TAB*}"
     body="${rest#*$TAB}"
     [ "$body" != "$rest" ] || body=""
-    # A DRAFT IS NOT A RELEASE. Drafts happen here -- publish-release.yml creates one per attempt and
-    # delete-draft-release.sh cleans them up -- and a leftover draft whose body carries the current
-    # digest would answer already-released forever while the real release silently never happened.
-    # Filtered HERE, in the half the tests exercise, rather than in a jq filter they cannot reach.
     case "$draft" in
       true) continue ;;
       false) : ;;

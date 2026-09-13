@@ -1,19 +1,15 @@
 #!/bin/sh
-# Wrap a flat component pkg into a distributable product archive that enforces a
-# hard OS install floor (default 10.9.5) via productbuild --distribution. A bare
-# pkgbuild product cannot express an OS floor; productbuild can. Generalized from
-# the divergent copies in mavericks-magic-trackpad2 (inline CMake) and mavericks-swift.
-#
-# Generates the distribution.xml from flags (single-component installer), runs
-# productbuild, then self-checks that the floor made it into the output pkg.
-#
-# Usage:
-#   set_install_floor.sh --identifier ID --title T --component COMP.pkg --out OUT.pkg
-#     [--resources DIR] [--welcome FILE] [--license FILE]
-#     [--require-scripts] [--host-arch x86_64] [--min-os 10.9.5]
-#
-# The floor default is MAVERICKS_MIN_OS (10.9.5) -- the single source of truth for
-# "the Mavericks install floor" across the family.
+#   usage: set_install_floor.sh --identifier ID --title T --component COMP.pkg --out OUT.pkg
+#            [--resources DIR] [--welcome FILE] [--license FILE]
+#            [--require-scripts] [--host-arch x86_64] [--min-os 10.9.5]
+#          Wraps a flat component pkg into a distributable product archive that enforces a hard OS
+#          install floor (default MAVERICKS_MIN_OS, the single source of truth for "the Mavericks
+#          install floor" across the family) via productbuild --distribution -- a bare pkgbuild
+#          product cannot express an OS floor. Generates distribution.xml from flags (single-
+#          component installer), runs productbuild, then self-checks that the floor made it into the
+#          output pkg.
+# spec: tests/shipyard-package-pkg-test.sh -- package-pkg.sh's own integration coverage exercises
+#       --host-arch end to end (both architectures must reach the Distribution).
 set -eu
 
 MIN_OS="${MAVERICKS_MIN_OS:-10.9.5}"
@@ -67,7 +63,6 @@ else
   productbuild --distribution "$DIST" --package-path "$COMP_DIR" "$OUT"
 fi
 
-# Self-check: the floor must be present in the built product.
 X=$(mktemp -d -t pkgfloor.XXXXXX)
 pkgutil --expand "$OUT" "$X/x"
 got=$(grep -o 'os-version min="[0-9.]*"' "$X/x/Distribution" || true)

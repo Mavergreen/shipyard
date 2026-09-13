@@ -1,18 +1,12 @@
 #!/bin/sh
-# Point cmake at an installed shipyard payload, whatever cmake that is.
-#
-# find_package() searches CMAKE_SYSTEM_PREFIX_PATH, which is baked into the cmake BINARY: it differs
-# between a pkgsrc cmake, a Homebrew one and CMake.app, and can change when any of them updates. So
-# discovery here does not depend on where the payload sits -- it records the location in the user
-# package registry, which every cmake consults. That is what lets the payload live in a product-owned
-# /usr/local/mavericks-shipyard instead of the shared /usr/local/share/cmake.
-#
-# The entry filename is FIXED, matching what CMakeLists.txt writes on `cmake --install`. Registering
-# twice replaces the path rather than adding a second entry, so this never needs a migration step.
-#
-# Called by the pkg's postinstall, and by hand: it is the documented recovery when shipyard was
-# installed before cmake was.
 #   usage: register-with-cmake.sh <payload-dir> [home]
+#          Points cmake at an installed shipyard payload. Called by the pkg's postinstall, and by hand
+#          -- it is the documented recovery when shipyard was installed before cmake was.
+# spec: tests/register-with-cmake-test.sh -- find_package() depends on the cmake BINARY's own
+#       CMAKE_SYSTEM_PREFIX_PATH, not on where the payload sits, so this records the location in the
+#       user package registry instead; the entry filename is FIXED (matching what CMakeLists.txt
+#       writes on `cmake --install`), so registering twice replaces the path and never needs a
+#       migration step.
 set -eu
 payload="${1:?register-with-cmake: payload dir required}"
 home="${2:-$HOME}"

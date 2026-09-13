@@ -1,19 +1,13 @@
 #!/bin/sh
-# Back-compat wrapper: the generator is release-notes.sh. Kept because six repos still call this
-# signature from their release.yml, and @v1 reaches them all within minutes of a shipyard push -- so
-# this must keep working until each has migrated. Delegating (rather than duplicating) means those
-# repos get the standard body before anyone edits their workflows.
-#
-# The PRODUCT argument here is the family's older prose phrase ("Mavericks OpenSSH"); the generator
-# wants the bare noun, so strip a leading "Mavericks " / trailing " for Mavericks" when present.
-#
-# The positional signature (TAG, FULL_VERSION, [PRODUCT_NAME]) is unchanged -- six live repos depend
-# on it -- so a repo shipping parallel upstream lines (golang: lines/126/) scopes the baseline through
-# the environment instead of a new positional argument: MAVERICKS_NOTES_LINE, forwarded to the
-# generator's --line when non-empty. Without this the wrapper's only path gets no line scoping, and a
-# second line's baseline becomes the numerically-highest tag across ALL lines -- a backwards compare
-# and a wrong "(was X)".
 #   usage: MAVERICKS_NOTES_LINE=<line> release-notes-file.sh <TAG> <FULL_VERSION> [PRODUCT_NAME]
+#          Back-compat wrapper delegating to the generator, release-notes.sh: six repos still call
+#          this positional signature from their release.yml. The PRODUCT argument here is the
+#          family's older prose phrase ("Mavericks OpenSSH"); the generator wants the bare noun, so a
+#          leading "Mavericks " / trailing " for Mavericks" is stripped when present. A repo shipping
+#          parallel upstream lines (golang: lines/126/) scopes the baseline through
+#          MAVERICKS_NOTES_LINE (forwarded to the generator's --line) rather than a new positional
+#          argument, since the positional signature itself is unchanged.
+# spec: tests/release-notes-file-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 

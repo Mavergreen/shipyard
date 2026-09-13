@@ -1,18 +1,19 @@
 #!/bin/sh
-# publish-release.yml's gate: a SIGNED release -- some file in it carries a sparkle:edSignature -- must
-# come with scan-for-key.yml's record that this run's logs and release files were scanned for the
-# signing key. An unsigned release needs no scan.
-#
-#   require_key_scan.sh DIST RECORD_DIR      (RECORD_DIR: where the sparkle-key-scan artifact landed)
-#
-# The scan cannot live in publish-release.yml itself: reading job logs needs `actions: read`, and a
-# called workflow may not ask for more than its caller grants -- every product calls this one with
-# `contents: write` alone, so asking would break every publish in the family at once. The signing
-# products call scan-for-key.yml instead; this is where its absence becomes visible for all of them.
-#
-# A missing record is an ERROR: every signing product calls scan-for-key.yml (2026-09-11), and
-# check-family-conventions.sh fails a repo that signs without it, so this should only ever fire on a
-# scan that did not run or did not pass. It warned during the rollout. CI-only.
+#   usage: require_key_scan.sh DIST RECORD_DIR   (RECORD_DIR: where the sparkle-key-scan artifact
+#                                                 landed). CI-only.
+#          publish-release.yml's gate: a SIGNED release -- some file in it carries a
+#          sparkle:edSignature -- must come with scan-for-key.yml's record that this run's logs and
+#          release files were scanned for the signing key. An unsigned release needs no scan. A
+#          missing record is an ERROR: every signing product calls scan-for-key.yml, and
+#          check-family-conventions.sh check 12 fails a repo that signs without it, so this should
+#          only ever fire on a scan that did not run or did not pass.
+# platform: reading job logs needs `actions: read`, and a called GitHub Actions workflow may not ask
+#           for more than its caller grants -- every product calls this one with `contents: write`
+#           alone, so the scan cannot live in publish-release.yml itself without breaking every
+#           publish in the family at once.
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Sparkle updater"
+#       -- scan-for-key.yml is the separate workflow this constraint forces; this script is where its
+#       absence becomes visible on publish.
 set -eu
 [ "$#" -eq 2 ] || { echo "usage: require_key_scan.sh DIST RECORD_DIR" >&2; exit 2; }
 DIST="$1"; RECORD="$2/sparkle-key-scan.txt"

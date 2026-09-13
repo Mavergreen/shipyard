@@ -1,27 +1,22 @@
 #!/bin/sh
-# Package shipyard: the payload, BOTH updater slices, and a postinstall that picks one.
-#
-# Both slices in one pkg because developing under Mavericks and developing under modern macOS are
-# equally first-class. An x86_64-only updater is cheaper and matches every other family product, but
-# it prompts for Rosetta on Apple Silicon; two pkgs would make someone choose, and choosing wrong is
-# silent. So: one artifact, no prompt, no choice.
-#
-# --host-arch x86_64,arm64 -- BOTH, which is the opposite of the restriction the family's "no
-# --host-arch" rule forbids (that rule stops a pkg being limited to ONE arch, which would refuse the
-# other box). Without arm64 in hostArchitectures, Installer on Apple Silicon offers Rosetta for a pkg
-# that has scripts and runs those scripts translated -- the very prompt this pkg exists to avoid.
-#
-# The postinstall is shipyard's own (not stage_updater.sh --scripts-out), because it must also pick an
-# arch and register with cmake. It sources an agent-load fragment rendered by --snippet-out, exactly as
-# mavericks-magic-trackpad2 does for its kext -- one fragment PER SLICE, since each has its label
-# baked in. A preinstall clears the payload dir first, so files dropped from a newer payload go away.
-#
-# The updater is a stopgap until Mavericks Lineup exists, so beyond its own build option only this
-# script and the release workflow that calls it know about it. Registration logic stays in
-# register-with-cmake.sh, which the postinstall merely calls.
 #   usage: package-pkg.sh --payload DIR --app-native APP --app-cross APP --version V --out PKG
 #          package-pkg.sh --emit-postinstall FILE    (for tests)
 #          package-pkg.sh --emit-preinstall FILE     (for tests)
+#          Packages shipyard: the payload, BOTH updater slices, and a postinstall that picks one. The
+#          postinstall is shipyard's own (not stage_updater.sh --scripts-out), because it must also
+#          pick an arch and register with cmake; it sources an agent-load fragment rendered by
+#          --snippet-out, one fragment PER SLICE since each has its label baked in. A preinstall
+#          clears the payload dir first, so files dropped from a newer payload go away. The updater is
+#          a stopgap until Mavericks Lineup exists; registration logic stays in
+#          register-with-cmake.sh, which the postinstall merely calls.
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "On-target/
+#       off-target parity" -- shipyard's own .pkg is the worked example: both slices ship in one pkg
+#       because developing under Mavericks and developing under modern macOS are equally
+#       first-class, and two pkgs would make someone choose, silently wrong when they choose badly.
+#       --host-arch x86_64,arm64 is BOTH arches -- without arm64, Installer on Apple Silicon offers
+#       Rosetta for a pkg with scripts and runs them translated, the very prompt this pkg exists to
+#       avoid.
+# spec: tests/shipyard-package-pkg-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 PAYLOAD=""; APP_NATIVE=""; APP_CROSS=""; VER=""; OUT=""; EMIT=""; EMIT_PRE=""
@@ -41,7 +36,6 @@ done
 ID="dev.modernmavericks.mavericks-shipyard"
 PAYLOAD_DIR="/usr/local/mavericks-shipyard"
 APPDIR="/Library/Application Support/ModernMavericks"
-# native = x86_64, min 10.9; cross = arm64. Names match Task 2's updater targets.
 NATIVE_APP="MavericksShipyardUpdater.app"
 CROSS_APP="MavericksShipyardCrossUpdater.app"
 NATIVE_LABEL="dev.modernmavericks.mavericks-shipyard-updatecheck"
@@ -119,9 +113,9 @@ POST
   chmod +x "$1"
 }
 
-# The preinstall spells out PAYLOAD_DIR literally instead of interpolating it: a destructive path must
-# not be one empty variable away from "$ROOT" alone. The test's fixture uses the same path, so the two
-# cannot drift apart unnoticed.
+# spec: tests/shipyard-package-pkg-test.sh -- the preinstall spells out PAYLOAD_DIR literally rather
+#       than interpolating it, so a destructive rm -rf is never one empty variable away from "$ROOT"
+#       alone; the test's fixture path must match it exactly or drift goes unnoticed.
 emit_preinstall() {  # $1 = destination file
   cat > "$1" <<'PRE'
 #!/bin/sh
@@ -160,11 +154,9 @@ fi
 : "${VER:?package-pkg: --version required}"
 : "${OUT:?package-pkg: --out required}"
 
-# A trailing slash would make cp -R copy the bundle's CONTENTS instead of the bundle.
+# platform: a trailing slash would make cp -R copy the bundle's CONTENTS instead of the bundle.
 APP_NATIVE="${APP_NATIVE%/}"; APP_CROSS="${APP_CROSS%/}"
 
-# The postinstall knows each slice by .app name. Anything else -- including the two swapped -- would
-# ship an updater the postinstall cannot find, or the x86_64 one under the arm64 name.
 check_app() {  # $1 = flag  $2 = path given  $3 = required basename
   [ "$(basename "$2")" = "$3" ] \
     || { echo "package-pkg: $1 must be a $3 (the postinstall looks for that name); got $2" >&2; exit 2; }
@@ -181,8 +173,6 @@ STAGE="$WORK/stage"; SCR="$WORK/scripts"
 mkdir -p "$STAGE$PAYLOAD_DIR" "$SCR" "$WORK/component" "$(dirname "$OUT")"
 COPYFILE_DISABLE=1 cp -R "$PAYLOAD"/. "$STAGE$PAYLOAD_DIR/"
 
-# Stage each slice with its own agent label, and render each slice's agent-load fragment with that
-# label baked in; the postinstall sources the one matching the machine.
 sh "$SELF/stage_updater.sh" --stage "$STAGE" --app "$APP_NATIVE" --app-dir "$APPDIR" \
   --agent-label "$NATIVE_LABEL" --snippet-out "$SCR/agent-load-native.sh"
 sh "$SELF/stage_updater.sh" --stage "$STAGE" --app "$APP_CROSS" --app-dir "$APPDIR" \
@@ -191,18 +181,17 @@ sh "$SELF/stage_updater.sh" --stage "$STAGE" --app "$APP_CROSS" --app-dir "$APPD
 emit_preinstall "$SCR/preinstall"
 emit_postinstall "$SCR/postinstall"
 
-# AppleDouble sidecars an NFS/shared stage sprays would otherwise ship as payload.
+# platform: AppleDouble sidecars an NFS/shared stage sprays would otherwise ship as payload.
 find "$STAGE" -name '._*' -delete 2>/dev/null || true
 
-# build_component_pkg.sh, not raw pkgbuild: the payload holds .app bundles, which pkgbuild makes
-# relocatable and version-checked by default -- so a developer with a locally built updater elsewhere
-# on disk (same bundle id) would get this payload installed INTO that build dir.
+# spec: tests/build_component_pkg.bats -- pkgbuild makes a payload holding .app bundles relocatable
+#       and version-checked by default, so a developer with a locally built updater elsewhere on
+#       disk (same bundle id) would get this payload installed INTO that build dir;
+#       build_component_pkg.sh turns both off.
 comp="$WORK/component/mavericks-shipyard.pkg"
 sh "$SELF/build_component_pkg.sh" --root "$STAGE" --identifier "$ID" --version "$VER" \
   --install-location / --scripts "$SCR" --out "$comp" >&2
 
-# Both arches, so this installs on Intel and Apple Silicon alike AND its scripts run natively on
-# Apple Silicon (see the header). Declaring both restricts nothing.
 sh "$SELF/set_install_floor.sh" \
   --identifier "$ID" \
   --title "Mavericks Shipyard ${VER}" \

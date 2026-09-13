@@ -1,23 +1,21 @@
 #!/bin/sh
-# Render this product's declared state canonically, and hash it.
-#
-# A release is the realisation of a declared state, not the side effect of an event (spec
-# 2026-09-12). publish-release.yml records this digest in the release body; release-needed.sh looks
-# it up. Two things to know before editing anything here:
-#
-#   1. The rendering is a WIRE FORMAT. Every published release carries a digest computed from it, so
-#      changing the rendering makes every one of them stop matching -- which reads as "nothing has
-#      ever been released". Hence the v1: prefix and the golden test. A format bump means RECOMPUTE,
-#      never republish -- and --ref below is what makes recomputing possible: the digest of a state
-#      that was already released is computed from the tag that released it, exactly, in any format.
-#   2. Declared state EXCLUDES the source tree. That is what makes "a push causes feedback and almost
-#      never a release" a property of the design rather than a rule someone must enforce.
-#
-# What is declared lives in INGREDIENTS.md's "## Declared state" section; declared-state.sh is the
-# parser and documents the grammar.
 #   usage: release-state.sh [--root DIR] [--ref REV] [--render]
+#          Renders this product's declared state canonically, and hashes it. What is declared lives
+#          in INGREDIENTS.md's "## Declared state" section; declared-state.sh is the parser and
+#          documents the grammar. publish-release.yml records the digest; release-needed.sh looks it
+#          up.
 #          --render  print the canonical rendering instead of its digest (debugging, and the test)
 #          --ref     take each declared entry's VALUE from REV's tree instead of the working tree
+# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "A release is a
+#       declared state, not an event" -- a release realises a declared state, not the side effect of
+#       an event; declared state EXCLUDES the source tree, which is what makes "a push causes
+#       feedback and almost never a release" a property of the design.
+# spec: docs/superpowers/specs/2026-09-12-release-doctrine-design.md "Failure modes" -- the rendering
+#       is a WIRE FORMAT (hence the v1: prefix and the golden test: a format bump means recompute,
+#       never republish) and ruling 16 (--ref recomputes a pre-migration release's digest from the
+#       tag that actually released it, rather than guessing from a version match, which lost one).
+# spec: tests/release-state-test.sh -- golden digest, byte-order sort, --ref rendering a tag's own
+#       tree, and the upstream/version.sh coupling.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 
@@ -31,22 +29,6 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# --ref exists because INFERENCE WAS UNSOUND, and the inference it replaces lost releases silently.
-# An earlier cut of release-needed.sh fell back to version equality -- "no digest anywhere, but a
-# release exists for the version this state maps to, so it must already be released" -- and then
-# backfilled the current digest onto that release. But version.sh's `auto` mode returns the EXISTING
-# tag's N whenever the upstream already has one, so it maps EVERY declared state of a given upstream
-# to ONE version. An ingredient bump that had not been released was therefore declared released, and
-# the backfill cemented it: the digest of the unreleased state was written onto a release that did
-# not contain it, after which the fast path matched and no later reconcile ever looked again. A
-# release lost silently and permanently -- the golang incident, reproduced by the machinery built to
-# prevent it, in a self-concealing form the original was not.
-#
-# So a released state is COMPUTED, not guessed: --ref <tag> renders the declaration using the values
-# in that tag's own tree. The DECLARATION itself still comes from the working tree, deliberately --
-# a pre-migration release predates the "## Declared state" section entirely, and the question being
-# asked is "what were TODAY's declared inputs worth at that tag?". A path the tag's tree does not
-# have is fatal, not empty (see the per-entry error below).
 if [ -n "$REF" ]; then
   git -C "$ROOT" rev-parse --verify "$REF^{commit}" >/dev/null 2>&1 || {
     echo "release-state: --ref '$REF' is not a revision of the repo at $ROOT" >&2
@@ -55,10 +37,6 @@ if [ -n "$REF" ]; then
   }
 fi
 
-# The value assigned to KEY in FILE, quotes and surrounding whitespace stripped, first match wins --
-# the same shape repackage-decision.sh reads, so a pin file means one thing to every script in the
-# family. Trimmed the same way the whole-file path is trimmed: two spellings of the same pin must
-# render identically, or a cosmetic reformat would move the digest.
 pin_value() {  # $1 = file  $2 = key
   sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1 | sed 's/^"//; s/"$//' | tr -d '[:space:]'
 }
@@ -68,10 +46,6 @@ work="$(mktemp -d "${_tmp%/}/release-state.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 decl="$work/decl"; lines="$work/lines"
 : > "$lines"
 
-# A parse failure must not become a digest, so take the parser's exit status before using its output.
-# declared-state.sh's own contract is exit 1 on a malformed entry; convert that to release-state's
-# documented exit 2 for any usage-or-declaration error, but keep its message so the author still
-# learns which entry was wrong.
 if ! sh "$SELF/declared-state.sh" "$ROOT" > "$decl" 2>"$work/parse-err"; then
   cat "$work/parse-err" >&2
   echo "release-state: $ROOT/INGREDIENTS.md has a malformed \"## Declared state\" declaration" >&2
@@ -86,12 +60,8 @@ fi
   exit 2
 }
 
-# The bytes of the file a declared entry names, from the working tree or (with --ref) from that
-# revision's tree. Everything downstream reads $work/entry, so one source of values serves both and
-# the rendering cannot differ between them -- which is the point: the digest of a released state and
-# the digest of the current state must be comparable, or the comparison means nothing.
-# `git show REV:PATH` resolves PATH from the repo ROOT (no leading ./), which is what a declared path
-# already is.
+# platform: `git show REV:PATH` resolves PATH from the repo ROOT (no leading ./), which is what a
+#           declared path already is.
 entry_bytes() {   # $1 = declared path, relative to the repo root
   if [ -n "$REF" ]; then
     git -C "$ROOT" show "$REF:$1" > "$work/entry" 2>"$work/git-err" || return 1
@@ -101,16 +71,6 @@ entry_bytes() {   # $1 = declared path, relative to the repo root
   fi
 }
 
-# The `upstream` entry must name the VERY FILE version.sh reads. Nothing else ties them together:
-# declared-state.sh accepts any path, and lib.sh's upstream_version() reads
-# ${MAVERICKS_UPSTREAM_FILE:-$MAVERICKS_ROOT/UPSTREAM_VERSION}. A product tracking one file for its
-# digest while version.sh derived the version from another would publish N+1 of the PREVIOUS upstream
-# carrying the NEW upstream's contents -- and nothing anywhere would say so.
-#
-# So a repo whose upstream lives elsewhere (container-tools and tailscale: components/*/version;
-# golang: lines/126/UPSTREAM_VERSION) must export $MAVERICKS_UPSTREAM_FILE wherever it calls this
-# script, exactly as it already must for version.sh. That coupling is the point: if the two scripts
-# disagree about which file the upstream lives in, that disagreement is the bug.
 assert_upstream_is_version_sh_input() {   # $1 = the declared path
   want="${MAVERICKS_UPSTREAM_FILE:-UPSTREAM_VERSION}"
   case "$want" in "$ROOT"/*) want="${want#"$ROOT"/}" ;; esac
@@ -157,7 +117,10 @@ while IFS="$(printf '\t')" read -r name spec || [ -n "$name" ]; do
   printf '%s=%s\n' "$name" "$value" >> "$lines"
 done < "$decl"
 
-# LC_ALL=C so the order is byte order on every box, forever. This line IS the wire format.
+# platform: LC_ALL=C, so the order is byte order on every box, forever -- this line IS the wire
+#           format (see tests/release-state-test.sh for the glibc-vs-BSD collation divergence this
+#           guards against: the digest is computed on macOS at build time and on glibc in the
+#           nightly reconcile).
 rendered="$(LC_ALL=C sort < "$lines")"
 
 if [ "$RENDER" = yes ]; then printf '%s\n' "$rendered"; exit 0; fi

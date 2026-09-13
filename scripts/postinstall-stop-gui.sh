@@ -1,15 +1,15 @@
 #!/bin/sh
-# SOURCED by a product's postinstall (never executed): defines mav_stop_gui_instance, the
-# stop-the-old-menu-bar-process step that MUST run before a postinstall (re)launches the app -- else
-# an update leaves the OLD instance running beside the NEW one ("two menu-bar icons until I quit the
-# old one"). launchd's own unload does not reliably kill a process that ignores SIGTERM, and `open -a`
-# / a fresh agent load then starts the new instance beside the survivor.
-#
-# Match the bundle's Contents/MacOS/<exec> name, NOT the .app path, so an instance still running from a
-# PRE-RENAME bundle is stopped too. TERM, then a guaranteed KILL; scoped to the console user (a
-# per-user GUI process). Prefixed mav_ and contains no `exit`, so sourcing cannot disturb the caller
-# (same discipline as updater/agent-load.in). Staged into the pkg's Scripts dir by package_pkg.sh, so
-# it is present when the postinstall runs on the target -- a shared script on the build host is NOT.
+#   usage: SOURCED by a product's postinstall (never executed). Defines mav_stop_gui_instance
+#          Contents/MacOS/<exec> <console-uid>, the stop-the-old-instance step a postinstall that
+#          relaunches a GUI menu-bar app must call first (assert_gui_relaunch_safe.sh gates on this).
+#          Staged into the pkg's Scripts dir by package-pkg.sh, so it is present when the postinstall
+#          runs on the target -- a shared script on the build host is NOT.
+# platform: launchd's own unload does not reliably kill a process that ignores SIGTERM, and `open -a`
+#           / a fresh agent load then starts the new instance beside the survivor -- an update leaves
+#           the OLD instance running beside the NEW one ("two menu-bar icons until I quit the old
+#           one"). TERM, then a guaranteed KILL; scoped to the console user (a per-user GUI process).
+# spec: tests/assert_gui_relaunch_safe.bats "helper: sourcing defines mav_stop_gui_instance" -- no
+#       `exit` and mav_-prefixed vars, so sourcing this file cannot disturb the caller.
 mav_stop_gui_instance() {  # $1 = Contents/MacOS/<exec>   $2 = console uid
     _mav_exec="$1"; _mav_uid="$2"
     [ -n "$_mav_exec" ] || return 0
