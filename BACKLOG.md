@@ -215,3 +215,111 @@ Tasks 1 and 3 closed the two reachable causes; a third cause would be invisible.
 answer to "when is absence legitimate?" before it can be a check — a genuine first release and a
 self-upstream product with no baseline both legitimately lack a compare link. Design work, not a
 task.
+## 8. Comments gate: two blind spots in `check-comments.sh`
+
+**Cannot see inside heredocs.** ~40 lines of prose in `package-pkg.sh`'s rendered pre/postinstall —
+including the whole R-P1-24 two-updaters-forever reasoning — will never be swept or re-checked. Known
+limitation in the comments spec; demonstrated during the shipyard-cmake collapse, 2026-09-13.
+
+**Ignores trailing comments entirely.** `ci.yml`'s untagged `# the CMake modules gate on Apple clang`
+passes only because it shares a line with code. This is ruling 3's deliberate scope exclusion, now with
+a live example.
+
+## 9. No consumer repo documents how to obtain shipyard outside CI
+
+All 14 surveyed 2026-09-13; the real instructions live in code comments, CLAUDE.md, or test scripts. The
+shipyard-cmake cutover makes this worse — a developer now needs shipyard-cmake installed — and only
+macho-tools' README was fixed, because there the existing text became actively false rather than merely
+absent.
+
+## 10. 1password's `cmake-10_9-gate` job cannot succeed as checked out
+
+It runs `cmake --preset cross` against a "Porthole viewer", but the repo has no CMakeLists.txt, no
+CMakePresets.json and no Porthole source. Pre-existing and unrelated to the flag day, which deliberately
+left it alone (flag-day spec D8).
+
+## 11. Check 18 has three blind spots, and real breakage hid in all of them
+
+It reads workflow `run:` blocks plus `git ls-files -- '*.sh'` minus `tests/`, so `*.bats`, `tests/*.sh`,
+extensionless executables, `*.cmake` and `CMakeLists.txt` are invisible; and it ignores a bare `(` even
+inside files it does read.
+
+**Concrete evidence, all found during the 2026-09-13 cutover:** porthole's
+`tests/test_standalone_build.bats` ran a real configure that CI executes via `run-repo-tests.sh`;
+porthole's extensionless `bin/generate-viewer` printed the build recipe users follow; and five
+`echo "... (build it: cmake --build ...)"` recipes across clang, golang, openssh and swift-runtime.
+
+Across the fourteen repos the gate saw a **minority** of the real call sites — magic-trackpad2 was 4
+visible against 18 invisible, macho-tools 2 of 12, macports-legacy-support 2 of 10.
+
+A gate that reports `ok` because it did not look is worse than no gate, because the `ok` is believed.
+
+## 12. Check 16 has two blind spots of its own
+
+It matches only `.cmake/package[s]`, so a locator reading `$HOME/.local/share/cmake/...` is invisible —
+clang and golang each carried a second locator in `build/versions.sh`, and swift-runtime two more in
+`package.sh` and `scripts/guard.sh`.
+
+It also skips `tests/` entirely, so a locator there can match its pattern exactly and still never be
+reported — magic-trackpad2's `tests/test_appcast_notes.sh` read `~/.cmake/packages/MavericksShipyard`
+and the gate said nothing.
+
+## 13. shipyard's CI never exercises the consumer path of `install/action.yml`
+
+**This is the most valuable finding of the 2026-09-16 cutover.** shipyard's own workflows use
+`uses: ./.github/actions/install` — the LOCAL path — where `github.action_ref` is populated differently
+than for a consumer pinning `@v1`. Every gate, test and review we ran exercised only the path that
+works.
+
+The cutover replaced a warn-and-continue with a hard `exit 1` when the ref would not resolve. That read
+as tightening, and it was — but on a condition nobody had measured. `github.action_ref` is **empty** for
+a consumer calling the action, so the released version broke **all 14 consumers at once**, at the first
+step, before reaching anything the cutover actually changed. Fixed forward in `8c46891` by falling back
+to `basename "$root"`, but nothing would have caught it before release.
+
+What is missing is a CI job that consumes shipyard the way a consumer does — pinned by ref, from
+outside the repo — rather than by relative path. Until that exists, any change to the install action is
+tested only on the half of its behaviour shipyard itself uses.
+
+## 14. `gh run rerun` cannot validate anything in this family
+
+A re-run makes `github.action_ref` empty, so `install@v1` fails at the first step with
+`'' names no shipyard release`. The re-run therefore fails EARLIER and for a DIFFERENT reason than the
+original run — which reads as "nothing changed / the fix did not work" and cost real debugging time on
+2026-09-16.
+
+Two consequences worth writing down. To force a genuine fresh run on a PR, close and reopen it; that
+re-triggers `pull_request` workflows with proper context and adds no commits. But repos whose workflows
+trigger only on `push` (swift-runtime and swift-toolchain use `branches: ['**']` with no
+`pull_request:`) ignore close/reopen entirely and need an actual push.
+
+Entry 13's fix would also make this less sharp, since the fallback covers the re-run case too.
+
+## 15. The major tag could move backwards (fixed 2026-09-16, recorded so it is not reintroduced)
+
+`major-tag` force-pushed `v1` onto its own run's commit unconditionally. Two overlapping releases
+therefore raced, and whichever job finished LAST won regardless of which commit was newer. On
+2026-09-16 a Renovate release and a fix release overlapped, `v1` landed on the OLDER commit, and every
+consumer resolved a stale action for about 40 minutes.
+
+Fixed in `938f902`: the tag moves only forward, skipping when `v1` already points at a descendant.
+Recorded here because the bug was latent for as long as the job has existed and only surfaced once two
+releases happened close enough together — which is to say, it will not resurface as a symptom until the
+next time someone ships quickly, long after anyone remembers why the guard is there.
+
+## 16. No way to pause automerge for a planned window
+
+Renovate merged `mavericks-clang` `.1 -> .2` (PR #11) at 17:40 on 2026-09-16, during a cutover where we
+had deliberately decided to hold it. It did exactly what `default.json` tells it to: checks were green,
+so it shipped.
+
+**This is NOT an argument for restricting automerge on that pin.** The exception rule's test is whether
+a green build can catch a bad bump, and for `mavericks-clang` it demonstrably can — CI verifies the pkg
+against its SHA256SUMS, rebuilds shipyard-cmake with it, runs the compat guard over the output and the
+full suite through the result. The bump was fine and was kept. The 40-minute stale-action window
+belonged to entry 15, not to this merge.
+
+The real gap is narrower: there is no mechanism for a TEMPORARY hold while something risky is in
+flight. Possibly not worth building — the family has already decided fix-forward beats human review of
+routine bumps, and this day is evidence for that policy rather than against it. Recorded so the
+question is asked deliberately rather than rediscovered mid-incident.
