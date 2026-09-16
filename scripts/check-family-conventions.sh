@@ -533,6 +533,18 @@ for p in sys.argv[1:]:
     for job in (wf.get("jobs") or {}).values():
         if not isinstance(job, dict):
             continue
+        # A job that demonstrably runs off macOS is skipped: shipyard ships no Linux pkg and no
+        # Linux shipyard-cmake, so demanding it there is incoherent -- the same reasoning
+        # MavericksShipyardConfig.cmake gives for skipping its refusal unless CMAKE_HOST_APPLE.
+        # Requiring it anyway broke container-tools' ubuntu jobs twice, most recently 2026-09-16.
+        # Skip ONLY when runs-on is plainly non-macOS; anything unresolvable (an expression, a
+        # matrix) is still checked, because a gate that stays silent when it cannot tell is the
+        # failure this family keeps paying for.
+        ro = job.get("runs-on")
+        labels = ro if isinstance(ro, list) else [ro]
+        if labels and all(isinstance(l, str) and "${{" not in l for l in labels) \
+           and not any("macos" in l.lower() for l in labels):
+            continue
         for st in (job.get("steps") or []):
             if not isinstance(st, dict):
                 continue

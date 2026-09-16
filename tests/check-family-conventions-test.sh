@@ -1016,3 +1016,26 @@ printf '%s\n' "$out" | grep -qi 'Traceback' && { echo "FAIL 18: a non-string run
 (cd "$work/p18yaml" && sh "$S" >/dev/null) || { echo "FAIL 18: a non-string run: should simply be skipped: $out"; exit 1; }
 
 echo "PASS: check-family-conventions"
+
+# platform: shipyard ships no Linux pkg and no Linux shipyard-cmake, so a job that demonstrably runs
+#           off macOS must be allowed plain cmake -- requiring it there broke container-tools'
+#           ubuntu jobs twice, most recently during the 2026-09-16 cutover. The macOS case must
+#           still fail, or the skip would have switched check 18 off altogether.
+mkrepo "$work/p18linux"
+printf 'name: CI\njobs:\n  iso:\n    runs-on: ubuntu-latest\n    steps:\n      - run: cmake --preset iso\n' \
+  > "$work/p18linux/.github/workflows/ci.yml"
+(cd "$work/p18linux" && git add -A) >/dev/null 2>&1
+(cd "$work/p18linux" && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL 18: a ubuntu-latest job using plain cmake must be allowed"; exit 1; }
+
+mkrepo "$work/p18mac"
+printf 'name: CI\njobs:\n  build:\n    runs-on: macos-26\n    steps:\n      - run: cmake --preset cross\n' \
+  > "$work/p18mac/.github/workflows/ci.yml"
+(cd "$work/p18mac" && git add -A) >/dev/null 2>&1
+lim18 "$work/p18mac" "a macos-26 job using plain cmake"
+
+mkrepo "$work/p18expr"
+printf 'name: CI\njobs:\n  build:\n    runs-on: ${{ matrix.os }}\n    steps:\n      - run: cmake --preset cross\n' \
+  > "$work/p18expr/.github/workflows/ci.yml"
+(cd "$work/p18expr" && git add -A) >/dev/null 2>&1
+lim18 "$work/p18expr" "an unresolvable runs-on expression (checked, not skipped)"
