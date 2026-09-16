@@ -220,6 +220,16 @@ jobs:
           major="v${{ needs.build.outputs.version }}"; major="${major%%.*}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # platform: this force-push used to be unconditional, so two overlapping releases raced and
+          #           whichever job finished LAST won -- on 2026-09-16 that moved v1 BACKWARDS onto an
+          #           older commit and served every consumer a stale action for 40 minutes. Moving the
+          #           tag only forward is monotonic whatever order the jobs finish in.
+          git fetch --force origin "refs/tags/$major:refs/tags/$major" 2>/dev/null || true
+          if git rev-parse -q --verify "$major^{commit}" >/dev/null 2>&1 \
+             && git merge-base --is-ancestor HEAD "$major^{commit}"; then
+            echo "$major is already at or ahead of $(git rev-parse --short HEAD); leaving it alone"
+            exit 0
+          fi
           git tag -f -a "$major" -m "$major -> v${{ needs.build.outputs.version }}"
           git push -f origin "$major"
           echo "moved $major -> $(git rev-parse --short HEAD)"
