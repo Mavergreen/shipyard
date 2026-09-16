@@ -16,9 +16,9 @@ runs:
       id: cache
       with:
         path: ${{ runner.temp }}/shipyard-cmake-tree
-        # platform: THIS FILE is in the key too -- the sysroot, the SDK symlink, the Rosetta install
-        #           and the build-cmake.sh invocation all live here, so a change to how the tree is
-        #           built would otherwise restore a tree built the old way and look like it worked.
+        # platform: THIS FILE is in the key too -- the sysroot, the SDK symlink and the
+        #           build-cmake.sh invocation all live here, so a change to how the tree is built
+        #           would otherwise restore a tree built the old way and look like it worked.
         key: shipyard-cmake-${{ runner.os }}-${{ hashFiles('cmake.pin', 'mavericks-clang.pin', 'patches/cmake/**', 'scripts/build-cmake.sh', 'scripts/lipo-merge-tree.sh', '.github/actions/shipyard-cmake/action.yml') }}
 
     - if: steps.cache.outputs.cache-hit != 'true'
@@ -37,21 +37,16 @@ runs:
         gh release download "$cv" -R ModernMavericks/clang --pattern 'mavericks-clang-*-cross-*.pkg' --pattern SHA256SUMS --dir "$d"
         ( cd "$d" && grep ' mavericks-clang-.*-cross-.*\.pkg$' SHA256SUMS | shasum -a 256 -c - )
         sudo installer -pkg "$d"/mavericks-clang-*-cross-*.pkg -target /
-        # platform: bootstrap compiles a stage-0 cmake and RUNS it, and mavericks-clang always targets
-        #           x86_64/10.9 -- so on this arm64 runner that stage-0 is an x86_64 binary. Without
-        #           Rosetta it cannot run and bootstrap reports "Cannot find appropriate C compiler".
-        softwareupdate --install-rosetta --agree-to-license \
-          || { echo "::error::cannot install Rosetta; the x86_64/10.9 half's bootstrap cannot run its stage-0 here"; exit 1; }
         mc="$(ls -d /usr/local/mavericks-clang-*-cross | head -1)"
         sdk="$("$mc/libexec/fetch_sdk.sh")"
         # platform: mavericks-clang's bin/clang.cfg and clang++.cfg hardcode
         #           `-isysroot <CFGDIR>/../SDKs/MacOSX10.9.sdk`, and the pkg ships that SDKs/
         #           directory EMPTY: fetch_sdk.sh only caches the SDK under
         #           $HOME/Library/Caches/mavericks-sdk and prints its path, it never populates the
-        #           prefix. --sysroot reaches only build-cmake.sh's own CMake-level configure, not the
-        #           raw compiler invocations bootstrap's stage-0 makes -- those read the .cfg and get
-        #           no headers at all. So symlink the toolchain's SDKs entry at the fetched SDK, as
-        #           mavericks-nodejs and mavericks-clang's own smoke test do.
+        #           prefix. So every invocation of that driver reads a .cfg naming a path that does
+        #           not exist until this symlink does -- symlink the toolchain's SDKs entry at the
+        #           fetched SDK, as mavericks-nodejs and mavericks-clang's own smoke test do.
+        #           build-cmake.sh's --sysroot is the CMake-level setting and does not replace it.
         sudo mkdir -p "$mc/SDKs"
         sudo ln -sfn "$sdk" "$mc/SDKs/MacOSX10.9.sdk"
         CC="$mc/bin/clang" CXX="$mc/bin/clang++" \

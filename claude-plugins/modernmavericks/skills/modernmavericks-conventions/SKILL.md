@@ -69,9 +69,9 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   config refuses, and the failure surfaces as an unexplained configure error inside the IDE.
 
   **shipyard-cmake has no HTTPS in CMake's own downloader.** `file(DOWNLOAD https://…)` and
-  `FetchContent` over HTTPS fail with "Unsupported protocol". That is deliberate: it bootstraps with
-  `--no-system-libs` so it links nothing from the build host, CMake's bundled curl has no macOS TLS
-  backend without OpenSSL, and 10.9's libcurl is too old to build CMake 4.4 against. Since this is now
+  `FetchContent` over HTTPS fail with "Unsupported protocol". That is deliberate: it is built with
+  `CMAKE_USE_SYSTEM_LIBRARIES=0` so it links nothing from the build host, CMake's bundled curl has no
+  macOS TLS backend without OpenSSL, and 10.9's libcurl is too old to build CMake 4.4 against. Since this is now
   the only cmake the family may use, the limitation applies to every repo — **fetch with
   `mavericks_fetch.sh` (tarball, pinned SHA-256) or `clone_pinned.sh` (git, pinned digest)**, which is
   what the family already did and which verifies what `file(DOWNLOAD)` never did.

@@ -37,10 +37,10 @@ pointed at `/usr/local/bin/shipyard-cmake`. The shared presets live at
 
 **One thing shipyard-cmake cannot do: HTTPS from inside CMake.** `file(DOWNLOAD https://…)` and
 `FetchContent` over HTTPS fail with "Unsupported protocol" — deliberately, and loudly rather than
-fragilely. shipyard-cmake bootstraps with `--no-system-libs` so it links nothing from the build host;
-CMake's own bundled curl has no macOS TLS backend without OpenSSL, and 10.9's system libcurl (7.30) is
-too old for CMake 4.4 to build against. Since this is the cmake the family is now required to use, the
-limitation is everyone's: **fetch with the shipyard helpers instead**, which are pinned and
+fragilely. shipyard-cmake is built with `CMAKE_USE_SYSTEM_LIBRARIES=0` so it links nothing from the
+build host; CMake's own bundled curl has no macOS TLS backend without OpenSSL, and 10.9's system
+libcurl (7.30) is too old for CMake 4.4 to build against. Since this is the cmake the family is now
+required to use, the limitation is everyone's: **fetch with the shipyard helpers instead**, pinned and
 integrity-checked in a way `file(DOWNLOAD)` never was —
 
 ```sh

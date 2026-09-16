@@ -141,7 +141,7 @@ require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-sep
 # spec: 2026-09-11 decision 1 -- both roots BECOME the product prefix verbatim, so the enumeration of
 #       the payload is a gate rather than a description: a stray shipyard-cmake-tree.tar.gz left
 #       beside the tree it was made from shipped a copy of the whole payload inside the payload, and
-#       nothing complained. `man` is allowed though our bootstrap does not build it -- CMake installs
+#       nothing complained. `man` is allowed though our build does not produce it -- CMake installs
 #       man pages there when Sphinx is present, and a doc-enabled build must not become a packaging
 #       failure.
 require_only --cmake-tree "$TREE" "bin doc man share"
