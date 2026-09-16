@@ -153,3 +153,65 @@ to 10.x" to six reviewable items, four of them one-liners.
 
 Suggested default: openssh, ed25519, and anything touching signing or key handling get a diff-first
 pause regardless of how routine the change looks.
+
+## 6. `docs/` should be committable; `docs/superpowers/` must never be
+
+Superpowers plans, specs and SDD ledgers are **ephemeral working material** and must never be
+committed. Everything else under `docs/` is ordinary documentation and should be.
+
+Today the family ignores the wrong thing, inconsistently:
+
+| repo | rule |
+|---|---|
+| shipyard, openssh, golang, container-tools, swift-runtime, ed25519, porthole | `docs/` — ignores everything |
+| **magic-trackpad2** | `/docs/superpowers/` — **correct; this is the shape to standardise on** |
+| tailscale | no rule at all |
+
+Ignoring all of `docs/` costs something real: it makes `docs/` unusable for documentation anyone else
+can read, so useful material either goes somewhere odd or stays local. It also silently hides work —
+on 2026-09-13 a session "preserved" a plan ledger and two research write-ups into
+`shipyard/docs/superpowers/specs/`, which felt like archiving and was in fact machine-local invisibility.
+
+**Wanted:**
+1. Every repo's `.gitignore` narrows `docs/` to `/docs/superpowers/` (magic-trackpad2 already has it;
+   tailscale needs the rule added).
+2. New-project scaffolding emits the narrow rule, not the broad one.
+3. The conventions skill says which is which and why.
+4. A conventions check, and it must assert **both directions**: `docs/superpowers/` IS ignored (an
+   ephemeral plan must never be committable) and `docs/` as a whole is NOT (documentation must be).
+   A one-directional check would let the current broad rule keep passing.
+
+## 7. Parked findings from the release-notes enforcement work (2026-09-12)
+
+Recorded in that plan's SDD ledger, which is gitignored and therefore machine-local — hence copied
+here. All were deliberately not-fixed with reasons; none is urgent; each is small.
+
+- **`ref_moved` is not `$exclkey`-aware** (`scripts/ingredient-notes.sh`). If a repo passed
+  `path:REF` on a `REPO`/`REF`/`DIGEST` component file, a real `DIGEST` move would be suppressed and
+  the file would report **nothing**. That is the silent-nothing class, which bit this work four
+  separate times. **Fix is one condition:** only set `ref_moved=yes` when `REF` is not the excluded
+  key. Unreachable today — `own-upstream-paths` is only ever `pins.env:SWIFT_VERSION`-shaped, never a
+  component triple — which is the only reason it was parked.
+- **A decoy tag that proves less than it looks** (`tests/previous-release-tag-test.sh`).
+  `20260802-rc1` does reach `numeric()`'s skip, but `ver_cmp` defaults a missing component to 0, so
+  it loses on ordering even with the skip disabled entirely — verified by mutating both. Wants a
+  decoy that would otherwise sort HIGHEST, e.g. `20260899.9-rc1`.
+- **A hardcoded example in a fatal message** (`scripts/release-notes.sh`). The unmatched-`--line`
+  error ends with a literal `(1.26, not 126)` instead of deriving the shape. Harmless while golang is
+  the only `--line` consumer; the day a second product adopts `--line`, it quotes golang's example at
+  an unrelated operator.
+- **`v1` satisfies a `## Shipyard 1.0.209` title** via the bare `1` after v-stripping
+  (`scripts/check-release-notes.sh`). Unreachable: the `v1` major tag is moved by a separate job that
+  never calls `publish-release.yml`.
+- **A whitespace-only notes file passes conformance.** It renders to nothing, so both digests become
+  sha256-of-empty and agree. Caught upstream by `check-release-notes.sh`'s "empty apart from
+  whitespace"; defence-in-depth only.
+- **`inside == 0 exit` in the appcast CDATA extractor** is unnecessary today — one `<item>` per
+  appcast.
+
+**And one that is not small, recorded by the final whole-branch review:** *nothing in any of the
+three enforcement layers checks that a body actually **has** its compare link or ingredient section.*
+Tasks 1 and 3 closed the two reachable causes; a third cause would be invisible. This needs a real
+answer to "when is absence legitimate?" before it can be a check — a genuine first release and a
+self-upstream product with no baseline both legitimately lack a compare link. Design work, not a
+task.
