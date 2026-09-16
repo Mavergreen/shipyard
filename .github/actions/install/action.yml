@@ -57,6 +57,11 @@ runs:
         #           the repo root (with CMakeLists.txt) is three levels up.
         root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         ref='${{ github.action_ref }}'
+        # platform: github.action_ref is EMPTY for a consumer repo calling this action, and on any
+        #           re-run -- it broke all 14 consumers at once on 2026-09-16. $root is
+        #           <runner>/_actions/ModernMavericks/shipyard/<ref>, so its basename is the ref we
+        #           were actually checked out at, which is the one source always present.
+        ref="${ref:-$(basename "$root")}"
         ver="$(sh "$root/scripts/resolve-action-version.sh" "$ref")" \
           || { echo "::error::'$ref' names no shipyard release -- pin ModernMavericks/shipyard/.github/actions/install@v1 (or an exact @vX.Y.Z)"; exit 1; }
         d="$RUNNER_TEMP/shipyard-pkg"; mkdir -p "$d"
