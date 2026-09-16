@@ -33,4 +33,25 @@ fi
 
 if sh "$S" --arch x86_64 >/dev/null 2>&1; then echo "FAIL: --arch without --min-os/--prefix must fail"; exit 1; fi
 
+# spec: scripts/build-cmake.sh -- the configure needs CMAKE_SYSTEM_VERSION as a DARWIN release, and
+#       the mapping is arithmetic on --min-os. A floor it cannot map must be refused here, before
+#       anything is downloaded, rather than reaching cmake as an empty or nonsense version.
+if msg="$(sh "$S" --arch x86_64 --min-os banana --prefix "$work/p" 2>&1)"; then
+  echo "FAIL: an unmappable --min-os must be refused"; exit 1
+fi
+printf '%s' "$msg" | grep -q 'min-os' || { echo "FAIL: the refusal must name --min-os; got: $msg"; exit 1; }
+
+# spec: scripts/build-cmake.sh -- CMake is configured by a host-native cmake now, not ./bootstrap,
+#       so a box without one must say so and say what to install instead of failing later inside a
+#       download or a configure.
+if PATH=/usr/bin:/bin command -v cmake >/dev/null 2>&1; then
+  echo "SKIP: a cmake is on the minimal PATH here, so the missing-host-cmake refusal cannot be exercised"
+else
+  if msg="$(PATH=/usr/bin:/bin sh "$S" --arch x86_64 --min-os 10.9 --prefix "$work/p" 2>&1)"; then
+    echo "FAIL: no cmake on PATH must be refused"; exit 1
+  fi
+  printf '%s' "$msg" | grep -q 'cmake.org/download' \
+    || { echo "FAIL: the refusal must name where to get a cmake; got: $msg"; exit 1; }
+fi
+
 echo "PASS: build-cmake"
