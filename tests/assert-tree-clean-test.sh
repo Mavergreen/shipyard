@@ -157,5 +157,39 @@ grep -q 'LC_ALL=C comm' "$S" || pinned=1
 [ "$pinned" -eq 0 ] \
   || say "the snapshot sort and the manifest comm must both be pinned to LC_ALL=C"
 
+mkrepo "$work/deleted"
+(cd "$work/deleted" && sh "$S" --record) >/dev/null 2>&1
+rm "$work/deleted/tracked.txt"
+if (cd "$work/deleted" && sh "$S" >/dev/null 2>&1); then
+  say "a deleted tracked file should still fail"; fi
+(cd "$work/deleted" && sh "$S" 2>&1 | grep -q 'tracked.txt') \
+  || say "the deletion should name tracked.txt"
+if (cd "$work/deleted" && sh "$S" 2>&1 | grep -q 'wrote into the source tree: tracked.txt'); then
+  say "a deleted file should not be reported as something the build wrote"; fi
+
+mkrepo "$work/renamed"
+(cd "$work/renamed" && printf 'y\n' > longfilename.txt && git add longfilename.txt \
+   && git -c user.email=t@t -c user.name=t commit -qm add) >/dev/null 2>&1
+(cd "$work/renamed" && sh "$S" --record) >/dev/null 2>&1
+(cd "$work/renamed" && git mv longfilename.txt renamed.txt) >/dev/null 2>&1
+if (cd "$work/renamed" && sh "$S" >/dev/null 2>&1); then
+  say "a renamed tracked file should still fail"; fi
+if (cd "$work/renamed" && sh "$S" 2>&1 | grep -q ': gfilename.txt$'); then
+  say "a rename should not report a truncated old path"; fi
+(cd "$work/renamed" && sh "$S" 2>&1 | grep -q ': longfilename.txt$') \
+  || say "a rename should name the old path in full"
+(cd "$work/renamed" && sh "$S" 2>&1 | grep -q ': renamed.txt$') \
+  || say "a rename should name the new path too"
+
+mkrepo "$work/newline"
+(cd "$work/newline" && sh "$S" --record) >/dev/null 2>&1
+: > "$work/newline/$(printf 'we\nird')"
+if (cd "$work/newline" && sh "$S" >/dev/null 2>&1); then
+  say "a path containing a newline should still fail"; fi
+if (cd "$work/newline" && sh "$S" 2>&1 | grep -q ': we$'); then
+  say "a path containing a newline should not be reported truncated to its first line"; fi
+(cd "$work/newline" && sh "$S" 2>&1 | grep -q 'we\\nird') \
+  || say "a path containing a newline should be reported whole, with the newline escaped"
+
 [ "$fails" -eq 0 ] && echo "assert-tree-clean: ok"
 exit $([ "$fails" -eq 0 ] && echo 0 || echo 1)
