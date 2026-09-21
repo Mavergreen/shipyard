@@ -169,17 +169,25 @@ verification round), and the test suites compile fixtures and dylibs on every
 run. This is the single cheapest speedup available to this family.
 
 - **shipyard's shared hidden presets (`mavericks-native` / `mavericks-cross`) declare
-  `MAVERICKS_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mm-build`.**
-  They name no repo, so they carry no `binaryDir` of their own — a consumer's own
-  preset supplies it, derived from the variable:
+  `MAVERICKS_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mm-build`,
+  and derive their OWN `binaryDir` from it, keyed by `${sourceDirName}`:**
   ```json
-  {"name": "native", "inherits": "mavericks-native",
-   "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/<repo>-native"}
+  "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-native"
   ```
-  A preset's `environment` block inherits through `inherits`, so the child sees the
-  hidden parent's default without repeating it. Do NOT hardcode a developer's local
-  path here, and do NOT use `${sourceDir}/build-*` — both put the build back inside
-  the (possibly NFS) source tree.
+  A consumer's preset supplies neither `MAVERICKS_BUILD_ROOT` nor `binaryDir` — it
+  just inherits:
+  ```json
+  {"name": "native", "inherits": "mavericks-native"}
+  ```
+  `${sourceDirName}` is the name of the checkout directory, so it differs per
+  checkout — this matters because shipyard itself has three checkouts in this tree
+  at once, and a repo can be checked out under more than one path spelling. A
+  `binaryDir` that did not vary by checkout would make two checkouts of the same
+  repo share one `CMakeCache.txt`, and CMake would refuse to reconfigure either one
+  ("does not match the source ... used to generate cache"). Leaving `binaryDir` out
+  of the consumer's own preset also removes a per-repo chance to typo the path. Do
+  NOT hardcode a developer's local path here, and do NOT use `${sourceDir}/build-*`
+  — both put the build back inside the (possibly NFS) source tree.
 - **A script-driven repo (no CMake presets) reads `$MAVERICKS_BUILD_ROOT` from the
   environment directly**, with the same `${TMPDIR}/mm-build` fallback if it is unset.
 - **To override the location, use `CMakeUserPresets.json`, not a shell export.** A
