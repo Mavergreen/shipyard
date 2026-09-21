@@ -1553,9 +1553,32 @@ it replaced inspected `CMakePresets.json`'s `binaryDir`, which would have silent
 from shell scripts, and would have exempted by default any future repo using meson, cargo or a
 Dockerfile. **Exempt-by-default is the opposite of a convention.** Forgetting `--record` makes the
 assertion *stricter*, not weaker: with no manifest it falls back to "nothing untracked or ignored
-may exist outside the allowlist" and says so. Legitimate in-tree writes go one per line in
-`.mavericks-intree` with a reason after `#`; a repo with no such file allows nothing, which is the
-right default.
+may exist outside the allowlist" and says so.
+
+Both halves are required, and the gate checks for both: `--record` on its own returns 0
+unconditionally, so a repo that calls only that half has adopted the half of the contract that can
+never fail. The gate matches the call *shape*, so a step name or a trailing comment that merely
+spells `assert-tree-clean.sh` does not count as having called it.
+
+**The `.mavericks-intree` allowlist**, for the in-tree writes a repo genuinely needs:
+
+- One entry per line. Everything after `#` is a comment; the reason for the entry belongs there.
+- The file must be **tracked by git**. An untracked one is ignored — with a warning — because an
+  allowlist a build step wrote for itself is not a reviewed allowlist.
+- An entry ending in `/` is a **prefix** match. `dist/` exempts the entire subtree beneath it, and
+  nothing written anywhere under it is ever reported.
+- An entry without the trailing slash is an **exact** match on a single path. `dist` allows a file
+  literally named `dist` and matches nothing inside a directory of that name — so a directory
+  written without its slash allows nothing at all. The script warns when an entry names a directory
+  that exists on disk, for exactly this reason.
+- A repo with no such file allows nothing, which is the right default.
+
+**Prefer the narrowest entry that works**, and know what a subtree entry costs. shipyard and clang
+both declare `dist/` and both run the bare assertion at the *end* of the build job: packaging,
+signing, appcast and install-smoke therefore all run inside the exempt subtree, and nothing they
+write there is checked. That is a deliberate trade — asserting last covers more of the job than
+asserting before the first `mkdir` does — but it is a trade, not a freebie. A maintainer who
+declares `build/` "for one file" has handed every later change a repo-wide exemption.
 
 **20. A repo that commits `CMakePresets.json` must gitignore `CMakeUserPresets.json`.** That file
 is the per-developer build-location override, and it is the *only* thing that can override the

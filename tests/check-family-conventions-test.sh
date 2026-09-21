@@ -1064,6 +1064,59 @@ sed 's|^\( *\)- run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"|\1# - run: sh "
 if (cd "$work/assertcomment" && sh "$S" >/dev/null 2>&1); then
   echo "FAIL: a commented-out assertion call should not satisfy check 19"; exit 1; fi
 
+# spec: scripts/check-family-conventions.sh check 19 -- --record returns 0 unconditionally, so a
+#       repo that calls only that half has adopted the half of the contract that can never fail.
+#       This is the one failure mode unique to check 19, and a substring match for the script name
+#       cannot see it.
+mkrepo "$work/recordonly"
+grep -v 'assert-tree-clean\.sh"$' "$work/ok/.github/workflows/release.yml" \
+  > "$work/recordonly/.github/workflows/release.yml"
+(cd "$work/recordonly" && git add -A) >/dev/null 2>&1
+if (cd "$work/recordonly" && sh "$S" >/dev/null 2>&1); then
+  echo "FAIL: a repo that calls only --record should not satisfy check 19"; exit 1; fi
+(cd "$work/recordonly" && sh "$S" 2>&1 | grep -q 'assert-tree-clean') \
+  || { echo "FAIL: the --record-only case should name assert-tree-clean.sh"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh check 19 -- the other half. With no recording the bare
+#       call falls back to "every untracked or ignored path counts", which is a different and
+#       stricter assertion than the one this convention describes.
+mkrepo "$work/bareonly"
+grep -v -e 'assert-tree-clean\.sh" --record' "$work/ok/.github/workflows/release.yml" \
+  > "$work/bareonly/.github/workflows/release.yml"
+(cd "$work/bareonly" && git add -A) >/dev/null 2>&1
+if (cd "$work/bareonly" && sh "$S" >/dev/null 2>&1); then
+  echo "FAIL: a repo that never records the tree should not satisfy check 19"; exit 1; fi
+
+# spec: scripts/check-family-conventions.sh check 19 -- a step NAME is not a call. ci_mentions
+#       strips whole-line comments only, so before check 19 required the call shape a workflow
+#       that merely spelled the script name in its step titles passed.
+mkrepo "$work/assertname"
+sed 's|- run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"|- name: assert-tree-clean.sh|' \
+  "$work/ok/.github/workflows/release.yml" > "$work/assertname/.github/workflows/release.yml"
+(cd "$work/assertname" && git add -A) >/dev/null 2>&1
+if (cd "$work/assertname" && sh "$S" >/dev/null 2>&1); then
+  echo "FAIL: a step name mentioning the script should not satisfy check 19"; exit 1; fi
+
+# spec: scripts/check-family-conventions.sh check 19 -- a TRAILING comment is not a call either,
+#       and ci_mentions cannot strip one without guessing where a YAML run: line's shell quoting
+#       ends. Requiring the call shape makes the guess unnecessary.
+mkrepo "$work/asserttrailing"
+sed 's|- run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"|- run: make all   # we should add assert-tree-clean.sh|' \
+  "$work/ok/.github/workflows/release.yml" > "$work/asserttrailing/.github/workflows/release.yml"
+(cd "$work/asserttrailing" && git add -A) >/dev/null 2>&1
+if (cd "$work/asserttrailing" && sh "$S" >/dev/null 2>&1); then
+  echo "FAIL: a trailing comment mentioning the script should not satisfy check 19"; exit 1; fi
+
+# spec: scripts/check-family-conventions.sh check 19 -- shipyard's own workflows call the script
+#       by repo-relative path, with no quotes and no $SHIPYARD_SCRIPTS, because in shipyard the
+#       scripts ARE the repo. Both spellings are in use across the family and both must pass.
+mkrepo "$work/assertunquoted"
+sed 's|sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"|sh scripts/assert-tree-clean.sh|' \
+  "$work/ok/.github/workflows/release.yml" > "$work/assertunquoted/.github/workflows/release.yml"
+(cd "$work/assertunquoted" && git add -A) >/dev/null 2>&1
+(cd "$work/assertunquoted" && sh "$S" >/dev/null) \
+  || { echo "FAIL: the unquoted repo-relative spelling should satisfy check 19"; exit 1; }
+
 # spec: scripts/check-family-conventions.sh check 20 -- CMakeUserPresets.json is the
 #       per-developer build-location override, because a preset's own `environment` block is
 #       applied after the real environment and therefore beats an exported variable. It must be

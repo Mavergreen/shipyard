@@ -583,10 +583,19 @@ rm -f "$cmdlist"
 #       exempted clang and golang -- the two repos with the MOST in-tree build references --
 #       because they build from shell scripts. ci_mentions strips comment lines, so a
 #       commented-out call is not a call.
+# spec: SKILL.md "Check 19" -- BOTH halves are required, because --record returns 0
+#       unconditionally: a repo that calls only --record has adopted the half that can never
+#       fail. Matching the call SHAPE rather than the bare script name is also what tells a call
+#       from a mention -- a step name or a trailing comment carries no leading "/" and no
+#       argument. The "*" allows the closing quote in `sh "$SHIPYARD_SCRIPTS/...sh" --record`;
+#       both that spelling and shipyard's own unquoted `sh scripts/...sh` are in use family-wide.
 if [ -n "$CI_FILES" ]; then
-  ci_mentions 'assert-tree-clean\.sh' \
+  ci_mentions '/assert-tree-clean\.sh"*[[:space:]]*--record' \
+    || fail "no workflow records the source tree before the build -- assert-tree-clean.sh --record is never called" \
+            "call \$SHIPYARD_SCRIPTS/assert-tree-clean.sh --record before the build; the bare call has nothing to compare against without it"
+  ci_mentions '/assert-tree-clean\.sh"*[[:space:]]*$' \
     || fail "no workflow asserts that the build wrote nothing into the source tree" \
-            "call \$SHIPYARD_SCRIPTS/assert-tree-clean.sh --record before the build and \$SHIPYARD_SCRIPTS/assert-tree-clean.sh after it"
+            "call \$SHIPYARD_SCRIPTS/assert-tree-clean.sh after the build; --record on its own returns 0 unconditionally and can never fail"
 fi
 
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
