@@ -34,8 +34,24 @@ fixture() {  # $1 = directory to populate as a CMake source root
   "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
   "include": ["mavericks-presets.json"],
   "configurePresets": [
-    { "name": "native", "inherits": "mavericks-native" } ] }
+    { "name": "native", "inherits": "mavericks-native" },
+    { "name": "cross", "inherits": "mavericks-cross" } ] }
 JSON
+}
+
+# A whole-file grep on mavericks-presets.json cannot tell the two hidden
+# presets' cacheVariables blocks apart, so a swapped MAVERICKS_EXPECTED_MODE
+# (or a dropped CMAKE_OSX_ARCHITECTURES/CMAKE_OSX_DEPLOYMENT_TARGET) would
+# pass one anyway -- and a swapped mode label ships every repo's `native`
+# build in CROSS mode, silently. Instead of parsing the JSON, this drives
+# the check off a REAL configure of each hidden preset and inspects the
+# resulting CMakeCache.txt, which is what the inherits chain actually
+# resolved to -- stronger than `cmake -N`, which only previews, and it
+# reuses the configure machinery this test already exercises rather than
+# introducing a second, less-familiar way to ask CMake a question.
+check_cache_var() {  # $1=CMakeCache.txt $2=var $3=expected value $4=label
+  grep -q "^$2:.*=$3\$" "$1" \
+    || say "$4: $2 is not '$3' in $1"
 }
 
 # Two SEPARATE checkouts (distinct mktemp'd source roots) using the SAME
@@ -50,7 +66,8 @@ work2="$(mktemp -d "${TMPDIR:-/tmp}/presets2.XXXXXX")"
 b1="$(basename "$work1")"; b2="$(basename "$work2")"
 bd1="${TMPDIR:-/tmp}/mm-build/${b1}-native"
 bd2="${TMPDIR:-/tmp}/mm-build/${b2}-native"
-trap 'rm -rf "$work1" "$work2" "$bd1" "$bd2"' EXIT INT TERM
+bd1cross="${TMPDIR:-/tmp}/mm-build/${b1}-cross"
+trap 'rm -rf "$work1" "$work2" "$bd1" "$bd2" "$bd1cross"' EXIT INT TERM
 
 fixture "$work1"
 fixture "$work2"
@@ -76,6 +93,25 @@ if [ "$bd1" = "$bd2" ]; then say "two different checkouts resolved to the SAME b
 # ... used to generate cache".
 out1b="$(cd "$work1" && cmake --preset native 2>&1)" \
   || say "checkout 1 does not reconfigure after checkout 2 ran: $out1b"
+
+# mavericks-native and mavericks-cross must each carry the RIGHT mode label,
+# per preset -- not just "both strings appear somewhere in the file", which
+# a swap between the two blocks would satisfy. Configuring `cross` in the
+# same checkout as `native` (distinct binaryDir, since the mode suffix
+# differs) exercises mavericks-cross's own cacheVariables block for real.
+out1cross="$(cd "$work1" && cmake --preset cross 2>&1)" \
+  || say "checkout 1 does not configure the cross preset: $out1cross"
+
+if [ -f "$bd1/CMakeCache.txt" ]; then
+  check_cache_var "$bd1/CMakeCache.txt" MAVERICKS_EXPECTED_MODE native "mavericks-native"
+  check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-native"
+  check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-native"
+fi
+if [ -f "$bd1cross/CMakeCache.txt" ]; then
+  check_cache_var "$bd1cross/CMakeCache.txt" MAVERICKS_EXPECTED_MODE cross "mavericks-cross"
+  check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-cross"
+  check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-cross"
+fi
 
 [ "$fails" -eq 0 ] && echo "mavericks-presets: ok"
 exit $([ "$fails" -eq 0 ] && echo 0 || echo 1)
