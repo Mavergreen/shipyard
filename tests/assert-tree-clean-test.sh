@@ -58,6 +58,22 @@ printf 'NEVER_WRITTEN  # nothing writes this any more\n' > "$work/stale/.maveric
 (cd "$work/stale" && sh "$S" --record) >/dev/null 2>&1
 (cd "$work/stale" && sh "$S" 2>&1 | grep -q 'NEVER_WRITTEN') \
   || say "an allowlist entry nothing wrote should be reported"
+(cd "$work/stale" && sh "$S" >/dev/null 2>&1) \
+  || say "a stale allowlist entry alone should still exit 0"
+
+# 6. a bare allowlist entry must match EXACTLY, not as a prefix -- VERSION must
+# not also allow VERSION_HISTORY_DUMP.log
+mkrepo "$work/prefix"
+printf 'VERSION  # the build stamps the resolved version\n' > "$work/prefix/.mavericks-intree"
+(cd "$work/prefix" && git add .mavericks-intree \
+   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
+(cd "$work/prefix" && sh "$S" --record) >/dev/null 2>&1
+printf '1.0.0\n' > "$work/prefix/VERSION"
+printf 'oops\n' > "$work/prefix/VERSION_HISTORY_DUMP.log"
+if (cd "$work/prefix" && sh "$S" >/dev/null 2>&1); then
+  say "an undeclared sibling sharing a declared path's prefix should fail"; fi
+(cd "$work/prefix" && sh "$S" 2>&1 | grep -q 'VERSION_HISTORY_DUMP.log') \
+  || say "the failure should name VERSION_HISTORY_DUMP.log"
 
 [ "$fails" -eq 0 ] && echo "assert-tree-clean: ok"
 exit $([ "$fails" -eq 0 ] && echo 0 || echo 1)

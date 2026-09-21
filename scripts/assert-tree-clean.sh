@@ -24,7 +24,7 @@ set -eu
 
 MANIFEST="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/mavericks-tree-manifest"
 
-snapshot() { git status --porcelain --ignored -z | tr '\0' '\n' | sed 's/^...//' | sort; }
+snapshot() { git status --porcelain --ignored -z | tr '\0' '\n' | sed 's/^...//' | LC_ALL=C sort; }
 
 if [ "${1:-}" = "--record" ]; then
   snapshot > "$MANIFEST"
