@@ -38,6 +38,9 @@ jobs:
           source: build
           cmake-tree: ${{ steps.cm.outputs.tree }}
 
+      - name: Record the pre-build tree
+        run: sh scripts/assert-tree-clean.sh --record
+
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
@@ -176,6 +179,9 @@ jobs:
             sudo grep -E 'preinstall|postinstall|mavericks-shipyard' /var/log/install.log | tail -n 100 || true
           fi
           [ "$bad" -eq 0 ] || exit 1
+
+      - name: The build must not have written into the source tree
+        run: sh scripts/assert-tree-clean.sh
 
       - uses: actions/upload-artifact@v7
         with:

@@ -27,6 +27,9 @@ jobs:
           source: build
           cmake-tree: ${{ steps.cm.outputs.tree }}
 
+      - name: Record the pre-build tree
+        run: sh scripts/assert-tree-clean.sh --record
+
       # spec: this job's own PyYAML, not .github/actions/install's -- consumers reach the
       #       workflow-parse gate through family-conventions.yml on ubuntu-latest, whose python3
       #       already has PyYAML, so provisioning it in the shared install action would run a needless
@@ -45,6 +48,9 @@ jobs:
 
       - name: Standalone test suites
         run: sh scripts/run-repo-tests.sh
+
+      - name: The build must not have written into the source tree
+        run: sh scripts/assert-tree-clean.sh
 
   # spec: R-P1-17 -- this job builds (or restores) the universal shipyard-cmake and publishes it as a
   #       run artifact so it can be run on a real 10.9 box, the only proof the x86_64 slice works
@@ -65,6 +71,9 @@ jobs:
         with:
           source: build
           cmake-tree: ${{ steps.cm.outputs.tree }}
+
+      - name: Record the pre-build tree
+        run: sh scripts/assert-tree-clean.sh --record
 
       # spec: scripts/package-pkg.sh -- $SHIPYARD_CMAKE_TREE, never the prefix install@v1 assembled:
       #       that prefix has shipyard installed into it, and this artifact is the bare CMake tree a
@@ -129,3 +138,6 @@ jobs:
             sudo grep -E 'preinstall|postinstall|mavericks-shipyard' /var/log/install.log | tail -n 100 || true
           fi
           [ "$bad" -eq 0 ] || exit 1
+
+      - name: The build must not have written into the source tree
+        run: sh scripts/assert-tree-clean.sh

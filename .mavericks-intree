@@ -1,0 +1,2 @@
+VERSION    # release.yml's "Resolve the version" step stamps the resolved version here; CMakeLists reads it back
+dist/    # release.yml's Package, Release notes and Sign + appcast steps stage the release there on purpose

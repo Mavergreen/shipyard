@@ -6,3 +6,4 @@ docs/
 
 # VERSION is a build product (this is a first-party repo: version = UPSTREAM_VERSION); never committed.
 /VERSION
+/dist/
