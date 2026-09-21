@@ -1536,6 +1536,33 @@ two consumers within the hour it shipped.
   at configure time, where the config refuses the foreign cmake by name however it was spelled. The
   gate moves the common case earlier; it is not the only thing standing there.
 
+**19. A repo whose CI builds must CALL the out-of-tree assertion.** `--record` before the build,
+a bare call after it:
+
+```yaml
+- run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
+# ... the repo's build, whatever it is ...
+- run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
+```
+
+The assertion asks what the source tree looks like **after** a build, never how the build ran, so
+one mechanism covers all six build shapes in this family and a build system nobody has invented
+yet. The check requires the *call*, not a build location, and that is the whole point: the design
+it replaced inspected `CMakePresets.json`'s `binaryDir`, which would have silently exempted
+`clang` and `golang` — the two repos with the most in-tree build references — because they build
+from shell scripts, and would have exempted by default any future repo using meson, cargo or a
+Dockerfile. **Exempt-by-default is the opposite of a convention.** Forgetting `--record` makes the
+assertion *stricter*, not weaker: with no manifest it falls back to "nothing untracked or ignored
+may exist outside the allowlist" and says so. Legitimate in-tree writes go one per line in
+`.mavericks-intree` with a reason after `#`; a repo with no such file allows nothing, which is the
+right default.
+
+**20. A repo that commits `CMakePresets.json` must gitignore `CMakeUserPresets.json`.** That file
+is the per-developer build-location override, and it is the *only* thing that can override the
+shared default: a preset's own `environment` block is applied after the real process environment,
+so exporting `MAVERICKS_BUILD_ROOT` cannot redirect a `--preset` build. Left unignored it sits in
+`git status` and gets committed by accident, pinning everyone to one person's paths. A repo with
+no committed presets file has no override channel and is not asked about one.
 
 Wire it with the reusable workflow — three lines, and it never changes when a check is added:
 

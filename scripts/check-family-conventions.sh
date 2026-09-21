@@ -575,6 +575,32 @@ while IFS="$TAB" read -r f line; do
 done < "$cmdlist"
 rm -f "$cmdlist"
 
+# spec: SKILL.md "Family conventions" check 19 -- a repo whose CI builds must CALL the
+#       out-of-tree assertion. The assertion asks what the source tree looks like after a
+#       build and never how the build ran, so it holds for a build system nobody has invented
+#       yet; requiring the call is what makes it impossible to skip by doing nothing. The
+#       design this replaces inspected CMakePresets.json's binaryDir instead, which would have
+#       exempted clang and golang -- the two repos with the MOST in-tree build references --
+#       because they build from shell scripts. ci_mentions strips comment lines, so a
+#       commented-out call is not a call.
+if [ -n "$CI_FILES" ]; then
+  ci_mentions 'assert-tree-clean\.sh' \
+    || fail "no workflow asserts that the build wrote nothing into the source tree" \
+            "call \$SHIPYARD_SCRIPTS/assert-tree-clean.sh --record before the build and \$SHIPYARD_SCRIPTS/assert-tree-clean.sh after it"
+fi
+
+# spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
+#       build-location override. A preset's own `environment` block is applied AFTER the real
+#       process environment, so exporting MAVERICKS_BUILD_ROOT cannot redirect a --preset
+#       build and this file is the only thing that can. It must be gitignored, or it pollutes
+#       git status and gets committed by accident. Keyed on a COMMITTED CMakePresets.json: a
+#       repo with no presets has no override channel to protect.
+if [ -f CMakePresets.json ] && git ls-files --error-unmatch CMakePresets.json >/dev/null 2>&1; then
+  git check-ignore -q CMakeUserPresets.json 2>/dev/null \
+    || fail "CMakeUserPresets.json is not gitignored, and it is the per-developer build-location override" \
+            "add CMakeUserPresets.json to .gitignore"
+fi
+
 [ "$status" -eq 0 ] && echo "check-family-conventions: ok"
 
 exit "$status"

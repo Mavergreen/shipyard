@@ -23,10 +23,12 @@ concurrency:
 jobs:
   build:
     steps:
+      - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
       - run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh"
       - run: |
           sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "$TAG" --version "$FULL" \
             --product Widget --min-os 10.9.5 --out dist/RELEASE_NOTES.md
+      - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
       - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
 YML
   printf '# Build ingredients\n' > "$1/INGREDIENTS.md"
@@ -1015,7 +1017,6 @@ out="$(cd "$work/p18yaml" && sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -qi 'Traceback' && { echo "FAIL 18: a non-string run: must not crash the gate: $out"; exit 1; }
 (cd "$work/p18yaml" && sh "$S" >/dev/null) || { echo "FAIL 18: a non-string run: should simply be skipped: $out"; exit 1; }
 
-echo "PASS: check-family-conventions"
 
 # platform: shipyard ships no Linux pkg and no Linux shipyard-cmake, so a job that demonstrably runs
 #           off macOS must be allowed plain cmake -- requiring it there broke container-tools'
@@ -1039,3 +1040,55 @@ printf 'name: CI\njobs:\n  build:\n    runs-on: ${{ matrix.os }}\n    steps:\n  
   > "$work/p18expr/.github/workflows/ci.yml"
 (cd "$work/p18expr" && git add -A) >/dev/null 2>&1
 lim18 "$work/p18expr" "an unresolvable runs-on expression (checked, not skipped)"
+
+# spec: scripts/check-family-conventions.sh check 19 -- the baseline above now CALLS the
+#       assertion, so this case is built by stripping the two calls out again. That direction
+#       is forced: the fixture's whole premise is a repo that satisfies every check, so the
+#       compliant state has to be the default and each case turns exactly one thing off.
+mkrepo "$work/noassert"
+grep -v 'assert-tree-clean' "$work/ok/.github/workflows/release.yml" \
+  > "$work/noassert/.github/workflows/release.yml"
+(cd "$work/noassert" && git add -A) >/dev/null 2>&1
+if (cd "$work/noassert" && sh "$S" >/dev/null 2>&1); then
+  echo "FAIL: a repo whose CI builds but never asserts the tree should fail"; exit 1; fi
+(cd "$work/noassert" && sh "$S" 2>&1 | grep -q 'assert-tree-clean') \
+  || { echo "FAIL: check 19 should name assert-tree-clean.sh"; exit 1; }
+
+# spec: check 19 greps with comment lines stripped (ci_mentions), so a commented-out call is
+#       not a call. Without this case the check would accept a repo that had disabled the
+#       assertion and left the line behind as documentation.
+mkrepo "$work/assertcomment"
+sed 's|^\( *\)- run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"|\1# - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"|; s|^\( *\)- run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record|\1# - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record|' \
+  "$work/ok/.github/workflows/release.yml" > "$work/assertcomment/.github/workflows/release.yml"
+(cd "$work/assertcomment" && git add -A) >/dev/null 2>&1
+if (cd "$work/assertcomment" && sh "$S" >/dev/null 2>&1); then
+  echo "FAIL: a commented-out assertion call should not satisfy check 19"; exit 1; fi
+
+# spec: scripts/check-family-conventions.sh check 20 -- CMakeUserPresets.json is the
+#       per-developer build-location override, because a preset's own `environment` block is
+#       applied after the real environment and therefore beats an exported variable. It must be
+#       gitignored or it pollutes git status and gets committed by accident.
+mkrepo "$work/nouser"
+printf '{ "version": 6 }\n' > "$work/nouser/CMakePresets.json"
+(cd "$work/nouser" && git add -A) >/dev/null 2>&1
+if (cd "$work/nouser" && sh "$S" >/dev/null 2>&1); then
+  echo "FAIL: a preset repo not ignoring CMakeUserPresets.json should fail"; exit 1; fi
+(cd "$work/nouser" && sh "$S" 2>&1 | grep -q 'CMakeUserPresets') \
+  || { echo "FAIL: check 20 should name CMakeUserPresets.json"; exit 1; }
+
+mkrepo "$work/withuser"
+printf '{ "version": 6 }\n' > "$work/withuser/CMakePresets.json"
+printf 'CMakeUserPresets.json\n' >> "$work/withuser/.gitignore"
+(cd "$work/withuser" && git add -A) >/dev/null 2>&1
+(cd "$work/withuser" && sh "$S" >/dev/null) \
+  || { echo "FAIL: a preset repo that ignores the override should pass"; exit 1; }
+
+# spec: check 20 keys on a COMMITTED CMakePresets.json. A repo with no presets has no override
+#       channel to protect, and the baseline above is exactly that repo -- it passes already,
+#       which is what makes the two cases above attributable to the presets file.
+mkrepo "$work/untrackedpresets"
+printf '{ "version": 6 }\n' > "$work/untrackedpresets/CMakePresets.json"
+(cd "$work/untrackedpresets" && sh "$S" >/dev/null) \
+  || { echo "FAIL: an UNTRACKED CMakePresets.json is not the committed override channel"; exit 1; }
+
+echo "PASS: check-family-conventions"
