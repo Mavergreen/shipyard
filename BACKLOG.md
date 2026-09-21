@@ -323,3 +323,69 @@ The real gap is narrower: there is no mechanism for a TEMPORARY hold while somet
 flight. Possibly not worth building — the family has already decided fix-forward beats human review of
 routine bumps, and this day is evidence for that policy rather than against it. Recorded so the
 question is asked deliberately rather than rediscovered mid-incident.
+
+## 17. A repackage publishes even when the product did not change
+
+`repackage-on-ingredient-bump.yml` dispatches a `local_release` whenever a push to main touches its
+path filter. In swift-runtime that filter is `build.sh` and `patches/**`. On 2026-09-21 the
+out-of-tree adoption commits changed where `build.sh` puts its build directory and nothing about what it
+builds, and that was enough: `6.3.3-mavericks.7` shipped to Sparkle users with no change in it.
+
+A path filter answers "might the product have changed?", which is the wrong question for deciding to
+publish. The right one is "did it change?". Answer it by comparing what this run built against the last
+release's assets. The digests already exist, since `publish-release.yml` regenerates `SHA256SUMS`, so
+this needs no new machinery. Two cautions:
+
+- **The build must be reproducible for the comparison to mean anything.** An embedded timestamp or a
+  pkg's own metadata will differ on every run and make every build look new. Measure which bytes
+  differ between two builds of one commit before trusting a digest. A comparison that is always
+  "changed" is the current behaviour with extra steps.
+- **Every repo with a repackage trigger has this,** not only swift-runtime. openssh and swift-toolchain
+  carry the same workflow.
+
+## 18. Two repackages close together race for the same `-mavericks.N`; the loser is dropped silently
+
+Also 2026-09-21, swift-runtime. Two adoption commits (`88b1b14`, `9a7fabd`) each dispatched a
+repackage. Both runs resolved `version=6.3.3-mavericks.7` near 07:54, because `version.sh local`
+computes N+1 from the tags that exist when the build **starts**. The first published `.7` at 08:01:28.
+The second reached publish at 08:02 and failed at "Refuse an already-taken tag" (run 35575078755).
+
+The guard did its job: no double publish, no overwritten release. But nothing retried, so the second
+commit's change was never released. It was CI-only this time and harmless. Next time it could be a
+real fix, and the only sign would be one red run that reads like a duplicate.
+
+Why concurrency cannot fix this: publishing runs are keyed per `run_id` deliberately, because GitHub keeps
+only the newest PENDING run per group and silently evicts the rest (golang lost a release that way
+on 2026-09-09). Queuing them is exactly what already failed. The fix belongs in the version, not the
+queue: either resolve N at publish time and not build time, or on a taken tag re-resolve and retry
+once with the next N. Either way, take the assets from the loser's own build and don't rebuild. Item 17
+interacts with this: if the loser's product is identical to what the winner shipped, the right outcome
+is to skip publishing, not to take `.8`.
+
+## 19. `assert-tree-clean.sh` warns "prune it" falsely in shipyard's own `ci.yml`
+
+`.mavericks-intree` declares `VERSION` and `dist/`. Only `release.yml`'s build job writes them, but
+the stale-allowlist check runs in every job that calls the assertion. Both of `ci.yml`'s jobs therefore
+print:
+
+    assert-tree-clean: .mavericks-intree allows 'VERSION', which nothing wrote -- prune it
+    assert-tree-clean: .mavericks-intree allows 'dist/', which nothing wrote -- prune it
+
+The exit code is 0, and `ci.yml` runs only on branches and pull requests, never on main, so it is rare
+noise. It still matters, because a warning that is false on every run of the repo that owns the
+mechanism teaches everyone to ignore it, and "a stale allowlist is how this rots" is the reason the
+warning exists.
+
+The allowlist belongs to the repo, while staleness belongs to one workflow. The obvious fixes each cost
+something:
+
+- **A flag on the bare call** (`--no-stale-check`) would not match check 19's bare-call pattern
+  (`scripts/check-family-conventions.sh`), so a repo using only the flagged form would fail check 19.
+  That coupling is worse than the noise.
+- **An environment knob** (a `MAVERICKS_*` variable set in the jobs that build only part of the
+  product) avoids the coupling and follows the family's existing idiom (`assert_binary_compatible.sh`
+  has seven such knobs). It is probably the right shape.
+- **Moving the stale check behind an opt-in** means most repos would never run it.
+
+Recorded 2026-09-21 by the review of the out-of-tree work (finding M4). Deferred then, because a
+new knob touching four files was out of scope for a fix round.
