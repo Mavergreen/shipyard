@@ -168,17 +168,30 @@ dozens of builds per task (one per commit, one per mutation test, one per
 verification round), and the test suites compile fixtures and dylibs on every
 run. This is the single cheapest speedup available to this family.
 
-- **`CMakePresets.json` is committed and shared, so its `binaryDir` must stay
-  portable.** Do NOT hardcode a developer's local path there, and do NOT use
-  `${sourceDir}/build-*`.
-- **`CMakeUserPresets.json` is the CMake-sanctioned per-developer override** —
-  gitignore it, and have it inherit the shared preset while pointing
-  `binaryDir` at local storage:
+- **shipyard's shared hidden presets (`mavericks-native` / `mavericks-cross`) declare
+  `MAVERICKS_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mm-build`.**
+  They name no repo, so they carry no `binaryDir` of their own — a consumer's own
+  preset supplies it, derived from the variable:
+  ```json
+  {"name": "native", "inherits": "mavericks-native",
+   "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/<repo>-native"}
+  ```
+  A preset's `environment` block inherits through `inherits`, so the child sees the
+  hidden parent's default without repeating it. Do NOT hardcode a developer's local
+  path here, and do NOT use `${sourceDir}/build-*` — both put the build back inside
+  the (possibly NFS) source tree.
+- **A script-driven repo (no CMake presets) reads `$MAVERICKS_BUILD_ROOT` from the
+  environment directly**, with the same `${TMPDIR}/mm-build` fallback if it is unset.
+- **To override the location, use `CMakeUserPresets.json`, not a shell export.** A
+  preset's `environment` overrides the real environment — exporting
+  `MAVERICKS_BUILD_ROOT` in your shell does not win against a shared preset that
+  already sets it. Gitignore the file, and have it inherit while repointing the
+  variable:
   ```json
   {"version": 6,
    "configurePresets": [
      {"name": "native-local", "inherits": "native",
-      "binaryDir": "/private/tmp/build/$env{USER}/<repo>-native"}]}
+      "environment": {"MAVERICKS_BUILD_ROOT": "/private/tmp/build/$env{USER}"}}]}
   ```
   Preset names must be unique across both files, so a local preset takes a new
   name rather than shadowing the shared one.
@@ -187,8 +200,11 @@ run. This is the single cheapest speedup available to this family.
   entry written as `build-native/` (with the trailing slash) matches a
   DIRECTORY and NOT a symlink, so the link shows up as untracked and pollutes
   `git status` for everyone. Verified, not assumed.
-- **CI is unaffected**: GitHub runners have local disks, so `${sourceDir}` is
-  already fast there and the shared presets keep working unchanged.
+- **`scripts/assert-tree-clean.sh` is what actually enforces this**, not the presets
+  themselves. It asks only what the source tree looks like before and after a build —
+  never how the build was run — so it holds for CMake, make, a shell script, or a
+  build system nobody has invented yet. A check that named specific build mechanisms
+  would exempt every new one by default; this one cannot be outgrown that way.
 
 ## Build equivalence: native-10.9 ≡ modern-cross (core invariant)
 
