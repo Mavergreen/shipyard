@@ -389,3 +389,35 @@ something:
 
 Recorded 2026-09-21 by the review of the out-of-tree work (finding M4). Deferred then, because a
 new knob touching four files was out of scope for a fix round.
+
+## 20. Reproducible builds as the convention for new repos, with deviations declared
+
+Raised by the repo owner 2026-09-21, prompted by entry 17: "maybe reproducible builds should be the
+convention for new org repos, and deviations documented."
+
+**Why it is worth making a convention rather than a per-repo nicety.** Entry 17's fix, publishing a
+repackage only when the product changed, is only as good as the answer to "did it change?". That answer
+is a digest comparison, and a digest comparison is meaningful only for a reproducible build. Without
+reproducibility, every build looks new and entry 17 changes nothing. Reproducibility also makes
+the cross build versus 10.9 native equivalence claims (macho-tools' `characterize`) checkable by digest
+rather than by bespoke comparison.
+
+**The shape, following how the family already handles conventions:**
+
+- **Stated in the conventions skill**, as the default for a NEW repo.
+- **Checked by building twice.** CI builds the same commit twice and compares the artifact digests.
+  A check that only reads files cannot see an embedded timestamp.
+- **Deviations declared** in `INGREDIENTS.md`'s `## Conformance deviations`, with the existing
+  `- <name>: <reason>` grammar (`- comments:` already works this way), so a repo that cannot be
+  reproducible says why, and the reason surfaces in the artifact facts.
+- **Existing repos are measured, not assumed.** Build each one twice and record what differs. Some
+  will already be reproducible, and some will need a deviation or a fix.
+
+**Known sources of difference to measure first, not a list of fixes:** timestamps embedded by
+`pkgbuild`/`productbuild` and in archives; code signatures with a secure timestamp, which differ per
+signing, so the comparison may have to be of the pre-signature payload; `__DATE__`/`__TIME__`;
+absolute build paths embedded in debug info or `__FILE__`, which the out-of-tree move to
+`$RUNNER_TEMP` may make worse, since that path can differ per run; and the order in which files
+are archived. Which of these actually bite in this family is unknown until measured.
+
+Depends on nothing. Entry 17 depends on this.
