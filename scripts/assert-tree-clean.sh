@@ -1,29 +1,18 @@
 #!/bin/sh
 #   usage: assert-tree-clean.sh --record   (before the build)
 #          assert-tree-clean.sh            (after the build)
-#
-# The family's out-of-tree contract. It asks what the source tree looks like, never
-# how the build was run -- so it holds for CMake, make, a shell script, a container
-# image, and for a build system nobody has invented yet. A check that enumerated
-# build mechanisms would exempt every new one by default, which is how clang and
-# golang went unnoticed for a year.
-#
-# --record writes a manifest; the second call reports every path the build added.
-# With NO manifest the check gets STRICTER, not weaker: nothing untracked or
-# ignored may exist at all, except the allowlist. Getting the wiring wrong must
-# fail loudly rather than pass quietly.
-#
-# .mavericks-intree lists paths a build may create: one per line, '#' starts a
-# reason, a trailing '/' means a directory. Nothing broader -- a pattern wide
-# enough to hide the next mistake defeats the point.
-#
-# `git status --porcelain -z` prints a rename as two NUL-separated paths (old,
-# then new); a build renaming a tracked file is not the case this guards
-# against, and a mislabelled entry is still reported, not silently passed.
+
+# spec: SKILL.md "Build OUT of the source tree, onto fast local storage" --
+#       this asks only what the source tree looks like, never how the build
+#       ran, so it holds for CMake, make, a shell script, or anything else
 set -eu
 
 MANIFEST="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/mavericks-tree-manifest"
 
+# platform: `git status --porcelain -z` prints a rename as two NUL-separated
+#           paths (old, then new); a build renaming a tracked file is not
+#           the case this guards against, and a mislabelled entry is still
+#           reported here, not silently passed.
 snapshot() { git status --porcelain --ignored -z | tr '\0' '\n' | sed 's/^...//' | LC_ALL=C sort; }
 
 if [ "${1:-}" = "--record" ]; then
@@ -52,9 +41,10 @@ else
   mode="with NO manifest (no --record was run), so EVERY untracked or ignored path counts"
 fi
 
-# A `for p in $added` here would word-split a path containing a space, and a
-# `while read` in a pipeline cannot set a variable the caller sees. Collect
-# offenders in a file so neither trap applies.
+# platform: a `for p in $added` here would word-split a path containing a
+#           space, and a `while read` in a pipeline cannot set a variable
+#           the caller sees -- collect offenders in a file so neither trap
+#           applies.
 offenders="$(mktemp "${TMPDIR:-/tmp}/atc-offenders.XXXXXX")"
 trap 'rm -f "$offenders"' EXIT INT TERM
 printf '%s\n' "$added" | while IFS= read -r p; do
@@ -71,7 +61,6 @@ if [ -s "$offenders" ]; then
   exit 1
 fi
 
-# A stale allowlist is how this rots: report an entry nothing wrote.
 if [ -f .mavericks-intree ]; then
   sed -e 's/#.*//' -e 's/[[:space:]]*$//' .mavericks-intree | while IFS= read -r pat; do
     [ -n "$pat" ] || continue

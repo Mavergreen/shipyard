@@ -1,11 +1,8 @@
 #!/bin/sh
-# The shared hidden presets must declare a binaryDir that varies by checkout
-# (via ${sourceDirName}), not a fixed path. shipyard itself has three
-# checkouts in this tree and macho-tools has two path spellings -- a fixed
-# name means two checkouts of the same repo share one CMakeCache.txt and
-# CMake refuses to reconfigure ("does not match the source ... used to
-# generate cache"). Their MAVERICKS_BUILD_ROOT default must also actually
-# resolve through `inherits`.
+# platform: CMake refuses to reconfigure a binaryDir last generated from a
+#           different source path ("does not match the source ... used to
+#           generate cache"), so two checkouts of one repo sharing one fixed
+#           binaryDir break the second one's reconfigure.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 P="$root/mavericks-presets.json"
@@ -23,8 +20,10 @@ grep -q '"MAVERICKS_BUILD_ROOT": "\$penv{TMPDIR}/mm-build"' "$P" \
 
 command -v cmake >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
 
-# A consumer no longer supplies its own binaryDir at all -- the hidden preset
-# derives one from ${sourceDirName}, removing a per-repo chance to typo it.
+# spec: SKILL.md "Build OUT of the source tree, onto fast local storage" --
+#       a consumer's preset supplies neither binaryDir nor MAVERICKS_BUILD_ROOT,
+#       it only inherits; this fixture must match that shape or the test
+#       proves nothing about real consumers.
 fixture() {  # $1 = directory to populate as a CMake source root
   mkdir -p "$1"
   printf 'cmake_minimum_required(VERSION 3.25)\nproject(t C)\n' > "$1/CMakeLists.txt"
@@ -39,28 +38,11 @@ fixture() {  # $1 = directory to populate as a CMake source root
 JSON
 }
 
-# A whole-file grep on mavericks-presets.json cannot tell the two hidden
-# presets' cacheVariables blocks apart, so a swapped MAVERICKS_EXPECTED_MODE
-# (or a dropped CMAKE_OSX_ARCHITECTURES/CMAKE_OSX_DEPLOYMENT_TARGET) would
-# pass one anyway -- and a swapped mode label ships every repo's `native`
-# build in CROSS mode, silently. Instead of parsing the JSON, this drives
-# the check off a REAL configure of each hidden preset and inspects the
-# resulting CMakeCache.txt, which is what the inherits chain actually
-# resolved to -- stronger than `cmake -N`, which only previews, and it
-# reuses the configure machinery this test already exercises rather than
-# introducing a second, less-familiar way to ask CMake a question.
 check_cache_var() {  # $1=CMakeCache.txt $2=var $3=expected value $4=label
   grep -q "^$2:.*=$3\$" "$1" \
     || say "$4: $2 is not '$3' in $1"
 }
 
-# Two SEPARATE checkouts (distinct mktemp'd source roots) using the SAME
-# preset -- this is the scenario a fixed binaryDir cannot survive. Each
-# mktemp call gets a fresh random suffix, so $work1 and $work2 are unique to
-# THIS run; no cross-run cleanup of a fixed build path is needed here (that
-# was only ever required because the earlier design's binaryDir name did not
-# vary by checkout), so the trap below is tidiness for this run's two build
-# dirs, not collision avoidance.
 work1="$(mktemp -d "${TMPDIR:-/tmp}/presets1.XXXXXX")"
 work2="$(mktemp -d "${TMPDIR:-/tmp}/presets2.XXXXXX")"
 b1="$(basename "$work1")"; b2="$(basename "$work2")"
@@ -86,29 +68,21 @@ if [ -e "$work2/CMakeCache.txt" ]; then say "checkout 2 configured INSIDE its ow
   || say "checkout 2 did not build at the \${sourceDirName}-derived path $bd2 -- binaryDir is not keying off the checkout's name"
 if [ "$bd1" = "$bd2" ]; then say "two different checkouts resolved to the SAME build directory"; fi
 
-# Reconfiguring checkout 1 a second time, after checkout 2 has also run,
-# must still succeed. If the two checkouts had collided on one binaryDir,
-# checkout 2's configure would have left a cache pointing at checkout 2's
-# source path, and this call would fail with "does not match the source
-# ... used to generate cache".
+# platform: reconfiguring here catches the failure mode CMake would raise on
+#           a collided binaryDir -- a cache left pointing at checkout 2's
+#           source makes this call fail with "does not match the source
+#           ... used to generate cache".
 out1b="$(cd "$work1" && cmake --preset native 2>&1)" \
   || say "checkout 1 does not reconfigure after checkout 2 ran: $out1b"
 
-# mavericks-native and mavericks-cross must each carry the RIGHT mode label,
-# per preset -- not just "both strings appear somewhere in the file", which
-# a swap between the two blocks would satisfy. Configuring `cross` in the
-# same checkout as `native` (distinct binaryDir, since the mode suffix
-# differs) exercises mavericks-cross's own cacheVariables block for real.
 out1cross="$(cd "$work1" && cmake --preset cross 2>&1)" \
   || say "checkout 1 does not configure the cross preset: $out1cross"
 [ -f "$bd1cross/CMakeCache.txt" ] \
   || say "checkout 1's cross configure produced no CMakeCache.txt"
 
-# $bd1 and $bd1cross were already asserted to exist above (an unguarded
-# `[ -f ... ] || say`), so the value checks below run unconditionally too --
-# a guard here would let a cache that silently stopped existing between the
-# existence check and this point skip these assertions without ever
-# incrementing $fails, exactly the shape this round exists to close.
+# platform: a guard here (`[ -f ... ] &&`) would skip these checks silently
+#           if it ever failed, without touching $fails -- omit it on
+#           purpose; existence was already asserted above.
 check_cache_var "$bd1/CMakeCache.txt" MAVERICKS_EXPECTED_MODE native "mavericks-native"
 check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-native"
 check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-native"
