@@ -101,17 +101,20 @@ out1b="$(cd "$work1" && cmake --preset native 2>&1)" \
 # differs) exercises mavericks-cross's own cacheVariables block for real.
 out1cross="$(cd "$work1" && cmake --preset cross 2>&1)" \
   || say "checkout 1 does not configure the cross preset: $out1cross"
+[ -f "$bd1cross/CMakeCache.txt" ] \
+  || say "checkout 1's cross configure produced no CMakeCache.txt"
 
-if [ -f "$bd1/CMakeCache.txt" ]; then
-  check_cache_var "$bd1/CMakeCache.txt" MAVERICKS_EXPECTED_MODE native "mavericks-native"
-  check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-native"
-  check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-native"
-fi
-if [ -f "$bd1cross/CMakeCache.txt" ]; then
-  check_cache_var "$bd1cross/CMakeCache.txt" MAVERICKS_EXPECTED_MODE cross "mavericks-cross"
-  check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-cross"
-  check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-cross"
-fi
+# $bd1 and $bd1cross were already asserted to exist above (an unguarded
+# `[ -f ... ] || say`), so the value checks below run unconditionally too --
+# a guard here would let a cache that silently stopped existing between the
+# existence check and this point skip these assertions without ever
+# incrementing $fails, exactly the shape this round exists to close.
+check_cache_var "$bd1/CMakeCache.txt" MAVERICKS_EXPECTED_MODE native "mavericks-native"
+check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-native"
+check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-native"
+check_cache_var "$bd1cross/CMakeCache.txt" MAVERICKS_EXPECTED_MODE cross "mavericks-cross"
+check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-cross"
+check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-cross"
 
 [ "$fails" -eq 0 ] && echo "mavericks-presets: ok"
 exit $([ "$fails" -eq 0 ] && echo 0 || echo 1)
