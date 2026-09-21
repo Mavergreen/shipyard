@@ -43,8 +43,8 @@ jobs:
 
       - name: ctest (parameterized suites)
         run: |
-          shipyard-cmake -S . -B build
-          shipyard-ctest --test-dir build --output-on-failure
+          shipyard-cmake -S . -B "$RUNNER_TEMP/build"
+          shipyard-ctest --test-dir "$RUNNER_TEMP/build" --output-on-failure
 
       - name: Standalone test suites
         run: sh scripts/run-repo-tests.sh
