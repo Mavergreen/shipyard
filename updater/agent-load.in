@@ -44,4 +44,14 @@ if [ -n "$MAV_OLD_LABEL" ] && [ -n "$MAV_TARGET" ]; then
     rm -f "$MAV_OLD_PLIST" 2>/dev/null || true
     rm -rf "$MAV_ROOT/Library/Application Support/ModernMavericks/@MAVERICKS_UPDATER_APP@" 2>/dev/null || true
     rmdir "$MAV_ROOT/Library/Application Support/ModernMavericks" 2>/dev/null || true
+    # The updater's defaults domain is its bundle id, so each user's Sparkle choices (automatic
+    # checks off, a skipped version) would silently reset. Copied, never moved or overwritten.
+    MAV_NEW_BID="@MAVERICKS_UPDATER_BUNDLE_ID@"
+    MAV_OLD_BID=$(printf '%s' "$MAV_NEW_BID" | sed -n 's/^dev\.mavergreen\./dev.modernmavericks./p')
+    if [ -n "$MAV_OLD_BID" ]; then
+        for MAV_PREFS in "$MAV_ROOT"/Users/*/Library/Preferences; do
+            [ -f "$MAV_PREFS/$MAV_OLD_BID.plist" ] && [ ! -e "$MAV_PREFS/$MAV_NEW_BID.plist" ] || continue
+            cp -p "$MAV_PREFS/$MAV_OLD_BID.plist" "$MAV_PREFS/$MAV_NEW_BID.plist" 2>/dev/null || true
+        done
+    fi
 fi

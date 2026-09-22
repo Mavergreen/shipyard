@@ -549,6 +549,21 @@ if [ -n "$CI_FILES" ]; then
             "call \$SHIPYARD_SCRIPTS/assert-tree-clean.sh after the build; --record on its own returns 0 unconditionally and can never fail"
 fi
 
+# spec: SKILL.md "Family conventions" check 21 -- a repo that builds a .pkg must run artifact
+#       conformance, or nothing checks what its pkg installs: the identity and install-path rules
+#       ("Identity and install paths") live in check-artifact-conformance.sh, and a product that
+#       never calls it is exempt from all of them by omission. Tests are excluded: fixtures build
+#       throwaway pkgs on purpose.
+builds_pkg=""
+for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -v '^tests/'); do
+  grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' && { builds_pkg="$f"; break; }
+done
+[ -n "$builds_pkg" ] || ! ci_mentions 'sign_and_appcast' || builds_pkg="a signing workflow"
+if [ -n "$builds_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! deviated artifact-conformance "$REL"; then
+  fail "this repo builds a .pkg ($builds_pkg) but no workflow runs check-artifact-conformance.sh -- nothing checks what it installs or under which identity" \
+       "pipe artifact-facts.sh into check-artifact-conformance.sh at package time (see the conventions skill, 'Artifact conformance'), or declare '- artifact-conformance: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+fi
+
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
 #       build-location override. A preset's own `environment` block is applied AFTER the real
 #       process environment, so exporting MAVERICKS_BUILD_ROOT cannot redirect a --preset

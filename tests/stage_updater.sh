@@ -15,6 +15,7 @@ LABEL=dev.mavergreen.test-updatecheck
 APP="$T/TestUpdater.app"
 mkdir -p "$APP/Contents/MacOS"
 printf '#!/bin/sh\n' > "$APP/Contents/MacOS/TestUpdater"
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.TestUpdater</string></dict></plist>\n' > "$APP/Contents/Info.plist"
 chmod +x "$APP/Contents/MacOS/TestUpdater"
 
 fail() { echo "stage_updater test: $1" >&2; exit 1; }
@@ -86,6 +87,13 @@ lay_down_old
 [ -e "$V/Library/LaunchAgents/dev.modernmavericks.other-updatecheck.plist" ] || fail "removed ANOTHER product's pre-rename agent -- each product retires only its own"
 [ -e "$OLDAPPS/OtherUpdater.app/keep" ] || fail "removed ANOTHER product's pre-rename updater app"
 [ -e "$V/Library/LaunchAgents/$LABEL.plist" ] || fail "removed this version's own agent"
+P="$V/Users/alice/Library/Preferences"; P2="$V/Users/bob/Library/Preferences"
+mkdir -p "$P" "$P2"; echo alice-old > "$P/dev.modernmavericks.TestUpdater.plist"
+echo bob-old > "$P2/dev.modernmavericks.TestUpdater.plist"; echo bob-new > "$P2/dev.mavergreen.TestUpdater.plist"
+( set -- /fake.pkg "$V" "$V"; . "$SNIP" )
+[ "$(cat "$P/dev.mavergreen.TestUpdater.plist" 2>/dev/null)" = alice-old ] || fail "did not carry a user's updater preferences to the new bundle id -- their Sparkle choices (automatic checks off) would silently reset"
+[ -f "$P/dev.modernmavericks.TestUpdater.plist" ] || fail "moved the old preferences instead of copying them"
+[ "$(cat "$P2/dev.mavergreen.TestUpdater.plist")" = bob-new ] || fail "overwrote preferences already written under the new bundle id"
 rm -rf "$OLDAPPS/OtherUpdater.app"
 ( set -- /fake.pkg "$V" "$V"; . "$SNIP" )
 [ ! -e "$OLDAPPS" ] || fail "left the empty pre-rename shared dir behind"

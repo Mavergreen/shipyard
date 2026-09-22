@@ -434,7 +434,7 @@ printf '%s\n' "$out" | grep -qi 'not committed' || { echo "FAIL should say it is
 # spec: a workflow that signs must call scan-for-key.yml -- publish-release.yml refuses a signed
 #       release without its record, and a missing job should fail a PR here, not a release there.
 mkrepo "$work/k"
-printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --pkg dist/x.pkg > dist/appcast.xml\n' \
+printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --pkg dist/x.pkg > dist/appcast.xml\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' \
   >> "$work/k/.github/workflows/release.yml"
 (cd "$work/k" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/k" && sh "$S" 2>&1)"; then echo "FAIL a signing workflow with no scan job should fail"; exit 1; fi
@@ -1172,5 +1172,24 @@ mkrepo "$work/untrackedpresets"
 printf '{ "version": 6 }\n' > "$work/untrackedpresets/CMakePresets.json"
 (cd "$work/untrackedpresets" && sh "$S" >/dev/null) \
   || { echo "FAIL: an UNTRACKED CMakePresets.json is not the committed override channel"; exit 1; }
+
+
+# spec: SKILL.md "Family conventions" check 21 -- a repo that builds a .pkg must run artifact
+#       conformance, or the identity and install-path rules never see its payload.
+mkrepo "$work/pk"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pk/build/package.sh"
+(cd "$work/pk" && git add -A) >/dev/null 2>&1
+out="$(cd "$work/pk" && sh "$S" 2>&1)" && { echo "FAIL: a repo that runs pkgbuild without artifact conformance should fail"; exit 1; }
+printf '%s\n' "$out" | grep -q 'check-artifact-conformance.sh' || { echo "FAIL should name check-artifact-conformance.sh: $out"; exit 1; }
+printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pk/.github/workflows/release.yml"
+(cd "$work/pk" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkg repo that runs artifact conformance should pass: $(cd "$work/pk" && sh "$S" 2>&1)"; exit 1; }
+mkrepo "$work/pkc"; printf '#!/bin/sh\npkgbuild --root stage out.pkg\n' > "$work/pkc/build/package.sh"
+printf '      # - run: sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkc/.github/workflows/release.yml"
+(cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) && { echo "FAIL: a commented-out conformance call must not count as wired"; exit 1; }
+printf '\n## Conformance deviations\n\n- artifact-conformance: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
+(cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a declared artifact-conformance deviation should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
+mkrepo "$work/pks"; printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --pkg dist/x.pkg > dist/appcast.xml\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$work/pks/.github/workflows/release.yml"
+(cd "$work/pks" && git add -A && sh "$S" 2>&1) | grep -q 'check-artifact-conformance.sh' || { echo "FAIL: a repo that signs an appcast builds a pkg, and must run conformance"; exit 1; }
+mkrepo "$work/pkt"; printf '#!/bin/sh\npkgbuild --root x t.pkg\n' > "$work/pkt/tests/fixture.sh"
+(cd "$work/pkt" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkgbuild in tests/ is a fixture, not a product: $(cd "$work/pkt" && sh "$S" 2>&1)"; exit 1; }
 
 echo "PASS: check-family-conventions"
