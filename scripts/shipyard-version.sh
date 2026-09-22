@@ -4,7 +4,7 @@
 #          commit count, so a new commit is necessarily a new version with no discipline to remember.
 #          NOT resolve-version.sh: that hardcodes -mavericks.N, which is for repackaged upstreams, not
 #          for us.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "shipyard: consume
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "shipyard: consume
 #       its facilities, never hand-roll them" -- we are our own upstream, consumed through a MOVING
 #       tag (@v1), so the version must change whenever the content does: UPSTREAM_VERSION once sat at
 #       1.0.5 while 13 commits each shipped to fifteen repos through @v1, every one claiming to be

@@ -1,6 +1,6 @@
 #!/bin/sh
 #   usage: check-family-conventions.sh
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md, "Family
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md, "Family
 #       conventions (checked, not just written down)" -- the why and history for every check below
 #       lives there; each check's fail() message carries the actionable summary.
 set -eu
@@ -9,7 +9,7 @@ REL=".github/workflows/release.yml"
 [ -f "$REL" ] || { echo "check-family-conventions: no $REL — not a product repo, nothing to check"; exit 0; }
 
 CI_FILES="$(ls .github/workflows/*.yml 2>/dev/null || true)"
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md, "Family
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md, "Family
 #       conventions" -- "mentions" means on a non-comment line, and why; same test, same spelling, as
 #       scripts/release-notes.sh's is_caller().
 ci_mentions() {  # $1 = pattern. -e so a pattern starting with '-' (--notes-file) is not read as a flag.

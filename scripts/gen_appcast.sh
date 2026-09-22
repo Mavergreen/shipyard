@@ -21,7 +21,7 @@
 #          stays a pure text transform, unit-testable via --render-notes.
 # platform: Sparkle 1.x shows the <description> in a WebView, which treats the CDATA as HTML; feeding
 #           it raw Markdown collapsed the notes into one line-joined blob.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "The build must
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "The build must
 #       also run natively ON 10.9" -- the renderer is deliberately dependency-free (pure awk, no
 #       pandoc/cmark) so it runs identically on the 10.9 dev box's BSD/BWK awk and on a modern CI
 #       runner.
@@ -114,7 +114,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 [ $# -eq 6 ] || { echo "usage: gen_appcast.sh <channel-title> <version> <pkg-url> <min-os> <notes-file> <enclosure-attrs>" >&2; exit 2; }
 CHANNEL_TITLE="$1"; VER="$2"; URL="$3"; MINOS="$4"; NOTES_FILE="$5"; ENCLOSURE_ATTRS="$6"
 
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "The Sparkle
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "The Sparkle
 #       comparison version must be dotted-numeric AND monotonic" -- SUStandardVersionComparator can't
 #       order the "-mavericks.N" suffix (it reads 1.2.3-mavericks.3 and .4 as EQUAL), so
 #       <sparkle:version> must be numeric-only; the human string stays in shortVersionString. The

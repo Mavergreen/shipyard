@@ -1,6 +1,6 @@
 name: family-conventions
 
-# spec: modernmavericks-conventions SKILL.md, "Family conventions" -- "Wire it with the reusable workflow"
+# spec: mavergreen-conventions SKILL.md, "Family conventions" -- "Wire it with the reusable workflow"
 
 on:
   workflow_call:

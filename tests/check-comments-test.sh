@@ -86,7 +86,7 @@ EOF
 #       path, a known-extension filename, a YYYY-MM-DD name, or a numbered decision/check.
 ok spec_citation_path <<'EOF'
 #!/bin/sh
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md decision 2
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md decision 2
 echo hi
 EOF
 

@@ -17,3 +17,31 @@ if [ -f "$MAV_AGENT_PLIST" ] && [ "${MAV_CONSOLE_UID:-0}" -gt 0 ] && [ "$MAV_CON
         || sudo -u "$MAV_CONSOLE_USER" launchctl load -w "$MAV_AGENT_PLIST" 2>/dev/null \
         || true
 fi
+
+# ONE-TIME MIGRATION off the ModernMavericks identity (flag day 2026-09-22: the org became Mavergreen,
+# and every installed identifier moved from dev.modernmavericks.* to dev.mavergreen.*). Installer
+# never removes what a newer payload does not carry, so without this an upgraded box runs the OLD
+# updater beside the new one -- two daily checks against one appcast, forever, both "working".
+# Retires exactly this product's previous updater: its agent, derived from this label, and its app,
+# by name, in the old shared dir. Everything else a product installed under the old identity is that
+# product's own postinstall's to retire.
+#
+# DELETABLE once no pre-flag-day install survives (see SKILL.md "Consolidation backlog").
+MAV_OLD_LABEL=$(printf '%s' "@MAVERICKS_AGENT_LABEL@" | sed -n 's/^dev\.mavergreen\./dev.modernmavericks./p')
+# Scoped to Installer's target volume ($3 of the postinstall that sources this): with none, nothing
+# is known about where the old install lives, so nothing is removed -- never an unanchored "/".
+MAV_TARGET="${3:-}"
+if [ -n "$MAV_OLD_LABEL" ] && [ -n "$MAV_TARGET" ]; then
+    MAV_ROOT="${MAV_TARGET%/}"
+    MAV_OLD_PLIST="$MAV_ROOT/Library/LaunchAgents/$MAV_OLD_LABEL.plist"
+    # The unload only when installing to the boot volume (ROOT empty): launchctl talks to the
+    # running system, not to whatever disk the pkg was pointed at.
+    if [ -z "$MAV_ROOT" ] && [ -f "$MAV_OLD_PLIST" ] && [ "${MAV_CONSOLE_UID:-0}" -gt 0 ] && [ "$MAV_CONSOLE_USER" != root ]; then
+        launchctl bootout gui/"$MAV_CONSOLE_UID" "$MAV_OLD_PLIST" 2>/dev/null \
+            || sudo -u "$MAV_CONSOLE_USER" launchctl unload -w "$MAV_OLD_PLIST" 2>/dev/null \
+            || true
+    fi
+    rm -f "$MAV_OLD_PLIST" 2>/dev/null || true
+    rm -rf "$MAV_ROOT/Library/Application Support/ModernMavericks/@MAVERICKS_UPDATER_APP@" 2>/dev/null || true
+    rmdir "$MAV_ROOT/Library/Application Support/ModernMavericks" 2>/dev/null || true
+fi

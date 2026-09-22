@@ -1,10 +1,10 @@
 {
-  "name": "modernmavericks",
+  "name": "mavergreen",
   "owner": { "name": "Amitai Schleier" },
   "plugins": [
     {
-      "name": "modernmavericks",
-      "source": "./claude-plugins/modernmavericks",
+      "name": "mavergreen",
+      "source": "./claude-plugins/mavergreen",
       "description": "Mavergreen family conventions: shipyard usage, Renovate/automerge policy (ignoreTests + green-gate), versioning (UPSTREAM_VERSION + version.sh), the release workflow, Sparkle updater, and when a deviation is warranted."
     }
   ]

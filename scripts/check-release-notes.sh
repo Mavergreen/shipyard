@@ -3,7 +3,7 @@
 #          Is this file the family's release body for this exact version? Used twice: release-notes.sh
 #          self-checks what it just generated, and publish-release.yml checks what it is about to
 #          publish -- so a repo that regresses to a hand-rolled body still cannot ship one.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Release notes" --
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes" --
 #       the shape is small on purpose (it has to pass for every product, from a Go toolchain to a
 #       kext), so it asserts only what a reader is entitled to: the release says which version it is,
 #       and says what changed. Six products once published "Automated release for Mac OS X 10.9

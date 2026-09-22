@@ -80,7 +80,7 @@ rc=0; MAVERICKS_RELEASES="" sh "$S" --digest sha256:nope --version 1.2.3-maveric
 #       transform that PARSES the outside world actually runs.
 P11="$(printf '%s\n' \
   "9.0.0-mavericks.1${TAB}false${TAB}## 9.0.0-mavericks.1\n\n- old news\n" \
-  "1.2.3-mavericks.1${TAB}false${TAB}## 1.2.3-mavericks.1\n\n- a thing\n\nModernMavericks-State: ${D1}\n" \
+  "1.2.3-mavericks.1${TAB}false${TAB}## 1.2.3-mavericks.1\n\n- a thing\n\nMavergreen-State: ${D1}\n" \
   "8.0.0-mavericks.3${TAB}false${TAB}## 8.0.0-mavericks.3\n\n- nothing recorded here\n")"
 got="$(raw "$P11" "$D1" 7.7.7-mavericks.1)"
 [ "$got" = "SKIP=already-released/1.2.3-mavericks.1" ] \
@@ -89,17 +89,17 @@ got="$(raw "$P11" "$D1" 7.7.7-mavericks.1)"
 got="$(raw "$P11" "$D2" 7.7.7-mavericks.1)"
 [ "$got" = PUBLISH ] || { echo "FAIL: a body with NO marker is digest-less, not a match: raw payload, no marker for this digest: got '$got'"; exit 1; }
 
-got="$(raw "1.2.3-mavericks.9${TAB}true${TAB}ModernMavericks-State: ${D1}" "$D1" 7.7.7-mavericks.1)"
+got="$(raw "1.2.3-mavericks.9${TAB}true${TAB}Mavergreen-State: ${D1}" "$D1" 7.7.7-mavericks.1)"
 [ "$got" = PUBLISH ] || { echo "FAIL: a DRAFT is not a release -- publish-release.yml creates a draft per attempt and delete-draft-release.sh cleans them up, so a leftover draft carrying the current digest is a real shape, and counting it would answer already-released forever while the real release silently never happened: a draft counted as released: got '$got'"; exit 1; }
 
 got="$(raw "$(printf '%s\n' \
-  "2.0.0-mavericks.1${TAB}true${TAB}ModernMavericks-State: ${D1}" \
-  "3.0.0-mavericks.1${TAB}false${TAB}ModernMavericks-State: ${D2}")" "$D2" 7.7.7-mavericks.1)"
+  "2.0.0-mavericks.1${TAB}true${TAB}Mavergreen-State: ${D1}" \
+  "3.0.0-mavericks.1${TAB}false${TAB}Mavergreen-State: ${D2}")" "$D2" 7.7.7-mavericks.1)"
 [ "$got" = "SKIP=already-released/3.0.0-mavericks.1" ] \
   || { echo "FAIL: the filter must drop ONLY drafts -- a published release alongside one still counts: got '$got'"; exit 1; }
 
 got="$(raw "$(printf '%s\n' \
-  "1.2.3-mavericks.1${TAB}false${TAB}| ingredient\tpinned |\n\nModernMavericks-State: ${D1}" \
+  "1.2.3-mavericks.1${TAB}false${TAB}| ingredient\tpinned |\n\nMavergreen-State: ${D1}" \
   "4.0.0-mavericks.1${TAB}false${TAB}plain notes")" "$D1" 7.7.7-mavericks.1)"
 [ "$got" = "SKIP=already-released/1.2.3-mavericks.1" ] \
   || { echo "FAIL: a TAB inside a body must not invent a record -- the old transform started a new record at any \"^[^\\t]+\\t\", so a body containing a tab attributed the digest to prose and left the real tag reading as digest-less; @tsv escapes it, and the split takes exactly the first two tabs: a tab inside a body moved the digest: got '$got'"; exit 1; }
@@ -147,17 +147,17 @@ out="$(MAVERICKS_RELEASES_RAW="1.2.3-mavericks.1${TAB}maybe${TAB}notes" \
 case "$out" in *PUBLISH*) echo "FAIL a malformed draft flag answered PUBLISH"; exit 1;; esac
 
 rc=0
-out="$(MAVERICKS_RELEASES_RAW="${TAB}false${TAB}ModernMavericks-State: ${D1}" \
+out="$(MAVERICKS_RELEASES_RAW="${TAB}false${TAB}Mavergreen-State: ${D1}" \
   sh "$S" --digest "$D1" --version 1.2.3-mavericks.1 2>"$w/e19")" || rc=$?
 [ "$rc" != 0 ] || { echo "FAIL: AN EMPTY TAG IS A SHAPE CHANGE TOO, and the dangerous one -- @tsv renders a null or RENAMED field as the empty string, so .tag_name going away empties the tag on EVERY record, and dropping those records answers PUBLISH in every repo every night (exactly the failure the body field already caused once, in the one field that had no shape guard): a record with no tag exited 0"; exit 1; }
 case "$out" in *PUBLISH*) echo "FAIL a record with no tag answered PUBLISH"; exit 1;; esac
 grep -q 'shape changed' "$w/e19" || { echo "FAIL the no-tag refusal does not say what went wrong"; exit 1; }
 
-got="$(raw "1.2.3-mavericks.1${TAB}false${TAB}ModernMavericks-State: v0:stale\n\nnotes\n\nModernMavericks-State: ${D1}" \
+got="$(raw "1.2.3-mavericks.1${TAB}false${TAB}Mavergreen-State: v0:stale\n\nnotes\n\nMavergreen-State: ${D1}" \
   "$D1" 9.9.9-mavericks.9)"
 [ "$got" = "SKIP=already-released/1.2.3-mavericks.1" ] \
   || { echo "FAIL: THE WEDGE, removed -- an unreadable marker ABOVE a valid one in the same body must not decide; first-marker-wins made this read as unreadable, so release-needed.sh refused to publish a state that was demonstrably already released two lines further down, a silent failure to release: an unreadable marker above a valid one wedged the lookup: got '$got'"; exit 1; }
-got="$(raw "1.2.3-mavericks.1${TAB}false${TAB}ModernMavericks-State: v0:a\n\nModernMavericks-State: v0:b" \
+got="$(raw "1.2.3-mavericks.1${TAB}false${TAB}Mavergreen-State: v0:a\n\nMavergreen-State: v0:b" \
   "$D1" 9.9.9-mavericks.9)"
 [ "$got" = "SKIP=unreadable-marker/1.2.3-mavericks.1" ] \
   || { echo "FAIL: with no readable marker anywhere it must still block -- \"prefer readable\" must not become \"ignore unreadable\": two unreadable markers stopped blocking: got '$got'"; exit 1; }
@@ -170,8 +170,8 @@ if command -v jq >/dev/null 2>&1; then
   [ -n "$filter" ] || { echo "FAIL could not read the fetch's jq filter out of the script"; exit 1; }
 
   cat > "$w/rel.json" <<JSON
-[{"tag_name":"1.2.3-mavericks.1","draft":false,"body":"## Notes\n\n| a\tb |\n\nModernMavericks-State: $D1\n"},
- {"tag_name":"1.2.3-mavericks.2","draft":true,"body":"ModernMavericks-State: $D2"},
+[{"tag_name":"1.2.3-mavericks.1","draft":false,"body":"## Notes\n\n| a\tb |\n\nMavergreen-State: $D1\n"},
+ {"tag_name":"1.2.3-mavericks.2","draft":true,"body":"Mavergreen-State: $D2"},
  {"tag_name":"1.2.3-mavericks.0","draft":false,"body":null}]
 JSON
   RAWJ="$(jq -r "$filter" "$w/rel.json")"
@@ -184,7 +184,7 @@ JSON
   # platform: a RENAMED tag field is how the empty-tag case above breaks in practice: jq yields
   #           null, @tsv renders it empty, and every release disappears.
   cat > "$w/renamed.json" <<JSON
-[{"tagName":"1.2.3-mavericks.1","draft":false,"body":"ModernMavericks-State: $D1"}]
+[{"tagName":"1.2.3-mavericks.1","draft":false,"body":"Mavergreen-State: $D1"}]
 JSON
   RAWR="$(jq -r "$filter" "$w/renamed.json")"
   rc=0
@@ -197,7 +197,7 @@ JSON
   #           \n alone) would turn this into a real line break and read a digest out of a
   #           sentence.
   cat > "$w/forge.json" <<JSON
-[{"tag_name":"9.9.9-mavericks.1","draft":false,"body":"prose saying \\\\nModernMavericks-State: $D1 inline"}]
+[{"tag_name":"9.9.9-mavericks.1","draft":false,"body":"prose saying \\\\nMavergreen-State: $D1 inline"}]
 JSON
   RAWF="$(jq -r "$filter" "$w/forge.json")"
   got="$(MAVERICKS_RELEASES_RAW="$RAWF" sh "$S" --digest "$D1" --version 9.9.9-mavericks.9 2>/dev/null)"

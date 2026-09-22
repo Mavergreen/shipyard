@@ -2,7 +2,7 @@
 #   usage: audit-repo-settings.sh [org]        (default: Mavergreen)
 #          Prints a verdict line and exits non-zero when anything is off, to be usable from a
 #          scheduled job with a PAT later.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "These two
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "These two
 #       settings are the only conventions the gate cannot check -- audit them" -- "Allow auto-merge"
 #       (OFF by GitHub default) and branch protection on main requiring the PR build check are GitHub
 #       repo state, reachable only through the API, so no renovate.json preset can set them; they

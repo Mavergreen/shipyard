@@ -1,4 +1,4 @@
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Consolidation
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Consolidation
 #       backlog" -- promoted here from three byte-identical per-repo copies (golang,
 #       macports-legacy-support, ed25519); sourced, no side effects. $MAVERICKS_ROOT defaults to the
 #       git toplevel so a plain `sh build/version.sh` still works from anywhere in a repo.
@@ -23,7 +23,7 @@ state_digest_readable() {
 }
 
 # spec: SKILL.md "A release is a declared state, not an event" -- marker format is
-#       "ModernMavericks-State: <value>" (spec 2026-09-12, decision 2). ONE reader for the family:
+#       "Mavergreen-State: <value>" (spec 2026-09-12, decision 2). ONE reader for the family:
 #       release-needed.sh once recognised only `v1:sha256:<hex>` while release-state-record.sh took
 #       anything after the key, so an older-format marker was "no digest recorded" to the first and
 #       "a CONFLICTING digest" to the second (ruling 1: the second exits 3 and fails the job) -- every
@@ -33,7 +33,7 @@ state_digest_readable() {
 #       reads is unreadable, so plain first-wins would let an unreadable line earlier in a body WEDGE
 #       a repo whose valid digest sat two lines below it.
 state_marker() {
-  _sm_all="$(sed -n 's/^ModernMavericks-State:[[:space:]]*//p' | sed 's/[[:space:]]*$//')"
+  _sm_all="$(sed -n 's/^Mavergreen-State:[[:space:]]*//p' | sed 's/[[:space:]]*$//')"
   _sm_pick=""
   while IFS= read -r _sm_one || [ -n "$_sm_one" ]; do
     [ -n "$_sm_one" ] || continue

@@ -48,21 +48,21 @@ check() {  # $1 = what  $2 = expected exit (0 or 1)  $3 = substring the output m
 #           whole point -- shipyard-cmake finding shipyard in its OWN prefix -- untested.
 croot="$(printf 'message("${CMAKE_ROOT}")\n' > "$w/r.cmake"; "$real" -P "$w/r.cmake" 2>&1)"
 fx="$w/root"
-prefix="$fx/usr/local/mavericks-shipyard"
+prefix="$fx/usr/local/mavergreen-shipyard"
 mkdir -p "$prefix/bin" "$prefix/share" "$fx/usr/local/bin"
 cp "$real" "$prefix/bin/cmake"
 # spec: tests/lib/cmake_fixture.sh -- the two ways a copied CMAKE_ROOT goes wrong (Homebrew's is a
 #       symlink AND read-only, and cp -R preserves both) are written out there and proven by
 #       tests/cmake-fixture-test.sh.
 copy_cmake_root "$croot" "$prefix/share/$(basename "$croot")"
-ln -s ../mavericks-shipyard/bin/cmake "$fx/usr/local/bin/shipyard-cmake"
+ln -s ../mavergreen-shipyard/bin/cmake "$fx/usr/local/bin/shipyard-cmake"
 for c in ctest cpack; do
   if [ -x "$(dirname "$real")/$c" ]; then
     cp "$(dirname "$real")/$c" "$prefix/bin/$c"
   else
     printf '#!/bin/sh\nexit 0\n' > "$prefix/bin/$c"; chmod +x "$prefix/bin/$c"
   fi
-  ln -s "../mavericks-shipyard/bin/$c" "$fx/usr/local/bin/shipyard-$c"
+  ln -s "../mavergreen-shipyard/bin/$c" "$fx/usr/local/bin/shipyard-$c"
 done
 # platform: keep this output. Sent to /dev/null, a failure here killed the script under set -e
 #           having said NOTHING, and a real macos-26 run could only report "exit 1" -- hiding the
@@ -72,7 +72,7 @@ done
 HOME="$w/home-install" "$real" --install "$w/sb" --prefix "$prefix" > "$w/install.log" 2>&1 \
   || { echo "FAIL: could not install shipyard into the fixture prefix:"; sed 's/^/    | /' "$w/install.log"; exit 1; }
 
-updir="$fx/Library/Application Support/ModernMavericks/MavericksShipyardUpdater.app/Contents/MacOS"
+updir="$fx/Library/Application Support/Mavergreen/MavericksShipyardUpdater.app/Contents/MacOS"
 mkdir -p "$updir"
 printf 'not a real Mach-O; lipo is stubbed below\n' > "$updir/MavericksShipyardUpdater"
 

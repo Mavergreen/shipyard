@@ -2,7 +2,7 @@
 #   usage: build-info.sh <outfile> key=value [key=value ...]
 #          Keys are free-form; conformance compares any key that appears in more than one variant,
 #          except the ones that are SUPPOSED to differ (variant, arch, prefix, pkg, identifier).
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Artifact
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance", "Record what a variant was built FROM" -- the artifacts cannot answer this on
 #       their own (golang's native .pkg carries the CA bundle and the legacy-support shim, its cross
 #       .pkg legitimately does not); "both variants used the same shim" is a claim about inputs,

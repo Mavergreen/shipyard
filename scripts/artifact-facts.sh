@@ -5,7 +5,7 @@
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files.
 # platform: runs at PACKAGE TIME, on macOS, where pkgutil exists and the artifacts do.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Artifact
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
 #       reads a repo in seconds and gates every PR.
 set -eu
@@ -14,7 +14,7 @@ dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"
 root="${3:-$(pwd)}"
 
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Artifact
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance", "A truncated fact stream fails" -- this producer runs upstream of a pipe with
 #       no pipefail, so dying here does not fail the step, it TRUNCATES the stream, and every check
 #       downstream is a "stay quiet with no records" check. A successful run therefore ends with
@@ -29,7 +29,53 @@ abort() {  # $1 = why.
 
 printf 'expected %s\n' "$version"
 
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Conformance
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
+#       paths" -- what a pkg INSTALLS, read from its payload rather than from the recipe that built it:
+#       every installed file or link (installs), every top-level bundle's CFBundleIdentifier (bundle),
+#       every launchd job's Label (launchd). Paths are relative to "/" and carry spaces as %20, since
+#       the stream is whitespace-delimited and "Application Support" is in nearly every product.
+enc() { sed -e 's/%/%25/g' -e 's/ /%20/g'; }
+payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read.
+  for _pl in $(find "$2" -name Payload -type f | sed 's/ /%20/g'); do
+    _pl="$(printf '%s' "$_pl" | sed 's/%20/ /g')"
+    _dir="${_pl%/Payload}"
+    # platform: a payload's paths are relative to its component's install-location, not to "/".
+    _loc="$(sed -n '/<pkg-info/ s/.*[[:space:]]install-location="\([^"]*\)".*/\1/p' "$_dir/PackageInfo" 2>/dev/null | head -1)"
+    _loc="${_loc:-/}"; _loc="${_loc#/}"; _loc="${_loc%/}"; [ -z "$_loc" ] || _loc="$_loc/"
+    _root="$_dir.root"; mkdir -p "$_root"
+    # platform: pkgbuild writes a gzip'd cpio archive; captured to a file, not piped, so a failed
+    #           decompress is a failure here rather than an empty (and therefore "clean") payload.
+    gzip -dc "$_pl" > "$_dir.cpio" 2>/dev/null || return 1
+    ( cd "$_root" && cpio -id < "$_dir.cpio" 2>/dev/null ) || return 1
+    rm -f "$_dir.cpio"
+    ( cd "$_root" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | enc \
+      | awk -v pkg="$1" -v loc="$(printf '%s' "$_loc" | enc)" '{ print "installs " pkg " " loc $0 }'
+    ( cd "$_root" && find . -type d \( -name '*.app' -o -name '*.prefPane' -o -name '*.kext' -o -name '*.bundle' \
+        -o -name '*.plugin' -o -name '*.framework' -o -name '*.appex' -o -name '*.xpc' \) ) | sed 's|^\./||' \
+      | awk '{ n = split($0, c, "/"); nested = 0
+               for (i = 1; i < n; i++) if (c[i] ~ /\.(app|prefPane|kext|bundle|plugin|framework|appex|xpc)$/) nested = 1
+               if (!nested) print }' \
+      | while IFS= read -r _bd; do
+          _id=none
+          for _ip in Contents/Info.plist Resources/Info.plist Info.plist; do
+            [ -f "$_root/$_bd/$_ip" ] || continue
+            _id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$_root/$_bd/$_ip" 2>/dev/null || echo none)"; break
+          done
+          printf 'bundle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" "$(printf '%s' "$_bd" | enc)" "${_id:-none}"
+        done
+    for _ld in Library/LaunchAgents Library/LaunchDaemons; do
+      [ -z "$_loc" ] && [ -d "$_root/$_ld" ] || continue
+      for _lp in "$_root/$_ld"/*.plist; do
+        [ -f "$_lp" ] || continue
+        _lab="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$_lp" 2>/dev/null || echo none)"
+        printf 'launchd %s %s/%s %s\n' "$1" "$_ld" "$(basename "$_lp" | enc)" "${_lab:-none}"
+      done
+    done
+  done
+  return 0
+}
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Conformance
 #       deviations" -- declared under "## Conformance deviations" as "- <check>[:<glob>]: <reason>";
 #       a deviation IS a product fact, so it belongs with the other product facts, not a file of its
 #       own that could disagree with them. ONE parser reads them -- deviations.sh -- because the
@@ -81,6 +127,7 @@ for f in "$dist"/*; do
           "$(printf '%s' "${ver:-unknown}" | tr -s '[:space:]' '_')" \
           "$(printf '%s' "${floor:-none}" | tr -s '[:space:]' '_')" \
           "$(printf '%s' "${ident:-none}" | tr -s '[:space:]' '_')"
+        payload_facts "$b" "$x/x" || { rm -rf "$x"; abort "cannot read the payload of $b"; }
       else
         printf 'pkg %s unreadable none none\n' "$b"
       fi
@@ -107,7 +154,7 @@ for f in "$dist"/*; do
         | while read -r k v; do printf 'build-info %s %s %s\n' "$b" "$k" "$v"; done
       ;;
     *appcast*.xml)
-      # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "The Sparkle
+      # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "The Sparkle
       #       comparison version must be dotted-numeric AND monotonic" -- the version that IDENTIFIES
       #       the release is the human shortVersionString; <sparkle:version> is a separate NUMERIC
       #       comparison key Sparkle can order, deliberately NOT equal to the "-mavericks.N" release

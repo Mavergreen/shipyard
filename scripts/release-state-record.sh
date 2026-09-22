@@ -7,7 +7,7 @@
 #          BEFORE packaging (the normal path, no --tag: the notes are not a release yet). --tag marks
 #          an ALREADY PUBLISHED release once, at migration -- paired with `release-state.sh --ref T`,
 #          which renders what that tag's tree actually contained.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "A release is a
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A release is a
 #       declared state, not an event" -- the only writer of a release body outside the publish path:
 #       appends one line and preserves every other byte, is idempotent, and a conflicting digest
 #       stops it with exit 3 rather than overwriting.
@@ -90,8 +90,8 @@ if [ -n "$existing" ]; then
     exit 0
   fi
   if [ "$REPLACE_UNREADABLE" = yes ] && ! state_digest_readable "$existing"; then
-    awk -v new="ModernMavericks-State: $DIGEST" '
-      /^ModernMavericks-State:/ { if (!seen) { print new; seen = 1 } ; next }
+    awk -v new="Mavergreen-State: $DIGEST" '
+      /^Mavergreen-State:/ { if (!seen) { print new; seen = 1 } ; next }
       { print }
     ' "$body" > "$work/replaced"
     mv "$work/replaced" "$body"
@@ -121,7 +121,7 @@ if [ "$REPLACED" = no ]; then
     [ -z "$(tail -c 1 "$body")" ] || printf '\n' >> "$body"
     printf '\n' >> "$body"
   fi
-  printf 'ModernMavericks-State: %s\n' "$DIGEST" >> "$body"
+  printf 'Mavergreen-State: %s\n' "$DIGEST" >> "$body"
 fi
 
 if [ -n "$NOTES_FILE" ]; then

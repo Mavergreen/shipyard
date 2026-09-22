@@ -7,7 +7,7 @@
 #          rather than invent a number; the caller falls back to the line and says why.
 # platform: a GitHub Action's own checkout is a TARBALL with no .git, so shipyard-version.sh's
 #           commit-count derivation cannot run there.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "shipyard: consume
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "shipyard: consume
 #       its facilities, never hand-roll them" -- resolving from the pinned ref is what ends the
 #       anonymous install: every consumer's installed shipyard used to report "1.0" regardless of
 #       @<ref>. A committed stamp is not an option either: check 7 fails a tracked VERSION.

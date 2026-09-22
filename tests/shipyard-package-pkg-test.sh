@@ -8,7 +8,7 @@ S="$root/scripts/package-pkg.sh"
 [ -f "$S" ] || { echo "FAIL: no scripts/package-pkg.sh"; exit 1; }
 w="$(mktemp -d "${TMPDIR:-/tmp}/pkg-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 code() { grep -v '^[[:space:]]*#' "$S"; }   # the script minus its comments
-PREFIX=usr/local/mavericks-shipyard
+PREFIX=usr/local/mavergreen-shipyard
 
 [ "$(code | grep -c -- '--host-arch x86_64,arm64')" = 1 ] || { echo "FAIL: the Distribution must declare BOTH architectures and exactly those -- without arm64, Installer on Apple Silicon offers Rosetta for a pkg with scripts and runs them translated; only one arch would stop the pkg installing on the other box -- package-pkg.sh must pass --host-arch x86_64,arm64 exactly once"; exit 1; }
 # spec: R-P1-24 -- the superseded machinery is gone, but CrossUpdater is NOT on this list: the
@@ -23,35 +23,37 @@ stray="$(code | grep 'CrossUpdater' | grep -vE '^rm -rf |^[[:space:]]*\|\| echo 
 [ -z "$stray" ] || { echo "FAIL: CrossUpdater appears outside its one-time removal: $stray"; exit 1; }
 for c in cmake ctest cpack; do
   code | grep -q "shipyard-$c" || { echo "FAIL: package-pkg.sh never creates /usr/local/bin/shipyard-$c"; exit 1; }
-  code | grep -q "ln -s ../mavericks-shipyard/bin/$c" \
-    || { echo "FAIL: shipyard-$c must be a RELATIVE symlink (ln -s ../mavericks-shipyard/bin/$c) -- an absolute /usr/local/mavericks-shipyard/bin/$c target points at the boot volume no matter which volume Installer is writing to, so an install to any other volume gets three dead links"; exit 1; }
+  code | grep -q "ln -s ../mavergreen-shipyard/bin/$c" \
+    || { echo "FAIL: shipyard-$c must be a RELATIVE symlink (ln -s ../mavergreen-shipyard/bin/$c) -- an absolute /usr/local/mavergreen-shipyard/bin/$c target points at the boot volume no matter which volume Installer is writing to, so an install to any other volume gets three dead links"; exit 1; }
 done
 
 sh "$S" --emit-preinstall "$w/preinstall"
 [ -s "$w/preinstall" ] || { echo "FAIL: --emit-preinstall wrote nothing"; exit 1; }
 
 AGENTS=Library/LaunchAgents
-APPS="Library/Application Support/ModernMavericks"
+APPS="Library/Application Support/Mavergreen"
 LEGACY_PLIST="$AGENTS/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist"
-LEGACY_APP="$APPS/MavericksShipyardCrossUpdater.app"
+OLD_APPS="Library/Application Support/ModernMavericks"
+LEGACY_APP="$OLD_APPS/MavericksShipyardCrossUpdater.app"
 
 lay_down_previous() {  # $1 = volume root: a previous install plus the neighbours it must not touch
   rm -rf "$1"
-  mkdir -p "$1/$PREFIX/bin" "$1/usr/local/mavericks-shipyard-other" "$1/usr/local/other" "$1/usr/local/bin"
+  mkdir -p "$1/$PREFIX/bin" "$1/usr/local/mavergreen-shipyard-other" "$1/usr/local/other" "$1/usr/local/bin"
+  mkdir -p "$1/usr/local/mavericks-shipyard/bin"; touch "$1/usr/local/mavericks-shipyard/bin/cmake"
   touch "$1/$PREFIX/bin/cmake" "$1/$PREFIX/dropped-in-a-newer-version" \
-        "$1/usr/local/mavericks-shipyard-other/keep" "$1/usr/local/other/keep" "$1/usr/local/bin/keep"
+        "$1/usr/local/mavergreen-shipyard-other/keep" "$1/usr/local/other/keep" "$1/usr/local/bin/keep"
 }
 
 # spec: R-P1-24 -- what v1.0.151 left on an Apple Silicon box: the CROSS updater and its agent, kept
 #       by the old postinstall's arch pick. Laid down beside the neighbours that must survive,
 #       including the plain-named pair this version installs, whose names differ by one word.
 lay_down_legacy() {  # $1 = volume root
-  mkdir -p "$1/$AGENTS" "$1/$APPS/$(basename "$LEGACY_APP")/Contents/MacOS" \
+  mkdir -p "$1/$AGENTS" "$1/$LEGACY_APP/Contents/MacOS" \
            "$1/$APPS/MavericksShipyardUpdater.app/Contents/MacOS" "$1/$APPS/SomeOtherProduct.app"
   touch "$1/$LEGACY_PLIST" \
         "$1/$LEGACY_APP/Contents/MacOS/MavericksShipyardCrossUpdater" \
-        "$1/$AGENTS/dev.modernmavericks.mavericks-shipyard-updatecheck.plist" \
-        "$1/$AGENTS/dev.modernmavericks.something-else.plist" \
+        "$1/$AGENTS/dev.mavergreen.mavericks-shipyard-updatecheck.plist" \
+        "$1/$AGENTS/dev.mavergreen.something-else.plist" \
         "$1/$APPS/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater" \
         "$1/$APPS/SomeOtherProduct.app/keep"
 }
@@ -63,7 +65,8 @@ for volarg in "$w/vol" "$w/vol/"; do
   rc=0; out="$(sh "$w/preinstall" /fake.pkg "$volarg" "$volarg" 2>&1)" || rc=$?
   [ "$rc" -eq 0 ] || { echo "FAIL: preinstall ($volarg) exited $rc: $out"; exit 1; }
   [ ! -e "$w/vol/$PREFIX" ] || { echo "FAIL: preinstall ($volarg) must remove the product dir"; exit 1; }
-  [ -f "$w/vol/usr/local/mavericks-shipyard-other/keep" ] \
+  [ ! -e "$w/vol/usr/local/mavericks-shipyard" ] || { echo "FAIL: preinstall ($volarg) left the pre-rename prefix /usr/local/mavericks-shipyard -- its cmake would linger beside the new one"; exit 1; }
+  [ -f "$w/vol/usr/local/mavergreen-shipyard-other/keep" ] \
     || { echo "FAIL: preinstall ($volarg) removed mavericks-shipyard-other, a prefix SIBLING"; exit 1; }
   [ -f "$w/vol/usr/local/other/keep" ] && [ -f "$w/vol/usr/local/bin/keep" ] \
     || { echo "FAIL: preinstall ($volarg) removed a neighbour under usr/local"; exit 1; }
@@ -80,11 +83,11 @@ for volarg in "$w/vol" "$w/vol/"; do
     || { echo "FAIL: preinstall ($volarg) left the superseded cross-updater LaunchAgent; it would keep checking the same appcast"; exit 1; }
   [ ! -e "$w/vol/$LEGACY_APP" ] \
     || { echo "FAIL: preinstall ($volarg) left MavericksShipyardCrossUpdater.app"; exit 1; }
-  [ -f "$w/vol/$AGENTS/dev.modernmavericks.mavericks-shipyard-updatecheck.plist" ] \
+  [ -f "$w/vol/$AGENTS/dev.mavergreen.mavericks-shipyard-updatecheck.plist" ] \
     || { echo "FAIL: preinstall ($volarg) removed THIS version's own LaunchAgent"; exit 1; }
   [ -f "$w/vol/$APPS/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater" ] \
     || { echo "FAIL: preinstall ($volarg) removed MavericksShipyardUpdater.app, the updater this version installs"; exit 1; }
-  [ -f "$w/vol/$AGENTS/dev.modernmavericks.something-else.plist" ] \
+  [ -f "$w/vol/$AGENTS/dev.mavergreen.something-else.plist" ] \
     || { echo "FAIL: preinstall ($volarg) removed another product's LaunchAgent"; exit 1; }
   [ -f "$w/vol/$APPS/SomeOtherProduct.app/keep" ] \
     || { echo "FAIL: preinstall ($volarg) removed another product's app"; exit 1; }
@@ -114,7 +117,7 @@ else
     || { echo "FAIL: a removal it could not do must SAY so; got '$out'"; exit 1; }
 fi
 
-# platform: with $3 unset a broken guard would reach for an unanchored /usr/local/mavericks-shipyard
+# platform: with $3 unset a broken guard would reach for an unanchored /usr/local/mavergreen-shipyard
 #           -- this machine's (or the runner's) OWN install -- so rm is stubbed for this case rather
 #           than run for real.
 mkdir -p "$w/stub"
@@ -154,7 +157,7 @@ fi
 
 # spec: 2026-09-11 decision 1 -- both --cmake-tree and --shipyard-prefix BECOME the product prefix
 #       verbatim, so a stray file beside a tree (the tarball it was unpacked from, a .DS_Store, a
-#       build dir) would otherwise install into /usr/local/mavericks-shipyard.
+#       build dir) would otherwise install into /usr/local/mavergreen-shipyard.
 mkfixture() {  # $1 = dir: a tree, a shipyard prefix and an app that all pass every other check
   rm -rf "$1"
   mkdir -p "$1/tree/bin" "$1/tree/doc" "$1/tree/man" "$1/tree/share" \

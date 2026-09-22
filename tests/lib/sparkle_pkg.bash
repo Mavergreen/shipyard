@@ -2,14 +2,14 @@
 # tests only). Real .pkg files, built with the same pkgbuild/productbuild the products use.
 
 # mkpkg OUT [KEY FEED [APP]] ... -- a product archive whose payload holds one updater app per
-# KEY FEED APP triple, under "Library/Application Support/ModernMavericks/" (the space is on purpose:
+# KEY FEED APP triple, under "Library/Application Support/Mavergreen/" (the space is on purpose:
 # that is where shipyard's own updaters live). With no triples, the payload holds no updater at all.
 mkpkg() {
   local out="$1" root; shift
   root="$(mktemp -d "$BATS_TEST_TMPDIR/root.XXXXXX")"
   mkdir -p "$root/usr/local/share/doc/test"; echo not-an-updater > "$root/usr/local/share/doc/test/README"
   while [ "$#" -ge 3 ]; do
-    local c="$root/Library/Application Support/ModernMavericks/$3.app/Contents"
+    local c="$root/Library/Application Support/Mavergreen/$3.app/Contents"
     mkdir -p "$c"
     cat > "$c/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -17,7 +17,7 @@ mkpkg() {
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>dev.modernmavericks.test.$3</string>
+	<string>dev.mavergreen.test.$3</string>
 	<key>SUFeedURL</key>
 	<string>$2</string>
 	<key>SUPublicEDKey</key>
@@ -27,7 +27,7 @@ mkpkg() {
 EOF
     shift 3
   done
-  pkgbuild --root "$root" --identifier dev.modernmavericks.test --version 1 --install-location / \
+  pkgbuild --root "$root" --identifier dev.mavergreen.test --version 1 --install-location / \
     "$out.component.pkg" >/dev/null
   productbuild --package "$out.component.pkg" "$out" >/dev/null
   rm -f "$out.component.pkg"

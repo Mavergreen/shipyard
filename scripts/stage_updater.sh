@@ -1,7 +1,7 @@
 #!/bin/sh
 #   usage: stage_updater.sh --stage ROOT --app UPDATER.app \
-#            --app-dir "/Library/Application Support/ModernMavericks" \
-#            --agent-label dev.modernmavericks.<product>-updatecheck \
+#            --app-dir "/Library/Application Support/Mavergreen" \
+#            --agent-label dev.mavergreen.<product>-updatecheck \
 #            [--scripts-out DIR] [--snippet-out FILE]
 #          Stages a Sparkle updater .app + its daily-check LaunchAgent into a pkg payload root, and
 #          emits the postinstall logic that loads the agent, rendered from the shared updater/*.in
@@ -44,7 +44,7 @@ done
 
 appbase=$(basename "$APP")            # DockerUpdater.app
 exec_name=${appbase%.app}             # DockerUpdater
-installed_app="$APPDIR/$appbase"      # /Library/Application Support/ModernMavericks/DockerUpdater.app
+installed_app="$APPDIR/$appbase"      # /Library/Application Support/Mavergreen/DockerUpdater.app
 installed_exec="$installed_app/Contents/MacOS/$exec_name"
 
 export COPYFILE_DISABLE=1             # no ._AppleDouble sidecars in the payload
@@ -57,7 +57,7 @@ sed -e "s#@MAVERICKS_AGENT_LABEL@#$LABEL#g" \
     -e "s#@MAVERICKS_UPDATER_INSTALLED_EXEC@#$installed_exec#g" \
     "$TPL/updatecheck.plist.in" > "$STAGE/Library/LaunchAgents/$LABEL.plist"
 
-render_agent_load() { sed -e "s#@MAVERICKS_AGENT_LABEL@#$LABEL#g" "$TPL/agent-load.in"; }
+render_agent_load() { sed -e "s#@MAVERICKS_AGENT_LABEL@#$LABEL#g" -e "s#@MAVERICKS_UPDATER_APP@#$appbase#g" "$TPL/agent-load.in"; }
 
 if [ -n "$SNIPPETOUT" ]; then
   mkdir -p "$(dirname "$SNIPPETOUT")"

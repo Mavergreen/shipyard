@@ -1,4 +1,4 @@
-# usage: modernmavericks-conventions SKILL.md, "Sparkle updater" names this the family's proof that
+# usage: mavergreen-conventions SKILL.md, "Sparkle updater" names this the family's proof that
 #        no log or released file carries the signing key, and points here for the snippet:
 #        scan:
 #          needs: [build]

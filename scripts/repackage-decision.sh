@@ -10,7 +10,7 @@
 #          new-upstream path -> SKIP. Otherwise -> DISPATCH (workflow_dispatch computes N+1 and
 #          publishes inline). An entry may be a PATH ("components/tailscale/version") or a KEY INSIDE
 #          A PATH ("pins.env:SWIFT_VERSION").
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Release notes" --
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes" --
 #       the path:KEY form exists because the swift repos keep every pin in one shared file
 #       (pins.env), where path-level ownership cannot tell the upstream pin from an ingredient pin;
 #       declaring the whole file own-upstream would skip every repackage, and declaring it not-own

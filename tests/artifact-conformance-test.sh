@@ -20,36 +20,36 @@ no() {  # facts on stdin must fail, and name the check
 }
 
 GOOD='expected 1.26.5-mavericks.5
-pkg golang-1.26.5-native-mavericks.5.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
+pkg golang-1.26.5-native-mavericks.5.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 appcast appcast.xml 1.26.5-mavericks.5 golang-1.26.5-native-mavericks.5.pkg 4096 10.9.5
 asset golang-1.26.5-native-mavericks.5.pkg 4096
 asset appcast.xml 700'
 ok "a coherent release" "$GOOD"
 
 no "pkg version disagrees with the tag" "version" 'expected 1.26.5-mavericks.5
-pkg p.pkg 1.26.5-mavericks.4 10.9.5 dev.modernmavericks.golang.go126
+pkg p.pkg 1.26.5-mavericks.4 10.9.5 dev.mavergreen.golang.go126
 asset p.pkg 10'
 
 no "appcast version disagrees with the pkg" "version" 'expected 1.26.5-mavericks.5
-pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
+pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 appcast appcast.xml 1.26.5-mavericks.4 p.pkg 10
 asset p.pkg 10
 asset appcast.xml 700'
 
 no "appcast points at an asset that was not published" "enclosure" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
 appcast appcast.xml 1.0.0-mavericks.1 ghost.pkg 10
 asset p.pkg 10
 asset appcast.xml 700'
 
 no "appcast enclosure length disagrees with the real file" "length" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
 appcast appcast.xml 1.0.0-mavericks.1 p.pkg 999
 asset p.pkg 10
 asset appcast.xml 700'
 
 no "a .pkg without the 10.9.5 floor" "floor" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.13 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 10.13 dev.mavergreen.x
 asset p.pkg 10'
 
 no "an identifier outside the family scheme" "identifier" 'expected 1.0.0-mavericks.1
@@ -57,17 +57,17 @@ pkg p.pkg 1.0.0-mavericks.1 10.9.5 com.example.thing
 asset p.pkg 10'
 
 no "a version outside the family scheme" "scheme" 'expected 1.0.0
-pkg p.pkg 1.0.0 10.9.5 dev.modernmavericks.x
+pkg p.pkg 1.0.0 10.9.5 dev.mavergreen.x
 asset p.pkg 10'
 
 no "two pkgs of one release disagree about the version" "version" 'expected 1.0.0-mavericks.1
-pkg native.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
-pkg cross.pkg 1.0.0-mavericks.2 10.9.5 dev.modernmavericks.x-cross
+pkg native.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+pkg cross.pkg 1.0.0-mavericks.2 10.9.5 dev.mavergreen.x-cross
 asset native.pkg 10
 asset cross.pkg 10'
 
 ok "a tools product with no updater ships no appcast, and that is fine" 'expected 20221003-mavericks.2
-pkg ed25519-20221003-mavericks.2.pkg 20221003-mavericks.2 10.9.5 dev.modernmavericks.ed25519
+pkg ed25519-20221003-mavericks.2.pkg 20221003-mavericks.2 10.9.5 dev.mavergreen.ed25519
 asset ed25519-20221003-mavericks.2.pkg 10'
 
 # platform: a component .pkg (PackageInfo, no Distribution) has no os-version floor by
@@ -75,31 +75,31 @@ asset ed25519-20221003-mavericks.2.pkg 10'
 #           the appcast that ships it. golang's cross product is exactly this: it TARGETS 10.9
 #           but RUNS on 11.0+, so demanding 10.9.5 of it would be wrong.
 ok "a component pkg whose appcast declares the minimum" 'expected 1.26.5-mavericks.5
-pkg golang-cross.pkg 1.26.5-mavericks.5 none dev.modernmavericks.golang.go126-cross
+pkg golang-cross.pkg 1.26.5-mavericks.5 none dev.mavergreen.golang.go126-cross
 appcast appcast-cross.xml 1.26.5-mavericks.5 golang-cross.pkg 10 11.0
 asset golang-cross.pkg 10
 asset appcast-cross.xml 700'
 
 no "a pkg with no floor and no appcast to declare one" "floor" 'expected 1.0.0-mavericks.1
-pkg orphan.pkg 1.0.0-mavericks.1 none dev.modernmavericks.x
+pkg orphan.pkg 1.0.0-mavericks.1 none dev.mavergreen.x
 asset orphan.pkg 10'
 
 ok "a product archive that does declare 10.9.5" 'expected 1.0.0-mavericks.1
-pkg native.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
+pkg native.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
 asset native.pkg 10'
 
 no "an undeclared floor deviation still fails" "floor" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 11.0 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 11.0 dev.mavergreen.x
 asset p.pkg 10'
 
 ok "a declared floor deviation passes" 'expected 1.0.0-mavericks.1
 deviation floor the cross toolchain runs on modern macOS and targets 10.9; it is not itself a 10.9 install
-pkg p.pkg 1.0.0-mavericks.1 11.0 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 11.0 dev.mavergreen.x
 asset p.pkg 10'
 
 no "a deviation with no reason is not a deviation" "reason" 'expected 1.0.0-mavericks.1
 deviation floor
-pkg p.pkg 1.0.0-mavericks.1 11.0 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 11.0 dev.mavergreen.x
 asset p.pkg 10'
 
 no "a floor deviation is scoped to its own check and does not excuse a bad identifier" "identifier" 'expected 1.0.0-mavericks.1
@@ -121,7 +121,7 @@ ok "a scoped deviation excuses the mirrored pkg" "$MIRROR"
 
 no "the same scoped deviation does NOT excuse our own artifact" "version" 'expected 6.3.3-mavericks.2
 deviation version:upstream-swift-*.pkg mirrored verbatim from swift.org
-pkg ours.pkg 6.3.3-mavericks.1 10.9.5 dev.modernmavericks.swift
+pkg ours.pkg 6.3.3-mavericks.1 10.9.5 dev.mavergreen.swift
 asset ours.pkg 10'
 
 # platform: an enclosure URL carries the release tag. If it names another release, Sparkle
@@ -129,14 +129,14 @@ asset ours.pkg 10'
 #           release silently disagree, and every other check still passes because both
 #           artifacts are individually fine.
 ok "an enclosure pointing at this release" 'expected 1.26.5-mavericks.5
-pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
+pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 appcast appcast.xml 1.26.5-mavericks.5 p.pkg 10 10.9.5
 enclosure-url appcast.xml https://github.com/Mavergreen/golang/releases/download/1.26.5-mavericks.5/p.pkg
 asset p.pkg 10
 asset appcast.xml 700'
 
 no "an enclosure pointing at a DIFFERENT release" "enclosure-url" 'expected 1.26.5-mavericks.5
-pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
+pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 appcast appcast.xml 1.26.5-mavericks.5 p.pkg 10 10.9.5
 enclosure-url appcast.xml https://github.com/Mavergreen/golang/releases/download/1.26.5-mavericks.4/p.pkg
 asset p.pkg 10
@@ -152,19 +152,19 @@ build-info build-info-native.txt mls_version 1.5.2-mavericks.2
 build-info build-info-native.txt ca_sha256 3ff344e30b9b
 build-info build-info-cross.txt mls_version 1.5.2-mavericks.2
 build-info build-info-cross.txt ca_sha256 3ff344e30b9b
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
+pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
 no "variants built from DIFFERENT shim pins" "mls_version" 'expected 1.26.5-mavericks.5
 build-info build-info-native.txt mls_version 1.5.2-mavericks.2
 build-info build-info-cross.txt mls_version 1.5.2-mavericks.1
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
+pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
 no "variants built from different CA bundles" "ca_sha256" 'expected 1.26.5-mavericks.5
 build-info build-info-native.txt ca_sha256 3ff344e30b9b
 build-info build-info-cross.txt ca_sha256 9a1c72b4aa0f
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
+pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
 ok "keys that SHOULD differ per variant are not evidence of disagreement" 'expected 1.26.5-mavericks.5
@@ -174,19 +174,19 @@ build-info build-info-native.txt prefix /usr/local/go126
 build-info build-info-cross.txt variant cross
 build-info build-info-cross.txt arch arm64
 build-info build-info-cross.txt prefix /usr/local/go126-cross
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
+pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
 ok "a single-variant product has nothing to compare against" 'expected 1.5.2-mavericks.2
 build-info build-info.txt mls_version 1.5.2-mavericks.2
-pkg p.pkg 1.5.2-mavericks.2 10.9.5 dev.modernmavericks.legacysupport
+pkg p.pkg 1.5.2-mavericks.2 10.9.5 dev.mavergreen.legacysupport
 asset p.pkg 10'
 
 ok "a declared disagreement, with a reason" 'expected 1.26.5-mavericks.5
 deviation ingredients the cross variant is deliberately built against the previous shim this once
 build-info build-info-native.txt mls_version 1.5.2-mavericks.2
 build-info build-info-cross.txt mls_version 1.5.2-mavericks.1
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
+pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
 # spec: scripts/check-artifact-conformance.sh -- "ok" must not be indistinguishable from
@@ -195,14 +195,14 @@ asset n.pkg 10'
 out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
 build-info build-info-a.txt commit abc
 build-info build-info-b.txt commit abc
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10
 end-of-facts' | sh "$S")"
 printf '%s\n' "$out" | grep -qi 'compared 2' \
   || { echo "FAIL should say how many records it compared; got: $out"; exit 1; }
 
 out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10
 end-of-facts' | sh "$S")"
 printf '%s\n' "$out" | grep -qi 'no build records' \
@@ -411,7 +411,7 @@ rm -rf "$_empty"; rm -f "$_empty_out"
 #       to say so. Every record present and correct, but the stream just stops: that must not be
 #       a pass.
 _trunc_out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10' | sh "$S" 2>&1)" \
   && { echo "FAIL: a stream with no end-of-facts sentinel must not pass; got: $_trunc_out"; exit 1; }
 
@@ -449,7 +449,7 @@ printf '%s\n' "$_abort_out" | grep -qi 'render-notes failed for RELEASE_NOTES.md
 #       skipped.
 _dev_out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
 deviation end-of-facts we would rather not be checked, thanks
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.modernmavericks.x
+pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10' | sh "$S" 2>&1)" \
   && { echo "FAIL: a deviation must not excuse a truncated stream; got: $_dev_out"; exit 1; }
 
@@ -537,5 +537,98 @@ _good_out="$(sh "$AF" "$_e2e/good" 9.9p2-mavericks.6 "$_e2e" 2>&1 | sh "$S" 2>&1
 printf '%s\n' "$_good_out" | grep -qi 'conformance: ok' \
   || { rm -rf "$_e2e"; echo "FAIL: a normal dist should report ok; got: $_good_out"; exit 1; }
 rm -rf "$_e2e"
+
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
+#       paths" -- what a pkg installs carries the family's identity and lands where the family puts
+#       things, unless a deviation scoped to that identifier or path says why not.
+REL='expected 1.0.0-mavericks.1
+pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+asset p.pkg 10'
+
+ok "identity: family bundle, job and paths pass" "$REL
+installs p.pkg usr/local/x/bin/x
+installs p.pkg Applications/Mavericks%20X.app/Contents/MacOS/X
+installs p.pkg Library/Application%20Support/Mavergreen/XUpdater.app/Contents/Info.plist
+installs p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
+installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
+bundle p.pkg Library/Application%20Support/Mavergreen/XUpdater.app dev.mavergreen.XUpdater
+launchd p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck"
+
+no "identity: a bundle outside the family" "bundle-id" "$REL
+bundle p.pkg Applications/X.app com.example.x"
+
+ok "identity: a bundle deviation scoped to its identifier excuses it" "$REL
+deviation bundle-id:com.example.* upstream's own kext, loaded by upstream's identifier
+bundle p.pkg Applications/X.app com.example.x"
+
+no "identity: a bundle deviation for a DIFFERENT identifier excuses nothing" "bundle-id" "$REL
+deviation bundle-id:org.other.* some other bundle
+bundle p.pkg Applications/X.app com.example.x"
+
+no "identity: a launchd job outside the family" "launchd-label" "$REL
+launchd p.pkg Library/LaunchDaemons/com.example.xd.plist com.example.xd"
+
+no "identity: a launchd plist not named for its Label" "named <Label>.plist" "$REL
+launchd p.pkg Library/LaunchDaemons/dev.mavergreen.a.plist dev.mavergreen.b"
+
+no "install-path: the pre-rename shared dir is outside the family" "install-path" "$REL
+installs p.pkg Library/Application%20Support/ModernMavericks/XUpdater.app/Contents/Info.plist"
+
+no "install-path: a launchd plist with a foreign name is outside the family" "install-path" "$REL
+installs p.pkg Library/LaunchDaemons/com.example.xd.plist"
+
+no "install-path: an arbitrary system location" "install-path" "$REL
+installs p.pkg Library/Extensions/X.kext/Contents/Info.plist"
+
+ok "install-path: a deviation scoped to the path excuses it, and the glob spans spaces" "$REL
+deviation install-path:Library/Extensions/* 10.9 loads kexts only from here
+deviation install-path:Library/Some*Place/* where upstream expects it
+installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
+installs p.pkg Library/Some%20Place/y"
+
+no "install-path: a path deviation excuses only the paths it names" "Library/PreferencePanes" "$REL
+deviation install-path:Library/Extensions/* 10.9 loads kexts only from here
+installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
+installs p.pkg Library/PreferencePanes/X.prefPane/Contents/Info.plist"
+
+no "install-path: a path deviation with no reason excuses nothing" "install-path" "$REL
+deviation install-path
+installs p.pkg Library/Extensions/X.kext/Contents/Info.plist"
+
+# spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
+#       are only as good as the extraction: install-location, a nested framework that is not a
+#       top-level bundle, a symlink, and a path with a space are each a way to report the wrong thing.
+if command -v pkgbuild >/dev/null 2>&1 && [ -x /usr/libexec/PlistBuddy ]; then
+  _pk="$(mktemp -d "${TMPDIR:-/tmp}/conformance-pkg.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+  _st="$_pk/stage"; _ap="$_st/Library/Application Support/Mavergreen/XUpdater.app/Contents"
+  mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/usr/local/x/bin" "$_pk/dist"
+  _plist() { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>%s</key><string>%s</string></dict></plist>\n' "$1" "$2" > "$3"; }
+  _plist CFBundleIdentifier dev.mavergreen.XUpdater "$_ap/Info.plist"
+  _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
+  _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
+  echo x > "$_st/usr/local/x/bin/x"; ln -s bin/x "$_st/usr/local/x/link"
+  pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
+    "$_pk/dist/x-1.0.0-mavericks.1.pkg"
+  pkgbuild --quiet --root "$_st/usr/local/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
+    --install-location /usr/local/y "$_pk/dist/y-1.0.0-mavericks.1.pkg"
+  _f="$(sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
+  rm -rf "$_pk"
+  for want in \
+    'installs x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/XUpdater.app/Contents/Info.plist' \
+    'installs x-1.0.0-mavericks.1.pkg usr/local/x/link' \
+    'installs y-1.0.0-mavericks.1.pkg usr/local/y/bin/x' \
+    'bundle x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/XUpdater.app dev.mavergreen.XUpdater' \
+    'launchd x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck'
+  do
+    printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
+  done
+  printf '%s\n' "$_f" | grep -q 'org.sparkle-project' \
+    && { echo "FAIL: a framework nested inside the updater is not a top-level bundle; its identifier is not the product's: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -q '^installs y-1.0.0-mavericks.1.pkg bin/' \
+    && { echo "FAIL: payload paths must be read relative to the component's install-location, not to /: $_f"; exit 1; }
+else
+  echo "artifact-conformance: no pkgbuild/PlistBuddy here -- the real-pkg payload fixture is skipped" >&2
+fi
 
 echo "PASS: artifact-conformance"

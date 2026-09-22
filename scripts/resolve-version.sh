@@ -4,7 +4,7 @@
 #          there yet. VERSION is a build PRODUCT -- written here, read by cmake and the updater,
 #          gitignored, never committed. An existing VERSION is reused as-is: within one CI run, an
 #          earlier job already resolved it and every job must agree.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Versioning" --
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning" --
 #       the shipped state lives in tags; container-tools shipped -mavericks.14 while its committed
 #       VERSION still said .2, which also made its tag-triggered publish path (tag must equal
 #       VERSION) impossible to satisfy.

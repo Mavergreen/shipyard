@@ -42,12 +42,12 @@ if(SHIPYARD_BUILD_UPDATER)
   mavericks_add_updater_app(
     NAME MavericksShipyardUpdater
     PRODUCT_NAME "Mavericks Shipyard"
-    BUNDLE_ID "dev.modernmavericks.mavericks-shipyard"
+    BUNDLE_ID "dev.mavergreen.mavericks-shipyard"
     FEED_URL "https://github.com/Mavergreen/shipyard/releases/latest/download/appcast.xml"
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "MavShipyardUpdater"
     CONFIRM_TITLE "Mavericks Shipyard updated"
-    CONFIRM_BODY "Mavericks Shipyard and shipyard-cmake in /usr/local/mavericks-shipyard were updated."
+    CONFIRM_BODY "Mavericks Shipyard and shipyard-cmake in /usr/local/mavergreen-shipyard were updated."
     RELAUNCH_MARKER "/tmp/.mavericks-shipyard-updater-relaunched"
     ALLOW_GENERIC
     # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification. shipyard has no UI.

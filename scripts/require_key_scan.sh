@@ -10,7 +10,7 @@
 # platform: reading job logs needs `actions: read`, and a called GitHub Actions workflow may not ask
 #           for more than its caller grants -- every product calls this one with `contents: write`
 #           alone.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Sparkle updater"
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Sparkle updater"
 #       -- scan-for-key.yml is the separate workflow this constraint forces, since the scan cannot
 #       live in publish-release.yml itself without breaking every publish in the family at once;
 #       this script is where its absence becomes visible on publish.

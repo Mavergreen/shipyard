@@ -118,7 +118,7 @@ for name, cs in (("ci.yml", ci), ("release.yml", rel)):
                       # The INSTALLED app specifically. `lipo -info` on the freshly merged bundle in
                       # $RUNNER_TEMP is the merge step logging what it produced, not a claim about
                       # what Installer put on the volume.
-                      (r"^lipo -info .*/Library/Application Support/ModernMavericks/", "the installed updater's architectures")):
+                      (r"^lipo -info .*/Library/Application Support/Mavergreen/", "the installed updater's architectures")):
         if has(cs, pat):
             bad.append("%s asserts %s inline; that belongs in scripts/assert-installed-shipyard.sh, "
                        "which both workflows and tests/assert-installed-shipyard-test.sh share" % (name, what))

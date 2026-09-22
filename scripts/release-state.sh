@@ -6,7 +6,7 @@
 #          up.
 #          --render  print the canonical rendering instead of its digest (debugging, and the test)
 #          --ref     take each declared entry's VALUE from REV's tree instead of the working tree
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "A release is a
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A release is a
 #       declared state, not an event" -- a release realises a declared state, not the side effect of
 #       an event; declared state EXCLUDES the source tree, which is what makes "a push causes
 #       feedback and almost never a release" a property of the design.

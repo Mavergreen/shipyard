@@ -10,7 +10,7 @@
 #     Release body, which are the same bytes by construction. Sections, in order: title, committed
 #     prose (verbatim, never rewritten), What changed, Our patches (only when one changed), Build
 #     ingredients (only when a pin moved), footer.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Release notes" --
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes" --
 #       NOTES ARE PART OF THE RELEASE CONTRACT: every gap here is fatal and names its cause. The old
 #       doctrine -- prose must never fail a release -- meant every section was appended with
 #       `|| true` and 2>/dev/null, so a broken hook or an unfindable baseline produced a shorter body
@@ -56,7 +56,7 @@ UP="${VER%%-mavericks.*}"
 SELF_UPSTREAM=no
 if [ "$UP" = "$VER" ]; then SELF_UPSTREAM=yes; fi
 
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Release notes"
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes"
 #       -- --tag-glob 'v*.*.*' (never 'v[0-9]*') excludes the moving major tag (v1, no dot) before
 #       it is ever compared. tests/release-notes-test.sh's "selfvglob" case is a mutation test for
 #       this branch: deleting it left the suite green.
@@ -120,7 +120,7 @@ fi
 
 printf '\n### What changed\n' >> "$tmp"
 
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Consuming a
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Consuming a
 #       Mavergreen toolchain + auto-propagation" -- "Name that caller
 #       .github/workflows/repackage-on-ingredient-bump.yml": the conventional path wins outright: a
 #       repo naming the caller something else falls through to DISCOVERY (naming the reusable
@@ -231,10 +231,10 @@ if [ -n "$PREV" ]; then
     esac
   fi
   if [ -n "$REPO_URL" ]; then
-    # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Release
+    # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release
     #       notes" -- "Every footer line gets a blank line BEFORE it, never after the line it
     #       follows": the rule binds anything appended after this generator hands the file off too
-    #       (the release-doctrine session's `ModernMavericks-State:` marker is the live case), which
+    #       (the release-doctrine session's `Mavergreen-State:` marker is the live case), which
     #       is why it is written down here even though this file cannot enforce that append itself.
     # platform: `[ -s "$f" ] && cmd`, as the LAST command of a script or function, returns non-zero
     #           under `set -e` and aborts the caller when the test is false.

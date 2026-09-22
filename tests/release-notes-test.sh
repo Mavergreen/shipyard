@@ -543,7 +543,7 @@ printf '%s\n' "$html" | grep -q 'or later\..*<a href' \
 #       afterwards in a different
 #       repository's script -- it can only get its OWN footer right -- so this simulates that
 #       append and checks the marker does not fuse to it either.
-printf 'ModernMavericks-State: v1:sha256:3f786850e387550fdab836ed7e6dc881de23001b\n' >> "$r/OUT.md"
+printf 'Mavergreen-State: v1:sha256:3f786850e387550fdab836ed7e6dc881de23001b\n' >> "$r/OUT.md"
 html="$(sh "$here/../scripts/gen_appcast.sh" --render-notes "$r/OUT.md")"
 printf '%s\n' "$html" | grep -q 'or later\..*sha256' \
   && { echo "FAIL footerpara: a state marker must not render inside the install-floor sentence"; printf '%s\n' "$html"; exit 1; }

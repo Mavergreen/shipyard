@@ -146,7 +146,7 @@ jobs:
             --notes-file dist/RELEASE_NOTES.md \
             --pkg "dist/mavericks-shipyard-$v.pkg" \
             > dist/appcast.xml
-          # spec: modernmavericks-conventions SKILL.md, "A self-upstream repo gets a real baseline
+          # spec: mavergreen-conventions SKILL.md, "A self-upstream repo gets a real baseline
           #       too, via --tag-glob" -- this is the worked example the rule book names.
           sh scripts/assert_appcast_upgradeable.sh --appcast dist/appcast.xml --version "v$v" --tag-glob 'v*.*.*'
 

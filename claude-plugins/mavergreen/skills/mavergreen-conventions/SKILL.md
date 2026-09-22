@@ -1,11 +1,11 @@
 ---
-name: modernmavericks-conventions
-description: Use when creating or modifying a Mavergreen (mavericks-*) project — its release workflow, Renovate/automerge config, versioning, shipyard usage, or Sparkle updater — or when deciding whether a deviation from the family conventions is warranted.
+name: mavergreen-conventions
+description: Use when creating or modifying a Mavergreen project — its release workflow, Renovate/automerge config, versioning, shipyard usage, or Sparkle updater — or when deciding whether a deviation from the family conventions is warranted.
 ---
 
 # Mavergreen project conventions
 
-Mavergreen repos (`mavericks-*`) each cross-build one upstream thing into a **Mac OS X 10.9
+Mavergreen repos (`github.com/Mavergreen/*`, checked out as `mavergreen-*`) each cross-build one upstream thing into a **Mac OS X 10.9
 (Mavericks)**-compatible `.pkg` with a **Sparkle** auto-updater, on a modern Apple-Silicon runner,
 with **no 10.9 build runner anywhere**. They share a CMake/Renovate helper (`Mavergreen/shipyard`)
 and a common release/versioning shape. This skill is the family's conventions plus the judgment calls
@@ -45,7 +45,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 
   **Installing shipyard: the pkg.** Download it from the latest release
   (`gh release download -R Mavergreen/shipyard --pattern '*.pkg'`) and install it. It puts one
-  whole prefix at `/usr/local/mavericks-shipyard` — CMake, the shipyard modules and the scripts — puts
+  whole prefix at `/usr/local/mavergreen-shipyard` — CMake, the shipyard modules and the scripts — puts
   `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` in `/usr/local/bin`, and installs a Sparkle
   updater that keeps it current, so an install can never quietly become a month old.
 
@@ -450,9 +450,11 @@ with <upstream>" disclaimer regardless. Where the product name is a third-party 
 nominatively (Tailscale), this is fine; where you can't use the upstream noun at all (Docker → "Container
 Tools"), the descriptor already IS your name, so "Mavericks Container Tools" is simply your product line.
 
-Never rename **functional identifiers** to match: bundle IDs (`dev.modernmavericks.*`), executable names,
+Never rename **functional identifiers** to match the display name: bundle IDs, executable names,
 `launchd` labels, `hostinfo.SetPackage`/equivalent, internal helper bundles (e.g. the `*Updater.app`), and
 asset filenames stay as they are. A `.app` name with a space is fine; quote the path in shell/plists.
+What those identifiers must LOOK like — `dev.mavergreen.*`, and where a product may install — is
+checked at package time: see "Identity and install paths" below.
 
 ## Versioning
 
@@ -683,7 +685,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 - **`sh "$SHIPYARD_SCRIPTS/release-state.sh" [--root DIR] [--ref REV] [--render]` renders the
   declaration canonically and hashes it** → `v1:sha256:<hex>` (`--render` prints the canonical bytes
   instead, for debugging and the golden test). `release-state-record.sh --notes-file dist/RELEASE_NOTES.md
-  --digest "$(...)"` writes `ModernMavericks-State: v1:sha256:<hex>` into the notes file **before
+  --digest "$(...)"` writes `Mavergreen-State: v1:sha256:<hex>` into the notes file **before
   `sign_and_appcast.sh` runs — never at publish time.** That one file is rendered into both the
   Sparkle appcast `<description>` and the GitHub Release body, so writing the marker before packaging
   keeps them in agreement — `check-artifact-conformance.sh`'s `notes` check (see Release notes, "Three
@@ -693,7 +695,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   the blank line above it is load-bearing, not cosmetic.** Markdown joins consecutive lines, so a
   marker welded to the footer's last line renders in that same dialog as one run-on sentence ending in
   a raw 64-character hash: `Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5
-  ModernMavericks-State: v1:sha256:3f78…`. And the marker's *shape* is read by one family rule
+  Mavergreen-State: v1:sha256:3f78…`. And the marker's *shape* is read by one family rule
   (`lib.sh`'s `state_marker`), never re-implemented per caller: while the reader and the writer
   disagreed, an older-format marker was "nothing recorded" to `release-needed.sh` and "a CONFLICTING
   record" to `release-state-record.sh`, which exits 3 — every migrated repo red, nightly, with no
@@ -909,7 +911,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   second half is a link (`Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5`).
   That shipped in every release from the generator's landing until it was fixed. The rule binds
   anything appended **after** the generator hands the file off, in another repo's script — the
-  `ModernMavericks-State:` marker above is the live case — and the separator is emitted only when
+  `Mavergreen-State:` marker above is the live case — and the separator is emitted only when
   something already precedes it, since a footer that opens with a blank line renders an empty leading
   `<p>`.
 - **The shape, in order:** title, the committed `release-notes/<TAG>.md` prose verbatim when present,
@@ -1283,7 +1285,7 @@ disagree is incoherent however it was built.
 |---|---|
 | Itself | `.pkg` / appcast / tag versions match; the enclosure names a published asset at its real length, and points into THIS release |
 | Neighbours | every `.pkg` of one release agrees on the version; **variants agree about their ingredients** |
-| Siblings | version scheme `<upstream>-mavericks.N`; identifier `dev.modernmavericks.*`; a product archive declares the 10.9.5 floor |
+| Siblings | version scheme `<upstream>-mavericks.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs (see "Identity and install paths"); a product archive declares the 10.9.5 floor |
 
 **This constrains outputs, not methods.** Products here build in genuinely different ways — a Go
 toolchain, a boot2docker iso, libswiftCore, an openssh — and making those look alike would buy
@@ -1305,6 +1307,43 @@ bundle and the legacy-support shim, its cross `.pkg` legitimately does not (cros
 the native prefix). "Both variants used the same shim" is a claim about *inputs*, which no payload
 inspection can settle — so the build writes it down rather than a checker guessing later. It also means
 a user can read what a release was made from.
+
+### Identity and install paths
+
+**Everything a pkg installs says it is ours, and lands where the family puts things.** Read from the
+payload itself (`artifact-facts.sh` expands each pkg; a filename or a recipe is a claim, the payload
+is the fact), four checks, each excusable only by a scoped, reasoned deviation:
+
+| Check | Default rule | Deviation scoped to |
+|---|---|---|
+| `identifier` | the pkg's identifier is `dev.mavergreen.*` | the pkg filename |
+| `bundle-id` | every TOP-LEVEL bundle (`.app`, `.prefPane`, `.kext`, `.bundle`, `.framework`, …; not one nested inside another, so Sparkle.framework inside an updater is not asked) has a `CFBundleIdentifier` under `dev.mavergreen.*` | the identifier |
+| `launchd-label` | every `Library/Launch{Agents,Daemons}/*.plist` has a `Label` under `dev.mavergreen.*`, and is named `<Label>.plist` | the Label |
+| `install-path` | every installed file or link is under `usr/local/`, `Applications/`, `Library/Application Support/Mavergreen/`, or is a `dev.mavergreen.*` launchd plist | the installed path (glob; `*` spans `/` and spaces) |
+
+Paths are relative to `/`, after each component's `install-location`.
+
+**Why a default, and why deviations stay legal.** An identifier or path that isn't ours collides with
+someone else's: tailscale once installed its daemon as `com.tailscale.tailscaled`, the Label upstream's
+own `tailscaled install-system-daemon` writes, so the two installs could silently overwrite each other.
+But some products genuinely must go elsewhere — a kext loads only from `/Library/Extensions`, a prefpane
+only from `/Library/PreferencePanes` — and those say so:
+
+```markdown
+## Conformance deviations
+
+- install-path:Library/Extensions/*: 10.9 loads third-party kexts only from here
+- bundle-id:as.acidanthera.*: upstream's kext, shipped unmodified under upstream's identity
+```
+
+**Flag day, 2026-09-22.** The org was ModernMavericks and every identifier was `dev.modernmavericks.*`,
+the shared dir `Application Support/ModernMavericks`, shipyard's prefix `/usr/local/mavericks-shipyard`,
+this plugin `modernmavericks`. All of it moved at once. Installer never removes what a newer payload no
+longer carries, so each pkg retires its own pre-rename leftovers on upgrade: the updater and its agent
+through the shared `updater/agent-load.in` (every product that stages its updater with
+`stage_updater.sh` gets this for free), and anything else — a daemon, a menu-bar agent, an old state
+dir — in the product's own pre/postinstall. That migration code is the one place the old names
+legitimately appear, and it is temporary: see the backlog.
 
 **Deviations are declared in `INGREDIENTS.md`, with a reason, scoped to a filename glob:**
 
@@ -1657,20 +1696,20 @@ in the same commit.
    on: no `concurrency:`; test files nothing runs; no `INGREDIENTS.md`; a Renovate key the preset
    already sets; a release that publishes no notes body; a release body not built by `release-notes.sh`
    (check 14 — `--generate-notes` no longer passes).
-10. Check in `.claude/settings.json` pointing at the `modernmavericks` marketplace (hosted in
+10. Check in `.claude/settings.json` pointing at the `mavergreen` marketplace (hosted in
    `mavericks-shipyard`) so contributors' agents load these conventions — do NOT copy the SKILL.md:
    ```json
-   {"extraKnownMarketplaces": {"modernmavericks": {"source": {"source": "github", "repo": "Mavergreen/shipyard"}}},
-    "enabledPlugins": {"modernmavericks@modernmavericks": true}}
+   {"extraKnownMarketplaces": {"mavergreen": {"source": {"source": "github", "repo": "Mavergreen/shipyard"}}},
+    "enabledPlugins": {"mavergreen@mavergreen": true}}
    ```
    **That file alone loads nothing.** It registers the marketplace and enables the plugin, but since
    Claude Code 2.1.195 a project setting does not *install* a plugin from an external source — so a
    fresh clone, a new repo and a new contributor all get no conventions, silently. Each contributor
    installs once, at **user** scope, which then covers every family repo:
    ```sh
-   claude plugin install modernmavericks@modernmavericks --scope user
+   claude plugin install mavergreen@mavergreen --scope user
    ```
-   and turns on auto-update for the marketplace (`/plugin` → Marketplaces → modernmavericks → Enable
+   and turns on auto-update for the marketplace (`/plugin` → Marketplaces → mavergreen → Enable
    auto-update; it is off by default for third-party marketplaces). Do NOT install at project scope:
    it covers only that one path, it pins whatever version was current, and `plugin uninstall --scope
    project` later rewrites this tracked settings file (it drops the `enabledPlugins` entry).
@@ -1759,6 +1798,13 @@ it here.** A silently dropped increment is how the family drifted in the first p
       derived expression rather than a literal — done 2026-09-12: it reports
       `still used, now computed rather than pinned (was <old value>)`, and never opens a
       `### Build ingredients` section by itself. See Release notes, above
+- [ ] **Retire the flag-day migration** (2026-09-22, ModernMavericks → Mavergreen). Exit condition:
+      no pre-flag-day install survives — in practice, once every product has shipped at least one
+      release AFTER its flag-day release and a maintainer has confirmed their own 10.9 and modern
+      boxes carry no `dev.modernmavericks.*` receipts (`pkgutil --pkgs | grep modernmavericks`). Then
+      delete: the ONE-TIME MIGRATION block in `updater/agent-load.in` and its test in
+      `tests/stage_updater.sh`, the old-prefix removal in `scripts/package-pkg.sh`'s preinstall, and
+      each product's own old-identity retirement (grep the family for `modernmavericks`)
 - [ ] **North star, not yet designed:** should a product repo carry build machinery at all? One
       declarative config per repo (upstream, verification, binaries, ingredients, updater) that
       shipyard turns into the build, package, release, and checks — a repo that cannot express a

@@ -3,7 +3,7 @@
 #          Exit 0 to publish, 1 to refuse. The caller's own remote is asked BY URL: publish-release.yml
 #          checks out shipyard, never the calling repo, so there is no `origin` here to ask. Every
 #          family repo is public, so this needs no token.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "An existing tag
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "An existing tag
 #       refuses the publish -- except the tag that triggered the run" -- two runs can compute the
 #       same -mavericks.(N+1) and both build it; the loser must not publish and must not relabel (the
 #       version is already baked into the pkg and the appcast), so it re-dispatches. A run started BY

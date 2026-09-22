@@ -153,7 +153,7 @@ while IFS= read -r f; do
         if (tag == "spec") {
           rest = line; sub(/^spec:[ \t]*/, "", rest)
           if (rest !~ /[^ \t\/]+\/[^ \t\/]+|\.(sh|yml|md|cmake|bats)|[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]|check[ \t]+[0-9]+[a-z]*|decision[ \t]+[0-9]+|ruling[ \t]+[0-9]+|[A-Z][A-Za-z0-9]*-[A-Za-z0-9]+-[0-9]+/) {
-            printf "%s:%d: %s\n    spec: needs a locatable citation -- e.g. \"# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md check 15\"\n", FNAME, FNR, $0
+            printf "%s:%d: %s\n    spec: needs a locatable citation -- e.g. \"# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 15\"\n", FNAME, FNR, $0
             bad++
             intag = 0
             next

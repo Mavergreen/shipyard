@@ -8,7 +8,7 @@
 #          --allow-key-change    a deliberate hard switch that installed clients will NOT follow;
 #                                 the signature must then verify against the new key. Say why in the
 #                                 workflow that passes it.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "A signature must
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A signature must
 #       satisfy the clients ALREADY INSTALLED" -- a Sparkle client verifies against the SUPublicEDKey
 #       of the updater it HAS, which came from the pkg the feed offered LAST TIME, not the repo's
 #       .pub and not the key the new pkg ships; ed25519-sign's own self-check can't see a mismatch

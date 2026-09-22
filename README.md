@@ -13,7 +13,7 @@ gh release download -R Mavergreen/shipyard --pattern '*.pkg'
 sudo installer -pkg mavericks-shipyard-*.pkg -target /
 ```
 
-Everything lands in `/usr/local/mavericks-shipyard` — one prefix holding CMake, the shipyard modules
+Everything lands in `/usr/local/mavergreen-shipyard` — one prefix holding CMake, the shipyard modules
 and the shell scripts — and three commands appear on your `PATH`:
 
 ```
@@ -33,7 +33,7 @@ pkg works on Intel, on Apple Silicon and on 10.9.
 
 GUI tools that want a CMake executable (CLion, VS Code's CMake Tools, Xcode wrappers) should be
 pointed at `/usr/local/bin/shipyard-cmake`. The shared presets live at
-`/usr/local/mavericks-shipyard/share/cmake/MavericksShipyard/mavericks-presets.json`.
+`/usr/local/mavergreen-shipyard/share/cmake/MavericksShipyard/mavericks-presets.json`.
 
 **One thing shipyard-cmake cannot do: HTTPS from inside CMake.** `file(DOWNLOAD https://…)` and
 `FetchContent` over HTTPS fail with "Unsupported protocol" — deliberately, and loudly rather than
@@ -92,7 +92,7 @@ In your `CMakePresets.json`:
 ```json
 {
   "version": 6,
-  "include": ["/usr/local/mavericks-shipyard/share/cmake/MavericksShipyard/mavericks-presets.json"],
+  "include": ["/usr/local/mavergreen-shipyard/share/cmake/MavericksShipyard/mavericks-presets.json"],
   "configurePresets": [
     { "name": "native", "inherits": "mavericks-native" },
     { "name": "cross",  "inherits": "mavericks-cross"  }
@@ -139,13 +139,13 @@ mavericks_add_updater_app(
 
 ## Conventions for Claude Code
 
-The family's conventions ship as the `modernmavericks` Claude Code plugin, from this repo's
+The family's conventions ship as the `mavergreen` Claude Code plugin, from this repo's
 marketplace. A product repo's checked-in `.claude/settings.json` registers the marketplace and
 enables the plugin, but that alone installs nothing. Install it once, for every family repo:
 
 ```sh
-claude plugin install modernmavericks@modernmavericks --scope user
+claude plugin install mavergreen@mavergreen --scope user
 ```
 
-then turn on auto-update in `/plugin` → Marketplaces → modernmavericks. The plugin carries no
+then turn on auto-update in `/plugin` → Marketplaces → mavergreen. The plugin carries no
 version, so every push to `main` is an update.

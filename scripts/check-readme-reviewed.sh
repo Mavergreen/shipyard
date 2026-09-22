@@ -1,6 +1,6 @@
 #!/bin/sh
 #   usage: check-readme-reviewed.sh [readme-path]
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "A repo's FIRST
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A repo's FIRST
 #       EVER release needs a README a human has read" -- gated by a marker line the generated README
 #       carries, in plain visible prose under the heading (not an HTML comment) so leaving it in
 #       place is embarrassing rather than invisible; a human edits the README, deletes the line, and

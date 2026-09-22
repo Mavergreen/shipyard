@@ -12,7 +12,7 @@
 #            end-of-facts                                         the producer ran to completion (LAST line)
 #          Facts rather than files: the agreement logic is testable without fabricating real .pkg
 #          files, and extraction is exercised for real at package time.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Artifact
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- what this checks and why, on all three axes
 #       (itself / neighbours / siblings), lives there.
 set -eu
@@ -20,7 +20,7 @@ set -eu
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/conformance.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT  # template: 10.9 BSD mktemp requires one
 facts="$tmp/facts"; cat > "$facts"
 
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Artifact
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance", "A truncated fact stream fails" -- every check below is a "stay quiet with no
 #       records" check, so a truncated stream would pass them all; the producer's exit status is
 #       discarded by the pipe (no pipefail), so a sentinel is the only structural fix. Checked here,
@@ -38,31 +38,37 @@ if ! grep -q '^end-of-facts$' "$facts"; then
   exit 2
 fi
 
+grep '^deviation ' "$facts" > "$tmp/devs" || true
+deviation_reason() {  # $1 = check, $2 = the subject it concerns (optional). Prints the reason, if any.
+  _dr="$(sed -n "s/^deviation ${1} \(..*\)$/\1/p" "$tmp/devs" | head -1)"
+  if [ -z "$_dr" ] && [ -n "${2:-}" ]; then
+    while IFS= read -r line; do
+      rest="${line#deviation ${1}:}"
+      glob="${rest%% *}"
+      why="${rest#* }"
+      [ "$why" = "$rest" ] && why=""      # no space => a glob with no reason, which is not a deviation
+      case "$2" in
+        $glob) [ -n "$why" ] && _dr="$why" && break ;;
+      esac
+    done <<EOF
+$(grep "^deviation ${1}:" "$tmp/devs" || true)
+EOF
+  fi
+  printf '%s' "$_dr"
+}
+
 status=0
 fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (optional)
   # spec: SKILL.md "Artifact conformance" -- a deviation excuses only its OWN check, only for the
   #       artifacts it names, and only with a reason (swift-toolchain's swift.org .pkg is the scoping
   #       example there).
   _c="$1"; _msg="$2"; _file="${3:-}"
-  reason="$(sed -n "s/^deviation ${_c} \(..*\)$/\1/p" "$facts" | head -1)"
-  if [ -z "$reason" ] && [ -n "$_file" ]; then
-    while IFS= read -r line; do
-      rest="${line#deviation ${_c}:}"
-      glob="${rest%% *}"
-      why="${rest#* }"
-      [ "$why" = "$rest" ] && why=""      # no space => a glob with no reason, which is not a deviation
-      case "$_file" in
-        $glob) [ -n "$why" ] && reason="$why" && break ;;
-      esac
-    done <<EOF
-$(grep "^deviation ${_c}:" "$facts" || true)
-EOF
-  fi
+  reason="$(deviation_reason "$_c" "$_file")"
   if [ -n "$reason" ]; then
     echo "conformance: ${_c}: DECLARED DEVIATION${_file:+ (${_file})} -- $reason"
     return 0
   fi
-  # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Conformance
+  # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Conformance
   #       deviations" -- excusing requires a REASON; a bare "deviation <check>" with none must still
   #       fail here, the same way its sibling above (the completion sentinel) refuses to let any
   #       deviation excuse it -- a switch-off with no reason attached is indistinguishable from a
@@ -102,10 +108,64 @@ while read -r kind file ver floor ident; do
       || fail floor "$file declares an install floor of $floor, not 10.9.5" "$file"
   fi
   case "$ident" in
-    dev.modernmavericks.*) : ;;
-    *) fail identifier "$file has identifier '$ident', outside dev.modernmavericks.*" "$file" ;;
+    dev.mavergreen.*) : ;;
+    *) fail identifier "$file has identifier '$ident', outside dev.mavergreen.*" "$file" ;;
   esac
 done < "$facts"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
+#       paths" -- SIBLINGS: what a pkg installs carries the family's identity. A deviation for these
+#       is scoped to the bundle identifier or Label it excuses, not to the pkg that ships it.
+dec() { printf '%s' "$1" | sed -e 's/%20/ /g' -e 's/%25/%/g'; }
+while read -r kind file path id; do
+  [ "$kind" = bundle ] || continue
+  case "$id" in
+    dev.mavergreen.*) : ;;
+    *) fail bundle-id "$file installs $(dec "$path") as '$id', outside dev.mavergreen.*" "$id" ;;
+  esac
+done < "$facts"
+while read -r kind file path label; do
+  [ "$kind" = launchd ] || continue
+  p="$(dec "$path")"; base="${p##*/}"; base="${base%.plist}"
+  case "$label" in
+    dev.mavergreen.*) : ;;
+    *) fail launchd-label "$file installs $p with Label '$label', outside dev.mavergreen.*" "$label" ;;
+  esac
+  [ "$base" = "$label" ] \
+    || fail launchd-label "$file installs $p with Label '$label' -- a job's plist is named <Label>.plist, or launchctl and every uninstaller look for the wrong file" "$label"
+done < "$facts"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
+#       paths" -- where a family product may put files by default. Anything else is a declared
+#       deviation scoped to the PATH (glob; `*` spans "/" and spaces), so excusing a kext's
+#       directory cannot quietly excuse a stray file elsewhere in the same pkg. Reported once per
+#       reason and capped, since one wrong directory can hold thousands of files.
+installs_seen=0
+: > "$tmp/ip-dev"; : > "$tmp/ip-fail"
+while read -r kind file path; do
+  [ "$kind" = installs ] || continue
+  installs_seen=$((installs_seen + 1))
+  p="$(dec "$path")"
+  case "$p" in
+    usr/local/*|Applications/*|"Library/Application Support/Mavergreen/"*) continue ;;
+    Library/LaunchAgents/dev.mavergreen.*.plist|Library/LaunchDaemons/dev.mavergreen.*.plist) continue ;;
+  esac
+  r="$(deviation_reason install-path "$p")"
+  if [ -n "$r" ]; then printf '%s\n' "$r" >> "$tmp/ip-dev"
+  else printf '%s: %s\n' "$file" "$p" >> "$tmp/ip-fail"; fi
+done < "$facts"
+sort "$tmp/ip-dev" | uniq -c | while read -r n r; do
+  echo "conformance: install-path: DECLARED DEVIATION ($n files) -- $r"
+done
+nfail="$(wc -l < "$tmp/ip-fail" | tr -d ' ')"
+if [ "$nfail" -gt 0 ]; then
+  head -20 "$tmp/ip-fail" | while IFS= read -r l; do
+    echo "conformance: install-path: $l -- outside usr/local, Applications, Library/Application Support/Mavergreen and dev.mavergreen.* launchd jobs" >&2
+  done
+  [ "$nfail" -le 20 ] || echo "conformance: install-path: ... and $((nfail - 20)) more" >&2
+  status=1
+fi
+echo "conformance: install-path: checked $installs_seen installed files"
 
 # spec: SKILL.md "Artifact conformance" axis table -- ITSELF: the appcast describes this release, and
 #       its enclosure names a published asset at its real length.

@@ -10,8 +10,8 @@ trap 'rm -rf "$T"' EXIT
 
 # platform: the install dir contains a SPACE, as the real one does -- this pins that the
 #           rendered paths survive it.
-APPDIR="/Library/Application Support/ModernMavericks"
-LABEL=dev.modernmavericks.test-updatecheck
+APPDIR="/Library/Application Support/Mavergreen"
+LABEL=dev.mavergreen.test-updatecheck
 APP="$T/TestUpdater.app"
 mkdir -p "$APP/Contents/MacOS"
 printf '#!/bin/sh\n' > "$APP/Contents/MacOS/TestUpdater"
@@ -67,5 +67,32 @@ if sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s4" --app "$APP" --app-dir "$
      --agent-label x --no-such-flag whatever 2>/dev/null; then
   fail "an unknown argument was accepted -- a caller asking for something this script does not do should fail loudly rather than get a payload quietly missing it"
 fi
+
+
+# spec: updater/agent-load.in "ONE-TIME MIGRATION off the ModernMavericks identity" -- an upgraded
+#       box must not keep running the pre-rename updater beside the new one; only THIS product's old
+#       updater goes, and only on the volume Installer names.
+V="$T/vol"; OLDAPPS="$V/Library/Application Support/ModernMavericks"
+lay_down_old() {
+  rm -rf "$V"; mkdir -p "$V/Library/LaunchAgents" "$OLDAPPS/TestUpdater.app/Contents/MacOS" "$OLDAPPS/OtherUpdater.app"
+  touch "$V/Library/LaunchAgents/dev.modernmavericks.test-updatecheck.plist" \
+        "$V/Library/LaunchAgents/dev.modernmavericks.other-updatecheck.plist" \
+        "$V/Library/LaunchAgents/$LABEL.plist" "$OLDAPPS/OtherUpdater.app/keep"
+}
+lay_down_old
+( set -- /fake.pkg "$V/" "$V/"; . "$SNIP" )
+[ ! -e "$V/Library/LaunchAgents/dev.modernmavericks.test-updatecheck.plist" ] || fail "left this product's pre-rename update-check agent"
+[ ! -e "$OLDAPPS/TestUpdater.app" ] || fail "left this product's pre-rename updater app"
+[ -e "$V/Library/LaunchAgents/dev.modernmavericks.other-updatecheck.plist" ] || fail "removed ANOTHER product's pre-rename agent -- each product retires only its own"
+[ -e "$OLDAPPS/OtherUpdater.app/keep" ] || fail "removed ANOTHER product's pre-rename updater app"
+[ -e "$V/Library/LaunchAgents/$LABEL.plist" ] || fail "removed this version's own agent"
+rm -rf "$OLDAPPS/OtherUpdater.app"
+( set -- /fake.pkg "$V" "$V"; . "$SNIP" )
+[ ! -e "$OLDAPPS" ] || fail "left the empty pre-rename shared dir behind"
+( set -- ; : > "$T/calls"
+  rm() { echo "rm $*" >> "$T/calls"; }; rmdir() { echo "rmdir $*" >> "$T/calls"; }
+  launchctl() { echo "launchctl $*" >> "$T/calls"; }
+  . "$SNIP" )
+! grep -q ModernMavericks "$T/calls" || fail "with no target volume it still removed: $(cat "$T/calls") -- it must remove nothing rather than fall back to the running system's /"
 
 echo "stage_updater OK"

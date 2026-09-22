@@ -1,6 +1,6 @@
 name: repackage-on-ingredient-bump
 
-# spec: modernmavericks-conventions SKILL.md, "Consuming a Mavergreen toolchain + auto-propagation"
+# spec: mavergreen-conventions SKILL.md, "Consuming a Mavergreen toolchain + auto-propagation"
 #       -- "Auto-propagation via the shared reusable workflow (dispatch, NOT tag)"
 
 on:

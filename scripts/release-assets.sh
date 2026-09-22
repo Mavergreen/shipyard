@@ -3,7 +3,7 @@
 #          Prints the release assets in a downloaded artifact directory, one per line: everything
 #          except the notes file and any pre-existing SHA256SUMS (the publish workflow regenerates
 #          that).
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Publishing a
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Publishing a
 #       release" -- an empty Release body is not a degraded release, it is the defect this refuses to
 #       publish: tailscale shipped one on every release, swift-runtime set no body at all.
 set -eu

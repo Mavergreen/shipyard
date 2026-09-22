@@ -10,7 +10,7 @@
 #          reports which case it was on exit: 3 = no link is due (a repackage), 4 = this repo has no
 #          hook, 5 = the hook is broken (or tags are unknowable), so a caller that cares can tell a
 #          missing link from a broken one.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "A new upstream
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A new upstream
 #       links upstream's own notes" -- decides whether a link is due (from the tags, never the
 #       previous release, since parallel lines make the previous release's upstream not comparable)
 #       BEFORE it even looks for the hook, so a repackage never needs one to exist; signal-desktop

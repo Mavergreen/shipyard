@@ -4,7 +4,7 @@
 #          declaring `add_test`, drives ctest (container-tools, tailscale); otherwise runs every
 #          top-level tests/*.sh and tests/*.bats. Subdirectories are fixtures and sub-suites with
 #          their own entry points, not tests to run here. Exit 77 = SKIP.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Running a repo's
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Running a repo's
 #       tests" -- a newly added test file must run the day it lands, not wait for someone to remember
 #       a CI line (macports-legacy-support had 9 test files CI never ran; two had silently rotted).
 set -eu

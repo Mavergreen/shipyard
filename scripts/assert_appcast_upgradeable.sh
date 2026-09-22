@@ -20,7 +20,7 @@
 #          (the first release) the ordering check is SKIPPED -- and SAID to be, never silently
 #          passed. If tags can't be listed at all (not a git checkout) the gate FAILS rather than
 #          skip.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "The Sparkle
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "The Sparkle
 #       comparison version must be dotted-numeric AND monotonic" -- the failure mode this catches is
 #       SUStandardVersionComparator returning EQUAL for consecutive "-mavericks.N" repackages, so a
 #       client reports "you're up to date". Uses lib.sh's ver_cmp (no `sort -V`, which the 10.9 box's

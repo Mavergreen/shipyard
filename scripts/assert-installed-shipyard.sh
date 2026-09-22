@@ -28,9 +28,9 @@ done
 
 R="${ROOT%/}"
 CM="$R/usr/local/bin/shipyard-cmake"
-PREFIX="$R/usr/local/mavericks-shipyard"
+PREFIX="$R/usr/local/mavergreen-shipyard"
 CFGDIR="$PREFIX/share/cmake/MavericksShipyard"
-EXE="$R/Library/Application Support/ModernMavericks/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater"
+EXE="$R/Library/Application Support/Mavergreen/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater"
 
 bad=0
 fail() { echo "::error::installed shipyard: $*" >&2; bad=1; }

@@ -1,7 +1,7 @@
 #!/bin/sh
 #   usage: package-pkg.sh --cmake-tree DIR --shipyard-prefix DIR --app APP --version V --out PKG
 #          package-pkg.sh --emit-preinstall FILE     (for tests)
-#          Packages shipyard as ONE prefix -- /usr/local/mavericks-shipyard holding shipyard's own
+#          Packages shipyard as ONE prefix -- /usr/local/mavergreen-shipyard holding shipyard's own
 #          CMake (bin/{cmake,ctest,cpack}, share/cmake-X.Y) and shipyard itself
 #          (share/cmake/MavericksShipyard) -- plus /usr/local/bin/shipyard-{cmake,ctest,cpack}
 #          symlinked into it, and one universal updater. A preinstall clears the product dir first:
@@ -13,7 +13,7 @@
 #       CMAKE_PREFIX_PATH, and MavericksShipyardConfig.cmake refuses every other cmake.
 #       /usr/local/bin is on macOS's default PATH (/etc/paths) and the three names are ours alone, so
 #       nothing shared is written into.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "On-target/
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "On-target/
 #       off-target parity" -- shipyard's own .pkg is the worked example: one artifact serves both
 #       boxes because developing under Mavericks and developing under modern macOS are equally
 #       first-class, and two pkgs would make someone choose, silently wrong when they choose badly.
@@ -36,11 +36,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-ID="dev.modernmavericks.mavericks-shipyard"
-PREFIX_DIR="/usr/local/mavericks-shipyard"
-APPDIR="/Library/Application Support/ModernMavericks"
+ID="dev.mavergreen.mavericks-shipyard"
+PREFIX_DIR="/usr/local/mavergreen-shipyard"
+APPDIR="/Library/Application Support/Mavergreen"
 APP_NAME="MavericksShipyardUpdater.app"
-LABEL="dev.modernmavericks.mavericks-shipyard-updatecheck"
+LABEL="dev.mavergreen.mavericks-shipyard-updatecheck"
 
 # spec: tests/shipyard-package-pkg-test.sh -- a destructive path must not be one empty variable away
 #       from "$ROOT" alone, so the preinstall spells it out literally and the test's fixture pins the
@@ -60,8 +60,15 @@ emit_preinstall() {  # $1 = destination file
 # Never fails the install: whatever this cannot remove, the payload still overwrites.
 [ -n "${3:-}" ] || { echo "mavericks-shipyard: preinstall got no target volume; removing nothing" >&2; exit 0; }
 ROOT="${3%/}"
+rm -rf "$ROOT/usr/local/mavergreen-shipyard" \
+  || echo "mavericks-shipyard: could not clear $ROOT/usr/local/mavergreen-shipyard; files dropped from this version may linger" >&2
+
+# ONE-TIME MIGRATION off the ModernMavericks identity (flag day 2026-09-22): the prefix was
+# /usr/local/mavericks-shipyard. Spelled out in full, like the line above. The old updater and its
+# agent are retired by updater/agent-load.in, as for every product.
+# DELETABLE once no pre-flag-day install survives.
 rm -rf "$ROOT/usr/local/mavericks-shipyard" \
-  || echo "mavericks-shipyard: could not clear $ROOT/usr/local/mavericks-shipyard; files dropped from this version may linger" >&2
+  || echo "mavericks-shipyard: could not remove the pre-rename prefix $ROOT/usr/local/mavericks-shipyard" >&2
 
 # ONE-TIME MIGRATION off the two-updater design (spec 2026-09-11, R-P1-24).
 #
@@ -159,9 +166,9 @@ COPYFILE_DISABLE=1 cp -R "$TREE"/. "$STAGE$PREFIX_DIR/"
 COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
 # platform: the link targets are RELATIVE, so they resolve on whatever volume Installer lays them
 #           down on.
-ln -s ../mavericks-shipyard/bin/cmake "$STAGE/usr/local/bin/shipyard-cmake"
-ln -s ../mavericks-shipyard/bin/ctest "$STAGE/usr/local/bin/shipyard-ctest"
-ln -s ../mavericks-shipyard/bin/cpack "$STAGE/usr/local/bin/shipyard-cpack"
+ln -s ../mavergreen-shipyard/bin/cmake "$STAGE/usr/local/bin/shipyard-cmake"
+ln -s ../mavergreen-shipyard/bin/ctest "$STAGE/usr/local/bin/shipyard-ctest"
+ln -s ../mavergreen-shipyard/bin/cpack "$STAGE/usr/local/bin/shipyard-cpack"
 
 sh "$SELF/stage_updater.sh" --stage "$STAGE" --app "$APP" --app-dir "$APPDIR" \
   --agent-label "$LABEL" --scripts-out "$SCR"

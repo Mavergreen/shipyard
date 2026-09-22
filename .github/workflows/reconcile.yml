@@ -1,6 +1,6 @@
 name: Reconcile release state
 
-# spec: modernmavericks-conventions SKILL.md, "A release is a declared state, not an event" --
+# spec: mavergreen-conventions SKILL.md, "A release is a declared state, not an event" --
 #       reconcile.yml is the nightly backstop it names.
 
 on:
@@ -30,7 +30,7 @@ on:
         default: ""
 
 permissions:
-  # spec: modernmavericks-conventions SKILL.md, "A release is a declared state, not an event" --
+  # spec: mavergreen-conventions SKILL.md, "A release is a declared state, not an event" --
   #       reads and dispatches only; a version match is never a state match, so this must never
   #       write a release body (the backfill-from-a-version-match incident that rule describes).
   contents: read
@@ -51,7 +51,7 @@ jobs:
 
       - uses: Mavergreen/shipyard/.github/actions/install@v1
 
-      # spec: modernmavericks-conventions SKILL.md, "A release is a declared state, not an event" --
+      # spec: mavergreen-conventions SKILL.md, "A release is a declared state, not an event" --
       #       upstream must name the file version.sh reads; this is the reconcile.yml half of that.
       - id: state
         env:

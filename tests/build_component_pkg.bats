@@ -15,7 +15,7 @@ setup() {
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>dev.modernmavericks.fake</string>
+<key>CFBundleIdentifier</key><string>dev.mavergreen.fake</string>
 <key>CFBundleName</key><string>Fake</string>
 <key>CFBundleExecutable</key><string>Fake</string>
 <key>CFBundleVersion</key><string>1.2.3</string>
@@ -28,7 +28,7 @@ PL
 teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
 
 @test "build_component_pkg: output installs in place (relocation + version-check both off)" {
-  run sh "$BUILD" --root "$WORK/root" --identifier dev.modernmavericks.fake \
+  run sh "$BUILD" --root "$WORK/root" --identifier dev.mavergreen.fake \
     --version 1.2.3 --install-location / --out "$WORK/clean.pkg"
   [ "$status" -eq 0 ]
   [ -f "$WORK/clean.pkg" ]
@@ -41,7 +41,7 @@ teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
 }
 
 @test "gate: a PLAIN pkgbuild pkg is rejected (this is the shipped-bug shape)" {
-  pkgbuild --root "$WORK/root" --identifier dev.modernmavericks.fake \
+  pkgbuild --root "$WORK/root" --identifier dev.mavergreen.fake \
     --version 1.2.3 --install-location / "$WORK/plain.pkg"
   run sh "$GATE" "$WORK/plain.pkg"
   [ "$status" -ne 0 ]

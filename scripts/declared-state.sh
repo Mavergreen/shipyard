@@ -5,7 +5,7 @@
 #          INGREDIENTS.md: exit 0 silently -- a repo that has not migrated is not an error. A
 #          MALFORMED entry is fatal (exit 1) and names itself: a declaration nobody can read must not
 #          become a digest.
-# spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "A release is a
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A release is a
 #       declared state, not an event" -- this reads INGREDIENTS.md's "## Declared state" section (one
 #       entry per line, in the same shape as "## Conformance deviations", parsed by deviations.sh, so
 #       one file means one thing): "- <canonical-name>: <path>" (the whole file's contents,
