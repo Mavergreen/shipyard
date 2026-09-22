@@ -214,21 +214,50 @@ mkdir -p "$work/v5/build"; printf '#!/bin/sh\n: > UPSTREAM_VERSION\n' > "$work/v
 (cd "$work/v5" && git add -A) >/dev/null 2>&1
 (cd "$work/v5" && sh "$S" >/dev/null) || { echo "FAIL derived upstream should pass"; exit 1; }
 
-# spec: scripts/check-family-conventions.sh -- parallel upstream lines (golang) keep one UPSTREAM_VERSION per line. Check 7b additionally
-#       demands each line carry its OWN capped Renovate manager, so the fixture has to look like
-#       golang really does -- an anchored managerFilePatterns plus an allowedVersions cap keeping
-#       the line off the next minor.
+# spec: scripts/check-family-conventions.sh -- check 7b fails a repo with a TRACKED lines/ dir --
+#       golang, nodejs and clang have all migrated off it (2026-09-22), so a reappearing tracked
+#       lines/ means the retired per-line directory shape crept back in, not a legitimate
+#       parallel-lines repo. (Check 7's separate lines/*/UPSTREAM_VERSION fallback, just above, is
+#       unrelated and untouched by this fixture.)
 mkrepo "$work/v6"; rm "$work/v6/UPSTREAM_VERSION"
 mkdir -p "$work/v6/lines/126"; printf '1.26.5\n' > "$work/v6/lines/126/UPSTREAM_VERSION"
-cat > "$work/v6/.github/renovate.json" <<'JSON'
-{"extends":["github>ModernMavericks/shipyard"],
- "customManagers":[{"customType":"regex","managerFilePatterns":["/^lines/126/UPSTREAM_VERSION$/"],
-                    "matchStrings":["^(?<currentValue>.+?)\\s*$"],"depNameTemplate":"go-126",
-                    "packageNameTemplate":"go","datasourceTemplate":"golang-version"}],
- "packageRules":[{"matchDepNames":["go-126"],"allowedVersions":"<1.27"}]}
-JSON
 (cd "$work/v6" && git add -A) >/dev/null 2>&1
-(cd "$work/v6" && sh "$S" >/dev/null) || { echo "FAIL per-line upstream should pass"; exit 1; }
+if out="$(cd "$work/v6" && sh "$S" 2>&1)"; then echo "FAIL: a reappearing tracked lines/ dir should fail"; exit 1; fi
+printf '%s\n' "$out" | grep -q 'lines/' || { echo "FAIL should name lines/: $out"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh -- and a repo with no lines/ dir at all (the family's
+#       current shape, everywhere) must pass. "$work/ok" above already proves this implicitly; this
+#       makes it explicit for check 7b specifically.
+mkrepo "$work/v7"
+(cd "$work/v7" && sh "$S" >/dev/null) || { echo "FAIL: a repo with no lines/ dir should pass"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh -- check 7b reads TRACKED files only, the same rule
+#       checks 7/17 apply. This family's NFS checkouts collect ignored AppleDouble `._*` files
+#       (lines/._126, lines/126/._patches); a migrated checkout that fast-forwards past golang's or
+#       clang's lines/-retiring commit has git delete the TRACKED files under lines/ while those
+#       ignored siblings stay on disk, leaving a real (but untracked) lines/ directory. That must
+#       not fail the gate on an otherwise-migrated repo.
+mkrepo "$work/v8"
+mkdir -p "$work/v8/lines/126"
+printf '._AppleDouble\n' > "$work/v8/lines/126/._patches"     # untracked -- .gitignore below covers it
+printf '._*\n' >> "$work/v8/.gitignore"
+(cd "$work/v8" && git add -A) >/dev/null 2>&1
+(cd "$work/v8" && sh "$S" >/dev/null) || { echo "FAIL: an untracked (ignored-AppleDouble) lines/ dir should pass"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh -- `git ls-files -- lines/` (trailing slash) matches
+#       only paths INSIDE a lines/ directory, so a tracked plain FILE literally named "lines" is not
+#       the retired shape and must pass.
+mkrepo "$work/v9"
+printf 'not a directory\n' > "$work/v9/lines"
+(cd "$work/v9" && git add -A) >/dev/null 2>&1
+(cd "$work/v9" && sh "$S" >/dev/null) || { echo "FAIL: a plain file named 'lines' (not a directory) should pass"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh -- the check only cares about lines/ AT THE REPO ROOT;
+#       a nested sub/lines/ is some other directory's business, not this family convention's.
+mkrepo "$work/v10"
+mkdir -p "$work/v10/sub/lines/22"; printf '22.1.1\n' > "$work/v10/sub/lines/22/UPSTREAM_VERSION"
+(cd "$work/v10" && git add -A) >/dev/null 2>&1
+(cd "$work/v10" && sh "$S" >/dev/null) || { echo "FAIL: a nested sub/lines/ should pass"; exit 1; }
 
 # spec: check 7d is the mirror of 7c: a build OUTPUT dir that is NOT ignored. tailscale's
 #       release.yml configures the updater with `cmake -S updater -B build/updater`, a path the

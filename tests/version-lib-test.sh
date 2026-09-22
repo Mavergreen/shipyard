@@ -42,7 +42,7 @@ mkdir -p "$w/lines/127"
 printf '1.27.0\n' > "$w/lines/127/UPSTREAM_VERSION"
 out="$(MAVERICKS_UPSTREAM_FILE="$w/lines/127/UPSTREAM_VERSION" MAVERICKS_TAGS='' sh "$V" auto)"
 printf '%s\n' "$out" | grep -qx 'FULL=1.27.0-mavericks.1' \
-  || { echo "FAIL: a repo with parallel upstream lines (mavericks-golang: lines/126/UPSTREAM_VERSION) keeps one UPSTREAM_VERSION per line, so the file must be an input rather than a fixed path: $out"; exit 1; }
+  || { echo "FAIL: a repo whose upstream isn't at the fixed UPSTREAM_VERSION path (container-tools, tailscale: components/<name>/version) needs the file to be an input rather than a fixed path: $out"; exit 1; }
 out="$(MAVERICKS_UPSTREAM_FILE="$w/lines/127/UPSTREAM_VERSION" MAVERICKS_TAGS='1.26.5-mavericks.9' sh "$V" auto)"
 printf '%s\n' "$out" | grep -qx 'FULL=1.27.0-mavericks.1' || { echo "FAIL: tags from the OTHER line must not affect this one's N: $out"; exit 1; }
 

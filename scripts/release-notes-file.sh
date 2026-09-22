@@ -4,9 +4,9 @@
 #          this positional signature from their release.yml. The PRODUCT argument here is the
 #          family's older prose phrase ("Mavericks OpenSSH"); the generator wants the bare noun, so a
 #          leading "Mavericks " / trailing " for Mavericks" is stripped when present. A repo shipping
-#          parallel upstream lines (golang: lines/126/) scopes the baseline through
-#          MAVERICKS_NOTES_LINE (forwarded to the generator's --line) rather than a new positional
-#          argument, since the positional signature itself is unchanged.
+#          one line of several (golang: --line 1.26, the prefix its tags carry) scopes the baseline
+#          through MAVERICKS_NOTES_LINE (forwarded to the generator's --line) rather than a new
+#          positional argument, since the positional signature itself is unchanged.
 # spec: tests/release-notes-file-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"

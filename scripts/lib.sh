@@ -5,9 +5,9 @@
 : "${MAVERICKS_ROOT:=$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
 # spec: SKILL.md "A release is a declared state, not an event" -- $MAVERICKS_UPSTREAM_FILE overrides
-#       the path; a repo shipping parallel upstream lines keeps one per line
-#       (mavericks-golang: lines/126/UPSTREAM_VERSION), so which file to read is an input, not a
-#       fixed location.
+#       the path; a repo whose upstream is not UPSTREAM_VERSION points elsewhere
+#       (container-tools and tailscale: components/<name>/version), so which file to read is an
+#       input, not a fixed location.
 upstream_version() {
   tr -d '[:space:]' < "${MAVERICKS_UPSTREAM_FILE:-$MAVERICKS_ROOT/UPSTREAM_VERSION}"
 }

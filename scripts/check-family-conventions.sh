@@ -113,69 +113,21 @@ if [ ! -f UPSTREAM_VERSION ] \
        "commit UPSTREAM_VERSION (bare x.y.z or a date), or add build/derive-upstream-version.sh"
 fi
 
-# spec: SKILL.md "Family conventions" check 7b -- each lines/<id>/UPSTREAM_VERSION needs its own
-#       CAPPED Renovate manager, or the line walks onto the next major/minor it was never built for.
-if [ -n "$(ls lines/*/UPSTREAM_VERSION 2>/dev/null || true)" ]; then
-  if [ ! -f .github/renovate.json ]; then
-    fail "lines/ ships parallel tracks but there is no .github/renovate.json to track them" \
-         "add one capped customManager per lines/<id>/UPSTREAM_VERSION (allowedVersions cap)"
-  elif command -v python3 >/dev/null 2>&1; then
-    python3 - .github/renovate.json <<'PY' || status=1
-import json, sys, re, glob, os
-cfg = json.load(open(sys.argv[1]))
-mgrs = cfg.get("customManagers", [])
-rules = cfg.get("packageRules", [])
-lines = sorted(os.path.basename(os.path.dirname(p)) for p in glob.glob("lines/*/UPSTREAM_VERSION"))
-
-def path_matches(mgr, path):
-    for p in mgr.get("managerFilePatterns", []) or mgr.get("fileMatch", []) or []:
-        rx = p[1:-1] if len(p) >= 2 and p[0] == "/" and p.endswith("/") else p
-        try:
-            if re.search(rx, path):
-                return True
-        except re.error:
-            if p.strip("/") in path:
-                return True
-    return False
-
-def is_capped(mgr):
-    dep = mgr.get("depNameTemplate") or mgr.get("packageNameTemplate") or ""
-    if mgr.get("allowedVersions"):
-        return True
-    for r in rules:
-        names = (r.get("matchDepNames") or []) + (r.get("matchPackageNames") or [])
-        if dep and dep in names and r.get("allowedVersions"):
-            return True
-    return False
-
-rc = 0
-def bad(msg, fix):
-    global rc
-    print("check-family-conventions: " + msg, file=sys.stderr)
-    print("    fix: " + fix, file=sys.stderr)
-    rc = 1
-
-for ln in lines:
-    path = "lines/%s/UPSTREAM_VERSION" % ln
-    owning = [m for m in mgrs if path_matches(m, path)]
-    if not owning:
-        bad("lines/%s/UPSTREAM_VERSION has no Renovate customManager — the line goes stale silently" % ln,
-            "add a customManager on /^lines/%s/UPSTREAM_VERSION$/ with an allowedVersions cap" % ln)
-        continue
-    # A manager that also matches ANOTHER line's file cannot cap each line separately.
-    spanning = [m for m in owning if sum(1 for o in lines if path_matches(m, "lines/%s/UPSTREAM_VERSION" % o)) > 1]
-    if spanning:
-        bad("a Renovate manager spans multiple lines/ tracks — one allowedVersions cannot cap each line",
-            "give lines/%s/UPSTREAM_VERSION its own manager anchored to just that path (/^lines/%s/UPSTREAM_VERSION$/)" % (ln, ln))
-        continue
-    if not any(is_capped(m) for m in owning):
-        bad("lines/%s/UPSTREAM_VERSION has a Renovate manager but no allowedVersions cap — Renovate will walk it onto the next line" % ln,
-            "cap it (e.g. a packageRule matchDepNames:[<dep>] allowedVersions:\"<%s\")" % ln)
-sys.exit(rc)
-PY
-  else
-    echo "check-family-conventions: python3 absent — cannot verify per-line Renovate caps (lines/ present)" >&2
-    status=1
+# spec: SKILL.md "Family conventions" check 7b -- lines/ is the RETIRED per-line directory shape
+#       (golang, nodejs and clang all migrated to one repo per line, 2026-09-22); a reappearing
+#       TRACKED lines/ means the retired shape crept back into a repo. TRACKED, the same rule
+#       checks 7/17 apply above: on this family's NFS checkouts, an ignored AppleDouble `._*` file
+#       (lines/._126, lines/126/._patches) survives a migrating repo's `git pull` past the point
+#       git deletes the tracked files, leaving an untracked `lines/` directory on disk that must
+#       not fail a migrated checkout. Outside a git checkout this looks at nothing — check 7 above
+#       already fails the whole run ("not a git checkout") when that happens.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  # platform: the trailing slash on the pathspec matters -- `-- lines` (no slash) also matches a
+  #           tracked plain FILE literally named "lines", which is not the retired directory shape
+  #           this check exists to catch; `-- lines/` matches only paths INSIDE a lines/ directory.
+  if [ -n "$(git ls-files -- lines/ | head -1)" ]; then
+    fail "lines/ exists — that per-line directory shape is retired; each upstream line is its own repo now" \
+         "move this line's UPSTREAM_VERSION and patches/ to the repo root (see SKILL.md \"Multiple upstream lines\"); a NEW line belongs in a NEW repo, never a new lines/<id>/ here"
   fi
 fi
 

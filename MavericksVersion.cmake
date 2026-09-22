@@ -2,7 +2,7 @@
 #
 #   mavericks_resolve_version(MYVAR)          # auto: the shipped N for this upstream
 #   mavericks_resolve_version(MYVAR MODE local)   # a repackage: N+1
-#   mavericks_resolve_version(MYVAR UPSTREAM_FILE "${CMAKE_SOURCE_DIR}/lines/126/UPSTREAM_VERSION")
+#   mavericks_resolve_version(MYVAR UPSTREAM_FILE "${CMAKE_SOURCE_DIR}/components/tailscale/version")
 #   mavericks_resolve_version(MYVAR ROOT "${CMAKE_SOURCE_DIR}/..")   # standalone subproject
 #
 # Replaces the `file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" ...)` every repo hand-rolled. That line

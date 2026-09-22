@@ -85,7 +85,7 @@ p="$(cd "$lw" && MAVERICKS_ROOT="$lw" MAVERICKS_NOTES_LINE=1.26 \
     GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=ModernMavericks/mavericks-golang \
     sh "$here/../scripts/release-notes-file.sh" 1.26.7-mavericks.1 1.26.7-mavericks.1 Go 2>/dev/null)"
 grep -q 'was 1.26.5' "$p" \
-  || { echo "FAIL: MAVERICKS_NOTES_LINE=1.26 (a parallel-lines repo, golang: lines/126/) should scope the baseline to 1.26.5, not the numerically-highest tag across every line"; cat "$p"; exit 1; }
+  || { echo "FAIL: MAVERICKS_NOTES_LINE=1.26 (a repo shipping one line of several, golang: --line 1.26) should scope the baseline to 1.26.5, not the numerically-highest tag across every line"; cat "$p"; exit 1; }
 grep -q '1.27.0' "$p" \
   && { echo "FAIL line: must not pick the newer 1.27.0 line as baseline"; cat "$p"; exit 1; }
 rm -f "$p"

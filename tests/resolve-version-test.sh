@@ -50,6 +50,6 @@ printf '1.27.0\n' > "$work/f/lines/127/UPSTREAM_VERSION"
 out="$(MAVERICKS_ROOT="$work/f" MAVERICKS_UPSTREAM_FILE="$work/f/lines/127/UPSTREAM_VERSION" \
        MAVERICKS_TAGS="1.27.0-mavericks.2" sh "$S")"
 [ "$out" = "1.27.0-mavericks.2" ] \
-  || { echo "FAIL: a repo with parallel upstream lines (golang) keeps one UPSTREAM_VERSION per line, so MAVERICKS_UPSTREAM_FILE (the same override the shared version.sh already honors) must say which file to read: got '$out'"; exit 1; }
+  || { echo "FAIL: a repo whose upstream isn't at the fixed UPSTREAM_VERSION path (container-tools, tailscale: components/<name>/version) needs MAVERICKS_UPSTREAM_FILE (the same override the shared version.sh already honors) to say which file to read: got '$out'"; exit 1; }
 
 echo "PASS: resolve-version"

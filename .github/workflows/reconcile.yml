@@ -19,8 +19,8 @@ on:
       upstream-file:
         description: >-
           Repo-relative path to the upstream version file, when it is not UPSTREAM_VERSION
-          (container-tools and tailscale: components/<name>/version; golang:
-          lines/126/UPSTREAM_VERSION). Sets $MAVERICKS_UPSTREAM_FILE for the state step, which BOTH
+          (container-tools and tailscale: components/<name>/version). Sets
+          $MAVERICKS_UPSTREAM_FILE for the state step, which BOTH
           scripts there read: version.sh derives the version from it, and release-state.sh refuses
           (exit 2) to render a declared `upstream` that is not the file version.sh reads. Without
           this input such a repo cannot use this workflow at all -- it would hard-fail nightly on

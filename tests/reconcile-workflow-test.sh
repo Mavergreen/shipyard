@@ -27,9 +27,9 @@ else:
             fail.append(f"{name} default must be {default!r}, matching repackage-on-ingredient-bump.yml")
     # release-state.sh refuses (exit 2) a declared `upstream` that is not the file version.sh reads.
     # So a product whose upstream lives elsewhere -- container-tools and tailscale
-    # (components/*/version), golang (lines/126/UPSTREAM_VERSION) -- cannot render state here at all
-    # unless it can say where: without this input it would hard-fail nightly from its first run after
-    # adopting the documented ten-line caller.
+    # (components/*/version) -- cannot render state here at all unless it can say where: without
+    # this input it would hard-fail nightly from its first run after adopting the documented
+    # ten-line caller.
     if "upstream-file" not in ins:
         fail.append("reconcile.yml has no upstream-file input: a product whose upstream is not "
                     "UPSTREAM_VERSION cannot render state here, because release-state.sh exits 2 "
