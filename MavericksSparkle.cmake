@@ -3,7 +3,7 @@
 #   mavericks_fetch_sparkle(<out_framework>)   -- fetch+thin Sparkle 1.27.3, return the .framework path
 #   mavericks_add_updater_app(...)             -- build a Sparkle-hosting .app (Cocoa-only, NO Swift)
 # The EdDSA signing tools are NOT built here -- use the prebuilt ed25519-keygen / ed25519-sign from
-# mavericks-ed25519 (https://github.com/ModernMavericks/ed25519). Sign+appcast + payload staging are
+# mavericks-ed25519 (https://github.com/Mavergreen/ed25519). Sign+appcast + payload staging are
 # CI shell steps (not CMake functions) -- see each product's release workflow:
 #   scripts/stage_updater.sh     -- stage the updater .app + LaunchAgent into a pkg payload,
 #                                   rendering updater/{updatecheck.plist,postinstall}.in per product

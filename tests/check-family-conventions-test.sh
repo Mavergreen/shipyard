@@ -32,7 +32,7 @@ jobs:
       - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
 YML
   printf '# Build ingredients\n' > "$1/INGREDIENTS.md"
-  printf '{"extends":["github>ModernMavericks/shipyard"]}\n' > "$1/.github/renovate.json"
+  printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$1/.github/renovate.json"
   printf '#!/bin/sh\nexit 0\n' > "$1/tests/a-test.sh"
   # spec: scripts/check-family-conventions.sh -- a compliant repo commits UPSTREAM_VERSION and
   #       gitignores VERSION (a build product), and the gate asks git what is tracked -- so the
@@ -129,7 +129,7 @@ mkrepo "$work/i"; rm -f "$work/i/INGREDIENTS.md"
 if (cd "$work/i" && sh "$S" >/dev/null 2>&1); then echo "FAIL missing INGREDIENTS.md should fail"; exit 1; fi
 
 mkrepo "$work/r"
-printf '{"extends":["github>ModernMavericks/shipyard"],"ignoreTests":false}\n' > "$work/r/.github/renovate.json"
+printf '{"extends":["github>Mavergreen/shipyard"],"ignoreTests":false}\n' > "$work/r/.github/renovate.json"
 if (cd "$work/r" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a Renovate key restating the preset's own value is redundant and should fail"; exit 1; fi
 (cd "$work/r" && sh "$S" 2>&1 | grep -qi ignoreTests) || { echo "FAIL should name the key"; exit 1; }
 
@@ -137,7 +137,7 @@ if (cd "$work/r" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a Renovate key re
 #       no build to gate legitimately opts back into blind automerge with ignoreTests:true; the
 #       gate must allow it.
 mkrepo "$work/r2"
-printf '{"extends":["github>ModernMavericks/shipyard"],"ignoreTests":true}\n' > "$work/r2/.github/renovate.json"
+printf '{"extends":["github>Mavergreen/shipyard"],"ignoreTests":true}\n' > "$work/r2/.github/renovate.json"
 (cd "$work/r2" && sh "$S" >/dev/null) || { echo "FAIL deliberate ignoreTests:true override should pass"; exit 1; }
 
 mkrepo "$work/n"; grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/n/.github/workflows/release.yml"
@@ -148,18 +148,18 @@ if (cd "$work/n" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a release that pu
 #       be wrong -- the case a green build cannot catch. Unexplained, that is indistinguishable
 #       from drift.
 mkrepo "$work/am"
-printf '%s\n' '{"extends":["github>ModernMavericks/shipyard"],"packageRules":[{"matchDepNames":["x"],"matchUpdateTypes":["minor"],"automerge":false}]}' \
+printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"packageRules":[{"matchDepNames":["x"],"matchUpdateTypes":["minor"],"automerge":false}]}' \
   > "$work/am/.github/renovate.json"
 if (cd "$work/am" && sh "$S" >/dev/null 2>&1); then echo "FAIL undescribed automerge exception should fail"; exit 1; fi
 (cd "$work/am" && sh "$S" 2>&1 | grep -qi 'automerge') || { echo "FAIL should name the automerge rule"; exit 1; }
 
 mkrepo "$work/am2"
-printf '%s\n' '{"extends":["github>ModernMavericks/shipyard"],"packageRules":[{"description":"A minor bump needs LLVM_BRANCH to follow, which no regex can infer: it would build fine and be wrong.","matchDepNames":["x"],"matchUpdateTypes":["minor"],"automerge":false}]}' \
+printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"packageRules":[{"description":"A minor bump needs LLVM_BRANCH to follow, which no regex can infer: it would build fine and be wrong.","matchDepNames":["x"],"matchUpdateTypes":["minor"],"automerge":false}]}' \
   > "$work/am2/.github/renovate.json"
 (cd "$work/am2" && sh "$S" >/dev/null) || { echo "FAIL: with a reason, the exception should pass"; exit 1; }
 
 mkrepo "$work/am3"
-printf '%s\n' '{"extends":["github>ModernMavericks/shipyard"],"packageRules":[{"matchDepNames":["x"],"allowedVersions":"/^v?[0-9.]+$/"}]}' \
+printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"packageRules":[{"matchDepNames":["x"],"allowedVersions":"/^v?[0-9.]+$/"}]}' \
   > "$work/am3/.github/renovate.json"
 (cd "$work/am3" && sh "$S" >/dev/null) || { echo "FAIL: a rule that does NOT touch automerge (e.g. allowedVersions) needs no such reason, should pass"; exit 1; }
 
@@ -172,7 +172,7 @@ import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace('      - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md\n',
             '  publish:\n'
-            '    uses: ModernMavericks/shipyard/.github/workflows/publish-release.yml@v1\n'
+            '    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1\n'
             '    with: { version: "1.0.0", artifact: pkg }\n')
 open(p,'w').write(s)
 PY
@@ -443,7 +443,7 @@ cat >> "$work/k/.github/workflows/release.yml" <<'YML'
   scan:
     needs: [build]
     if: always()
-    uses: ModernMavericks/shipyard/.github/workflows/scan-for-key.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1
     with: { artifact: dist }
 YML
 (cd "$work/k" && git add -A) >/dev/null 2>&1
@@ -456,11 +456,11 @@ YML
 MMVER='regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavericks\.(?<build>\d+)$'
 mkrepo "$work/mv"   # swift-runtime's shape: an inline pin in a shared file, default versioning
 printf 'TOOLCHAIN_REF="6.3.3-mavericks.1"\n' > "$work/mv/build.sh"
-printf '%s\n' '{"extends":["github>ModernMavericks/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^build\\.sh$/"],"matchStrings":["TOOLCHAIN_REF=\"(?<currentValue>[^\"]+)\""],"depNameTemplate":"ModernMavericks/swift-toolchain","datasourceTemplate":"github-releases"}]}' \
+printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^build\\.sh$/"],"matchStrings":["TOOLCHAIN_REF=\"(?<currentValue>[^\"]+)\""],"depNameTemplate":"Mavergreen/swift-toolchain","datasourceTemplate":"github-releases"}]}' \
   > "$work/mv/.github/renovate.json"
 (cd "$work/mv" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/mv" && sh "$S" 2>&1)"; then echo "FAIL a -mavericks.N pin with default versioning should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'ModernMavericks/swift-toolchain' || { echo "FAIL should name the dep: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'Mavergreen/swift-toolchain' || { echo "FAIL should name the dep: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'mavericks' || { echo "FAIL should name the -mavericks.N versioning: $out"; exit 1; }
 # spec: with the family's versioning regex (container-tools/tailscale tracking golang), it must
 #       pass.
@@ -476,7 +476,7 @@ PY
 #       differently.
 mkrepo "$work/mv2"
 printf '6.3.3-mavericks.1\n' > "$work/mv2/components-version"
-printf '%s\n' '{"extends":["github>ModernMavericks/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^components-version$/"],"matchStrings":["^(?<currentValue>.+?)\\s*$"],"depNameTemplate":"x","datasourceTemplate":"github-releases","versioningTemplate":"regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)"}]}' \
+printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^components-version$/"],"matchStrings":["^(?<currentValue>.+?)\\s*$"],"depNameTemplate":"x","datasourceTemplate":"github-releases","versioningTemplate":"regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)"}]}' \
   > "$work/mv2/.github/renovate.json"
 (cd "$work/mv2" && git add -A) >/dev/null 2>&1
 if (cd "$work/mv2" && sh "$S" >/dev/null 2>&1); then echo "FAIL versioning that ignores N should fail"; exit 1; fi
@@ -484,7 +484,7 @@ if (cd "$work/mv2" && sh "$S" >/dev/null 2>&1); then echo "FAIL versioning that 
 #       form).
 mkrepo "$work/mv3"
 printf 'V_9_9_P2\n' > "$work/mv3/components-version"
-printf '%s\n' '{"extends":["github>ModernMavericks/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^components-version$/"],"matchStrings":["^(?<currentValue>V_[0-9_P]+)\\s*$"],"depNameTemplate":"openssh/openssh-portable","datasourceTemplate":"github-tags"}]}' \
+printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^components-version$/"],"matchStrings":["^(?<currentValue>V_[0-9_P]+)\\s*$"],"depNameTemplate":"openssh/openssh-portable","datasourceTemplate":"github-tags"}]}' \
   > "$work/mv3/.github/renovate.json"
 (cd "$work/mv3" && git add -A) >/dev/null 2>&1
 (cd "$work/mv3" && sh "$S" >/dev/null) || { echo "FAIL a non-mavericks pin should pass"; exit 1; }
@@ -696,7 +696,7 @@ mkrepo "$work/g8"
 grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/g8/.github/workflows/release.yml"
 cat >> "$work/g8/.github/workflows/release.yml" <<'YML'
   publish:
-    uses: ModernMavericks/shipyard/.github/workflows/publish-release.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
 YML
 (cd "$work/g8" && sh "$S" >/dev/null) || { echo "FAIL a repo that stages no appcast from the notes should pass"; exit 1; }
 

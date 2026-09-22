@@ -43,7 +43,7 @@ if(SHIPYARD_BUILD_UPDATER)
     NAME MavericksShipyardUpdater
     PRODUCT_NAME "Mavericks Shipyard"
     BUNDLE_ID "dev.modernmavericks.mavericks-shipyard"
-    FEED_URL "https://github.com/ModernMavericks/shipyard/releases/latest/download/appcast.xml"
+    FEED_URL "https://github.com/Mavergreen/shipyard/releases/latest/download/appcast.xml"
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "MavShipyardUpdater"
     CONFIRM_TITLE "Mavericks Shipyard updated"

@@ -49,7 +49,7 @@ jobs:
           ref: main           # main is where state is DECLARED; a branch is only a proposal
           fetch-depth: 0      # version.sh reads tags
 
-      - uses: ModernMavericks/shipyard/.github/actions/install@v1
+      - uses: Mavergreen/shipyard/.github/actions/install@v1
 
       # spec: modernmavericks-conventions SKILL.md, "A release is a declared state, not an event" --
       #       upstream must name the file version.sh reads; this is the reconcile.yml half of that.

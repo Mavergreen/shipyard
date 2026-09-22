@@ -9,7 +9,7 @@ Features: yes. Whatever helps native builds to succeed and cross builds to match
 Install shipyard from the pkg. Download it from the latest release and install it:
 
 ```sh
-gh release download -R ModernMavericks/shipyard --pattern '*.pkg'
+gh release download -R Mavergreen/shipyard --pattern '*.pkg'
 sudo installer -pkg mavericks-shipyard-*.pkg -target /
 ```
 
@@ -103,7 +103,7 @@ In your `CMakePresets.json`:
 In your `.github/workflows/*.yml` (if applicable):
 
 ```yaml
-- uses: ModernMavericks/shipyard/.github/actions/install@v1
+- uses: Mavergreen/shipyard/.github/actions/install@v1
 ```
 
 Then build, and test:
@@ -121,7 +121,7 @@ Plain `cmake` is refused: `find_package(MavericksShipyard)` fails with a message
 ## Sparkle
 
 Configure a keypair with
-[ed25519](https://github.com/ModernMavericks/ed25519).
+[ed25519](https://github.com/Mavergreen/ed25519).
 
 In your `CMakeLists.txt`:
 

@@ -35,7 +35,7 @@ if(CMAKE_HOST_APPLE)
     message(FATAL_ERROR
       "mavericks-shipyard must be configured with shipyard-cmake "
       "(/usr/local/bin/shipyard-cmake, installed by the shipyard pkg; in GitHub Actions, "
-      "ModernMavericks/shipyard/.github/actions/install@v1 provides it). This configure is running "
+      "Mavergreen/shipyard/.github/actions/install@v1 provides it). This configure is running "
       "${CMAKE_COMMAND}. IDEs and CMake GUIs: point their cmake setting at /usr/local/bin/shipyard-cmake.")
   endif()
 endif()
@@ -84,7 +84,7 @@ if(NOT MAVERICKS_NO_RENOVATE_SCAFFOLD AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
     file(WRITE "${_mav_renovate}"
 "{
   \"$schema\": \"https://docs.renovatebot.com/renovate-schema.json\",
-  \"extends\": [\"github>ModernMavericks/shipyard\"]
+  \"extends\": [\"github>Mavergreen/shipyard\"]
 }
 ")
     message(STATUS "mavericks-shipyard: created a default ${_mav_renovate} "

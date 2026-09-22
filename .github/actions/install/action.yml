@@ -59,13 +59,13 @@ runs:
         ref='${{ github.action_ref }}'
         # platform: github.action_ref is EMPTY for a consumer repo calling this action, and on any
         #           re-run -- it broke all 14 consumers at once on 2026-09-16. $root is
-        #           <runner>/_actions/ModernMavericks/shipyard/<ref>, so its basename is the ref we
+        #           <runner>/_actions/Mavergreen/shipyard/<ref>, so its basename is the ref we
         #           were actually checked out at, which is the one source always present.
         ref="${ref:-$(basename "$root")}"
         ver="$(sh "$root/scripts/resolve-action-version.sh" "$ref")" \
-          || { echo "::error::'$ref' names no shipyard release -- pin ModernMavericks/shipyard/.github/actions/install@v1 (or an exact @vX.Y.Z)"; exit 1; }
+          || { echo "::error::'$ref' names no shipyard release -- pin Mavergreen/shipyard/.github/actions/install@v1 (or an exact @vX.Y.Z)"; exit 1; }
         d="$RUNNER_TEMP/shipyard-pkg"; mkdir -p "$d"
-        gh release download "v$ver" -R ModernMavericks/shipyard --pattern 'mavericks-shipyard-*.pkg' --dir "$d"
+        gh release download "v$ver" -R Mavergreen/shipyard --pattern 'mavericks-shipyard-*.pkg' --dir "$d"
         sudo installer -pkg "$d"/mavericks-shipyard-*.pkg -target /
         /usr/local/bin/shipyard-cmake --version | head -1
         scripts=/usr/local/mavericks-shipyard/share/cmake/MavericksShipyard/scripts

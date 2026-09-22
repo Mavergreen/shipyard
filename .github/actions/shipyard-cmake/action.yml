@@ -34,7 +34,7 @@ runs:
         #           pinned in mavericks-clang.pin and verified against that release's SHA256SUMS.
         cv="$(sed -n 's/^MAVERICKS_CLANG_VERSION=//p' mavericks-clang.pin)"
         d="$t/mclang"; mkdir -p "$d"
-        gh release download "$cv" -R ModernMavericks/clang --pattern 'mavericks-clang-*-cross-*.pkg' --pattern SHA256SUMS --dir "$d"
+        gh release download "$cv" -R Mavergreen/clang --pattern 'mavericks-clang-*-cross-*.pkg' --pattern SHA256SUMS --dir "$d"
         ( cd "$d" && grep ' mavericks-clang-.*-cross-.*\.pkg$' SHA256SUMS | shasum -a 256 -c - )
         sudo installer -pkg "$d"/mavericks-clang-*-cross-*.pkg -target /
         mc="$(ls -d /usr/local/mavericks-clang-*-cross | head -1)"

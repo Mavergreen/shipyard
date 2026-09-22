@@ -1,6 +1,6 @@
 #!/bin/sh
 #   usage: resolve-action-version.sh <ref> [repo-url]
-#          What shipyard version is a consumer's `uses: ModernMavericks/shipyard/...@<ref>` actually
+#          What shipyard version is a consumer's `uses: Mavergreen/shipyard/...@<ref>` actually
 #          getting? An EXACT pin (v1.0.126) already IS the version, no network. A MOVING tag (v1) is
 #          dereferenced against the remote for the immutable v*.*.* tag pointing at the same commit.
 #          Anything else -- a raw SHA, a branch, an unreleased tag -- names no release and FAILS
@@ -13,7 +13,7 @@
 #       @<ref>. A committed stamp is not an option either: check 7 fails a tracked VERSION.
 set -eu
 ref="${1:?resolve-action-version: ref required}"
-url="${2:-https://github.com/ModernMavericks/shipyard}"
+url="${2:-https://github.com/Mavergreen/shipyard}"
 
 case "$ref" in
   v[0-9]*.[0-9]*.[0-9]*)

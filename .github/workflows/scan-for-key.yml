@@ -4,7 +4,7 @@
 #          needs: [build]
 #          if: always() && needs.build.outputs.publish == 'yes'
 #          permissions: { actions: read, contents: read }   # actions: read = this run's job logs
-#          uses: ModernMavericks/shipyard/.github/workflows/scan-for-key.yml@v1
+#          uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1
 #          with: { artifact: <the artifact publish-release.yml publishes> }
 #          secrets: { SPARKLE_PRIVATE_KEY: "${{ secrets.SPARKLE_PRIVATE_KEY }}" }
 #        publish:
@@ -38,7 +38,7 @@ jobs:
       - name: Check out shipyard (for the scan scripts)
         uses: actions/checkout@v7
         with:
-          repository: ModernMavericks/shipyard
+          repository: Mavergreen/shipyard
           ref: ${{ inputs.shipyard-ref }}
           path: .shipyard
 

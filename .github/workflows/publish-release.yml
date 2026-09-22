@@ -43,7 +43,7 @@ jobs:
       - name: Check out shipyard (for release-assets.sh)
         uses: actions/checkout@v7
         with:
-          repository: ModernMavericks/shipyard
+          repository: Mavergreen/shipyard
           ref: ${{ inputs.shipyard-ref }}
           path: .shipyard
 

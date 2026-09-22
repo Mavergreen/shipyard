@@ -1,5 +1,5 @@
 #!/bin/sh
-#   usage: audit-repo-settings.sh [org]        (default: ModernMavericks)
+#   usage: audit-repo-settings.sh [org]        (default: Mavergreen)
 #          Prints a verdict line and exits non-zero when anything is off, to be usable from a
 #          scheduled job with a PAT later.
 # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "These two
@@ -11,7 +11,7 @@
 #       Not a CI gate: reading branch protection requires ADMIN, which a workflow's default
 #       GITHUB_TOKEN does not have, so this runs with a human's `gh` credentials instead.
 set -eu
-org="${1:-ModernMavericks}"
+org="${1:-Mavergreen}"
 command -v gh >/dev/null 2>&1 || { echo "audit-repo-settings: needs the gh CLI" >&2; exit 1; }
 
 bad=0

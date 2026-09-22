@@ -245,7 +245,7 @@ def exports(cs, name):
     return False
 
 for pat, why in ((r'resolve-action-version\.sh', "the macOS release path never resolves its ref to a version"),
-                 (r'^gh release download "v\$ver" -R ModernMavericks/shipyard --pattern ', "the macOS release path never downloads the release's pkg"),
+                 (r'^gh release download "v\$ver" -R Mavergreen/shipyard --pattern ', "the macOS release path never downloads the release's pkg"),
                  (r'^sudo installer -pkg ', "the macOS release path never installs the pkg")):
     if not any(re.search(pat, c) for c in rel_mac): bad.append(why)
 if not exports(rel_mac, "SHIPYARD_SCRIPTS"):

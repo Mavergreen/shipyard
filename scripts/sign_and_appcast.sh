@@ -60,7 +60,7 @@ if [ -z "$SIGNER" ]; then
     exit 1
   fi
   _dl=$(mktemp -d "${TMPDIR:-/tmp}/sign_and_appcast.XXXXXX")
-  gh release download -R ModernMavericks/ed25519 -p '*.pkg' -D "$_dl" \
+  gh release download -R Mavergreen/ed25519 -p '*.pkg' -D "$_dl" \
     || { echo "sign_and_appcast: could not download the ed25519 .pkg from mavericks-ed25519 releases (is GH_TOKEN set on this step?)" >&2; exit 1; }
   pkgutil --expand-full "$_dl"/*.pkg "$_dl/x" \
     || { echo "sign_and_appcast: could not expand the ed25519 .pkg" >&2; exit 1; }

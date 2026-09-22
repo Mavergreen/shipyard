@@ -1,4 +1,4 @@
-# SHA-256 of known PLACEHOLDER app icons that must NEVER ship in a ModernMavericks product.
+# SHA-256 of known PLACEHOLDER app icons that must NEVER ship in a Mavergreen product.
 # mavericks_require_icon() and mavericks_add_updater_app() FATAL at configure time if a product's
 # .icns matches a line here -- UNLESS -DMAVERICKS_ALLOW_GENERIC_ICON=ON (the explicit "ship a
 # generic/placeholder icon on purpose" opt-in). This exists because an agent-generated stand-in

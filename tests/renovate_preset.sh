@@ -10,7 +10,7 @@ m = [x for x in cms if x.get("depNameTemplate") == "mavericks-legacysupport"]
 assert m, "no mavericks-legacysupport customManager"
 m = m[0]
 assert m["datasourceTemplate"] == "github-releases", "wrong datasource"
-assert m["packageNameTemplate"] == "ModernMavericks/macports-legacy-support", "wrong packageName"
+assert m["packageNameTemplate"] == "Mavergreen/macports-legacy-support", "wrong packageName"
 assert "extractVersionTemplate" in m, "must strip the leading v"
 
 # no Python (?P<...>) syntax anywhere in the manager -- Renovate uses (?<...>)

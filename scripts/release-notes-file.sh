@@ -13,7 +13,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 
 TAG="${1:?release-notes-file: TAG required}"
 FULL="${2:?release-notes-file: FULL version required}"
-PRODUCT="${3:-ModernMavericks}"
+PRODUCT="${3:-Mavergreen}"
 PRODUCT="${PRODUCT#Mavericks }"
 PRODUCT="${PRODUCT% for Mavericks}"
 

@@ -131,14 +131,14 @@ asset ours.pkg 10'
 ok "an enclosure pointing at this release" 'expected 1.26.5-mavericks.5
 pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
 appcast appcast.xml 1.26.5-mavericks.5 p.pkg 10 10.9.5
-enclosure-url appcast.xml https://github.com/ModernMavericks/golang/releases/download/1.26.5-mavericks.5/p.pkg
+enclosure-url appcast.xml https://github.com/Mavergreen/golang/releases/download/1.26.5-mavericks.5/p.pkg
 asset p.pkg 10
 asset appcast.xml 700'
 
 no "an enclosure pointing at a DIFFERENT release" "enclosure-url" 'expected 1.26.5-mavericks.5
 pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
 appcast appcast.xml 1.26.5-mavericks.5 p.pkg 10 10.9.5
-enclosure-url appcast.xml https://github.com/ModernMavericks/golang/releases/download/1.26.5-mavericks.4/p.pkg
+enclosure-url appcast.xml https://github.com/Mavergreen/golang/releases/download/1.26.5-mavericks.4/p.pkg
 asset p.pkg 10
 asset appcast.xml 700'
 
@@ -502,7 +502,7 @@ cat > "$_e2e/dist/appcast.xml" <<'XML'
       <description><![CDATA[
 <p>Text that is not this release's notes at all.</p>
 ]]></description>
-      <enclosure url="https://github.com/ModernMavericks/openssh/releases/download/9.9p2-mavericks.5/ghost.pkg" length="4096" sparkle:edSignature="x" />
+      <enclosure url="https://github.com/Mavergreen/openssh/releases/download/9.9p2-mavericks.5/ghost.pkg" length="4096" sparkle:edSignature="x" />
     </item>
   </channel>
 </rss>
@@ -529,7 +529,7 @@ NOTES
 printf 'payload\n' > "$_e2e/good/thing-9.9p2-mavericks.6.tgz"
 _good_len="$(wc -c < "$_e2e/good/thing-9.9p2-mavericks.6.tgz" | tr -d ' ')"
 sh "$GA" "Test Channel" "9.9p2-mavericks.6" \
-  "https://github.com/ModernMavericks/openssh/releases/download/9.9p2-mavericks.6/thing-9.9p2-mavericks.6.tgz" \
+  "https://github.com/Mavergreen/openssh/releases/download/9.9p2-mavericks.6/thing-9.9p2-mavericks.6.tgz" \
   "10.9.5" "$_e2e/good/RELEASE_NOTES.md" "sparkle:edSignature=\"x\" length=\"$_good_len\"" \
   > "$_e2e/good/appcast.xml"
 _good_out="$(sh "$AF" "$_e2e/good" 9.9p2-mavericks.6 "$_e2e" 2>&1 | sh "$S" 2>&1)" \

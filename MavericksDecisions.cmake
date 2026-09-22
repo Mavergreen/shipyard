@@ -4,7 +4,7 @@ set(MAVERICKS_DECISIONS_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "maverick
 
 # mavericks_reject_placeholder_icon(<target> <icns>)
 #   FATAL if <icns> is a registered PLACEHOLDER (scripts/placeholder-icons.sha256), unless
-#   MAVERICKS_ALLOW_GENERIC_ICON=ON (the explicit opt-in). A ModernMavericks product must not ship
+#   MAVERICKS_ALLOW_GENERIC_ICON=ON (the explicit opt-in). A Mavergreen product must not ship
 #   a placeholder icon it never chose. The denylist path is overridable via
 #   MAVERICKS_PLACEHOLDER_DENYLIST (for tests). Reused by mavericks_require_icon and the Sparkle
 #   updater so BOTH icon entry points are gated.
@@ -33,7 +33,7 @@ function(mavericks_reject_placeholder_icon target icns)
       message(FATAL_ERROR
         "mavericks: ${target} ships a known PLACEHOLDER icon (${icns}, sha256 ${_icnshash}). "
         "Replace it with real artwork, or set -DMAVERICKS_ALLOW_GENERIC_ICON=ON to ship a generic "
-        "icon on purpose. ModernMavericks products must not ship an unopted placeholder icon.")
+        "icon on purpose. Mavergreen products must not ship an unopted placeholder icon.")
     endif()
   endforeach()
 endfunction()
@@ -75,5 +75,5 @@ function(mavericks_require_icon)
   message(FATAL_ERROR
     "mavericks_require_icon(${MRI_TARGET}): no icon decided. Provide ICNS <path/to.icns>, "
     "or opt into generic with ALLOW_GENERIC (or -DMAVERICKS_ALLOW_GENERIC_ICON=ON). "
-    "ModernMavericks apps must make an explicit icon decision.")
+    "Mavergreen apps must make an explicit icon decision.")
 endfunction()

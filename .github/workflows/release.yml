@@ -142,7 +142,7 @@ jobs:
           sh scripts/sign_and_appcast.sh \
             --channel-title "Mavericks Shipyard" \
             --version "$v" \
-            --pkg-url "https://github.com/ModernMavericks/shipyard/releases/download/v$v/mavericks-shipyard-$v.pkg" \
+            --pkg-url "https://github.com/Mavergreen/shipyard/releases/download/v$v/mavericks-shipyard-$v.pkg" \
             --notes-file dist/RELEASE_NOTES.md \
             --pkg "dist/mavericks-shipyard-$v.pkg" \
             > dist/appcast.xml

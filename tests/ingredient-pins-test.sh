@@ -23,7 +23,7 @@ on:
     paths: ['components/**']
 jobs:
   repackage:
-    uses: ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
     with:
       own-upstream-paths: components/tailscale/version
 YML
@@ -39,7 +39,7 @@ on:
       - UPSTREAM_VERSION   # deliberately listed to prove exclusion works
 jobs:
   repackage:
-    uses: ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
     with:
       own-upstream-paths: UPSTREAM_VERSION
 YML
@@ -71,7 +71,7 @@ on:
     paths: ['pins.env']
 jobs:
   repackage:
-    uses: ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
     with:
       own-upstream-paths: pins.env:SWIFT_VERSION
 YML
@@ -88,7 +88,7 @@ on:
     paths: ['pins.env']
 jobs:
   repackage:
-    uses: ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
     with:
       own-upstream-paths: pins.env
 YML
@@ -107,7 +107,7 @@ on:
     paths: ['pins.env', 'other.txt']
 jobs:
   repackage:
-    uses: ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
     with:
       own-upstream-paths: |
         pins.env:SWIFT_VERSION
@@ -128,7 +128,7 @@ on:
     paths: ['pins.env', 'other.txt']
 jobs:
   repackage:
-    uses: ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
     with:
       own-upstream-paths: |
         pins.env:SWIFT_VERSION

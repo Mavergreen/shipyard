@@ -1,6 +1,6 @@
 name: repackage-on-ingredient-bump
 
-# spec: modernmavericks-conventions SKILL.md, "Consuming a ModernMavericks toolchain + auto-propagation"
+# spec: modernmavericks-conventions SKILL.md, "Consuming a Mavergreen toolchain + auto-propagation"
 #       -- "Auto-propagation via the shared reusable workflow (dispatch, NOT tag)"
 
 on:
@@ -36,7 +36,7 @@ jobs:
         with: { fetch-depth: 0 }
 
       - name: Install mavericks-shipyard (for scripts/repackage-decision.sh)
-        uses: ModernMavericks/shipyard/.github/actions/install@v1
+        uses: Mavergreen/shipyard/.github/actions/install@v1
 
       - name: Dispatch a repackage if a build ingredient (not own-upstream) moved
         env:

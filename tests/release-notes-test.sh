@@ -22,7 +22,7 @@ on:
       - components/libressl/version
 jobs:
   repackage:
-    uses: ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
     with:
       own-upstream-paths: UPSTREAM_VERSION
 YML
@@ -34,7 +34,7 @@ YML
 gen() {  # $1 = repo, $2 = tag/version, rest = extra args
   r="$1"; v="$2"; shift 2
   ( cd "$r" && MAVERICKS_ROOT="$r" \
-      GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=ModernMavericks/mavericks-openssh \
+      GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=Mavergreen/mavericks-openssh \
       sh "$S" --tag "$v" --version "$v" \
       --product OpenSSH --min-os 10.9.5 --out "$r/OUT.md" "$@" )
 }
@@ -209,7 +209,7 @@ fi
 #       first release (or a not-yet-tagged dispatch-cut build): the plan accepts that false
 #       negative rather than block every real first release.
 if ! ( cd "$nr" && MAVERICKS_ROOT="$nr" GITHUB_SERVER_URL=https://github.com \
-       GITHUB_REPOSITORY=ModernMavericks/mavericks-openssh sh "$S" \
+       GITHUB_REPOSITORY=Mavergreen/mavericks-openssh sh "$S" \
        --tag 9.9p2-mavericks.1 --version 9.9p2-mavericks.1 \
        --product OpenSSH --out "$nr/OUT.md" ) >/dev/null 2>&1; then
   echo "FAIL notags: -mavericks.1 with no visible upstream tags should still succeed"; exit 1
@@ -223,7 +223,7 @@ fi
 r="$work/golang"; mkrepo "$r"
 ( cd "$r" && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 )
 for line in "1.26" "1.26.*"; do
-  ( cd "$r" && GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=ModernMavericks/mavericks-golang \
+  ( cd "$r" && GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=Mavergreen/mavericks-golang \
       MAVERICKS_ROOT="$r" sh "$S" --tag 1.26.7-mavericks.1 --version 1.26.7-mavericks.1 \
       --product Go --line "$line" --out "$r/OUT.md" ) >/dev/null \
     || { echo "FAIL golang ($line): should succeed"; exit 1; }
@@ -255,7 +255,7 @@ on:
     branches: [main]
 jobs:
   repackage:
-    uses: ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
 YML
 ( cd "$r" && git add -A && git commit -qm "caller with no paths" && git tag 9.9p2-mavericks.1 )
 if gen "$r" 9.9p2-mavericks.1 >/dev/null 2>&1; then
@@ -332,7 +332,7 @@ on:
 jobs:
   repackage:
     uses: >-
-      ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+      Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
     with:
       own-upstream-paths: UPSTREAM_VERSION
 YML
@@ -628,7 +628,7 @@ gen "$r" 9.9p2-mavericks.2 >/dev/null
 want="$(printf '%s\n' '## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.2)' '' '### What changed' \
   '- Repackage of upstream OpenSSH 9.9p2; packaging changes only.' '' '---' \
   'Requires Mac OS X 10.9.5 or later.' '' \
-  '[All changes since 9.9p2-mavericks.1](https://github.com/ModernMavericks/mavericks-openssh/compare/9.9p2-mavericks.1...9.9p2-mavericks.2)')"
+  '[All changes since 9.9p2-mavericks.1](https://github.com/Mavergreen/mavericks-openssh/compare/9.9p2-mavericks.1...9.9p2-mavericks.2)')"
 [ "$(cat "$r/OUT.md")" = "$want" ] || { echo "FAIL patchnone: body changed"; cat "$r/OUT.md"; exit 1; }
 
 # spec: scripts/release-notes.sh -- notes that cannot say whether our patches changed must not

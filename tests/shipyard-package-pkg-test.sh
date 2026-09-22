@@ -88,7 +88,7 @@ for volarg in "$w/vol" "$w/vol/"; do
     || { echo "FAIL: preinstall ($volarg) removed another product's LaunchAgent"; exit 1; }
   [ -f "$w/vol/$APPS/SomeOtherProduct.app/keep" ] \
     || { echo "FAIL: preinstall ($volarg) removed another product's app"; exit 1; }
-  [ -d "$w/vol/$APPS" ] || { echo "FAIL: preinstall ($volarg) removed the shared ModernMavericks app dir"; exit 1; }
+  [ -d "$w/vol/$APPS" ] || { echo "FAIL: preinstall ($volarg) removed the shared Mavergreen app dir"; exit 1; }
 done
 
 lay_down_previous "$w/vol"

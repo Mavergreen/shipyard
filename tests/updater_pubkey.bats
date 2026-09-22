@@ -8,7 +8,7 @@ setup() {
   T="$BATS_TEST_TMPDIR"
   K1='11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo='
   K2='PUAXw+hDiVqStwqnTRt+vJyYLM8uxJaMwM1V8Sr0Zgw='
-  FEED='https://github.com/ModernMavericks/test/releases/latest/download/appcast.xml'
+  FEED='https://github.com/Mavergreen/test/releases/latest/download/appcast.xml'
 }
 
 pubkey() { sh "$ROOT/scripts/updater_pubkey.sh" "$@"; }

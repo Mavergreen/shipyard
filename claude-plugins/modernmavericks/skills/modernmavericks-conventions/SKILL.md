@@ -1,13 +1,13 @@
 ---
 name: modernmavericks-conventions
-description: Use when creating or modifying a ModernMavericks (mavericks-*) project — its release workflow, Renovate/automerge config, versioning, shipyard usage, or Sparkle updater — or when deciding whether a deviation from the family conventions is warranted.
+description: Use when creating or modifying a Mavergreen (mavericks-*) project — its release workflow, Renovate/automerge config, versioning, shipyard usage, or Sparkle updater — or when deciding whether a deviation from the family conventions is warranted.
 ---
 
-# ModernMavericks project conventions
+# Mavergreen project conventions
 
-ModernMavericks repos (`mavericks-*`) each cross-build one upstream thing into a **Mac OS X 10.9
+Mavergreen repos (`mavericks-*`) each cross-build one upstream thing into a **Mac OS X 10.9
 (Mavericks)**-compatible `.pkg` with a **Sparkle** auto-updater, on a modern Apple-Silicon runner,
-with **no 10.9 build runner anywhere**. They share a CMake/Renovate helper (`ModernMavericks/shipyard`)
+with **no 10.9 build runner anywhere**. They share a CMake/Renovate helper (`Mavergreen/shipyard`)
 and a common release/versioning shape. This skill is the family's conventions plus the judgment calls
 that copying one repo can't teach.
 
@@ -39,12 +39,12 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 
 ## shipyard: consume its facilities, never hand-roll them
 
-- Install via its **action**: `uses: ModernMavericks/shipyard/.github/actions/install@v1`. It installs
+- Install via its **action**: `uses: Mavergreen/shipyard/.github/actions/install@v1`. It installs
   the released `.pkg` and exports `SHIPYARD_SCRIPTS`; consume the CMake side with `find_package` —
   **no `CMAKE_PREFIX_PATH`, no vendored copy, no hand-run `--install`.**
 
   **Installing shipyard: the pkg.** Download it from the latest release
-  (`gh release download -R ModernMavericks/shipyard --pattern '*.pkg'`) and install it. It puts one
+  (`gh release download -R Mavergreen/shipyard --pattern '*.pkg'`) and install it. It puts one
   whole prefix at `/usr/local/mavericks-shipyard` — CMake, the shipyard modules and the scripts — puts
   `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` in `/usr/local/bin`, and installs a Sparkle
   updater that keeps it current, so an install can never quietly become a month old.
@@ -104,14 +104,14 @@ fast: on 2026-09-09 a defect in conventions check 7d reddened two repos within t
 
 Since shipyard cuts `vLINE.COUNT` on every push (`scripts/shipyard-version.sh`), every one of those
 pushes is a real, downloadable, pinnable release. So when `@v1` breaks you and you cannot wait for a
-fix, pin the previous version — `uses: ModernMavericks/shipyard/.github/workflows/family-conventions.yml@v1.0.<N>`,
-where `<N>` is a real patch number from `gh release list -R ModernMavericks/shipyard` (pick the release
+fix, pin the previous version — `uses: Mavergreen/shipyard/.github/workflows/family-conventions.yml@v1.0.<N>`,
+where `<N>` is a real patch number from `gh release list -R Mavergreen/shipyard` (pick the release
 before the bad one) — and move back to `@v1` afterwards. Say why in the diff, so the pin has an exit.
 Never copy a specific `<N>` from this doc: the count advances on every push to shipyard's `main`, so
 any literal written here is stale by the time you read it — always look up the current one.
 
-`gh release list -R ModernMavericks/shipyard` shows what is available;
-`gh api repos/ModernMavericks/shipyard/git/ref/tags/v1 --jq .object.sha` says where `@v1` points now.
+`gh release list -R Mavergreen/shipyard` shows what is available;
+`gh api repos/Mavergreen/shipyard/git/ref/tags/v1 --jq .object.sha` says where `@v1` points now.
 
 **Use its facilities for 10.9-correctness — do NOT reinvent SDK fetching, floors, build-mode handling,
 updaters, signing, or compat checks:**
@@ -129,7 +129,7 @@ updaters, signing, or compat checks:**
 
 ## The build must also run natively ON 10.9
 
-CI and day-to-day development happen on modern macOS, but a ModernMavericks product's build must
+CI and day-to-day development happen on modern macOS, but a Mavergreen product's build must
 generally still work **natively on a real Mavericks box**, with occasional deliberate exceptions. That
 is not sentiment: a native build is the check that the cross-build's inputs and assumptions are honest,
 and it is how the family avoids depending on a runner it can never reproduce.
@@ -274,7 +274,7 @@ runtime back-fills).
 
 ## Renovate & automerge
 
-Consumer `renovate.json` is `{"$schema", "extends": ["github>ModernMavericks/shipyard"]}` plus
+Consumer `renovate.json` is `{"$schema", "extends": ["github>Mavergreen/shipyard"]}` plus
 your upstream manager and rules. The shared preset provides `config:recommended` + `automerge: true`.
 
 **The `ignoreTests` policy (load-bearing):** the preset now defaults **`ignoreTests: false`** — automerge
@@ -333,7 +333,7 @@ take. Two ways out, both in use here:
 - **Verify against upstream's own published `SHA256SUMS`** for the pinned release. That vouches for a
   version that does not exist yet, so Renovate only has to move the *ref*. container-tools does this
   for the golang toolchain; swift-runtime does it for the swift-toolchain build environment. Prefer
-  this whenever the upstream is a ModernMavericks repo — `publish-release.yml` regenerates
+  this whenever the upstream is a Mavergreen repo — `publish-release.yml` regenerates
   `SHA256SUMS` over everything it attaches, so the file is always there. Fail if the asset is **not
   listed**, rather than passing an empty expectation to `shasum` — unverified must never look like a
   pass.
@@ -461,7 +461,7 @@ suffix means "our Nth repackage of *someone else's* thing." Most repos port an u
 `<upstream>-mavericks.N` machinery below (including date-versioned ports — `mavericks-ed25519`
 `20221003-mavericks.N`, `mavericks-container-tools` `20260727-mavericks.N` — where `UPSTREAM_VERSION` is a
 date but they are still repackaging an upstream). A repo that is **its own upstream** — original
-ModernMavericks code, not a port (e.g. `mavericks-porthole`) — has no "repackage-of-someone-else" axis, so
+Mavergreen code, not a port (e.g. `mavericks-porthole`) — has no "repackage-of-someone-else" axis, so
 it **drops the `-mavericks` suffix** and versions itself directly:
 
 - **date-based `YYYYMMDD.N`** (`mavericks-porthole`; N counts the day's releases starting at `.1`, never
@@ -562,7 +562,7 @@ cut and publish a release. Pushing is therefore a decision, not a reflex.
 - **Push when you want the answer**, not every time you have a commit. A series of commits is one push.
   Local commits cost nothing; a push costs runner minutes and everyone's feedback latency.
 - **Look at what is already running first.** `gh run list --branch main --limit 5` (add `-R
-  ModernMavericks/<repo>` from elsewhere). Queuing another build behind three in-flight ones delays the
+  Mavergreen/<repo>` from elsewhere). Queuing another build behind three in-flight ones delays the
   answer you actually came for.
 - **Before pushing to `main` in an auto-cut repo, know whether this push releases.** If `UPSTREAM_VERSION`
   has no release yet, it does.
@@ -754,7 +754,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
     needs: [build]
     if: needs.build.outputs.publish == 'true'
     permissions: { contents: write }
-    uses: ModernMavericks/shipyard/.github/workflows/publish-release.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
     with: { version: "${{ needs.build.outputs.version }}", artifact: <artifact name> }
   ```
 - **A repo's FIRST EVER release needs a README a human has read.** `publish-release.yml` refuses it
@@ -1062,11 +1062,11 @@ not the `-mavericks.N` tag).
 - `gen_appcast.sh` renders `[text](scheme:url)` and `### ` headings for the Sparkle `<description>`;
   write notes links in that form, not as bare URLs.
 
-## Consuming a ModernMavericks toolchain + auto-propagation
+## Consuming a Mavergreen toolchain + auto-propagation
 
 A repo built WITH another MM product (e.g. the go126 toolchain) pins it in a **file** (not workflow env),
 e.g. `components/golang/version`, tracked by a Renovate customManager (`github-releases` on
-`ModernMavericks/golang`). Renovate bumps the pin; the green-gated build rebuilds the product with the new
+`Mavergreen/golang`). Renovate bumps the pin; the green-gated build rebuilds the product with the new
 toolchain and automerges. Two things to wire deliberately:
 
 - **Download the toolchain asset prefix-tolerantly.** golang's cross `.pkg` was renamed `go126-` →
@@ -1080,7 +1080,7 @@ toolchain and automerges. Two things to wire deliberately:
   jobs:
     repackage:
       permissions: { actions: write }   # dispatch release.yml — reusable perms can't be elevated by the callee
-      uses: ModernMavericks/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+      uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
       with: { own-upstream-paths: <path(s) meaning a NEW own upstream → N=1, excluded; omit if none> }
   ```
   The reusable workflow decides "ingredient changed and not the own upstream?" and, if so, **dispatches**
@@ -1594,7 +1594,7 @@ Wire it with the reusable workflow — three lines, and it never changes when a 
 ```yaml
 jobs:
   conventions:
-    uses: ModernMavericks/shipyard/.github/workflows/family-conventions.yml@v1
+    uses: Mavergreen/shipyard/.github/workflows/family-conventions.yml@v1
 ```
 
 It checks out shipyard itself rather than expecting `$SHIPYARD_SCRIPTS`, so it also gates repos that do
@@ -1660,7 +1660,7 @@ in the same commit.
 10. Check in `.claude/settings.json` pointing at the `modernmavericks` marketplace (hosted in
    `mavericks-shipyard`) so contributors' agents load these conventions — do NOT copy the SKILL.md:
    ```json
-   {"extraKnownMarketplaces": {"modernmavericks": {"source": {"source": "github", "repo": "ModernMavericks/shipyard"}}},
+   {"extraKnownMarketplaces": {"modernmavericks": {"source": {"source": "github", "repo": "Mavergreen/shipyard"}}},
     "enabledPlugins": {"modernmavericks@modernmavericks": true}}
    ```
    **That file alone loads nothing.** It registers the marketplace and enables the plugin, but since

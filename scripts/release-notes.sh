@@ -121,7 +121,7 @@ fi
 printf '\n### What changed\n' >> "$tmp"
 
 # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Consuming a
-#       ModernMavericks toolchain + auto-propagation" -- "Name that caller
+#       Mavergreen toolchain + auto-propagation" -- "Name that caller
 #       .github/workflows/repackage-on-ingredient-bump.yml": the conventional path wins outright: a
 #       repo naming the caller something else falls through to DISCOVERY (naming the reusable
 #       workflow on a non-comment line -- not a `uses:.*<filename>` regex, which a folded `uses: >-`

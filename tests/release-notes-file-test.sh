@@ -50,7 +50,7 @@ grep -q '^## OpenSSH 20260911.4$' "$p" \
 rm -f "$p"
 
 p="$(sh "$S" 20260911.5 20260911.5 2>/dev/null)"
-grep -q '^## ModernMavericks 20260911.5$' "$p" || { echo "FAIL: omitted PRODUCT must keep the documented default"; cat "$p"; exit 1; }
+grep -q '^## Mavergreen 20260911.5$' "$p" || { echo "FAIL: omitted PRODUCT must keep the documented default"; cat "$p"; exit 1; }
 rm -f "$p"
 
 echo "PASS: release-notes-file (shared)"
@@ -75,14 +75,14 @@ lw="$(mktemp -d "${TMPDIR:-/tmp}/rnf-line.XXXXXX")"
     && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 )
 
 p="$(cd "$lw" && MAVERICKS_ROOT="$lw" GITHUB_SERVER_URL=https://github.com \
-    GITHUB_REPOSITORY=ModernMavericks/mavericks-golang \
+    GITHUB_REPOSITORY=Mavergreen/mavericks-golang \
     sh "$here/../scripts/release-notes-file.sh" 1.26.7-mavericks.1 1.26.7-mavericks.1 Go 2>/dev/null)"
 grep -q 'was 1.27.0' "$p" \
   || { echo "FAIL: MAVERICKS_NOTES_LINE forwards to the generator's --line, the wrapper's only call path -- unset must add no --line (today's behavior), so the baseline is the numerically highest tag across ALL lines (1.27.0)"; cat "$p"; exit 1; }
 rm -f "$p"
 
 p="$(cd "$lw" && MAVERICKS_ROOT="$lw" MAVERICKS_NOTES_LINE=1.26 \
-    GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=ModernMavericks/mavericks-golang \
+    GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=Mavergreen/mavericks-golang \
     sh "$here/../scripts/release-notes-file.sh" 1.26.7-mavericks.1 1.26.7-mavericks.1 Go 2>/dev/null)"
 grep -q 'was 1.26.5' "$p" \
   || { echo "FAIL: MAVERICKS_NOTES_LINE=1.26 (a repo shipping one line of several, golang: --line 1.26) should scope the baseline to 1.26.5, not the numerically-highest tag across every line"; cat "$p"; exit 1; }
