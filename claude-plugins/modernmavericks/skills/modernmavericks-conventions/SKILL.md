@@ -580,14 +580,22 @@ Two release models — **pick by how you publish**:
   `workflow_dispatch`. Use this when a human decides when to cut, or the build is too heavy or too risky
   to release unattended.
 
-**Which repo is which** (checked 2026-09-09; each repo's `release.yml` header is the authority):
+**Which repo is which** (checked 2026-09-22; a repo's `release.yml` **`ver`/version step is the
+authority, not its header comment** — a header can drift out of sync with what the step actually does,
+as clang's did):
 
 | auto-cut on a push to `main` | publishes only from a tag or a dispatch |
 |---|---|
-| golang, openssh, 1password, signal-desktop, swift-toolchain, swift-runtime, ed25519, legacysupport | macho-tools, container-tools, clang, tailscale, porthole |
+| golang, openssh, 1password, signal-desktop, swift-toolchain, swift-runtime, ed25519, legacysupport, clang | macho-tools, container-tools, tailscale, porthole, magic-trackpad2 |
 
-If you cannot say from memory which column a repo is in, read its `release.yml` header before you push to
-its `main` — in the left column, that push is a release.
+tailscale's `release.yml` has no `push: branches:[main]` trigger at all — only tags and
+`workflow_dispatch` — but a push to its `main` that moves `components/**` is still a release:
+`release-on-bump.yml` dispatches it with
+`upstream_release=true` the moment `components/tailscale/version` moves, so a new upstream still ships
+automatically there; `repackage-on-ingredient-bump.yml` does the same for an ingredient-only bump.
+
+If you cannot say from memory which column a repo is in, read its `release.yml` `ver`/version step
+before you push to its `main` — in the left column, that push is a release.
 
 **Shared shape (both models):**
 
@@ -622,8 +630,8 @@ its `main` — in the left column, that push is a release.
   with a message naming the tag. A wasted build with a red X beats a release that silently never happened.
   The version is baked into `pkgbuild --version`, the pkg filename and the appcast's `<sparkle:version>`,
   so a collision must **rebuild** — re-dispatch — and must never be relabeled.
-- **Why branch pushes do not supersede, even though superseding would be cheaper.** In 8 of the 13 product
-  repos a push to `main` can publish (see the table above). Concurrency is resolved when a run is queued,
+- **Why branch pushes do not supersede, even though superseding would be cheaper.** In every repo in the table's left
+  column (and tailscale, via its bump dispatchers) a push to `main` can publish. Concurrency is resolved when a run is queued,
   long before the `ver` step decides whether this one releases, so "cancel the build but not the publish"
   is not expressible — cancelling the run cancels the publish job with it. Worst case that leaves a
   half-uploaded release whose tag is already taken, which the publish guard then refuses to re-cut. Paying
@@ -817,7 +825,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 ## Release notes
 
 - **One generator, called directly: `$SHIPYARD_SCRIPTS/release-notes.sh`.** This is now the family
-  shape, not one option among several — every one of the 13 product repos and shipyard itself call it
+  shape, not one option among several — every product repo and shipyard itself call it
   straight from `release.yml`. It writes the ONE file that becomes both the Sparkle appcast
   `<description>` and the GitHub Release body, so the two cannot disagree:
   ```sh
@@ -1270,7 +1278,7 @@ disagree is incoherent however it was built.
 | Axis | Checked |
 |---|---|
 | Itself | `.pkg` / appcast / tag versions match; the enclosure names a published asset at its real length, and points into THIS release |
-| Neighbours | every `.pkg` of one release agrees on the version; where `lines/` exists, each identifier carries its line; **variants agree about their ingredients** |
+| Neighbours | every `.pkg` of one release agrees on the version; **variants agree about their ingredients** |
 | Siblings | version scheme `<upstream>-mavericks.N`; identifier `dev.modernmavericks.*`; a product archive declares the 10.9.5 floor |
 
 **This constrains outputs, not methods.** Products here build in genuinely different ways — a Go

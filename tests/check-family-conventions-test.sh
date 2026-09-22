@@ -217,9 +217,9 @@ mkdir -p "$work/v5/build"; printf '#!/bin/sh\n: > UPSTREAM_VERSION\n' > "$work/v
 # spec: scripts/check-family-conventions.sh -- check 7b fails a repo with a TRACKED lines/ dir --
 #       golang, nodejs and clang have all migrated off it (2026-09-22), so a reappearing tracked
 #       lines/ means the retired per-line directory shape crept back in, not a legitimate
-#       parallel-lines repo. (Check 7's separate lines/*/UPSTREAM_VERSION fallback, just above, is
-#       unrelated and untouched by this fixture.)
-mkrepo "$work/v6"; rm "$work/v6/UPSTREAM_VERSION"
+#       parallel-lines repo. Keeps its root UPSTREAM_VERSION (from mkrepo) so check 7, just above,
+#       stays satisfied and this fixture isolates 7b's failure.
+mkrepo "$work/v6"
 mkdir -p "$work/v6/lines/126"; printf '1.26.5\n' > "$work/v6/lines/126/UPSTREAM_VERSION"
 (cd "$work/v6" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/v6" && sh "$S" 2>&1)"; then echo "FAIL: a reappearing tracked lines/ dir should fail"; exit 1; fi

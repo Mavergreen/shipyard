@@ -95,7 +95,7 @@ ci_mentions 'publish-release.yml' || ci_mentions '--notes-file' || ci_mentions '
 
 # spec: SKILL.md "Family conventions" check 7 -- VERSION is a build product, never committed (an
 #       untracked one in the tree is fine); something must also be able to SUPPLY the upstream
-#       version (a committed UPSTREAM_VERSION, a per-line one, or a derive script).
+#       version (a committed UPSTREAM_VERSION, or a derive script).
 if git rev-parse --git-dir >/dev/null 2>&1; then
   if git ls-files --error-unmatch VERSION >/dev/null 2>&1; then
     fail "VERSION is committed — it is a build product, and the committed copy goes stale while tags move on" \
@@ -107,7 +107,6 @@ else
 fi
 
 if [ ! -f UPSTREAM_VERSION ] \
-   && [ -z "$(ls lines/*/UPSTREAM_VERSION 2>/dev/null || true)" ] \
    && [ -z "$(ls build/derive-upstream-version.sh scripts/derive-upstream-version.sh 2>/dev/null || true)" ]; then
   fail "no UPSTREAM_VERSION and nothing to derive one — the version cannot be computed" \
        "commit UPSTREAM_VERSION (bare x.y.z or a date), or add build/derive-upstream-version.sh"

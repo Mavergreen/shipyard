@@ -142,27 +142,6 @@ enclosure-url appcast.xml https://github.com/ModernMavericks/golang/releases/dow
 asset p.pkg 10
 asset appcast.xml 700'
 
-# spec: SKILL.md "Multiple upstream lines (tracks)" -- side-by-side coexistence forces per-line
-#       functional identifiers: go126 and go127 must not share an identifier, or two products
-#       claim one install and the updater cannot tell them apart.
-ok "identifiers carrying their line" 'expected 1.26.5-mavericks.5
-line 126
-pkg native.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang.go126
-pkg cross.pkg 1.26.5-mavericks.5 none dev.modernmavericks.golang.go126-cross
-appcast appcast-cross.xml 1.26.5-mavericks.5 cross.pkg 10 11.0
-asset native.pkg 10
-asset cross.pkg 10
-asset appcast-cross.xml 700'
-
-no "an identifier missing its line" "line" 'expected 1.26.5-mavericks.5
-line 126
-pkg native.pkg 1.26.5-mavericks.5 10.9.5 dev.modernmavericks.golang
-asset native.pkg 10'
-
-ok "a single-line product (a repo with no lines) is not asked the line question" 'expected 1.5.2-mavericks.2
-pkg p.pkg 1.5.2-mavericks.2 10.9.5 dev.modernmavericks.legacysupport
-asset p.pkg 10'
-
 # spec: scripts/check-artifact-conformance.sh's build-info records -- the artifacts cannot
 #       answer this: golang's native .pkg carries the CA bundle and the shim, its cross .pkg
 #       legitimately does not (cross-built apps look at the native prefix). "Same shim, same CA"
@@ -229,21 +208,7 @@ end-of-facts' | sh "$S")"
 printf '%s\n' "$out" | grep -qi 'no build records' \
   || { echo "FAIL should say when there was nothing to compare; got: $out"; exit 1; }
 
-# spec: artifact-facts derives the line from lines/<X>/, not a version heuristic -- the line is
-#       the directory name (matched by upstream version). A MAJOR-based line (clang 22, nodejs
-#       24) must emit its major, not major.minor collapsed ("221"), which no identifier carries. A
-#       MINOR-based line (golang 1.26 -> 126) must keep working.
 AF="$here/../scripts/artifact-facts.sh"
-_afline() {  # <full-version> <line-dir> <upstream-in-dir> -> the emitted `line` fact value
-  _r="$(mktemp -d "${TMPDIR:-/tmp}/af.XXXXXX")"
-  mkdir -p "$_r/lines/$2" "$_r/dist"; printf '%s\n' "$3" > "$_r/lines/$2/UPSTREAM_VERSION"
-  sh "$AF" "$_r/dist" "$1" "$_r" | sed -n 's/^line //p'
-  rm -rf "$_r"
-}
-[ "$(_afline 22.1.1-mavericks.1 22 22.1.1)" = 22 ] \
-  || { echo "FAIL: major-line should emit 'line 22', not major.minor '221'"; exit 1; }
-[ "$(_afline 1.26.5-mavericks.5 126 1.26.5)" = 126 ] \
-  || { echo "FAIL: minor-line (golang) should still emit 'line 126'"; exit 1; }
 
 # spec: both the appcast <description> and the Release body are built from dist/RELEASE_NOTES.md
 #       today, which is exactly why the assertion is cheap and why a future change that breaks

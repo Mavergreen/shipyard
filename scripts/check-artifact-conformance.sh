@@ -166,19 +166,6 @@ else
   echo "conformance: notes: no notes file staged (nothing to compare)"
 fi
 
-# spec: SKILL.md "Multiple upstream lines (tracks)" -- SIBLINGS: a line is a product; go126 and go127
-#       must not share an identifier, or an updater cannot tell which install it is looking at.
-line="$(sed -n 's/^line \(..*\)$/\1/p' "$facts" | head -1)"
-if [ -n "$line" ]; then
-  while read -r kind file ver floor ident; do
-    [ "$kind" = pkg ] || continue
-    case "$ident" in
-      *"$line"*) : ;;
-      *) fail line "$file has identifier '$ident', which does not carry line $line" "$file" ;;
-    esac
-  done < "$facts"
-fi
-
 # spec: SKILL.md "Artifact conformance", "Record what a variant was built FROM" -- NEIGHBOURS:
 #       variants of one release must agree about their ingredients; the artifacts themselves cannot
 #       answer this (golang's native .pkg carries the CA bundle/shim, its cross .pkg legitimately does

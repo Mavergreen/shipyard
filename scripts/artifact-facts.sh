@@ -29,21 +29,6 @@ abort() {  # $1 = why.
 
 printf 'expected %s\n' "$version"
 
-# spec: tests/artifact-conformance-test.sh -- the line is the NAME of the lines/<X>/ directory whose
-#       UPSTREAM_VERSION matches this build's upstream, not a guess from the version: that guess only
-#       worked for MINOR-based lines (golang: 1.26 -> 126), and a MAJOR-based line (clang 22, nodejs
-#       24) collapses 22.1.1 -> "221", which no identifier carries. Falls back to the old
-#       major.minor heuristic only if nothing matches (a committed VERSION that has drifted).
-if [ -d "$root/lines" ]; then
-  _up="${version%%-mavericks.*}"; _line=""
-  for _d in "$root"/lines/*/; do
-    [ -f "$_d/UPSTREAM_VERSION" ] || continue
-    [ "$(tr -d '[:space:]' < "$_d/UPSTREAM_VERSION")" = "$_up" ] && { _line="$(basename "$_d")"; break; }
-  done
-  [ -n "$_line" ] || _line="$(printf '%s' "$_up" | cut -d. -f1,2 | tr -d '.')"
-  printf 'line %s\n' "$_line"
-fi
-
 # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Conformance
 #       deviations" -- declared under "## Conformance deviations" as "- <check>[:<glob>]: <reason>";
 #       a deviation IS a product fact, so it belongs with the other product facts, not a file of its
