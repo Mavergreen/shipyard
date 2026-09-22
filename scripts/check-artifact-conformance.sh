@@ -184,8 +184,10 @@ done < "$facts"
 # platform: an enclosure URL carries the release tag.
 while read -r kind file url; do
   [ "$kind" = enclosure-url ] || continue
+  # platform: a self-upstream product's tag carries a leading v (magic-trackpad2's v0.5.5), while
+  #           $expected is the bare version, so both spellings name THIS release.
   case "$url" in
-    */download/"$expected"/*) : ;;
+    */download/"$expected"/*|*/download/v"$expected"/*) : ;;
     *) fail enclosure-url "$file points outside this release: $url -- Sparkle would silently serve users a different build than the one just published, and every other check here still passes because both artifacts are individually fine" "$file" ;;
   esac
 done < "$facts"

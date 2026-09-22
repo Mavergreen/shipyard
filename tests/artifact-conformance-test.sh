@@ -539,6 +539,22 @@ printf '%s\n' "$_good_out" | grep -qi 'conformance: ok' \
 rm -rf "$_e2e"
 
 
+# spec: scripts/check-artifact-conformance.sh -- a self-upstream product tags vX.Y.Z, so its
+#       enclosure URL carries the v while the version does not; that is the same release.
+ok "enclosure-url: a v-prefixed release tag is this release" 'expected 0.5.5
+pkg p.pkg 0.5.5 10.9.5 dev.mavergreen.x
+deviation scheme self-upstream, versioned vX.Y.Z
+appcast appcast.xml 0.5.5 p.pkg 10 10.9.5
+asset p.pkg 10
+enclosure-url appcast.xml https://github.com/Mavergreen/magic-trackpad2/releases/download/v0.5.5/p.pkg'
+
+no "enclosure-url: another release is still caught, v or no v" "enclosure-url" 'expected 0.5.5
+pkg p.pkg 0.5.5 10.9.5 dev.mavergreen.x
+deviation scheme self-upstream, versioned vX.Y.Z
+appcast appcast.xml 0.5.5 p.pkg 10 10.9.5
+asset p.pkg 10
+enclosure-url appcast.xml https://github.com/Mavergreen/magic-trackpad2/releases/download/v0.5.4/p.pkg'
+
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
 #       paths" -- what a pkg installs carries the family's identity and lands where the family puts
 #       things, unless a deviation scoped to that identifier or path says why not.
