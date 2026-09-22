@@ -8,8 +8,8 @@
 #     --min-os          emits the install floor line; omit for a product that is not a 10.9 .pkg
 #     Generates ONE product's release notes: the Sparkle appcast <description> and the GitHub
 #     Release body, which are the same bytes by construction. Sections, in order: title, committed
-#     prose (verbatim, never rewritten), What changed, Build ingredients (only when a pin moved),
-#     footer.
+#     prose (verbatim, never rewritten), What changed, Our patches (only when one changed), Build
+#     ingredients (only when a pin moved), footer.
 # spec: claude-plugins/modernmavericks/skills/modernmavericks-conventions/SKILL.md "Release notes" --
 #       NOTES ARE PART OF THE RELEASE CONTRACT: every gap here is fatal and names its cause. The old
 #       doctrine -- prose must never fail a release -- meant every section was appended with
@@ -159,6 +159,18 @@ if [ -n "$PREV" ] && [ -n "$PINS" ]; then
     || die "cannot read the ingredient pins that moved since $PREV; a repackage that cannot say what moved must not ship"
 fi
 
+# spec: tests/release-notes-test.sh "patchadd" -- tailscale 1.102.4-mavericks.7 added
+#       patches/darwin-exit-nodes.patch (exit nodes on macOS) and its notes still said "packaging
+#       changes only": a change to OUR modifications of the upstream source is a behaviour change a
+#       reader is owed. Pins are excluded because ingredient-notes.sh already reports them. A
+#       self-upstream product has no upstream to modify, so nothing here applies to it.
+PATCHES=""
+if [ -n "$PREV" ] && [ "$SELF_UPSTREAM" = no ]; then
+  # shellcheck disable=SC2086  # PINS is a deliberate list of paths
+  PATCHES="$(sh "$SELF/patch-notes.sh" "$PREV" $PINS)" \
+    || die "cannot read which of our patches changed since $PREV; a release that cannot say whether it changed our patches must not ship"
+fi
+
 if [ "$SELF_UPSTREAM" = yes ]; then
   printf -- '- Release of %s %s.\n' "$PRODUCT" "$VER" >> "$tmp"
 else
@@ -175,8 +187,14 @@ else
       printf -- '  [Upstream release notes for %s](%s)\n' "$UP" "$URL" >> "$tmp"
       ;;
     3)  # a repackage: no upstream change
-      if [ -n "$INGREDIENTS" ]; then
+      if [ -n "$INGREDIENTS" ] && [ -n "$PATCHES" ]; then
+        printf -- '- Repackage of upstream %s %s, rebuilt because build ingredients moved and our patches changed (below).\n  No upstream change.\n' \
+          "$PRODUCT" "$UP" >> "$tmp"
+      elif [ -n "$INGREDIENTS" ]; then
         printf -- '- Repackage of upstream %s %s, rebuilt because build ingredients moved (below).\n  No upstream change.\n' \
+          "$PRODUCT" "$UP" >> "$tmp"
+      elif [ -n "$PATCHES" ]; then
+        printf -- '- Repackage of upstream %s %s with changes to our patches (below).\n  No upstream change.\n' \
           "$PRODUCT" "$UP" >> "$tmp"
       else
         printf -- '- Repackage of upstream %s %s; packaging changes only.\n' "$PRODUCT" "$UP" >> "$tmp"
@@ -193,6 +211,7 @@ else
   esac
 fi
 
+[ -z "$PATCHES" ] || printf '\n%s\n' "$PATCHES" >> "$tmp"
 [ -z "$INGREDIENTS" ] || printf '\n%s\n' "$INGREDIENTS" >> "$tmp"
 
 # spec: tests/release-notes-test.sh "nofooter"/"withfooter" -- the footer's '---' rule is buffered

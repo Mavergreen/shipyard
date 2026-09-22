@@ -913,9 +913,13 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   something already precedes it, since a footer that opens with a blank line renders an empty leading
   `<p>`.
 - **The shape, in order:** title, the committed `release-notes/<TAG>.md` prose verbatim when present,
-  `### What changed`, `### Build ingredients` when a pin moved, then a footer (the floor line, a
-  compare link). Prose stays optional and is never rewritten; a release with none still says what
-  changed. **Committed prose must NOT carry its own title** — the generator emits the title itself and
+  `### What changed`, `### Our patches` when one of our modifications changed, `### Build
+  ingredients` when a pin moved, then a footer (the floor line, a compare link). Prose stays optional
+  and is never rewritten; a release with none still says what changed. `patch-notes.sh` finds "our
+  patches" as any `*.patch`/`*.diff`, or anything under a `patches/` or `overlays/` directory, at any
+  depth (never `release-notes/`, and never a pin `ingredient-notes.sh` already reports), changed since
+  the previous tag — so a repackage that adds one (tailscale's `darwin-exit-nodes.patch`) no longer
+  claims "packaging changes only". **Committed prose must NOT carry its own title** — the generator emits the title itself and
   slots the prose verbatim right after it, so a note beginning with a heading produces two. **Nine
   files across five repos still do** (all historical — none is a future release, so nothing is broken
   today, but a regeneration of one of these exact tags would be a surprise without this list):

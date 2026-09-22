@@ -548,4 +548,102 @@ html="$(sh "$here/../scripts/gen_appcast.sh" --render-notes "$r/OUT.md")"
 printf '%s\n' "$html" | grep -q 'or later\..*sha256' \
   && { echo "FAIL footerpara: a state marker must not render inside the install-floor sentence"; printf '%s\n' "$html"; exit 1; }
 
+# spec: scripts/patch-notes.sh -- a repackage that changes OUR modifications to the upstream source
+#       is a behaviour change: tailscale 1.102.4-mavericks.7 added patches/darwin-exit-nodes.patch
+#       (exit nodes on macOS) and its notes called it "packaging changes only". Patches are the
+#       behaviour change, so their section comes FIRST, before any ingredient section.
+r="$work/patchadd"; mkrepo "$r"
+( cd "$r" && git tag 9.9p2-mavericks.1 && mkdir patches && echo p > patches/darwin-exit-nodes.patch \
+    && git add -A && git commit -qm "exit nodes" && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null
+grep -q 'packaging changes only' "$r/OUT.md" \
+  && { echo "FAIL patchadd: a patch change is not packaging-only"; cat "$r/OUT.md"; exit 1; }
+grep -q '^- Repackage of upstream OpenSSH 9.9p2 with changes to our patches (below)\.$' "$r/OUT.md" \
+  || { echo "FAIL patchadd: kind"; cat "$r/OUT.md"; exit 1; }
+grep -q '^  No upstream change\.$' "$r/OUT.md" || { echo "FAIL patchadd: no-upstream line"; cat "$r/OUT.md"; exit 1; }
+grep -q '^### Our patches$' "$r/OUT.md" || { echo "FAIL patchadd: section"; cat "$r/OUT.md"; exit 1; }
+grep -q '^- Added `patches/darwin-exit-nodes.patch`$' "$r/OUT.md" \
+  || { echo "FAIL patchadd: bullet"; cat "$r/OUT.md"; exit 1; }
+grep -q '### Build ingredients' "$r/OUT.md" && { echo "FAIL patchadd: no pin moved"; exit 1; }
+
+# spec: scripts/patch-notes.sh -- an overlay is a modification even when it is not a .patch
+#       (tailscale's replacement systray_darwin.m); removal and rename count too.
+r="$work/patchmisc"; mkrepo "$r"
+mkdir -p "$r/overlays" "$r/patches"
+echo 'int x;' > "$r/overlays/systray_darwin.m"; echo a > "$r/patches/gone.patch"
+printf '1\n2\n3\n4\n5\n6\n' > "$r/patches/before.patch"
+( cd "$r" && git add -A && git commit -qm overlays && git tag 9.9p2-mavericks.1 \
+    && echo 'int y;' > overlays/systray_darwin.m && git rm -q patches/gone.patch \
+    && git mv patches/before.patch patches/after.patch \
+    && git add -A && git commit -qm "touch overlays" && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null
+grep -q '^- Changed `overlays/systray_darwin.m`$' "$r/OUT.md" || { echo "FAIL patchmisc: changed"; cat "$r/OUT.md"; exit 1; }
+grep -q '^- Removed `patches/gone.patch`$' "$r/OUT.md" || { echo "FAIL patchmisc: removed"; cat "$r/OUT.md"; exit 1; }
+grep -q '^- Renamed `patches/before.patch` to `patches/after.patch`$' "$r/OUT.md" \
+  || { echo "FAIL patchmisc: renamed"; cat "$r/OUT.md"; exit 1; }
+
+# spec: scripts/release-notes.sh -- patches AND ingredients moved -> both named in the summary,
+#       patches section first.
+r="$work/patching"; mkrepo "$r"
+( cd "$r" && git tag 9.9p2-mavericks.1 && mkdir patches && echo p > patches/fix.patch \
+    && printf '3.9.2\n' > components/libressl/version \
+    && git add -A && git commit -qm "both" && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null
+grep -q '^- Repackage of upstream OpenSSH 9.9p2, rebuilt because build ingredients moved and our patches changed (below)\.$' "$r/OUT.md" \
+  || { echo "FAIL patching: kind"; cat "$r/OUT.md"; exit 1; }
+grep -q '^  No upstream change\.$' "$r/OUT.md" || { echo "FAIL patching: no-upstream line"; cat "$r/OUT.md"; exit 1; }
+p="$(grep -n '^### Our patches$' "$r/OUT.md" | cut -d: -f1)"
+i="$(grep -n '^### Build ingredients$' "$r/OUT.md" | cut -d: -f1)"
+[ -n "$p" ] && [ -n "$i" ] && [ "$p" -lt "$i" ] \
+  || { echo "FAIL patching: patches section must precede ingredients"; cat "$r/OUT.md"; exit 1; }
+sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 9.9p2-mavericks.2 >/dev/null \
+  || { echo "FAIL patching: own output fails the shape check"; exit 1; }
+
+# spec: scripts/release-notes.sh -- a new upstream often rebases our patches -- keep the
+#       new-upstream line, add the section.
+r="$work/patchnewup"; mkrepo "$r"
+mkdir -p "$r/patches"; echo v1 > "$r/patches/fix.patch"
+( cd "$r" && git add -A && git commit -qm p && git tag 9.9p1-mavericks.1 \
+    && echo v2 > patches/fix.patch && git commit -qam rebase && git tag 9.9p2-mavericks.1 )
+gen "$r" 9.9p2-mavericks.1 >/dev/null
+grep -q 'New upstream: OpenSSH 9.9p2 (was 9.9p1)' "$r/OUT.md" || { echo "FAIL patchnewup: kind"; cat "$r/OUT.md"; exit 1; }
+grep -q '^- Changed `patches/fix.patch`$' "$r/OUT.md" || { echo "FAIL patchnewup: section"; cat "$r/OUT.md"; exit 1; }
+
+# spec: scripts/patch-notes.sh -- committed prose under release-notes/ is not a modification of
+#       upstream.
+r="$work/patchprose"; mkrepo "$r"
+( cd "$r" && git tag 9.9p2-mavericks.1 && printf 'Words.\n' > release-notes/9.9p2-mavericks.2.md \
+    && git add -A && git commit -qm prose && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null
+grep -q '^- Repackage of upstream OpenSSH 9.9p2; packaging changes only\.$' "$r/OUT.md" \
+  || { echo "FAIL patchprose: prose alone is packaging-only"; cat "$r/OUT.md"; exit 1; }
+grep -q '### Our patches' "$r/OUT.md" && { echo "FAIL patchprose: no section"; exit 1; }
+
+# spec: scripts/release-notes.sh -- with no patch change the body is byte-identical to what it
+#       was before patch-notes existed.
+r="$work/patchnone"; mkrepo "$r"
+( cd "$r" && git tag 9.9p2-mavericks.1 && echo x >> README.md && git add -A \
+    && git commit -qm unrelated && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null
+want="$(printf '%s\n' '## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.2)' '' '### What changed' \
+  '- Repackage of upstream OpenSSH 9.9p2; packaging changes only.' '' '---' \
+  'Requires Mac OS X 10.9.5 or later.' '' \
+  '[All changes since 9.9p2-mavericks.1](https://github.com/ModernMavericks/mavericks-openssh/compare/9.9p2-mavericks.1...9.9p2-mavericks.2)')"
+[ "$(cat "$r/OUT.md")" = "$want" ] || { echo "FAIL patchnone: body changed"; cat "$r/OUT.md"; exit 1; }
+
+# spec: scripts/release-notes.sh -- notes that cannot say whether our patches changed must not
+#       ship.
+r="$work/patchfails"; mkrepo "$r"
+( cd "$r" && git tag 9.9p2-mavericks.1 && git tag 9.9p2-mavericks.2 )
+pstub="$work/scripts-pstub"
+cp -R "$here/../scripts" "$pstub"
+printf '#!/bin/sh\necho "patch-notes.sh: boom" >&2\nexit 5\n' > "$pstub/patch-notes.sh"
+if ( cd "$r" && MAVERICKS_ROOT="$r" sh "$pstub/release-notes.sh" --tag 9.9p2-mavericks.2 \
+       --version 9.9p2-mavericks.2 --product OpenSSH --out "$r/OUT.md" ) >/dev/null 2>&1; then
+  echo "FAIL patchfails: a failing patch-notes.sh must be fatal"; exit 1
+fi
+out="$(cd "$r" && MAVERICKS_ROOT="$r" sh "$pstub/release-notes.sh" --tag 9.9p2-mavericks.2 \
+       --version 9.9p2-mavericks.2 --product OpenSSH --out "$r/OUT.md" 2>&1 || true)"
+printf '%s\n' "$out" | grep -q 'patches' || { echo "FAIL patchfails: cause not named: $out"; exit 1; }
+
 echo "PASS: release-notes"
