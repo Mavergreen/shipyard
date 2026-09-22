@@ -893,8 +893,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 
   | `--min-os` passed | Repos |
   |---|---|
-  | `10.9` (bare) | 1password, signal-desktop, porthole |
-  | `10.9.5` | openssh, container-tools, clang, golang, macports-legacy-support, ed25519, tailscale, swift-runtime, magic-trackpad2, shipyard |
+    | `10.9.5` | 1password, signal-desktop, porthole (bare `10.9` until the 2026-09-22 flag day, which found it was drift), openssh, container-tools, clang, golang, macports-legacy-support, ed25519, tailscale, swift-runtime, magic-trackpad2, shipyard |
   | *(omitted)* — no floored end-user `.pkg` | swift-toolchain |
 
   **Dual-variant repos (clang, golang): the notes' floor line describes the NATIVE `.pkg`, while each
