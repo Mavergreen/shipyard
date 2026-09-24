@@ -180,6 +180,10 @@ owns_replace_link() {
   fi
   return 1
 }
+is_real_dir() {
+  [ -d "$1" ] || return 1
+  [ ! -L "$1" ]
+}
 do_system_replace() {
   need_product "$1"
   _pv="$("$PB" -c 'Print :ProductVersion' "$R/System/Library/CoreServices/SystemVersion.plist" 2>/dev/null || true)"
@@ -193,7 +197,11 @@ do_system_replace() {
     [ -n "$_abs" ] || continue
     replace_shape_ok "$_abs" "$_rel" || die "$1 declares an unsafe replaces entry: '$_abs' -> '$_rel'"
     [ -e "$MG/$1/$_rel" ] || die "$1 declares $_abs -> $_rel, but $_rel is not in its tree"
+    is_real_dir "$MG/$1/$_rel" \
+      && die "$1 declares $_abs -> $_rel, but $_rel is a directory; system-replace swaps files and symlinks only"
     _want="/usr/local/mavergreen/$1/$_rel"; _cur="$R$_abs"
+    is_real_dir "$_cur" \
+      && die "$1 declares $_abs -> $_rel, but $_abs is a directory; system-replace swaps files and symlinks only"
     if [ -L "$_cur" ] && [ "$(readlink "$_cur")" = "$_want" ]; then continue; fi
     if [ -e "$_b$_abs" ] || [ -L "$_b$_abs" ]; then
       die "$_abs was already saved once and has since changed; run system-restore $1 first"

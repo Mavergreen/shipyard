@@ -237,4 +237,20 @@ chmod 755 "$V/usr/bin"
 PATH="$stub:$PATH" mg uninstall rouninstall || fail "a retried uninstall must succeed once the obstruction is gone"
 [ ! -e "$T/rouninstall" ] || fail "the retried uninstall must finish removing the product"
 
+mkproduct dirorig dirorig "" bin/m
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/m string bin/m" "$T/dirorig/mavergreen.plist"
+mkdir -p "$V/usr/bin/m"; echo inner > "$V/usr/bin/m/inner"
+mg system-replace dirorig 2>"$w/err" && fail "system-replace must refuse an entry whose live path is a real directory"
+grep -q directory "$w/err" || fail "the refusal must say it is a directory"
+[ -d "$V/usr/bin/m" ] && [ ! -L "$V/usr/bin/m" ] && [ -f "$V/usr/bin/m/inner" ] \
+  || fail "a refused directory original must be left intact"
+[ ! -e "$T/var/system-replace/dirorig" ] || fail "a refused directory original must leave no .replaced"
+
+mkproduct wholedir wholedir "" bin/n
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin string bin/n" "$T/wholedir/mavergreen.plist"
+mg system-replace wholedir 2>"$w/err" && fail "system-replace must refuse a replaces key that names a whole directory"
+grep -q directory "$w/err" || fail "the refusal must say it is a directory"
+[ -d "$V/usr/bin" ] && [ ! -L "$V/usr/bin" ] || fail "a refused whole-directory key must leave /usr/bin intact"
+[ ! -e "$T/var/system-replace/wholedir" ] || fail "a refused whole-directory key must leave no .replaced"
+
 echo "PASS: mavergreen-helper"
