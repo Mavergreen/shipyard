@@ -1544,6 +1544,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **16.** Nothing tracked reads the CMake **user package registry** (`~/.cmake/packages`) | shipyard now lives in `shipyard-cmake`'s own prefix and nothing writes that registry any more, so a script reading it reads a file that is no longer there — and reads it *silently*, resolving to an empty path rather than failing |
 | **17.** A repo's **committed** `build/msc.sh` (or `./msc.sh`) equals `$SHIPYARD_SCRIPTS/templates/msc.sh` **byte for byte** | It is the one piece each product carries in order to find shipyard. Eleven hand-kept copies had drifted into three variants, so "the incantation" meant three different things depending on which repo you opened. Tracked copies only — an untracked scratch copy in your worktree is not what the repo ships, and the failure shows the first differing line |
 | **18.** No plain `cmake` / `ctest` / `cpack` at command position — in workflow `run:` bodies or in committed `*.sh` outside `tests/` | `MavericksShipyardConfig.cmake` refuses any other cmake at configure time; this finds the call in the PR instead of in the release. `tests/` is excluded because fixtures quote the command on purpose |
+| **22.** Every tracked script declares its host in its header — `# platform: host-agnostic` or `# platform: macOS-only -- <why>` — and a host-agnostic one runs no macOS-only tool at command position (`check-host-tools.sh`); **opt-in**, in a repo where at least one script declares | Nothing stopped a script that a Linux job depends on from growing an `otool` or `sw_vers`: it passed every gate and broke on the runner. `check-shell-portability.sh` cannot see it — flawless POSIX sh can still call `lipo`. An undeclared script **fails** rather than defaulting to host-agnostic, because a default makes the gate silently incomplete. Opt-in, like 15, so `@v1` reaching fourteen consumers reddens none of them |
 
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,
@@ -1577,6 +1578,32 @@ two consumers within the hour it shipped.
   `sudo cmake`, `env FOO=1 cmake`, `command cmake`, `xcrun cmake`, `time cmake`. Each is still caught
   at configure time, where the config refuses the foreign cmake by name however it was spelled. The
   gate moves the common case earlier; it is not the only thing standing there.
+
+**Check 22** is `check-host-tools.sh`. It scans the **whole tracked tree**, `tests/` included: every
+`*.sh`, `*.bats`, `*.bash` and `*.py`, every file tracked executable, and every file starting `#!`.
+Those three shapes are exactly where check 18 is blind. Only `scripts/templates/` is skipped, because
+check 17 byte-compares those copies against other repos.
+
+- **Declare in the header**, meaning after any `#!` and before the first line of code, exactly one of
+  `# platform: host-agnostic` or `# platform: macOS-only -- <why>`. The reason is required. A
+  declaration further down does not count, and the check says so.
+- **A host-agnostic file may not run** any of `otool lipo sw_vers installer pkgutil pkgbuild productbuild
+  codesign xcrun plutil hdiutil sips defaults launchctl softwareupdate system_profiler diskutil
+  PlistBuddy` at command position. Extend that list, never trim it. A tool that slips through is caught
+  when shipyard's Linux job fails, which is why the job exists.
+- **A guarded call** in a host-agnostic file carries `# platform: guarded macOS-only call -- <the
+  guard>` on the line directly above it. The comment covers that one line only: not the next one, and
+  not across a blank line.
+- **It reads shell with a lexer, not a line regex.** A bare `(`, a path (`/usr/bin/lipo`), a prefix
+  (`sudo -u x`, `env A=1`, `command`, `exec`, `time`, `xargs`, bats' `run`), `VAR=value`, `$(`,
+  backticks, `case` patterns and `{ ...; }` all put a word at command position. `command -v tool` is a
+  query. A heredoc body, a multi-line single-quoted string, a comment and `name() {` are not calls.
+- **Known blind spots:** a tool named through a variable (`"$LIPO"`), `eval`, a `.py` file's
+  `subprocess` calls (a `.py` is lexed as if it were shell), and `*.cmake` and workflow `run:` blocks,
+  which are not scripts. The check's ok line says the last one out loud.
+- **Opt-in by declaring.** A repo where no script declares a host passes and prints that it has not
+  adopted the split. `--required` makes that a failure. shipyard's own test suite runs it that way, so
+  shipyard cannot quietly un-adopt.
 
 **19. A repo whose CI builds must CALL the out-of-tree assertion.** `--record` before the build,
 a bare call after it:
@@ -1653,6 +1680,13 @@ in the same commit.
 - **A test that cannot run yet exits 77 to SKIP**, the same idiom as ctest's `SKIP_RETURN_CODE 77`.
   Guard on the artifact you need (`[ -d "$OUT" ] || { echo "not built — skipping"; exit 77; }`) rather
   than failing a CI run that was never going to have it.
+- **A test declares where it can run** (check 22's header line). One declared `# platform: macOS-only --
+  <why>` is not run off macOS: the runner prints `SKIP <file> (macOS-only)` instead.
+  `run-repo-tests.sh --strict-host` is for a job whose purpose is proving the host-agnostic half works
+  on its host, as shipyard's Linux job does. Under it, every test must declare. A host-agnostic test
+  that skips, whether by exit 77 or a bats `# skip`, **fails**, because "needs a Mac" is already
+  declared and any other skip means broken. A run that ran no host-agnostic test fails too. It cannot be
+  combined with a ctest preset.
 - **`bats` is required, not optional.** `install@v1` installs it on any runner that lacks it, so a
   `.bats` file with no bats means a broken environment — `run-repo-tests.sh` reports **FAIL**, not
   SKIP. A skipped assertion is one nobody is checking, which is the hole that let two tests rot.

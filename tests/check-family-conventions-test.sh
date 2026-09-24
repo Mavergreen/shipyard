@@ -1193,4 +1193,15 @@ mkrepo "$work/pks"; printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.
 mkrepo "$work/pkt"; printf '#!/bin/sh\npkgbuild --root x t.pkg\n' > "$work/pkt/tests/fixture.sh"
 (cd "$work/pkt" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkgbuild in tests/ is a fixture, not a product: $(cd "$work/pkt" && sh "$S" 2>&1)"; exit 1; }
 
+# spec: SKILL.md "Family conventions" check 22 -- delegated to check-host-tools.sh, whose own
+#       test covers the rule; this proves the gate CALLS it. The baseline declares no host, so it
+#       has not adopted the split and passes (the ok case at the top); one declared script adopts it.
+mkrepo "$work/host"; printf '#!/bin/sh\n# platform: host-agnostic\notool -L x\n' > "$work/host/tests/a-test.sh"
+printf '#!/bin/sh\n# platform: host-agnostic\nprintf "https://example.com/v%%s\\n" "$1"\n' > "$work/host/build/upstream-release-notes-url.sh"
+(cd "$work/host" && git add -A) >/dev/null 2>&1
+out="$(cd "$work/host" && sh "$S" 2>&1)" && { echo "FAIL: a host-agnostic script running otool should fail check 22"; exit 1; }
+printf '%s\n' "$out" | grep -q 'check-host-tools' || { echo "FAIL: check 22 should report through check-host-tools: $out"; exit 1; }
+printf '#!/bin/sh\n# platform: host-agnostic\nexit 0\n' > "$work/host/tests/a-test.sh"
+(cd "$work/host" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a clean, declared repo should pass check 22: $(cd "$work/host" && sh "$S" 2>&1)"; exit 1; }
+
 echo "PASS: check-family-conventions"

@@ -577,6 +577,17 @@ if [ -f CMakePresets.json ] && git ls-files --error-unmatch CMakePresets.json >/
             "add CMakeUserPresets.json to .gitignore"
 fi
 
+# spec: SKILL.md "Family conventions" check 22 -- every tracked script declares its host, and a
+#       host-agnostic one runs no macOS-only tool. Delegated to check-host-tools.sh, like 10 and 15,
+#       so the family's rule and shipyard's own Linux job cannot drift apart. Opt-in falls out of
+#       check-host-tools.sh itself: a repo where no script declares a host passes, saying so.
+if [ -f "$SELF/check-host-tools.sh" ]; then
+  sh "$SELF/check-host-tools.sh" || status=1
+else
+  fail "cannot find check-host-tools.sh next to this gate -- the shipyard checkout is incomplete" \
+       "check out the whole repo (family-conventions.yml does), not just this one script"
+fi
+
 [ "$status" -eq 0 ] && echo "check-family-conventions: ok"
 
 exit "$status"
