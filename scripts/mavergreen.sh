@@ -165,6 +165,21 @@ replaces() {
   "$PB" -c "Print :replaces" "$(manifest "$1")" 2>/dev/null \
     | sed -n 's/^[[:space:]]*\(\/[^ =]*\) = \(.*\)$/\1	\2/p'
 }
+replace_shape_ok() {
+  case "$1" in /*) : ;; *) return 1 ;; esac
+  case "/$1/" in *"/./"*|*"/../"*) return 1 ;; esac
+  case "$2" in ''|/*) return 1 ;; esac
+  case "/$2/" in *"/./"*|*"/../"*) return 1 ;; esac
+  return 0
+}
+owns_replace_link() {
+  if [ -L "$1" ]; then
+    case "$(readlink "$1")" in
+      "$2"*) return 0 ;;
+    esac
+  fi
+  return 1
+}
 do_system_replace() {
   need_product "$1"
   _pv="$("$PB" -c 'Print :ProductVersion' "$R/System/Library/CoreServices/SystemVersion.plist" 2>/dev/null || true)"
@@ -176,35 +191,64 @@ do_system_replace() {
   _entries="$(replaces "$1")"
   while IFS="	" read -r _abs _rel; do
     [ -n "$_abs" ] || continue
+    replace_shape_ok "$_abs" "$_rel" || die "$1 declares an unsafe replaces entry: '$_abs' -> '$_rel'"
     [ -e "$MG/$1/$_rel" ] || die "$1 declares $_abs -> $_rel, but $_rel is not in its tree"
     _want="/usr/local/mavergreen/$1/$_rel"; _cur="$R$_abs"
     if [ -L "$_cur" ] && [ "$(readlink "$_cur")" = "$_want" ]; then continue; fi
+    if [ -e "$_b$_abs" ] || [ -L "$_b$_abs" ]; then
+      die "$_abs was already saved once and has since changed; run system-restore $1 first"
+    fi
+  done <<EOF
+$_entries
+EOF
+  mkdir -p "$_b"; : > "$_b/.replaced"
+  while IFS="	" read -r _abs _rel; do
+    [ -n "$_abs" ] || continue
+    _want="/usr/local/mavergreen/$1/$_rel"; _cur="$R$_abs"
+    if [ -L "$_cur" ] && [ "$(readlink "$_cur")" = "$_want" ]; then continue; fi
     if [ -e "$_cur" ] || [ -L "$_cur" ]; then
-      if [ -e "$_b$_abs" ] || [ -L "$_b$_abs" ]; then
-        die "$_abs was already saved once and has since changed; run system-restore $1 first"
-      fi
       mkdir -p "$(dirname "$_b$_abs")"; mv "$_cur" "$_b$_abs"
     fi
     mkdir -p "$(dirname "$_cur")"; ln -s "$_want" "$_cur"
   done <<EOF
 $_entries
 EOF
-  mkdir -p "$_b"; : > "$_b/.replaced"
 }
 do_system_restore() {
   need_product "$1"
   _b="$MG/var/system-replace/$1"
   _entries="$(replaces "$1")"
+  _want_prefix="/usr/local/mavergreen/$1/"
   _rfail=0
+  _saved=""
+  if [ -d "$_b" ]; then
+    _saved="$(cd "$_b" && find . -mindepth 1 \( -type f -o -type l \) ! -name .replaced | sed 's|^\./||')"
+  fi
+  while IFS= read -r _relpath; do
+    [ -n "$_relpath" ] || continue
+    _abs="/$_relpath"; _cur="$R$_abs"
+    if owns_replace_link "$_cur" "$_want_prefix"; then rm -f "$_cur" 2>/dev/null || true; fi
+    if [ -e "$_cur" ] || [ -L "$_cur" ]; then
+      echo "mavergreen: $_abs still exists after removing $1's link; keeping the saved original" >&2
+      _rfail=1
+      continue
+    fi
+    mkdir -p "$(dirname "$_cur")"
+    mv "$_b$_abs" "$_cur" || { echo "mavergreen: could not restore $_abs" >&2; _rfail=1; }
+  done <<EOF
+$_saved
+EOF
   while IFS="	" read -r _abs _rel; do
     [ -n "$_abs" ] || continue
-    _cur="$R$_abs"
-    if [ -L "$_cur" ] && [ "$(readlink "$_cur")" = "/usr/local/mavergreen/$1/$_rel" ]; then
-      rm -f "$_cur" || { echo "mavergreen: could not remove $_abs" >&2; _rfail=1; continue; }
+    if [ -e "$_b$_abs" ] || [ -L "$_b$_abs" ]; then continue; fi
+    if ! replace_shape_ok "$_abs" "$_rel"; then
+      echo "mavergreen: $1's replaces entry '$_abs' -> '$_rel' is unsafe; not touching it" >&2
+      _rfail=1
+      continue
     fi
-    if [ -e "$_b$_abs" ] || [ -L "$_b$_abs" ]; then
-      mkdir -p "$(dirname "$_cur")" && mv "$_b$_abs" "$_cur" \
-        || { echo "mavergreen: could not restore $_abs" >&2; _rfail=1; }
+    _cur="$R$_abs"
+    if owns_replace_link "$_cur" "$_want_prefix"; then
+      rm -f "$_cur" || { echo "mavergreen: could not remove $_abs" >&2; _rfail=1; }
     fi
   done <<EOF
 $_entries
@@ -258,9 +302,12 @@ remove_outside() {
 }
 do_uninstall() {
   need_product "$1"
+  if [ -f "$MG/var/system-replace/$1/.replaced" ]; then
+    do_system_restore "$1" \
+      || die "system-restore failed for $1; uninstall stopped before removing anything else -- fix it, then retry"
+  fi
   _g="$(group_of "$1")"; _id="$(mf "$1" identifier)"
   _failed=0
-  if [ -f "$MG/var/system-replace/$1/.replaced" ]; then do_system_restore "$1" || _failed=1; fi
   unlink_product "$1"
   _outside="$(mf_array "$1" outside)"
   while IFS= read -r _o; do

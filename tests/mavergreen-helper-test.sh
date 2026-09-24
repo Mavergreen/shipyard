@@ -158,4 +158,83 @@ mg system-restore openssh || fail "system-restore must succeed"
 [ ! -e "$V/usr/sbin/sshd" ] && [ ! -L "$V/usr/sbin/sshd" ] || fail "restore removes a link that had no original"
 [ ! -e "$T/var/system-replace/openssh" ] || fail "restore clears its saved state"
 
+mkproduct twoentry twoentry "" bin/a
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/a string bin/a" \
+      -c "Add :replaces:/usr/bin/z string bin/missing" "$T/twoentry/mavergreen.plist"
+echo original-a > "$V/usr/bin/a"
+mg system-replace twoentry 2>"$w/err" \
+  && fail "a refused entry must refuse the whole system-replace, even when an earlier entry already looked fine"
+grep -q 'bin/missing' "$w/err" || fail "the refusal must name the entry it refused"
+[ ! -L "$V/usr/bin/a" ] && [ "$(cat "$V/usr/bin/a")" = original-a ] \
+  || fail "a refused first-time system-replace must change nothing, even for an entry that comes before the refused one"
+[ ! -e "$T/var/system-replace/twoentry" ] || fail "a refused first-time system-replace must leave no .replaced"
+
+mkproduct escapee escapee "" bin/f
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/../escaped-by-mavergreen-test string bin/f" \
+      "$T/escapee/mavergreen.plist"
+mg system-replace escapee 2>"$w/err" && fail "a replaces key containing .. must be refused"
+grep -q unsafe "$w/err" || fail "the refusal must say the entry is unsafe"
+[ ! -e "$V/../escaped-by-mavergreen-test" ] || fail "a refused .. entry must not touch anything outside the volume"
+[ ! -L "$V/usr/bin/f" ] && [ ! -e "$V/usr/bin/f" ] || fail "a refused .. entry must not touch /usr/bin either"
+[ ! -e "$T/var/system-replace/escapee" ] || fail "a refused .. entry must leave no .replaced"
+
+mkproduct dropped dropped "" bin/h
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/h string bin/h" "$T/dropped/mavergreen.plist"
+echo apple-h > "$V/usr/bin/h"
+mg system-replace dropped || fail "setup: system-replace dropped must succeed"
+"$PB" -c "Delete :replaces:/usr/bin/h" "$T/dropped/mavergreen.plist"
+mg system-restore dropped || fail "system-restore must succeed even when its manifest no longer lists the entry"
+[ "$(cat "$V/usr/bin/h")" = apple-h ] && [ ! -L "$V/usr/bin/h" ] \
+  || fail "system-restore must put back an original whose manifest entry was since dropped"
+[ ! -e "$T/var/system-replace/dropped" ] || fail "system-restore must clear its saved state once everything is back"
+
+mkproduct driftfile driftfile "" bin/k
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/k string bin/k" "$T/driftfile/mavergreen.plist"
+echo apple-k > "$V/usr/bin/k"
+mg system-replace driftfile || fail "setup: system-replace driftfile must succeed"
+rm "$V/usr/bin/k"; echo updated-k > "$V/usr/bin/k"
+rc=0; mg system-restore driftfile 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "system-restore must fail when the live path is no longer our link"
+[ "$(cat "$V/usr/bin/k")" = updated-k ] || fail "system-restore must not clobber a drifted live path"
+[ "$(cat "$T/var/system-replace/driftfile/usr/bin/k")" = apple-k ] \
+  || fail "system-restore must keep the saved original when it cannot put it back"
+grep -q /usr/bin/k "$w/err" || fail "system-restore must name the path it could not restore"
+
+mkproduct driftdir driftdir "" bin/l
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/l string bin/l" "$T/driftdir/mavergreen.plist"
+echo apple-l > "$V/usr/bin/l"
+mg system-replace driftdir || fail "setup: system-replace driftdir must succeed"
+rm "$V/usr/bin/l"; mkdir "$V/usr/bin/l"
+rc=0; mg system-restore driftdir 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "system-restore must fail when a directory now occupies the live path"
+[ -d "$V/usr/bin/l" ] || fail "system-restore must not remove or move into a directory occupying the live path"
+[ "$(cat "$T/var/system-replace/driftdir/usr/bin/l")" = apple-l ] \
+  || fail "system-restore must keep the saved original when the live path is a directory"
+
+mkproduct rostore rostore "" bin/i
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/i string bin/i" "$T/rostore/mavergreen.plist"
+echo apple-i > "$V/usr/bin/i"
+mg system-replace rostore || fail "setup: system-replace rostore must succeed"
+chmod 555 "$V/usr/bin"
+rc=0; mg system-restore rostore 2>"$w/err" || rc=$?
+chmod 755 "$V/usr/bin"
+[ "$rc" -ne 0 ] || fail "system-restore must fail when it cannot remove the link (read-only directory)"
+[ -f "$T/var/system-replace/rostore/usr/bin/i" ] || fail "a failed system-restore must keep the saved original so a retry can use it"
+mg system-restore rostore || fail "a retried system-restore must succeed once the obstruction is gone"
+[ "$(cat "$V/usr/bin/i")" = apple-i ] || fail "the retried system-restore must put the original back"
+
+mkproduct rouninstall rouninstall "" bin/j
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/j string bin/j" "$T/rouninstall/mavergreen.plist"
+echo apple-j > "$V/usr/bin/j"
+mg system-replace rouninstall || fail "setup: system-replace rouninstall must succeed"
+chmod 555 "$V/usr/bin"
+rc=0; PATH="$stub:$PATH" mg uninstall rouninstall 2>"$w/err" || rc=$?
+chmod 755 "$V/usr/bin"
+[ "$rc" -ne 0 ] || fail "uninstall must fail when its system-restore fails"
+[ -f "$T/rouninstall/mavergreen.plist" ] || fail "a failed system-restore must stop uninstall before it removes the product's tree"
+[ -f "$T/var/system-replace/rouninstall/usr/bin/j" ] \
+  || fail "a failed system-restore during uninstall must keep the saved original so a retry can use it"
+PATH="$stub:$PATH" mg uninstall rouninstall || fail "a retried uninstall must succeed once the obstruction is gone"
+[ ! -e "$T/rouninstall" ] || fail "the retried uninstall must finish removing the product"
+
 echo "PASS: mavergreen-helper"
