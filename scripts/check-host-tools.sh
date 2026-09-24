@@ -81,7 +81,7 @@ fi
 
 while IFS= read -r p; do
   if grep -qE '^# platform: (host-agnostic|macOS-only)' "$p"; then
-    fail "$p declares its host below its first line of code, or declares macOS-only with no reason" \
+    fail "$p has a '# platform: host-agnostic|macOS-only' line that is not an accepted declaration: it must sit in the header, match exactly '# platform: host-agnostic' (optionally ' -- <note>') or '# platform: macOS-only -- <why>', with no trailing whitespace" \
          "move it into the header, before any code: # platform: host-agnostic, or # platform: macOS-only -- <why>"
   else
     fail "$p declares no host -- an undeclared script is an error, never assumed host-agnostic" \

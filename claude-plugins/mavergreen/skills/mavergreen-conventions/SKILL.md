@@ -1603,6 +1603,15 @@ check 17 requires to stay byte-identical and which therefore cannot carry its ow
 - **Known blind spots:** a tool named through a variable (`"$LIPO"`), `eval`, a `.py` file's
   `subprocess` calls (a `.py` is lexed as if it were shell), and `*.cmake` and workflow `run:` blocks,
   which are not scripts. The check's ok line says the last one out loud.
+- **Known false positives:** a `case` pattern at the start of a line (`  otool)`, `  otool|lipo)`), a
+  function defined with a space (`otool () {`), and a `.py` line that merely happens to shape like
+  shell (`defaults = {...}`); each is fixed by rewording the line, or by declaring the file
+  macOS-only.
+- **Known false negatives:** a redirection before the command (`2>/dev/null otool`), a `(a)`-style
+  case pattern, a prefix wrapper other than the ones listed above (`nice`, `timeout`, `env -u X`,
+  `xargs -n 1`), a `$(...)` inside a `${x:-...}` default, and `find ... -exec tool`.
+- **`--strict-host` cannot see a host-agnostic suite that skips PART of itself internally** without
+  exiting 77 or using bats' `# skip` -- e.g. artifact-conformance-test.sh's pkgbuild block.
 - **Opt-in by declaring.** A repo where no script declares a host passes and prints that it has not
   adopted the split. `--required` makes that a failure. shipyard's own test suite runs it that way, so
   shipyard cannot quietly un-adopt.

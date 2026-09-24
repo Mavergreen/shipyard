@@ -118,6 +118,8 @@ mk guardgap "scripts/g.sh${T}#!/bin/sh\n$AGN\n# platform: guarded macOS-only cal
 fails guardgap "the guard comment covers only the line directly below it"
 mk guardonce "scripts/g.sh${T}#!/bin/sh\n$AGN\n# platform: guarded macOS-only call -- uname\n[ \"\$(uname -s)\" = Darwin ] && sw_vers\nsw_vers\n"
 fails guardonce "the guard comment covers one line, not the rest of the file"
+mk guardcomment "scripts/g.sh${T}#!/bin/sh\n$AGN\n# platform: guarded macOS-only call -- uname\n# note\nsw_vers\n"
+fails guardcomment "an unrelated comment line between the guard and the call must not keep the guard alive"
 
 out="$(cd "$work/agnotool" && sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'scripts/a.sh:3' || { echo "FAIL: a violation must name file:line: $out"; exit 1; }

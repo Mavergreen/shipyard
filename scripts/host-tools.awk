@@ -29,7 +29,7 @@ BEGIN {
 }
 hd != "" { t = $0; if (hdtabs) sub(/^\t+/, "", t); if (t == hd) hd = ""; next }
 FNR == 1 && /^#!/ { next }
-q == "" && !cont && /^[ \t]*#/ { if ($0 ~ /^[ \t]*# platform: guarded macOS-only call -- /) guard = 1; next }
+q == "" && !cont && /^[ \t]*#/ { guard = ($0 ~ /^[ \t]*# platform: guarded macOS-only call -- /); next }
 {
   s = $0; L = length(s); i = 1
   if (q == "" && !cont) atcmd()
