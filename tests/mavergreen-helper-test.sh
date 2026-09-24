@@ -128,4 +128,34 @@ grep -q "unsafe outside path 'usr/local/mavergreen/sibling'" "$w/err" \
 [ ! -e "$V/Library/LaunchAgents/dev.mavergreen.widget-updatecheck.plist" ] \
   || fail "an outside entry AFTER a refused one must still be removed (best-effort, not abort-on-first-failure)"
 
+mkproduct openssh openssh "" bin/ssh sbin/sshd
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/ssh string bin/ssh" \
+      -c "Add :replaces:/usr/sbin/sshd string sbin/sshd" "$T/openssh/mavergreen.plist"
+mkdir -p "$V/usr/bin" "$V/usr/sbin" "$V/System/Library/CoreServices"
+echo apple-ssh > "$V/usr/bin/ssh"
+"$PB" -c "Add :ProductVersion string 26.0" "$V/System/Library/CoreServices/SystemVersion.plist" >/dev/null
+mg system-replace openssh 2>"$w/err" && fail "system-replace must refuse a volume that is not 10.9"
+grep -q 'sealed\|10.9' "$w/err" || fail "the refusal must say why"
+"$PB" -c "Set :ProductVersion 10.9.5" "$V/System/Library/CoreServices/SystemVersion.plist"
+mg system-replace openssh || fail "system-replace on 10.9 must succeed"
+[ "$(readlink "$V/usr/bin/ssh")" = /usr/local/mavergreen/openssh/bin/ssh ] || fail "the system path becomes a link into the product"
+[ "$(cat "$T/var/system-replace/openssh/usr/bin/ssh")" = apple-ssh ] || fail "the original is saved"
+[ -L "$V/usr/sbin/sshd" ] || fail "a replacement with no original still gets its link"
+mg system-replace openssh || fail "system-replace must be idempotent"
+[ "$(cat "$T/var/system-replace/openssh/usr/bin/ssh")" = apple-ssh ] || fail "a second replace must not overwrite the saved original with our own link"
+rm "$V/usr/bin/ssh"; echo apple-update > "$V/usr/bin/ssh"
+mg check 2>"$w/err" && fail "a replaced path that is no longer our link is drift, and check must fail"
+grep -q /usr/bin/ssh "$w/err" || fail "check must name the drifted path"
+mg system-replace openssh 2>"$w/err" && fail "system-replace must refuse a drifted path whose original was already saved"
+grep -q 'system-restore\|already saved' "$w/err" || fail "the refusal must say to run system-restore"
+[ "$(cat "$T/var/system-replace/openssh/usr/bin/ssh")" = apple-ssh ] \
+  || fail "a refused system-replace must not touch the saved original"
+[ -f "$T/var/system-replace/openssh/.replaced" ] || fail "a refused system-replace must not remove the .replaced marker"
+[ "$(cat "$V/usr/bin/ssh")" = apple-update ] || fail "a refused system-replace must leave the drifted path alone"
+rm "$V/usr/bin/ssh"; ln -s /usr/local/mavergreen/openssh/bin/ssh "$V/usr/bin/ssh"
+mg system-restore openssh || fail "system-restore must succeed"
+[ "$(cat "$V/usr/bin/ssh")" = apple-ssh ] && [ ! -L "$V/usr/bin/ssh" ] || fail "restore puts the original back"
+[ ! -e "$V/usr/sbin/sshd" ] && [ ! -L "$V/usr/sbin/sshd" ] || fail "restore removes a link that had no original"
+[ ! -e "$T/var/system-replace/openssh" ] || fail "restore clears its saved state"
+
 echo "PASS: mavergreen-helper"

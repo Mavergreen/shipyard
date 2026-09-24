@@ -6,6 +6,8 @@
 #            list                         installed products, groups, lines, selections
 #            check                        verify the farm's links and manifests; problems to stderr
 #            uninstall <product>          remove it, its farm links, and what its manifest owns outside the tree
+#            system-replace <product>     swap the manifest's :replaces system paths for links into the tree (10.9 only)
+#            system-restore <product>     put those system paths back
 #            version                      print the mavergreen helper's stamped version
 # spec: tests/mavergreen-helper-test.sh
 set -eu
@@ -159,8 +161,66 @@ do_check() {
   done
   [ "$_n" -eq 0 ]
 }
-replace_drift() { echo 0; }
-do_system_restore() { :; }
+replaces() {
+  "$PB" -c "Print :replaces" "$(manifest "$1")" 2>/dev/null \
+    | sed -n 's/^[[:space:]]*\(\/[^ =]*\) = \(.*\)$/\1	\2/p'
+}
+do_system_replace() {
+  need_product "$1"
+  _pv="$("$PB" -c 'Print :ProductVersion' "$R/System/Library/CoreServices/SystemVersion.plist" 2>/dev/null || true)"
+  case "$_pv" in
+    10.9|10.9.*) : ;;
+    *) die "system-replace is 10.9-only; this volume is macOS ${_pv:-unknown}, where /usr/bin belongs to the sealed system volume" ;;
+  esac
+  _b="$MG/var/system-replace/$1"
+  _entries="$(replaces "$1")"
+  while IFS="	" read -r _abs _rel; do
+    [ -n "$_abs" ] || continue
+    [ -e "$MG/$1/$_rel" ] || die "$1 declares $_abs -> $_rel, but $_rel is not in its tree"
+    _want="/usr/local/mavergreen/$1/$_rel"; _cur="$R$_abs"
+    if [ -L "$_cur" ] && [ "$(readlink "$_cur")" = "$_want" ]; then continue; fi
+    if [ -e "$_cur" ] || [ -L "$_cur" ]; then
+      if [ -e "$_b$_abs" ] || [ -L "$_b$_abs" ]; then
+        die "$_abs was already saved once and has since changed; run system-restore $1 first"
+      fi
+      mkdir -p "$(dirname "$_b$_abs")"; mv "$_cur" "$_b$_abs"
+    fi
+    mkdir -p "$(dirname "$_cur")"; ln -s "$_want" "$_cur"
+  done <<EOF
+$_entries
+EOF
+  mkdir -p "$_b"; : > "$_b/.replaced"
+}
+do_system_restore() {
+  need_product "$1"
+  _b="$MG/var/system-replace/$1"
+  _entries="$(replaces "$1")"
+  _rfail=0
+  while IFS="	" read -r _abs _rel; do
+    [ -n "$_abs" ] || continue
+    _cur="$R$_abs"
+    if [ -L "$_cur" ] && [ "$(readlink "$_cur")" = "/usr/local/mavergreen/$1/$_rel" ]; then
+      rm -f "$_cur" || { echo "mavergreen: could not remove $_abs" >&2; _rfail=1; continue; }
+    fi
+    if [ -e "$_b$_abs" ] || [ -L "$_b$_abs" ]; then
+      mkdir -p "$(dirname "$_cur")" && mv "$_b$_abs" "$_cur" \
+        || { echo "mavergreen: could not restore $_abs" >&2; _rfail=1; }
+    fi
+  done <<EOF
+$_entries
+EOF
+  if [ "$_rfail" -eq 0 ]; then rm -rf "$_b"; fi
+  [ "$_rfail" -eq 0 ]
+}
+replace_drift() {
+  _msgs="$(replaces "$1" | while IFS="	" read -r _abs _rel; do
+    if [ -L "$R$_abs" ] && [ "$(readlink "$R$_abs")" = "/usr/local/mavergreen/$1/$_rel" ]; then :; else
+      echo "mavergreen: $_abs is no longer $1's replacement"; fi
+  done)"
+  if [ -z "$_msgs" ]; then echo 0; return 0; fi
+  printf '%s\n' "$_msgs" >&2
+  printf '%s\n' "$_msgs" | wc -l | tr -d ' '
+}
 unload() {
   [ -z "$R" ] || return 0
   case "$1" in
@@ -200,7 +260,7 @@ do_uninstall() {
   need_product "$1"
   _g="$(group_of "$1")"; _id="$(mf "$1" identifier)"
   _failed=0
-  if [ -f "$MG/var/system-replace/$1/.replaced" ]; then do_system_restore "$1"; fi
+  if [ -f "$MG/var/system-replace/$1/.replaced" ]; then do_system_restore "$1" || _failed=1; fi
   unlink_product "$1"
   _outside="$(mf_array "$1" outside)"
   while IFS= read -r _o; do
@@ -236,6 +296,8 @@ case "$cmd" in
   list) do_list ;;
   check) do_check ;;
   uninstall) [ $# -eq 1 ] || die "usage: mavergreen uninstall <product>" 2; do_uninstall "$1" ;;
+  system-replace) [ $# -eq 1 ] || die "usage: mavergreen system-replace <product>" 2; do_system_replace "$1" ;;
+  system-restore) [ $# -eq 1 ] || die "usage: mavergreen system-restore <product>" 2; do_system_restore "$1" ;;
   version) do_version ;;
-  *) die "usage: mavergreen [--root VOLUME] link|unlink|select|list|check|uninstall|version ..." 2 ;;
+  *) die "usage: mavergreen [--root VOLUME] link|unlink|select|list|check|uninstall|system-replace|system-restore|version ..." 2 ;;
 esac
