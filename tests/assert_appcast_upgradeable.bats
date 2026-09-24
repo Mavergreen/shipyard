@@ -5,7 +5,7 @@
 
 setup() {
   GATE="$BATS_TEST_DIRNAME/../scripts/assert_appcast_upgradeable.sh"
-  WORK="$(mktemp -d -t appcast_upgradeable_test)"
+  WORK="$(mktemp -d "${TMPDIR:-/tmp}/appcast_upgradeable_test.XXXXXX")"
   REPO="$WORK/repo"; mkdir -p "$REPO"
   git -C "$REPO" init -q
   git -C "$REPO" config user.email t@t; git -C "$REPO" config user.name t

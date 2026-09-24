@@ -42,10 +42,17 @@ printf 'cmake_minimum_required(VERSION 3.16)\nproject(c NONE)\nfind_package(Mave
 out="$(HOME="$w/home-run" "$fx/bin/cmake" -S "$w/c" -B "$w/b1" 2>&1)" || { echo "FAIL: a shipyard-cmake must configure; got:"; echo "$out"; exit 1; }
 printf '%s' "$out" | grep -q "DIR=$fx/share/cmake/MavericksShipyard" || { echo "FAIL: expected the fixture's shipyard; got:"; echo "$out"; exit 1; }
 
-if out="$(HOME="$w/home-run" "$real" -S "$w/c" -B "$w/b2" -DMavericksShipyard_DIR="$fx/share/cmake/MavericksShipyard" 2>&1)"; then
-  echo "FAIL: a foreign cmake must be refused"; exit 1
+# spec: MavericksShipyardConfig.cmake -- the refusal is keyed on CMAKE_HOST_APPLE, so what a foreign
+#       cmake must get depends on the host running this test, and each host checks its own half.
+if [ "$(uname -s)" = Darwin ]; then
+  if out="$(HOME="$w/home-run" "$real" -S "$w/c" -B "$w/b2" -DMavericksShipyard_DIR="$fx/share/cmake/MavericksShipyard" 2>&1)"; then
+    echo "FAIL: a foreign cmake must be refused"; exit 1
+  fi
+  printf '%s' "$out" | grep -q 'shipyard-cmake' || { echo "FAIL: the refusal must name shipyard-cmake; got:"; echo "$out"; exit 1; }
+else
+  out="$(HOME="$w/home-run" "$real" -S "$w/c" -B "$w/b2" -DMavericksShipyard_DIR="$fx/share/cmake/MavericksShipyard" 2>&1)" \
+    || { echo "FAIL: off macOS a foreign cmake must configure against shipyard -- there is no Linux shipyard-cmake to demand; got:"; echo "$out"; exit 1; }
 fi
-printf '%s' "$out" | grep -q 'shipyard-cmake' || { echo "FAIL: the refusal must name shipyard-cmake; got:"; echo "$out"; exit 1; }
 
 out="$(HOME="$w/home-run" CMAKE_PREFIX_PATH="$w/dev" "$fx/bin/cmake" -S "$w/c" -B "$w/b3" 2>&1)" || { echo "FAIL: dev override must configure; got:"; echo "$out"; exit 1; }
 printf '%s' "$out" | grep -q "DIR=$w/dev/share/cmake/MavericksShipyard" || { echo "FAIL: dev override must load the dev copy; got:"; echo "$out"; exit 1; }

@@ -5,7 +5,7 @@
 setup() {
   GATE="$BATS_TEST_DIRNAME/../scripts/assert_gui_relaunch_safe.sh"
   HELPER="$BATS_TEST_DIRNAME/../scripts/postinstall-stop-gui.sh"
-  WORK="$(mktemp -d -t gui_relaunch_test)"
+  WORK="$(mktemp -d "${TMPDIR:-/tmp}/gui_relaunch_test.XXXXXX")"
 }
 teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
 

@@ -4,7 +4,7 @@
 
 setup() {
   HDR_DIR="$BATS_TEST_DIRNAME/../updater"
-  WORK="$(mktemp -d -t relaunch_decision_test)"
+  WORK="$(mktemp -d "${TMPDIR:-/tmp}/relaunch_decision_test.XXXXXX")"
 }
 teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
 

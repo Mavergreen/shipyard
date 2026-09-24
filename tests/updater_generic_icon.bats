@@ -7,7 +7,7 @@ SHARED="${BATS_TEST_DIRNAME}/.."
 # Configure a tiny updater project with a FAKE Sparkle framework (so no network fetch) and an
 # inline ED_PUBKEY (so no keyfile needed). $1 = extra add_updater_app args. Sets $d, $status, $output.
 mk() {
-  d="$(mktemp -d -t updgen)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/updgen.XXXXXX")"
   mkdir -p "$d/Fake.framework"
   cat > "$d/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)

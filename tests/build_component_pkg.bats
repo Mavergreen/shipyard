@@ -8,7 +8,7 @@ setup() {
   BUILD="$BATS_TEST_DIRNAME/../scripts/build_component_pkg.sh"
   GATE="$BATS_TEST_DIRNAME/../scripts/assert_pkg_installs_in_place.sh"
   command -v pkgbuild >/dev/null 2>&1 && command -v pkgutil >/dev/null 2>&1 || skip "no pkgbuild/pkgutil"
-  WORK="$(mktemp -d -t build_component_pkg_test)"
+  WORK="$(mktemp -d "${TMPDIR:-/tmp}/build_component_pkg_test.XXXXXX")"
   APP="$WORK/root/Applications/Fake.app"
   mkdir -p "$APP/Contents/MacOS"
   cat > "$APP/Contents/Info.plist" <<'PL'

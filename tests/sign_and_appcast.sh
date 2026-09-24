@@ -3,11 +3,10 @@
 #       stubs the signer so the test exercises this script's orchestration, not the crypto (no
 #       compiler or network fetch needed).
 set -eu
-# spec: scripts/run-repo-tests.sh -- exit 77 is the family's SKIP idiom, not a failure. Called
-#       bare, as the shared runner does when it globs tests/*.sh, there is no root to test
-#       against; ctest itself always supplies the source root (see add_test in CMakeLists.txt).
-[ "$#" -ge 1 ] || { echo "no source root given (ctest supplies it) -- skipping" >&2; exit 77; }
-ROOT="$1"
+# spec: scripts/run-repo-tests.sh --strict-host -- a host-agnostic test must RUN when called bare,
+#       as the shared runner does when it globs tests/*.sh, so the root defaults to this checkout;
+#       ctest still passes it explicitly (see add_test in CMakeLists.txt).
+ROOT="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 T=$(mktemp -d "${TMPDIR:-/tmp}/mav-signappcast.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 

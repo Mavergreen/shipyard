@@ -5,7 +5,7 @@
 
 setup() {
   GUARD="$BATS_TEST_DIRNAME/../scripts/assert_binary_compatible.sh"
-  WORK="$(mktemp -d -t compat_guard_test)"
+  WORK="$(mktemp -d "${TMPDIR:-/tmp}/compat_guard_test.XXXXXX")"
   CC=$(command -v clang || command -v cc)
   printf 'int main(void){return 0;}\n' > "$WORK/clean.c"
   if ! "$CC" -arch x86_64 -mmacosx-version-min=10.9 "$WORK/clean.c" -o "$WORK/clean" 2>/dev/null; then

@@ -5,7 +5,7 @@ SHARED="${BATS_TEST_DIRNAME}/.."
 # Configure a tiny project whose CMakeLists calls mavericks_require_icon with $1 (extra args).
 # Echoes cmake's combined output; status reflects configure success/failure.
 try_icon() {  # $1 = the require-icon args line; $2 (optional) = extra -D flags
-  d="$(mktemp -d -t reqicon)"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/reqicon.XXXXXX")"
   cat > "$d/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
 project(t LANGUAGES NONE)
@@ -35,7 +35,7 @@ EOF
 }
 
 @test "require_icon: ICNS that exists -> configures + wires it" {
-  d="$(mktemp -d -t reqicns)"; : > "$d/AppIcon.icns"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/reqicns.XXXXXX")"; : > "$d/AppIcon.icns"
   cat > "$d/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
 project(t LANGUAGES NONE)
@@ -56,7 +56,7 @@ EOF
 }
 
 @test "require_icon: a denylisted PLACEHOLDER icns -> configure FATAL" {
-  d="$(mktemp -d -t reqph)"; printf 'solid-fill placeholder\n' > "$d/AppIcon.icns"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/reqph.XXXXXX")"; printf 'solid-fill placeholder\n' > "$d/AppIcon.icns"
   h="$(shasum -a 256 "$d/AppIcon.icns" | awk '{print $1}')"
   printf '%s  # test placeholder\n' "$h" > "$d/deny.sha256"
   cat > "$d/CMakeLists.txt" <<EOF
@@ -73,7 +73,7 @@ EOF
 }
 
 @test "require_icon: denylisted placeholder + MAVERICKS_ALLOW_GENERIC_ICON -> configures" {
-  d="$(mktemp -d -t reqpha)"; printf 'solid-fill placeholder\n' > "$d/AppIcon.icns"
+  d="$(mktemp -d "${TMPDIR:-/tmp}/reqpha.XXXXXX")"; printf 'solid-fill placeholder\n' > "$d/AppIcon.icns"
   h="$(shasum -a 256 "$d/AppIcon.icns" | awk '{print $1}')"
   printf '%s\n' "$h" > "$d/deny.sha256"
   cat > "$d/CMakeLists.txt" <<EOF

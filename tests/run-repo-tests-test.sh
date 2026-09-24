@@ -26,7 +26,11 @@ printf '#!/bin/sh\nexit 1\n' > tests/fixtures/nested.sh
 sh "$S" >/dev/null || { echo "FAIL: subdirectories are fixtures/sub-suites with their own entry points, not tests to run -- nested script must not be run"; exit 1; }
 
 printf '#!/usr/bin/env bats\n@test "trivial" { true; }\n' > tests/d.bats
-if out="$(PATH=/usr/bin:/bin sh "$S" 2>&1)"; then echo "FAIL missing bats should fail the runner: $out"; exit 1; fi
+# platform: Ubuntu installs bats as /usr/bin/bats, beside sh itself, so PATH=/usr/bin:/bin hid
+#           nothing there. A PATH holding only what the runner itself calls hides bats on every host.
+nobats="$work/nobats"; mkdir -p "$nobats"
+for c in sh dirname uname mktemp awk sed grep rm; do ln -s "$(command -v "$c")" "$nobats/$c"; done
+if out="$(PATH="$nobats" sh "$S" 2>&1)"; then echo "FAIL missing bats should fail the runner: $out"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'FAIL tests/d.bats' \
   || { echo "FAIL: a .bats file with no bats is a FAILURE not a skip -- install@v1 provides bats on every runner, so its absence means the environment is broken, and a skipped assertion is one nobody is checking, which is the whole hole this runner exists to close: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qi 'bats' || { echo "FAIL should say bats is missing: $out"; exit 1; }

@@ -5,7 +5,7 @@
 
 setup() {
   HELPER="$BATS_TEST_DIRNAME/../scripts/clone_pinned.sh"
-  WORK="$(mktemp -d -t clone_pinned_test)"
+  WORK="$(mktemp -d "${TMPDIR:-/tmp}/clone_pinned_test.XXXXXX")"
   UP="$WORK/upstream"; mkdir -p "$UP"
   git -C "$UP" init -q
   git -C "$UP" config user.email t@t; git -C "$UP" config user.name t

@@ -4,7 +4,7 @@
 
 setup() {
   . "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
-  WORK="$(mktemp -d -t mav_fetch_test)"
+  WORK="$(mktemp -d "${TMPDIR:-/tmp}/mav_fetch_test.XXXXXX")"
   mkdir -p "$WORK/stage/payload"
   echo hello > "$WORK/stage/payload/file.txt"
   ( cd "$WORK/stage" && tar cf "$WORK/fixture.tar" payload )
