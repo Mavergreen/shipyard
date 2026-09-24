@@ -73,6 +73,36 @@ CMAKE_PREFIX_PATH="$HOME/.local/opt/shipyard-dev" shipyard-cmake -S . -B build
 `CMAKE_PREFIX_PATH` is searched before shipyard-cmake's own prefix, so the override is explicit, scoped
 to the command that asks for it, and gone the moment you stop asking.
 
+### Developing shipyard on Linux
+
+You can work on shipyard without a Mac: edit its scripts, run its gates, and run every suite that does
+not need Apple tools. On Debian or Ubuntu:
+
+```sh
+sudo apt-get install bats cmake python3-yaml jq
+sh scripts/run-repo-tests.sh --strict-host      # every host-agnostic suite; a skip counts as a failure
+sh scripts/check-family-conventions.sh          # the gate every product repo runs
+```
+
+**What you cannot do on Linux** is anything that produces or inspects an Apple artifact: the pkg,
+shipyard-cmake, the updater, and the `lipo`/`otool`/`pkgbuild` assertions. There is no Linux pkg and no
+Linux shipyard-cmake. On Linux, shipyard's CMake config accepts any `cmake`, because there is nothing
+else to demand. Those suites run in CI's macOS jobs.
+
+**How to tell which is which:** every script and test says so in its header, and check 22 enforces it:
+
+```sh
+grep -rl '^# platform: macOS-only' scripts tests   # the Mac-only half, each with its reason
+```
+
+`--strict-host` lists each macOS-only suite as `SKIP ... (macOS-only)` and ends with a count. The same
+command runs in CI on ubuntu-latest (`.github/workflows/linux-host.yml`), and a release does not
+publish unless it passes.
+
+Consumers get the same half in their own Linux jobs: `install@v1` on a non-macOS runner exports
+`SHIPYARD_SCRIPTS` and `MavericksShipyard_DIR`, and `find_package(MavericksShipyard)` resolves with any
+cmake.
+
 ## Use
 
 In your `CMakeLists.txt`:
