@@ -26,8 +26,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 case "$P" in
-  [a-z0-9][a-z0-9-]*) : ;;
-  *) echo "package-system-replace: not a product name: '$P'" >&2; exit 2 ;;
+  ''|-*|*[!a-z0-9-]*) echo "package-system-replace: not a product name: '$P'" >&2; exit 2 ;;
 esac
 ID="$(sh "$SELF/product-name.sh" identifier "$P")" || { echo "package-system-replace: $P is not registered" >&2; exit 1; }
 emit() {
