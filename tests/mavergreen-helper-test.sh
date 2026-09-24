@@ -102,4 +102,30 @@ grep -q "pkgutil --volume $V --forget dev.mavergreen.go127" "$w/calls" || fail "
 grep -q launchctl "$w/calls" && fail "uninstall on a non-boot volume must not touch launchd: $(cat "$w/calls")"
 [ "$(sh "$MG" version)" = "@MAVERGREEN_VERSION@" ] || fail "version prints the stamped version (unstamped in the source tree)"
 
+mkproduct widget widget "" bin/widget
+mkdir -p "$V/Applications/Widget.app/Contents" "$V/Library/Extensions" "$V/Library/LaunchAgents" "$T/sibling"
+touch "$V/Library/Extensions/marker" "$T/sibling/marker"
+touch "$V/Library/LaunchAgents/dev.mavergreen.widget-updatecheck.plist"
+"$PB" -c "Add :outside array" \
+      -c "Add :outside:0 string Applications/Widget.app" \
+      -c "Add :outside:1 string Library" \
+      -c "Add :outside:2 string usr/local/mavergreen/sibling" \
+      -c "Add :outside:3 string Library/Extensions" \
+      -c "Add :outside:4 string Library/LaunchAgents/dev.mavergreen.widget-updatecheck.plist" \
+      "$T/widget/mavergreen.plist" >/dev/null
+rc=0; PATH="$stub:$PATH" mg uninstall widget 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "uninstall with a refused outside entry must exit non-zero"
+[ ! -e "$T/widget" ] || fail "uninstall always removes the product's own tree, even when an outside entry is refused"
+[ ! -e "$V/Applications/Widget.app" ] || fail "an outside .app bundle is removed"
+[ -d "$V/Library" ] || fail "a bare top-level directory like Library must be refused, not rm -rf'd whole"
+grep -q '^mavergreen: refusing to remove Library -- ' "$w/err" || fail "uninstall must name a refused non-bundle directory on stderr"
+[ -d "$T/sibling" ] && [ -f "$T/sibling/marker" ] \
+  || fail "an outside path under usr/local/mavergreen must be refused -- it can name a sibling product's tree"
+grep -q "unsafe outside path 'usr/local/mavergreen/sibling'" "$w/err" \
+  || fail "uninstall must name a refused path under the mavergreen tree on stderr"
+[ -d "$V/Library/Extensions" ] && [ -f "$V/Library/Extensions/marker" ] \
+  || fail "a plain directory like Library/Extensions must be refused, not rm -rf'd whole"
+[ ! -e "$V/Library/LaunchAgents/dev.mavergreen.widget-updatecheck.plist" ] \
+  || fail "an outside entry AFTER a refused one must still be removed (best-effort, not abort-on-first-failure)"
+
 echo "PASS: mavergreen-helper"

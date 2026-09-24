@@ -170,17 +170,51 @@ unload() {
       [ "$_u" = root ] || sudo -u "$_u" launchctl unload -w "/$1" 2>/dev/null || true ;;
   esac
 }
+outside_shape_ok() {
+  case "$1" in ''|/*) return 1 ;; esac
+  case "/$1/" in *"/./"*|*"/../"*) return 1 ;; esac
+  case "$1" in usr/local/mavergreen|usr/local/mavergreen/*) return 1 ;; esac
+  return 0
+}
+remove_outside() {
+  _full="$R/$1"
+  if [ -L "$_full" ] || [ -f "$_full" ]; then
+    unload "$1"
+    rm -f "$_full" || { echo "mavergreen: could not remove $1" >&2; return 1; }
+    return 0
+  fi
+  if [ -d "$_full" ]; then
+    case "$(basename "$_full")" in
+      *.app|*.kext|*.prefPane|*.plugin|*.bundle|*.framework)
+        unload "$1"
+        rm -rf "$_full" || { echo "mavergreen: could not remove $1" >&2; return 1; }
+        return 0 ;;
+      *)
+        echo "mavergreen: refusing to remove $1 -- not an app/plugin bundle" >&2
+        return 1 ;;
+    esac
+  fi
+  return 0
+}
 do_uninstall() {
   need_product "$1"
   _g="$(group_of "$1")"; _id="$(mf "$1" identifier)"
+  _failed=0
   if [ -f "$MG/var/system-replace/$1/.replaced" ]; then do_system_restore "$1"; fi
   unlink_product "$1"
-  mf_array "$1" outside | while IFS= read -r _o; do
-    case "$_o" in ''|/*|*..*) echo "mavergreen: ignoring unsafe outside path '$_o'" >&2; continue ;; esac
-    unload "$_o"
-    rm -rf "$R/$_o"
-  done
-  rm -rf "$MG/$1" "$MG/var/$1"
+  _outside="$(mf_array "$1" outside)"
+  while IFS= read -r _o; do
+    [ -n "$_o" ] || continue
+    if outside_shape_ok "$_o"; then
+      remove_outside "$_o" || _failed=1
+    else
+      echo "mavergreen: refusing to remove unsafe outside path '$_o'" >&2
+      _failed=1
+    fi
+  done <<EOF
+$_outside
+EOF
+  rm -rf "$MG/$1" "$MG/var/$1" || { echo "mavergreen: could not remove $1's tree" >&2; _failed=1; }
   if [ "$(selection "$_g")" = "$1" ]; then
     _left="$(for _p in $(installed); do if [ "$(group_of "$_p")" = "$_g" ]; then echo "$_p"; fi; done)"
     if [ -n "$_left" ] && [ "$(printf '%s\n' "$_left" | wc -l | tr -d ' ')" -eq 1 ]; then
@@ -190,6 +224,7 @@ do_uninstall() {
     fi
   fi
   [ -z "$_id" ] || pkgutil --volume "$ROOT" --forget "$_id" >/dev/null 2>&1 || true
+  [ "$_failed" -eq 0 ]
 }
 do_version() { printf '%s\n' "$MAVERGREEN_VERSION"; }
 
