@@ -63,6 +63,17 @@ mg unlink openssh
 [ ! -L "$T/bin/ssh" ] && [ ! -L "$T/share/man/man1/ssh.1" ] || fail "unlink removes every link the product owns"
 [ -L "$T/bin/go" ] || fail "unlink removes only its own product's links"
 
+mkproduct oddsections oddsections "" bin/odd share/man/mann/after.n share/man/man9/k.9
+mg link oddsections
+[ -L "$T/share/man/mann/after.n" ] || fail "a manpage in section n (share/man/mann) is exported"
+[ -L "$T/share/man/man9/k.9" ] || fail "a manpage in section 9 (share/man/man9) is exported"
+mg unlink oddsections
+[ ! -L "$T/share/man/mann/after.n" ] \
+  || fail "unlink must remove a link in a man section outside man1-man8 (mann)"
+[ ! -L "$T/share/man/man9/k.9" ] \
+  || fail "unlink must remove a link in a man section outside man1-man8 (man9)"
+rm -rf "$T/oddsections"
+
 mg list | grep -q '^go127 go 127 1.0 selected$' || fail "list shows product group line version and selection: $(mg list)"
 mg link no-such 2>/dev/null && fail "linking a product that is not installed must fail"
 rc=0; mg link '../x' 2>/dev/null || rc=$?

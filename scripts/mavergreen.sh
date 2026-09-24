@@ -4,7 +4,7 @@
 #            unlink <product>             remove them (never changes a selection)
 #            select <group> [<product>]   show or change which member owns the bare names
 #            list                         installed products, groups, lines, selections
-# spec: docs/superpowers/specs/2026-09-24-install-layout-design.md
+# spec: tests/mavergreen-helper-test.sh
 set -eu
 MAVERGREEN_VERSION="@MAVERGREEN_VERSION@"
 PB=/usr/libexec/PlistBuddy
@@ -13,7 +13,6 @@ if [ "${1:-}" = --root ]; then ROOT="${2:?mavergreen: --root needs a volume}"; s
 R="${ROOT%/}"
 MG="$R/usr/local/mavergreen"
 SEL="$MG/var/mavergreen/selections"
-FARM="bin sbin share/man/man1 share/man/man2 share/man/man3 share/man/man4 share/man/man5 share/man/man6 share/man/man7 share/man/man8"
 
 die() { echo "mavergreen: $1" >&2; exit "${2:-1}"; }
 valid() { case "$1" in ''|-*|*[!a-z0-9-]*) return 1 ;; esac; }
@@ -83,8 +82,14 @@ place() {
     ln -s "$(up "$_link")$1/$_rel" "$MG/$_link"
   done
 }
+farm_dirs() {
+  printf '%s\n' bin sbin
+  for _d in "$MG"/share/man/man*; do
+    if [ -d "$_d" ]; then printf 'share/man/%s\n' "$(basename "$_d")"; fi
+  done
+}
 unlink_product() {
-  for _d in $FARM; do
+  farm_dirs | while IFS= read -r _d; do
     for _l in "$MG/$_d"/*; do
       if [ -L "$_l" ] && [ "$(owner "$_l")" = "$1" ]; then rm -f "$_l"; fi
     done
