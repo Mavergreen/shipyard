@@ -1,0 +1,17 @@
+# spec: docs/superpowers/specs/2026-09-24-install-layout-design.md decision 3 -- one line per
+#       product: <short name> <pkg identifier>. Adding a product means adding its line here.
+shipyard dev.mavergreen.mavericks-shipyard
+go126 dev.mavergreen.golang.go126
+go126-cross dev.mavergreen.golang.go126-cross
+clang22 dev.mavergreen.clang.clang22
+clang22-cross dev.mavergreen.clang.clang22-cross
+openssh dev.mavergreen.openssh
+tailscale dev.mavergreen.tailscale
+ed25519 dev.mavergreen.ed25519
+porthole dev.mavergreen.porthole
+1password dev.mavergreen.1password
+signal-desktop dev.mavergreen.signal-desktop
+container-tools dev.mavergreen.container-tools
+swift-runtime dev.mavergreen.swift-runtime
+trackpad2 dev.mavergreen.voodooinputmavericks
+legacysupport dev.mavergreen.macports-legacy-support
