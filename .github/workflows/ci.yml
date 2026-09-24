@@ -136,9 +136,10 @@ jobs:
           sudo installer -pkg "$RUNNER_TEMP"/dist/mavericks-shipyard-*.pkg -target / || bad=1
           want="$(sed -n 's/^CMAKE_VERSION=//p' cmake.pin)"
           sh scripts/assert-installed-shipyard.sh --cmake-version "$want" --root / || bad=1
+          /usr/local/bin/mavergreen check || bad=1
           if [ "$bad" -ne 0 ]; then
             echo "---- /var/log/install.log, the pkg's scripts ----"
-            sudo grep -E 'preinstall|postinstall|mavericks-shipyard' /var/log/install.log | tail -n 100 || true
+            sudo grep -E 'preinstall|postinstall|mavericks-shipyard|mavergreen' /var/log/install.log | tail -n 100 || true
           fi
           [ "$bad" -eq 0 ] || exit 1
 

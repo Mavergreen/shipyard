@@ -45,7 +45,7 @@ if [ -n "$preset" ] && [ -f CMakeLists.txt ] && grep -q 'add_test' CMakeLists.tx
   #           missing thing is an install step rather than a broken test.
   command -v shipyard-ctest >/dev/null 2>&1 || {
     echo "run-repo-tests: shipyard-ctest not found, and a ctest preset ($preset) was asked for" >&2
-    echo "    the shipyard pkg provides shipyard-cmake/ctest/cpack in /usr/local/bin;" >&2
+    echo "    the shipyard pkg provides shipyard-cmake/ctest/cpack in /usr/local/mavergreen/bin;" >&2
     echo "    install@v1 installs it on a macOS runner, and there is no pkg for Linux --" >&2
     echo "    a Linux job cannot run a shipyard-configured ctest preset" >&2
     exit 1

@@ -49,21 +49,24 @@ check() {  # $1 = what  $2 = expected exit (0 or 1)  $3 = substring the output m
 #           whole point -- shipyard-cmake finding shipyard in its OWN prefix -- untested.
 croot="$(printf 'message("${CMAKE_ROOT}")\n' > "$w/r.cmake"; "$real" -P "$w/r.cmake" 2>&1)"
 fx="$w/root"
-prefix="$fx/usr/local/mavergreen-shipyard"
-mkdir -p "$prefix/bin" "$prefix/share" "$fx/usr/local/bin"
+prefix="$fx/usr/local/mavergreen/shipyard"
+farm="$fx/usr/local/mavergreen/bin"
+mkdir -p "$prefix/bin" "$prefix/share" "$farm"
 cp "$real" "$prefix/bin/cmake"
 # spec: tests/lib/cmake_fixture.sh -- the two ways a copied CMAKE_ROOT goes wrong (Homebrew's is a
 #       symlink AND read-only, and cp -R preserves both) are written out there and proven by
 #       tests/cmake-fixture-test.sh.
 copy_cmake_root "$croot" "$prefix/share/$(basename "$croot")"
-ln -s ../mavergreen-shipyard/bin/cmake "$fx/usr/local/bin/shipyard-cmake"
 for c in ctest cpack; do
   if [ -x "$(dirname "$real")/$c" ]; then
     cp "$(dirname "$real")/$c" "$prefix/bin/$c"
   else
     printf '#!/bin/sh\nexit 0\n' > "$prefix/bin/$c"; chmod +x "$prefix/bin/$c"
   fi
-  ln -s "../mavergreen-shipyard/bin/$c" "$fx/usr/local/bin/shipyard-$c"
+done
+for c in cmake ctest cpack; do
+  ln -s "$c" "$prefix/bin/shipyard-$c"
+  ln -s "../shipyard/bin/shipyard-$c" "$farm/shipyard-$c"
 done
 # platform: keep this output. Sent to /dev/null, a failure here killed the script under set -e
 #           having said NOTHING, and a real macos-26 run could only report "exit 1" -- hiding the
@@ -114,10 +117,10 @@ check "a shipyard-cmake with no arm64 slice fails (it could not run on Apple Sil
 lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
 
 for c in shipyard-ctest shipyard-cpack; do
-  mv "$fx/usr/local/bin/$c" "$w/cmd-aside"
+  mv "$farm/$c" "$w/cmd-aside"
   check "a missing $c fails (both workflows and every consumer run it by name)" 1 "no executable .*$c" \
     assert --cmake-version "$ver"
-  mv "$w/cmd-aside" "$fx/usr/local/bin/$c"
+  mv "$w/cmd-aside" "$farm/$c"
 done
 
 lipo_says "$UNIVERSAL_CMAKE" "MavericksShipyardUpdater: is architecture: arm64"
@@ -138,10 +141,20 @@ check "a prefix whose shipyard is missing fails the stripped-environment probe" 
   assert --cmake-version "$ver"
 mv "$w/shipyard-aside" "$prefix/share/cmake/MavericksShipyard"
 
-mv "$fx/usr/local/bin/shipyard-cmake" "$w/link-aside"
-check "a missing /usr/local/bin/shipyard-cmake fails" 1 "no executable shipyard-cmake" \
+mv "$farm/shipyard-cmake" "$w/link-aside"
+check "a missing /usr/local/mavergreen/bin/shipyard-cmake fails" 1 "no executable shipyard-cmake" \
   assert --cmake-version "$ver"
-mv "$w/link-aside" "$fx/usr/local/bin/shipyard-cmake"
+mv "$w/link-aside" "$farm/shipyard-cmake"
+
+mkdir -p "$fx/usr/local/bin"
+ln -s ../mavergreen/shipyard/bin/cmake "$fx/usr/local/bin/shipyard-cmake"
+check "a /usr/local/bin/shipyard-cmake beside the new layout fails" 1 "left over from the old layout" \
+  assert --cmake-version "$ver"
+rm "$fx/usr/local/bin/shipyard-cmake"
+ln -s ../mavergreen-shipyard/bin/cmake "$fx/usr/local/bin/shipyard-cmake"
+check "a DANGLING /usr/local/bin/shipyard-cmake (its old prefix removed by hand) still fails" 1 "left over from the old layout" \
+  assert --cmake-version "$ver"
+rm "$fx/usr/local/bin/shipyard-cmake"
 
 cat > "$stub/cmake" <<'STUB'
 #!/bin/sh
@@ -159,6 +172,18 @@ chmod +x "$stub/cmake"
 check "a refusal that never names shipyard-cmake fails" 1 "does not name shipyard-cmake" \
   assert --cmake-version "$ver"
 rm -f "$stub/cmake"
+
+cp "$root/scripts/mavergreen.sh" "$fx/usr/local/bin/mavergreen"; chmod +x "$fx/usr/local/bin/mavergreen"
+check "an installed helper whose check fails fails the assertion (farm links into a product with no manifest)" 1 "mavergreen check failed" \
+  assert --cmake-version "$ver"
+ms="$w/manifest-stage"; mkdir -p "$ms/usr/local/mavergreen/shipyard"
+sh "$root/scripts/render-manifest.sh" --stage "$ms" --product shipyard --name "Mavericks Shipyard" --version 0.0.0 \
+  --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
+cp "$ms/usr/local/mavergreen/shipyard/mavergreen.plist" "$prefix/mavergreen.plist"
+mkdir -p "$fx/usr/local/mavergreen/var/mavergreen/selections"
+echo shipyard > "$fx/usr/local/mavergreen/var/mavergreen/selections/shipyard"
+check "with the helper installed and shipyard linked, a correct install passes mavergreen check too" 0 "finds shipyard in" \
+  assert --cmake-version "$ver"
 
 check "--cmake-version is required" 2 "--cmake-version required" \
   assert

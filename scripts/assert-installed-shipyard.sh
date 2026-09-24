@@ -5,9 +5,10 @@
 #          and is the CMake in cmake.pin; it is OURS (universal, with shipyard-ctest and
 #          shipyard-cpack beside it on the default PATH); a probe under a stripped environment
 #          resolves shipyard inside shipyard-cmake's own prefix; the installed updater is universal;
-#          and any other cmake is refused, by name. --root defaults to "/" (a real install); a
-#          fixture root makes this unit-testable. Exit 0 clean, 1 on a failed assertion, 2 on a usage
-#          error.
+#          nothing is left in /usr/local/bin from the old layout; an installed mavergreen helper
+#          passes its own check; and any other cmake is refused, by name. --root defaults to "/" (a
+#          real install); a fixture root makes this unit-testable. Exit 0 clean, 1 on a failed
+#          assertion, 2 on a usage error.
 # spec: R-P1-17 -- these assertions used to live inline in release.yml's install smoke, the one step
 #       that runs ONLY on a push to main, which left them unrunnable until the very push that must
 #       not be a rehearsal. release.yml, ci.yml and tests/assert-installed-shipyard-test.sh now share
@@ -28,8 +29,9 @@ done
 [ -d "$ROOT" ] || { echo "assert-installed-shipyard: no such root: $ROOT" >&2; exit 2; }
 
 R="${ROOT%/}"
-CM="$R/usr/local/bin/shipyard-cmake"
-PREFIX="$R/usr/local/mavergreen-shipyard"
+FARM="$R/usr/local/mavergreen/bin"
+CM="$FARM/shipyard-cmake"
+PREFIX="$R/usr/local/mavergreen/shipyard"
 CFGDIR="$PREFIX/share/cmake/MavericksShipyard"
 EXE="$R/Library/Application Support/Mavergreen/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater"
 
@@ -57,9 +59,17 @@ else
 fi
 
 for c in shipyard-cmake shipyard-ctest shipyard-cpack; do
-  [ -x "$R/usr/local/bin/$c" ] \
-    || fail "no executable $R/usr/local/bin/$c -- the pkg puts all three on the default PATH"
+  [ -x "$FARM/$c" ] \
+    || fail "no executable $FARM/$c -- the pkg exports all three through the link farm on the default PATH"
 done
+# platform: -L as well as -e -- a leftover link whose old prefix was removed by hand dangles, and -e
+#           alone reads a dangling link as absent.
+if [ -e "$R/usr/local/bin/shipyard-cmake" ] || [ -L "$R/usr/local/bin/shipyard-cmake" ]; then
+  fail "$R/usr/local/bin/shipyard-cmake is left over from the old layout -- it shadows the farm's shipyard-cmake on the default PATH; remove it by hand"
+fi
+if [ -f "$R/usr/local/bin/mavergreen" ]; then
+  sh "$R/usr/local/bin/mavergreen" --root "$ROOT" check || fail "mavergreen check failed"
+fi
 if [ -x "$CM" ]; then
   cmarchs="$(lipo -info "$CM" 2>&1 || true)"
   case "$cmarchs" in

@@ -1,19 +1,16 @@
 #!/bin/sh
 # platform: macOS-only -- builds the pkg, and stat -f is BSD stat
 #   usage: package-pkg.sh --cmake-tree DIR --shipyard-prefix DIR --app APP --version V --out PKG
-#          package-pkg.sh --emit-preinstall FILE     (for tests)
-#          Packages shipyard as ONE prefix -- /usr/local/mavergreen-shipyard holding shipyard's own
-#          CMake (bin/{cmake,ctest,cpack}, share/cmake-X.Y) and shipyard itself
-#          (share/cmake/MavericksShipyard) -- plus /usr/local/bin/shipyard-{cmake,ctest,cpack}
-#          symlinked into it, and one universal updater. A preinstall clears the product dir first:
-#          Installer never deletes a file a newer payload no longer carries, so every CMake bump
-#          would otherwise leave the old share/cmake-X.Y behind. The updater is a stopgap until
-#          Mavericks Lineup exists.
+#          Packages shipyard as ONE prefix -- /usr/local/mavergreen/shipyard holding shipyard's own
+#          CMake (bin/{cmake,ctest,cpack}, share/cmake-X.Y), bin/shipyard-{cmake,ctest,cpack} linked
+#          to it, and shipyard itself (share/cmake/MavericksShipyard) -- plus one universal updater
+#          and the dev.mavergreen.base component. The mavergreen helper exports the three
+#          shipyard-* names into /usr/local/mavergreen/bin, never the bare cmake/ctest/cpack; nothing
+#          is installed into /usr/local/bin. The install scripts come from stage_product.sh. The
+#          updater is a stopgap until Mavericks Lineup exists.
 # spec: 2026-09-11 -- a cmake always searches its own install prefix, and finds that prefix through a
 #       symlink, so shipyard-cmake finds shipyard with no registry, no PATH change and no
 #       CMAKE_PREFIX_PATH, and MavericksShipyardConfig.cmake refuses every other cmake.
-#       /usr/local/bin is on macOS's default PATH (/etc/paths) and the three names are ours alone, so
-#       nothing shared is written into.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "On-target/
 #       off-target parity" -- shipyard's own .pkg is the worked example: one artifact serves both
 #       boxes because developing under Mavericks and developing under modern macOS are equally
@@ -24,7 +21,7 @@
 # spec: tests/shipyard-package-pkg-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-TREE=""; SPREFIX=""; APP=""; VER=""; OUT=""; EMIT_PRE=""
+TREE=""; SPREFIX=""; APP=""; VER=""; OUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --cmake-tree) TREE="${2%/}"; shift 2;;
@@ -32,43 +29,15 @@ while [ $# -gt 0 ]; do
     --app) APP="${2%/}"; shift 2;;
     --version) VER="$2"; shift 2;;
     --out) OUT="$2"; shift 2;;
-    --emit-preinstall) EMIT_PRE="$2"; shift 2;;
     *) echo "package-pkg: unknown option $1" >&2; exit 2;;
   esac
 done
 
 ID="dev.mavergreen.mavericks-shipyard"
-PREFIX_DIR="/usr/local/mavergreen-shipyard"
+PREFIX_DIR="/usr/local/mavergreen/shipyard"
 APPDIR="/Library/Application Support/Mavergreen"
 APP_NAME="MavericksShipyardUpdater.app"
 LABEL="dev.mavergreen.mavericks-shipyard-updatecheck"
-
-# spec: tests/shipyard-package-pkg-test.sh -- a destructive path must not be one empty variable away
-#       from "$ROOT" alone, so the preinstall spells it out literally and the test's fixture pins the
-#       same path.
-emit_preinstall() {  # $1 = destination file
-  cat > "$1" <<'PRE'
-#!/bin/sh
-# Rendered by package-pkg.sh -- do not edit here.
-#
-# Clear the product dir before Installer lays down the new one. Installer only adds and overwrites; it
-# never deletes a file a newer payload no longer carries -- a removed script would keep working here
-# while CI fails, and every CMake bump would leave the old share/cmake-X.Y behind. The dir is
-# product-owned, so nothing but shipyard lives there. The path is a FIXED constant under the target
-# volume, never built from a variable that could be empty; with no target volume ($3 unset, which
-# Installer never does) this removes nothing rather than assume "/".
-#
-# Never fails the install: whatever this cannot remove, the payload still overwrites.
-[ -n "${3:-}" ] || { echo "mavericks-shipyard: preinstall got no target volume; removing nothing" >&2; exit 0; }
-ROOT="${3%/}"
-rm -rf "$ROOT/usr/local/mavergreen-shipyard" \
-  || echo "mavericks-shipyard: could not clear $ROOT/usr/local/mavergreen-shipyard; files dropped from this version may linger" >&2
-exit 0
-PRE
-  chmod +x "$1"
-}
-
-if [ -n "$EMIT_PRE" ]; then emit_preinstall "$EMIT_PRE"; exit 0; fi
 
 : "${TREE:?package-pkg: --cmake-tree required}"
 : "${SPREFIX:?package-pkg: --shipyard-prefix required}"
@@ -120,22 +89,24 @@ require_only --shipyard-prefix "$SPREFIX" "share"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-pkg.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 STAGE="$WORK/stage"; SCR="$WORK/scripts"
-mkdir -p "$STAGE$PREFIX_DIR" "$STAGE/usr/local/bin" "$SCR" "$WORK/component" "$(dirname "$OUT")"
+mkdir -p "$STAGE$PREFIX_DIR" "$SCR" "$WORK/component" "$(dirname "$OUT")"
 COPYFILE_DISABLE=1 cp -R "$TREE"/. "$STAGE$PREFIX_DIR/"
 COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
-# platform: the link targets are RELATIVE, so they resolve on whatever volume Installer lays them
-#           down on.
-ln -s ../mavergreen-shipyard/bin/cmake "$STAGE/usr/local/bin/shipyard-cmake"
-ln -s ../mavergreen-shipyard/bin/ctest "$STAGE/usr/local/bin/shipyard-ctest"
-ln -s ../mavergreen-shipyard/bin/cpack "$STAGE/usr/local/bin/shipyard-cpack"
-
-sh "$SELF/stage_updater.sh" --stage "$STAGE" --app "$APP" --app-dir "$APPDIR" \
-  --agent-label "$LABEL" --scripts-out "$SCR"
-emit_preinstall "$SCR/preinstall"
+# platform: the link targets are RELATIVE, so the farm link through them resolves on whatever volume
+#           Installer lays them down on.
+ln -s cmake "$STAGE$PREFIX_DIR/bin/shipyard-cmake"
+ln -s ctest "$STAGE$PREFIX_DIR/bin/shipyard-ctest"
+ln -s cpack "$STAGE$PREFIX_DIR/bin/shipyard-cpack"
 
 # platform: an NFS or otherwise shared stage sprays AppleDouble "._*" sidecars, which would ship as
-#           payload.
-find "$STAGE" -name '._*' -delete 2>/dev/null || true
+#           payload -- and, left in place while the manifest is rendered, be listed in its `outside`.
+strip_appledouble() { find "$STAGE" -name '._*' -delete 2>/dev/null || true; }
+strip_appledouble
+sh "$SELF/stage_product.sh" --stage "$STAGE" --product shipyard --name "Mavericks Shipyard" \
+  --version "$VER" --appcast https://github.com/Mavergreen/shipyard/releases/latest/download/appcast.xml \
+  --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack \
+  --updater-app "$APP" --app-dir "$APPDIR" --agent-label "$LABEL" --scripts-out "$SCR"
+strip_appledouble
 
 # platform: pkgbuild makes a payload holding a .app relocatable and version-checked, so a locally
 #           built updater elsewhere on disk would capture it; build_component_pkg.sh does not.
@@ -149,6 +120,7 @@ sh "$SELF/set_install_floor.sh" \
   --component "$comp" \
   --out "$OUT" \
   --host-arch x86_64,arm64 \
+  --base-version "$VER" \
   --require-scripts >&2
 
 echo "built $OUT" >&2

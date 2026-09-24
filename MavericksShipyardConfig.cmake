@@ -10,12 +10,13 @@
 # in-tree copy).
 
 # Only shipyard's own cmake may configure against shipyard (spec 2026-09-11). shipyard ships its cmake
-# as /usr/local/bin/shipyard-cmake, whose real binary lives in the same prefix as this package, and a
-# cmake always searches its own install prefix -- so under shipyard-cmake this package is found with
-# no registry, no PATH and no CMAKE_PREFIX_PATH. Any OTHER cmake reaching this file (Homebrew's,
-# MacPorts', pkgsrc's, CMake.app's -- even pointed here on purpose) is refused: nothing may depend on a
-# cmake shipyard did not build. CMAKE_COMMAND is the resolved real path, so the check is not fooled by
-# a symlink named shipyard-cmake. An exception is a declared conventions deviation, not a flag.
+# as /usr/local/mavergreen/bin/shipyard-cmake, whose real binary lives in the same prefix as this
+# package, and a cmake always searches its own install prefix -- so under shipyard-cmake this package
+# is found with no registry, no PATH and no CMAKE_PREFIX_PATH. Any OTHER cmake reaching this file
+# (Homebrew's, MacPorts', pkgsrc's, CMake.app's -- even pointed here on purpose) is refused: nothing
+# may depend on a cmake shipyard did not build. CMAKE_COMMAND is the resolved real path, so the check
+# is not fooled by a symlink named shipyard-cmake. An exception is a declared conventions deviation,
+# not a flag.
 # This is a guardrail, not a sandbox (spec 2026-09-11, R-P1-13): CMAKE_COMMAND is an ordinary
 # variable, so someone determined enough can point it at any prefix that happens to hold a
 # shipyard, same as they could just edit this file -- the check exists to catch the wrong cmake
@@ -34,9 +35,9 @@ if(CMAKE_HOST_APPLE)
   if(NOT EXISTS "${_shipyard_cmake_prefix}/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake")
     message(FATAL_ERROR
       "mavericks-shipyard must be configured with shipyard-cmake "
-      "(/usr/local/bin/shipyard-cmake, installed by the shipyard pkg; in GitHub Actions, "
+      "(/usr/local/mavergreen/bin/shipyard-cmake, installed by the shipyard pkg; in GitHub Actions, "
       "Mavergreen/shipyard/.github/actions/install@v1 provides it). This configure is running "
-      "${CMAKE_COMMAND}. IDEs and CMake GUIs: point their cmake setting at /usr/local/bin/shipyard-cmake.")
+      "${CMAKE_COMMAND}. IDEs and CMake GUIs: point their cmake setting at /usr/local/mavergreen/bin/shipyard-cmake.")
   endif()
 endif()
 

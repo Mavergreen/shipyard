@@ -67,8 +67,9 @@ runs:
         d="$RUNNER_TEMP/shipyard-pkg"; mkdir -p "$d"
         gh release download "v$ver" -R Mavergreen/shipyard --pattern 'mavericks-shipyard-*.pkg' --dir "$d"
         sudo installer -pkg "$d"/mavericks-shipyard-*.pkg -target /
-        /usr/local/bin/shipyard-cmake --version | head -1
-        scripts=/usr/local/mavergreen-shipyard/share/cmake/MavericksShipyard/scripts
+        echo /usr/local/mavergreen/bin >> "$GITHUB_PATH"
+        /usr/local/mavergreen/bin/shipyard-cmake --version | head -1
+        scripts=/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts
         [ -d "$scripts" ] || { echo "::error::the shipyard pkg installed no scripts dir at $scripts"; exit 1; }
         echo "SHIPYARD_SCRIPTS=$scripts" >> "$GITHUB_ENV"
         echo "shipyard $ver installed; SHIPYARD_SCRIPTS=$scripts"

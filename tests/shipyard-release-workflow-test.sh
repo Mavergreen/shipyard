@@ -162,6 +162,9 @@ else:
     if not has(r'^sh scripts/assert-installed-shipyard\.sh --cmake-version "\$want" --root / \|\| bad=1$'):
         bad.append("the smoke never runs scripts/assert-installed-shipyard.sh against the installed "
                    "root with its failure recorded (|| bad=1)")
+    if not has(r'^/usr/local/bin/mavergreen check \|\| bad=1$'):
+        bad.append("the smoke never runs the installed helper's own check (/usr/local/bin/mavergreen "
+                   "check || bad=1), so a pkg whose farm links or manifest are wrong would publish")
     if not has(r'^\[ "\$bad" -eq 0 \] \|\| exit 1$'):
         bad.append("the smoke's failures never fail the step ([ \"$bad\" -eq 0 ] || exit 1)")
     if not s.get("timeout-minutes"):
@@ -251,6 +254,15 @@ for pat, why in ((r'resolve-action-version\.sh', "the macOS release path never r
     if not any(re.search(pat, c) for c in rel_mac): bad.append(why)
 if not exports(rel_mac, "SHIPYARD_SCRIPTS"):
     bad.append("the macOS release path never exports SHIPYARD_SCRIPTS")
+# Consumer-facing: every product's CI calls shipyard-cmake by bare name and reads $SHIPYARD_SCRIPTS.
+# The pkg exports its commands through the link farm, which only paths.d puts on PATH -- and a
+# runner's steps never read paths.d.
+if not any(re.search(r'^echo /usr/local/mavergreen/bin >> "\$GITHUB_PATH"$', c) for c in rel_mac):
+    bad.append("the macOS release path never puts /usr/local/mavergreen/bin on the job's PATH "
+               "(echo /usr/local/mavergreen/bin >> \"$GITHUB_PATH\"), so no later step finds shipyard-cmake")
+if not any(re.search(r'^scripts=/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts$', c) for c in rel_mac):
+    bad.append("the macOS release path must export SHIPYARD_SCRIPTS from the installed product "
+               "tree, /usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts")
 
 # R-P1-18: a non-macOS runner gets shipyard's shell half, pinned to the ref, and nothing installed.
 # repackage-on-ingredient-bump.yml runs on ubuntu-latest and wants exactly that.

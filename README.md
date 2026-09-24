@@ -13,13 +13,15 @@ gh release download -R Mavergreen/shipyard --pattern '*.pkg'
 sudo installer -pkg mavericks-shipyard-*.pkg -target /
 ```
 
-Everything lands in `/usr/local/mavergreen-shipyard` — one prefix holding CMake, the shipyard modules
-and the shell scripts — and three commands appear on your `PATH`:
+Everything lands in `/usr/local/mavergreen/shipyard` — one directory holding CMake, the shipyard
+modules and the shell scripts — and nothing in `/usr/local/bin` but the family's `mavergreen` helper.
+The helper links three commands into `/usr/local/mavergreen/bin`, which the pkg puts on every login
+shell's `PATH` through `/etc/paths.d/mavergreen` (open a new terminal to pick it up):
 
 ```
-/usr/local/bin/shipyard-cmake
-/usr/local/bin/shipyard-ctest
-/usr/local/bin/shipyard-cpack
+/usr/local/mavergreen/bin/shipyard-cmake
+/usr/local/mavergreen/bin/shipyard-ctest
+/usr/local/mavergreen/bin/shipyard-cpack
 ```
 
 **Configure your projects with `shipyard-cmake`.** It is a real CMake (4.4.3) that finds shipyard in
@@ -31,9 +33,10 @@ its own.
 The pkg also keeps itself current: its updater checks daily and installs each new release. The same
 pkg works on Intel, on Apple Silicon and on 10.9.
 
-GUI tools that want a CMake executable (CLion, VS Code's CMake Tools, Xcode wrappers) should be
-pointed at `/usr/local/bin/shipyard-cmake`. The shared presets live at
-`/usr/local/mavergreen-shipyard/share/cmake/MavericksShipyard/mavericks-presets.json`.
+GUI tools that want a CMake executable (CLion, VS Code's CMake Tools, Xcode wrappers), launchd jobs and
+anything else that never runs a login shell do not see `paths.d`: point them at
+`/usr/local/mavergreen/bin/shipyard-cmake`. The shared presets live at
+`/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/mavericks-presets.json`.
 
 **One thing shipyard-cmake cannot do: HTTPS from inside CMake.** `file(DOWNLOAD https://…)` and
 `FetchContent` over HTTPS fail with "Unsupported protocol" — deliberately, and loudly rather than
@@ -53,6 +56,14 @@ does, that is the substitution to make.
 
 If you have a machine that ran an older shipyard, `rm -rf ~/.cmake/packages/MavericksShipyard` once.
 Nothing reads it any more.
+
+A machine that had shipyard installed before it moved under `/usr/local/mavergreen` still has the old
+layout, which no installer removes and whose `/usr/local/bin/shipyard-cmake` comes first on `PATH`.
+Remove it by hand, once:
+
+```sh
+sudo rm -rf /usr/local/mavergreen-shipyard /usr/local/bin/shipyard-cmake /usr/local/bin/shipyard-ctest /usr/local/bin/shipyard-cpack
+```
 
 ### Developing shipyard itself
 
@@ -122,7 +133,7 @@ In your `CMakePresets.json`:
 ```json
 {
   "version": 6,
-  "include": ["/usr/local/mavergreen-shipyard/share/cmake/MavericksShipyard/mavericks-presets.json"],
+  "include": ["/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/mavericks-presets.json"],
   "configurePresets": [
     { "name": "native", "inherits": "mavericks-native" },
     { "name": "cross",  "inherits": "mavericks-cross"  }

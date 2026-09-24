@@ -47,7 +47,7 @@ if(SHIPYARD_BUILD_UPDATER)
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "MavShipyardUpdater"
     CONFIRM_TITLE "Mavericks Shipyard updated"
-    CONFIRM_BODY "Mavericks Shipyard and shipyard-cmake in /usr/local/mavergreen-shipyard were updated."
+    CONFIRM_BODY "Mavericks Shipyard and shipyard-cmake in /usr/local/mavergreen/shipyard were updated."
     RELAUNCH_MARKER "/tmp/.mavericks-shipyard-updater-relaunched"
     ALLOW_GENERIC
     # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification. shipyard has no UI.
