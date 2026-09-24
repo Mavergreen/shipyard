@@ -2,9 +2,11 @@
 # platform: host-agnostic
 #   usage: check-host-tools.sh [--required]
 #          Scans the WHOLE tracked tree, tests/ included: every *.sh, *.bats, *.bash and *.py,
-#          every file git tracks as executable, and every file whose first line is "#!". Only
-#          scripts/templates/ is skipped -- those are other repos' canonical copies, compared byte
-#          for byte by check 17. Each script must declare its host in its header (host-of.sh), and
+#          every file git tracks as executable, and every file whose first line is "#!".
+#          scripts/templates/ is skipped -- those are shipyard's own canonical copies, compared
+#          byte for byte by check 17 -- and so is any tracked script that is byte-identical to
+#          $SELF/templates/<its basename>: that is a consumer's copy of one, and check 17 owns it
+#          too. Each script must declare its host in its header (host-of.sh), and
 #          a host-agnostic one may not run a macOS-only tool (host-tools.awk) unless the comment
 #          line directly above the call says "# platform: guarded macOS-only call -- <the guard>".
 #          A repo where no script declares a host has not adopted the split and passes, saying
@@ -36,6 +38,13 @@ while IFS="$TAB" read -r meta p; do
   case "$p" in scripts/templates/*) continue ;; esac
   # platform: a file deleted in the worktree but not yet from the index is still listed
   [ -f "$p" ] || continue
+  # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22 -- a
+  #       consumer's byte-for-byte copy of a shipyard template (check 17's build/msc.sh, e.g.) is
+  #       that template's problem to declare, not this one's: declaring in the copy breaks check
+  #       17 against the template, and declaring in the template breaks check 17 for every OTHER
+  #       consumer's copy.
+  tmpl="$SELF/templates/$(basename "$p")"
+  [ -f "$tmpl" ] && cmp -s "$p" "$tmpl" && continue
   case "$p" in
     *.sh|*.bats|*.bash|*.py) ;;
     *) case "$meta" in

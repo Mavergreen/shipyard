@@ -1581,8 +1581,10 @@ two consumers within the hour it shipped.
 
 **Check 22** is `check-host-tools.sh`. It scans the **whole tracked tree**, `tests/` included: every
 `*.sh`, `*.bats`, `*.bash` and `*.py`, every file tracked executable, and every file starting `#!`.
-Those three shapes are exactly where check 18 is blind. Only `scripts/templates/` is skipped, because
-check 17 byte-compares those copies against other repos.
+Those three shapes are exactly where check 18 is blind. `scripts/templates/` is skipped, because
+check 17 byte-compares those copies against other repos, and so is any OTHER tracked file that is
+byte-identical to a template there -- a consumer's own copy of it (`build/msc.sh`, e.g.), which
+check 17 requires to stay byte-identical and which therefore cannot carry its own declaration.
 
 - **Declare in the header**, meaning after any `#!` and before the first line of code, exactly one of
   `# platform: host-agnostic` or `# platform: macOS-only -- <why>`. The reason is required. A

@@ -70,6 +70,24 @@ fails extundecl "an undeclared extensionless #! script, anywhere in the tree"
 mk tmpl "scripts/templates/msc.sh${T}#!/bin/sh\notool -L x\n"
 passes tmpl "scripts/templates/ holds other repos' canonical copies (check 17's), not this repo's scripts"
 
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22 -- F1: check 17
+#       requires a consumer's build/msc.sh to stay byte-identical to $SELF/templates/msc.sh --
+#       $SELF is check-host-tools.sh's OWN directory, i.e. shipyard's real scripts/templates/,
+#       regardless which fixture repo is under test -- so that copy can carry no declaration of
+#       its own; check 22 must skip it by CONTENT, not name.
+mk tmplcopy
+mkdir -p "$work/tmplcopy/build"
+cp "$here/../scripts/templates/msc.sh" "$work/tmplcopy/build/msc.sh"
+(cd "$work/tmplcopy" && git add -A) >/dev/null 2>&1
+passes tmplcopy "a consumer's build/msc.sh, byte-identical to shipyard's own template, is skipped too"
+
+mk tmplcopydiff
+mkdir -p "$work/tmplcopydiff/build"
+cat "$here/../scripts/templates/msc.sh" > "$work/tmplcopydiff/build/msc.sh"
+printf '# a local edit\n' >> "$work/tmplcopydiff/build/msc.sh"
+(cd "$work/tmplcopydiff" && git add -A) >/dev/null 2>&1
+fails tmplcopydiff "a build/msc.sh that DIFFERS from the template and declares nothing is not exempt -- the skip is identity, not name"
+
 # spec: scripts/host-tools.awk -- command position, as a shell sees it.
 n=0
 for call in '(otool -L x)' '/usr/bin/otool -L x' 'sudo -u "$u" launchctl list' 'env A=1 otool -L x' \
