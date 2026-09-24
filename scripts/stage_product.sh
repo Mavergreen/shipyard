@@ -12,6 +12,10 @@ ST=""; P=""; SCR=""; APP=""; APPDIR=""; LABEL=""; PREH=""; POSTH=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
+    --stage|--product|--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--appcast|--exclude|--replaces)
+      [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
+  esac
+  case "$1" in
     --stage) ST="${2%/}"; set -- "$@" "$1" "$2"; shift 2 ;;
     --product) P="$2"; set -- "$@" "$1" "$2"; shift 2 ;;
     --scripts-out) SCR="$2"; shift 2 ;;
@@ -41,7 +45,7 @@ sh "$SELF/render-manifest.sh" "$@"
   printf 'ROOT="${3%%/}"\n'
   printf 'if [ -x "$ROOT/usr/local/bin/mavergreen" ]; then "$ROOT/usr/local/bin/mavergreen" --root "$ROOT/" unlink %s 2>/dev/null || true; fi\n' "$P"
   printf 'rm -rf "$ROOT/usr/local/mavergreen/%s"\n' "$P"
-  [ -z "$PREH" ] || cat "$PREH"
+  if [ -n "$PREH" ]; then cat "$PREH"; printf '\n'; fi
   printf 'exit 0\n'
 } > "$SCR/preinstall"
 {
@@ -49,11 +53,32 @@ sh "$SELF/render-manifest.sh" "$@"
   printf '[ -n "${3:-}" ] || { echo "%s: postinstall got no target volume" >&2; exit 1; }\n' "$P"
   printf 'ROOT="${3%%/}"\n'
   printf 'MG="$ROOT/usr/local/bin/mavergreen"\n'
-  printf '[ -x "$MG" ] || MG="$(ls -d "$ROOT"/usr/local/mavergreen/.base/*/mavergreen 2>/dev/null | tail -1)"\n'
+  cat <<'HELPERPICK'
+if [ ! -x "$MG" ]; then
+  _mg_newer() {
+    _a="$1"; _b="$2"
+    while [ -n "$_a$_b" ]; do
+      _x="${_a%%.*}"; _y="${_b%%.*}"
+      [ "${_x:-0}" -gt "${_y:-0}" ] && return 0
+      [ "${_x:-0}" -lt "${_y:-0}" ] && return 1
+      case "$_a" in *.*) _a="${_a#*.}" ;; *) _a="" ;; esac
+      case "$_b" in *.*) _b="${_b#*.}" ;; *) _b="" ;; esac
+    done
+    return 1
+  }
+  MG=""; MGV=""
+  for _mg_c in "$ROOT"/usr/local/mavergreen/.base/*/mavergreen; do
+    [ -x "$_mg_c" ] || continue
+    _mg_v="${_mg_c%/mavergreen}"; _mg_v="${_mg_v##*/}"
+    case "$_mg_v" in ''|*[!0-9.]*|.*|*.|*..*) continue ;; esac
+    if [ -z "$MG" ] || _mg_newer "$_mg_v" "$MGV"; then MG="$_mg_c"; MGV="$_mg_v"; fi
+  done
+fi
+HELPERPICK
   printf '[ -n "$MG" ] && [ -x "$MG" ] || { echo "%s: no mavergreen helper on this volume" >&2; exit 1; }\n' "$P"
   printf '"$MG" --root "$ROOT/" link %s || exit 1\n' "$P"
-  [ -z "$snippet" ] || cat "$snippet"
-  [ -z "$POSTH" ] || cat "$POSTH"
+  if [ -n "$snippet" ]; then cat "$snippet"; printf '\n'; fi
+  if [ -n "$POSTH" ]; then cat "$POSTH"; printf '\n'; fi
   printf 'exit 0\n'
 } > "$SCR/postinstall"
 rm -f "$SCR/.agent-load"

@@ -5,6 +5,26 @@ S="$here/../scripts/stage_product.sh"
 [ -x /usr/libexec/PlistBuddy ] || { echo "no PlistBuddy -- skipping"; exit 77; }
 w="$(mktemp -d "${TMPDIR:-/tmp}/stage-product.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
+run_with_timeout() {
+  _secs="$1"; _rcfile="$2"; shift 2
+  "$@" >/dev/null 2>&1 &
+  _pid=$!
+  _n=0
+  while kill -0 "$_pid" 2>/dev/null; do
+    _n=$((_n + 1))
+    if [ "$_n" -gt "$_secs" ]; then
+      kill -TERM "$_pid" 2>/dev/null || true
+      sleep 1
+      kill -KILL "$_pid" 2>/dev/null || true
+      wait "$_pid" 2>/dev/null || true
+      return 124
+    fi
+    sleep 1
+  done
+  wait "$_pid" 2>/dev/null
+  echo $? > "$_rcfile"
+  return 0
+}
 st="$w/stage"; mkdir -p "$st/usr/local/mavergreen/openssh/bin"; echo ssh > "$st/usr/local/mavergreen/openssh/bin/ssh"
 printf 'echo post-hook-ran "$ROOT" >> "$ROOT/hook.log"\n' > "$w/hook"
 sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr" --postinstall-hook "$w/hook"
@@ -100,5 +120,50 @@ grep -qE -- '--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-ho
   && fail "a stage_product-only option must never reach render-manifest"
 grep -qF "$w/scr3" "$w/rm.log" && fail "a stage_product-only option's VALUE must never reach render-manifest either"
 grep -qF "Application Support" "$w/rm.log" && fail "the updater's app-dir value must never reach render-manifest"
+
+rc1="$w/rc1"
+if run_with_timeout 5 "$rc1" sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out; then
+  [ "$(cat "$rc1")" = 2 ] || fail "an option missing its value (at the end of the argument list) must exit 2, got $(cat "$rc1" 2>/dev/null)"
+else
+  fail "an option missing its value at the end of the argument list must exit promptly, not hang"
+fi
+rc2="$w/rc2"
+if run_with_timeout 5 "$rc2" sh "$S" --stage "$st" --product openssh --name --end --version 1 --scripts-out "$w/scrbad2"; then
+  [ "$(cat "$rc2")" = 2 ] || fail "an option value literally --end must exit 2, got $(cat "$rc2" 2>/dev/null)"
+else
+  fail "an option value literally --end must exit promptly, not hang"
+fi
+
+hooknonl="$w/hook-no-nl"
+printf 'echo hook-no-nl-ran "$ROOT" >> "$ROOT/hook2.log"' > "$hooknonl"
+scrnl="$w/scr-nonl"
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$scrnl" \
+  --preinstall-hook "$hooknonl" --postinstall-hook "$hooknonl" \
+  || fail "stage_product must succeed even with a hook lacking a trailing newline"
+sh -n "$scrnl/preinstall" || fail "preinstall with a no-trailing-newline hook must still be valid sh"
+sh -n "$scrnl/postinstall" || fail "postinstall with a no-trailing-newline hook must still be valid sh"
+tail -1 "$scrnl/preinstall" | grep -qx 'exit 0' || fail "preinstall must end with exit 0 on its own line even after a no-trailing-newline hook"
+tail -1 "$scrnl/postinstall" | grep -qx 'exit 0' || fail "postinstall must end with exit 0 on its own line even after a no-trailing-newline hook"
+Vnl="$w/volnl"; mkdir -p "$Vnl"
+sh "$scrnl/preinstall" /x.pkg "$Vnl/" "$Vnl/" || fail "preinstall (no-trailing-newline hook) must still succeed"
+grep -q hook-no-nl-ran "$Vnl/hook2.log" || fail "a hook without a trailing newline must still run, not get swallowed into the next line"
+
+Vver="$w/volver"; mkdir -p "$Vver/usr/local/mavergreen"
+cp -R "$st/usr/local/mavergreen/openssh" "$Vver/usr/local/mavergreen/"
+mkdir -p "$Vver/usr/local/mavergreen/.base/1.0.9" "$Vver/usr/local/mavergreen/.base/1.0.10"
+poisonlog="$w/poison.log"
+{
+  printf '#!/bin/sh\n'
+  printf 'echo wrong-version-used >> %s\n' "$poisonlog"
+  printf 'exit 1\n'
+} > "$Vver/usr/local/mavergreen/.base/1.0.9/mavergreen"
+chmod +x "$Vver/usr/local/mavergreen/.base/1.0.9/mavergreen"
+sed 's/@MAVERGREEN_VERSION@/1.0.10/' "$here/../scripts/mavergreen.sh" > "$Vver/usr/local/mavergreen/.base/1.0.10/mavergreen"
+chmod +x "$Vver/usr/local/mavergreen/.base/1.0.10/mavergreen"
+sh "$w/scr/postinstall" /x.pkg "$Vver/" "$Vver/" \
+  || fail "postinstall must succeed with only staged helpers present, picking the numerically newest one"
+[ ! -f "$poisonlog" ] \
+  || fail "postinstall picked the lexically-last staged helper (1.0.9) instead of the numerically newest (1.0.10)"
+[ -L "$Vver/usr/local/mavergreen/bin/ssh" ] || fail "postinstall (numeric helper pick) must still link the product"
 
 echo "PASS: stage-product"
