@@ -13,4 +13,11 @@ pkgutil --expand "$w/out.pkg" "$w/x"
 first="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$w/x/Distribution" | grep -v '^default$' | head -1)"
 [ "$first" = dev.mavergreen.base ] || fail "the base component is listed first, so its payload lands before the product's scripts run: got $first"
 grep -q 'os-version min="10.9.5"' "$w/x/Distribution" || fail "the floor is still enforced"
+
+rc=0
+sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.base --title Base --component "$w/c/x.pkg" \
+  --out "$w/out2.pkg" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "--identifier dev.mavergreen.base must be refused as a usage error (exit 2), since the base is added automatically and a caller passing it as the product identifier would collide with it; got $rc"
+[ ! -e "$w/out2.pkg" ] || fail "a refused --identifier dev.mavergreen.base must not write an output pkg"
+
 echo "PASS: set-install-floor-base"

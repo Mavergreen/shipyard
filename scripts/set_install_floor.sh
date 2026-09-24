@@ -44,6 +44,8 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$ID" ] && [ -n "$TITLE" ] && [ -n "$COMPONENT" ] && [ -n "$OUT" ] \
   || { echo "productbuild_floor: need --identifier --title --component --out" >&2; exit 2; }
+[ "$ID" != dev.mavergreen.base ] \
+  || { echo "productbuild_floor: --identifier may not be dev.mavergreen.base -- the base component is added automatically" >&2; exit 2; }
 [ -f "$COMPONENT" ] || { echo "productbuild_floor: no component pkg: $COMPONENT" >&2; exit 1; }
 
 COMP_DIR=$(dirname "$COMPONENT"); COMP_BASE=$(basename "$COMPONENT")
