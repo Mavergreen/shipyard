@@ -1196,16 +1196,39 @@ printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 22 shou
 printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
 (cd "$work/pk" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkg repo that calls stage_product.sh should pass: $(cd "$work/pk" && sh "$S" 2>&1)"; exit 1; }
 
-# spec: scripts/check-family-conventions.sh check 22 -- matches a CALL shape (the script path
-#       followed by its arguments), not a bare mention, the same distinction check 19 pins for
-#       assert-tree-clean.sh (assertname, asserttrailing above). A step name and an echo'd string
-#       both spell "stage_product.sh" with no leading "/" or "sh " and no argument after it, so
-#       neither is a call.
-mkrepo "$work/pkm"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\necho "see stage_product.sh for the manifest layout"\n' > "$work/pkm/build/package.sh"
+# spec: scripts/check-family-conventions.sh check 22 -- matches a CALL shape ANCHORED to command
+#       position (check 18's anchor set: line start, ; & | a backtick, "$(", then/do/exec, plus
+#       YAML "run:" and CMake "COMMAND"), not a bare mention -- the same distinction check 19 pins
+#       for assert-tree-clean.sh (assertname, asserttrailing above). A step name, an echo'd string
+#       whose payload merely spells "sh stage_product.sh" or a path to it, and a trailing comment
+#       all put "stage_product.sh" textually next to "/" or "sh " with no COMMAND-POSITION anchor
+#       in front of it, so none of them is a call. (An earlier draft checked only that adjacency,
+#       with no anchor requirement at all, and `echo "sh stage_product.sh"` slipped past it.)
+mkrepo "$work/pkm"
+printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg   # sh stage_product.sh\necho "sh stage_product.sh"\necho "use $SHIPYARD_SCRIPTS/stage_product.sh --stage x"\n' \
+  > "$work/pkm/build/package.sh"
 printf '      - name: stage_product.sh already ran earlier\n        run: echo done\n' >> "$work/pkm/.github/workflows/release.yml"
 printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkm/.github/workflows/release.yml"
-out="$(cd "$work/pkm" && git add -A && sh "$S" 2>&1)" && { echo "FAIL: a step name or echo'd string mentioning stage_product.sh must not satisfy check 22: $out"; exit 1; }
+out="$(cd "$work/pkm" && git add -A && sh "$S" 2>&1)" && { echo "FAIL: a step name, an echo'd mention, or a trailing comment naming stage_product.sh must not satisfy check 22: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 22 should still name stage_product.sh when only mentioned: $out"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh check 22 -- a call inside a YAML "run: |" block scalar
+#       is still a call: its continuation lines are their own physical lines, indented but
+#       otherwise ordinary shell, so the plain line-start anchor covers them with no special case.
+mkrepo "$work/pkblock"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pkblock/build/package.sh"
+printf '      - run: |\n          sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n          sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
+  >> "$work/pkblock/.github/workflows/release.yml"
+(cd "$work/pkblock" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: a stage_product.sh call inside a YAML run: | block should satisfy check 22: $(cd "$work/pkblock" && sh "$S" 2>&1)"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh check 22 -- CMake's own command position is the
+#       COMMAND keyword inside execute_process()/add_custom_command(), the same anchor check 18
+#       does not need because check 18 only ever scans *.sh files and extracted YAML run: lines.
+mkrepo "$work/pkcmake"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pkcmake/build/package.sh"
+printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkcmake/.github/workflows/release.yml"
+printf 'execute_process(COMMAND sh ${SHIPYARD_SCRIPTS}/stage_product.sh --stage stage --product w --name W --version 1 --scripts-out scr)\n' > "$work/pkcmake/CMakeLists.txt"
+(cd "$work/pkcmake" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: a stage_product.sh call via CMake's COMMAND keyword should satisfy check 22: $(cd "$work/pkcmake" && sh "$S" 2>&1)"; exit 1; }
 
 mkrepo "$work/pkc"; printf '#!/bin/sh\npkgbuild --root stage out.pkg\n' > "$work/pkc/build/package.sh"
 printf '      # - run: sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkc/.github/workflows/release.yml"

@@ -567,27 +567,25 @@ fi
 
 # spec: SKILL.md "Family conventions" check 22 -- a pkg-building repo gets its install scripts and
 #       manifest from stage_product.sh, or the layout conformance enforces has no one generating it.
-# spec: scripts/check-family-conventions.sh check 19 -- a step NAME or a trailing comment can
-#       spell a script's name with no leading path and no argument after it, and that is a
-#       MENTION, not a CALL; check 19's own tests (assertname, asserttrailing) pin the distinction.
-#       The pattern below requires stage_product.sh to be reached either through a path ("/" right
-#       before it, e.g. "$SHIPYARD_SCRIPTS/stage_product.sh") or through an explicit interpreter
-#       ("sh " right before it), and to be followed by an argument (optional closing quotes then
-#       whitespace, or end of line) -- the shape of an invocation, not of a sentence about one. This
-#       still misses a bare `./stage_product.sh` or a PATH-resolved call with neither prefix; no
-#       repo in the family calls it that way today.
-# platform: this check's own fail message may not spell "/stage_product.sh" as a call shape
-#           either, same as check 16's ".cmake/package[s]" note -- shipyard is itself a repo this
-#           gate scans, and its fail hint is a non-comment line on par with anyone else's.
+# spec: scripts/check-family-conventions.sh check 18 -- a mention is not a call unless it sits in
+#       COMMAND POSITION: line start, a separator (; & | or a backtick), "$(", then/do/exec (check
+#       18's own anchor set, reused verbatim here), plus a YAML "run:" key and a CMake "COMMAND"
+#       keyword, which are this family's other two command positions. check 19's tests
+#       (assertname, asserttrailing) pin the same mention-vs-call distinction for
+#       assert-tree-clean.sh; check 22's own fixtures (pkm) pin it for stage_product.sh, including
+#       `echo "sh stage_product.sh"`, which an EARLIER draft's plain adjacency check ("sh "
+#       immediately before the name, with no command-position requirement) let through. This still
+#       misses a bare `./stage_product.sh` called with neither a "/" nor an "sh " prefix; no repo
+#       in the family calls it that way today.
 if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
   staged=""
   for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -v '^tests/'); do
     grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
-      | grep -Eq '(/|(^|[^A-Za-z0-9_-])sh[[:space:]]+"?)stage_product\.sh"*([[:space:]]|$)' \
+      | grep -Eq '(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^then|^do|^exec|^[[:space:]]*-?[[:space:]]*run:|[[:space:](]COMMAND)[[:space:]]*(sh[[:space:]]+"?[^[:space:]"]*stage_product\.sh|"?[^[:space:]"]*/stage_product\.sh)"*([[:space:]]|$)' \
       && { staged="$f"; break; }
   done
   [ -n "$staged" ] || fail "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh -- its install scripts and manifest are hand-rolled" \
-                          "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS's stage_product.sh (see the conventions skill, 'Install layout'), or declare '- product-layout: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+                          "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare '- product-layout: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
