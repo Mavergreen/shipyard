@@ -32,6 +32,12 @@ for name, job in jobs.items():
     ro = job.get("runs-on")
     if not (isinstance(ro, str) and ro.startswith("ubuntu-")):
         bad.append("linux-host.yml job %s must run on an ubuntu- runner, got %r" % (name, ro))
+    # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22 -- F2: called
+    #       from release.yml this job otherwise inherits contents: write, a token it never needs
+    #       to run apt and ~57 suites.
+    perms = job.get("permissions")
+    if perms != {"contents": "read"}:
+        bad.append("linux-host.yml job %s must declare permissions: {contents: read}, got %r" % (name, perms))
     c = cmds(job)
     if "sh scripts/run-repo-tests.sh --strict-host" not in c:
         bad.append("linux-host.yml job %s never runs sh scripts/run-repo-tests.sh --strict-host" % name)
