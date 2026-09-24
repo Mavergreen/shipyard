@@ -49,4 +49,43 @@ printf '%s\n' "$out" | grep -q 'chatty but fine' \
   && { echo "FAIL: a passing test must stay quiet, or the signal drowns -- it printed its output"; exit 1; }
 rm -f tests/f-chatty.sh
 
+# spec: SKILL.md "Running a repo's tests" -- --strict-host. Every case asserts the runner's EXIT
+#       STATUS. uname is stubbed so each case means the same thing on a Mac and on Linux, and each
+#       failing case keeps a passing host-agnostic suite beside it, so it fails for its own reason.
+stub="$work/stub"; mkdir -p "$stub"
+printf '#!/bin/sh\necho Linux\n' > "$stub/uname"; chmod +x "$stub/uname"
+onlinux() { PATH="$stub:$PATH" sh "$S" "$@"; }
+fresh() { rm -rf tests; mkdir tests; }
+agn='#!/bin/sh\n# platform: host-agnostic\n'
+mac='#!/bin/sh\n# platform: macOS-only -- a fixture\n'
+
+fresh; printf "${agn}exit 0\n" > tests/a.sh; printf "${mac}exit 1\n" > tests/m.sh
+out="$(onlinux --strict-host 2>&1)" || { echo "FAIL strict: one passing host-agnostic suite and one macOS-only must pass: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'SKIP tests/m.sh (macOS-only)' || { echo "FAIL strict: a macOS-only suite must be named as not run: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q '1 host-agnostic suites run, 1 macOS-only not run' || { echo "FAIL strict: the count must be printed: $out"; exit 1; }
+
+fresh; printf "${mac}exit 1\n" > tests/m.sh
+onlinux >/dev/null 2>&1 || { echo "FAIL: WITHOUT --strict-host a declared macOS-only suite is still not run off macOS"; exit 1; }
+
+fresh; printf '#!/bin/sh\nexit 0\n' > tests/u.sh; printf "${agn}exit 0\n" > tests/a.sh
+if out="$(onlinux --strict-host 2>&1)"; then echo "FAIL strict: an undeclared suite must fail, even beside a passing host-agnostic one: $out"; exit 1; fi
+printf '%s\n' "$out" | grep -q 'FAIL tests/u.sh (declares no host' || { echo "FAIL strict: the undeclared suite must be named: $out"; exit 1; }
+onlinux >/dev/null 2>&1 || { echo "FAIL: WITHOUT --strict-host an undeclared suite runs as before"; exit 1; }
+
+fresh; printf "${agn}exit 77\n" > tests/s.sh; printf "${agn}exit 0\n" > tests/a.sh
+if out="$(onlinux --strict-host 2>&1)"; then echo "FAIL strict: a host-agnostic suite that skips must fail: $out"; exit 1; fi
+onlinux >/dev/null 2>&1 || { echo "FAIL: WITHOUT --strict-host exit 77 is still a skip"; exit 1; }
+
+fresh; printf '#!/usr/bin/env bats\n# platform: host-agnostic\n@test "t" { skip "no"; }\n' > tests/s.bats; printf "${agn}exit 0\n" > tests/a.sh
+if out="$(onlinux --strict-host 2>&1)"; then echo "FAIL strict: a host-agnostic bats file that skips a case must fail: $out"; exit 1; fi
+
+fresh; printf "${mac}exit 0\n" > tests/m.sh
+if out="$(onlinux --strict-host 2>&1)"; then echo "FAIL strict: running no host-agnostic suite at all must fail: $out"; exit 1; fi
+
+fresh; printf "${agn}exit 1\n" > tests/f.sh; printf "${agn}exit 0\n" > tests/a.sh
+if onlinux --strict-host >/dev/null 2>&1; then echo "FAIL strict: a failing host-agnostic suite must fail the runner"; exit 1; fi
+
+rc=0; sh "$S" --strict-host some-preset >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL: --strict-host with a ctest preset is a usage error (exit 2), got $rc"; exit 1; }
+
 echo "PASS: run-repo-tests"
