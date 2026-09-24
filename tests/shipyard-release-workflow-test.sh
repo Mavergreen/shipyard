@@ -174,8 +174,8 @@ else:
 jobs = wf.get("jobs") or {}
 if "scan-for-key.yml" not in str((jobs.get("scan") or {}).get("uses", "")):
     bad.append("the scan job (./.github/workflows/scan-for-key.yml) is gone")
-if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "scan"]:
-    bad.append("publish must need exactly [build, scan]")
+if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan"]:
+    bad.append("publish must need exactly [build, linux, scan]")
 
 # Nothing of the superseded design survives in any command: no user package registry, no second
 # "cross" updater app, no postinstall picking a slice by hw.optional.arm64.

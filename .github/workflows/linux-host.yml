@@ -1,0 +1,35 @@
+name: linux-host
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22 -- the Linux half
+#       of shipyard, proven by running it: every host-agnostic suite, on Linux, with a skip counted as
+#       a failure. Reusable so ci.yml (branches, PRs) and release.yml (main, before publish) run the
+#       one definition; neither runs on the other's events.
+
+on:
+  workflow_call:
+
+jobs:
+  strict-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
+
+      # spec: .github/actions/install/action.yml R-P1-18 -- the consumer's Linux path, exercised with
+      #       this checkout: it installs bats and exports SHIPYARD_SCRIPTS and MavericksShipyard_DIR.
+      - name: Install mavericks-shipyard (the Linux path)
+        uses: ./.github/actions/install
+
+      - name: Record the pre-build tree
+        run: sh scripts/assert-tree-clean.sh --record
+
+      - name: Host-agnostic suites, strictly
+        run: sh scripts/run-repo-tests.sh --strict-host
+
+      - name: Our own conventions gate, where consumers run it
+        run: sh scripts/check-family-conventions.sh
+
+      - name: The suites must not have written into the source tree
+        run: sh scripts/assert-tree-clean.sh

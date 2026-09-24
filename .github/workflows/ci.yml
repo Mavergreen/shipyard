@@ -52,6 +52,9 @@ jobs:
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
 
+  linux:
+    uses: ./.github/workflows/linux-host.yml
+
   # spec: R-P1-17 -- this job builds (or restores) the universal shipyard-cmake and publishes it as a
   #       run artifact so it can be run on a real 10.9 box, the only proof the x86_64 slice works
   #       there; and it REHEARSES release.yml's whole packaging path. release.yml runs only on a push

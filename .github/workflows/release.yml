@@ -201,8 +201,13 @@ jobs:
     secrets:
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
 
+  # spec: .github/workflows/linux-host.yml -- a release whose host-agnostic half is broken on Linux
+  #       breaks every consumer's ubuntu-latest job the moment @v1 moves, so it does not publish.
+  linux:
+    uses: ./.github/workflows/linux-host.yml
+
   publish:
-    needs: [build, scan]
+    needs: [build, linux, scan]
     permissions:
       contents: write
     uses: ./.github/workflows/publish-release.yml
