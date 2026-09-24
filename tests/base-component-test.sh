@@ -23,6 +23,11 @@ stage 1.0.10
 stage 1.0.9
 [ "$(sh "$V/usr/local/bin/mavergreen" version)" = 1.0.10 ] || fail "an older product installer must never downgrade the helper"
 [ ! -e "$V/usr/local/mavergreen/.base/1.0.9" ] || fail "a skipped older base still clears its staged copy"
+printf 'garbage\n' > "$V/usr/local/mavergreen/.base/installed-version"
+out="$(stage 1.0.9 2>&1)"
+[ "$(sh "$V/usr/local/bin/mavergreen" version)" = 1.0.9 ] || fail "a non-numeric installed-version must be treated as missing, not compared -- an older base still installs over it"
+[ "$(cat "$V/usr/local/mavergreen/.base/installed-version")" = 1.0.9 ] || fail "installed-version is rewritten after installing over a non-numeric value"
+case "$out" in *"integer expression expected"*) fail "a non-numeric installed-version must not reach the numeric comparison: $out" ;; esac
 rm "$V/usr/local/bin/mavergreen"; stage 1.0.9
 [ -x "$V/usr/local/bin/mavergreen" ] || fail "a missing helper is reinstalled even from an older base"
 out="$(sh "$w/post-1.0.9" 2>&1)" && fail "no target volume must fail rather than assume /: $out"

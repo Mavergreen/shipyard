@@ -15,6 +15,7 @@ newer() {
   return 1
 }
 cur="$(cat "$R/usr/local/mavergreen/.base/installed-version" 2>/dev/null || true)"
+case "$cur" in ''|*[!0-9.]*|.*|*.|*..*) cur="" ;; esac
 if [ ! -x "$R/usr/local/bin/mavergreen" ] || [ -z "$cur" ] || newer "$V" "$cur"; then
   [ -f "$S/mavergreen" ] || { echo "mavergreen-base: no staged helper at $S" >&2; exit 1; }
   mkdir -p "$R/usr/local/bin" "$R/etc/paths.d" "$R/etc/manpaths.d"
