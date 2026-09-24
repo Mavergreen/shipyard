@@ -435,7 +435,9 @@ printf '%s\n' "$out" | grep -qi 'not committed' || { echo "FAIL should say it is
 # spec: a workflow that signs must call scan-for-key.yml -- publish-release.yml refuses a signed
 #       release without its record, and a missing job should fail a PR here, not a release there.
 mkrepo "$work/k"
-printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --pkg dist/x.pkg > dist/appcast.xml\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' \
+# spec: scripts/check-family-conventions.sh check 22 -- a signing workflow builds a pkg too
+#       (check 21's fallback), so it needs stage_product.sh the same as a direct pkgbuild caller.
+printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --pkg dist/x.pkg > dist/appcast.xml\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
   >> "$work/k/.github/workflows/release.yml"
 (cd "$work/k" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/k" && sh "$S" 2>&1)"; then echo "FAIL a signing workflow with no scan job should fail"; exit 1; fi
@@ -448,7 +450,7 @@ cat >> "$work/k/.github/workflows/release.yml" <<'YML'
     with: { artifact: dist }
 YML
 (cd "$work/k" && git add -A) >/dev/null 2>&1
-(cd "$work/k" && sh "$S" >/dev/null) || { echo "FAIL a signing workflow with a scan job should pass"; exit 1; }
+(cd "$work/k" && sh "$S" >/dev/null) || { echo "FAIL a signing workflow with a scan job should pass: $(cd "$work/k" && sh "$S" 2>&1)"; exit 1; }
 
 # spec: SKILL.md "Renovate & automerge" -- a pin on a -mavericks.N release must be read with
 #       versioning that COMPARES N. Renovate's default coerces the suffix away, so .1 and .4
@@ -1182,12 +1184,34 @@ mkrepo "$work/pk"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mav
 out="$(cd "$work/pk" && sh "$S" 2>&1)" && { echo "FAIL: a repo that runs pkgbuild without artifact conformance should fail"; exit 1; }
 printf '%s\n' "$out" | grep -q 'check-artifact-conformance.sh' || { echo "FAIL should name check-artifact-conformance.sh: $out"; exit 1; }
 printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pk/.github/workflows/release.yml"
-(cd "$work/pk" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkg repo that runs artifact conformance should pass: $(cd "$work/pk" && sh "$S" 2>&1)"; exit 1; }
+(cd "$work/pk" && git add -A) >/dev/null 2>&1
+
+# spec: SKILL.md "Family conventions" check 22 -- a pkg-building repo gets its install scripts and
+#       manifest from stage_product.sh, or the layout conformance enforces has no one generating it.
+#       Check 21 alone no longer earns a full pass here -- it earns NOT failing check 21 anymore,
+#       while check 22, pinned right below, still fails until stage_product.sh is called too.
+out="$(cd "$work/pk" && sh "$S" 2>&1)" && { echo "FAIL: a pkg repo that never calls stage_product.sh should fail check 22"; exit 1; }
+printf '%s\n' "$out" | grep -q 'check-artifact-conformance.sh' && { echo "FAIL: a pkg repo that runs artifact conformance should no longer fail check 21: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 22 should name stage_product.sh: $out"; exit 1; }
+printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
+(cd "$work/pk" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkg repo that calls stage_product.sh should pass: $(cd "$work/pk" && sh "$S" 2>&1)"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh check 22 -- matches a CALL shape (the script path
+#       followed by its arguments), not a bare mention, the same distinction check 19 pins for
+#       assert-tree-clean.sh (assertname, asserttrailing above). A step name and an echo'd string
+#       both spell "stage_product.sh" with no leading "/" or "sh " and no argument after it, so
+#       neither is a call.
+mkrepo "$work/pkm"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\necho "see stage_product.sh for the manifest layout"\n' > "$work/pkm/build/package.sh"
+printf '      - name: stage_product.sh already ran earlier\n        run: echo done\n' >> "$work/pkm/.github/workflows/release.yml"
+printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkm/.github/workflows/release.yml"
+out="$(cd "$work/pkm" && git add -A && sh "$S" 2>&1)" && { echo "FAIL: a step name or echo'd string mentioning stage_product.sh must not satisfy check 22: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 22 should still name stage_product.sh when only mentioned: $out"; exit 1; }
+
 mkrepo "$work/pkc"; printf '#!/bin/sh\npkgbuild --root stage out.pkg\n' > "$work/pkc/build/package.sh"
 printf '      # - run: sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkc/.github/workflows/release.yml"
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) && { echo "FAIL: a commented-out conformance call must not count as wired"; exit 1; }
-printf '\n## Conformance deviations\n\n- artifact-conformance: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
-(cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a declared artifact-conformance deviation should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
+printf '\n## Conformance deviations\n\n- artifact-conformance: ships a disk image, not a Mavergreen pkg\n- product-layout: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
+(cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: declared artifact-conformance and product-layout deviations should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
 mkrepo "$work/pks"; printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --pkg dist/x.pkg > dist/appcast.xml\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$work/pks/.github/workflows/release.yml"
 (cd "$work/pks" && git add -A && sh "$S" 2>&1) | grep -q 'check-artifact-conformance.sh' || { echo "FAIL: a repo that signs an appcast builds a pkg, and must run conformance"; exit 1; }
 mkrepo "$work/pkt"; printf '#!/bin/sh\npkgbuild --root x t.pkg\n' > "$work/pkt/tests/fixture.sh"

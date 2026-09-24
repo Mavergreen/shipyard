@@ -565,6 +565,31 @@ if [ -n "$builds_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! d
        "pipe artifact-facts.sh into check-artifact-conformance.sh at package time (see the conventions skill, 'Artifact conformance'), or declare '- artifact-conformance: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
+# spec: SKILL.md "Family conventions" check 22 -- a pkg-building repo gets its install scripts and
+#       manifest from stage_product.sh, or the layout conformance enforces has no one generating it.
+# spec: scripts/check-family-conventions.sh check 19 -- a step NAME or a trailing comment can
+#       spell a script's name with no leading path and no argument after it, and that is a
+#       MENTION, not a CALL; check 19's own tests (assertname, asserttrailing) pin the distinction.
+#       The pattern below requires stage_product.sh to be reached either through a path ("/" right
+#       before it, e.g. "$SHIPYARD_SCRIPTS/stage_product.sh") or through an explicit interpreter
+#       ("sh " right before it), and to be followed by an argument (optional closing quotes then
+#       whitespace, or end of line) -- the shape of an invocation, not of a sentence about one. This
+#       still misses a bare `./stage_product.sh` or a PATH-resolved call with neither prefix; no
+#       repo in the family calls it that way today.
+# platform: this check's own fail message may not spell "/stage_product.sh" as a call shape
+#           either, same as check 16's ".cmake/package[s]" note -- shipyard is itself a repo this
+#           gate scans, and its fail hint is a non-comment line on par with anyone else's.
+if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
+  staged=""
+  for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -v '^tests/'); do
+    grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
+      | grep -Eq '(/|(^|[^A-Za-z0-9_-])sh[[:space:]]+"?)stage_product\.sh"*([[:space:]]|$)' \
+      && { staged="$f"; break; }
+  done
+  [ -n "$staged" ] || fail "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh -- its install scripts and manifest are hand-rolled" \
+                          "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS's stage_product.sh (see the conventions skill, 'Install layout'), or declare '- product-layout: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+fi
+
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
 #       build-location override. A preset's own `environment` block is applied AFTER the real
 #       process environment, so exporting MAVERICKS_BUILD_ROOT cannot redirect a --preset
