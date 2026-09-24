@@ -11,6 +11,8 @@ ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; EXCL=""; REPL=""
 nl='
 '
 dotty() { case "/$1/" in *"/./"*|*"/../"*) return 0 ;; esac; return 1; }
+xesc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+xstring() { printf '  <key>%s</key>\n  <string>%s</string>\n' "$(xesc "$1")" "$(xesc "$2")"; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --stage) ST="${2%/}"; shift 2 ;;
@@ -40,15 +42,46 @@ case "${G:-$P}" in *[!a-z0-9-]*|-*) echo "render-manifest: bad group ${G:-$P}" >
 case "$L" in *[!0-9a-z.-]*) echo "render-manifest: bad line $L" >&2; exit 2 ;; esac
 T="$ST/usr/local/mavergreen/$P"; M="$T/mavergreen.plist"
 mkdir -p "$T"; rm -f "$M"
-"$PB" -c "Add :identifier string $ID" -c "Add :name string $NAME" -c "Add :product string $P" \
-      -c "Add :group string ${G:-$P}" -c "Add :line string $L" -c "Add :version string $VER" \
-      -c "Add :appcast string $AC" -c "Add :exports-exclude array" -c "Add :replaces dict" \
-      -c "Add :outside array" "$M" >/dev/null
-i=0; printf '%s' "$EXCL" | while IFS= read -r e; do [ -n "$e" ] || continue; "$PB" -c "Add :exports-exclude:$i string $e" "$M"; i=$((i + 1)); done
-printf '%s' "$REPL" | while IFS= read -r r; do [ -n "$r" ] || continue; "$PB" -c "Add :replaces:${r%%=*} string ${r#*=}" "$M"; done
-i=0
-( cd "$ST" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | grep -v "^usr/local/mavergreen/$P/" \
-  | awk '{ n = split($0, c, "/"); out = $0
-           for (k = 1; k <= n; k++) if (c[k] ~ /\.(app|kext|prefPane|plugin|bundle|framework)$/) { out = c[1]; for (j = 2; j <= k; j++) out = out "/" c[j]; break }
-           print out }' | sort -u \
-  | while IFS= read -r o; do "$PB" -c "Add :outside:$i string $o" "$M"; i=$((i + 1)); done
+{
+  cat <<'PLIST_HEADER'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+PLIST_HEADER
+  xstring identifier "$ID"
+  xstring name "$NAME"
+  xstring product "$P"
+  xstring group "${G:-$P}"
+  xstring line "$L"
+  xstring version "$VER"
+  xstring appcast "$AC"
+  printf '  <key>exports-exclude</key>\n  <array>\n'
+  printf '%s' "$EXCL" | while IFS= read -r e; do [ -n "$e" ] || continue; printf '    <string>%s</string>\n' "$(xesc "$e")"; done
+  printf '  </array>\n'
+  printf '  <key>replaces</key>\n  <dict>\n'
+  printf '%s' "$REPL" | while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    printf '    <key>%s</key>\n    <string>%s</string>\n' "$(xesc "${r%%=*}")" "$(xesc "${r#*=}")"
+  done
+  printf '  </dict>\n'
+  printf '  <key>outside</key>\n  <array>\n'
+  ( cd "$ST" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | grep -v "^usr/local/mavergreen/$P/" \
+    | awk '{ n = split($0, c, "/"); out = $0
+             for (k = 1; k <= n; k++) if (c[k] ~ /\.(app|kext|prefPane|plugin|bundle|framework)$/) { out = c[1]; for (j = 2; j <= k; j++) out = out "/" c[j]; break }
+             print out }' | sort -u \
+    | while IFS= read -r o; do printf '    <string>%s</string>\n' "$(xesc "$o")"; done
+  printf '  </array>\n</dict>\n</plist>\n'
+} > "$M"
+plutil -lint "$M" >/dev/null || { echo "render-manifest: $M failed plutil -lint after writing" >&2; exit 1; }
+verify() {
+  _got="$("$PB" -c "Print :$1" "$M" 2>/dev/null)" || { echo "render-manifest: could not read back :$1 after writing $M" >&2; exit 1; }
+  [ "$_got" = "$2" ] || { echo "render-manifest: :$1 did not round-trip through $M" >&2; exit 1; }
+}
+verify identifier "$ID"
+verify name "$NAME"
+verify product "$P"
+verify group "${G:-$P}"
+verify line "$L"
+verify version "$VER"
+verify appcast "$AC"
