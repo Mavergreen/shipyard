@@ -72,6 +72,25 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
         printf 'launchd %s %s/%s %s\n' "$1" "$_ld" "$(basename "$_lp" | enc)" "${_lab:-none}"
       done
     done
+    # spec: tests/artifact-conformance-test.sh -- a product tree always installs at "/", so only
+    #       such a payload can carry a manifest. Values are collapsed like the pkg record's so a
+    #       space cannot shift fields; outside entries are encoded like installs paths so the
+    #       checker compares them directly.
+    [ -z "$_loc" ] || continue
+    for _mf in "$_root"/usr/local/mavergreen/*/mavergreen.plist; do
+      [ -f "$_mf" ] || continue
+      _dir="$(basename "$(dirname "$_mf")" | enc)"
+      _mp="$(/usr/libexec/PlistBuddy -c 'Print :product' "$_mf" 2>/dev/null)" || _mp=""
+      _mi="$(/usr/libexec/PlistBuddy -c 'Print :identifier' "$_mf" 2>/dev/null)" || _mi=""
+      _reg="$(sh "$SELF/product-name.sh" identifier "$_mp" 2>/dev/null)" || _reg=""
+      _mp="$(printf '%s' "${_mp:-none}" | tr -s '[:space:]' '_')"
+      printf 'manifest %s %s %s %s\n' "$1" "$_mp" "$(printf '%s' "${_mi:-none}" | tr -s '[:space:]' '_')" "$_dir"
+      printf 'registered %s %s\n' "$_mp" "$(printf '%s' "${_reg:-none}" | tr -s '[:space:]' '_')"
+      _k=0
+      while _o="$(/usr/libexec/PlistBuddy -c "Print :outside:$_k" "$_mf" 2>/dev/null)"; do
+        printf 'manifest-outside %s %s\n' "$1" "$(printf '%s' "$_o" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
+      done
+    done
   done
   return 0
 }
@@ -105,10 +124,15 @@ for f in "$dist"/*; do
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
       if pkgutil --expand "$f" "$x/x" >/dev/null 2>&1; then
         if [ -f "$x/x/Distribution" ]; then
-          # platform: a product archive: version, floor and identity all live in Distribution.
-          ver="$(sed -n 's/.*<pkg-ref[^>]*version="\([^"]*\)".*/\1/p' "$x/x/Distribution" | head -1)"
+          # platform: a product archive: version, floor and identity all live in Distribution. The
+          #           version and identity are the product's, not those of the dev.mavergreen.base
+          #           component set_install_floor.sh lists ahead of it; its choice ids are the pkg
+          #           identifiers, in install order.
+          nb="$(sed -n '/<pkg-ref[^>]*version=/p' "$x/x/Distribution" | grep -v 'id="dev\.mavergreen\.base"' || true)"
+          ver="$(printf '%s\n' "$nb" | sed -n 's/.*<pkg-ref[^>]*version="\([^"]*\)".*/\1/p' | head -1)"
           floor="$(sed -n 's/.*<os-version[^>]*min="\([^"]*\)".*/\1/p' "$x/x/Distribution" | head -1)"
-          ident="$(sed -n 's/.*<pkg-ref[^>]*id="\([^"]*\)".*/\1/p' "$x/x/Distribution" | head -1)"
+          ident="$(printf '%s\n' "$nb" | sed -n 's/.*<pkg-ref[^>]*id="\([^"]*\)".*/\1/p' | head -1)"
+          comps="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$x/x/Distribution" | grep -v '^default$' || true)"
         else
           # platform: a component package: PackageInfo carries version and identity, and there is NO
           #           floor to read -- that is structural, not a defect (the checker requires an
@@ -120,6 +144,7 @@ for f in "$dist"/*; do
           ver="$(sed -n '/<pkg-info/ s/.*[[:space:]]version="\([^"]*\)".*/\1/p' "$x/x/PackageInfo" 2>/dev/null | head -1)"
           ident="$(sed -n '/<pkg-info/ s/.*[[:space:]]identifier="\([^"]*\)".*/\1/p' "$x/x/PackageInfo" 2>/dev/null | head -1)"
           floor=""
+          comps="$ident"
         fi
         # spec: tests/artifact-conformance-test.sh -- the fact stream is whitespace-delimited, so a
         #       value containing a space would silently shift the fields after it; collapsed to
@@ -128,6 +153,9 @@ for f in "$dist"/*; do
           "$(printf '%s' "${ver:-unknown}" | tr -s '[:space:]' '_')" \
           "$(printf '%s' "${floor:-none}" | tr -s '[:space:]' '_')" \
           "$(printf '%s' "${ident:-none}" | tr -s '[:space:]' '_')"
+        printf '%s\n' "$comps" | while IFS= read -r c; do
+          [ -z "$c" ] || printf 'component %s %s\n' "$b" "$(printf '%s' "$c" | tr -s '[:space:]' '_')"
+        done
         payload_facts "$b" "$x/x" || { rm -rf "$x"; abort "cannot read the payload of $b"; }
       else
         printf 'pkg %s unreadable none none\n' "$b"

@@ -563,8 +563,27 @@ REL='expected 1.0.0-mavericks.1
 pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10'
 
+LAYOUT='component p.pkg dev.mavergreen.base
+component p.pkg dev.mavergreen.x
+manifest p.pkg x dev.mavergreen.x x
+registered x dev.mavergreen.x
+installs p.pkg usr/local/mavergreen/.base/1.0.9/mavergreen
+installs p.pkg usr/local/mavergreen/x/mavergreen.plist'
+
+alone() {  # facts must fail, and every failure reported must be check $2's -- no other check trips
+  _err="$(printf '%s\nend-of-facts\n' "$3" | sh "$S" 2>&1 >/dev/null)" && { echo "FAIL $1: expected failure"; exit 1; }
+  printf '%s\n' "$_err" | grep -v "^conformance: $2: " | grep -q . \
+    && { echo "FAIL $1: only the $2 check should fail here, got: $_err"; exit 1; }
+  return 0
+}
+
 ok "identity: family bundle, job and paths pass" "$REL
-installs p.pkg usr/local/x/bin/x
+$LAYOUT
+manifest-outside p.pkg Applications/Mavericks%20X.app
+manifest-outside p.pkg Library/Application%20Support/Mavergreen/XUpdater.app
+manifest-outside p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
+manifest-outside p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
+installs p.pkg usr/local/mavergreen/x/bin/x
 installs p.pkg Applications/Mavericks%20X.app/Contents/MacOS/X
 installs p.pkg Library/Application%20Support/Mavergreen/XUpdater.app/Contents/Info.plist
 installs p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
@@ -572,73 +591,201 @@ installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
 bundle p.pkg Library/Application%20Support/Mavergreen/XUpdater.app dev.mavergreen.XUpdater
 launchd p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck"
 
+no "install-path: loose files in /usr/local are no longer the family's" "install-path" "$REL
+$LAYOUT
+installs p.pkg usr/local/bin/x"
+
+no "install-path: another product's tree is not this pkg's" "install-path" "$REL
+$LAYOUT
+installs p.pkg usr/local/mavergreen/y/bin/y"
+
+no "install-path: .base is only for a pkg that carries the base component" "install-path" 'expected 1.0.0-mavericks.1
+pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+component p.pkg dev.mavergreen.x
+manifest p.pkg x dev.mavergreen.x x
+registered x dev.mavergreen.x
+installs p.pkg usr/local/mavergreen/x/mavergreen.plist
+installs p.pkg usr/local/mavergreen/.base/1.0.9/mavergreen'
+
+no "manifest: a pkg that installs a product must carry its manifest" "manifest" "$REL
+component p.pkg dev.mavergreen.base
+component p.pkg dev.mavergreen.x
+installs p.pkg usr/local/mavergreen/x/bin/x"
+
+no "manifest: the product must be registered to this identifier" "registered" "$REL
+component p.pkg dev.mavergreen.base
+component p.pkg dev.mavergreen.x
+manifest p.pkg x dev.mavergreen.x x
+registered x none
+installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
+
+no "manifest: the manifest's product must match the tree it sits in" "manifest" "$REL
+component p.pkg dev.mavergreen.base
+component p.pkg dev.mavergreen.x
+manifest p.pkg y dev.mavergreen.x x
+registered y dev.mavergreen.x
+installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
+
+no "manifest: something installed outside the tree must be listed in outside" "outside" "$REL
+component p.pkg dev.mavergreen.base
+component p.pkg dev.mavergreen.x
+manifest p.pkg x dev.mavergreen.x x
+registered x dev.mavergreen.x
+installs p.pkg usr/local/mavergreen/x/mavergreen.plist
+installs p.pkg Applications/X.app/Contents/MacOS/X"
+
+no "manifest: an outside entry must name something the pkg installs" "outside" "$REL
+component p.pkg dev.mavergreen.base
+component p.pkg dev.mavergreen.x
+manifest p.pkg x dev.mavergreen.x x
+registered x dev.mavergreen.x
+manifest-outside p.pkg Applications/Gone.app
+installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
+
+no "manifest: a whole unlisted directory is reported capped, not once per file" "5 more files outside its tree" "$REL
+$LAYOUT
+$(awk 'BEGIN { for (i = 0; i < 25; i++) print "installs p.pkg usr/local/bin/f" i }')"
+
+no "base: a product archive must carry dev.mavergreen.base first" "base" "$REL
+component p.pkg dev.mavergreen.x
+component p.pkg dev.mavergreen.base
+manifest p.pkg x dev.mavergreen.x x
+registered x dev.mavergreen.x
+installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
+
+no "base: a bare component pkg cannot carry the helper, so it cannot install a product" "base" 'expected 1.0.0-mavericks.1
+pkg p.pkg 1.0.0-mavericks.1 none dev.mavergreen.x
+appcast appcast.xml 1.0.0-mavericks.1 p.pkg 10 11.0
+asset p.pkg 10
+asset appcast.xml 10
+component p.pkg dev.mavergreen.x
+manifest p.pkg x dev.mavergreen.x x
+registered x dev.mavergreen.x
+installs p.pkg usr/local/mavergreen/x/mavergreen.plist'
+
 no "identity: a bundle outside the family" "bundle-id" "$REL
+$LAYOUT
+bundle p.pkg Applications/X.app com.example.x"
+alone "identity: a bundle outside the family" "bundle-id" "$REL
+$LAYOUT
 bundle p.pkg Applications/X.app com.example.x"
 
 ok "identity: a bundle deviation scoped to its identifier excuses it" "$REL
+$LAYOUT
 deviation bundle-id:com.example.* upstream's own kext, loaded by upstream's identifier
 bundle p.pkg Applications/X.app com.example.x"
 
-no "identity: a bundle deviation for a DIFFERENT identifier excuses nothing" "bundle-id" "$REL
+alone "identity: a bundle deviation for a DIFFERENT identifier excuses nothing" "bundle-id" "$REL
+$LAYOUT
 deviation bundle-id:org.other.* some other bundle
 bundle p.pkg Applications/X.app com.example.x"
 
-no "identity: a launchd job outside the family" "launchd-label" "$REL
+alone "identity: a launchd job outside the family" "launchd-label" "$REL
+$LAYOUT
 launchd p.pkg Library/LaunchDaemons/com.example.xd.plist com.example.xd"
 
 no "identity: a launchd plist not named for its Label" "named <Label>.plist" "$REL
+$LAYOUT
+launchd p.pkg Library/LaunchDaemons/dev.mavergreen.a.plist dev.mavergreen.b"
+alone "identity: a launchd plist not named for its Label" "launchd-label" "$REL
+$LAYOUT
 launchd p.pkg Library/LaunchDaemons/dev.mavergreen.a.plist dev.mavergreen.b"
 
-no "install-path: another vendor's shared dir is outside the family" "install-path" "$REL
+alone "install-path: another vendor's shared dir is outside the family" "install-path" "$REL
+$LAYOUT
+manifest-outside p.pkg Library/Application%20Support/SomeoneElse/XUpdater.app
 installs p.pkg Library/Application%20Support/SomeoneElse/XUpdater.app/Contents/Info.plist"
 
-no "install-path: a launchd plist with a foreign name is outside the family" "install-path" "$REL
+alone "install-path: a launchd plist with a foreign name is outside the family" "install-path" "$REL
+$LAYOUT
+manifest-outside p.pkg Library/LaunchDaemons/com.example.xd.plist
 installs p.pkg Library/LaunchDaemons/com.example.xd.plist"
 
-no "install-path: an arbitrary system location" "install-path" "$REL
+alone "install-path: an arbitrary system location" "install-path" "$REL
+$LAYOUT
+manifest-outside p.pkg Library/Extensions/X.kext
 installs p.pkg Library/Extensions/X.kext/Contents/Info.plist"
 
 ok "install-path: a deviation scoped to the path excuses it, and the glob spans spaces" "$REL
+$LAYOUT
 deviation install-path:Library/Extensions/* 10.9 loads kexts only from here
 deviation install-path:Library/Some*Place/* where upstream expects it
+manifest-outside p.pkg Library/Extensions/X.kext
+manifest-outside p.pkg Library/Some%20Place/y
 installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
 installs p.pkg Library/Some%20Place/y"
 
 no "install-path: a path deviation excuses only the paths it names" "Library/PreferencePanes" "$REL
+$LAYOUT
 deviation install-path:Library/Extensions/* 10.9 loads kexts only from here
+manifest-outside p.pkg Library/Extensions/X.kext
+manifest-outside p.pkg Library/PreferencePanes/X.prefPane
+installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
+installs p.pkg Library/PreferencePanes/X.prefPane/Contents/Info.plist"
+alone "install-path: a path deviation excuses only the paths it names" "install-path" "$REL
+$LAYOUT
+deviation install-path:Library/Extensions/* 10.9 loads kexts only from here
+manifest-outside p.pkg Library/Extensions/X.kext
+manifest-outside p.pkg Library/PreferencePanes/X.prefPane
 installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
 installs p.pkg Library/PreferencePanes/X.prefPane/Contents/Info.plist"
 
-no "install-path: a path deviation with no reason excuses nothing" "install-path" "$REL
+alone "install-path: a path deviation with no reason excuses nothing" "install-path" "$REL
+$LAYOUT
 deviation install-path
+manifest-outside p.pkg Library/Extensions/X.kext
 installs p.pkg Library/Extensions/X.kext/Contents/Info.plist"
+
+ok "manifest: a scoped, reasoned deviation excuses a pkg with no manifest, like any other check" "$REL
+deviation manifest:p.pkg upstream's own pkg, mirrored unmodified
+deviation install-path:usr/local/upstream/* upstream's own layout
+installs p.pkg usr/local/upstream/bin/u"
 
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
 #       top-level bundle, a symlink, and a path with a space are each a way to report the wrong thing.
-if command -v pkgbuild >/dev/null 2>&1 && [ -x /usr/libexec/PlistBuddy ]; then
+if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&1 && [ -x /usr/libexec/PlistBuddy ]; then
   _pk="$(mktemp -d "${TMPDIR:-/tmp}/conformance-pkg.XXXXXX")"   # template: 10.9 BSD mktemp requires one
   _st="$_pk/stage"; _ap="$_st/Library/Application Support/Mavergreen/XUpdater.app/Contents"
-  mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/usr/local/x/bin" "$_pk/dist"
+  mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/usr/local/mavergreen/x/bin" "$_pk/dist" "$_pk/comp" "$_pk/archive"
   _plist() { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>%s</key><string>%s</string></dict></plist>\n' "$1" "$2" > "$3"; }
   _plist CFBundleIdentifier dev.mavergreen.XUpdater "$_ap/Info.plist"
   _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
   _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
-  echo x > "$_st/usr/local/x/bin/x"; ln -s bin/x "$_st/usr/local/x/link"
+  echo x > "$_st/usr/local/mavergreen/x/bin/x"; ln -s bin/x "$_st/usr/local/mavergreen/x/link"
   # platform: guarded macOS-only call -- the enclosing `if command -v pkgbuild` skips this block without it
+  /usr/libexec/PlistBuddy -c "Add :product string x" -c "Add :identifier string dev.mavergreen.x" \
+    -c "Add :outside array" -c "Add :outside:0 string Library/Application Support/Mavergreen/XUpdater.app" \
+    -c "Add :outside:1 string Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist" \
+    "$_st/usr/local/mavergreen/x/mavergreen.plist" >/dev/null
+  printf 'x dev.mavergreen.x\n' > "$_pk/product-names"
+  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
   pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
     "$_pk/dist/x-1.0.0-mavericks.1.pkg"
   # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
-  pkgbuild --quiet --root "$_st/usr/local/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
+  pkgbuild --quiet --root "$_st/usr/local/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
     --install-location /usr/local/y "$_pk/dist/y-1.0.0-mavericks.1.pkg"
-  _f="$(sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
+  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
+  pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.z --version 1.0.0-mavericks.1 --install-location /opt/z \
+    "$_pk/dist/z-1.0.0-mavericks.1.pkg"
+  cp "$_pk/dist/x-1.0.0-mavericks.1.pkg" "$_pk/comp/x-component.pkg"
+  sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --base-version 1.0.9 \
+    --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavericks.1.pkg" >/dev/null 2>&1 \
+    || { echo "FAIL: set_install_floor.sh could not build the archive this fixture reads"; exit 1; }
+  _f="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
+  _fa="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/archive" 1.0.0-mavericks.1 "$_pk")"
   rm -rf "$_pk"
   for want in \
     'installs x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/XUpdater.app/Contents/Info.plist' \
-    'installs x-1.0.0-mavericks.1.pkg usr/local/x/link' \
+    'installs x-1.0.0-mavericks.1.pkg usr/local/mavergreen/x/link' \
     'installs y-1.0.0-mavericks.1.pkg usr/local/y/bin/x' \
     'bundle x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/XUpdater.app dev.mavergreen.XUpdater' \
-    'launchd x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck'
+    'launchd x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck' \
+    'manifest x-1.0.0-mavericks.1.pkg x dev.mavergreen.x x' \
+    'component x-1.0.0-mavericks.1.pkg dev.mavergreen.x' \
+    'registered x dev.mavergreen.x' \
+    'manifest-outside x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/XUpdater.app' \
+    'manifest-outside x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist'
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
@@ -646,8 +793,21 @@ if command -v pkgbuild >/dev/null 2>&1 && [ -x /usr/libexec/PlistBuddy ]; then
     && { echo "FAIL: a framework nested inside the updater is not a top-level bundle; its identifier is not the product's: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q '^installs y-1.0.0-mavericks.1.pkg bin/' \
     && { echo "FAIL: payload paths must be read relative to the component's install-location, not to /: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -q '^manifest z-1.0.0-mavericks.1.pkg ' \
+    && { echo "FAIL: a manifest is read only from a payload installed at /, where a product tree always lands: $_f"; exit 1; }
+  for want in \
+    'pkg x-1.0.0-mavericks.1.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x' \
+    'installs x-1.0.0-mavericks.1.pkg usr/local/mavergreen/.base/1.0.9/mavergreen'
+  do
+    printf '%s\n' "$_fa" | grep -qxF "$want" \
+      || { echo "FAIL: a product archive's version and identity are the product's, not the base component's that precedes it: want $want -- got: $_fa"; exit 1; }
+  done
+  [ "$(printf '%s\n' "$_fa" | sed -n 's/^component x-1.0.0-mavericks.1.pkg //p' | tr '\n' ' ')" = 'dev.mavergreen.base dev.mavergreen.x ' ] \
+    || { echo "FAIL: an archive's components are reported in Distribution order, base first: $_fa"; exit 1; }
+  _ca="$(printf '%s\n' "$_fa" | sh "$S" 2>&1)" \
+    || { echo "FAIL: an archive set_install_floor.sh built from a laid-out stage must pass conformance: $_ca"; exit 1; }
 else
-  echo "artifact-conformance: no pkgbuild/PlistBuddy here -- the real-pkg payload fixture is skipped" >&2
+  echo "artifact-conformance: no pkgbuild/productbuild/PlistBuddy here -- the real-pkg payload fixture is skipped" >&2
 fi
 
 echo "PASS: artifact-conformance"

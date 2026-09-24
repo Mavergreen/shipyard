@@ -4,6 +4,13 @@
 #          Reads a fact stream on stdin (see artifact-facts.sh), one record per line:
 #            expected      <version>                              the version this release claims to be
 #            pkg           <file> <version> <floor> <identifier>  one per shipped .pkg
+#            component     <file> <identifier>                    one per component, in Distribution order
+#            installs      <file> <path>                          one per installed file or link (%20-encoded)
+#            bundle        <file> <path> <CFBundleIdentifier>     one per top-level bundle
+#            launchd       <file> <path> <Label>                  one per launchd job
+#            manifest      <file> <product> <identifier> <dir>    one per usr/local/mavergreen/<dir>/mavergreen.plist
+#            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
+#            registered    <product> <identifier|none>            what scripts/product-names registers the product to
 #            appcast       <file> <version> <enclosure> <length>  one per Sparkle appcast
 #            asset         <file> <bytes>                         one per file that will be published
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
@@ -136,21 +143,86 @@ while read -r kind file path label; do
     || fail launchd-label "$file installs $p with Label '$label' -- a job's plist is named <Label>.plist, or launchctl and every uninstaller look for the wrong file" "$label"
 done < "$facts"
 
+# spec: tests/artifact-conformance-test.sh -- a pkg that installs a product carries exactly one
+#       manifest, naming a product registered to one of its components; it installs only into
+#       that product's tree and what the manifest lists as outside (else uninstall leaves files
+#       behind); and its first component is dev.mavergreen.base, the only way the helper its
+#       postinstall runs is on disk by then.
+grep '^manifest ' "$facts" > "$tmp/manifests" || true
+grep '^component ' "$facts" > "$tmp/components" || true
+: > "$tmp/prod-of"
+for pk in $(sed -n 's/^pkg \([^ ][^ ]*\) .*/\1/p' "$facts" | sort -u); do
+  n="$(awk -v p="$pk" '$2 == p' "$tmp/manifests" | wc -l | tr -d ' ')"
+  product_files="$(awk -v p="$pk" '$1 == "installs" && $2 == p && index($3, "usr/local/mavergreen/.base/") != 1' "$facts" | wc -l | tr -d ' ')"
+  if [ "$product_files" -gt 0 ] && [ "$n" -ne 1 ]; then
+    fail manifest "$pk installs $product_files files but carries $n usr/local/mavergreen/<product>/mavergreen.plist manifests; it must carry exactly one, or nothing can find, update or uninstall what it installed" "$pk"
+    continue
+  fi
+  [ "$n" -eq 1 ] || continue
+  read -r _ _ mprod mid mdir <<EOF
+$(awk -v p="$pk" '$2 == p' "$tmp/manifests")
+EOF
+  [ "$mprod" = "$mdir" ] \
+    || fail manifest "$pk's manifest names product '$mprod' but sits in usr/local/mavergreen/$(dec "$mdir")" "$pk"
+  reg="$(awk -v m="$mprod" '$1 == "registered" && $2 == m { print $3; exit }' "$facts")"
+  [ "$reg" = "$mid" ] \
+    || fail manifest "$pk's product '$mprod' is not registered to $mid in shipyard's scripts/product-names (registered: ${reg:-none})" "$pk"
+  awk -v p="$pk" -v i="$mid" '$2 == p && $3 == i { f = 1 } END { exit !f }' "$tmp/components" \
+    || fail manifest "$pk's manifest names identifier $mid, which is not one of its components" "$pk"
+  first="$(awk -v p="$pk" '$2 == p { print $3; exit }' "$tmp/components")"
+  [ "$first" = dev.mavergreen.base ] \
+    || fail base "$pk installs a product but its first component is '${first:-none}', not dev.mavergreen.base -- the helper its postinstall runs would not be there" "$pk"
+  printf '%s %s\n' "$pk" "$mdir" >> "$tmp/prod-of"
+  awk -v p="$pk" -v pr="$mdir" '
+    NR == FNR { if ($1 == "manifest-outside" && $2 == p) o[$3] = 1; next }
+    $1 == "installs" && $2 == p && index($3, "usr/local/mavergreen/" pr "/") != 1 && index($3, "usr/local/mavergreen/.base/") != 1 {
+      hit = ""
+      if ($3 in o) hit = $3
+      else {
+        n = split($3, c, "/"); s = c[1]
+        for (i = 1; i < n && hit == ""; i++) { if (s in o) hit = s; s = s "/" c[i + 1] }
+      }
+      if (hit == "") print "unlisted " $3; else used[hit] = 1
+    }
+    END { for (k in o) if (!(k in used)) print "unused " k }' "$facts" "$facts" | sort > "$tmp/outside-$pk"
+  unlisted=0
+  while read -r why op; do
+    case "$why" in
+      unlisted) unlisted=$((unlisted + 1)); [ "$unlisted" -le 20 ] || continue
+        fail manifest "$pk installs $(dec "$op") outside its tree, and its manifest's outside list does not name it -- uninstall would leave it behind" "$pk" ;;
+      unused) fail manifest "$pk's manifest lists $(dec "$op") in outside, but the pkg installs nothing there" "$pk" ;;
+    esac
+  done < "$tmp/outside-$pk"
+  [ "$unlisted" -le 20 ] \
+    || fail manifest "$pk installs $((unlisted - 20)) more files outside its tree that its manifest's outside list does not name" "$pk"
+done
+
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
 #       paths" -- where a family product may put files by default. Anything else is a declared
 #       deviation scoped to the PATH (glob; `*` spans "/" and spaces), so excusing a kext's
 #       directory cannot quietly excuse a stray file elsewhere in the same pkg. Reported once per
-#       reason and capped, since one wrong directory can hold thousands of files.
+#       reason and capped, since one wrong directory can hold thousands of files. Matched while
+#       still encoded (encoding preserves these prefixes), so only a path that needs a deviation
+#       costs a decode.
 installs_seen=0
+last_file=""; prod=""; has_base=no
 : > "$tmp/ip-dev"; : > "$tmp/ip-fail"
 while read -r kind file path; do
   [ "$kind" = installs ] || continue
   installs_seen=$((installs_seen + 1))
-  p="$(dec "$path")"
-  case "$p" in
-    usr/local/*|Applications/*|"Library/Application Support/Mavergreen/"*) continue ;;
+  if [ "$file" != "$last_file" ]; then
+    last_file="$file"
+    prod="$(awk -v f="$file" '$1 == f { print $2; exit }' "$tmp/prod-of")"
+    has_base=no
+    awk -v f="$file" '$2 == f && $3 == "dev.mavergreen.base" { g = 1 } END { exit !g }' "$tmp/components" && has_base=yes
+  fi
+  if [ -n "$prod" ]; then case "$path" in "usr/local/mavergreen/$prod/"*) continue ;; esac; fi
+  case "$path" in
+    usr/local/mavergreen/.base/*) [ "$has_base" = no ] || continue ;;
+    Applications/*|"Library/Application%20Support/Mavergreen/"*) continue ;;
     Library/LaunchAgents/dev.mavergreen.*.plist|Library/LaunchDaemons/dev.mavergreen.*.plist) continue ;;
   esac
+  p="$(dec "$path")"
   r="$(deviation_reason install-path "$p")"
   if [ -n "$r" ]; then printf '%s\n' "$r" >> "$tmp/ip-dev"
   else printf '%s: %s\n' "$file" "$p" >> "$tmp/ip-fail"; fi
@@ -161,7 +233,7 @@ done
 nfail="$(wc -l < "$tmp/ip-fail" | tr -d ' ')"
 if [ "$nfail" -gt 0 ]; then
   head -20 "$tmp/ip-fail" | while IFS= read -r l; do
-    echo "conformance: install-path: $l -- outside usr/local, Applications, Library/Application Support/Mavergreen and dev.mavergreen.* launchd jobs" >&2
+    echo "conformance: install-path: $l -- outside usr/local/mavergreen/<its product>, usr/local/mavergreen/.base (with the base component), Applications, Library/Application Support/Mavergreen and dev.mavergreen.* launchd jobs" >&2
   done
   [ "$nfail" -le 20 ] || echo "conformance: install-path: ... and $((nfail - 20)) more" >&2
   status=1
