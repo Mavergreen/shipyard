@@ -556,8 +556,8 @@ appcast appcast.xml 0.5.5 p.pkg 10 10.9.5
 asset p.pkg 10
 enclosure-url appcast.xml https://github.com/Mavergreen/magic-trackpad2/releases/download/v0.5.4/p.pkg'
 
-# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
-#       paths" -- what a pkg installs carries the family's identity and lands where the family puts
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
+#       identity" -- what a pkg installs carries the family's identity and lands where the family puts
 #       things, unless a deviation scoped to that identifier or path says why not.
 REL='expected 1.0.0-mavericks.1
 pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x

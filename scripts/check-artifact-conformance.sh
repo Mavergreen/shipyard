@@ -121,8 +121,8 @@ while read -r kind file ver floor ident; do
   esac
 done < "$facts"
 
-# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
-#       paths" -- SIBLINGS: what a pkg installs carries the family's identity. A deviation for these
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
+#       identity" -- SIBLINGS: what a pkg installs carries the family's identity. A deviation for these
 #       is scoped to the bundle identifier or Label it excuses, not to the pkg that ships it.
 dec() { printf '%s' "$1" | sed -e 's/%20/ /g' -e 's/%25/%/g'; }
 while read -r kind file path id; do
@@ -210,8 +210,8 @@ EOF
     || fail manifest "$pk installs $((unlisted - 20)) more files outside its tree that its manifest's outside list does not name" "$pk"
 done
 
-# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
-#       paths" -- where a family product may put files by default. Anything else is a declared
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
+#       identity" -- where a family product may put files by default. Anything else is a declared
 #       deviation scoped to the PATH (glob; `*` spans "/" and spaces), so excusing a kext's
 #       directory cannot quietly excuse a stray file elsewhere in the same pkg. Reported once per
 #       reason and capped, since one wrong directory can hold thousands of files. Matched while

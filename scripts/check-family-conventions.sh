@@ -552,7 +552,7 @@ fi
 
 # spec: SKILL.md "Family conventions" check 21 -- a repo that builds a .pkg must run artifact
 #       conformance, or nothing checks what its pkg installs: the identity and install-path rules
-#       ("Identity and install paths") live in check-artifact-conformance.sh, and a product that
+#       ("Install layout and identity") live in check-artifact-conformance.sh, and a product that
 #       never calls it is exempt from all of them by omission. Tests are excluded: fixtures build
 #       throwaway pkgs on purpose.
 builds_pkg=""

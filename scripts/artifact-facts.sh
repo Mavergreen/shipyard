@@ -30,8 +30,8 @@ abort() {  # $1 = why.
 
 printf 'expected %s\n' "$version"
 
-# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Identity and install
-#       paths" -- what a pkg INSTALLS, read from its payload rather than from the recipe that built it:
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
+#       identity" -- what a pkg INSTALLS, read from its payload rather than from the recipe that built it:
 #       every installed file or link (installs), every top-level bundle's CFBundleIdentifier (bundle),
 #       every launchd job's Label (launchd). Paths are relative to "/" and carry spaces as %20, since
 #       the stream is whitespace-delimited and "Application Support" is in nearly every product.
