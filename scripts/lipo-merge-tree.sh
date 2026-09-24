@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- lipo merges the two trees
 #   usage: lipo-merge-tree.sh --a DIR --b DIR --out DIR [--allow-differ RELPATH]... [--require-archs "ARCH ..."]
 #          Merges two single-arch builds of the same thing into one universal tree -- shipyard's CMake
 #          (x86_64/10.9 + arm64/11.0) and its updater app. Identical files are copied; files Mach-O in

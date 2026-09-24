@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: check-readme-reviewed.sh [readme-path]
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A repo's FIRST
 #       EVER release needs a README a human has read" -- gated by a marker line the generated README

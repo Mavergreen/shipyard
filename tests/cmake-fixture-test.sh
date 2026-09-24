@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: cmake-fixture-test.sh
 #          Drives tests/lib/cmake_fixture.sh's copy_cmake_root against the shape that broke three
 #          tests on macos-26 and could not break anything here: a read-only real tree plus a symlink

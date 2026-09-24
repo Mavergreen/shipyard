@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: ingredient-pins.sh [caller-workflow-path]
 #          Prints this repo's build-ingredient pin paths, one per line. Source of truth is the
 #          repo's OWN repackage caller: the paths it watches are the ingredient pins, minus

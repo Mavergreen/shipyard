@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 set -eu
 cd "$(dirname "$0")/.."
 python3 -m json.tool default.json >/dev/null || { echo "invalid JSON in default.json"; exit 1; }

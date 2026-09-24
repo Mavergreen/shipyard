@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: build-cmake-test.sh
 #          build-cmake.sh must refuse bytes Kitware did not publish: the tarball is verified against
 #          the release's own cmake-<v>-SHA-256.txt, fetched from the same place, so a tampered or

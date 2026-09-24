@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # Tests for scripts/assert_appcast_upgradeable.sh -- the "auto-update will see this as newer" gate.
 # A local fixture repo with prior -mavericks.N tags stands in for a release history; no network, no
 # Sparkle framework (the gate reasons over the numeric domain SUStandardVersionComparator orders).

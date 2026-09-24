@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: msc-template-test.sh
 #          scripts/templates/msc.sh is how a product's build scripts find shipyard with no registry:
 #          $SHIPYARD_SCRIPTS when CI exported it, else asking shipyard-cmake where find_package

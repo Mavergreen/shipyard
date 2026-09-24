@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: assert_tag_publishable.sh VERSION REPO_URL REF_TYPE REF_NAME SHA
 #          Exit 0 to publish, 1 to refuse. The caller's own remote is asked BY URL: publish-release.yml
 #          checks out shipyard, never the calling repo, so there is no `origin` here to ask. Every

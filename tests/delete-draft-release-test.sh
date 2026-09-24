@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/delete-draft-release.sh"

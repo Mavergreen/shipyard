@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: deviations-test.sh
 #          ONE parser for INGREDIENTS.md's "## Conformance deviations": the artifact checker and the
 #          conventions gate must read a declared exception identically, and a deviation without a

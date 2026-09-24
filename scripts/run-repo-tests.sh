@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: run-repo-tests.sh [ctest-preset]
 #          Runs this repo's tests the same way every repo does. With a preset and a CMakeLists.txt
 #          declaring `add_test`, drives ctest (container-tools, tailscale); otherwise runs every

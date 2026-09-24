@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "Versioning" -- resolve-version.sh is the ONE way a repo learns its full version
 #       at build time; VERSION is a build product, not an input (a committed copy drifts, as
 #       container-tools proved building -mavericks.14 from a file saying .2).

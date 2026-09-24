@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: mav_fetch_pinned URL SHA256 CACHE_DIR TARBALL_NAME [tar-member...]
 #          Sourced POSIX-sh helper for the mavericks-* fetch scripts. Provides the
 #          download+verify+extract skeleton they all share. SOURCE it, don't execute it; the caller

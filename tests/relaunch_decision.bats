@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # Unit test for updater/relaunch_decision.h -- the post-relaunch decision factored out of main.m.in so
 # the retry logic is testable without a GUI. Compiles a tiny C driver against the header and runs it.
 

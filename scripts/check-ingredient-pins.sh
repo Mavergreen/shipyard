@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: check-ingredient-pins.sh [caller-workflow-path]
 #          Guards the ingredient pin declaration. The notes and the repackage trigger read ONE list
 #          (ingredient-pins.sh), so they cannot disagree -- but a list can still be wrong on its own:

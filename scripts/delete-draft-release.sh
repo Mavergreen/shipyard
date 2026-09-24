@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: delete-draft-release.sh OWNER/REPO TAG     (needs gh, authenticated via GH_TOKEN)
 #          Deletes every DRAFT release of one tag -- never a published one. publish-release.yml calls
 #          it between publish attempts and after the last one fails, so a failed publish leaves

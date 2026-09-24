@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # Tests for mav_fetch_pinned (scripts/mavericks_fetch.sh). No network: a local
 # fixture tarball is served via a file:// URL.
 

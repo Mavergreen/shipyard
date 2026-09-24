@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- sourced by a pkg postinstall, on the Mac it installs to
 #   usage: SOURCED by a product's postinstall (never executed). Defines mav_stop_gui_instance
 #          Contents/MacOS/<exec> <console-uid>, the stop-the-old-instance step a postinstall that
 #          relaunches a GUI menu-bar app must call first (assert_gui_relaunch_safe.sh gates on this).

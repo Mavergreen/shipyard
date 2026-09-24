@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "shipyard: consume its facilities" -- "A repo that ships the tooling publishes
 #       itself with the commit under test, not with @v1", and the 2026-09-09 conventions-check-7d
 #       incident that rule prevents a repeat of.

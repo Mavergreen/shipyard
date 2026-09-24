@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: release-notes.sh --tag T --version V --product P --out FILE [--line L] [--min-os M]
 #     --tag/--version   the release tag and full version (equal for most repos; golang's differ)
 #     --product         the BARE product noun ("OpenSSH", "Go", "Signal Desktop"). This composes the

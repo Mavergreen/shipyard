@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # mavericks_require_icon: forced icon decision (FATAL unless real .icns or explicit generic).
 SHARED="${BATS_TEST_DIRNAME}/.."
 

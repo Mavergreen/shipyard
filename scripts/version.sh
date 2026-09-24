@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: version.sh [auto|local]
 #          Derives the full version (<upstream>-mavericks.N), its tag, and whether to release.
 #            auto  (default): new upstream (no tag yet) -> N=1, RELEASE=yes; else current N,

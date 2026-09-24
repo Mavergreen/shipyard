@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: check-family-conventions.sh
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md, "Family
 #       conventions (checked, not just written down)" -- the why and history for every check below

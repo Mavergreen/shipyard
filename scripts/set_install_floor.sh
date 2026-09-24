@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- productbuild and pkgutil write the distribution
 #   usage: set_install_floor.sh --identifier ID --title T --component COMP.pkg --out OUT.pkg
 #            [--resources DIR] [--welcome FILE] [--license FILE]
 #            [--require-scripts] [--host-arch x86_64] [--min-os 10.9.5]

@@ -1,5 +1,5 @@
 #!/bin/sh
-#   usage: release-state.sh [--root DIR] [--ref REV] [--render]
+# platform: host-agnostic
 #          Renders this product's declared state canonically, and hashes it. What is declared lives
 #          in INGREDIENTS.md's "## Declared state" section; declared-state.sh is the parser and
 #          documents the grammar. publish-release.yml records the digest; release-needed.sh looks it

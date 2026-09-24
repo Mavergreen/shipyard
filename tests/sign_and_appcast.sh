@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: scripts/sign_and_appcast.sh -- mavericks-ed25519 carries the real ed25519-sign; this
 #       stubs the signer so the test exercises this script's orchestration, not the crypto (no
 #       compiler or network fetch needed).

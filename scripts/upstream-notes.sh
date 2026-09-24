@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: upstream-notes.sh [--url-only] <version>          (<upstream>-mavericks.N)
 #          Links upstream's own release notes, as a markdown section for the release notes (Sparkle
 #          appcast <description> + GitHub Release body), when this release ships an upstream version

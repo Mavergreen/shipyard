@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: release-state-record.sh --notes-file F --digest v1:sha256:<hex>
 #          release-state-record.sh --tag T --digest v1:sha256:<hex> [--repo OWNER/NAME]
 #          release-state-record.sh --tag T --digest D [--replace-unreadable]

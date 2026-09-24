@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "A release is a declared state, not an event" -- release-state-record.sh is the
 #       only writer of a release body outside the publish path, deliberately narrow: it appends
 #       one line and touches nothing else, is idempotent so the nightly backstop can run forever,

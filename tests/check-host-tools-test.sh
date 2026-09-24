@@ -106,4 +106,8 @@ printf '%s\n' "$out" | grep -q 'scripts/a.sh:3' || { echo "FAIL: a violation mus
 out="$(cd "$work/ok" && sh "$S" 2>&1)"
 printf '%s\n' "$out" | grep -q 'whole tree' || { echo "FAIL: the ok line must say it scanned the whole tree: $out"; exit 1; }
 
+# spec: SKILL.md check 22 -- shipyard itself has adopted the split, and must stay adopted.
+(cd "$here/.." && sh "$S" --required >/dev/null 2>&1) \
+  || { echo "FAIL: shipyard's own tree must pass check-host-tools --required:"; (cd "$here/.." && sh "$S" --required 2>&1 | sed 's/^/    | /'); exit 1; }
+
 echo "PASS: check-host-tools"

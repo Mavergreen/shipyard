@@ -1,3 +1,4 @@
+# platform: host-agnostic
 # spec: R-P1-21 -- shared by the three tests that build a fixture cmake PREFIX
 #       (shipyard-cmake-refusal, msc-template, assert-installed-shipyard); tests/lib/ is not itself
 #       run, since run-repo-tests.sh takes top-level tests only.

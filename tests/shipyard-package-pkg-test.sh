@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: 2026-09-11 decision 1 -- the pkg is ONE prefix holding shipyard's own CMake and shipyard
 #       itself, three uniquely named commands in /usr/local/bin, and one universal updater. No
 #       registration, no arch picking.

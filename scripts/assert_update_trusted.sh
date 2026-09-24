@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: assert_update_trusted.sh --pkg PKG --signature SIG --verifier ED25519_VERIFY
 #                                   [--pubkey B64] [--allow-key-change]
 #          Messages go to stderr (sign_and_appcast.sh's stdout is the appcast). Exit 0 trusted, 1

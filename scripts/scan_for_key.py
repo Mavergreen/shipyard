@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# platform: host-agnostic
 """Fail when any FILE carries a piece of $SPARKLE_PRIVATE_KEY -- saying where, never what.
 
     SPARKLE_PRIVATE_KEY=... scan_for_key.py FILE|DIR...

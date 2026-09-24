@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: audit-repo-settings.sh [org]        (default: Mavergreen)
 #          Prints a verdict line and exits non-zero when anything is off, to be usable from a
 #          scheduled job with a PAT later.

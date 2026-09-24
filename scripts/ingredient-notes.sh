@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: ingredient-notes.sh <prev-tag> [pin-path[:KEY]...]
 #          Describes which build-ingredient pins moved since the previous release, as a markdown
 #          section for the release notes (Sparkle appcast <description> + GitHub Release body).

@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- lipo thins the framework
 #   usage: fetch_sparkle_framework.sh
 #          Fetches + caches + checksum-verifies the PREBUILT Sparkle 1.27.3 framework, producing a
 #          per-arch thinned copy and printing its path. Sparkle bytes are never committed --

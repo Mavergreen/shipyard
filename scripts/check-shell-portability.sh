@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: check-shell-portability.sh [file ...]
 #          Gate: no shell construct that the 10.9 base system lacks, in the scripts this family
 #          ships. Scans the repo's git-TRACKED *.sh and *.bats (so vendored or fetched upstream

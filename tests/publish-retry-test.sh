@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "Release notes" section, "A failed upload must not strand a draft" -- the golang
 #       1.26.8-mavericks.3 incident and the retry design this asserts are documented there.
 set -eu

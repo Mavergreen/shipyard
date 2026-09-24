@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: check-release-notes.sh <file> <version>
 #          Is this file the family's release body for this exact version? Used twice: release-notes.sh
 #          self-checks what it just generated, and publish-release.yml checks what it is about to

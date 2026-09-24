@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- lipo checks the installed universal binaries
 #   usage: assert-installed-shipyard.sh --cmake-version V [--root DIR]
 #          Asserts that an INSTALLED mavericks-shipyard is what we meant to ship: shipyard-cmake runs
 #          and is the CMake in cmake.pin; it is OURS (universal, with shipyard-ctest and

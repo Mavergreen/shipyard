@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: MAVERICKS_NOTES_LINE=<line> release-notes-file.sh <TAG> <FULL_VERSION> [PRODUCT_NAME]
 #          Back-compat wrapper delegating to the generator, release-notes.sh: six repos still call
 #          this positional signature from their release.yml. The PRODUCT argument here is the

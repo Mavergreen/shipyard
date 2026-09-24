@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- lipo and otool read Mach-O load commands
 #   usage: assert_binary_compatible.sh <binary>...
 #          10.9 userland compat guard for one or more shipped Mach-O binaries. Per binary:
 #          (1) no post-10.9 UNDEFINED import, (2) no post-10.9 ObjC selector sent, (3) arch exactly

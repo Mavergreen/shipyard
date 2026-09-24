@@ -1,3 +1,4 @@
+# platform: host-agnostic
 bats_require_minimum_version 1.5.0
 
 # require_key_scan.sh DIST RECORD_DIR -- publish-release.yml's gate: a release that was signed (some

@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "A release is a declared state, not an event" -- ruling 16. The answer must
 #       depend on the digest and never on the version: version.sh's `auto` mode maps every
 #       declared state of a given upstream to ONE version, so "a release exists for this version"

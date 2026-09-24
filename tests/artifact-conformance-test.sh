@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: scripts/check-artifact-conformance.sh consumes a fact stream so it can be tested without
 #       fabricating real .pkg files; the extraction that produces those facts
 #       (scripts/artifact-facts.sh) is exercised for real in CI at package time.
@@ -624,8 +625,10 @@ if command -v pkgbuild >/dev/null 2>&1 && [ -x /usr/libexec/PlistBuddy ]; then
   _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
   _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
   echo x > "$_st/usr/local/x/bin/x"; ln -s bin/x "$_st/usr/local/x/link"
+  # platform: guarded macOS-only call -- the enclosing `if command -v pkgbuild` skips this block without it
   pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
     "$_pk/dist/x-1.0.0-mavericks.1.pkg"
+  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
   pkgbuild --quiet --root "$_st/usr/local/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
     --install-location /usr/local/y "$_pk/dist/y-1.0.0-mavericks.1.pkg"
   _f="$(sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"

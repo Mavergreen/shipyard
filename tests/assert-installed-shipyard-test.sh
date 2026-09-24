@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- tests a lipo-based assertion, and on Linux shipyard refuses no cmake
 #   usage: assert-installed-shipyard-test.sh
 #          Drives scripts/assert-installed-shipyard.sh against a FIXTURE root shaped like the pkg's
 #          layout, built from this box's own cmake. Three of its four assertions run for real here;

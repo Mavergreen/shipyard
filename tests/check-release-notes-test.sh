@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "Release notes" -- this is the family shape for a release body: a title naming
 #       THIS version, a What changed section, no empty sections, a non-empty body. Six products
 #       once published "Automated release for Mac OS X 10.9 (Mavericks)." as their entire notes.

@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: resolve-version.sh [auto|local]
 #          Prints this repo's full version (<upstream>-mavericks.N), writing VERSION if it is not
 #          there yet. VERSION is a build PRODUCT -- written here, read by cmake and the updater,

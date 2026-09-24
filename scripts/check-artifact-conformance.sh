@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: artifact-facts.sh dist "$VER" | check-artifact-conformance.sh
 #          Reads a fact stream on stdin (see artifact-facts.sh), one record per line:
 #            expected      <version>                              the version this release claims to be

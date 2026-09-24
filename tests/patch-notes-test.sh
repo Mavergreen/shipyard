@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: scripts/patch-notes.sh -- a repackage that adds or changes OUR modifications to the upstream
 #       source is a behaviour change, not "packaging changes only": tailscale 1.102.4-mavericks.7
 #       added patches/darwin-exit-nodes.patch (exit nodes on macOS) and its notes said otherwise.

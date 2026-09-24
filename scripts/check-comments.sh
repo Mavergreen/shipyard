@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: check-comments.sh [path...]
 #          with no paths, scans every tracked *.sh and *.yml. A path named on
 #          the command line that is not a readable file is a usage error, not

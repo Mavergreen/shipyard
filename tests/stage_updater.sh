@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- plutil lints the staged agent
 set -eu
 # spec: scripts/run-repo-tests.sh -- exit 77 is the family's SKIP idiom, not a failure. Called
 #       bare, as the shared runner does when it globs tests/*.sh, there is no root to test

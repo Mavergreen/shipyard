@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # Tests for scripts/clone_pinned.sh -- the git-source supply-chain boundary. No network: a local
 # fixture repo (tag v1 on commit A, then commit B on the default branch) stands in for upstream. The
 # fixture allows fetching a ref-reachable sha (as GitHub does), so the fetch-by-digest path is exercised.

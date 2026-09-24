@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "Release notes" -- before this generator, notes were best-effort prose: every
 #       generated section was appended with `|| true` and 2>/dev/null, so a broken hook, an
 #       unfindable baseline or a shallow clone all produced a SHORTER body and a green run.

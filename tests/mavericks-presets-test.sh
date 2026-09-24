@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # platform: CMake refuses to reconfigure a binaryDir last generated from a
 #           different source path ("does not match the source ... used to
 #           generate cache"), so two checkouts of one repo sharing one fixed

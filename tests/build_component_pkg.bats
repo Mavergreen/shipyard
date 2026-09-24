@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: macOS-only -- pkgbuild is the subject
 # Tests for scripts/build_component_pkg.sh and scripts/assert_pkg_installs_in_place.sh -- the
 # install-in-place guarantee. A tiny real .app bundle stands in for a product payload, so pkgbuild
 # actually classifies it as a relocatable/version-checked component (a plain-file payload would not

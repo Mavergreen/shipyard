@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "A release is a declared state, not an event" -- the "## Declared state" section
 #       of INGREDIENTS.md is ONE machine-readable list, deliberately a subset of the file's prose
 #       table above it; a second declaration file would be a second list of the same pins.

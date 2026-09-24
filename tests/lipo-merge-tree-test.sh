@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- lipo is the subject
 #   usage: lipo-merge-tree-test.sh
 #          Two builds of one thing differing ONLY by architecture must merge into one universal tree;
 #          anything else differing must be refused unless the caller declared that path.

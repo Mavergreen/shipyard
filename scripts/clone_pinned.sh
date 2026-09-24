@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: clone_pinned.sh REPO REF DIGEST DEST
 #          The family's git-source supply-chain boundary. Idempotently fetches a pinned git source
 #          into a shared, mode/host-independent cache and VERIFIES the checkout is exactly the pinned

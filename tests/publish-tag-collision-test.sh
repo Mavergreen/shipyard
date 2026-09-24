@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "Release workflow" -- the version is baked into pkgbuild --version, the pkg
 #       filename, and the appcast's <sparkle:version>, so a tag collision must rebuild
 #       (re-dispatch) and must never be relabeled. What the guard DECIDES is

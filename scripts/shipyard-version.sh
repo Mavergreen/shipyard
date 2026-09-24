@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: shipyard-version.sh          (prints FULL=<line>.<count> and TAG=v<line>.<count>)
 #          shipyard's own version -- UPSTREAM_VERSION holds the LINE (major.minor); the patch is the
 #          commit count, so a new commit is necessarily a new version with no discipline to remember.

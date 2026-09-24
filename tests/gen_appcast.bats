@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 
 setup() { SCRIPT="${BATS_TEST_DIRNAME}/../scripts/gen_appcast.sh"; }
 

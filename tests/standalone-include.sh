@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- needs shipyard-cmake, which has no Linux build
 set -eu
 SC="${SHIPYARD_CMAKE:-$(command -v shipyard-cmake 2>/dev/null || true)}"
 [ -n "$SC" ] || { echo "SKIP: no shipyard-cmake (install the shipyard pkg, or set SHIPYARD_CMAKE)"; exit 77; }

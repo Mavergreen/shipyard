@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- lipo is the subject
 # spec: check-family-conventions.sh check 10's `lipo -archs` replacement advice must actually be
 #       equivalent, on BOTH the platform that lacks -archs (10.9) and the platform CI runs on
 #       (Tahoe) -- asserting the rule's advice, not the rule, since a lint that names a fix

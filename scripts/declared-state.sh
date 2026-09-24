@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: declared-state.sh [repo-root]
 #          Prints what this product declares itself to BE, for release purposes: one line per entry,
 #          "<name><TAB><path>" or "<name><TAB><path>:<KEY>", in declaration order. No section, or no

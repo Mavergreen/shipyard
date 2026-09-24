@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- the updater is Objective-C against AppKit
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"

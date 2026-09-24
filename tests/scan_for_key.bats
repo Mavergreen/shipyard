@@ -1,3 +1,4 @@
+# platform: host-agnostic
 bats_require_minimum_version 1.5.0
 
 # scan_for_key.py FILE... fails when any file carries a piece of $SPARKLE_PRIVATE_KEY in any encoding

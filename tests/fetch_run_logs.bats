@@ -1,3 +1,4 @@
+# platform: host-agnostic
 bats_require_minimum_version 1.5.0
 
 # fetch_run_logs.sh REPO RUN_ID DIR: every FINISHED job's log in this run, one file each, for

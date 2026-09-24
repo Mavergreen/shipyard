@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: deviations.sh <repo>
 #          Prints the deviations declared in <repo>/INGREDIENTS.md under "## Conformance deviations",
 #          one per line as "<check> <glob or *> <reason>". The grammar is "- <check>[:<glob>]:

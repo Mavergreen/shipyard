@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: macOS-only -- the updater is Objective-C against AppKit
 # mavericks_add_updater_app: ICON is optional. With no ICON you must explicitly opt into the
 # generic macOS app icon (ALLOW_GENERIC / -DMAVERICKS_ALLOW_GENERIC_ICON=ON); doing so ships an
 # empty CFBundleIconFile (the standard generic app icon) and embeds no artwork.

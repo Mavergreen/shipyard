@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: scripts/run-repo-tests.sh -- exit 77 is the SKIP idiom container-tools already uses for
 #       its boot-proof.
 set -eu

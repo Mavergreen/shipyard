@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- pkgutil and PlistBuddy read the updater out of a pkg
 #   usage: updater_pubkey.sh PKG   ->   SUPublicEDKey=<base64>
 #                                       SUFeedURL=<url>
 #          Prints the SUPublicEDKey and SUFeedURL of the Sparkle updater a .pkg installs -- what a

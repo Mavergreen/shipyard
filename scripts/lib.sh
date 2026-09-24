@@ -1,3 +1,4 @@
+# platform: host-agnostic
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Consolidation
 #       backlog" -- promoted here from three byte-identical per-repo copies (golang,
 #       macports-legacy-support, ed25519); sourced, no side effects. $MAVERICKS_ROOT defaults to the

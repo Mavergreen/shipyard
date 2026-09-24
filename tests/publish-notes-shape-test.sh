@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: check-family-conventions.sh clause 14 gates a repo's wiring at PR time; publish-release.yml
 #       itself is the one place EVERY release passes through -- hand-tagged, re-dispatched, or from a
 #       repo that never had the PR gate -- so it is the only check a body regression cannot route

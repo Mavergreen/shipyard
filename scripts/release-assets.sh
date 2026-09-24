@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: release-assets.sh <dir> [notes-name]
 #          Prints the release assets in a downloaded artifact directory, one per line: everything
 #          except the notes file and any pre-existing SHA256SUMS (the publish workflow regenerates

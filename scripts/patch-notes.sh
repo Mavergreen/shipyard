@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: patch-notes.sh <prev-tag> [exclude-path[:KEY]...]
 #          Describes which of OUR modifications to the upstream source changed between the previous
 #          release and HEAD, as a markdown section for the release notes (the same register as

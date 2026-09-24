@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: previous-release-tag.sh [--tag-glob PATTERN] [tag-to-exclude] [upstream-glob]
 #          Prints the newest existing release tag (<upstream>-mavericks.N by default), or nothing when
 #          there is none. Generated release notes use it as the "changed since" baseline. upstream-glob

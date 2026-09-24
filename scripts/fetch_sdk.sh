@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- xcrun and otool locate and check the SDK's tapi
 #   usage: fetch_sdk.sh
 #          Fetches + caches + checksum-verifies MacOSX10.9.sdk. Prints the SDK root on stdout. Used
 #          ONLY to cross-build for 10.9 from a modern host (a native 10.9 box uses its own system

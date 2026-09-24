@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- pkgutil expands the ed25519 pkg
 #   usage: sign_and_appcast.sh --channel-title T --version V --pkg-url URL \
 #            --notes-file FILE --pkg PKG [--signer BIN] [--verifier BIN] [--min-os 10.9.5] \
 #            [--pubkey B64] [--allow-key-change]  > appcast.xml

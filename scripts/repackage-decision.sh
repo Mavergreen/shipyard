@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: repackage-decision.sh
 #          env in:  CHANGED (newline-separated paths changed this push)
 #                   OWN_UPSTREAM_PATHS (newline/space-separated paths or path:KEY entries, may be

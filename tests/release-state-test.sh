@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "A release is a declared state, not an event" -- the rendering is a WIRE FORMAT;
 #       every published release records a digest computed from it, so a change here invalidates
 #       all of them. A format bump means recompute, never republish. The golden values below are

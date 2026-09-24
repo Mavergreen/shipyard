@@ -1,3 +1,4 @@
+# platform: host-agnostic
 bats_require_minimum_version 1.5.0
 
 # assert_tag_publishable.sh VERSION REPO_URL REF_TYPE REF_NAME SHA -- publish-release.yml's guard.

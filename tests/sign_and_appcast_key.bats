@@ -1,3 +1,4 @@
+# platform: host-agnostic
 bats_require_minimum_version 1.5.0
 
 # The signing key must never be recoverable from a CI log. A public repo's Actions logs are public,

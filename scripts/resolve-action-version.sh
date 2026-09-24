@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: resolve-action-version.sh <ref> [repo-url]
 #          What shipyard version is a consumer's `uses: Mavergreen/shipyard/...@<ref>` actually
 #          getting? An EXACT pin (v1.0.126) already IS the version, no network. A MOVING tag (v1) is

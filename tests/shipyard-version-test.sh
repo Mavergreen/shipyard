@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: SKILL.md "shipyard: consume its facilities" -- shipyard's own version is
 #       <UPSTREAM_VERSION>.<commit count>, so a new commit is necessarily a new version.
 set -eu

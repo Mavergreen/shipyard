@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- pkgbuild and PlistBuddy build the component pkg
 #   usage: build_component_pkg.sh --root DIR --identifier ID --version V --install-location LOC
 #                                  --out PKG [--scripts DIR]
 #          Prints the output .pkg path on stdout (everything else goes to stderr), matching

@@ -1,3 +1,4 @@
+# platform: macOS-only -- pkgbuild and productbuild build the fixtures
 # Fixtures for the Sparkle-key checks (tests/lib/ is not itself run: run-repo-tests.sh takes top-level
 # tests only). Real .pkg files, built with the same pkgbuild/productbuild the products use.
 

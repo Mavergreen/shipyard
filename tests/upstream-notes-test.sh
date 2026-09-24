@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 set -eu
 work="$(mktemp -d "${TMPDIR:-/tmp}/upstream-notes.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 here="$(cd "$(dirname "$0")" && pwd)"

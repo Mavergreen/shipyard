@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: assert_appcast_upgradeable.sh --appcast FILE --version V [--upstream-glob G | --tag-glob G]
 #          --version        the release being published -- the TAG name; excluded from the tag
 #                           search so a tag build compares against its PREDECESSOR, not itself.

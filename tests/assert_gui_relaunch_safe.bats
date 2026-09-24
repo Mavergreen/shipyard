@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: host-agnostic
 # Tests for scripts/assert_gui_relaunch_safe.sh (the "two menu-bar icons after an update" gate) and
 # the mav_stop_gui_instance helper it points offenders at. Pure text/process fixtures; no pkg install.
 

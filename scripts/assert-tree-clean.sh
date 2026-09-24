@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: assert-tree-clean.sh --record   (before the build)
 #          assert-tree-clean.sh            (after the build)
 

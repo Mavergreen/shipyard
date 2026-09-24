@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: assert_gui_relaunch_safe.sh <postinstall-file> [more...]
 # platform: presence gate for the "two menu-bar icons after an update" bug: a postinstall that
 #           (re)launches a GUI menu-bar app MUST also stop the prior instance, or macOS runs both.

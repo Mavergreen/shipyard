@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: fetch_run_logs.sh REPO RUN_ID DIR      ->  DIR/job-<id>.log ...
 #          Fetches the log of every FINISHED job in a workflow run, one file each, for
 #          scan-for-key.yml to scan. Finished only: the job running this is still writing its own

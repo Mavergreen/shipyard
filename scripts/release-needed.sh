@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: release-needed.sh --digest v1:sha256:<hex> --version <full> [--repo OWNER/NAME]
 #          Has this declared state already been released? One line out; decides nothing about HOW to
 #          publish.

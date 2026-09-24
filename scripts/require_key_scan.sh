@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: require_key_scan.sh DIST RECORD_DIR   (RECORD_DIR: where the sparkle-key-scan artifact
 #                                                 landed). CI-only.
 #          publish-release.yml's gate: a SIGNED release -- some file in it carries a

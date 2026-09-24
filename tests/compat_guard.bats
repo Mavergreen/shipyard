@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+# platform: macOS-only -- every case needs Apple clang, and all of them skip without it
 # Unit tests for scripts/assert_binary_compatible.sh. Builds tiny x86_64/10.9 fixture Mach-Os
 # with controlled symbols. If the host clang cannot emit an x86_64/10.9 slice, the
 # arch/min-OS-dependent cases skip, but the symbol logic still runs.

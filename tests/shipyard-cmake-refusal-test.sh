@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: shipyard-cmake-refusal-test.sh
 #          Only shipyard's own cmake may configure against shipyard: "its own" means the running
 #          cmake lives in a prefix that also holds a shipyard. Any other cmake, even one pointed

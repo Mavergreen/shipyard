@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 #   usage: build-info.sh <outfile> key=value [key=value ...]
 #          Keys are free-form; conformance compares any key that appears in more than one variant,
 #          except the ones that are SUPPOSED to differ (variant, arch, prefix, pkg, identifier).

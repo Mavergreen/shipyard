@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- pkgutil expands the pkg
 #   usage: assert_pkg_installs_in_place.sh PKG [PKG...]
 #          Gates a BUILT .pkg against the two install-time footguns build_component_pkg.sh disables,
 #          by reading what the .pkg ACTUALLY declares in its PackageInfo -- so a regression (a

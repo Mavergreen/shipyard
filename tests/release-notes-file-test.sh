@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # spec: release-notes-file.sh is a back-compat DELEGATING wrapper around release-notes.sh (the
 #       generator); what a generated body actually CONTAINS is release-notes.sh's contract,
 #       tested exhaustively in tests/release-notes-test.sh -- duplicating that here would only
