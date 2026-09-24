@@ -147,7 +147,10 @@ done < "$facts"
 #       manifest, naming a product registered to one of its components; it installs only into
 #       that product's tree and what the manifest lists as outside (else uninstall leaves files
 #       behind); and its first component is dev.mavergreen.base, the only way the helper its
-#       postinstall runs is on disk by then.
+#       postinstall runs is on disk by then. Coverage mirrors scripts/mavergreen.sh uninstall,
+#       which removes an outside entry only as an exact file or link, or as a directory whose name
+#       ends in one of the bundle extensions render-manifest.sh collapses to, and refuses the shapes
+#       outside_shape_ok rejects.
 grep '^manifest ' "$facts" > "$tmp/manifests" || true
 grep '^component ' "$facts" > "$tmp/components" || true
 : > "$tmp/prod-of"
@@ -174,13 +177,22 @@ EOF
     || fail base "$pk installs a product but its first component is '${first:-none}', not dev.mavergreen.base -- the helper its postinstall runs would not be there" "$pk"
   printf '%s %s\n' "$pk" "$mdir" >> "$tmp/prod-of"
   awk -v p="$pk" -v pr="$mdir" '
-    NR == FNR { if ($1 == "manifest-outside" && $2 == p) o[$3] = 1; next }
+    NR == FNR {
+      if ($1 != "manifest-outside" || $2 != p) next
+      if ($3 == "" || $3 ~ /^\// || index("/" $3 "/", "/./") || index("/" $3 "/", "/../") \
+          || $3 == "usr/local/mavergreen" || index($3, "usr/local/mavergreen/") == 1) print "badshape " $3
+      else o[$3] = 1
+      next
+    }
     $1 == "installs" && $2 == p && index($3, "usr/local/mavergreen/" pr "/") != 1 && index($3, "usr/local/mavergreen/.base/") != 1 {
       hit = ""
       if ($3 in o) hit = $3
       else {
         n = split($3, c, "/"); s = c[1]
-        for (i = 1; i < n && hit == ""; i++) { if (s in o) hit = s; s = s "/" c[i + 1] }
+        for (i = 1; i < n && hit == ""; i++) {
+          if ((s in o) && c[i] ~ /\.(app|kext|prefPane|plugin|bundle|framework)$/) hit = s
+          s = s "/" c[i + 1]
+        }
       }
       if (hit == "") print "unlisted " $3; else used[hit] = 1
     }
@@ -190,7 +202,8 @@ EOF
     case "$why" in
       unlisted) unlisted=$((unlisted + 1)); [ "$unlisted" -le 20 ] || continue
         fail manifest "$pk installs $(dec "$op") outside its tree, and its manifest's outside list does not name it -- uninstall would leave it behind" "$pk" ;;
-      unused) fail manifest "$pk's manifest lists $(dec "$op") in outside, but the pkg installs nothing there" "$pk" ;;
+      unused) fail manifest "$pk's manifest lists $(dec "$op") in outside, but the pkg installs nothing it would remove -- uninstall deletes an entry only as that exact file or link, or as a whole .app, .kext, .prefPane, .plugin, .bundle or .framework directory" "$pk" ;;
+      badshape) fail manifest "$pk's manifest lists outside entry '$(dec "$op")' in a shape the helper refuses to uninstall -- empty, absolute, a . or .. segment, or under usr/local/mavergreen" "$pk" ;;
     esac
   done < "$tmp/outside-$pk"
   [ "$unlisted" -le 20 ] \

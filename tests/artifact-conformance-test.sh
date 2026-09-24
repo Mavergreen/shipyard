@@ -646,6 +646,39 @@ no "manifest: a whole unlisted directory is reported capped, not once per file" 
 $LAYOUT
 $(awk 'BEGIN { for (i = 0; i < 25; i++) print "installs p.pkg usr/local/bin/f" i }')"
 
+alone "manifest: an outside directory that is not a bundle covers nothing beneath it -- uninstall refuses to remove it" "manifest" "$REL
+$LAYOUT
+manifest-outside p.pkg Applications
+installs p.pkg Applications/Stray.app/Contents/MacOS/Stray"
+
+alone "manifest: a launchd directory listed as outside covers none of its jobs" "manifest" "$REL
+$LAYOUT
+manifest-outside p.pkg Library/LaunchDaemons
+installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist"
+
+alone "manifest: a plain support directory listed as outside covers none of its files" "manifest" "$REL
+$LAYOUT
+manifest-outside p.pkg Library/Application%20Support/Mavergreen/x
+installs p.pkg Library/Application%20Support/Mavergreen/x/data"
+
+for _bad in /Applications/X.app 'Applications/../X.app' 'Applications/./X.app' usr/local/mavergreen/x/bin/x usr/local/mavergreen ''; do
+  _facts="$REL
+$LAYOUT
+manifest-outside p.pkg Applications/X.app
+manifest-outside p.pkg $_bad
+installs p.pkg Applications/X.app/Contents/MacOS/X"
+  no "manifest: outside entry '$_bad' has a shape the helper refuses to uninstall" "shape the helper refuses" "$_facts"
+  alone "manifest: outside entry '$_bad' has a shape the helper refuses to uninstall" "manifest" "$_facts"
+done
+
+ok "manifest: a bundle entry covers the files beneath it, and a file entry covers itself" "$REL
+$LAYOUT
+manifest-outside p.pkg Applications/X.app
+manifest-outside p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
+installs p.pkg Applications/X.app/Contents/MacOS/X
+installs p.pkg Applications/X.app/Contents/Info.plist
+installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist"
+
 no "base: a product archive must carry dev.mavergreen.base first" "base" "$REL
 component p.pkg dev.mavergreen.x
 component p.pkg dev.mavergreen.base
