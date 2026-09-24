@@ -4,6 +4,9 @@
 #            unlink <product>             remove them (never changes a selection)
 #            select <group> [<product>]   show or change which member owns the bare names
 #            list                         installed products, groups, lines, selections
+#            check                        verify the farm's links and manifests; problems to stderr
+#            uninstall <product>          remove it, its farm links, and what its manifest owns outside the tree
+#            version                      print the mavergreen helper's stamped version
 # spec: tests/mavergreen-helper-test.sh
 set -eu
 MAVERGREEN_VERSION="@MAVERGREEN_VERSION@"
@@ -136,11 +139,68 @@ do_list() {
   done
 }
 
+do_check() {
+  _n=0
+  for _d in $(farm_dirs); do
+    for _l in "$MG/$_d"/*; do
+      [ -L "$_l" ] || continue
+      if [ ! -e "$_l" ]; then echo "mavergreen: dangling link ${_l#"$MG/"}" >&2; _n=$((_n + 1)); continue; fi
+      _o="$(owner "$_l")"
+      [ -f "$(manifest "$_o")" ] || { echo "mavergreen: ${_l#"$MG/"} points into $_o, which has no manifest" >&2; _n=$((_n + 1)); }
+    done
+  done
+  for _p in $(installed); do
+    [ "$(mf "$_p" product)" = "$_p" ] || { echo "mavergreen: $_p's manifest names product '$(mf "$_p" product)'" >&2; _n=$((_n + 1)); }
+    _mode=versioned; [ "$(selection "$(group_of "$_p")")" = "$_p" ] && _mode=bare
+    _missing="$(plan_links "$_p" "$_mode" | while IFS="	" read -r _link _rel; do
+      [ -L "$MG/$_link" ] && [ "$(owner "$MG/$_link")" = "$_p" ] || echo "$_link"; done)"
+    [ -z "$_missing" ] || { echo "mavergreen: $_p is missing links: $(printf '%s' "$_missing" | tr '\n' ' ')" >&2; _n=$((_n + 1)); }
+    if [ -f "$MG/var/system-replace/$_p/.replaced" ]; then _n=$((_n + $(replace_drift "$_p"))); fi
+  done
+  [ "$_n" -eq 0 ]
+}
+replace_drift() { echo 0; }
+do_system_restore() { :; }
+unload() {
+  [ -z "$R" ] || return 0
+  case "$1" in
+    Library/LaunchDaemons/*.plist) launchctl unload -w "/$1" 2>/dev/null || true ;;
+    Library/LaunchAgents/*.plist)
+      _u="$(stat -f %Su /dev/console 2>/dev/null || echo root)"
+      [ "$_u" = root ] || sudo -u "$_u" launchctl unload -w "/$1" 2>/dev/null || true ;;
+  esac
+}
+do_uninstall() {
+  need_product "$1"
+  _g="$(group_of "$1")"; _id="$(mf "$1" identifier)"
+  if [ -f "$MG/var/system-replace/$1/.replaced" ]; then do_system_restore "$1"; fi
+  unlink_product "$1"
+  mf_array "$1" outside | while IFS= read -r _o; do
+    case "$_o" in ''|/*|*..*) echo "mavergreen: ignoring unsafe outside path '$_o'" >&2; continue ;; esac
+    unload "$_o"
+    rm -rf "$R/$_o"
+  done
+  rm -rf "$MG/$1" "$MG/var/$1"
+  if [ "$(selection "$_g")" = "$1" ]; then
+    _left="$(for _p in $(installed); do if [ "$(group_of "$_p")" = "$_g" ]; then echo "$_p"; fi; done)"
+    if [ -n "$_left" ] && [ "$(printf '%s\n' "$_left" | wc -l | tr -d ' ')" -eq 1 ]; then
+      set_selection "$_g" "$_left"; place "$_left" "$(plan_links "$_left" bare)"
+    else
+      rm -f "$SEL/$_g"
+    fi
+  fi
+  [ -z "$_id" ] || pkgutil --volume "$ROOT" --forget "$_id" >/dev/null 2>&1 || true
+}
+do_version() { printf '%s\n' "$MAVERGREEN_VERSION"; }
+
 cmd="${1:-}"; [ $# -gt 0 ] && shift
 case "$cmd" in
   link) [ $# -eq 1 ] || die "usage: mavergreen link <product>" 2; do_link "$1" ;;
   unlink) [ $# -eq 1 ] || die "usage: mavergreen unlink <product>" 2; do_unlink "$1" ;;
   select) [ $# -ge 1 ] || die "usage: mavergreen select <group> [<product>]" 2; do_select "$@" ;;
   list) do_list ;;
-  *) die "usage: mavergreen [--root VOLUME] link|unlink|select|list ..." 2 ;;
+  check) do_check ;;
+  uninstall) [ $# -eq 1 ] || die "usage: mavergreen uninstall <product>" 2; do_uninstall "$1" ;;
+  version) do_version ;;
+  *) die "usage: mavergreen [--root VOLUME] link|unlink|select|list|check|uninstall|version ..." 2 ;;
 esac
