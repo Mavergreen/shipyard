@@ -40,8 +40,8 @@ enc() { sed -e 's/%/%25/g' -e 's/ /%20/g'; }
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- one fact per
 #       Mach-O slice of every shipped file, read by the ONE parser (macho-slices.sh). A file with an
 #       unambiguous Mach-O magic that cannot be read aborts the stream rather than vanishing from it;
-#       "cafebabe" is also a Java class file and "!<arch>" any ar archive, so those are Mach-O only
-#       if lipo can read them.
+#       "cafebabe" (and its 64-bit-offset twin "cafebabf") is also a Java class file's magic and
+#       "!<arch>" any ar archive's, so those are Mach-O only if lipo can read them.
 macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded, may be empty). Non-zero on abort.
   # platform: the file list is captured to a temp file and the loop below reads it via "< $_ml",
   #           not piped in -- a `while` fed by a pipe is the LAST stage of that pipeline, which runs
@@ -55,7 +55,7 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
     _mg="$(head -c 4 "$2/$_mf" | od -An -tx1 | tr -d ' \n')"
     case "$_mg" in
       cffaedfe|cefaedfe|feedfacf|feedface) _strict=1 ;;
-      cafebabe|213c6172) _strict=0 ;;
+      cafebabe|cafebabf|213c6172) _strict=0 ;;
       *) continue ;;
     esac
     if ! _sl="$(sh "$SELF/macho-slices.sh" "$2/$_mf")"; then

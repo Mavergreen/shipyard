@@ -50,7 +50,7 @@ ALLOW_WEAK="${MAVERICKS_ALLOW_GUARDED_WEAK:-}"
 POST_10_9_SEL='labelColor|secondaryLabelColor|tertiaryLabelColor|quaternaryLabelColor|controlAccentColor'
 [ -n "${MAVERICKS_POST_10_9_SELECTORS:-}" ] && POST_10_9_SEL="$POST_10_9_SEL|$MAVERICKS_POST_10_9_SELECTORS"
 ALLOW_SEL="${MAVERICKS_ALLOW_SELECTORS:-}"
-ALLOW_ARCHS="$(printf '%s\n' ${MAVERICKS_ALLOW_ARCHS:-x86_64} | sort | xargs)"
+ALLOW_ARCHS="$(printf '%s\n' ${MAVERICKS_ALLOW_ARCHS:-x86_64} | sort -u | xargs)"
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/compat-guard.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 

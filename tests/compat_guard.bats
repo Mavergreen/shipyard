@@ -112,6 +112,12 @@ mk_stamped() {  # $1 out, $2 arch, $3 minos, $4 sdk
   [ "$status" -eq 0 ]
 }
 
+@test "an arch named twice in MAVERICKS_ALLOW_ARCHS is still the same arch set" {
+  mk_stamped "$WORK/p109" x86_64 10.9 10.9
+  run env MAVERICKS_ALLOW_ARCHS="x86_64 x86_64" sh "$GUARD" "$WORK/p109"
+  [ "$status" -eq 0 ]
+}
+
 @test "an arm64 slice needs MAVERICKS_ALLOW_ARCHS, and then the 11.3 pin" {
   mk_stamped "$WORK/a113" arm64 11.0 11.3
   run sh "$GUARD" "$WORK/a113"

@@ -40,9 +40,16 @@ if(MAVERICKS_MODE STREQUAL "cross")
   if(_mav_na EQUAL 1)
     execute_process(COMMAND sh "${MAVERICKS_SHARED_DIR}/scripts/fetch_sdk.sh" --arch "${CMAKE_OSX_ARCHITECTURES}"
                     OUTPUT_VARIABLE _mav_pin OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _mav_prc)
+    if(NOT _mav_prc EQUAL 0)
+      message(FATAL_ERROR
+        "include(Mavericks): could not fetch the pinned SDK for ${CMAKE_OSX_ARCHITECTURES} "
+        "(fetch_sdk.sh --arch ${CMAKE_OSX_ARCHITECTURES} exit ${_mav_prc}), so CMAKE_OSX_SYSROOT "
+        "'${CMAKE_OSX_SYSROOT}' cannot be checked against it. Check the network and MAVERICKS_SDK_CACHE; "
+        "see SKILL.md \"SDK pinning\".")
+    endif()
     get_filename_component(_mav_have "${CMAKE_OSX_SYSROOT}" REALPATH)
     get_filename_component(_mav_want "${_mav_pin}" REALPATH)
-    if(NOT _mav_prc EQUAL 0 OR NOT _mav_have STREQUAL _mav_want)
+    if(NOT _mav_have STREQUAL _mav_want)
       message(FATAL_ERROR
         "CMAKE_OSX_SYSROOT '${CMAKE_OSX_SYSROOT}' is not the pinned SDK for ${CMAKE_OSX_ARCHITECTURES} ('${_mav_pin}').\n"
         "Configure through a shipyard preset (mavericks-cross), or pass "

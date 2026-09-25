@@ -5,12 +5,13 @@
 # Capture the install dir (this file sits alongside scripts/) at include time.
 set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
 
-# mavericks_assert_binary_compatible(<target>): after linking <target>, assert its Mach-O is
-# x86_64 + LC_VERSION_MIN_MACOSX 10.9 + free of post-10.9 undefined imports. Forwards
-# two optional project-set knobs into the guard's env (baked at configure time):
+# mavericks_assert_binary_compatible(<target>): after linking <target>, assert its Mach-O holds
+# exactly this configure's arches, that every slice records its arch's pinned minos and SDK
+# (scripts/sdk-pins.sh; SKILL.md "SDK pinning"), and that it is free of post-10.9 undefined
+# imports. Forwards these into the guard's env (baked at configure time):
+#   MAVERICKS_ALLOW_ARCHS             CMAKE_OSX_ARCHITECTURES, when set (the guard defaults to x86_64)
 #   MAVERICKS_POST_10_9_SYMBOLS       extra post-10.9 symbols that must not be undefined imports
 #   MAVERICKS_REQUIRE_DEFINED_SYMBOLS symbols that MUST be present as defined (e.g. shims)
-# With neither set, the emitted command is identical to the historical one.
 function(mavericks_assert_binary_compatible tgt)
   set(_cmd sh "${MAVERICKS_SHARED_DIR}/scripts/assert_binary_compatible.sh" "$<TARGET_FILE:${tgt}>")
   set(_env)

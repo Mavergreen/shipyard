@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- xcrun, lipo and otool build and check the universal CMake
+# platform: macOS-only -- lipo and otool check each half of the universal CMake it builds
 #   usage: build-cmake.sh --arch x86_64|arm64 --min-os VER --prefix DIR --sysroot DIR [--jobs N]
 #          build-cmake.sh --fetch-only --dest DIR          (download + verify only; prints the path)
 #          Builds the CMake shipyard ships as shipyard-cmake: ONE arch and deployment floor per run,

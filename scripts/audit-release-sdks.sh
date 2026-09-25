@@ -3,7 +3,8 @@
 #   usage: audit-release-sdks.sh <owner/repo>...
 #          audit-release-sdks.sh --dist DIR REPO_CHECKOUT
 #          The family acceptance audit for "SDK pinning": downloads each repo's LATEST release (verified
-#          against its SHA256SUMS), runs artifact-facts.sh over it and applies the sdk-pin rule alone,
+#          against its SHA256SUMS; a release without one is audited anyway and said to be UNVERIFIED),
+#          runs artifact-facts.sh over it and applies the sdk-pin rule alone,
 #          honouring the deviations its INGREDIENTS.md declares. One verdict line per repo; exit 1 if any
 #          repo has an unexcused violation. --dist audits an already-downloaded release against a local
 #          checkout (the test uses it).
@@ -54,10 +55,15 @@ fi
 [ "$#" -gt 0 ] || { echo "usage: audit-release-sdks.sh <owner/repo>..." >&2; exit 2; }
 for r in "$@"; do
   d="$w/${r##*/}"; mkdir -p "$d/dist" "$d/src"
-  gh release download -R "$r" --dir "$d/dist" --pattern '*.pkg' --pattern '*.tar.gz' --pattern '*.tar.xz' --pattern SHA256SUMS \
+  gh release download -R "$r" --dir "$d/dist" --pattern '*.pkg' --pattern '*.tar.gz' --pattern '*.tgz' \
+      --pattern '*.tar.xz' --pattern '*.tar.bz2' --pattern SHA256SUMS \
     || { echo "audit: $r has no downloadable release"; rc=1; continue; }
-  ( cd "$d/dist" && [ ! -f SHA256SUMS ] || grep -E '\.(pkg|tar\.gz|tar\.xz)$' SHA256SUMS | shasum -a 256 -c - >/dev/null ) \
-    || { echo "audit: $r failed its SHA256SUMS"; rc=1; continue; }
+  if [ -f "$d/dist/SHA256SUMS" ]; then
+    ( cd "$d/dist" && grep -E '\.(pkg|tar\.gz|tgz|tar\.xz|tar\.bz2)$' SHA256SUMS | shasum -a 256 -c - >/dev/null ) \
+      || { echo "audit: $r failed its SHA256SUMS"; rc=1; continue; }
+  else
+    echo "audit: $r has no SHA256SUMS -- audited UNVERIFIED"
+  fi
   rm -f "$d/dist/SHA256SUMS"
   gh api "repos/$r/contents/INGREDIENTS.md" --jq .content 2>/dev/null | base64 -d > "$d/src/INGREDIENTS.md" 2>/dev/null || rm -f "$d/src/INGREDIENTS.md"
   audit_one "$r" "$d/dist" "$d/src" || rc=1

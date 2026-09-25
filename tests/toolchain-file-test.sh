@@ -36,6 +36,14 @@ rc=0; "$real" -S "$w/q" -B "$w/b3" -DMavericksShipyard_DIR="$root" -DMAVERICKS_R
 "$real" -S "$w/q" -B "$w/b4" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF \
   -DCMAKE_TOOLCHAIN_FILE="$root/MavericksToolchain.cmake" > "$w/c4.log" 2>&1 \
   || { echo "FAIL: include(Mavericks) must accept the toolchain file's pin:"; sed 's/^/    | /' "$w/c4.log"; exit 1; }
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a plain
+#       configure (no arch, no preset, no toolchain file) is the first thing a newly-red consumer runs,
+#       so it must get the preset/toolchain-file guidance, not "one arch per cross configure".
+rc=0; ( unset CMAKE_OSX_ARCHITECTURES
+        "$real" -S "$w/q" -B "$w/b6" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF ) \
+  > "$w/c6.log" 2>&1 || rc=$?
+[ "$rc" -ne 0 ] && grep -q 'CMAKE_OSX_ARCHITECTURES is empty' "$w/c6.log" && grep -q 'MavericksToolchain.cmake' "$w/c6.log" \
+  || { echo "FAIL: a configure with no arch must be refused with the preset/toolchain-file guidance:"; sed 's/^/    | /' "$w/c6.log"; exit 1; }
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the toolchain
 #       file sets CMAKE_OSX_SYSROOT with FORCE precisely so it overrides whatever a caller already set

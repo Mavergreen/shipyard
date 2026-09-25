@@ -18,7 +18,14 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the
+      #       input reaches the shell through env, never spliced into run:, so its text is data, not
+      #       script. $REPOS is left unquoted to split the list into one argument per repo; set -f
+      #       keeps a stray glob character in it from expanding against the checkout.
       - name: Audit
         env:
           GH_TOKEN: ${{ github.token }}
-        run: sh scripts/audit-release-sdks.sh ${{ inputs.repos }}
+          REPOS: ${{ inputs.repos }}
+        run: |
+          set -euf
+          sh scripts/audit-release-sdks.sh $REPOS

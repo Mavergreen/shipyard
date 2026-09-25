@@ -132,7 +132,7 @@ updaters, signing, or compat checks:**
 | `mavericks_build_mode` · `MavericksMode` · `mavericks_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
 | `mavericks_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
 | `RequireAppleClang` | enforces Apple `/usr/bin/clang` (cgo/ObjC) | assuming the toolchain |
-| `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + symbol set) | a bespoke compat check |
+| `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set) | a bespoke compat check |
 | `mavericks_add_updater_app` · `MavericksSparkle` · `stage_updater.sh` | builds/stages the Sparkle updater (self-fetches the framework) | wiring Sparkle by hand |
 | `set_install_floor.sh` | stamps the 10.9.5 install floor on the `.pkg` | editing the pkg Distribution |
 | `sign_and_appcast.sh` · `gen_appcast.sh` | EdDSA-signs + renders the appcast (fetches `ed25519-sign` via `gh`) | rolling your own signing |
@@ -1329,7 +1329,10 @@ there: the toolchain file uses xcrun's own 10.9 SDK when it has one, and the fet
 
 **Exemptions are declared, never implicit:**
 - Prebuilt third-party files and build-only files that are never installed go under INGREDIENTS.md
-  `## Conformance deviations` as `- sdk-pin:<glob>: <reason>`. The glob matches the payload path.
+  `## Conformance deviations` as `- sdk-pin:<glob>: <reason>`. The glob matches the path in the pkg
+  payload, or the path inside the archive for a shipped tarball. It cannot contain a space (write `*`
+  for one, as in `Application*Support`) or a colon. A bare `- sdk-pin: <reason>`, with no glob,
+  excuses the rule for **every** file in the release: use it only when that is what you mean.
 - Sparkle 1.27.3 is exempt **by content**: `sdk-pins.sh` lists the sha256 of its three Mach-O files, so
   only the exact pinned bytes pass.
 
@@ -1337,7 +1340,8 @@ there: the toolchain file uses xcrun's own 10.9 SDK when it has one, and the fet
 - **A kext records no version load command.** It is checked for arch only (x86_64), and its build must
   pass the 10.9 SDK.
 - **A static archive's members compiled against the 10.9 SDK record sdk `n/a`,** because that SDK has no
-  SDKSettings.json. They must match minos, and `n/a` is accepted for `OBJECT` files only.
+  SDKSettings.json. They must match minos, and `n/a` is accepted for x86_64 `OBJECT` files only (the
+  11.3 SDK has SDKSettings.json, so arm64 members must record 11.3).
 
 ## Artifact conformance (checked at package time)
 
