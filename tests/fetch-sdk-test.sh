@@ -34,4 +34,14 @@ rc=0; sh "$S" --arch i386 >/dev/null 2>&1 || rc=$?
 rc=0; sh "$S" --arch >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] || { echo "FAIL: --arch with no value is a usage error (2), got $rc"; exit 1; }
 
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a consumer
+#       that copies fetch_sdk.sh and mavericks_fetch.sh into its own libexec/ but not sdk-pins.sh gets a
+#       usage error naming the missing file, not the shell's own "sdk-pins.sh: not found".
+mkdir -p "$w/lonely"
+cp "$S" "$here/../scripts/mavericks_fetch.sh" "$w/lonely/"
+rc=0; err="$(sh "$w/lonely/fetch_sdk.sh" 2>&1 >/dev/null)" || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL: fetch_sdk.sh without sdk-pins.sh beside it must exit 2, got $rc: $err"; exit 1; }
+printf '%s' "$err" | grep -q 'sdk-pins\.sh is missing' \
+  || { echo "FAIL: fetch_sdk.sh without sdk-pins.sh must say sdk-pins.sh is missing, got: $err"; exit 1; }
+
 echo "PASS: fetch-sdk"

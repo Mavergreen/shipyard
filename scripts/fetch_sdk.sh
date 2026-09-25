@@ -10,6 +10,9 @@
 #          them); MAVERICKS_SDK_CACHE moves the cache. Exit 2 on a usage error or an arch with no pin.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a repo that
+#       ships this script (a toolchain's libexec/, e.g.) ships its two sourced helpers beside it.
+[ -f "$SELF/sdk-pins.sh" ] || { echo "fetch_sdk: sdk-pins.sh is missing beside $0 -- copy it with fetch_sdk.sh and mavericks_fetch.sh (SKILL.md \"SDK pinning\")" >&2; exit 2; }
 . "$SELF/mavericks_fetch.sh"
 . "$SELF/sdk-pins.sh"
 ARCH=x86_64

@@ -1312,7 +1312,9 @@ needs one policy for both hosts.
 **How a build complies:** configure through the shipyard presets (`mavericks-cross` / `mavericks-native`),
 or pass `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`. That sets the pinned SDK, the
 arch and the deployment target **before `project()`**, one arch per configure. A build that calls the
-compiler itself passes `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`.
+compiler itself passes `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`. A repo that
+ships `fetch_sdk.sh` (in a toolchain's `libexec/`, e.g.) ships `sdk-pins.sh` and `mavericks_fetch.sh`
+beside it; without `sdk-pins.sh` it exits 2 naming the missing file.
 `include(Mavericks)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
 
 **Where it is enforced:**
