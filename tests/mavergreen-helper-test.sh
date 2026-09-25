@@ -158,6 +158,36 @@ rc=0; PATH="$stub:$PATH" mg uninstall slashgen 2>"$w/err" || rc=$?
 grep -q "unsafe generated path 'Applications/Linux Slash.app/'" "$w/err" || fail "uninstall must name a refused trailing-slash entry: $(cat "$w/err")"
 [ -f "$w/elsewhere/Real.app/Contents/Info.plist" ] \
   || fail "a trailing slash must not make uninstall follow a symlinked bundle and delete its target outside the volume"
+mv "$V/Applications" "$w/apps-aside"
+mkdir -p "$w/beyond/Linux X.app/Contents"; touch "$w/beyond/Linux X.app/Contents/Info.plist"
+ln -s "$w/beyond" "$V/Applications"
+mkproduct escape escape "" bin/escape
+"$PB" -c "Add :generated array" -c "Add :generated:0 string Applications/Linux X.app" "$T/escape/mavergreen.plist" >/dev/null
+rc=0; PATH="$stub:$PATH" mg uninstall escape 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "an entry whose parent resolves outside the volume must fail uninstall"
+grep -q "refusing to remove Applications/Linux X.app -- " "$w/err" || fail "uninstall must name the entry whose parent escapes the volume: $(cat "$w/err")"
+[ -f "$w/beyond/Linux X.app/Contents/Info.plist" ] \
+  || fail "a symlinked ancestor must not make uninstall delete a bundle outside the volume"
+[ ! -e "$T/escape" ] || fail "uninstall still removes the product's own tree after refusing an escaping entry"
+rm -f "$V/Applications"
+mkdir -p "$V/Apps/Linux Y.app/Contents"
+ln -s "$V/Apps" "$V/Applications"
+mkproduct inapps inapps "" bin/inapps
+"$PB" -c "Add :generated array" -c "Add :generated:0 string Applications/Linux Y.app" "$T/inapps/mavergreen.plist" >/dev/null
+PATH="$stub:$PATH" mg uninstall inapps 2>"$w/err" \
+  || fail "an entry whose parent is a symlink that stays inside the volume must be removable: $(cat "$w/err")"
+[ ! -e "$V/Apps/Linux Y.app" ] || fail "a symlinked ancestor that stays inside the volume must not block removal"
+rm -f "$V/Applications"; mv "$w/apps-aside" "$V/Applications"
+mkproduct varescape varescape "" bin/varescape
+mv "$T/var" "$w/var-aside"
+mkdir -p "$w/beyond-var/varescape"; touch "$w/beyond-var/varescape/state"
+ln -s "$w/beyond-var" "$T/var"
+rc=0; PATH="$stub:$PATH" mg uninstall varescape 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "a var dir whose parent resolves outside the volume must fail uninstall"
+grep -q "refusing to remove $T/var/varescape -- " "$w/err" || fail "uninstall must name the var dir it refuses: $(cat "$w/err")"
+[ -f "$w/beyond-var/varescape/state" ] || fail "a symlinked var/ must not make uninstall delete state outside the volume"
+[ ! -e "$T/varescape" ] || fail "uninstall still removes the product's tree after refusing its var dir"
+rm -f "$T/var"; mv "$w/var-aside" "$T/var"
 
 mkproduct openssh openssh "" bin/ssh sbin/sshd
 "$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/ssh string bin/ssh" \

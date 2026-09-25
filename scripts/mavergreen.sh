@@ -289,8 +289,19 @@ outside_shape_ok() {
   case "$1" in usr/local/mavergreen|usr/local/mavergreen/*) return 1 ;; esac
   return 0
 }
+parent_in_root() {
+  _pr_dir="$(dirname "$1")"
+  [ -d "$_pr_dir" ] || return 2
+  _pr_real="$(cd -P "$_pr_dir" 2>/dev/null && pwd -P)" || return 1
+  _pr_root="$(cd -P "$R/" 2>/dev/null && pwd -P)" || return 1
+  case "$_pr_real/" in "${_pr_root%/}/"*) return 0 ;; esac
+  return 1
+}
 remove_outside() {
   _full="$R/$1"
+  _pi=0; parent_in_root "$_full" || _pi=$?
+  [ "$_pi" -ne 2 ] || return 0
+  [ "$_pi" -eq 0 ] || { echo "mavergreen: refusing to remove $1 -- its parent directory resolves outside $ROOT" >&2; return 1; }
   if [ -L "$_full" ] || [ -f "$_full" ]; then
     unload "$1"
     rm -f "$_full" || { echo "mavergreen: could not remove $1" >&2; return 1; }
@@ -336,7 +347,14 @@ do_uninstall() {
   unlink_product "$1"
   remove_listed "$1" outside || _failed=1
   remove_listed "$1" generated || _failed=1
-  rm -rf "$MG/$1" "$MG/var/$1" || { echo "mavergreen: could not remove $1's tree" >&2; _failed=1; }
+  for _d in "$MG/$1" "$MG/var/$1"; do
+    _pi=0; parent_in_root "$_d" || _pi=$?
+    case "$_pi" in
+      0) rm -rf "$_d" || { echo "mavergreen: could not remove $_d" >&2; _failed=1; } ;;
+      2) ;;
+      *) echo "mavergreen: refusing to remove $_d -- its parent directory resolves outside $ROOT" >&2; _failed=1 ;;
+    esac
+  done
   if [ "$(selection "$_g")" = "$1" ]; then
     _left="$(for _p in $(installed); do if [ "$(group_of "$_p")" = "$_g" ]; then echo "$_p"; fi; done)"
     if [ -n "$_left" ] && [ "$(printf '%s\n' "$_left" | wc -l | tr -d ' ')" -eq 1 ]; then
