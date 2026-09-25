@@ -1290,6 +1290,51 @@ release until real artwork (a different hash) replaces it, or someone opts in on
 entry points call the shared `mavericks_reject_placeholder_icon`, so neither the main-app nor the
 updater path can smuggle one through.
 
+## SDK pinning (checked on what ships)
+
+**Every Mach-O we compile that is installed on anyone's Mac records a PINNED SDK, never the runner's:**
+
+| Slice | Records | SDK comes from |
+|---|---|---|
+| x86_64 | minos 10.9, sdk 10.9 | `fetch_sdk.sh` (MacOSX10.9.sdk) |
+| arm64 | minos 11.0, sdk 11.3 | `fetch_sdk.sh --arch arm64` (MacOSX11.3.sdk) |
+
+This covers cross toolchains installed on modern Macs too (clang-cross, golang-cross, shipyard-cmake's
+arm64 half). The pins and the rule live in exactly one place, `scripts/sdk-pins.sh`.
+
+**Why:** a 2026-09-24 audit of every family release found builds that go through `mavericks-clang`, the
+Go wrapper or an explicit sysroot recorded 10.9, while plain CMake builds with AppleClang silently linked
+the runner's SDK (26.5). That included every Sparkle updater and every arm64 slice in the family, and
+nothing noticed: the compat guard read minos and never the SDK. Linking the runner's SDK lets a post-10.9
+declaration compile and fail only on the target, and a Linux host has no runner SDK at all. So the family
+needs one policy for both hosts.
+
+**How a build complies:** configure through the shipyard presets (`mavericks-cross` / `mavericks-native`),
+or pass `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`. That sets the pinned SDK, the
+arch and the deployment target **before `project()`**, one arch per configure. A build that calls the
+compiler itself passes `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`.
+`include(Mavericks)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
+
+**Where it is enforced:**
+- **At package time, on everything the release contains (the gate).** `artifact-facts.sh` emits a
+  `macho` fact for every Mach-O slice in every pkg payload and shipped tarball, and conformance's
+  `sdk-pin` rule checks each one. Check 21 already makes every pkg-building repo run conformance.
+- **Right after each build (early feedback).** The compat guard checks each slice against its arch's
+  rule. `MAVERICKS_ALLOW_ARCHS` gives the exact arch set (`mavericks_assert_binary_compatible` passes
+  `CMAKE_OSX_ARCHITECTURES`).
+
+**Exemptions are declared, never implicit:**
+- Prebuilt third-party files and build-only files that are never installed go under INGREDIENTS.md
+  `## Conformance deviations` as `- sdk-pin:<glob>: <reason>`. The glob matches the payload path.
+- Sparkle 1.27.3 is exempt **by content**: `sdk-pins.sh` lists the sha256 of its three Mach-O files, so
+  only the exact pinned bytes pass.
+
+**Known limits, stated rather than hidden:**
+- **A kext records no version load command.** It is checked for arch only (x86_64), and its build must
+  pass the 10.9 SDK.
+- **A static archive's members compiled against the 10.9 SDK record sdk `n/a`,** because that SDK has no
+  SDKSettings.json. They must match minos, and `n/a` is accepted for `OBJECT` files only.
+
 ## Artifact conformance (checked at package time)
 
 The conventions gate constrains the REPO. `check-artifact-conformance.sh` constrains what comes OUT,
@@ -1304,7 +1349,7 @@ disagree is incoherent however it was built.
 |---|---|
 | Itself | `.pkg` / appcast / tag versions match; the enclosure names a published asset at its real length, and points into THIS release |
 | Neighbours | every `.pkg` of one release agrees on the version; **variants agree about their ingredients** |
-| Siblings | version scheme `<upstream>-mavericks.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a product archive declares the 10.9.5 floor |
+| Siblings | version scheme `<upstream>-mavericks.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a product archive declares the 10.9.5 floor; every shipped Mach-O slice records its arch's pinned SDK (see "SDK pinning") |
 
 **This constrains outputs, not methods.** Products here build in genuinely different ways — a Go
 toolchain, a boot2docker iso, libswiftCore, an openssh — and making those look alike would buy

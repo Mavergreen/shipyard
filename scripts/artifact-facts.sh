@@ -36,6 +36,30 @@ printf 'expected %s\n' "$version"
 #       every launchd job's Label (launchd). Paths are relative to "/" and carry spaces as %20, since
 #       the stream is whitespace-delimited and "Application Support" is in nearly every product.
 enc() { sed -e 's/%/%25/g' -e 's/ /%20/g'; }
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- one fact per
+#       Mach-O slice of every shipped file, read by the ONE parser (macho-slices.sh). A file with an
+#       unambiguous Mach-O magic that cannot be read aborts the stream rather than vanishing from it;
+#       "cafebabe" is also a Java class file and "!<arch>" any ar archive, so those are Mach-O only
+#       if lipo can read them.
+macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded, may be empty). Non-zero on abort.
+  ( cd "$2" && find . -type f ) | sed 's|^\./||' | while IFS= read -r _mf; do
+    _mg="$(head -c 4 "$2/$_mf" | od -An -tx1 | tr -d ' \n')"
+    case "$_mg" in
+      cffaedfe|cefaedfe|feedfacf|feedface) _strict=1 ;;
+      cafebabe|213c6172) _strict=0 ;;
+      *) continue ;;
+    esac
+    if ! _sl="$(sh "$SELF/macho-slices.sh" "$2/$_mf")"; then
+      [ "$_strict" = 0 ] && continue
+      echo "artifact-facts: cannot read Mach-O $1:$_mf" >&2; return 1
+    fi
+    _sha="$(shasum -a 256 "$2/$_mf" | awk '{print $1}')"
+    _p="$3$(printf '%s' "$_mf" | enc)"
+    printf '%s\n' "$_sl" | while read -r _a _ft _mn _sd; do
+      printf 'macho %s %s %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_ft" "$_mn" "$_sd" "$_sha"
+    done
+  done
+}
 payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read.
   for _pl in $(find "$2" -name Payload -type f | sed 's/ /%20/g'); do
     _pl="$(printf '%s' "$_pl" | sed 's/%20/ /g')"
@@ -49,6 +73,7 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     gzip -dc "$_pl" > "$_dir.cpio" 2>/dev/null || return 1
     ( cd "$_root" && cpio -id < "$_dir.cpio" 2>/dev/null ) || return 1
     rm -f "$_dir.cpio"
+    macho_facts "$1" "$_root" "$(printf '%s' "$_loc" | enc)" || return 1
     ( cd "$_root" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | enc \
       | awk -v pkg="$1" -v loc="$(printf '%s' "$_loc" | enc)" '{ print "installs " pkg " " loc $0 }'
     ( cd "$_root" && find . -type d \( -name '*.app' -o -name '*.prefPane' -o -name '*.kext' -o -name '*.bundle' \
@@ -160,6 +185,12 @@ for f in "$dist"/*; do
       else
         printf 'pkg %s unreadable none none\n' "$b"
       fi
+      rm -rf "$x"
+      ;;
+    *.tar.gz|*.tgz|*.tar.xz|*.tar.bz2)
+      x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+      tar -xf "$f" -C "$x" 2>/dev/null || { rm -rf "$x"; abort "cannot extract $b"; }
+      macho_facts "$b" "$x" "" || { rm -rf "$x"; abort "cannot read a Mach-O in $b"; }
       rm -rf "$x"
       ;;
     RELEASE_NOTES.md)

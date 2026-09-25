@@ -13,6 +13,7 @@
 #            registered    <product> <identifier|none>            what scripts/product-names registers the product to
 #            appcast       <file> <version> <enclosure> <length>  one per Sparkle appcast
 #            asset         <file> <bytes>                         one per file that will be published
+#            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
 #            appcast-notes <appcast-file> [<sha256>]               digest of the appcast's <description> CDATA
 #            deviation     <check> <reason...>                    a declared, reasoned departure
@@ -24,6 +25,8 @@
 #       conformance (checked at package time)" -- what this checks and why, on all three axes
 #       (itself / neighbours / siblings), lives there.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/sdk-pins.sh"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/conformance.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT  # template: 10.9 BSD mktemp requires one
 facts="$tmp/facts"; cat > "$facts"
@@ -331,6 +334,16 @@ for key in $(sed -n 's/^build-info [^ ][^ ]* \([^ ][^ ]*\) .*/\1/p' "$facts" | s
   files="$(sed -n "s/^build-info \([^ ][^ ]*\) $key .*/\1/p" "$facts" | tr '\n' ' ')"
   fail ingredients "variants disagree about $key: $(printf '%s' "$vals" | tr '\n' '/') (from $files)"
 done
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- every shipped
+#       Mach-O slice records its arch's pinned minos and SDK, unless its bytes are a pinned third-party
+#       binary or a declared sdk-pin:<glob> deviation names its path.
+while read -r kind file path arch ft mn sd sha; do
+  [ "$kind" = macho ] || continue
+  mav_sdk_exempt_sha256 "$sha" && continue
+  why="$(mav_sdk_rule "$arch" "$ft" "$mn" "$sd")" \
+    || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")"
+done < "$facts"
 
 [ "$status" -eq 0 ] && echo "conformance: ok — $expected"
 exit "$status"

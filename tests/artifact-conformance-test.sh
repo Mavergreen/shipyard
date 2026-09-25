@@ -27,6 +27,33 @@ asset golang-1.26.5-native-mavericks.5.pkg 4096
 asset appcast.xml 700'
 ok "a coherent release" "$GOOD"
 
+# spec: SKILL.md "SDK pinning" -- the sdk-pin rule over every shipped Mach-O slice.
+M='macho golang-1.26.5-native-mavericks.5.pkg usr/local/go/bin/go'
+ok "a pinned x86_64 slice" "$GOOD
+$M x86_64 EXECUTE 10.9 10.9 aa"
+no "an x86_64 slice linked against the runner's SDK" "sdk-pin" "$GOOD
+$M x86_64 EXECUTE 10.9 26.5 aa"
+ok "a pinned arm64 slice" "$GOOD
+$M arm64 EXECUTE 11.0 11.3 aa"
+no "an arm64 slice on the runner's SDK" "sdk-pin" "$GOOD
+$M arm64 EXECUTE 11.0 26.5 aa"
+ok "a kext records no version" "$GOOD
+$M x86_64 KEXTBUNDLE - - aa"
+ok "a 10.9-SDK archive member records sdk n/a" "$GOOD
+$M x86_64 OBJECT 10.9 n/a aa"
+no "an i386 slice has no pin" "sdk-pin" "$GOOD
+$M i386 OBJECT 10.7 26.5 aa"
+ok "pinned Sparkle passes on its content" "$GOOD
+macho p.pkg Library/X.app/Contents/Frameworks/Sparkle.framework/Versions/A/Sparkle x86_64 DYLIB 10.9 12.0 95ad6ce1558b1ffef550455bf9aa05ad6686d434279631d170ab92fb3747c93f"
+no "a different Sparkle does not" "sdk-pin" "$GOOD
+macho p.pkg Library/X.app/Contents/Frameworks/Sparkle.framework/Versions/A/Sparkle x86_64 DYLIB 10.9 12.0 bb"
+ok "a declared sdk-pin deviation excuses the files its glob names" "$GOOD
+deviation sdk-pin:usr/local/go/src/* Go's own race-detector and testdata objects, shipped verbatim in src/
+macho p.pkg usr/local/go/src/runtime/race/race_darwin.syso x86_64 OBJECT 10.12 14.4 aa"
+no "and only those" "sdk-pin" "$GOOD
+deviation sdk-pin:usr/local/go/src/* Go's own race-detector and testdata objects, shipped verbatim in src/
+macho p.pkg usr/local/go/bin/go x86_64 EXECUTE 10.9 26.5 aa"
+
 no "pkg version disagrees with the tag" "version" 'expected 1.26.5-mavericks.5
 pkg p.pkg 1.26.5-mavericks.4 10.9.5 dev.mavergreen.golang.go126
 asset p.pkg 10'
@@ -526,8 +553,14 @@ NOTES
 # platform: a text file with a .pkg name would be reported `unreadable` by pkgutil and fail for
 #           a reason this fixture is not about, so it uses a .tgz instead. What it proves is
 #           that a COMPLETE run reaches the sentinel and the checker accepts it -- the pkg
-#           records have their own fixtures above.
-printf 'payload\n' > "$_e2e/good/thing-9.9p2-mavericks.6.tgz"
+#           records have their own fixtures above. A real (if trivial) tarball, not a text file
+#           wearing a .tgz name: artifact-facts.sh now extracts every shipped tarball looking for
+#           Mach-O slices, and a non-tarball masquerading as one would abort for a reason this
+#           fixture is not about, the same trap the comment above already names for .pkg.
+mkdir -p "$_e2e/good-src"
+printf 'payload\n' > "$_e2e/good-src/payload.txt"
+( cd "$_e2e/good-src" && tar -czf "$_e2e/good/thing-9.9p2-mavericks.6.tgz" payload.txt )
+rm -rf "$_e2e/good-src"
 _good_len="$(wc -c < "$_e2e/good/thing-9.9p2-mavericks.6.tgz" | tr -d ' ')"
 sh "$GA" "Test Channel" "9.9p2-mavericks.6" \
   "https://github.com/Mavergreen/openssh/releases/download/9.9p2-mavericks.6/thing-9.9p2-mavericks.6.tgz" \
@@ -786,6 +819,8 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
   _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
   _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
   echo x > "$_st/usr/local/mavergreen/x/bin/x"; ln -s bin/x "$_st/usr/local/mavergreen/x/link"
+  printf 'int main(void){return 0;}\n' > "$_pk/h.c"; cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/usr/local/mavergreen/x/bin/hello"
+  ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
   # platform: guarded macOS-only call -- the enclosing `if command -v pkgbuild` skips this block without it
   /usr/libexec/PlistBuddy -c "Add :product string x" -c "Add :identifier string dev.mavergreen.x" \
     -c "Add :outside array" -c "Add :outside:0 string Library/Application Support/Mavergreen/XUpdater.app" \
@@ -822,6 +857,12 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
+  printf '%s\n' "$_f" | grep -qE '^macho x-1\.0\.0-mavericks\.1\.pkg usr/local/mavergreen/x/bin/hello x86_64 EXECUTE 10\.9 [0-9.]+ [0-9a-f]{64}$' \
+    || { echo "FAIL: a Mach-O in a pkg payload must yield a macho fact -- got: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -qE '^macho x-tools\.tar\.gz bin/hello x86_64 EXECUTE 10\.9 [0-9.]+ [0-9a-f]{64}$' \
+    || { echo "FAIL: a Mach-O in a shipped tarball must yield a macho fact -- got: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -q '^macho .* usr/local/mavergreen/x/bin/x ' \
+    && { echo "FAIL: a non-Mach-O file must not yield a macho fact: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q 'org.sparkle-project' \
     && { echo "FAIL: a framework nested inside the updater is not a top-level bundle; its identifier is not the product's: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q '^installs y-1.0.0-mavericks.1.pkg bin/' \
