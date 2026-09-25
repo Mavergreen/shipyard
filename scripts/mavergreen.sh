@@ -343,18 +343,23 @@ run_pre_uninstall_hook() {
   case "$_puh_pi" in
     2) return 0 ;;
     0) ;;
-    *) die "refusing to run $1's pre-uninstall hook -- its parent directory resolves outside $ROOT" ;;
+    *) die "refusing to run $1's pre-uninstall hook ($_puh) -- its parent directory resolves outside $ROOT" ;;
   esac
-  [ -e "$_puh" ] || [ -L "$_puh" ] || return 0
+  if [ -L "$_puh" ]; then
+    die "refusing to run $1's pre-uninstall hook ($_puh) -- it is a symlink, and a hook is never a link into the payload"
+  fi
+  [ -e "$_puh" ] || return 0
   [ -x "$_puh" ] \
-    || die "$1's pre-uninstall hook exists but is not executable; uninstall stopped, nothing removed"
+    || die "$1's pre-uninstall hook ($_puh) exists but is not executable; uninstall stopped, nothing removed"
   _puh_rc=0
+  trap : INT
   MAVERGREEN_ROOT="$ROOT" MAVERGREEN_PRODUCT="$1" "$_puh" || _puh_rc=$?
+  trap - INT
   [ "$_puh_rc" -eq 0 ] || {
     if [ "$_puh_rc" -gt 128 ]; then
-      die "$1's pre-uninstall hook was cancelled (status $_puh_rc); uninstall stopped, nothing removed" "$_puh_rc"
+      die "$1's pre-uninstall hook ($_puh) was cancelled (status $_puh_rc); uninstall stopped, nothing removed" "$_puh_rc"
     else
-      die "$1's pre-uninstall hook failed (status $_puh_rc); uninstall stopped, nothing removed" "$_puh_rc"
+      die "$1's pre-uninstall hook ($_puh) failed (status $_puh_rc); uninstall stopped, nothing removed" "$_puh_rc"
     fi
   }
 }

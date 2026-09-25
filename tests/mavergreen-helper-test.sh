@@ -345,25 +345,34 @@ grep -qxF "$V hookgood" "$w/hook.log" \
 
 mkproduct hookfail hookfail "" bin/hookfail
 mg link hookfail || fail "setup: link hookfail"
-mkdir -p "$T/hookfail/libexec/mavergreen" "$V/Applications/HookFail.app/Contents"
+mkdir -p "$T/hookfail/libexec/mavergreen" "$V/Applications/HookFail.app/Contents" "$T/var/hookfail"
+touch "$T/var/hookfail/state"
 "$PB" -c "Add :outside array" -c "Add :outside:0 string Applications/HookFail.app" "$T/hookfail/mavergreen.plist" >/dev/null
 printf '#!/bin/sh\nexit 1\n' > "$T/hookfail/libexec/mavergreen/pre-uninstall"
 chmod +x "$T/hookfail/libexec/mavergreen/pre-uninstall"
+: > "$w/calls"
 rc=0; PATH="$stub:$PATH" mg uninstall hookfail 2>"$w/err" || rc=$?
 [ "$rc" -ne 0 ] || fail "uninstall must fail when its pre-uninstall hook exits non-zero"
-grep -q 'pre-uninstall' "$w/err" || fail "the failure message must name the hook: $(cat "$w/err")"
+grep -qF "$T/hookfail/libexec/mavergreen/pre-uninstall" "$w/err" \
+  || fail "the failure message must name the hook's path: $(cat "$w/err")"
 [ -d "$T/hookfail" ] || fail "a failing pre-uninstall hook must leave the product's tree in place"
+[ -d "$T/var/hookfail" ] && [ -f "$T/var/hookfail/state" ] \
+  || fail "a failing pre-uninstall hook must leave the product's var/ in place"
 [ -L "$T/bin/hookfail" ] || fail "a failing pre-uninstall hook must leave the product's farm links in place"
 [ -d "$V/Applications/HookFail.app" ] || fail "a failing pre-uninstall hook must leave outside entries in place"
 [ "$(mg select hookfail)" = hookfail ] || fail "a failing pre-uninstall hook must leave the selection alone"
+grep -q 'forget dev.mavergreen.hookfail' "$w/calls" \
+  && fail "a failing pre-uninstall hook must leave the receipt in place: $(cat "$w/calls")"
 
 mkproduct hookcancel hookcancel "" bin/hookcancel
 mkdir -p "$T/hookcancel/libexec/mavergreen"
 printf '#!/bin/sh\nexit 130\n' > "$T/hookcancel/libexec/mavergreen/pre-uninstall"
 chmod +x "$T/hookcancel/libexec/mavergreen/pre-uninstall"
 rc=0; PATH="$stub:$PATH" mg uninstall hookcancel 2>"$w/err" || rc=$?
-[ "$rc" -ne 0 ] || fail "uninstall must fail when its pre-uninstall hook is killed by a signal"
+[ "$rc" -ne 0 ] || fail "uninstall must fail when its pre-uninstall hook exits above 128"
 grep -qi cancelled "$w/err" || fail "a pre-uninstall hook exiting above 128 must be reported as cancelled, not failed: $(cat "$w/err")"
+grep -qF "$T/hookcancel/libexec/mavergreen/pre-uninstall" "$w/err" \
+  || fail "the cancellation message must name the hook's path: $(cat "$w/err")"
 [ -d "$T/hookcancel" ] || fail "a cancelled pre-uninstall hook must remove nothing"
 
 mkproduct hooknonexec hooknonexec "" bin/hooknonexec
@@ -373,6 +382,34 @@ rc=0; PATH="$stub:$PATH" mg uninstall hooknonexec 2>"$w/err" || rc=$?
 [ "$rc" -ne 0 ] || fail "a non-executable pre-uninstall hook must fail uninstall"
 grep -q 'not executable' "$w/err" || fail "the refusal must say the hook is not executable: $(cat "$w/err")"
 [ -d "$T/hooknonexec" ] || fail "a non-executable pre-uninstall hook must remove nothing"
+
+mkproduct hooklink hooklink "" bin/hooklink
+mkdir -p "$T/hooklink/libexec/mavergreen" "$w/outside-hook"
+printf '#!/bin/sh\ntouch "%s/ran"\nexit 0\n' "$w/outside-hook" > "$w/outside-hook/real"
+chmod +x "$w/outside-hook/real"
+ln -s "$w/outside-hook/real" "$T/hooklink/libexec/mavergreen/pre-uninstall"
+rc=0; PATH="$stub:$PATH" mg uninstall hooklink 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "a symlinked pre-uninstall hook must be refused, even if its target is a real, in-root file"
+grep -qF "$T/hooklink/libexec/mavergreen/pre-uninstall" "$w/err" \
+  || fail "the refusal must name the symlinked hook's path: $(cat "$w/err")"
+[ ! -e "$w/outside-hook/ran" ] || fail "a refused symlinked pre-uninstall hook's target must never run"
+[ -d "$T/hooklink" ] || fail "a refused symlinked pre-uninstall hook must remove nothing"
+
+mkproduct hookbeforerestore hookbeforerestore "" bin/hookbr
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/hookbr string bin/hookbr" "$T/hookbeforerestore/mavergreen.plist"
+echo apple-hookbr > "$V/usr/bin/hookbr"
+mg system-replace hookbeforerestore || fail "setup: system-replace hookbeforerestore must succeed"
+mkdir -p "$T/hookbeforerestore/libexec/mavergreen"
+printf '#!/bin/sh\nexit 1\n' > "$T/hookbeforerestore/libexec/mavergreen/pre-uninstall"
+chmod +x "$T/hookbeforerestore/libexec/mavergreen/pre-uninstall"
+rc=0; PATH="$stub:$PATH" mg uninstall hookbeforerestore 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "a failing pre-uninstall hook must fail uninstall even for a product with replaced system files"
+[ "$(readlink "$V/usr/bin/hookbr")" = /usr/local/mavergreen/hookbeforerestore/bin/hookbr ] \
+  || fail "a failing pre-uninstall hook must run before system-restore -- the replaced system path must still be our link"
+[ -f "$T/var/system-replace/hookbeforerestore/usr/bin/hookbr" ] \
+  || fail "a failing pre-uninstall hook must run before system-restore -- the saved original must still be waiting, untouched"
+grep -qF "$T/hookbeforerestore/libexec/mavergreen/pre-uninstall" "$w/err" \
+  || fail "the failure message must name the hook: $(cat "$w/err")"
 
 mkproduct hookescape hookescape "" bin/hookescape
 mkdir -p "$w/beyond-hook"
@@ -384,5 +421,20 @@ rc=0; PATH="$stub:$PATH" mg uninstall hookescape 2>"$w/err" || rc=$?
 [ "$rc" -ne 0 ] || fail "a pre-uninstall hook whose parent directory resolves outside the volume must fail uninstall"
 grep -q 'pre-uninstall' "$w/err" || fail "the refusal must name the hook: $(cat "$w/err")"
 [ -d "$T/hookescape" ] || fail "an escaping pre-uninstall hook's parent must not let uninstall remove anything"
+
+if command -v perl >/dev/null 2>&1; then
+  mkproduct hookintgroup hookintgroup "" bin/hookintgroup
+  mkdir -p "$T/hookintgroup/libexec/mavergreen"
+  printf '#!/bin/sh\nkill -INT 0\nsleep 5\n' > "$T/hookintgroup/libexec/mavergreen/pre-uninstall"
+  chmod +x "$T/hookintgroup/libexec/mavergreen/pre-uninstall"
+  rc=0
+  PATH="$stub:$PATH" perl -e 'setpgrp 0, 0; exec @ARGV' sh "$MG" --root "$V" uninstall hookintgroup 2>"$w/err" || rc=$?
+  [ "$rc" -ne 0 ] || fail "uninstall must fail when a real Ctrl-C (delivered to the whole process group) kills its hook"
+  grep -qi cancelled "$w/err" \
+    || fail "the helper must survive a process-group SIGINT delivered while its hook runs, and report it as cancelled: $(cat "$w/err")"
+  [ -d "$T/hookintgroup" ] || fail "a process-group SIGINT during the pre-uninstall hook must remove nothing"
+else
+  echo "no perl -- skipping the process-group SIGINT pre-uninstall hook test" >&2
+fi
 
 echo "PASS: mavergreen-helper"

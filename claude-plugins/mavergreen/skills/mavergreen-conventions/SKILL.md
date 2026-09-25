@@ -1514,13 +1514,17 @@ Everything in a product's `bin/`, `sbin/` and `share/man/man*/` is exported by d
 only its `shipyard-*` names reach the farm).
 
 **A product's pre-uninstall hook** is a fixed path in its tree,
-`<product>/libexec/mavergreen/pre-uninstall` — no manifest key. `mavergreen uninstall <product>`
-runs it, by its own shebang, before system-restore, unlink or any removal, with `MAVERGREEN_ROOT`
-set to the helper's root (`/` by default) and `MAVERGREEN_PRODUCT` set to the product; stdin,
-stdout and stderr are inherited, so it may prompt. Exit 0 lets the uninstall proceed; anything else
-stops it before anything is removed, naming the hook and its exit status (above 128, reported as
-cancelled). The hook decides what applies to that root — the helper never skips it for a non-`/`
-root — so work that only makes sense on the running system starts
+`<product>/libexec/mavergreen/pre-uninstall` — no manifest key, and never a symlink (the helper
+refuses one outright, unread: the payload is ours, so a hook is never legitimately a link).
+`mavergreen uninstall <product>` runs it, by its own shebang, before system-restore, unlink or any
+removal, with `MAVERGREEN_ROOT` set to the helper's root (`/` by default) and `MAVERGREEN_PRODUCT`
+set to the product; stdin, stdout and stderr are inherited, so it may prompt. Exit 0 lets the
+uninstall proceed; anything else stops it before anything is removed, naming the hook's path and
+its exit status. A real Ctrl-C at that prompt delivers `SIGINT` to the hook and the helper together
+(they share the terminal's process group); the helper ignores its own copy while the hook runs, so
+it survives to see the hook's signal-killed exit status (above 128) and reports the uninstall as
+cancelled rather than failed. The hook decides what applies to that root — the helper never skips
+it for a non-`/` root — so work that only makes sense on the running system starts
 `[ "${MAVERGREEN_ROOT:-/}" = / ] || exit 0`. Like any tracked script it is host-declared on line 2,
 and it exits 0 when it has nothing to do.
 
@@ -1616,9 +1620,11 @@ pass Installer's target volume rather than assuming `/`; with any other root it 
 
 **`uninstall`** runs the tree's `libexec/mavergreen/pre-uninstall` hook first, if there is one, by its
 own shebang, with `MAVERGREEN_ROOT`/`MAVERGREEN_PRODUCT` set and stdin/stdout/stderr inherited; a
-hook that exists but is not executable, that exits non-zero, or whose parent path resolves outside
-the target volume stops uninstall before anything is removed, naming the hook and its exit status (a
-status above 128 is reported as cancelled, not failed). Then it runs `system-restore` if the product
+hook that is a symlink, that exists but is not executable, that exits non-zero, or whose parent path
+resolves outside the target volume stops uninstall before anything is removed, naming the hook's
+path and its exit status (a status above 128 -- including one from a real Ctrl-C at the hook's own
+prompt, which the helper survives on purpose -- is reported as cancelled, not failed). Then it runs
+`system-restore` if the product
 has replaced system files, and **stops there if that fails**, removing nothing: the manifest
 survives, so a retry can finish the restore. Then it unlinks; removes each `outside` and `generated` entry (a `generated` entry that does not exist is not an error) — a file or link, or a whole bundle directory (`.app`,
 `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`), unloading a launchd job first when the
