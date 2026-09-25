@@ -122,10 +122,14 @@ jobs:
           #       shipyard into: --cmake-tree refuses a root carrying anything but bin/doc/man/share,
           #       and --shipyard-prefix anything but share. Two clean roots in, one prefix out.
           shipyard-cmake -S . -B "$RUNNER_TEMP/payload-build"
-          shipyard-cmake --install "$RUNNER_TEMP/payload-build" --prefix "$RUNNER_TEMP/payload-prefix"
+          # spec: scripts/package-pkg.sh -- the install bakes its prefix into mavericks-presets.json, so
+          #       it installs INTO the pkg's prefix, staged under DESTDIR; package-pkg.sh refuses presets
+          #       naming any other toolchain file.
+          DESTDIR="$RUNNER_TEMP/payload-stage" shipyard-cmake --install "$RUNNER_TEMP/payload-build" \
+            --prefix /usr/local/mavergreen/shipyard
           sh scripts/package-pkg.sh \
             --cmake-tree "$SHIPYARD_CMAKE_TREE" \
-            --shipyard-prefix "$RUNNER_TEMP/payload-prefix" \
+            --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
             --app "$RUNNER_TEMP/MavericksShipyardUpdater.app" \
             --version "$v" \
             --out "dist/mavericks-shipyard-$v.pkg"

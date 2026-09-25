@@ -49,7 +49,13 @@ mkfixture() {  # $1 = dir: a tree, a shipyard prefix and an app that all pass ev
            "$1/sp/share/cmake/MavericksShipyard" "$1/app/MavericksShipyardUpdater.app"
   for c in cmake ctest cpack; do printf '#!/bin/sh\n' > "$1/tree/bin/$c"; chmod +x "$1/tree/bin/$c"; done
   : > "$1/sp/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake"
+  presets "$1" /usr/local/mavergreen/shipyard
   : > "$1/notadir"
+}
+presets() {  # $1 = fixture dir  $2 = the prefix its installed presets name
+  _t="$2/share/cmake/MavericksShipyard/MavericksToolchain.cmake"
+  printf '{ "configurePresets": [\n  { "name": "a",\n    "toolchainFile": "%s" },\n  { "name": "b",\n    "toolchainFile": "%s" } ] }\n' \
+    "$_t" "$_t" > "$1/sp/share/cmake/MavericksShipyard/mavericks-presets.json"
 }
 # platform: --out under a plain FILE, so a fixture that passes every input check stops at the first
 #           mkdir after them -- exercising the checks without pkgbuild, and without a special case
@@ -76,5 +82,18 @@ printf '%s\n' "$err" | grep -q 'build' \
   || { echo "FAIL: the refusal must name the stray entry; got '$err'"; exit 1; }
 printf '%s\n' "$err" | grep -q -- '--shipyard-prefix' \
   || { echo "FAIL: the refusal must name the flag that carried it; got '$err'"; exit 1; }
+
+# spec: scripts/package-pkg.sh -- the install bakes its --prefix into the presets' toolchainFile, so a prefix
+#       installed anywhere but the pkg's own (a bare `--prefix "$RUNNER_TEMP/..."`) ships presets naming
+#       a runner's temp dir, and every consumer's `cmake --preset` fails.
+mkfixture "$w/fd"; presets "$w/fd" "$w/fd/sp"; run_pkg "$w/fd"
+[ "$rc" -ne 0 ] || { echo "FAIL: presets naming a toolchain file outside the pkg's prefix must be refused"; exit 1; }
+printf '%s\n' "$err" | grep -q 'toolchainFile' \
+  || { echo "FAIL: the refusal must say it is the presets' toolchainFile that is wrong; got '$err'"; exit 1; }
+printf '%s\n' "$err" | grep -q 'DESTDIR' \
+  || { echo "FAIL: the refusal must say how to stage the install (DESTDIR); got '$err'"; exit 1; }
+mkfixture "$w/fe"; rm "$w/fe/sp/share/cmake/MavericksShipyard/mavericks-presets.json"; run_pkg "$w/fe"
+printf '%s\n' "$err" | grep -q 'mavericks-presets.json' \
+  || { echo "FAIL: a --shipyard-prefix with no mavericks-presets.json must be refused, naming it; got '$err'"; exit 1; }
 
 echo "PASS: shipyard-package-pkg"

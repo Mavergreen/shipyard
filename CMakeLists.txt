@@ -79,8 +79,40 @@ install(FILES
   MavericksSparkle.cmake
   MavericksVersion.cmake
   MavericksDecisions.cmake
-  mavericks-presets.json
   DESTINATION "${_dest}")
+
+# platform: CMake expands a preset's ${fileDir} against the file of the preset being CONFIGURED, not
+#           the file that wrote the macro, so a consumer inheriting mavericks-cross from the installed
+#           presets got "Could not find toolchain file: <consumer dir>/MavericksToolchain.cmake"
+#           (CMake 3.28, 4.4.3). The installed copy names the installed toolchain file absolutely.
+#           The source keeps ${fileDir}: it is the token replaced here, it keeps the source valid
+#           JSON, and it is still right for the one caller it can serve -- a CMakePresets.json
+#           beside it, whose ${fileDir} is this directory too. Nothing consumes the source that way.
+# spec: tests/installed-presets-test.sh -- baked at INSTALL time, not configure time, so the path is
+#       the prefix `cmake --install --prefix` names; file(INSTALL) adds $ENV{DESTDIR} to where the
+#       file lands, never to the path written inside it, so a pkg stage bakes the real prefix.
+set(_msc_presets_code [[
+  if(IS_ABSOLUTE "@_dest@")
+    set(_msc_to "@_dest@")
+  else()
+    set(_msc_to "${CMAKE_INSTALL_PREFIX}/@_dest@")
+  endif()
+  file(READ "@CMAKE_CURRENT_SOURCE_DIR@/mavericks-presets.json" _msc_json)
+  set(_msc_token "\${fileDir}/MavericksToolchain.cmake")
+  string(FIND "${_msc_json}" "${_msc_token}" _msc_at)
+  if(_msc_at EQUAL -1)
+    message(FATAL_ERROR "mavericks-presets.json has no ${_msc_token} to replace with the installed toolchain file")
+  endif()
+  string(REPLACE "${_msc_token}" "${_msc_to}/MavericksToolchain.cmake" _msc_json "${_msc_json}")
+  if(_msc_json MATCHES "fileDir")
+    message(FATAL_ERROR "mavericks-presets.json still names \${fileDir} after install-time substitution")
+  endif()
+  file(WRITE "@CMAKE_CURRENT_BINARY_DIR@/installed-presets/mavericks-presets.json" "${_msc_json}")
+  file(INSTALL DESTINATION "${_msc_to}" TYPE FILE
+    FILES "@CMAKE_CURRENT_BINARY_DIR@/installed-presets/mavericks-presets.json")
+]])
+string(CONFIGURE "${_msc_presets_code}" _msc_presets_code @ONLY)
+install(CODE "${_msc_presets_code}")
 
 # Scripts keep their executable bit (they are run via `sh` but stay +x for direct use).
 # scripts/ carries the Sparkle fetch scripts + native signer/keygen sources too.

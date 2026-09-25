@@ -86,6 +86,21 @@ require_only --cmake-tree "$TREE" "bin doc man share"
 #       so `share` is the only thing that may be here; anything else means a build dir, a source tree
 #       or a shared prefix was passed by mistake.
 require_only --shipyard-prefix "$SPREFIX" "share"
+# spec: tests/installed-presets-test.sh -- the install bakes its --prefix into the presets' toolchainFile, so this prefix
+#       must have been installed AS $PREFIX_DIR (staged under DESTDIR), or every consumer's
+#       `cmake --preset` looks for the toolchain file in a directory that exists only on the runner.
+presets="$SPREFIX/share/cmake/MavericksShipyard/mavericks-presets.json"
+want="$PREFIX_DIR/share/cmake/MavericksShipyard/MavericksToolchain.cmake"
+[ -f "$presets" ] || { echo "package-pkg: --shipyard-prefix has no mavericks-presets.json: $presets" >&2; exit 1; }
+tcs="$(sed -n 's/^[[:space:]]*"toolchainFile":[[:space:]]*"\([^"]*\)".*/\1/p' "$presets")"
+wrong="$(printf '%s\n' "$tcs" | grep -vxF "$want" || true)"
+if [ -z "$tcs" ] || [ -n "$wrong" ]; then
+  echo "package-pkg: $presets must name toolchainFile $want; it names: ${wrong:-nothing}" >&2
+  echo "    install shipyard into the pkg's prefix, staged:" >&2
+  echo "    DESTDIR=<stage> shipyard-cmake --install <build> --prefix $PREFIX_DIR" >&2
+  echo "    and pass --shipyard-prefix <stage>$PREFIX_DIR" >&2
+  exit 1
+fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-pkg.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 STAGE="$WORK/stage"; SCR="$WORK/scripts"

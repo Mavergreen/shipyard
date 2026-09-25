@@ -18,8 +18,10 @@ if [ "$(grep -c '${sourceDirName}' "$P" || true)" -ne 2 ]; then
 fi
 grep -q '"MAVERICKS_BUILD_ROOT": "\$penv{TMPDIR}/mm-build"' "$P" \
   || say "MAVERICKS_BUILD_ROOT is not defaulted to TMPDIR"
+# spec: tests/installed-presets-test.sh -- the source's toolchainFile is the token the install
+#       replaces with the installed toolchain file's absolute path; that test checks the result.
 [ "$(grep -c '"toolchainFile": "${fileDir}/MavericksToolchain.cmake"' "$P" || true)" -eq 2 ] \
-  || say "both hidden presets must use \${fileDir}/MavericksToolchain.cmake, so a consumer's preset pins the SDK by inheriting"
+  || say "both hidden presets must carry \${fileDir}/MavericksToolchain.cmake, the token the install replaces, so a consumer's preset pins the SDK by inheriting"
 
 command -v cmake >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
 
@@ -31,20 +33,17 @@ command -v cmake >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
 #       toolchain file FORCE-sets CMAKE_OSX_SYSROOT to the pinned SDK, which here is an EMPTY fake;
 #       a language would make CMake's compiler check link against it and fail, so the fixture
 #       enables none (NONE still runs the toolchain file and writes its cache variables).
-# spec: mavericks-presets.json's "toolchainFile" is "${fileDir}/MavericksToolchain.cmake" -- ${fileDir}
-#       is the directory of the preset FILE that sets it (the fixture's own copy of
-#       mavericks-presets.json), so the fixture needs its own copy of the toolchain file and the
-#       scripts/ it shells out to, next to it -- exactly how an installed share dir holds them.
+# platform: the fixture includes an INSTALLED shipyard's presets from its own, different directory,
+#           as README.md shows consumers doing. A copy of the presets beside the fixture hid a
+#           released bug: CMake expands an inherited ${fileDir} against the CONSUMER's file, and
+#           there the two directories were one.
 fixture() {  # $1 = directory to populate as a CMake source root
   mkdir -p "$1"
   printf 'cmake_minimum_required(VERSION 3.25)\nproject(t NONE)\n' > "$1/CMakeLists.txt"
-  cp "$P" "$1/mavericks-presets.json"
-  cp "$root/MavericksToolchain.cmake" "$1/MavericksToolchain.cmake"
-  cp -R "$root/scripts" "$1/scripts"
-  cat > "$1/CMakePresets.json" <<'JSON'
+  cat > "$1/CMakePresets.json" <<JSON
 { "version": 6,
   "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
-  "include": ["mavericks-presets.json"],
+  "include": ["$installed/mavericks-presets.json"],
   "configurePresets": [
     { "name": "native", "inherits": "mavericks-native" },
     { "name": "cross", "inherits": "mavericks-cross" } ] }
@@ -76,7 +75,12 @@ work3="$(mktemp -d "${_tmp%/}/presets-sdkcache.XXXXXX")"
 mkdir -p "$work3/MacOSX10.9.sdk/usr/lib"
 MAVERICKS_SDK_CACHE="$work3"; export MAVERICKS_SDK_CACHE
 
-trap 'rm -rf "$work1" "$work2" "$work3" "$bd1" "$bd2" "$bd1cross"' EXIT INT TERM
+work4="$(mktemp -d "${_tmp%/}/presets-shipyard.XXXXXX")"
+trap 'rm -rf "$work1" "$work2" "$work3" "$work4" "$bd1" "$bd2" "$bd1cross"' EXIT INT TERM
+cmake -S "$root" -B "$work4/build" > "$work4/install.log" 2>&1 \
+  && cmake --install "$work4/build" --prefix "$work4/prefix" >> "$work4/install.log" 2>&1 \
+  || { echo "FAIL: shipyard does not install"; sed 's/^/    | /' "$work4/install.log"; exit 1; }
+installed="$work4/prefix/share/cmake/MavericksShipyard"
 sdk="$work3/MacOSX10.9.sdk"
 # platform: MavericksToolchain.cmake picks native mode by the HOST, not the preset: on a 10.9 host it
 #           pins xcrun's own 10.9 SDK when xcrun finds one, so both presets must record that there.
