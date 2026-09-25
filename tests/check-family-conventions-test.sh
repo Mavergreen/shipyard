@@ -438,7 +438,7 @@ printf '%s\n' "$out" | grep -qi 'not committed' || { echo "FAIL should say it is
 mkrepo "$work/k"
 # spec: scripts/check-family-conventions.sh check 23 -- a signing workflow builds a pkg too
 #       (check 21's fallback), so it needs stage_product.sh the same as a direct pkgbuild caller.
-printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --pkg dist/x.pkg > dist/appcast.xml\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
+printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
   >> "$work/k/.github/workflows/release.yml"
 (cd "$work/k" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/k" && sh "$S" 2>&1)"; then echo "FAIL a signing workflow with no scan job should fail"; exit 1; fi
@@ -452,6 +452,44 @@ cat >> "$work/k/.github/workflows/release.yml" <<'YML'
 YML
 (cd "$work/k" && git add -A) >/dev/null 2>&1
 (cd "$work/k" && sh "$S" >/dev/null) || { echo "FAIL a signing workflow with a scan job should pass: $(cd "$work/k" && sh "$S" 2>&1)"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 12 -- sign_and_appcast.sh writes <feed-dir>/<product>.xml
+#       itself, so a call that omits --product or --feed-dir, or redirects its stdout, is the retired
+#       `--pkg ... > dist/appcast.xml` shape; a call continued over lines with a trailing \ is one call.
+signs() {  # $1 = dir, $2 = the lines of one run: | block
+  mkrepo "$1"
+  { printf '      - run: |\n'; printf '%s\n' "$2" | sed 's/^/          /'
+    printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n'
+    printf '      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n'
+    printf '  scan:\n    needs: [build]\n    if: always()\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n'
+  } >> "$1/.github/workflows/release.yml"
+  (cd "$1" && git add -A) >/dev/null 2>&1
+}
+SA='sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh"'
+signs "$work/sa1" "$SA --product w --feed-dir dist --pkg dist/x.pkg"
+(cd "$work/sa1" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 12: a one-line call with --product and --feed-dir passes: $(cd "$work/sa1" && sh "$S" 2>&1)"; exit 1; }
+signs "$work/sa2" "# $SA --pkg x > dist/appcast.xml
+$SA \\
+  --product w --channel-title W \\
+  --feed-dir dist --pkg dist/x.pkg 2>&1
+echo signed > dist/log.txt"
+(cd "$work/sa2" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 12: a call continued over lines passes, and a later command's redirect is not its: $(cd "$work/sa2" && sh "$S" 2>&1)"; exit 1; }
+sa_refused() {  # $1 = dir, $2 = what the case is
+  out="$(cd "$1" && sh "$S" 2>&1)" && { echo "FAIL: check 12: $2 must fail"; exit 1; }
+  printf '%s\n' "$out" | grep -q 'sign_and_appcast.sh must pass --product' \
+    || { echo "FAIL: check 12: $2 must be refused for its shape: $out"; exit 1; }
+}
+signs "$work/sa3" "$SA --pkg dist/x.pkg > dist/appcast.xml"
+sa_refused "$work/sa3" "the retired '--pkg ... > dist/appcast.xml' call"
+signs "$work/sa4" "$SA \\
+  --product w \\
+  --pkg dist/x.pkg"
+sa_refused "$work/sa4" "a continued call with no --feed-dir"
+signs "$work/sa5" "$SA --product w --feed-dir dist --pkg dist/x.pkg > dist/w.xml"
+sa_refused "$work/sa5" "a call that redirects its stdout"
+signs "$work/sa6" "$SA --product w --feed-dir dist --pkg dist/x.pkg
+$SA --product w-cross --pkg dist/y.pkg"
+sa_refused "$work/sa6" "a second call without --feed-dir"
 
 # spec: SKILL.md "Renovate & automerge" -- a pin on a -mavericks.N release must be read with
 #       versioning that COMPARES N. Renovate's default coerces the suffix away, so .1 and .4
@@ -1267,7 +1305,7 @@ printf '      # - run: sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) && { echo "FAIL: a commented-out conformance call must not count as wired"; exit 1; }
 printf '\n## Conformance deviations\n\n- artifact-conformance: ships a disk image, not a Mavergreen pkg\n- product-layout: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: declared artifact-conformance and product-layout deviations should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
-mkrepo "$work/pks"; printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --pkg dist/x.pkg > dist/appcast.xml\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$work/pks/.github/workflows/release.yml"
+mkrepo "$work/pks"; printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$work/pks/.github/workflows/release.yml"
 (cd "$work/pks" && git add -A && sh "$S" 2>&1) | grep -q 'check-artifact-conformance.sh' || { echo "FAIL: a repo that signs an appcast builds a pkg, and must run conformance"; exit 1; }
 mkrepo "$work/pkt"; printf '#!/bin/sh\npkgbuild --root x t.pkg\n' > "$work/pkt/tests/fixture.sh"
 (cd "$work/pkt" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkgbuild in tests/ is a fixture, not a product: $(cd "$work/pkt" && sh "$S" 2>&1)"; exit 1; }

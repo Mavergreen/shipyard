@@ -278,6 +278,31 @@ if ci_mentions 'sign_and_appcast'; then
             "add a scan job between the signing job and publish, under always() (the snippet is at the top of shipyard's scan-for-key.yml), and make publish need it"
 fi
 
+# spec: SKILL.md "Family conventions" check 12 -- sign_and_appcast.sh writes <feed-dir>/<product>.xml
+#       itself, so every call passes both and redirects nothing; a line ending in \ continues the call.
+_bad12="$(for f in $CI_FILES; do
+  awk '
+    /^[[:space:]]*#/ { next }
+    { sub(/(^|[[:space:]])#.*$/, "") }
+    /\\$/ { sub(/\\$/, ""); held = held $0 " "; next }
+    { print held $0; held = "" }
+    END { if (held != "") print held }
+  ' "$f" \
+    | grep -E '(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^[[:space:]]*-?[[:space:]]*run:)[[:space:]]*((if|elif|while|until|!)[[:space:]]+)*((/bin/)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]+[^[:space:]=]*sign_and_appcast\.sh|[^[:space:]=]*/sign_and_appcast\.sh)"*([[:space:]]|$)' \
+    | while IFS= read -r call; do
+        args="$(printf '%s\n' "$call" | sed -e 's/.*sign_and_appcast\.sh"*//' -e 's/[;|].*//' -e 's/&&.*//')"
+        printf '%s\n' "$args" | grep -Eq '(^|[[:space:]])--product[[:space:]]' \
+          && printf '%s\n' "$args" | grep -Eq '(^|[[:space:]])--feed-dir[[:space:]]' \
+          && ! printf '%s\n' "$args" | grep -Eq '(^|[^2])>' \
+          || echo "$f: $call"
+      done
+done)"
+if [ -n "$_bad12" ]; then
+  fail "a call to sign_and_appcast.sh must pass --product and --feed-dir and redirect nothing -- it writes <feed-dir>/<product>.xml itself:
+$_bad12" \
+       "sh \"\$SHIPYARD_SCRIPTS/sign_and_appcast.sh\" --product <short> --feed-dir dist ... as one command (continue it with a trailing \\), with no > after it"
+fi
+
 # spec: SKILL.md "Family conventions" check 13 -- a Renovate manager whose captured pin ends in
 #       -mavericks.N needs regex versioning that compares N; default versioning coerces it away and
 #       every repackage compares equal (swift-runtime missed three releases this way).
