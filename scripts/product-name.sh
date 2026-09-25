@@ -10,6 +10,9 @@
 #        registry cannot answer: it is unreadable, the name's row names no valid repo, or the call
 #        is malformed.
 set -eu
+# spec: tests/product-names-test.sh -- a name is lowercase ASCII; a UTF-8 locale can collate [a-z] to
+#       admit uppercase in case patterns and awk ranges, so names are matched in the C locale.
+LC_ALL=C; export LC_ALL
 REG="${MAVERGREEN_PRODUCT_NAMES:-$(cd "$(dirname "$0")" && pwd)/product-names}"
 [ -f "$REG" ] && [ -r "$REG" ] || { echo "product-name.sh: cannot read the registry $REG" >&2; exit 2; }
 entries() { sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$REG"; }
