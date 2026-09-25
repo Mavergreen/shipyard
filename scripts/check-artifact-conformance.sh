@@ -27,6 +27,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/sdk-pins.sh"
+. "$SELF/deviation-reason.sh"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/conformance.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT  # template: 10.9 BSD mktemp requires one
 facts="$tmp/facts"; cat > "$facts"
@@ -50,23 +51,8 @@ if ! grep -q '^end-of-facts$' "$facts"; then
 fi
 
 grep '^deviation ' "$facts" > "$tmp/devs" || true
-deviation_reason() {  # $1 = check, $2 = the subject it concerns (optional). Prints the reason, if any.
-  _dr="$(sed -n "s/^deviation ${1} \(..*\)$/\1/p" "$tmp/devs" | head -1)"
-  if [ -z "$_dr" ] && [ -n "${2:-}" ]; then
-    while IFS= read -r line; do
-      rest="${line#deviation ${1}:}"
-      glob="${rest%% *}"
-      why="${rest#* }"
-      [ "$why" = "$rest" ] && why=""      # no space => a glob with no reason, which is not a deviation
-      case "$2" in
-        $glob) [ -n "$why" ] && _dr="$why" && break ;;
-      esac
-    done <<EOF
-$(grep "^deviation ${1}:" "$tmp/devs" || true)
-EOF
-  fi
-  printf '%s' "$_dr"
-}
+# spec: scripts/deviation-reason.sh -- the ONE matcher, shared with assert_binary_compatible.sh.
+deviation_reason() { mav_deviation_reason "$tmp/devs" "$@"; }  # $1 = check, $2 = subject (optional)
 
 status=0
 fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (optional)

@@ -12,6 +12,7 @@
 #       reads a repo in seconds and gates every PR.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
+. "$SELF/deviation-reason.sh"
 dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"
 root="${3:-$(pwd)}"
@@ -141,10 +142,7 @@ if [ -f "$root/INGREDIENTS.md" ]; then
   #           reports the `while`'s status instead, turning "this declaration is malformed" into
   #           "there are no deviations".
   _devs="$(sh "$SELF/deviations.sh" "$root")" || exit 1
-  [ -z "$_devs" ] || printf '%s\n' "$_devs" | while read -r _check _glob _reason; do
-    if [ "$_glob" = '*' ]; then printf 'deviation %s %s\n' "$_check" "$_reason"
-    else printf 'deviation %s:%s %s\n' "$_check" "$_glob" "$_reason"; fi
-  done
+  printf '%s\n' "$_devs" | mav_deviation_facts
 fi
 
 for f in "$dist"/*; do
