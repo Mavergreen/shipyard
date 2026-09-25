@@ -15,3 +15,4 @@ container-tools dev.mavergreen.container-tools
 swift-runtime dev.mavergreen.swift-runtime
 trackpad2 dev.mavergreen.voodooinputmavericks
 legacysupport dev.mavergreen.macports-legacy-support
+node24 dev.mavergreen.nodejs.node24
