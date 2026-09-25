@@ -1341,4 +1341,40 @@ printf '%s\n' "$out" | grep -q 'absent-registry' \
 printf '%s\n' "$out" | grep -q 'assigns no product' \
   && { echo "FAIL: check 24 must not call an unreadable registry an unregistered repo: $out"; exit 1; }
 
+# spec: SKILL.md "Family conventions" check 25 -- the family is retiring Rosetta (see the
+#       conventions skill, "Rosetta"). An undeclared arch -x86_64 call outside tests/ must fail,
+#       naming rosetta and the declaration form; a declared rosetta:<path> deviation must excuse
+#       it; a comment-only mention must pass undeclared; and a call inside tests/ must pass
+#       undeclared, because a test that runs the shipped product under Rosetta only when it is
+#       already present (SKIPping otherwise) is coverage, not a build dependency.
+mkrepo "$work/rosetta"
+printf '#!/bin/sh\narch -x86_64 ./host-tool\n' > "$work/rosetta/build/cross.sh"
+(cd "$work/rosetta" && git add -A) >/dev/null 2>&1
+out="$(cd "$work/rosetta" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared arch -x86_64 call must fail"; exit 1; }
+printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'Rosetta' || { echo "FAIL: check 25 should point at the SKILL \"Rosetta\" section: $out"; exit 1; }
+printf '\n## Conformance deviations\n\n- rosetta:build/cross.sh: the cross build runs a host tool under Rosetta; reconsider when an arm64 host tool exists, and at the latest before macOS 28\n' >> "$work/rosetta/INGREDIENTS.md"
+(cd "$work/rosetta" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse it: $(cd "$work/rosetta" && sh "$S" 2>&1)"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh check 25 -- the other two spellings the gate scans for.
+mkrepo "$work/rosetta2"; printf '#!/bin/sh\narch -arch x86_64 ./host-tool\n' > "$work/rosetta2/build/cross.sh"
+(cd "$work/rosetta2" && git add -A) >/dev/null 2>&1
+(cd "$work/rosetta2" && sh "$S" >/dev/null 2>&1) && { echo "FAIL: check 25: undeclared 'arch -arch x86_64' must fail"; exit 1; }
+mkrepo "$work/rosetta3"; printf '#!/bin/sh\n/usr/bin/arch -x86_64 ./host-tool\n' > "$work/rosetta3/build/cross.sh"
+(cd "$work/rosetta3" && git add -A) >/dev/null 2>&1
+(cd "$work/rosetta3" && sh "$S" >/dev/null 2>&1) && { echo "FAIL: check 25: undeclared '/usr/bin/arch -x86_64' must fail"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh check 25 -- a comment-only mention is prose, not a call.
+mkrepo "$work/rosettac"
+printf '#!/bin/sh\n# arch -x86_64 ./host-tool -- no longer true, kept as a note\nexit 0\n' > "$work/rosettac/build/cross.sh"
+(cd "$work/rosettac" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 25: a comment-only mention of arch -x86_64 must not fail: $(cd "$work/rosettac" && sh "$S" 2>&1)"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 25 -- tests/ is excluded, per "Rosetta", above.
+mkrepo "$work/rosettat"
+printf '#!/bin/sh\narch -x86_64 ./product --version\n' > "$work/rosettat/tests/rosetta-smoke.sh"
+(cd "$work/rosettat" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 25: a call under tests/ must pass undeclared: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
+
 echo "PASS: check-family-conventions"

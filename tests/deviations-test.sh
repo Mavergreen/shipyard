@@ -13,6 +13,7 @@ cat > "$w/INGREDIENTS.md" <<'EOF'
 - scheme: shipyard ports nothing
 - enclosure-url:appcast.xml: the tag carries a v
 - shipyard-cmake-only:build/legacy.sh: runs under the host cmake to bootstrap
+- rosetta:build/cross.sh: gyp's host tools are x86_64 and run under Rosetta
 ## Next
 - not-a-deviation: ignored
 EOF
@@ -20,6 +21,10 @@ out="$(sh "$S" "$w")"
 printf '%s\n' "$out" | grep -qx 'scheme \* shipyard ports nothing' || { echo "FAIL: unscoped entry; got:"; echo "$out"; exit 1; }
 printf '%s\n' "$out" | grep -qx 'enclosure-url appcast.xml the tag carries a v' || { echo "FAIL: scoped entry; got:"; echo "$out"; exit 1; }
 printf '%s\n' "$out" | grep -qx 'shipyard-cmake-only build/legacy.sh runs under the host cmake to bootstrap' || { echo "FAIL: path-scoped entry"; exit 1; }
+# spec: SKILL.md "Family conventions" check 25 -- rosetta:<scope> is a deviation key like any
+#       other; this parser accepts any check name, so the family-conventions gate's check 25 can
+#       rely on it without deviations.sh naming rosetta specially.
+printf '%s\n' "$out" | grep -qx 'rosetta build/cross.sh gyp'\''s host tools are x86_64 and run under Rosetta' || { echo "FAIL: rosetta:<path> entry must parse like any other scoped deviation; got:"; echo "$out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'not-a-deviation' && { echo "FAIL: entries outside the section must be ignored"; exit 1; }
 printf '## Conformance deviations\n- scheme:\n' > "$w/INGREDIENTS.md"
 if sh "$S" "$w" >/dev/null 2>&1; then echo "FAIL: an entry without a reason must fail"; exit 1; fi
