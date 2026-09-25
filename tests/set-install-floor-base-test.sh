@@ -59,4 +59,28 @@ sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title
 [ "$rc" -eq 2 ] || fail "--conclusion is interpolated into the Distribution XML, so a value with a quote must be refused as a usage error; got $rc"
 [ ! -e "$w/out-c4.pkg" ] || fail "a refused --conclusion must not write an output pkg"
 
+rc=0
+sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
+  --out "$w/out-c5.pkg" --resources "$w/res" --conclusion >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "--conclusion given last with no value is a usage error (exit 2), not an unbound-variable crash; got $rc"
+[ ! -e "$w/out-c5.pkg" ] || fail "a refused --conclusion with no value must not write an output pkg"
+
+rc=0
+sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
+  --out "$w/out-c6.pkg" --resources "$w/res" --conclusion 'a&b.html' >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "--conclusion is interpolated into the Distribution XML, so a value with & must be refused as a usage error; got $rc"
+[ ! -e "$w/out-c6.pkg" ] || fail "a refused --conclusion must not write an output pkg"
+
+rc=0
+sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
+  --out "$w/out-c7.pkg" --resources "$w/res" --conclusion 'a<b.html' >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "--conclusion is interpolated into the Distribution XML, so a value with < must be refused as a usage error; got $rc"
+[ ! -e "$w/out-c7.pkg" ] || fail "a refused --conclusion must not write an output pkg"
+
+rc=0
+sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
+  --out "$w/out-c8.pkg" --resources "$w/res" --conclusion NoSuchFile.html >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "--conclusion naming a file absent from --resources is a usage error (exit 2), not a silently-broken pane; got $rc"
+[ ! -e "$w/out-c8.pkg" ] || fail "a refused --conclusion for a missing file must not write an output pkg"
+
 echo "PASS: set-install-floor-base"

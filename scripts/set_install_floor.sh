@@ -29,6 +29,10 @@ REQSCRIPTS="false"; HOSTARCH=""; BASEVER=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --identifier|--title|--component|--out|--resources|--welcome|--license|--conclusion|--host-arch|--min-os|--base-version)
+      [ $# -ge 2 ] || { echo "productbuild_floor: $1 needs a value" >&2; exit 2; } ;;
+  esac
+  case "$1" in
     --identifier) ID="$2"; shift 2;;
     --title) TITLE="$2"; shift 2;;
     --component) COMPONENT="$2"; shift 2;;
@@ -50,9 +54,21 @@ done
   || { echo "productbuild_floor: --identifier may not be dev.mavergreen.base -- the base component is added automatically" >&2; exit 2; }
 [ -z "$CONCLUSION" ] || [ -n "$RES" ] \
   || { echo "productbuild_floor: --conclusion needs --resources, the directory holding the file" >&2; exit 2; }
-case "$CONCLUSION" in
-  */*|*'"'*) echo "productbuild_floor: --conclusion must be a plain file name, no / or \" -- it is interpolated into the Distribution XML" >&2; exit 2;;
+case "$WELCOME" in
+  */*|*'"'*|*'&'*|*'<'*) echo "productbuild_floor: --welcome must be a plain file name, no / \" & or < -- it is interpolated into the Distribution XML" >&2; exit 2;;
 esac
+case "$LICENSE" in
+  */*|*'"'*|*'&'*|*'<'*) echo "productbuild_floor: --license must be a plain file name, no / \" & or < -- it is interpolated into the Distribution XML" >&2; exit 2;;
+esac
+case "$CONCLUSION" in
+  */*|*'"'*|*'&'*|*'<'*) echo "productbuild_floor: --conclusion must be a plain file name, no / \" & or < -- it is interpolated into the Distribution XML" >&2; exit 2;;
+esac
+[ -z "$RES" ] || [ -z "$WELCOME" ] || [ -f "$RES/$WELCOME" ] \
+  || { echo "productbuild_floor: --welcome file not found: $RES/$WELCOME" >&2; exit 2; }
+[ -z "$RES" ] || [ -z "$LICENSE" ] || [ -f "$RES/$LICENSE" ] \
+  || { echo "productbuild_floor: --license file not found: $RES/$LICENSE" >&2; exit 2; }
+[ -z "$CONCLUSION" ] || [ -f "$RES/$CONCLUSION" ] \
+  || { echo "productbuild_floor: --conclusion file not found: $RES/$CONCLUSION" >&2; exit 2; }
 [ -f "$COMPONENT" ] || { echo "productbuild_floor: no component pkg: $COMPONENT" >&2; exit 1; }
 
 COMP_DIR=$(dirname "$COMPONENT"); COMP_BASE=$(basename "$COMPONENT")
