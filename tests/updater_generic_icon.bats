@@ -14,6 +14,7 @@ mavericks_add_updater_app(
   CONFIRM_TITLE T CONFIRM_BODY B
   VERSION 1.0.0 ED_PUBKEY AAAA SPARKLE_FRAMEWORK "$d/Fake.framework"
   $2)
+${3:-}
 EOF
   run cmake -S "$d" -B "$d/b"
 }
@@ -45,6 +46,13 @@ EOF
     || { cat "$p"; rm -rf "$d"; return 1; }
   grep -A1 SUFeedURL "$p" | grep -q '<string>https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml</string>' \
     || { cat "$p"; rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "add_updater_app: the target and bundle id are published to the caller, for product code that names the updater" {
+  mk go126 "ALLOW_GENERIC" 'message(STATUS "updater=[${MAVERICKS_UPDATER_TARGET}] id=[${MAVERICKS_UPDATER_BUNDLE_ID}]")'
+  [ "$status" -eq 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
+  [[ "$output" == *"updater=[go126-updater] id=[dev.mavergreen.golang.go126.updater]"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
   rm -rf "$d"
 }
 

@@ -1237,7 +1237,11 @@ signal (see the auto-merge intent above — fix runtime regressions in `-maveric
   `<pkg identifier>-updatecheck` (plist `<label>.plist`), and the feed
   `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`.
   `mavericks_add_updater_app(PRODUCT <short> …)` builds the app with that bundle id and feed and refuses
-  `NAME`, `BUNDLE_ID` and `FEED_URL`. `stage_product.sh --updater-app` stages it, refuses one built with
+  `NAME`, `BUNDLE_ID` and `FEED_URL`. Its CMake target and the app it builds are both `<short>-updater`,
+  and the bundle id is also the updater's defaults (prefs) domain: product code that launches the
+  updater, names its app path or reads its defaults takes them from `MAVERICKS_UPDATER_TARGET` and
+  `MAVERICKS_UPDATER_BUNDLE_ID`, which `mavericks_add_updater_app` sets in the caller's scope (or from
+  `product-name.sh`), and never hardcodes them. `stage_product.sh --updater-app` stages it, refuses one built with
   another identity, and refuses `--appcast`, `--app-dir` and `--agent-label`.
   `sign_and_appcast.sh --product <short> --feed-dir dist` writes the feed as `dist/<short>.xml`, and
   `publish-release.yml` attaches it with the other assets, publishing only after every upload, so

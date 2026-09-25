@@ -6,7 +6,7 @@
 # mavericks-ed25519 (https://github.com/Mavergreen/ed25519). Sign+appcast + payload staging are
 # CI shell steps (not CMake functions) -- see each product's release workflow:
 #   scripts/stage_updater.sh     -- stage the updater .app + LaunchAgent into a pkg payload,
-#                                   rendering updater/{updatecheck.plist,postinstall}.in per product
+#                                   rendering updater/{updatecheck.plist,agent-load}.in per product
 #   scripts/sign_and_appcast.sh  -- sign a .pkg (via ed25519-sign) then write its feed, <short>.xml (gen_appcast.sh)
 set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
 include("${MAVERICKS_SHARED_DIR}/MavericksDecisions.cmake")   # mavericks_reject_placeholder_icon()
@@ -40,6 +40,9 @@ endfunction()
 # Builds ${CMAKE_BINARY_DIR}/<PRODUCT>-updater.app hosting Sparkle. Cocoa-only; links NO libswiftCore.
 # Its bundle id and SUFeedURL are the ones scripts/product-name.sh derives for PRODUCT, so the app,
 # stage_product.sh and conformance cannot disagree; NAME, BUNDLE_ID and FEED_URL are refused.
+# Sets MAVERICKS_UPDATER_TARGET (<PRODUCT>-updater, the target and the app's name) and
+# MAVERICKS_UPDATER_BUNDLE_ID (also the updater's defaults domain) in the caller's scope, for product
+# code that launches the updater or reads its defaults.
 # PANE_HINT_KEY omitted/empty => background-found updates post an NSUserNotification (no-pane products).
 # POST_UPDATE_HELPER: absolute path to an executable the updater runs (as the user) after a successful
 # install + the confirmation -- for product-specific follow-up (e.g. offer to roll a VM onto a new image).
@@ -75,6 +78,8 @@ function(mavericks_add_updater_app)
   _mavericks_registry_fact(A_BUNDLE_ID updater-bundle-id "${A_PRODUCT}")
   _mavericks_registry_fact(A_FEED_URL feed "${A_PRODUCT}")
   set(A_NAME "${A_PRODUCT}-updater")
+  set(MAVERICKS_UPDATER_TARGET "${A_NAME}" PARENT_SCOPE)
+  set(MAVERICKS_UPDATER_BUNDLE_ID "${A_BUNDLE_ID}" PARENT_SCOPE)
 
   # Defaults for the mechanical args -- only PRODUCT/ICON/CONFIRM_TITLE/CONFIRM_BODY are the caller's.
   if(NOT A_PRODUCT_NAME)
