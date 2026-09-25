@@ -143,14 +143,17 @@ jobs:
           sh scripts/assert_pkg_installs_in_place.sh "$RUNNER_TEMP/dist/mavericks-shipyard-$v.pkg"
 
       # spec: SKILL.md "SDK pinning" -- the release runs full conformance; the rehearsal has no appcast
-      #       or notes, so it checks the sdk-pin facts alone, before the release ever sees them.
+      #       or notes, so it runs the family's SDK audit on the dist alone, before the release ever sees
+      #       it. The audit fails an unreadable pkg; the grep proves it checked at least one Mach-O slice
+      #       (an empty dist reports "no Mach-O shipped" and fails here). No pipe: the default run shell
+      #       has no pipefail, so a `| tee` would hide the audit's own exit status.
       - name: SDK pinning (the rehearsed pkg)
         run: |
           set -eu
-          v="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"
-          sh scripts/artifact-facts.sh "$RUNNER_TEMP/dist" "$v" \
-            | grep -E '^(expected|deviation|macho|abort|end-of-facts)( |$)' \
-            | sh scripts/check-artifact-conformance.sh
+          sh scripts/audit-release-sdks.sh --dist "$RUNNER_TEMP/dist" . > "$RUNNER_TEMP/sdk-audit.txt" \
+            || { cat "$RUNNER_TEMP/sdk-audit.txt"; exit 1; }
+          cat "$RUNNER_TEMP/sdk-audit.txt"
+          grep -q 'Mach-O slices)' "$RUNNER_TEMP/sdk-audit.txt"
 
       - name: Install smoke (the rehearsed pkg)
         timeout-minutes: 10

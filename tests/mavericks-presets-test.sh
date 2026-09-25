@@ -27,16 +27,20 @@ command -v cmake >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
 #       a consumer's preset supplies neither binaryDir nor MAVERICKS_BUILD_ROOT,
 #       it only inherits; this fixture must match that shape or the test
 #       proves nothing about real consumers.
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the
+#       toolchain file FORCE-sets CMAKE_OSX_SYSROOT to the pinned SDK, which here is an EMPTY fake;
+#       a language would make CMake's compiler check link against it and fail, so the fixture
+#       enables none (NONE still runs the toolchain file and writes its cache variables).
 # spec: mavericks-presets.json's "toolchainFile" is "${fileDir}/MavericksToolchain.cmake" -- ${fileDir}
 #       is the directory of the preset FILE that sets it (the fixture's own copy of
 #       mavericks-presets.json), so the fixture needs its own copy of the toolchain file and the
 #       scripts/ it shells out to, next to it -- exactly how an installed share dir holds them.
 fixture() {  # $1 = directory to populate as a CMake source root
   mkdir -p "$1"
-  printf 'cmake_minimum_required(VERSION 3.25)\nproject(t C)\n' > "$1/CMakeLists.txt"
+  printf 'cmake_minimum_required(VERSION 3.25)\nproject(t NONE)\n' > "$1/CMakeLists.txt"
   cp "$P" "$1/mavericks-presets.json"
   cp "$root/MavericksToolchain.cmake" "$1/MavericksToolchain.cmake"
-  cp -r "$root/scripts" "$1/scripts"
+  cp -R "$root/scripts" "$1/scripts"
   cat > "$1/CMakePresets.json" <<'JSON'
 { "version": 6,
   "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
@@ -68,6 +72,7 @@ mkdir -p "$work3/MacOSX10.9.sdk/usr/lib"
 MAVERICKS_SDK_CACHE="$work3"; export MAVERICKS_SDK_CACHE
 
 trap 'rm -rf "$work1" "$work2" "$work3" "$bd1" "$bd2" "$bd1cross"' EXIT INT TERM
+sdk="$work3/MacOSX10.9.sdk"
 
 fixture "$work1"
 fixture "$work2"
@@ -104,9 +109,11 @@ out1cross="$(cd "$work1" && cmake --preset cross 2>&1)" \
 check_cache_var "$bd1/CMakeCache.txt" MAVERICKS_EXPECTED_MODE native "mavericks-native"
 check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-native"
 check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-native"
+check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_SYSROOT "$sdk" "mavericks-native"
 check_cache_var "$bd1cross/CMakeCache.txt" MAVERICKS_EXPECTED_MODE cross "mavericks-cross"
 check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-cross"
 check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-cross"
+check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_SYSROOT "$sdk" "mavericks-cross"
 
 [ "$fails" -eq 0 ] && echo "mavericks-presets: ok"
 exit $([ "$fails" -eq 0 ] && echo 0 || echo 1)
