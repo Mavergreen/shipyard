@@ -67,7 +67,12 @@ bd1cross="${TMPDIR:-/tmp}/mm-build/${b1}-cross"
 #       presets' toolchainFile now runs on every configure below and fetches the pinned SDK;
 #       pre-seed a fake cached SDK and point fetch_sdk.sh at it, so this test stays offline (both
 #       presets pin CMAKE_OSX_ARCHITECTURES x86_64, so only that SDK is needed).
-work3="$(mktemp -d "${TMPDIR:-/tmp}/presets-sdkcache.XXXXXX")"
+# platform: macOS sets TMPDIR with a trailing slash, and cmake normalizes "//" away in the
+#           CMAKE_OSX_SYSROOT it caches -- so an unstripped slash here would make the
+#           check_cache_var comparison below fail on every real macOS session while looking fine
+#           here with TMPDIR unset.
+_tmp="${TMPDIR:-/tmp}"
+work3="$(mktemp -d "${_tmp%/}/presets-sdkcache.XXXXXX")"
 mkdir -p "$work3/MacOSX10.9.sdk/usr/lib"
 MAVERICKS_SDK_CACHE="$work3"; export MAVERICKS_SDK_CACHE
 
