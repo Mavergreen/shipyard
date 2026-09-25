@@ -612,9 +612,15 @@ rm -rf "$_fc2"
 # spec: scripts/artifact-facts.sh "macho_facts" -- a Mach-O-magic file this process cannot even
 #       open (mode 000) must abort too, via the [ -r ] guard checked before reading the magic.
 #       Skipped as root, which can read anything regardless of mode, so the fixture would prove
-#       nothing there.
+#       nothing there. Also skipped where `tar` is not GNU tar: building the fixture needs
+#       --mode=000 (GNU-only) to record a mode-000 member without reading an unreadable source
+#       file at archive time, and macOS's bsdtar has no such flag -- erroring there would redden
+#       the whole test on the one host this rule most needs to hold on, for a reason unrelated to
+#       what this fixture tests. The Linux strict run (GNU tar) still exercises it.
 if [ "$(id -u)" = 0 ]; then
   echo "artifact-conformance: running as root -- skipping the mode-000 fail-closed fixture (root can read anything)"
+elif ! tar --version 2>/dev/null | grep -q 'GNU tar'; then
+  echo "artifact-conformance: skip: mode-000 fixture needs GNU tar's --mode"
 else
   _fc3="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-c.XXXXXX")"
   mkdir -p "$_fc3/src" "$_fc3/dist"
