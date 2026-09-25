@@ -31,7 +31,8 @@ done
 shift
 [ -n "$ST" ] && [ -n "$P" ] && [ -n "$SCR" ] || { echo "stage_product: need --stage --product --scripts-out" >&2; exit 2; }
 case "$P" in ''|-*|*[!a-z0-9-]*) echo "stage_product: bad product name '$P'" >&2; exit 2 ;; esac
-[ -n "$(ls -A "$ST/usr/local/mavergreen/$P" 2>/dev/null)" ] || { echo "stage_product: nothing staged under $ST/usr/local/mavergreen/$P" >&2; exit 1; }
+[ -n "$(find "$ST" \( -type f -o -type l \) 2>/dev/null | head -n 1)" ] || { echo "stage_product: nothing staged under $ST" >&2; exit 1; }
+mkdir -p "$ST/usr/local/mavergreen/$P"
 mkdir -p "$SCR"
 snippet=""
 if [ -n "$APP" ]; then
@@ -44,8 +45,8 @@ sh "$SELF/render-manifest.sh" "$@"
   printf '[ -n "${3:-}" ] || { echo "%s: preinstall got no target volume; removing nothing" >&2; exit 0; }\n' "$P"
   printf 'ROOT="${3%%/}"\n'
   printf 'if [ -x "$ROOT/usr/local/bin/mavergreen" ]; then "$ROOT/usr/local/bin/mavergreen" --root "$ROOT/" unlink %s 2>/dev/null || true; fi\n' "$P"
-  printf 'rm -rf "$ROOT/usr/local/mavergreen/%s"\n' "$P"
   if [ -n "$PREH" ]; then cat "$PREH"; printf '\n'; fi
+  printf 'rm -rf "$ROOT/usr/local/mavergreen/%s" 2>/dev/null || echo "%s: could not clear $ROOT/usr/local/mavergreen/%s; files dropped from this version may linger" >&2\n' "$P" "$P" "$P"
   printf 'exit 0\n'
 } > "$SCR/preinstall"
 {

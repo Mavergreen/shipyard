@@ -58,6 +58,20 @@ echo reached-the-end > "$T/sourced"
 [ -f "$T/sourced" ] || fail "sourcing the snippet must not exit the caller, but it did"
 [ "$CONSOLE_USER" = mine ] && [ "$PLIST" = mine ] || fail "sourcing the snippet must not clobber a caller variable, but it did"
 
+sys="$T/sys"; stubs="$T/stubs"; alog="$T/agent.log"
+mkdir -p "$sys/Library/LaunchAgents" "$stubs"; : > "$sys/Library/LaunchAgents/$LABEL.plist"; : > "$alog"
+for c in launchctl sudo; do printf '#!/bin/sh\necho %s "$@" >> "%s"\n' "$c" "$alog" > "$stubs/$c"; done
+printf '#!/bin/sh\ncase "$*" in *%%Su*) echo tester ;; *) echo 501 ;; esac\n' > "$stubs/stat"
+chmod +x "$stubs"/*
+sed "s#/Library/LaunchAgents/#$sys/Library/LaunchAgents/#" "$SNIP" > "$T/snip-redirected"
+grep -q "$sys" "$T/snip-redirected" || fail "the test must redirect the snippet's running-system plist path, or it proves nothing"
+PATH="$stubs:$PATH" sh -c '. "$0"' "$T/snip-redirected"
+grep -q '^launchctl bootstrap gui/501 ' "$alog" \
+  || fail "sourced by a script with no \$3, the snippet acts as for the boot volume: [$(cat "$alog")]"
+: > "$alog"
+PATH="$stubs:$PATH" sh -c '. "$0"' "$T/snip-redirected" /x.pkg /Volumes/Other /Volumes/Other
+[ ! -s "$alog" ] || fail "sourced with \$3 naming another volume, the snippet must not touch the running system: $(cat "$alog")"
+
 grep -q 'MAV_AGENT_PLIST' "$PI" || fail "postinstall does not carry the shared agent-load logic -- both outputs must render the same logic (the postinstall is the snippet plus a shebang and exit)"
 
 STAGE3="$T/stage3"

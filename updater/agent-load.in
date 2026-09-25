@@ -1,18 +1,20 @@
 # Load the daily update-check LaunchAgent into the console user's GUI session so auto-check starts
-# without a logout. Best-effort: never fail the install over the agent load.
+# without a logout. Acts only on an install to the boot volume -- Installer's $3 is `/`, or there is
+# no $3 at all -- since launchctl and /Library/LaunchAgents belong to the running system, never to
+# another target volume. Best-effort: never fail the install over the agent load.
 #
 # `launchctl bootstrap` is 10.11+. On 10.9 the fallback MUST run as the console user: a root
 # postinstall's own launchctl talks to root's session, not the Aqua one, so `launchctl load -w`
 # straight from postinstall silently loads into the wrong session. Either way /Library/LaunchAgents
 # auto-loads at the next login, so failing here only delays the first check.
 #
-# Rendered by stage_updater.sh. Sourced by the postinstall it writes, or by a product's own
-# postinstall (mavericks-magic-trackpad2 loads a kext and a prefpane in the same script). Deliberately
-# contains no `exit` and prefixes its variables, so sourcing it cannot end or disturb the caller.
+# Rendered by stage_updater.sh, inlined into a generated postinstall or written as a snippet for a
+# postinstall to source. Contains no `exit` and prefixes its variables, so it can neither end nor
+# disturb the script it lands in.
 MAV_AGENT_PLIST=/Library/LaunchAgents/@MAVERICKS_AGENT_LABEL@.plist
 MAV_CONSOLE_UID=$(stat -f %u /dev/console 2>/dev/null || echo 0)
 MAV_CONSOLE_USER=$(stat -f %Su /dev/console 2>/dev/null || echo root)
-if [ -f "$MAV_AGENT_PLIST" ] && [ "${MAV_CONSOLE_UID:-0}" -gt 0 ] && [ "$MAV_CONSOLE_USER" != root ]; then
+if [ "${3:-/}" = / ] && [ -f "$MAV_AGENT_PLIST" ] && [ "${MAV_CONSOLE_UID:-0}" -gt 0 ] && [ "$MAV_CONSOLE_USER" != root ]; then
     launchctl bootstrap gui/"$MAV_CONSOLE_UID" "$MAV_AGENT_PLIST" 2>/dev/null \
         || sudo -u "$MAV_CONSOLE_USER" launchctl load -w "$MAV_AGENT_PLIST" 2>/dev/null \
         || true

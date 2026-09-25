@@ -37,7 +37,9 @@ mg link go127
 [ "$(target bin/go)" = ../go126/bin/go ] || fail "installing another line must never take the selection"
 [ "$(target bin/go-127)" = ../go127/bin/go ] || fail "the second line still exports its versioned names"
 
-mg unlink go126; mg link go126
+mg unlink go126
+[ "$(mg select go)" = go126 ] || fail "unlink never changes a selection: an upgrade's preinstall runs it on the selected line"
+mg link go126
 [ "$(target bin/go)" = ../go126/bin/go ] \
   || fail "an upgrade (unlink then link) of the selected line must keep the selection"
 

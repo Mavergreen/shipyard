@@ -3,7 +3,7 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/stage_product.sh"
 [ -x /usr/libexec/PlistBuddy ] || { echo "no PlistBuddy -- skipping"; exit 77; }
-w="$(mktemp -d "${TMPDIR:-/tmp}/stage-product.XXXXXX")"; trap 'rm -rf "$w"' EXIT
+w="$(mktemp -d "${TMPDIR:-/tmp}/stage-product.XXXXXX")"; trap 'chmod -R u+w "$w" 2>/dev/null; rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
 run_with_timeout() {
   _secs="$1"; _rcfile="$2"; shift 2
@@ -50,7 +50,15 @@ sh "$w/scr/postinstall" /x.pkg "$V/" "$V/" 2>/dev/null && fail "postinstall with
 sh "$w/scr/preinstall" /x.pkg >/dev/null 2>&1; [ -d "$V/usr/local/mavergreen/openssh" ] || fail "preinstall with no target volume removes nothing"
 mkdir -p "$w/empty"
 sh "$S" --stage "$w/empty" --product openssh --name x --version 1 --scripts-out "$w/scr2" 2>/dev/null \
-  && fail "a product with nothing in its tree must be refused"
+  && fail "a product with nothing staged at all must be refused"
+so="$w/outside-only"; mkdir -p "$so/usr/lib/swift"; echo lib > "$so/usr/lib/swift/libswiftCore.dylib"
+sh "$S" --stage "$so" --product swift-runtime --name "Swift Runtime" --version 1 --scripts-out "$w/scr-so" \
+  || fail "a product whose every file lives where the OS dictates still stages, so its manifest can find them"
+[ -f "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist" ] \
+  || fail "an outside-only product's manifest sits at its tree root, where the helper and conformance look"
+/usr/libexec/PlistBuddy -c 'Print :outside:0' "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist" 2>/dev/null \
+  | grep -qx usr/lib/swift/libswiftCore.dylib \
+  || fail "an outside-only product's manifest lists its files in outside, so uninstall removes them"
 grep -q 'rm -rf "$ROOT/usr/local/mavergreen/openssh"' "$w/scr/preinstall" \
   || fail "the preinstall's destructive path is a literal, never built from a variable that could be empty"
 
@@ -69,6 +77,30 @@ sh -n "$SCRU/postinstall" || fail "generated postinstall (with updater) must be 
 grep -q MAV_AGENT_PLIST "$SCRU/postinstall" \
   || fail "stage_updater's agent-load fragment must land in the postinstall when --updater-app is given"
 [ ! -e "$SCRU/.agent-load" ] || fail "the intermediate agent-load snippet must not remain in scripts-out"
+
+sys="$w/sys"; stubs="$w/stubs"; alog="$w/agent.log"
+mkdir -p "$sys/Library/LaunchAgents" "$stubs"
+: > "$sys/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist"
+for c in launchctl sudo; do printf '#!/bin/sh\necho %s "$@" >> "%s"\n' "$c" "$alog" > "$stubs/$c"; done
+printf '#!/bin/sh\ncase "$*" in *%%Su*) echo tester ;; *) echo 501 ;; esac\n' > "$stubs/stat"
+printf '#!/bin/sh\nexit 0\n' > "$stubs/mavergreen"
+chmod +x "$stubs"/*
+sed -e "s#/Library/LaunchAgents/#$sys/Library/LaunchAgents/#g" \
+    -e "s#^MG=\"\$ROOT/usr/local/bin/mavergreen\"\$#MG=\"$stubs/mavergreen\"#" \
+    "$SCRU/postinstall" > "$w/post-redirected"
+grep -q "^MAV_AGENT_PLIST=$sys/Library/LaunchAgents/" "$w/post-redirected" \
+  || fail "the test must redirect the agent-load's running-system plist path, or it proves nothing"
+grep -q "^MG=\"$stubs/mavergreen\"\$" "$w/post-redirected" \
+  || fail "the test must stub the helper, or a / install would link on the running system"
+Vag="$w/volagent"; mkdir -p "$Vag/Library/LaunchAgents"
+: > "$Vag/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist"
+: > "$alog"
+PATH="$stubs:$PATH" sh "$w/post-redirected" /x.pkg "$Vag/" "$Vag/" || fail "postinstall to another volume must succeed"
+[ ! -s "$alog" ] || fail "an install to a volume other than / must never run launchctl or sudo on the running system: $(cat "$alog")"
+: > "$alog"
+PATH="$stubs:$PATH" sh "$w/post-redirected" /x.pkg / / || fail "postinstall to / must succeed"
+grep -q '^launchctl bootstrap gui/501 ' "$alog" \
+  || fail "an install to the boot volume loads the update-check agent into the console user's session: [$(cat "$alog")]"
 
 fake="$w/fake"; mkdir -p "$fake"
 cp "$S" "$fake/stage_product.sh"
@@ -165,5 +197,58 @@ sh "$w/scr/postinstall" /x.pkg "$Vver/" "$Vver/" \
 [ ! -f "$poisonlog" ] \
   || fail "postinstall picked the lexically-last staged helper (1.0.9) instead of the numerically newest (1.0.10)"
 [ -L "$Vver/usr/local/mavergreen/bin/ssh" ] || fail "postinstall (numeric helper pick) must still link the product"
+
+
+stg="$w/stage-go"; mkdir -p "$stg/usr/local/mavergreen/go126/bin"; echo go > "$stg/usr/local/mavergreen/go126/bin/go"
+sh "$S" --stage "$stg" --product go126 --name "Go 1.26" --version 2 --group go --line 126 --scripts-out "$w/scr-go" \
+  || fail "staging a group member must succeed"
+Vup="$w/volup"; MGup="$Vup/usr/local/mavergreen"; mkdir -p "$Vup/usr/local/bin" "$MGup/go127/bin"
+sed 's/@MAVERGREEN_VERSION@/9.9/' "$here/../scripts/mavergreen.sh" > "$Vup/usr/local/bin/mavergreen"; chmod +x "$Vup/usr/local/bin/mavergreen"
+cp -R "$stg/usr/local/mavergreen/go126" "$MGup/"
+echo go > "$MGup/go127/bin/go"
+/usr/libexec/PlistBuddy -c "Add :product string go127" -c "Add :group string go" -c "Add :line string 127" \
+  -c "Add :identifier string dev.mavergreen.go127" -c "Add :version string 1" "$MGup/go127/mavergreen.plist" >/dev/null
+sh "$Vup/usr/local/bin/mavergreen" --root "$Vup" link go126; sh "$Vup/usr/local/bin/mavergreen" --root "$Vup" link go127
+[ "$(cat "$MGup/var/mavergreen/selections/go")" = go126 ] || fail "fixture: the first member linked is selected"
+sh "$w/scr-go/preinstall" /x.pkg "$Vup/" "$Vup/" || fail "the selected member's upgrade preinstall must succeed"
+[ ! -e "$MGup/go126" ] || fail "the upgrade preinstall clears the selected member's tree"
+[ "$(cat "$MGup/var/mavergreen/selections/go")" = go126 ] || fail "an upgrade's preinstall never changes the group's selection"
+cp -R "$stg/usr/local/mavergreen/go126" "$MGup/"
+sh "$w/scr-go/postinstall" /x.pkg "$Vup/" "$Vup/" || fail "the selected member's upgrade postinstall must succeed"
+[ "$(cat "$MGup/var/mavergreen/selections/go")" = go126 ] || fail "upgrading the selected line keeps it selected"
+[ "$(readlink "$MGup/bin/go")" = ../go126/bin/go ] || fail "upgrading the selected line keeps its bare names: bin/go is $(readlink "$MGup/bin/go")"
+[ "$(readlink "$MGup/bin/go-126")" = ../go126/bin/go ] || fail "upgrading a line puts its versioned names back"
+[ "$(readlink "$MGup/bin/go-127")" = ../go127/bin/go ] || fail "upgrading one line leaves another line's links alone"
+
+
+printf 'if [ -f "$ROOT/usr/local/mavergreen/openssh/bin/ssh" ]; then echo saw-old-tree >> "$ROOT/prehook.log"; else echo tree-gone >> "$ROOT/prehook.log"; fi\n' > "$w/prehook"
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-pre" --preinstall-hook "$w/prehook" \
+  || fail "staging with a preinstall hook must succeed"
+Vp="$w/volpre"; MGp="$Vp/usr/local/mavergreen"
+mkdir -p "$MGp/openssh/bin" "$MGp/openssh-other" "$MGp/bin"
+echo old > "$MGp/openssh/bin/ssh"; echo keep > "$MGp/openssh-other/f"; ln -s ../openssh-other/f "$MGp/bin/f"
+sh "$w/scr-pre/preinstall" /x.pkg "$Vp" "$Vp" || fail "preinstall must accept a target volume with no trailing slash"
+[ ! -e "$MGp/openssh" ] || fail "preinstall clears the product tree when the volume has no trailing slash"
+[ "$(cat "$Vp/prehook.log")" = saw-old-tree ] || fail "the preinstall hook runs before the tree is removed, so it can use the outgoing version"
+[ -f "$MGp/openssh-other/f" ] || fail "preinstall removes only its own tree, never a sibling whose name it prefixes"
+[ -L "$MGp/bin/f" ] || fail "preinstall never touches the link farm beyond its own product's links"
+
+stubrm="$w/stubrm"; mkdir -p "$stubrm"; rmlog="$w/rmcalls.log"; : > "$rmlog"
+printf '#!/bin/sh\necho rm "$@" >> "%s"\n' "$rmlog" > "$stubrm/rm"; chmod +x "$stubrm/rm"
+mkdir -p "$MGp/openssh/bin"; echo old > "$MGp/openssh/bin/ssh"
+PATH="$stubrm:$PATH" sh "$w/scr-pre/preinstall" /x.pkg >/dev/null 2>&1 || fail "preinstall with no target volume exits 0"
+[ ! -s "$rmlog" ] || fail "preinstall with no target volume removes nothing anywhere: $(cat "$rmlog")"
+[ -f "$MGp/openssh/bin/ssh" ] || fail "preinstall with no target volume leaves every tree alone"
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "note: running as root, which ignores directory permissions -- skipping the unremovable-tree case"
+else
+  chmod 555 "$MGp"
+  rc=0; sh "$w/scr/preinstall" /x.pkg "$Vp/" "$Vp/" > "$w/pre-ro.out" 2>&1 || rc=$?
+  chmod 755 "$MGp"
+  [ "$rc" -eq 0 ] || fail "a tree preinstall cannot remove must never fail the install, got exit $rc"
+  grep -q 'openssh: could not clear' "$w/pre-ro.out" || fail "a tree preinstall cannot remove is reported: [$(cat "$w/pre-ro.out")]"
+  [ -d "$MGp/openssh" ] || fail "fixture: the unwritable parent must have kept the tree"
+fi
 
 echo "PASS: stage-product"

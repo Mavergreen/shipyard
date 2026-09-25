@@ -1530,18 +1530,25 @@ product archives.
 ### `stage_product.sh`: the one way to get install scripts
 
 Stage the product's files under `<stage>/usr/local/mavergreen/<product>/` (and anything the OS
-dictates elsewhere), then call `sh "$SHIPYARD_SCRIPTS/stage_product.sh"`. It refuses an empty tree,
-and writes the manifest and both scripts:
+dictates elsewhere), then call `sh "$SHIPYARD_SCRIPTS/stage_product.sh"`. It refuses a stage with
+nothing in it; a product whose every file lives where the OS dictates (swift-runtime's
+`usr/lib/swift`) still gets a tree, holding just its manifest. It writes the manifest and both
+scripts:
 
-- **preinstall**: `mavergreen unlink <product>` if a helper exists, then removes
-  `/usr/local/mavergreen/<product>` (never `var/`), then the product's `--preinstall-hook`.
+- **preinstall**: `mavergreen unlink <product>` if a helper exists; then the product's
+  `--preinstall-hook`, which still sees the outgoing version's tree; then removes
+  `/usr/local/mavergreen/<product>` (never `var/`). A tree it cannot remove is reported,
+  never failing the install: files the new version dropped may linger.
 - **postinstall**: `mavergreen link <product>`, failing the install if it fails; then the updater's
   agent load (`--updater-app`, `--app-dir`, `--agent-label`); then the `--postinstall-hook`.
 
 Both anchor on Installer's target volume and never on `/`: with none, the preinstall removes nothing
 and the postinstall fails. **A product's own steps go in the hooks**, appended to the generated
 scripts, never in a hand-written script: that is what keeps unlink-remove-link the same in every
-product, and check 22 enforces the call.
+product, and check 23 enforces the call. Hooks see the volume as `$ROOT` (empty for the boot
+volume), and **a hook touches the running system (`launchctl`, `kextload`, …) only when `$ROOT` is
+empty**: an install to another volume must not load that volume's jobs or kexts into the system
+doing the installing. The updater's agent load follows the same rule.
 
 ### Where a product may install
 
