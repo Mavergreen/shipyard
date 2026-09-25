@@ -565,25 +565,6 @@ if [ -n "$builds_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! d
        "pipe artifact-facts.sh into check-artifact-conformance.sh at package time (see the conventions skill, 'Artifact conformance'), or declare '- artifact-conformance: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
-# spec: SKILL.md "Family conventions" check 23 -- a pkg-building repo gets its install scripts and
-#       manifest from stage_product.sh, or the layout conformance enforces has no one generating it.
-# spec: scripts/check-family-conventions.sh check 18 -- a mention is not a call unless it sits in
-#       COMMAND POSITION: line start, a separator (; & | or a backtick), "$(", then/do/exec (check
-#       18's own anchor set), a YAML "run:" key or a CMake "COMMAND" keyword, optionally followed by
-#       if/elif/while/until/!, which run the command after them. The call is sh or /bin/sh (with
-#       option flags) and a word ending stage_product.sh, or a word ending /stage_product.sh; a word
-#       holding "=" is an assignment, not a call. SKILL.md's check 23 row lists what this misses.
-if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
-  staged=""
-  for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -v '^tests/'); do
-    grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
-      | grep -Eq '(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^then|^do|^exec|^[[:space:]]*-?[[:space:]]*run:|[[:space:](]COMMAND)[[:space:]]*((if|elif|while|until|!)[[:space:]]+)*((/bin/)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]+[^[:space:]=]*stage_product\.sh|[^[:space:]=]*/stage_product\.sh)"*([[:space:]]|$)' \
-      && { staged="$f"; break; }
-  done
-  [ -n "$staged" ] || fail "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh -- its install scripts and manifest are hand-rolled" \
-                          "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare '- product-layout: <reason>' under INGREDIENTS.md's ## Conformance deviations"
-fi
-
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
 #       build-location override. A preset's own `environment` block is applied AFTER the real
 #       process environment, so exporting MAVERICKS_BUILD_ROOT cannot redirect a --preset
@@ -605,6 +586,25 @@ if [ -f "$SELF/check-host-tools.sh" ]; then
 else
   fail "cannot find check-host-tools.sh next to this gate -- the shipyard checkout is incomplete" \
        "check out the whole repo (family-conventions.yml does), not just this one script"
+fi
+
+# spec: SKILL.md "Family conventions" check 23 -- a pkg-building repo gets its install scripts and
+#       manifest from stage_product.sh, or the layout conformance enforces has no one generating it.
+# spec: scripts/check-family-conventions.sh check 18 -- a mention is not a call unless it sits in
+#       COMMAND POSITION: line start, a separator (; & | or a backtick), "$(", then/do/exec (check
+#       18's own anchor set), a YAML "run:" key or a CMake "COMMAND" keyword, optionally followed by
+#       if/elif/while/until/!, which run the command after them. The call is sh or /bin/sh (with
+#       option flags) and a word ending stage_product.sh, or a word ending /stage_product.sh; a word
+#       holding "=" is an assignment, not a call. SKILL.md's check 23 row lists what this misses.
+if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
+  staged=""
+  for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -v '^tests/'); do
+    grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
+      | grep -Eq '(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^then|^do|^exec|^[[:space:]]*-?[[:space:]]*run:|[[:space:](]COMMAND)[[:space:]]*((if|elif|while|until|!)[[:space:]]+)*((/bin/)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]+[^[:space:]=]*stage_product\.sh|[^[:space:]=]*/stage_product\.sh)"*([[:space:]]|$)' \
+      && { staged="$f"; break; }
+  done
+  [ -n "$staged" ] || fail "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh -- its install scripts and manifest are hand-rolled" \
+                          "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare '- product-layout: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
 [ "$status" -eq 0 ] && echo "check-family-conventions: ok"
