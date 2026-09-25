@@ -989,6 +989,31 @@ asset appcast.xml 700
 appcast appcast.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
 $(printf '%s\n' "$UPD" | sed '/^sparkle /s|/releases/latest/download/x\.xml$|/releases/download/feed-x/appcast.xml|')"
 
+# spec: scripts/check-artifact-conformance.sh -- a feed's enclosure names the pkg it describes;
+#       two products' feeds naming EACH OTHER's pkg must fail through the enclosure-name check
+#       alone, not through the per-updater derived checks (neither product here has a repo/derived
+#       record at all).
+SWAP='expected 1.26.8-mavericks.7
+pkg go126.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.golang.go126
+asset go126.pkg 10
+component go126.pkg dev.mavergreen.base
+component go126.pkg dev.mavergreen.golang.go126
+manifest go126.pkg go126 dev.mavergreen.golang.go126 go126
+registered go126 dev.mavergreen.golang.go126 golang-126
+installs go126.pkg usr/local/mavergreen/go126/mavergreen.plist
+pkg go126-cross.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.golang.go126-cross
+asset go126-cross.pkg 10
+component go126-cross.pkg dev.mavergreen.base
+component go126-cross.pkg dev.mavergreen.golang.go126-cross
+manifest go126-cross.pkg go126-cross dev.mavergreen.golang.go126-cross go126-cross
+registered go126-cross dev.mavergreen.golang.go126-cross golang-126
+installs go126-cross.pkg usr/local/mavergreen/go126-cross/mavergreen.plist
+asset go126.xml 700
+appcast go126.xml 1.26.8-mavericks.7 go126-cross.pkg 10 10.9.5
+asset go126-cross.xml 700
+appcast go126-cross.xml 1.26.8-mavericks.7 go126.pkg 10 10.9.5'
+alone "feed: two updaters' feeds swap enclosures -- each is named for the pkg it actually describes" "feed" "$SWAP"
+
 GO='expected 1.26.8-mavericks.7
 pkg go.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.golang.go126
 asset go.pkg 10

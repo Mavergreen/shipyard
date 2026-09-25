@@ -3,6 +3,7 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/release-assets.sh"
+. "$here/../scripts/stand-in-marker.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/release-assets-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 
 mkd() { d="$w/$1"; mkdir -p "$d"; printf 'notes\n' > "$d/RELEASE_NOTES.md"; printf 'pkg\n' > "$d/x.pkg"; printf 'xml\n' > "$d/x.xml"; }
@@ -34,5 +35,17 @@ printf '%s\n' "$out" | grep -q 'NOTES.md' && { echo "FAIL custom notes attached:
 mkd retired; printf 'xml\n' > "$w/retired/appcast.xml"
 if err="$(sh "$S" "$w/retired" 2>&1)"; then echo "FAIL: appcast.xml is a retired feed name -- no installed updater polls it"; exit 1; fi
 printf '%s\n' "$err" | grep -q '<short name>.xml' || { echo "FAIL: the refusal should name the feed's real shape: $err"; exit 1; }
+
+mkd standinsig; printf 'sparkle:edSignature="%s" length="10"\n' "$STAND_IN_SIGNATURE" > "$w/standinsig/x.xml"
+if err="$(sh "$S" "$w/standinsig" 2>&1)"; then echo "FAIL: an unsigned stand-in feed must never be published"; exit 1; fi
+printf '%s\n' "$err" | grep -q 'x.xml' || { echo "FAIL: the refusal should name the stand-in asset: $err"; exit 1; }
+
+mkd standinnotes; printf '%s\n\n- nothing is published from it\n' "$STAND_IN_NOTES_HEADING" > "$w/standinnotes/RELEASE_NOTES.md"
+if err="$(sh "$S" "$w/standinnotes" 2>&1)"; then echo "FAIL: stand-in release notes must never be published"; exit 1; fi
+printf '%s\n' "$err" | grep -qi 'RELEASE_NOTES' || { echo "FAIL: the refusal should name the notes file: $err"; exit 1; }
+
+mkd realsigned; printf 'sparkle:edSignature="RealBase64SignatureNotAStandIn==" length="10"\n' > "$w/realsigned/x.xml"
+out="$(sh "$S" "$w/realsigned")"
+printf '%s\n' "$out" | grep -q 'x.xml' || { echo "FAIL: a real signed feed must still be published: $out"; exit 1; }
 
 echo "PASS: release-assets"

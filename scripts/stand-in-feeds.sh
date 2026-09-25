@@ -8,6 +8,7 @@
 # spec: tests/artifact-conformance-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/stand-in-marker.sh"
 dist="${1:?stand-in-feeds: dist directory required}"
 ver="${2:?stand-in-feeds: version required}"
 _t="$(mktemp -d "${TMPDIR:-/tmp}/stand-in-feeds.XXXXXX")"; trap 'rm -rf "$_t"' EXIT
@@ -20,9 +21,9 @@ while IFS= read -r pk; do
   [ -n "$P" ] || continue
   [ ! -e "$dist/$P.xml" ] || continue
   repo="$(sh "$SELF/product-name.sh" repo "$P")" || { echo "stand-in-feeds: $P is not in scripts/product-names" >&2; exit 1; }
-  [ -s "$dist/RELEASE_NOTES.md" ] || printf '## A build that is not a release\n\n- nothing is published from it\n' > "$dist/RELEASE_NOTES.md"
+  [ -s "$dist/RELEASE_NOTES.md" ] || printf '%s\n\n- nothing is published from it\n' "$STAND_IN_NOTES_HEADING" > "$dist/RELEASE_NOTES.md"
   len="$(wc -c < "$dist/$pk" | tr -d ' ')"
   sh "$SELF/gen_appcast.sh" "$P" "$ver" "https://github.com/Mavergreen/$repo/releases/download/$ver/$pk" 10.9.5 \
-    "$dist/RELEASE_NOTES.md" "sparkle:edSignature=\"unsigned-stand-in\" length=\"$len\"" > "$dist/$P.xml"
+    "$dist/RELEASE_NOTES.md" "sparkle:edSignature=\"$STAND_IN_SIGNATURE\" length=\"$len\"" > "$dist/$P.xml"
   echo "stand-in-feeds: wrote an unsigned $dist/$P.xml" >&2
 done < "$_t/pkgs"
