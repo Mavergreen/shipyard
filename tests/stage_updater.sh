@@ -71,37 +71,4 @@ if sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s4" --app "$APP" --app-dir "$
 fi
 
 
-# spec: updater/agent-load.in "ONE-TIME MIGRATION off the ModernMavericks identity" -- an upgraded
-#       box must not keep running the pre-rename updater beside the new one; only THIS product's old
-#       updater goes, and only on the volume Installer names.
-V="$T/vol"; OLDAPPS="$V/Library/Application Support/ModernMavericks"
-lay_down_old() {
-  rm -rf "$V"; mkdir -p "$V/Library/LaunchAgents" "$OLDAPPS/TestUpdater.app/Contents/MacOS" "$OLDAPPS/OtherUpdater.app"
-  touch "$V/Library/LaunchAgents/dev.modernmavericks.test-updatecheck.plist" \
-        "$V/Library/LaunchAgents/dev.modernmavericks.other-updatecheck.plist" \
-        "$V/Library/LaunchAgents/$LABEL.plist" "$OLDAPPS/OtherUpdater.app/keep"
-}
-lay_down_old
-( set -- /fake.pkg "$V/" "$V/"; . "$SNIP" )
-[ ! -e "$V/Library/LaunchAgents/dev.modernmavericks.test-updatecheck.plist" ] || fail "left this product's pre-rename update-check agent"
-[ ! -e "$OLDAPPS/TestUpdater.app" ] || fail "left this product's pre-rename updater app"
-[ -e "$V/Library/LaunchAgents/dev.modernmavericks.other-updatecheck.plist" ] || fail "removed ANOTHER product's pre-rename agent -- each product retires only its own"
-[ -e "$OLDAPPS/OtherUpdater.app/keep" ] || fail "removed ANOTHER product's pre-rename updater app"
-[ -e "$V/Library/LaunchAgents/$LABEL.plist" ] || fail "removed this version's own agent"
-P="$V/Users/alice/Library/Preferences"; P2="$V/Users/bob/Library/Preferences"
-mkdir -p "$P" "$P2"; echo alice-old > "$P/dev.modernmavericks.TestUpdater.plist"
-echo bob-old > "$P2/dev.modernmavericks.TestUpdater.plist"; echo bob-new > "$P2/dev.mavergreen.TestUpdater.plist"
-( set -- /fake.pkg "$V" "$V"; . "$SNIP" )
-[ "$(cat "$P/dev.mavergreen.TestUpdater.plist" 2>/dev/null)" = alice-old ] || fail "did not carry a user's updater preferences to the new bundle id -- their Sparkle choices (automatic checks off) would silently reset"
-[ -f "$P/dev.modernmavericks.TestUpdater.plist" ] || fail "moved the old preferences instead of copying them"
-[ "$(cat "$P2/dev.mavergreen.TestUpdater.plist")" = bob-new ] || fail "overwrote preferences already written under the new bundle id"
-rm -rf "$OLDAPPS/OtherUpdater.app"
-( set -- /fake.pkg "$V" "$V"; . "$SNIP" )
-[ ! -e "$OLDAPPS" ] || fail "left the empty pre-rename shared dir behind"
-( set -- ; : > "$T/calls"
-  rm() { echo "rm $*" >> "$T/calls"; }; rmdir() { echo "rmdir $*" >> "$T/calls"; }
-  launchctl() { echo "launchctl $*" >> "$T/calls"; }
-  . "$SNIP" )
-! grep -q ModernMavericks "$T/calls" || fail "with no target volume it still removed: $(cat "$T/calls") -- it must remove nothing rather than fall back to the running system's /"
-
 echo "stage_updater OK"

@@ -63,48 +63,6 @@ emit_preinstall() {  # $1 = destination file
 ROOT="${3%/}"
 rm -rf "$ROOT/usr/local/mavergreen-shipyard" \
   || echo "mavericks-shipyard: could not clear $ROOT/usr/local/mavergreen-shipyard; files dropped from this version may linger" >&2
-
-# ONE-TIME MIGRATION off the ModernMavericks identity (flag day 2026-09-22): the prefix was
-# /usr/local/mavericks-shipyard. Spelled out in full, like the line above. The old updater and its
-# agent are retired by updater/agent-load.in, as for every product.
-# DELETABLE once no pre-flag-day install survives.
-rm -rf "$ROOT/usr/local/mavericks-shipyard" \
-  || echo "mavericks-shipyard: could not remove the pre-rename prefix $ROOT/usr/local/mavericks-shipyard" >&2
-
-# ONE-TIME MIGRATION off the two-updater design (spec 2026-09-11, R-P1-24).
-#
-# Up to v1.0.151 the pkg carried two updaters and its postinstall deleted the one that did not match
-# the box: an Apple Silicon machine was left running MavericksShipyardCrossUpdater.app under
-# dev.modernmavericks.mavericks-shipyard-cross-updatecheck. This version ships ONE universal updater
-# under the plain name, and Installer never removes a file a newer payload does not carry -- so
-# without this, every existing arm64 install would quietly run TWO Sparkle updaters against the same
-# appcast, daily, forever. Nobody would see it; both would "work".
-#
-# Names spelled out in full, as with the rm -rf above: a destructive path must not be one empty
-# variable away from "$ROOT" alone. Best-effort throughout -- a box that cannot unload the agent must
-# still get the new version.
-#
-# DELETABLE once no v1.0.151-or-earlier install survives. Nothing else refers to these names.
-#
-# The unload only happens when installing to the BOOT volume ($3 = "/", so ROOT is ""): launchctl
-# talks to the running system, and unloading a job because a file of the same name exists on some
-# other disk would be wrong. Installing elsewhere still removes the files; the agent on that volume
-# was never loaded from here anyway. Mirrors updater/agent-load.in's load, in reverse: bootstrap is
-# 10.11+, and on 10.9 the fallback must run as the console user, because a root postinstall's own
-# launchctl talks to root's session and not the Aqua one.
-if [ -z "$ROOT" ] && [ -f /Library/LaunchAgents/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist ]; then
-  mav_uid=$(stat -f %u /dev/console 2>/dev/null || echo 0)
-  mav_user=$(stat -f %Su /dev/console 2>/dev/null || echo root)
-  if [ "${mav_uid:-0}" -gt 0 ] && [ "$mav_user" != root ]; then
-    launchctl bootout gui/"$mav_uid" /Library/LaunchAgents/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist 2>/dev/null \
-      || sudo -u "$mav_user" launchctl unload -w /Library/LaunchAgents/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist 2>/dev/null \
-      || true
-  fi
-fi
-rm -f "$ROOT/Library/LaunchAgents/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist" \
-  || echo "mavericks-shipyard: could not remove the superseded cross-updater LaunchAgent; it would keep checking the same appcast alongside the new updater" >&2
-rm -rf "$ROOT/Library/Application Support/ModernMavericks/MavericksShipyardCrossUpdater.app" \
-  || echo "mavericks-shipyard: could not remove the superseded MavericksShipyardCrossUpdater.app" >&2
 exit 0
 PRE
   chmod +x "$1"

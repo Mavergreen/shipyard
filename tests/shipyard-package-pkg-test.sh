@@ -12,16 +12,9 @@ code() { grep -v '^[[:space:]]*#' "$S"; }   # the script minus its comments
 PREFIX=usr/local/mavergreen-shipyard
 
 [ "$(code | grep -c -- '--host-arch x86_64,arm64')" = 1 ] || { echo "FAIL: the Distribution must declare BOTH architectures and exactly those -- without arm64, Installer on Apple Silicon offers Rosetta for a pkg with scripts and runs them translated; only one arch would stop the pkg installing on the other box -- package-pkg.sh must pass --host-arch x86_64,arm64 exactly once"; exit 1; }
-# spec: R-P1-24 -- the superseded machinery is gone, but CrossUpdater is NOT on this list: the
-#       preinstall has to name it once, to delete it off boxes that installed the two-updater design.
-#       Once, and only to remove -- never to stage or install one.
-for gone in register-with-cmake sysctl agent-load-cross uname; do
+for gone in register-with-cmake sysctl agent-load-cross uname CrossUpdater modernmavericks mavericks-shipyard/; do
   code | grep -q -- "$gone" && { echo "FAIL: package-pkg.sh still mentions $gone"; exit 1; }
 done
-[ "$(code | grep -c '^rm -rf .*CrossUpdater')" = 1 ] \
-  || { echo "FAIL: the preinstall must remove MavericksShipyardCrossUpdater.app exactly once (rm -rf); got $(code | grep -c '^rm -rf .*CrossUpdater')"; exit 1; }
-stray="$(code | grep 'CrossUpdater' | grep -vE '^rm -rf |^[[:space:]]*\|\| echo ' || true)"
-[ -z "$stray" ] || { echo "FAIL: CrossUpdater appears outside its one-time removal: $stray"; exit 1; }
 for c in cmake ctest cpack; do
   code | grep -q "shipyard-$c" || { echo "FAIL: package-pkg.sh never creates /usr/local/bin/shipyard-$c"; exit 1; }
   code | grep -q "ln -s ../mavergreen-shipyard/bin/$c" \
@@ -31,33 +24,13 @@ done
 sh "$S" --emit-preinstall "$w/preinstall"
 [ -s "$w/preinstall" ] || { echo "FAIL: --emit-preinstall wrote nothing"; exit 1; }
 
-AGENTS=Library/LaunchAgents
-APPS="Library/Application Support/Mavergreen"
-LEGACY_PLIST="$AGENTS/dev.modernmavericks.mavericks-shipyard-cross-updatecheck.plist"
-OLD_APPS="Library/Application Support/ModernMavericks"
-LEGACY_APP="$OLD_APPS/MavericksShipyardCrossUpdater.app"
-
 lay_down_previous() {  # $1 = volume root: a previous install plus the neighbours it must not touch
   rm -rf "$1"
   mkdir -p "$1/$PREFIX/bin" "$1/usr/local/mavergreen-shipyard-other" "$1/usr/local/other" "$1/usr/local/bin"
-  mkdir -p "$1/usr/local/mavericks-shipyard/bin"; touch "$1/usr/local/mavericks-shipyard/bin/cmake"
   touch "$1/$PREFIX/bin/cmake" "$1/$PREFIX/dropped-in-a-newer-version" \
         "$1/usr/local/mavergreen-shipyard-other/keep" "$1/usr/local/other/keep" "$1/usr/local/bin/keep"
 }
 
-# spec: R-P1-24 -- what v1.0.151 left on an Apple Silicon box: the CROSS updater and its agent, kept
-#       by the old postinstall's arch pick. Laid down beside the neighbours that must survive,
-#       including the plain-named pair this version installs, whose names differ by one word.
-lay_down_legacy() {  # $1 = volume root
-  mkdir -p "$1/$AGENTS" "$1/$LEGACY_APP/Contents/MacOS" \
-           "$1/$APPS/MavericksShipyardUpdater.app/Contents/MacOS" "$1/$APPS/SomeOtherProduct.app"
-  touch "$1/$LEGACY_PLIST" \
-        "$1/$LEGACY_APP/Contents/MacOS/MavericksShipyardCrossUpdater" \
-        "$1/$AGENTS/dev.mavergreen.mavericks-shipyard-updatecheck.plist" \
-        "$1/$AGENTS/dev.mavergreen.something-else.plist" \
-        "$1/$APPS/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater" \
-        "$1/$APPS/SomeOtherProduct.app/keep"
-}
 # platform: Installer passes "/" for the boot volume, so a trailing slash must not double up into
 #           "//usr/local/..." -- and a path without one must work too. Only one of the two was
 #           covered before.
@@ -66,40 +39,16 @@ for volarg in "$w/vol" "$w/vol/"; do
   rc=0; out="$(sh "$w/preinstall" /fake.pkg "$volarg" "$volarg" 2>&1)" || rc=$?
   [ "$rc" -eq 0 ] || { echo "FAIL: preinstall ($volarg) exited $rc: $out"; exit 1; }
   [ ! -e "$w/vol/$PREFIX" ] || { echo "FAIL: preinstall ($volarg) must remove the product dir"; exit 1; }
-  [ ! -e "$w/vol/usr/local/mavericks-shipyard" ] || { echo "FAIL: preinstall ($volarg) left the pre-rename prefix /usr/local/mavericks-shipyard -- its cmake would linger beside the new one"; exit 1; }
   [ -f "$w/vol/usr/local/mavergreen-shipyard-other/keep" ] \
     || { echo "FAIL: preinstall ($volarg) removed mavericks-shipyard-other, a prefix SIBLING"; exit 1; }
   [ -f "$w/vol/usr/local/other/keep" ] && [ -f "$w/vol/usr/local/bin/keep" ] \
     || { echo "FAIL: preinstall ($volarg) removed a neighbour under usr/local"; exit 1; }
 done
 
-# spec: R-P1-24 -- Installer never removes what a newer payload no longer carries, so without this
-#       one-time migration an existing arm64 install would run TWO Sparkle updaters against one
-#       appcast, daily, forever -- invisibly, because both would work.
-for volarg in "$w/vol" "$w/vol/"; do
-  lay_down_previous "$w/vol"; lay_down_legacy "$w/vol"
-  rc=0; out="$(sh "$w/preinstall" /fake.pkg "$volarg" "$volarg" 2>&1)" || rc=$?
-  [ "$rc" -eq 0 ] || { echo "FAIL: preinstall ($volarg) with the legacy pair present exited $rc: $out"; exit 1; }
-  [ ! -e "$w/vol/$LEGACY_PLIST" ] \
-    || { echo "FAIL: preinstall ($volarg) left the superseded cross-updater LaunchAgent; it would keep checking the same appcast"; exit 1; }
-  [ ! -e "$w/vol/$LEGACY_APP" ] \
-    || { echo "FAIL: preinstall ($volarg) left MavericksShipyardCrossUpdater.app"; exit 1; }
-  [ -f "$w/vol/$AGENTS/dev.mavergreen.mavericks-shipyard-updatecheck.plist" ] \
-    || { echo "FAIL: preinstall ($volarg) removed THIS version's own LaunchAgent"; exit 1; }
-  [ -f "$w/vol/$APPS/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater" ] \
-    || { echo "FAIL: preinstall ($volarg) removed MavericksShipyardUpdater.app, the updater this version installs"; exit 1; }
-  [ -f "$w/vol/$AGENTS/dev.mavergreen.something-else.plist" ] \
-    || { echo "FAIL: preinstall ($volarg) removed another product's LaunchAgent"; exit 1; }
-  [ -f "$w/vol/$APPS/SomeOtherProduct.app/keep" ] \
-    || { echo "FAIL: preinstall ($volarg) removed another product's app"; exit 1; }
-  [ -d "$w/vol/$APPS" ] || { echo "FAIL: preinstall ($volarg) removed the shared Mavergreen app dir"; exit 1; }
-done
-
 lay_down_previous "$w/vol"
-mkdir -p "$w/vol/$AGENTS" "$w/vol/$APPS"
 rc=0; out="$(sh "$w/preinstall" /fake.pkg "$w/vol" "$w/vol" 2>&1)" || rc=$?
-[ "$rc" -eq 0 ] || { echo "FAIL: preinstall with no legacy pair to remove must exit 0; got $rc: $out"; exit 1; }
-[ -z "$out" ] || { echo "FAIL: preinstall with nothing to migrate must say nothing; got: $out"; exit 1; }
+[ "$rc" -eq 0 ] || { echo "FAIL: preinstall over a previous install must exit 0; got $rc: $out"; exit 1; }
+[ -z "$out" ] || { echo "FAIL: preinstall that removed everything it meant to must say nothing; got: $out"; exit 1; }
 
 rm -rf "$w/vol"; mkdir -p "$w/vol/usr/local"
 rc=0; out="$(sh "$w/preinstall" /fake.pkg "$w/vol" "$w/vol" 2>&1)" || rc=$?

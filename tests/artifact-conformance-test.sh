@@ -589,8 +589,8 @@ launchd p.pkg Library/LaunchDaemons/com.example.xd.plist com.example.xd"
 no "identity: a launchd plist not named for its Label" "named <Label>.plist" "$REL
 launchd p.pkg Library/LaunchDaemons/dev.mavergreen.a.plist dev.mavergreen.b"
 
-no "install-path: the pre-rename shared dir is outside the family" "install-path" "$REL
-installs p.pkg Library/Application%20Support/ModernMavericks/XUpdater.app/Contents/Info.plist"
+no "install-path: another vendor's shared dir is outside the family" "install-path" "$REL
+installs p.pkg Library/Application%20Support/SomeoneElse/XUpdater.app/Contents/Info.plist"
 
 no "install-path: a launchd plist with a foreign name is outside the family" "install-path" "$REL
 installs p.pkg Library/LaunchDaemons/com.example.xd.plist"

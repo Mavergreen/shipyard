@@ -1335,15 +1335,12 @@ only from `/Library/PreferencePanes` — and those say so:
 - bundle-id:as.acidanthera.*: upstream's kext, shipped unmodified under upstream's identity
 ```
 
-**Flag day, 2026-09-22.** The org was ModernMavericks and every identifier was `dev.modernmavericks.*`,
-the shared dir `Application Support/ModernMavericks`, shipyard's prefix `/usr/local/mavericks-shipyard`,
-this plugin `modernmavericks`. All of it moved at once. Installer never removes what a newer payload no
-longer carries, so each pkg retires its own pre-rename leftovers on upgrade: the updater and its agent
-through the shared `updater/agent-load.in` (every product that stages its updater with
-`stage_updater.sh` gets this for free, including copying each user's updater preferences to the new
-bundle id, so "check automatically: off" survives), and anything else — a daemon, a menu-bar agent, an old state
-dir — in the product's own pre/postinstall. That migration code is the one place the old names
-legitimately appear, and it is temporary: see the backlog.
+**No upgrade migrations while the family has no users.** The 2026-09-22 flag day moved every
+identifier from `dev.modernmavericks.*` to `dev.mavergreen.*` without shipping code to retire the old
+names from existing installs, because there were none to protect: a maintainer's own box is cleaned by
+hand. A pkg's pre/postinstall handles upgrades from its own current identity only. The day the family
+has real users, a rename needs a retirement plan, written with its exit condition (see "A
+"transitional" decision without an exit task is a permanent one", below).
 
 **Deviations are declared in `INGREDIENTS.md`, with a reason, scoped to a filename glob:**
 
@@ -1844,13 +1841,8 @@ it here.** A silently dropped increment is how the family drifted in the first p
       derived expression rather than a literal — done 2026-09-12: it reports
       `still used, now computed rather than pinned (was <old value>)`, and never opens a
       `### Build ingredients` section by itself. See Release notes, above
-- [ ] **Retire the flag-day migration** (2026-09-22, ModernMavericks → Mavergreen). Exit condition:
-      no pre-flag-day install survives — in practice, once every product has shipped at least one
-      release AFTER its flag-day release and a maintainer has confirmed their own 10.9 and modern
-      boxes carry no `dev.modernmavericks.*` receipts (`pkgutil --pkgs | grep modernmavericks`). Then
-      delete: the ONE-TIME MIGRATION block in `updater/agent-load.in` and its test in
-      `tests/stage_updater.sh`, the old-prefix removal in `scripts/package-pkg.sh`'s preinstall, and
-      each product's own old-identity retirement (grep the family for `modernmavericks`)
+- [x] **Retire the flag-day migration** — done 2026-09-24, ahead of its exit condition: with no
+      users, nothing needed migrating, so the retirement code went from shipyard and every product
 - [ ] **North star, not yet designed:** should a product repo carry build machinery at all? One
       declarative config per repo (upstream, verification, binaries, ingredients, updater) that
       shipyard turns into the build, package, release, and checks — a repo that cannot express a

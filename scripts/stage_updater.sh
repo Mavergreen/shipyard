@@ -58,10 +58,7 @@ sed -e "s#@MAVERICKS_AGENT_LABEL@#$LABEL#g" \
     -e "s#@MAVERICKS_UPDATER_INSTALLED_EXEC@#$installed_exec#g" \
     "$TPL/updatecheck.plist.in" > "$STAGE/Library/LaunchAgents/$LABEL.plist"
 
-# platform: PlistBuddy reads binary and XML plists alike, on 10.9 and on the modern runner.
-bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist" 2>/dev/null || true)"
-render_agent_load() { sed -e "s#@MAVERICKS_AGENT_LABEL@#$LABEL#g" -e "s#@MAVERICKS_UPDATER_APP@#$appbase#g" \
-                          -e "s#@MAVERICKS_UPDATER_BUNDLE_ID@#$bundle_id#g" "$TPL/agent-load.in"; }
+render_agent_load() { sed -e "s#@MAVERICKS_AGENT_LABEL@#$LABEL#g" "$TPL/agent-load.in"; }
 
 if [ -n "$SNIPPETOUT" ]; then
   mkdir -p "$(dirname "$SNIPPETOUT")"
