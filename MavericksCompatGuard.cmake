@@ -9,12 +9,15 @@ set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-s
 # exactly this configure's arches, that every slice records its arch's pinned minos and SDK
 # (scripts/sdk-pins.sh; SKILL.md "SDK pinning"), and that it is free of post-10.9 undefined
 # imports. Forwards these into the guard's env (baked at configure time):
+#   MAVERICKS_DEVIATIONS_ROOT         CMAKE_SOURCE_DIR, whose INGREDIENTS.md declares any sdk-pin:<glob>
+#                                     exemption (a POST_BUILD command runs in the build tree, where the
+#                                     guard's default -- the current directory -- has none)
 #   MAVERICKS_ALLOW_ARCHS             CMAKE_OSX_ARCHITECTURES, when set (the guard defaults to x86_64)
 #   MAVERICKS_POST_10_9_SYMBOLS       extra post-10.9 symbols that must not be undefined imports
 #   MAVERICKS_REQUIRE_DEFINED_SYMBOLS symbols that MUST be present as defined (e.g. shims)
 function(mavericks_assert_binary_compatible tgt)
   set(_cmd sh "${MAVERICKS_SHARED_DIR}/scripts/assert_binary_compatible.sh" "$<TARGET_FILE:${tgt}>")
-  set(_env)
+  set(_env "MAVERICKS_DEVIATIONS_ROOT=${CMAKE_SOURCE_DIR}")
   # The exact arch set this configure builds: an arm64-only updater slice is not an x86_64 binary.
   if(CMAKE_OSX_ARCHITECTURES)
     string(REPLACE ";" " " _archs "${CMAKE_OSX_ARCHITECTURES}")
@@ -26,9 +29,7 @@ function(mavericks_assert_binary_compatible tgt)
   if(MAVERICKS_REQUIRE_DEFINED_SYMBOLS)
     list(APPEND _env "MAVERICKS_REQUIRE_DEFINED_SYMBOLS=${MAVERICKS_REQUIRE_DEFINED_SYMBOLS}")
   endif()
-  if(_env)
-    set(_cmd ${CMAKE_COMMAND} -E env ${_env} ${_cmd})
-  endif()
+  set(_cmd ${CMAKE_COMMAND} -E env ${_env} ${_cmd})
   add_custom_command(TARGET ${tgt} POST_BUILD
     COMMAND ${_cmd}
     VERBATIM COMMENT "compat guard: assert ${tgt} is 10.9-safe")

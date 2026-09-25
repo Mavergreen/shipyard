@@ -1333,6 +1333,13 @@ there: the toolchain file uses xcrun's own 10.9 SDK when it has one, and the fet
   payload, or the path inside the archive for a shipped tarball. It cannot contain a space (write `*`
   for one, as in `Application*Support`) or a colon. A bare `- sdk-pin: <reason>`, with no glob,
   excuses the rule for **every** file in the release: use it only when that is what you mean.
+- The compat guard honours the same globs at build time. It matches each glob against the path exactly
+  as its command line gives it, and reads INGREDIENTS.md from `MAVERICKS_DEVIATIONS_ROOT` (default: the
+  current directory; `mavericks_assert_binary_compatible` passes `CMAKE_SOURCE_DIR`). **Write each glob
+  with a leading `*/`**, as in `- sdk-pin:*/lib/libswiftCore.dylib: <reason>`, so that one glob matches
+  both the payload path and the staged or build path the guard sees. `*` spans `/`.
+- An excuse covers the minos/SDK rule only. The guard still checks the file's arches and its post-10.9
+  imports and selectors. A malformed entry fails the guard, as it fails packaging.
 - Sparkle 1.27.3 is exempt **by content**: `sdk-pins.sh` lists the sha256 of its three Mach-O files, so
   only the exact pinned bytes pass.
 

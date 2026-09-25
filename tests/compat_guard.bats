@@ -161,3 +161,42 @@ mk_stamped() {  # $1 out, $2 arch, $3 minos, $4 sdk
   run sh "$GUARD" "$WORK/fileop"
   [ "$status" -ne 0 ]
 }
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the guard
+#       honours the same declared sdk-pin:<glob> exemptions as the package-time rule, read from
+#       $MAVERICKS_DEVIATIONS_ROOT/INGREDIENTS.md, and they excuse the minos/sdk rule only.
+declare_deviation() { printf '## Conformance deviations\n%s\n' "$1" > "$WORK/INGREDIENTS.md"; }
+
+@test "a matching sdk-pin glob excuses the SDK rule, and says so" {
+  mk_stamped "$WORK/r265" x86_64 10.9 26.5
+  declare_deviation '- sdk-pin:*/r265: prebuilt upstream, shipped verbatim'
+  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"compat guard: $WORK/r265 is excused from sdk-pin: prebuilt upstream, shipped verbatim"* ]] || false
+}
+
+@test "a non-matching sdk-pin glob excuses nothing" {
+  mk_stamped "$WORK/r265" x86_64 10.9 26.5
+  declare_deviation '- sdk-pin:*/other: prebuilt upstream'
+  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"sdk 26.5"* ]] || false
+}
+
+@test "an sdk-pin glob with no reason fails the guard closed" {
+  mk_stamped "$WORK/r265" x86_64 10.9 26.5
+  declare_deviation '- sdk-pin:*/r265:'
+  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"is excused"* ]] || false
+}
+
+@test "an sdk-pin excuse does not excuse an arch outside MAVERICKS_ALLOW_ARCHS" {
+  mk_stamped "$WORK/a265" arm64 11.0 26.5
+  declare_deviation '- sdk-pin:*/a265: prebuilt upstream'
+  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/a265"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"arches 'arm64' != 'x86_64'"* ]] || false
+  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" MAVERICKS_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a265"
+  [ "$status" -eq 0 ]
+}

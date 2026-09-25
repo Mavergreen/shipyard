@@ -5,8 +5,14 @@
 #          (1) no post-10.9 UNDEFINED import, (2) no post-10.9 ObjC selector sent, (3) the arches
 #          present are exactly MAVERICKS_ALLOW_ARCHS, (4) every slice records its arch's
 #          pinned minos and SDK (sdk-pins.sh). (1) and (2) read the x86_64 slice. A file whose bytes are
-#          a pinned third-party binary (Sparkle) is exempt by content. Fail-closed if nothing measured.
+#          a pinned third-party binary (Sparkle) is exempt by content. A declared "- sdk-pin:<glob>:
+#          <reason>" deviation whose glob matches the file's path AS GIVEN here excuses (4), and only
+#          (4). Fail-closed if nothing measured, or if the deviations cannot be read.
 #          Knobs:
+#            MAVERICKS_DEVIATIONS_ROOT         the repo whose INGREDIENTS.md declares the deviations
+#                                               (default: the current directory;
+#                                               mavericks_assert_binary_compatible passes
+#                                               CMAKE_SOURCE_DIR).
 #            MAVERICKS_ALLOW_ARCHS             the exact arch set each binary must contain (default
 #                                               "x86_64"; a universal updater passes "x86_64 arm64").
 #            MAVERICKS_POST_10_9_SYMBOLS       extra post-10.9 symbols (grep -E alternation) that
@@ -30,6 +36,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/sdk-pins.sh"
+. "$SELF/deviation-reason.sh"
 
 mav_die() { echo "compat guard CANNOT MEASURE (fail-closed): $*" >&2; exit 4; }
 
@@ -54,6 +61,19 @@ ALLOW_ARCHS="$(printf '%s\n' ${MAVERICKS_ALLOW_ARCHS:-x86_64} | sort -u | xargs)
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/compat-guard.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the guard
+#       honours the same sdk-pin:<glob> exemptions as the package-time rule, parsed by the same
+#       deviations.sh and matched by the same mav_deviation_reason, so a file excused in the pkg is
+#       excused at build time. Read before any binary: a malformed declaration fails every run, not
+#       only the one that needed it.
+devs_root="${MAVERICKS_DEVIATIONS_ROOT:-.}"
+# platform: not a pipeline -- deviations.sh exits 1 on a malformed entry, and a pipeline would report
+#           mav_deviation_facts' status instead, turning "this declaration is malformed" into "there
+#           are no deviations".
+_devs="$(sh "$SELF/deviations.sh" "$devs_root")" \
+  || mav_die "$devs_root/INGREDIENTS.md declares a malformed conformance deviation (deviations.sh said why above)"
+printf '%s\n' "$_devs" | mav_deviation_facts > "$work/devs"
+
 # platform: nm -m lines look like "<addr|spaces> (undefined) [weak] external _sym (from libX)"; nm
 #           -u loses the weak flag, so nm -m is parsed instead (the undefined NAME set is identical).
 #           Stripping only a trailing " (from libX)" parenthetical, not also " (dynamically looked
@@ -64,7 +84,7 @@ mav_undefs() {
     | awk '{ w = (/ weak /) ? "W" : "H"; print w, $NF }'
 }
 
-fail=0; checked=0
+fail=0; checked=0; excused=0
 for b in "$@"; do
   [ -f "$b" ] || { echo "compat guard: MISSING $b" >&2; fail=1; continue; }
   checked=$((checked+1))
@@ -75,11 +95,21 @@ for b in "$@"; do
 
   archs="$(printf '%s\n' "$slices" | awk '{print $1}' | sort -u | xargs)"
   [ "$archs" = "$ALLOW_ARCHS" ] || { echo "compat guard: $b arches '$archs' != '$ALLOW_ARCHS'" >&2; fail=1; }
+  sdk_bad=""
   while read -r _a _ft _mn _sd; do
-    why="$(mav_sdk_rule "$_a" "$_ft" "$_mn" "$_sd")" || { echo "compat guard: $b: $why" >&2; fail=1; }
+    why="$(mav_sdk_rule "$_a" "$_ft" "$_mn" "$_sd")" || sdk_bad="${sdk_bad}compat guard: $b: $why
+"
   done <<EOF
 $slices
 EOF
+  if [ -n "$sdk_bad" ]; then
+    excuse="$(mav_deviation_reason "$work/devs" sdk-pin "$b")"
+    if [ -n "$excuse" ]; then
+      echo "compat guard: $b is excused from sdk-pin: $excuse"; excused=$((excused+1))
+    else
+      printf '%s' "$sdk_bad" >&2; fail=1
+    fi
+  fi
 
   # platform: the post-10.9 import and selector checks concern what runs ON 10.9, which is only ever the
   #           x86_64 slice; thinned first, because nm -m and strings read every slice of a fat file.
@@ -119,7 +149,9 @@ EOF
 done
 [ "$checked" -gt 0 ] || mav_die "no binaries checked"
 if [ "$fail" = 0 ]; then
-  echo "compat guard: $checked binaries clean ($ALLOW_ARCHS, pinned minos and SDK per arch, no post-10.9 imports)"
+  pinned="pinned minos and SDK per arch"
+  [ "$excused" = 0 ] || pinned="$pinned, $excused excused from sdk-pin"
+  echo "compat guard: $checked binaries clean ($ALLOW_ARCHS, $pinned, no post-10.9 imports)"
 else
   exit 1
 fi
