@@ -34,4 +34,29 @@ sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.base --ti
 [ "$rc" -eq 2 ] || fail "--identifier dev.mavergreen.base must be refused as a usage error (exit 2), since the base is added automatically and a caller passing it as the product identifier would collide with it; got $rc"
 [ ! -e "$w/out2.pkg" ] || fail "a refused --identifier dev.mavergreen.base must not write an output pkg"
 
+mkdir -p "$w/res"; printf '<html><body>restart to finish</body></html>\n' > "$w/res/Conclusion.html"
+sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
+  --out "$w/out-c.pkg" --base-version 1.0.9 --resources "$w/res" --conclusion Conclusion.html >/dev/null 2>&1 \
+  || fail "an archive with a conclusion pane must build"
+pkgutil --expand "$w/out-c.pkg" "$w/xc"
+grep -q '<conclusion file="Conclusion.html"' "$w/xc/Distribution" \
+  || fail "--conclusion names the pane in the Distribution -- the only surface Installer shows after the scripts run"
+[ -f "$w/xc/Resources/Conclusion.html" ] || fail "the conclusion file ships in the archive's Resources"
+rc=0
+sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
+  --out "$w/out-c2.pkg" --conclusion Conclusion.html >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "--conclusion without --resources is a usage error (exit 2) -- productbuild would have nowhere to find the file; got $rc"
+
+rc=0
+sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
+  --out "$w/out-c3.pkg" --resources "$w/res" --conclusion "../Conclusion.html" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "--conclusion is interpolated into the Distribution XML, so a value with a slash must be refused as a usage error; got $rc"
+[ ! -e "$w/out-c3.pkg" ] || fail "a refused --conclusion must not write an output pkg"
+
+rc=0
+sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
+  --out "$w/out-c4.pkg" --resources "$w/res" --conclusion 'Conclusion".html' >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "--conclusion is interpolated into the Distribution XML, so a value with a quote must be refused as a usage error; got $rc"
+[ ! -e "$w/out-c4.pkg" ] || fail "a refused --conclusion must not write an output pkg"
+
 echo "PASS: set-install-floor-base"

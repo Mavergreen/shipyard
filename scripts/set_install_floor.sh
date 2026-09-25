@@ -1,8 +1,9 @@
 #!/bin/sh
 # platform: macOS-only -- productbuild and pkgutil write the distribution
 #   usage: set_install_floor.sh --identifier ID --title T --component COMP.pkg --out OUT.pkg
-#            [--resources DIR] [--welcome FILE] [--license FILE]
+#            [--resources DIR] [--welcome FILE] [--license FILE] [--conclusion FILE]
 #            [--require-scripts] [--host-arch x86_64] [--min-os 10.9.5] [--base-version V]
+#          FILE for --welcome, --license and --conclusion names a file inside --resources.
 #          Wraps a flat component pkg into a distributable product archive that enforces a hard OS
 #          install floor (default MAVERICKS_MIN_OS, the single source of truth for "the Mavericks
 #          install floor" across the family) via productbuild --distribution -- a bare pkgbuild
@@ -23,7 +24,7 @@
 set -eu
 
 MIN_OS="${MAVERICKS_MIN_OS:-10.9.5}"
-ID=""; TITLE=""; COMPONENT=""; OUT=""; RES=""; WELCOME=""; LICENSE=""
+ID=""; TITLE=""; COMPONENT=""; OUT=""; RES=""; WELCOME=""; LICENSE=""; CONCLUSION=""
 REQSCRIPTS="false"; HOSTARCH=""; BASEVER=""
 
 while [ $# -gt 0 ]; do
@@ -35,6 +36,7 @@ while [ $# -gt 0 ]; do
     --resources) RES="$2"; shift 2;;
     --welcome) WELCOME="$2"; shift 2;;
     --license) LICENSE="$2"; shift 2;;
+    --conclusion) CONCLUSION="$2"; shift 2;;
     --require-scripts) REQSCRIPTS="true"; shift;;
     --host-arch) HOSTARCH="$2"; shift 2;;
     --min-os) MIN_OS="$2"; shift 2;;
@@ -46,6 +48,11 @@ done
   || { echo "productbuild_floor: need --identifier --title --component --out" >&2; exit 2; }
 [ "$ID" != dev.mavergreen.base ] \
   || { echo "productbuild_floor: --identifier may not be dev.mavergreen.base -- the base component is added automatically" >&2; exit 2; }
+[ -z "$CONCLUSION" ] || [ -n "$RES" ] \
+  || { echo "productbuild_floor: --conclusion needs --resources, the directory holding the file" >&2; exit 2; }
+case "$CONCLUSION" in
+  */*|*'"'*) echo "productbuild_floor: --conclusion must be a plain file name, no / or \" -- it is interpolated into the Distribution XML" >&2; exit 2;;
+esac
 [ -f "$COMPONENT" ] || { echo "productbuild_floor: no component pkg: $COMPONENT" >&2; exit 1; }
 
 COMP_DIR=$(dirname "$COMPONENT"); COMP_BASE=$(basename "$COMPONENT")
@@ -70,6 +77,7 @@ _opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\""
   echo "    <title>$TITLE</title>"
   [ -n "$WELCOME" ] && echo "    <welcome file=\"$(basename "$WELCOME")\" mime-type=\"text/html\"/>"
   [ -n "$LICENSE" ] && echo "    <license file=\"$(basename "$LICENSE")\"/>"
+  [ -n "$CONCLUSION" ] && echo "    <conclusion file=\"$(basename "$CONCLUSION")\" mime-type=\"text/html\"/>"
   echo "    <allowed-os-versions><os-version min=\"$MIN_OS\"/></allowed-os-versions>"
   echo "    <options $_opts/>"
   echo '    <choices-outline>'
@@ -96,9 +104,12 @@ X=$(mktemp -d -t pkgfloor.XXXXXX)
 pkgutil --expand "$OUT" "$X/x"
 got=$(grep -o 'os-version min="[0-9.]*"' "$X/x/Distribution" || true)
 first="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$X/x/Distribution" | grep -v '^default$' | head -1)"
+concl="$(grep -c '<conclusion file=' "$X/x/Distribution" || true)"
 rm -rf "$X"
 [ "$got" = "os-version min=\"$MIN_OS\"" ] \
   || { echo "productbuild_floor: FLOOR MISSING/WRONG in $OUT (got: ${got:-none}, want $MIN_OS)" >&2; exit 1; }
 [ "$first" = dev.mavergreen.base ] \
   || { echo "productbuild_floor: dev.mavergreen.base is not first in $OUT" >&2; exit 1; }
+[ -z "$CONCLUSION" ] || [ "$concl" -ge 1 ] \
+  || { echo "productbuild_floor: the conclusion pane did not make it into $OUT" >&2; exit 1; }
 echo "productbuild_floor: $OUT built, install floor $MIN_OS enforced"
