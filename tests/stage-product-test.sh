@@ -284,4 +284,35 @@ grep -q 'postinstall hook failed' "$w/err" || fail "the failure names the postin
 sh "$w/scr-guarded/postinstall" /x.pkg "$V2/" "$V2/" \
   || fail "a running-system step guarded by if [ -z \$ROOT ] is skipped on another volume, and the hook still succeeds"
 
+printf 'echo inside)\n' > "$w/hook-paren"
+printf 'echo "unbalanced\n' > "$w/hook-quote"
+for h in hook-paren hook-quote; do
+  rc=0; sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-$h" \
+    --preinstall-hook "$w/$h" 2>"$w/err" || rc=$?
+  [ "$rc" -eq 1 ] || fail "a preinstall hook that is not valid sh must be refused at staging ($h), got exit $rc"
+  grep -q "$w/$h" "$w/err" || fail "the refusal names the hook ($h): $(cat "$w/err")"
+  rc=0; sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-$h-post" \
+    --postinstall-hook "$w/$h" 2>"$w/err" || rc=$?
+  [ "$rc" -eq 1 ] || fail "a postinstall hook that is not valid sh must be refused at staging ($h), got exit $rc"
+  grep -q "$w/$h" "$w/err" || fail "the refusal names the hook ($h): $(cat "$w/err")"
+done
+
+if [ "$(id -u)" -eq 0 ]; then
+  echo "note: running as root, which ignores directory permissions -- skipping the failed-relink case"
+else
+  V3="$w/vol-relink"; T3="$V3/usr/local/mavergreen"; mkdir -p "$V3/usr/local/bin" "$T3"
+  cp "$V2/usr/local/bin/mavergreen" "$V3/usr/local/bin/mavergreen"
+  printf 'chmod 555 "$ROOT/usr/local/mavergreen/bin"; false\n' > "$w/hook-lockfarm"
+  sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-lockfarm" \
+    --preinstall-hook "$w/hook-lockfarm" || fail "staging with a farm-locking hook must succeed"
+  cp -R "$st/usr/local/mavergreen/openssh" "$T3/"
+  "$V3/usr/local/bin/mavergreen" --root "$V3/" link openssh || fail "setup: link the installed version"
+  rc=0; sh "$w/scr-lockfarm/preinstall" /x.pkg "$V3/" "$V3/" 2>"$w/err" || rc=$?
+  chmod 755 "$T3/bin"
+  [ "$rc" -ne 0 ] || fail "a failing preinstall hook fails the install even when the relink fails"
+  [ ! -L "$T3/bin/ssh" ] || fail "fixture: the locked farm must have kept the relink out"
+  grep -q 'could not relink; run `mavergreen link openssh`' "$w/err" || fail "a failed relink is reported with its remedy: $(cat "$w/err")"
+  ! grep -q 'left in place' "$w/err" || fail "a failed relink must not claim the installed version is left in place: $(cat "$w/err")"
+fi
+
 echo "PASS: stage-product"

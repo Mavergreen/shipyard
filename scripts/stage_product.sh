@@ -33,6 +33,11 @@ shift
 [ -n "$ST" ] && [ -n "$P" ] && [ -n "$SCR" ] || { echo "stage_product: need --stage --product --scripts-out" >&2; exit 2; }
 case "$P" in ''|-*|*[!a-z0-9-]*) echo "stage_product: bad product name '$P'" >&2; exit 2 ;; esac
 [ -n "$(find "$ST" \( -type f -o -type l \) 2>/dev/null | head -n 1)" ] || { echo "stage_product: nothing staged under $ST" >&2; exit 1; }
+for h in "$PREH" "$POSTH"; do
+  if [ -n "$h" ]; then
+    sh -n "$h" || { echo "stage_product: hook $h is not valid sh; refusing to stage" >&2; exit 1; }
+  fi
+done
 mkdir -p "$ST/usr/local/mavergreen/$P"
 mkdir -p "$SCR"
 snippet=""
@@ -48,8 +53,12 @@ sh "$SELF/render-manifest.sh" "$@"
   printf 'if [ -x "$ROOT/usr/local/bin/mavergreen" ]; then "$ROOT/usr/local/bin/mavergreen" --root "$ROOT/" unlink %s 2>/dev/null || true; fi\n' "$P"
   if [ -n "$PREH" ]; then
     printf '(\n:\n'; cat "$PREH"; printf '\n) || {\n'
-    printf '  echo "%s: preinstall hook failed; the installed version is left in place" >&2\n' "$P"
-    printf '  if [ -x "$ROOT/usr/local/bin/mavergreen" ]; then "$ROOT/usr/local/bin/mavergreen" --root "$ROOT/" link %s >/dev/null 2>&1 || true; fi\n' "$P"
+    printf '  if [ ! -x "$ROOT/usr/local/bin/mavergreen" ] || "$ROOT/usr/local/bin/mavergreen" --root "$ROOT/" link %s >/dev/null 2>&1; then\n' "$P"
+    printf '    echo "%s: preinstall hook failed; the installed version is left in place" >&2\n' "$P"
+    printf '  else\n'
+    printf '    echo "%s: preinstall hook failed" >&2\n' "$P"
+    printf '    echo '"'"'%s: could not relink; run `mavergreen link %s`'"'"' >&2\n' "$P" "$P"
+    printf '  fi\n'
     printf '  exit 1\n}\n'
   fi
   printf 'rm -rf "$ROOT/usr/local/mavergreen/%s" 2>/dev/null || echo "%s: could not clear $ROOT/usr/local/mavergreen/%s; files dropped from this version may linger" >&2\n' "$P" "$P" "$P"
@@ -91,4 +100,7 @@ HELPERPICK
   printf 'exit 0\n'
 } > "$SCR/postinstall"
 rm -f "$SCR/.agent-load"
+for g in "$SCR/preinstall" "$SCR/postinstall"; do
+  sh -n "$g" || { echo "stage_product: generated $g is not valid sh (hooks: ${PREH:-none} ${POSTH:-none}); refusing to stage" >&2; exit 1; }
+done
 chmod +x "$SCR/preinstall" "$SCR/postinstall"

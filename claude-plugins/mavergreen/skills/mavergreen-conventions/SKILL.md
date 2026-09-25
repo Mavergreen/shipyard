@@ -1621,13 +1621,17 @@ product, and check 23 enforces the call. Hooks see the volume as `$ROOT` (empty 
 volume), and **a hook touches the running system (`launchctl`, `kextload`, `open`, …) only inside
 `if [ -z "$ROOT" ]; then … fi`**: an install to another volume must not load that volume's jobs or
 kexts into the system doing the installing. The updater's agent load follows the same rule. **Each
-hook runs in a subshell, and its last command's status is its verdict.** A failing preinstall hook
-stops the install before the tree is removed (the outgoing version is relinked), which is how a
-preset refuses a missing dependency. A failing postinstall hook fails the install. So a best-effort
-step ends `|| true`, an essential one records its failure (`|| _rc=1`) and the hook ends
-`[ "$_rc" -eq 0 ]`, and a guard is written as `if [ -z "$ROOT" ]; then …; fi`, never as
-`[ -z "$ROOT" ] && …` on the last line (that line is false on another volume). A hook contains no
-`exit` and no `set -e`.
+hook runs in a subshell, and its last command's status is its verdict.** `stage_product.sh` refuses
+to stage a hook that `sh -n` rejects. A failing preinstall hook stops the install before the tree is
+removed, which is how a preset refuses a missing dependency. When a helper is installed, the
+outgoing version is relinked; if that relink fails, the preinstall says so and names
+`mavergreen link <product>` as the remedy. A failing postinstall hook fails the install, but
+Installer does not roll back: the product stays installed and linked, and whatever the hook did
+before it failed stays done. So a best-effort step ends `|| true`, and an essential one records its
+failure: the hook starts `_rc=0`, the step ends `|| _rc=1`, and the hook ends `[ "$_rc" -eq 0 ]`. A
+guard is written as `if [ -z "$ROOT" ]; then …; fi`, never as `[ -z "$ROOT" ] && …` on the last line
+(that line is false on another volume). A hook contains no `exit` and no `set -e`: the subshell sits
+left of `||`, so `set -e` inside it is silently ignored, not enforced.
 
 ### Where a product may install
 
