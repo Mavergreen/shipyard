@@ -1349,6 +1349,10 @@ there: the toolchain file uses xcrun's own 10.9 SDK when it has one, and the fet
 - **A static archive's members compiled against the 10.9 SDK record sdk `n/a`,** because that SDK has no
   SDKSettings.json. They must match minos, and `n/a` is accepted for x86_64 `OBJECT` files only (the
   11.3 SDK has SDKSettings.json, so arm64 members must record 11.3).
+- **A static archive built natively on 10.9 records no version at all.** 10.9's own clang (pre-Xcode 7)
+  writes no version-min load command into a `.o`, only into what it links. So an x86_64 `OBJECT` that
+  records neither minos nor SDK is accepted. Every modern toolchain writes one, so only a 10.9-era build
+  produces that absence.
 
 ## Artifact conformance (checked at package time)
 

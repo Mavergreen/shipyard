@@ -22,6 +22,11 @@ yes x86_64 OBJECT 10.9 n/a        # a 10.9-SDK archive member cannot record its 
 no  x86_64 OBJECT 10.7 n/a
 no  arm64 OBJECT 11.0 n/a         # arm64 SDK has SDKSettings.json, so no n/a allowance
 no  x86_64 EXECUTE 10.9 n/a       # only an OBJECT gets the n/a allowance
+yes x86_64 OBJECT - -            # 10.9's native pre-Xcode-7 clang writes no version-min into a .o
+no  x86_64 OBJECT - 26.5         # an SDK with no minos is not "no load command"
+no  x86_64 OBJECT 10.9 -
+no  x86_64 EXECUTE - -           # only an OBJECT gets the no-load-command allowance
+no  arm64 OBJECT - -             # an arm64 member always records its SDK
 no  i386 OBJECT 10.7 26.5
 no  arm64e OBJECT 11.0 26.5
 why="$(mav_sdk_rule x86_64 EXECUTE 10.9 26.5 || true)"

@@ -33,6 +33,12 @@ mav_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk
   #           so a member can prove its minos but not its SDK. The 11.3 arm64 SDK includes
   #           SDKSettings.json, so arm64 members must record their SDK version.
   [ "$1" = x86_64 ] && [ "$2" = OBJECT ] && [ "$4" = n/a ] && [ "$3" = "$_want_min" ] && return 0
+  # platform: OS X 10.9's own clang (pre-Xcode 7) writes no version-min load command into a
+  #           relocatable .o at all -- only into what it links -- so a static archive built natively on
+  #           10.9 has members recording neither minos nor sdk, though every compile passed the pinned
+  #           10.9 SDK and -mmacosx-version-min=10.9. Every modern toolchain writes one, so an x86_64
+  #           member with no version load command can only come from a 10.9-era toolchain.
+  [ "$1" = x86_64 ] && [ "$2" = OBJECT ] && [ "$3" = - ] && [ "$4" = - ] && return 0
   [ "$3" = "$_want_min" ] && [ "$4" = "$_want_sdk" ] && return 0
   echo "$1 records minos $3 sdk $4; the pin is minos $_want_min sdk $_want_sdk"; return 1
 }
