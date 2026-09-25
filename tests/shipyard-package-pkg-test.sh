@@ -28,7 +28,7 @@ code | grep -q -- '--base-version "\$VER"' \
   || { echo "FAIL: the base component shipyard ships must be stamped with the version being built (--base-version \"\$VER\")"; exit 1; }
 
 for missing in --cmake-tree --shipyard-prefix --app --version --out; do
-  args="--cmake-tree $w/t --shipyard-prefix $w/p --app $w/MavericksShipyardUpdater.app --version 1.0.0 --out $w/o.pkg"
+  args="--cmake-tree $w/t --shipyard-prefix $w/p --app $w/shipyard-updater.app --version 1.0.0 --out $w/o.pkg"
   args="$(printf '%s' "$args" | sed "s|$missing [^ ]*||")"
   # shellcheck disable=SC2086
   if err="$(sh "$S" $args 2>&1 >/dev/null)"; then echo "FAIL: $missing must be required"; exit 1; fi
@@ -37,7 +37,7 @@ for missing in --cmake-tree --shipyard-prefix --app --version --out; do
 done
 mkdir -p "$w/Other.app"
 if sh "$S" --cmake-tree "$w/t" --shipyard-prefix "$w/p" --app "$w/Other.app" --version 1.0.0 --out "$w/o.pkg" >/dev/null 2>&1; then
-  echo "FAIL: an app not named MavericksShipyardUpdater.app must be refused"; exit 1
+  echo "FAIL: an app not named shipyard-updater.app must be refused"; exit 1
 fi
 
 # spec: 2026-09-11 decision 1 -- both --cmake-tree and --shipyard-prefix BECOME the product prefix
@@ -46,7 +46,7 @@ fi
 mkfixture() {  # $1 = dir: a tree, a shipyard prefix and an app that all pass every other check
   rm -rf "$1"
   mkdir -p "$1/tree/bin" "$1/tree/doc" "$1/tree/man" "$1/tree/share" \
-           "$1/sp/share/cmake/MavericksShipyard" "$1/app/MavericksShipyardUpdater.app"
+           "$1/sp/share/cmake/MavericksShipyard" "$1/app/shipyard-updater.app"
   for c in cmake ctest cpack; do printf '#!/bin/sh\n' > "$1/tree/bin/$c"; chmod +x "$1/tree/bin/$c"; done
   : > "$1/sp/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake"
   presets "$1" /usr/local/mavergreen/shipyard
@@ -63,7 +63,7 @@ presets() {  # $1 = fixture dir  $2 = the prefix its installed presets name
 run_pkg() {  # $1 = fixture dir; sets $rc and $err
   rc=0
   err="$(sh "$S" --cmake-tree "$1/tree" --shipyard-prefix "$1/sp" \
-    --app "$1/app/MavericksShipyardUpdater.app" --version 1.0.0 --out "$1/notadir/o.pkg" 2>&1 >/dev/null)" || rc=$?
+    --app "$1/app/shipyard-updater.app" --version 1.0.0 --out "$1/notadir/o.pkg" 2>&1 >/dev/null)" || rc=$?
 }
 mkfixture "$w/fa"; run_pkg "$w/fa"
 [ "$rc" -ne 0 ] || { echo "FAIL: the fixture was built to stop at --out; it did not fail at all"; exit 1; }

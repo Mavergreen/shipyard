@@ -115,12 +115,12 @@ jobs:
             shipyard-cmake --build "$RUNNER_TEMP/upd-$1"
           done
           sh scripts/lipo-merge-tree.sh \
-            --a "$RUNNER_TEMP/upd-x86_64/MavericksShipyardUpdater.app" \
-            --b "$RUNNER_TEMP/upd-arm64/MavericksShipyardUpdater.app" \
-            --out "$RUNNER_TEMP/MavericksShipyardUpdater.app" \
+            --a "$RUNNER_TEMP/upd-x86_64/shipyard-updater.app" \
+            --b "$RUNNER_TEMP/upd-arm64/shipyard-updater.app" \
+            --out "$RUNNER_TEMP/shipyard-updater.app" \
             --require-archs "x86_64 arm64"
           # spec: R-P1-22 -- NOT re-signed; release.yml's copy of this step states it in full.
-          exe="$RUNNER_TEMP/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater"
+          exe="$RUNNER_TEMP/shipyard-updater.app/Contents/MacOS/shipyard-updater"
           archs="$(lipo -info "$exe" | sed -n 's/.*: //p')"
           case " $archs " in *" x86_64 "*) ;; *) echo "::error::the merged updater has no x86_64 slice: $archs"; exit 1;; esac
           case " $archs " in *" arm64 "*) ;; *) echo "::error::the merged updater has no arm64 slice: $archs"; exit 1;; esac
@@ -141,7 +141,7 @@ jobs:
           sh scripts/package-pkg.sh \
             --cmake-tree "$SHIPYARD_CMAKE_TREE" \
             --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
-            --app "$RUNNER_TEMP/MavericksShipyardUpdater.app" \
+            --app "$RUNNER_TEMP/shipyard-updater.app" \
             --version "$v" \
             --out "$RUNNER_TEMP/dist/mavericks-shipyard-$v.pkg"
           sh scripts/assert_pkg_installs_in_place.sh "$RUNNER_TEMP/dist/mavericks-shipyard-$v.pkg"

@@ -36,7 +36,8 @@ done
 ID="dev.mavergreen.mavericks-shipyard"
 PREFIX_DIR="/usr/local/mavergreen/shipyard"
 APPDIR="/Library/Application Support/Mavergreen"
-APP_NAME="MavericksShipyardUpdater.app"
+APP_REL="$(sh "$SELF/product-name.sh" updater-app shipyard)"
+APP_NAME="${APP_REL##*/}"
 LABEL="dev.mavergreen.mavericks-shipyard-updatecheck"
 
 : "${TREE:?package-pkg: --cmake-tree required}"

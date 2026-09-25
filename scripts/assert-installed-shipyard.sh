@@ -33,7 +33,7 @@ FARM="$R/usr/local/mavergreen/bin"
 CM="$FARM/shipyard-cmake"
 PREFIX="$R/usr/local/mavergreen/shipyard"
 CFGDIR="$PREFIX/share/cmake/MavericksShipyard"
-EXE="$R/Library/Application Support/Mavergreen/MavericksShipyardUpdater.app/Contents/MacOS/MavericksShipyardUpdater"
+EXE="$R/Library/Application Support/Mavergreen/shipyard-updater.app/Contents/MacOS/shipyard-updater"
 
 bad=0
 fail() { echo "::error::installed shipyard: $*" >&2; bad=1; }

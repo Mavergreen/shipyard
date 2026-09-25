@@ -7,7 +7,7 @@
 # CI shell steps (not CMake functions) -- see each product's release workflow:
 #   scripts/stage_updater.sh     -- stage the updater .app + LaunchAgent into a pkg payload,
 #                                   rendering updater/{updatecheck.plist,postinstall}.in per product
-#   scripts/sign_and_appcast.sh  -- sign a .pkg (via ed25519-sign) then emit appcast.xml (gen_appcast.sh)
+#   scripts/sign_and_appcast.sh  -- sign a .pkg (via ed25519-sign) then write its feed, <short>.xml (gen_appcast.sh)
 set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
 include("${MAVERICKS_SHARED_DIR}/MavericksDecisions.cmake")   # mavericks_reject_placeholder_icon()
 include("${MAVERICKS_SHARED_DIR}/MavericksCompatGuard.cmake")   # mavericks_assert_binary_compatible()
@@ -25,32 +25,58 @@ function(mavericks_fetch_sparkle out_var)
 endfunction()
 
 # mavericks_add_updater_app(
-#   NAME <target>  BUNDLE_ID <id>  FEED_URL <appcast url>
-#   CONFIRM_TITLE <str>  CONFIRM_BODY <str>          # ^ the required (per-project) values
+#   PRODUCT <short name>                      # registered in shipyard's scripts/product-names
+#   CONFIRM_TITLE <str>  CONFIRM_BODY <str>   # ^ the required (per-project) values
 #   [ICON <path/to.icns> | ALLOW_GENERIC]   # a real icon (placeholder-gated), OR the generic macOS
 #                                            # app icon on purpose (empty CFBundleIconFile, no artwork)
-#   [PRODUCT_NAME <str>]        # default: NAME              (shown in Sparkle dialogs)
+#   [PRODUCT_NAME <str>]        # default: <PRODUCT>-updater (shown in Sparkle dialogs)
 #   [VERSION <str>]             # default: ${PROJECT_VERSION}
 #   [AUTO_CHECK <true|false>]   # default: true
 #   [SPARKLE_FRAMEWORK <path>]  # default: mavericks_fetch_sparkle()
-#   [LOG_PREFIX <str>]          # default: NAME
-#   [RELAUNCH_MARKER <path>]    # default: /tmp/.<BUNDLE_ID>-relaunched
+#   [LOG_PREFIX <str>]          # default: <PRODUCT>-updater
+#   [RELAUNCH_MARKER <path>]    # default: /tmp/.<bundle id>-relaunched
 #   [ED_PUBKEY <base64> | ED_PUBKEY_FILE <path>]   # default: updater/ed25519_key.pub -> Info.plist SUPublicEDKey
 #   [PANE_HINT_KEY <str>]  [POST_UPDATE_HELPER <abs path>])
-# Builds ${CMAKE_BINARY_DIR}/<NAME>.app hosting Sparkle. Cocoa-only; links NO libswiftCore.
+# Builds ${CMAKE_BINARY_DIR}/<PRODUCT>-updater.app hosting Sparkle. Cocoa-only; links NO libswiftCore.
+# Its bundle id and SUFeedURL are the ones scripts/product-name.sh derives for PRODUCT, so the app,
+# stage_product.sh and conformance cannot disagree; NAME, BUNDLE_ID and FEED_URL are refused.
 # PANE_HINT_KEY omitted/empty => background-found updates post an NSUserNotification (no-pane products).
 # POST_UPDATE_HELPER: absolute path to an executable the updater runs (as the user) after a successful
 # install + the confirmation -- for product-specific follow-up (e.g. offer to roll a VM onto a new image).
+function(_mavericks_registry_fact out_var fact short)
+  set(_script "${MAVERICKS_SHARED_DIR}/scripts/product-name.sh")
+  if(NOT EXISTS "${_script}")
+    message(FATAL_ERROR "mavericks_add_updater_app: PRODUCT '${short}' cannot be looked up.\n ${_script} is missing")
+  endif()
+  execute_process(
+    COMMAND sh "${_script}" "${fact}" "${short}"
+    OUTPUT_VARIABLE _v ERROR_VARIABLE _e RESULT_VARIABLE _rc OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(_rc EQUAL 1)
+    message(FATAL_ERROR "mavericks_add_updater_app: PRODUCT '${short}' is refused.\n '${short}' is not in shipyard's scripts/product-names -- register it there first\n ${_e}")
+  elseif(NOT _rc EQUAL 0 OR _v STREQUAL "")
+    message(FATAL_ERROR "mavericks_add_updater_app: PRODUCT '${short}' cannot be looked up.\n product-name.sh ${fact} ${short} exited ${_rc}\n ${_e}")
+  endif()
+  set(${out_var} "${_v}" PARENT_SCOPE)
+endfunction()
+
 function(mavericks_add_updater_app)
   cmake_parse_arguments(A "ALLOW_GENERIC"
-    "NAME;PRODUCT_NAME;BUNDLE_ID;FEED_URL;ED_PUBKEY;ED_PUBKEY_FILE;ICON;VERSION;AUTO_CHECK;SPARKLE_FRAMEWORK;LOG_PREFIX;CONFIRM_TITLE;CONFIRM_BODY;RELAUNCH_MARKER;PANE_HINT_KEY;POST_UPDATE_HELPER" "" ${ARGN})
-  foreach(req NAME BUNDLE_ID FEED_URL CONFIRM_TITLE CONFIRM_BODY)
+    "PRODUCT;NAME;PRODUCT_NAME;BUNDLE_ID;FEED_URL;ED_PUBKEY;ED_PUBKEY_FILE;ICON;VERSION;AUTO_CHECK;SPARKLE_FRAMEWORK;LOG_PREFIX;CONFIRM_TITLE;CONFIRM_BODY;RELAUNCH_MARKER;PANE_HINT_KEY;POST_UPDATE_HELPER" "" ${ARGN})
+  foreach(derived NAME BUNDLE_ID FEED_URL)
+    if(DEFINED A_${derived} OR derived IN_LIST A_KEYWORDS_MISSING_VALUES)
+      message(FATAL_ERROR "mavericks_add_updater_app: ${derived} is refused.\n ${derived} is derived from shipyard's scripts/product-names; pass PRODUCT <short name> instead")
+    endif()
+  endforeach()
+  foreach(req PRODUCT CONFIRM_TITLE CONFIRM_BODY)
     if(NOT DEFINED A_${req})
       message(FATAL_ERROR "mavericks_add_updater_app: ${req} required")
     endif()
   endforeach()
+  _mavericks_registry_fact(A_BUNDLE_ID updater-bundle-id "${A_PRODUCT}")
+  _mavericks_registry_fact(A_FEED_URL feed "${A_PRODUCT}")
+  set(A_NAME "${A_PRODUCT}-updater")
 
-  # Defaults for the mechanical args -- only NAME/BUNDLE_ID/FEED_URL/ICON/CONFIRM_TITLE/CONFIRM_BODY are required.
+  # Defaults for the mechanical args -- only PRODUCT/ICON/CONFIRM_TITLE/CONFIRM_BODY are the caller's.
   if(NOT A_PRODUCT_NAME)
     set(A_PRODUCT_NAME "${A_NAME}")
   endif()

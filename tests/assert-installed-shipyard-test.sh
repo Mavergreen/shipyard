@@ -76,9 +76,9 @@ done
 HOME="$w/home-install" "$real" --install "$w/sb" --prefix "$prefix" > "$w/install.log" 2>&1 \
   || { echo "FAIL: could not install shipyard into the fixture prefix:"; sed 's/^/    | /' "$w/install.log"; exit 1; }
 
-updir="$fx/Library/Application Support/Mavergreen/MavericksShipyardUpdater.app/Contents/MacOS"
+updir="$fx/Library/Application Support/Mavergreen/shipyard-updater.app/Contents/MacOS"
 mkdir -p "$updir"
-printf 'not a real Mach-O; lipo is stubbed below\n' > "$updir/MavericksShipyardUpdater"
+printf 'not a real Mach-O; lipo is stubbed below\n' > "$updir/shipyard-updater"
 
 # platform: a scratch HOME for every run -- this box may carry a stale ~/.cmake user-registry entry
 #           from an older shipyard, and an ambient entry would outrank the fixture in find_package.
@@ -89,14 +89,14 @@ lipo_says() {  # $1 = the -info line for shipyard-cmake  $2 = the -info line for
   cat > "$stub/lipo" <<EOF
 #!/bin/sh
 case "\$2" in
-  *MavericksShipyardUpdater) printf '%s\n' "$2" ;;
+  *shipyard-updater) printf '%s\n' "$2" ;;
   *) printf '%s\n' "$1" ;;
 esac
 EOF
   chmod +x "$stub/lipo"
 }
 UNIVERSAL_CMAKE="shipyard-cmake: architecture x86_64 arm64"
-UNIVERSAL_APP="MavericksShipyardUpdater: architecture x86_64 arm64"
+UNIVERSAL_APP="shipyard-updater: architecture x86_64 arm64"
 assert() {  # remaining args are appended to the script's own
   HOME="$run_home" PATH="$stub:$PATH" sh "$S" --root "$fx" "$@"
 }
@@ -123,18 +123,18 @@ for c in shipyard-ctest shipyard-cpack; do
   mv "$w/cmd-aside" "$farm/$c"
 done
 
-lipo_says "$UNIVERSAL_CMAKE" "MavericksShipyardUpdater: is architecture: arm64"
+lipo_says "$UNIVERSAL_CMAKE" "shipyard-updater: is architecture: arm64"
 check "an updater with no x86_64 slice fails" 1 "no x86_64 slice" \
   assert --cmake-version "$ver"
-lipo_says "$UNIVERSAL_CMAKE" "MavericksShipyardUpdater: is architecture: x86_64"
+lipo_says "$UNIVERSAL_CMAKE" "shipyard-updater: is architecture: x86_64"
 check "an updater with no arm64 slice fails" 1 "no arm64 slice" \
   assert --cmake-version "$ver"
 lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
 
-mv "$updir/MavericksShipyardUpdater" "$w/updater-aside"
+mv "$updir/shipyard-updater" "$w/updater-aside"
 check "a missing updater fails" 1 "no installed updater executable" \
   assert --cmake-version "$ver"
-mv "$w/updater-aside" "$updir/MavericksShipyardUpdater"
+mv "$w/updater-aside" "$updir/shipyard-updater"
 
 mv "$prefix/share/cmake/MavericksShipyard" "$w/shipyard-aside"
 check "a prefix whose shipyard is missing fails the stripped-environment probe" 1 "under a stripped environment" \

@@ -169,14 +169,15 @@ In your `CMakeLists.txt`:
 ```cmake
 include(MavericksSparkle)
 mavericks_add_updater_app(
-  NAME          FooUpdater
-  BUNDLE_ID     com.example.FooUpdater
-  FEED_URL      https://github.com/you/foo/releases/latest/download/appcast.xml
+  PRODUCT       foo
   ICON          updater/foo.icns
   CONFIRM_TITLE "Foo updated"
   CONFIRM_BODY  "Foo was updated in the background."
 )
 ```
+
+`foo` is the product's short name in shipyard's `scripts/product-names`; the app (`foo-updater.app`),
+its bundle id and its feed are derived from that line.
 
 ## Conventions for Claude Code
 

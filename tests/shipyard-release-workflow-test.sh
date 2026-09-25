@@ -106,7 +106,7 @@ for arch in ("x86_64", "arm64"):
          "the merged updater's %s slice is never asserted after the merge" % arch)
 
 # The pkg: the CMake tree + shipyard's install prefix + the merged app.
-need(r"^sh scripts/package-pkg\.sh .*--cmake-tree \S+ .*--shipyard-prefix \S+ .*--app \S*/MavericksShipyardUpdater\.app\"?",
+need(r"^sh scripts/package-pkg\.sh .*--cmake-tree \S+ .*--shipyard-prefix \S+ .*--app \S*/shipyard-updater\.app\"?",
      "release.yml never runs scripts/package-pkg.sh with --cmake-tree, --shipyard-prefix and the merged --app")
 
 # The built pkg is gated the way the family gates one: what the installer does on a box that has the

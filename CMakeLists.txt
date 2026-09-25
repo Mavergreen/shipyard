@@ -26,7 +26,7 @@ project(MavericksShipyard VERSION ${_MSC_VERSION} LANGUAGES NONE)
 #
 # Built once per arch (x86_64/10.9 and arm64/11.0) rather than a single fat build: CMAKE_OSX_ARCHITECTURES
 # and the deployment target are directory-scoped, and a fat CMAKE_OSX_ARCHITECTURES can't carry two
-# floors -- arm64 has no 10.9. The two single-arch builds share the same NAME and BUNDLE_ID and are
+# floors -- arm64 has no 10.9. The two single-arch builds share the same PRODUCT, so the same name and bundle id, and are
 # merged into ONE universal .app by scripts/lipo-merge-tree.sh in the release, not picked between.
 option(SHIPYARD_BUILD_UPDATER "Build the Sparkle updater app (needed only to package the pkg)" OFF)
 if(SHIPYARD_BUILD_UPDATER)
@@ -37,12 +37,10 @@ if(SHIPYARD_BUILD_UPDATER)
 
   # ONE universal app (spec 2026-09-11): built once per arch -- x86_64/10.9 and arm64/11.0, since a
   # deployment floor is per-configure and arm64 has no 10.9 -- and merged by lipo-merge-tree.sh in the
-  # release. Same name and bundle id for both builds, so the merge is of one app, not two.
+  # release. One PRODUCT for both builds, so the merge is of one app, not two.
   mavericks_add_updater_app(
-    NAME MavericksShipyardUpdater
+    PRODUCT shipyard
     PRODUCT_NAME "Mavericks Shipyard"
-    BUNDLE_ID "dev.mavergreen.mavericks-shipyard"
-    FEED_URL "https://github.com/Mavergreen/shipyard/releases/latest/download/appcast.xml"
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "MavShipyardUpdater"
     CONFIRM_TITLE "Mavericks Shipyard updated"
