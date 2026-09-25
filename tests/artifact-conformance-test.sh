@@ -135,6 +135,22 @@ deviation floor targets 10.9 rather than running on it
 pkg p.pkg 1.0.0-mavericks.1 11.0 com.example.thing
 asset p.pkg 10'
 
+CROSS='expected 1.26.8-mavericks.7
+deviation floor:golang-*-cross-*.pkg the cross toolchain runs on macOS 11 and later and only targets 10.9
+pkg golang-1.26.8-cross-mavericks.7.pkg 1.26.8-mavericks.7 11.0 dev.mavergreen.golang.go126-cross
+asset golang-1.26.8-cross-mavericks.7.pkg 10'
+ok "a floor deviation scoped to the cross archive excuses its 11.0 floor" "$CROSS
+pkg golang-1.26.8-native-mavericks.7.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.golang.go126
+asset golang-1.26.8-native-mavericks.7.pkg 10"
+_xerr="$(printf '%s\nend-of-facts\n' "$CROSS
+pkg golang-1.26.8-native-mavericks.7.pkg 1.26.8-mavericks.7 11.0 dev.mavergreen.golang.go126
+asset golang-1.26.8-native-mavericks.7.pkg 10" | sh "$S" 2>&1 >/dev/null)" \
+  && { echo "FAIL: the cross archive's floor deviation must not excuse the native archive's 11.0 floor"; exit 1; }
+printf '%s\n' "$_xerr" | grep -q 'golang-1.26.8-native-mavericks.7.pkg declares an install floor of 11.0' \
+  || { echo "FAIL: the native archive must be the one named: $_xerr"; exit 1; }
+printf '%s\n' "$_xerr" | grep -q 'cross-mavericks.7.pkg declares' \
+  && { echo "FAIL: the cross archive is excused and must not be reported: $_xerr"; exit 1; }
+
 # spec: scripts/check-artifact-conformance.sh's scoped deviations -- swift-toolchain
 #       republishes swift.org's .pkg verbatim so the correspondence with download.swift.org
 #       stays checkable. Its version, floor and identifier are UPSTREAM's and must stay that way
