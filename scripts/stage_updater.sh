@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- PlistBuddy reads the updater bundle
+# platform: host-agnostic
 #   usage: stage_updater.sh --stage ROOT --app UPDATER.app \
 #            --app-dir "/Library/Application Support/Mavergreen" \
 #            --agent-label dev.mavergreen.<product>-updatecheck \

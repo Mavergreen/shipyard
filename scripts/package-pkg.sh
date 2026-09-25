@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- builds the pkg, and stat -f is BSD stat
+# platform: macOS-only -- builds the pkg
 #   usage: package-pkg.sh --cmake-tree DIR --shipyard-prefix DIR --app APP --version V --out PKG
 #          Packages shipyard as ONE prefix -- /usr/local/mavergreen/shipyard holding shipyard's own
 #          CMake (bin/{cmake,ctest,cpack}, share/cmake-X.Y), bin/shipyard-{cmake,ctest,cpack} linked
