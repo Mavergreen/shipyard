@@ -572,6 +572,68 @@ printf '%s\n' "$_good_out" | grep -qi 'conformance: ok' \
   || { rm -rf "$_e2e"; echo "FAIL: a normal dist should report ok; got: $_good_out"; exit 1; }
 rm -rf "$_e2e"
 
+# spec: scripts/artifact-facts.sh "macho_facts" -- three ways a shipped Mach-O slice can be
+#       unreadable, each of which must ABORT the stream (a record plus no end-of-facts) rather
+#       than silently dropping the file and reporting a clean release.
+
+# spec: scripts/macho-slices.sh -- a 5-byte "file" carrying the FEEDFACF magic and nothing else
+#       is not a valid Mach-O anywhere: lipo -info rejects it on macOS, and lipo does not even
+#       exist on Linux -- either way macho-slices.sh exits non-zero, and that failure must survive
+#       as an abort record, not vanish as a skipped file.
+_fc1="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-a.XXXXXX")"
+mkdir -p "$_fc1/src" "$_fc1/dist"
+printf '\317\372\355\376x' > "$_fc1/src/tiny"
+( cd "$_fc1/src" && tar -czf "$_fc1/dist/broken.tar.gz" tiny )
+_fc1_facts="$(sh "$AF" "$_fc1/dist" 1.0.0-mavericks.1 "$_fc1" 2>/dev/null)" \
+  && { rm -rf "$_fc1"; echo "FAIL: a tarball holding an unreadable Mach-O-magic file must abort, not succeed; got: $_fc1_facts"; exit 1; }
+printf '%s\n' "$_fc1_facts" | grep -q '^abort cannot read a Mach-O' \
+  || { rm -rf "$_fc1"; echo "FAIL: expected an 'abort cannot read a Mach-O' record; got: $_fc1_facts"; exit 1; }
+printf '%s\n' "$_fc1_facts" | grep -qx 'end-of-facts' \
+  && { rm -rf "$_fc1"; echo "FAIL: an aborted stream must not also carry end-of-facts; got: $_fc1_facts"; exit 1; }
+printf '%s\n' "$_fc1_facts" | sh "$S" >/dev/null 2>&1 \
+  && { rm -rf "$_fc1"; echo "FAIL: piping an aborted stream to the checker must not exit 0"; exit 1; }
+rm -rf "$_fc1"
+
+# spec: scripts/artifact-facts.sh "macho_facts" -- a file named *.tgz that is not actually a
+#       tarball must abort extraction, not be silently skipped as though it carried no Mach-O.
+_fc2="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-b.XXXXXX")"
+mkdir -p "$_fc2/dist"
+printf 'not a tarball\n' > "$_fc2/dist/fake.tgz"
+_fc2_facts="$(sh "$AF" "$_fc2/dist" 1.0.0-mavericks.1 "$_fc2" 2>/dev/null)" \
+  && { rm -rf "$_fc2"; echo "FAIL: a .tgz that is not really a tarball must abort, not succeed; got: $_fc2_facts"; exit 1; }
+printf '%s\n' "$_fc2_facts" | grep -q '^abort cannot extract' \
+  || { rm -rf "$_fc2"; echo "FAIL: expected an 'abort cannot extract' record; got: $_fc2_facts"; exit 1; }
+printf '%s\n' "$_fc2_facts" | grep -qx 'end-of-facts' \
+  && { rm -rf "$_fc2"; echo "FAIL: an aborted stream must not also carry end-of-facts; got: $_fc2_facts"; exit 1; }
+printf '%s\n' "$_fc2_facts" | sh "$S" >/dev/null 2>&1 \
+  && { rm -rf "$_fc2"; echo "FAIL: piping an aborted stream to the checker must not exit 0"; exit 1; }
+rm -rf "$_fc2"
+
+# spec: scripts/artifact-facts.sh "macho_facts" -- a Mach-O-magic file this process cannot even
+#       open (mode 000) must abort too, via the [ -r ] guard checked before reading the magic.
+#       Skipped as root, which can read anything regardless of mode, so the fixture would prove
+#       nothing there.
+if [ "$(id -u)" = 0 ]; then
+  echo "artifact-conformance: running as root -- skipping the mode-000 fail-closed fixture (root can read anything)"
+else
+  _fc3="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-c.XXXXXX")"
+  mkdir -p "$_fc3/src" "$_fc3/dist"
+  printf '\317\372\355\376xxxxxxxxxxxx' > "$_fc3/src/noperm"
+  # platform: --mode overrides the archived permission bits without needing to actually read a
+  #           mode-000 source file at archive time (which even its owner cannot do); GNU tar
+  #           (this host) restores that exact mode on extraction.
+  ( cd "$_fc3/src" && tar --mode=000 -czf "$_fc3/dist/noperm.tar.gz" noperm )
+  _fc3_facts="$(sh "$AF" "$_fc3/dist" 1.0.0-mavericks.1 "$_fc3" 2>/dev/null)" \
+    && { rm -rf "$_fc3"; echo "FAIL: a tarball holding an unreadable (mode 000) Mach-O-magic file must abort, not succeed; got: $_fc3_facts"; exit 1; }
+  printf '%s\n' "$_fc3_facts" | grep -q '^abort ' \
+    || { rm -rf "$_fc3"; echo "FAIL: expected an abort record; got: $_fc3_facts"; exit 1; }
+  printf '%s\n' "$_fc3_facts" | grep -qx 'end-of-facts' \
+    && { rm -rf "$_fc3"; echo "FAIL: an aborted stream must not also carry end-of-facts; got: $_fc3_facts"; exit 1; }
+  printf '%s\n' "$_fc3_facts" | sh "$S" >/dev/null 2>&1 \
+    && { rm -rf "$_fc3"; echo "FAIL: piping an aborted stream to the checker must not exit 0"; exit 1; }
+  rm -rf "$_fc3"
+fi
+
 
 # spec: scripts/check-artifact-conformance.sh -- a self-upstream product tags vX.Y.Z, so its
 #       enclosure URL carries the v while the version does not; that is the same release.

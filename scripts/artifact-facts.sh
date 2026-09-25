@@ -4,7 +4,8 @@
 #          Emits the fact stream check-artifact-conformance.sh consumes, by inspecting a built dist/
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
-#          without fabricating .pkg files.
+#          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
+#          payload and shipped tarball.
 # platform: runs at PACKAGE TIME, on macOS, where pkgutil exists and the artifacts do.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
@@ -42,7 +43,15 @@ enc() { sed -e 's/%/%25/g' -e 's/ /%20/g'; }
 #       "cafebabe" is also a Java class file and "!<arch>" any ar archive, so those are Mach-O only
 #       if lipo can read them.
 macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded, may be empty). Non-zero on abort.
-  ( cd "$2" && find . -type f ) | sed 's|^\./||' | while IFS= read -r _mf; do
+  # platform: the file list is captured to a temp file and the loop below reads it via "< $_ml",
+  #           not piped in -- a `while` fed by a pipe is the LAST stage of that pipeline, which runs
+  #           in a subshell on both dash and bash (no lastpipe by default), so a `return` inside it
+  #           only exits the subshell and this function would silently keep going and return 0. A
+  #           redirected-in loop has no such subshell, so `return` here really does abort the caller.
+  _ml="$(mktemp "${TMPDIR:-/tmp}/macho-facts-list.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+  ( cd "$2" && find . -type f ) | sed 's|^\./||' > "$_ml"
+  while IFS= read -r _mf; do
+    [ -r "$2/$_mf" ] || { echo "artifact-facts: cannot read $1:$_mf" >&2; rm -f "$_ml"; return 1; }
     _mg="$(head -c 4 "$2/$_mf" | od -An -tx1 | tr -d ' \n')"
     case "$_mg" in
       cffaedfe|cefaedfe|feedfacf|feedface) _strict=1 ;;
@@ -51,14 +60,15 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
     esac
     if ! _sl="$(sh "$SELF/macho-slices.sh" "$2/$_mf")"; then
       [ "$_strict" = 0 ] && continue
-      echo "artifact-facts: cannot read Mach-O $1:$_mf" >&2; return 1
+      echo "artifact-facts: cannot read Mach-O $1:$_mf" >&2; rm -f "$_ml"; return 1
     fi
     _sha="$(shasum -a 256 "$2/$_mf" | awk '{print $1}')"
     _p="$3$(printf '%s' "$_mf" | enc)"
     printf '%s\n' "$_sl" | while read -r _a _ft _mn _sd; do
       printf 'macho %s %s %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_ft" "$_mn" "$_sd" "$_sha"
     done
-  done
+  done < "$_ml"
+  rm -f "$_ml"
 }
 payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read.
   for _pl in $(find "$2" -name Payload -type f | sed 's/ /%20/g'); do
