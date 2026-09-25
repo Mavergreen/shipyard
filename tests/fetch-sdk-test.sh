@@ -28,6 +28,8 @@ if MAVERICKS_SDK_CACHE="$w/c3" MAVERICKS_SDK_URL="file://$t113" MAVERICKS_SDK_SH
   echo "FAIL: a checksum mismatch must fail"; exit 1
 fi
 [ ! -e "$w/c3/MacOSX11.3.sdk" ] || { echo "FAIL: a checksum mismatch must leave no SDK dir behind"; exit 1; }
+[ ! -e "$w/c3/MacOSX11.3.sdk.tar.xz" ] \
+  || { echo "FAIL: a checksum mismatch must not keep the bad tarball, or every later run fails on it"; exit 1; }
 
 rc=0; sh "$S" --arch i386 >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] || { echo "FAIL: an arch with no pin is a usage error (2), got $rc"; exit 1; }
