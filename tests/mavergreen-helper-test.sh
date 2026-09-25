@@ -80,6 +80,11 @@ mg list | grep -q '^go127 go 127 1.0 selected$' || fail "list shows product grou
 mg link no-such 2>/dev/null && fail "linking a product that is not installed must fail"
 rc=0; mg link '../x' 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "a malformed product name is a usage error (exit 2), got $rc"
+mkproduct var var "" bin/var-tool
+rc=0; mg link var 2>/dev/null || rc=$?
+[ "$rc" -eq 2 ] || fail "a name the install layout reserves (var) is not a product, even with a hand-made manifest: want exit 2, got $rc"
+[ ! -L "$T/bin/var-tool" ] || fail "a refused reserved name must link nothing"
+rm -f "$T/var/mavergreen.plist" "$T/var/bin/var-tool"; rmdir "$T/var/bin"
 
 mg link openssh
 mg check || fail "a consistent farm must pass check: $(mg check 2>&1)"

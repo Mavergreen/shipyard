@@ -15,6 +15,8 @@ case "${1:-}" in
       NF != 2 { print "product-names: not <name> <identifier>: " $0 > "/dev/stderr"; bad = 1; next }
       $1 !~ /^[a-z0-9][a-z0-9-]*$/ { print "product-names: bad short name: " $1 > "/dev/stderr"; bad = 1 }
       $2 !~ /^dev\.mavergreen\./ { print "product-names: identifier outside dev.mavergreen.*: " $2 > "/dev/stderr"; bad = 1 }
+      $1 ~ /^(var|bin|sbin|share|mavergreen|system-replace|base)$/ { print "product-names: short name reserved by the install layout: " $1 > "/dev/stderr"; bad = 1 }
+      $2 == "dev.mavergreen.base" { print "product-names: dev.mavergreen.base is the helper component, not a product: " $1 > "/dev/stderr"; bad = 1 }
       ($1 in n) { print "product-names: duplicate short name: " $1 > "/dev/stderr"; bad = 1 }
       ($2 in i) { print "product-names: duplicate identifier: " $2 > "/dev/stderr"; bad = 1 }
       { n[$1] = 1; i[$2] = 1 }

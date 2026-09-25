@@ -19,6 +19,14 @@ MAVERGREEN_PRODUCT_NAMES="$w/dup-id" sh "$S" check 2>/dev/null \
 printf 'Go126 dev.mavergreen.golang.go126\n' > "$w/bad"
 MAVERGREEN_PRODUCT_NAMES="$w/bad" sh "$S" check 2>/dev/null \
   && fail "a name outside [a-z0-9-] must be refused -- it becomes a path in a preinstall's rm -rf"
+for r in var bin sbin share mavergreen system-replace base; do
+  printf '%s dev.mavergreen.%s-x\n' "$r" "$r" > "$w/reserved"
+  MAVERGREEN_PRODUCT_NAMES="$w/reserved" sh "$S" check 2>/dev/null \
+    && fail "short name '$r' must be refused -- the install layout reserves it (the link farm, var/, the helper and its base component)"
+done
+printf 'x dev.mavergreen.base\n' > "$w/base-id"
+MAVERGREEN_PRODUCT_NAMES="$w/base-id" sh "$S" check 2>/dev/null \
+  && fail "identifier dev.mavergreen.base must be refused -- it is the helper component every archive carries"
 printf '# comment\n\nok dev.mavergreen.ok\n' > "$w/good"
 MAVERGREEN_PRODUCT_NAMES="$w/good" sh "$S" check || fail "comments and blank lines are allowed"
 echo "PASS: product-names"

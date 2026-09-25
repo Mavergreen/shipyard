@@ -1,5 +1,5 @@
-# spec: docs/superpowers/specs/2026-09-24-install-layout-design.md decision 3 -- one line per
-#       product: <short name> <pkg identifier>. Adding a product means adding its line here.
+# spec: tests/product-names-test.sh -- one line per product: <short name> <pkg identifier>.
+#       Adding a product means adding its line here.
 shipyard dev.mavergreen.mavericks-shipyard
 go126 dev.mavergreen.golang.go126
 go126-cross dev.mavergreen.golang.go126-cross

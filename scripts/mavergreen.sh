@@ -20,7 +20,7 @@ MG="$R/usr/local/mavergreen"
 SEL="$MG/var/mavergreen/selections"
 
 die() { echo "mavergreen: $1" >&2; exit "${2:-1}"; }
-valid() { case "$1" in ''|-*|*[!a-z0-9-]*) return 1 ;; esac; }
+valid() { case "$1" in ''|-*|*[!a-z0-9-]*|var|bin|sbin|share|mavergreen|system-replace|base) return 1 ;; esac; }
 manifest() { printf '%s/%s/mavergreen.plist' "$MG" "$1"; }
 mf() { "$PB" -c "Print :$2" "$(manifest "$1")" 2>/dev/null || true; }
 mf_array() {

@@ -1408,8 +1408,11 @@ only its `shipyard-*` names reach the farm).
 `scripts/product-names`** — one line, `<short name> <pkg identifier>`. It names the product's
 directory and is what people type (`mavergreen select go go126`), and the registry is the only place
 uniqueness can be checked: `product-name.sh check` refuses a duplicate name, a duplicate identifier,
-a name outside `[a-z0-9-]` (it becomes a path in a preinstall's `rm -rf`) and an identifier outside
-`dev.mavergreen.*`. **Adding a product means adding its line there and pushing shipyard**:
+a name outside `[a-z0-9-]` (it becomes a path in a preinstall's `rm -rf`), a name the layout reserves
+(`var`, `bin`, `sbin`, `share`, `mavergreen`, `system-replace`, `base`), an identifier outside
+`dev.mavergreen.*`, and `dev.mavergreen.base`, which is the helper's component. The helper refuses
+the reserved names too, so a hand-made manifest cannot reach them.
+**Adding a product means adding its line there and pushing shipyard**:
 `render-manifest.sh` reads the registry beside it and refuses an unregistered name, so the product
 cannot package until it builds with a shipyard release that carries its line. A variant packaged separately is a product of its own (`go126-cross`).
 
