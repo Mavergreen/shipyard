@@ -648,22 +648,20 @@ $REG_WHY" \
 fi
 
 # spec: SKILL.md "Family conventions" check 25, and "Rosetta" above -- the family is retiring
-#       Rosetta, so an undeclared translated x86_64 call is swept before release day rather than
-#       found the day macOS 28 removes Rosetta for good. tests/ is excluded: a test that runs the
-#       shipped x86_64 product under Rosetta only when it is already present, SKIPping (77)
-#       otherwise, adds coverage rather than a build dependency. The three spellings this scans for
-#       are only what THIS check can see; "Rosetta" states that the declaration rule itself is not
-#       limited to them -- a build that merely runs an x86_64 binary it built earlier still needs
-#       one. Neither the pattern nor a fail() message below may spell what it scans for as one
-#       contiguous run of "arch", a space, and a flag -- the same self-match check 16 avoids by
-#       writing "package[s]" -- or this check is its own first offender.
+#       Rosetta, so an undeclared use is swept before macOS 28 removes Rosetta for good, not found
+#       the day it does. Neither the pattern nor a fail() message below may spell what it scans for
+#       as one contiguous run of a command word, a space, and its flag -- the same self-match
+#       check 16 avoids by writing "package[s]" -- or this check is its own first offender.
 for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*.bats' 2>/dev/null | grep -v '^tests/'); do
+  # spec: SKILL.md "Family conventions" check 25 -- a trailing " #..." remark is stripped (a "#"
+  #       preceded by whitespace) before matching, so it cannot force a bogus declaration.
   hit="$(grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
-    | grep -E '(^|[^A-Za-z0-9_./-])(/usr/bin/)?arch[[:space:]]+(-x86_64|-arch[[:space:]]+x86_64)([[:space:]]|$)' \
+    | sed 's/[[:space:]]#.*$//' \
+    | grep -E '(^|[^A-Za-z0-9_./-])((/usr/bin/)?arch[[:space:]]+(-x86_64|-arch[[:space:]]+x86_64)|softwareupdate[[:space:]]+--install-rosetta)([[:space:]]|$)' \
     | head -1 | sed 's/^[[:space:]]*//' | cut -c1-70)"
   [ -n "$hit" ] || continue
   deviated rosetta "$f" && continue
-  fail "$f invokes arch to run something translated as x86_64, with no declared rosetta:<path> deviation covering it: $hit" \
+  fail "$f depends on Rosetta translation, with no declared rosetta:<path> deviation covering it: $hit" \
        "declare what runs translated, why it can't be native yet, and when to reconsider under INGREDIENTS.md's ## Conformance deviations as '- rosetta:$f: <reason>' (see the conventions skill, 'Rosetta')"
 done
 

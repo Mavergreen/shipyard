@@ -1377,4 +1377,42 @@ printf '#!/bin/sh\narch -x86_64 ./product --version\n' > "$work/rosettat/tests/r
 (cd "$work/rosettat" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a call under tests/ must pass undeclared: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
 
+# spec: SKILL.md "Family conventions" check 25 -- the regex matches anywhere on a non-comment
+#       line, not just at command position (unlike check 23). A trailing " #..." remark is
+#       stripped before matching, so an unrelated command with one does not force a bogus
+#       declaration; a quoted MENTION on an otherwise-real command line still counts, because
+#       excluding quotes reliably is not practical in BWK awk/sed -- both cases the checks table's
+#       row 25 now says explicitly.
+mkrepo "$work/rosettatrail"
+printf '#!/bin/sh\necho hello there # not Rosetta, just mentions arch -x86_64 in a note\n' > "$work/rosettatrail/build/cross.sh"
+(cd "$work/rosettatrail" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 25: a trailing # remark mentioning arch -x86_64 must not force a declaration: $(cd "$work/rosettatrail" && sh "$S" 2>&1)"; exit 1; }
+mkrepo "$work/rosettaquote"
+printf '#!/bin/sh\necho "legacy builds used arch -x86_64 here"\n' > "$work/rosettaquote/build/cross.sh"
+(cd "$work/rosettaquote" && git add -A && sh "$S" >/dev/null 2>&1) \
+  && { echo "FAIL: check 25: a quoted mention of arch -x86_64 on a real command line must still count (documented limitation)"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 25 -- a workflow's YAML run: block is scanned like any
+#       other tracked file; the check does no YAML parsing, so indentation inside the block scalar
+#       does not matter.
+mkrepo "$work/rosettayml"
+printf 'jobs:\n  build:\n    steps:\n      - run: |\n          arch -x86_64 ./cross-tool\n' > "$work/rosettayml/.github/workflows/x.yml"
+(cd "$work/rosettayml" && git add -A) >/dev/null 2>&1
+out="$(cd "$work/rosettayml" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared arch -x86_64 inside a workflow run: block must fail"; exit 1; }
+printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta for a workflow-file hit: $out"; exit 1; }
+printf '\n## Conformance deviations\n\n- rosetta:.github/workflows/x.yml: the release job cross-builds a host tool under Rosetta\n' >> "$work/rosettayml/INGREDIENTS.md"
+(cd "$work/rosettayml" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 25: a declared rosetta:.github/workflows/x.yml deviation should excuse the workflow hit: $(cd "$work/rosettayml" && sh "$S" 2>&1)"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 25 -- softwareupdate --install-rosetta is the plainest
+#       Rosetta dependency there is: it installs the translator itself.
+mkrepo "$work/rosettainstall"
+printf '#!/bin/sh\nsoftwareupdate --install-rosetta --agree-to-license\n' > "$work/rosettainstall/build/prep.sh"
+(cd "$work/rosettainstall" && git add -A) >/dev/null 2>&1
+out="$(cd "$work/rosettainstall" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared softwareupdate --install-rosetta must fail"; exit 1; }
+printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta for a softwareupdate --install-rosetta hit: $out"; exit 1; }
+printf '\n## Conformance deviations\n\n- rosetta:build/prep.sh: installs Rosetta so a later step can run x86_64 tools\n' >> "$work/rosettainstall/INGREDIENTS.md"
+(cd "$work/rosettainstall" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse softwareupdate --install-rosetta: $(cd "$work/rosettainstall" && sh "$S" 2>&1)"; exit 1; }
+
 echo "PASS: check-family-conventions"
