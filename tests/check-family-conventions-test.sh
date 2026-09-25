@@ -435,7 +435,7 @@ printf '%s\n' "$out" | grep -qi 'not committed' || { echo "FAIL should say it is
 # spec: a workflow that signs must call scan-for-key.yml -- publish-release.yml refuses a signed
 #       release without its record, and a missing job should fail a PR here, not a release there.
 mkrepo "$work/k"
-# spec: scripts/check-family-conventions.sh check 22 -- a signing workflow builds a pkg too
+# spec: scripts/check-family-conventions.sh check 23 -- a signing workflow builds a pkg too
 #       (check 21's fallback), so it needs stage_product.sh the same as a direct pkgbuild caller.
 printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --pkg dist/x.pkg > dist/appcast.xml\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
   >> "$work/k/.github/workflows/release.yml"
@@ -1186,49 +1186,80 @@ printf '%s\n' "$out" | grep -q 'check-artifact-conformance.sh' || { echo "FAIL s
 printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pk/.github/workflows/release.yml"
 (cd "$work/pk" && git add -A) >/dev/null 2>&1
 
-# spec: SKILL.md "Family conventions" check 22 -- a pkg-building repo gets its install scripts and
+# spec: SKILL.md "Family conventions" check 23 -- a pkg-building repo gets its install scripts and
 #       manifest from stage_product.sh, or the layout conformance enforces has no one generating it.
-#       Check 21 alone no longer earns a full pass here -- it earns NOT failing check 21 anymore,
-#       while check 22, pinned right below, still fails until stage_product.sh is called too.
-out="$(cd "$work/pk" && sh "$S" 2>&1)" && { echo "FAIL: a pkg repo that never calls stage_product.sh should fail check 22"; exit 1; }
+#       Running conformance satisfies check 21 but not check 23, which needs the call itself.
+out="$(cd "$work/pk" && sh "$S" 2>&1)" && { echo "FAIL: a pkg repo that never calls stage_product.sh should fail check 23"; exit 1; }
 printf '%s\n' "$out" | grep -q 'check-artifact-conformance.sh' && { echo "FAIL: a pkg repo that runs artifact conformance should no longer fail check 21: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 22 should name stage_product.sh: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 23 should name stage_product.sh: $out"; exit 1; }
 printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
 (cd "$work/pk" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkg repo that calls stage_product.sh should pass: $(cd "$work/pk" && sh "$S" 2>&1)"; exit 1; }
 
-# spec: scripts/check-family-conventions.sh check 22 -- matches a CALL shape ANCHORED to command
+# spec: scripts/check-family-conventions.sh check 23 -- matches a CALL shape ANCHORED to command
 #       position (check 18's anchor set: line start, ; & | a backtick, "$(", then/do/exec, plus
 #       YAML "run:" and CMake "COMMAND"), not a bare mention -- the same distinction check 19 pins
 #       for assert-tree-clean.sh (assertname, asserttrailing above). A step name, an echo'd string
 #       whose payload merely spells "sh stage_product.sh" or a path to it, and a trailing comment
 #       all put "stage_product.sh" textually next to "/" or "sh " with no COMMAND-POSITION anchor
-#       in front of it, so none of them is a call. (An earlier draft checked only that adjacency,
-#       with no anchor requirement at all, and `echo "sh stage_product.sh"` slipped past it.)
+#       in front of it, so none of them is a call.
 mkrepo "$work/pkm"
 printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg   # sh stage_product.sh\necho "sh stage_product.sh"\necho "use $SHIPYARD_SCRIPTS/stage_product.sh --stage x"\n' \
   > "$work/pkm/build/package.sh"
 printf '      - name: stage_product.sh already ran earlier\n        run: echo done\n' >> "$work/pkm/.github/workflows/release.yml"
 printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkm/.github/workflows/release.yml"
-out="$(cd "$work/pkm" && git add -A && sh "$S" 2>&1)" && { echo "FAIL: a step name, an echo'd mention, or a trailing comment naming stage_product.sh must not satisfy check 22: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 22 should still name stage_product.sh when only mentioned: $out"; exit 1; }
+out="$(cd "$work/pkm" && git add -A && sh "$S" 2>&1)" && { echo "FAIL: a step name, an echo'd mention, or a trailing comment naming stage_product.sh must not satisfy check 23: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 23 should still name stage_product.sh when only mentioned: $out"; exit 1; }
 
-# spec: scripts/check-family-conventions.sh check 22 -- a call inside a YAML "run: |" block scalar
+# spec: scripts/check-family-conventions.sh check 23 -- a call inside a YAML "run: |" block scalar
 #       is still a call: its continuation lines are their own physical lines, indented but
 #       otherwise ordinary shell, so the plain line-start anchor covers them with no special case.
 mkrepo "$work/pkblock"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pkblock/build/package.sh"
 printf '      - run: |\n          sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n          sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
   >> "$work/pkblock/.github/workflows/release.yml"
 (cd "$work/pkblock" && git add -A && sh "$S" >/dev/null 2>&1) \
-  || { echo "FAIL: a stage_product.sh call inside a YAML run: | block should satisfy check 22: $(cd "$work/pkblock" && sh "$S" 2>&1)"; exit 1; }
+  || { echo "FAIL: a stage_product.sh call inside a YAML run: | block should satisfy check 23: $(cd "$work/pkblock" && sh "$S" 2>&1)"; exit 1; }
 
-# spec: scripts/check-family-conventions.sh check 22 -- CMake's own command position is the
+# spec: scripts/check-family-conventions.sh check 23 -- CMake's own command position is the
 #       COMMAND keyword inside execute_process()/add_custom_command(), the same anchor check 18
 #       does not need because check 18 only ever scans *.sh files and extracted YAML run: lines.
 mkrepo "$work/pkcmake"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pkcmake/build/package.sh"
 printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkcmake/.github/workflows/release.yml"
 printf 'execute_process(COMMAND sh ${SHIPYARD_SCRIPTS}/stage_product.sh --stage stage --product w --name W --version 1 --scripts-out scr)\n' > "$work/pkcmake/CMakeLists.txt"
 (cd "$work/pkcmake" && git add -A && sh "$S" >/dev/null 2>&1) \
-  || { echo "FAIL: a stage_product.sh call via CMake's COMMAND keyword should satisfy check 22: $(cd "$work/pkcmake" && sh "$S" 2>&1)"; exit 1; }
+  || { echo "FAIL: a stage_product.sh call via CMake's COMMAND keyword should satisfy check 23: $(cd "$work/pkcmake" && sh "$S" 2>&1)"; exit 1; }
+
+# spec: scripts/check-family-conventions.sh check 23 -- a keyword that runs its command (if, elif,
+#       while, until, !) is still command position, /bin/sh is sh, sh takes option flags, and a
+#       quoted variable may end mid-path: each of these spellings is a call.
+pkcall() {  # $1 dir  $2 the build script's body after its pkgbuild line
+  mkrepo "$1"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n%s\n' "$2" > "$1/build/package.sh"
+  printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$1/.github/workflows/release.yml"
+  (cd "$1" && git add -A && sh "$S" >/dev/null 2>&1) \
+    || { echo "FAIL: this spelling is a stage_product.sh call and should satisfy check 23: [$2]: $(cd "$1" && sh "$S" 2>&1)"; exit 1; }
+}
+A='--stage stage --product w --name W --version 1 --scripts-out scr'
+pkcall "$work/pkif" "if sh \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A; then :; fi"
+pkcall "$work/pkelif" "if false; then :
+elif sh \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A; then :; fi"
+pkcall "$work/pkwhile" "while sh \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A; do break; done"
+pkcall "$work/pkuntil" "until sh \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A; do :; done"
+pkcall "$work/pkbang" "! sh \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A || exit 1"
+pkcall "$work/pkifbang" "if ! sh \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A; then exit 1; fi"
+pkcall "$work/pkbinsh" "/bin/sh \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A"
+pkcall "$work/pkshe" "sh -e \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A"
+pkcall "$work/pkshex" "sh -ex \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A"
+pkcall "$work/pkmidq" "sh \"\$SHIPYARD_SCRIPTS\"/stage_product.sh $A"
+pkcall "$work/pkmidqpath" "\"\$SHIPYARD_SCRIPTS\"/stage_product.sh $A"
+
+# spec: scripts/check-family-conventions.sh check 23 -- a variable that merely holds the script's
+#       path is not a call, and neither is a keyword spelled inside an echo'd string.
+mkrepo "$work/pkassign"
+printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\nSP="$SHIPYARD_SCRIPTS/stage_product.sh"\necho "if sh stage_product.sh"\necho "/bin/sh -e $SHIPYARD_SCRIPTS/stage_product.sh"\n' > "$work/pkassign/build/package.sh"
+printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkassign/.github/workflows/release.yml"
+out="$(cd "$work/pkassign" && git add -A && sh "$S" 2>&1)" \
+  && { echo "FAIL: an assignment of stage_product.sh's path, or an echo'd string spelling a call, must not satisfy check 23"; exit 1; }
+printf '%s\n' "$out" | grep -q 'never calls stage_product.sh' \
+  || { echo "FAIL: check 23 must be what fails when stage_product.sh's path is only assigned or echoed: $out"; exit 1; }
 
 mkrepo "$work/pkc"; printf '#!/bin/sh\npkgbuild --root stage out.pkg\n' > "$work/pkc/build/package.sh"
 printf '      # - run: sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkc/.github/workflows/release.yml"

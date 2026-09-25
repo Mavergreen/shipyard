@@ -565,23 +565,19 @@ if [ -n "$builds_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! d
        "pipe artifact-facts.sh into check-artifact-conformance.sh at package time (see the conventions skill, 'Artifact conformance'), or declare '- artifact-conformance: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
-# spec: SKILL.md "Family conventions" check 22 -- a pkg-building repo gets its install scripts and
+# spec: SKILL.md "Family conventions" check 23 -- a pkg-building repo gets its install scripts and
 #       manifest from stage_product.sh, or the layout conformance enforces has no one generating it.
 # spec: scripts/check-family-conventions.sh check 18 -- a mention is not a call unless it sits in
 #       COMMAND POSITION: line start, a separator (; & | or a backtick), "$(", then/do/exec (check
-#       18's own anchor set, reused verbatim here), plus a YAML "run:" key and a CMake "COMMAND"
-#       keyword, which are this family's other two command positions. check 19's tests
-#       (assertname, asserttrailing) pin the same mention-vs-call distinction for
-#       assert-tree-clean.sh; check 22's own fixtures (pkm) pin it for stage_product.sh, including
-#       `echo "sh stage_product.sh"`, which an EARLIER draft's plain adjacency check ("sh "
-#       immediately before the name, with no command-position requirement) let through. This still
-#       misses a bare `./stage_product.sh` called with neither a "/" nor an "sh " prefix; no repo
-#       in the family calls it that way today.
+#       18's own anchor set), a YAML "run:" key or a CMake "COMMAND" keyword, optionally followed by
+#       if/elif/while/until/!, which run the command after them. The call is sh or /bin/sh (with
+#       option flags) and a word ending stage_product.sh, or a word ending /stage_product.sh; a word
+#       holding "=" is an assignment, not a call. SKILL.md's check 23 row lists what this misses.
 if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
   staged=""
   for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -v '^tests/'); do
     grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
-      | grep -Eq '(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^then|^do|^exec|^[[:space:]]*-?[[:space:]]*run:|[[:space:](]COMMAND)[[:space:]]*(sh[[:space:]]+"?[^[:space:]"]*stage_product\.sh|"?[^[:space:]"]*/stage_product\.sh)"*([[:space:]]|$)' \
+      | grep -Eq '(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^then|^do|^exec|^[[:space:]]*-?[[:space:]]*run:|[[:space:](]COMMAND)[[:space:]]*((if|elif|while|until|!)[[:space:]]+)*((/bin/)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]+[^[:space:]=]*stage_product\.sh|[^[:space:]=]*/stage_product\.sh)"*([[:space:]]|$)' \
       && { staged="$f"; break; }
   done
   [ -n "$staged" ] || fail "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh -- its install scripts and manifest are hand-rolled" \
