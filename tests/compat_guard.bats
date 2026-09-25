@@ -8,6 +8,12 @@ setup() {
   GUARD="$BATS_TEST_DIRNAME/../scripts/assert_binary_compatible.sh"
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/compat_guard_test.XXXXXX")"
   CC=$(command -v clang || command -v cc)
+  # platform: no vtool (pre-Xcode 11, e.g. the 10.9 box) to restamp fixtures, and that box's
+  #           default SDK may be 10.10 -- so build them against the pinned 10.9 SDK instead;
+  #           clang honours SDKROOT.
+  if ! xcrun --find vtool >/dev/null 2>&1; then
+    SDKROOT="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh")" && export SDKROOT
+  fi
   printf 'int main(void){return 0;}\n' > "$WORK/clean.c"
   if ! "$CC" -arch x86_64 -mmacosx-version-min=10.9 "$WORK/clean.c" -o "$WORK/clean" 2>/dev/null; then
     HAVE_X8609=0
@@ -25,12 +31,15 @@ setup() {
   printf '#import <AppKit/AppKit.h>\nint main(void){(void)[NSColor blackColor];return 0;}\n' > "$WORK/sel_ok.m"
   "$CC" -arch x86_64 -mmacosx-version-min=10.9 -framework AppKit "$WORK/sel_ok.m" -o "$WORK/sel_ok" 2>/dev/null || true
   # platform: vtool rewrites the recorded SDK without needing that SDK; it cannot write in place.
-  # platform: on the 10.9 box there is no vtool, and none is needed: its native SDK already records 10.9.
-  xcrun --find vtool >/dev/null 2>&1 && for fx in clean shim leak sel_bad sel_ok; do
-    [ -f "$WORK/$fx" ] || continue
-    xcrun vtool -set-version-min macos 10.9 10.9 -replace -output "$WORK/$fx.stamped" "$WORK/$fx" \
-      && mv "$WORK/$fx.stamped" "$WORK/$fx"
-  done
+  # platform: on the 10.9 box there is no vtool -- SDKROOT above already pinned the build to 10.9,
+  #           so no restamping is needed there either.
+  if xcrun --find vtool >/dev/null 2>&1; then
+    for fx in clean shim leak sel_bad sel_ok; do
+      [ -f "$WORK/$fx" ] || continue
+      xcrun vtool -set-version-min macos 10.9 10.9 -replace -output "$WORK/$fx.stamped" "$WORK/$fx" \
+        && mv "$WORK/$fx.stamped" "$WORK/$fx"
+    done
+  fi
 }
 teardown() { rm -rf "$WORK"; }
 
@@ -85,7 +94,7 @@ mk_stamped() {  # $1 out, $2 arch, $3 minos, $4 sdk
   "$CC" -arch "$2" -mmacosx-version-min="$3" "$WORK/s.c" -o "$WORK/s.$2"
   case "$2" in
     x86_64) xcrun vtool -set-version-min macos "$3" "$4" -replace -output "$1" "$WORK/s.$2" ;;
-    *)      xcrun vtool -set-build-version macos "$3" "$4" -replace -output "$1" "$WORK/s.$2" ;;
+    *)      xcrun vtool -set-build-version macos "$3" "$4" -tool ld 1000.0 -replace -output "$1" "$WORK/s.$2" ;;
   esac
 }
 

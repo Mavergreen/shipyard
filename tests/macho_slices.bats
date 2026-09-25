@@ -12,7 +12,7 @@ setup() {
   clang -arch arm64 -mmacosx-version-min=11.0 "$WORK/m.c" -o "$WORK/a"
   # platform: vtool rewrites the recorded SDK without needing that SDK, so no fixture downloads one.
   xcrun vtool -set-version-min macos 10.9 10.9 -replace -output "$WORK/x109" "$WORK/x"
-  xcrun vtool -set-build-version macos 11.0 11.3 -replace -output "$WORK/a113" "$WORK/a"
+  xcrun vtool -set-build-version macos 11.0 11.3 -tool ld 1000.0 -replace -output "$WORK/a113" "$WORK/a"
   lipo -create "$WORK/x109" "$WORK/a113" -output "$WORK/fat"
 }
 teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
