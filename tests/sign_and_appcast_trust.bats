@@ -22,6 +22,7 @@ signer_signs_as() {  # KEY -- the stub signer's signature "verifies" against KEY
 
 sign_and_appcast() {
   SPARKLE_PRIVATE_KEY=throwaway sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/bin/ed25519-sign" \
+    --product openssh --feed-dir "$T/feeds" \
     --channel-title C --version 1.2.3 --pkg-url https://example.invalid/new.pkg \
     --notes-file "$T/notes.md" --pkg "$T/new.pkg" "$@"
 }
@@ -31,7 +32,7 @@ sign_and_appcast() {
   signer_signs_as "$KNEW"
   run --separate-stderr sign_and_appcast
   [ "$status" -eq 0 ]
-  [[ "$output" == *"sparkle:edSignature=\"signed-by:$KNEW\""* ]] || false
+  [[ "$(cat "$T/feeds/openssh.xml")" == *"sparkle:edSignature=\"signed-by:$KNEW\""* ]] || false
 }
 
 @test "a signature installed clients would reject gets no appcast at all" {
@@ -39,7 +40,7 @@ sign_and_appcast() {
   signer_signs_as "$KOTHER"
   run --separate-stderr sign_and_appcast
   [ "$status" -ne 0 ]
-  [[ "$output" != *"<rss"* ]] || false
+  [ ! -e "$T/feeds/openssh.xml" ]
   [[ "$stderr" == *"$KNEW"* ]] || false
 }
 

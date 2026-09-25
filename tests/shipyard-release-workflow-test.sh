@@ -116,14 +116,14 @@ need(r"^sh scripts/assert_pkg_installs_in_place\.sh \S*\.pkg\"?$",
 need(r"^sh scripts/artifact-facts\.sh dist \S+ \| sh scripts/check-artifact-conformance\.sh$",
      "release.yml never pipes artifact-facts.sh into scripts/check-artifact-conformance.sh")
 
-# Signed, with the appcast written into the release.
-need(r"^sh scripts/sign_and_appcast\.sh .*--pkg \S+\.pkg\"? > dist/appcast\.xml$",
-     "release.yml never runs scripts/sign_and_appcast.sh into dist/appcast.xml")
+# Signed, with the feed written into the release as shipyard.xml.
+need(r"^sh scripts/sign_and_appcast\.sh --product shipyard --feed-dir dist .*--pkg \S+\.pkg\"?$",
+     "release.yml never runs scripts/sign_and_appcast.sh --product shipyard --feed-dir dist")
 
 # shipyard's tags are vX.Y.Z. Without --tag-glob the upgradeable gate sees none of them, finds no
 # previous release, and skips the ordering check on every release.
-need(r"^sh scripts/assert_appcast_upgradeable\.sh .*--appcast dist/appcast\.xml .*--tag-glob 'v\*\.\*\.\*'",
-     "release.yml must run scripts/assert_appcast_upgradeable.sh on dist/appcast.xml with --tag-glob 'v*.*.*'")
+need(r"^sh scripts/assert_appcast_upgradeable\.sh .*--appcast dist/shipyard\.xml .*--tag-glob 'v\*\.\*\.\*'",
+     "release.yml must run scripts/assert_appcast_upgradeable.sh on dist/shipyard.xml with --tag-glob 'v*.*.*'")
 
 # release-notes.sh is called directly (no wrapper): --out writes the body straight to
 # dist/RELEASE_NOTES.md. shipyard's own .pkg IS floored at 10.9.5 (package-pkg.sh builds it through

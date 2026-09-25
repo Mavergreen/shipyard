@@ -225,7 +225,7 @@ for f in "$dist"/*; do
       sed -n 's/^\([a-z][a-z0-9_]*\)=\(..*\)$/\1 \2/p' "$f" \
         | while read -r k v; do printf 'build-info %s %s %s\n' "$b" "$k" "$v"; done
       ;;
-    *appcast*.xml)
+    *.xml)
       # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "The Sparkle
       #       comparison version must be dotted-numeric AND monotonic" -- the version that IDENTIFIES
       #       the release is the human shortVersionString; <sparkle:version> is a separate NUMERIC

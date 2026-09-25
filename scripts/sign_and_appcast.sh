@@ -1,11 +1,14 @@
 #!/bin/sh
 # platform: macOS-only -- pkgutil expands the ed25519 pkg
-#   usage: sign_and_appcast.sh --channel-title T --version V --pkg-url URL \
+#   usage: sign_and_appcast.sh --product P --feed-dir DIR --channel-title T --version V --pkg-url URL \
 #            --notes-file FILE --pkg PKG [--signer BIN] [--verifier BIN] [--min-os 10.9.5] \
-#            [--pubkey B64] [--allow-key-change]  > appcast.xml
+#            [--pubkey B64] [--allow-key-change]
 #          (SPARKLE_PRIVATE_KEY must be in the environment)
-#          Signs a .pkg with the native EdDSA signer and emits its Sparkle appcast.xml to stdout, in
-#          one call.
+#          Signs a .pkg with the native EdDSA signer and writes its Sparkle feed to DIR/P.xml, in one
+#          call. P.xml is the file P's updater polls (scripts/product-name.sh feed P), so its name is
+#          P's, never the caller's; nothing goes to stdout.
+#            --product   the registered short name the pkg ships
+#            --feed-dir  where P.xml is written; nothing is written when the run refuses
 #            --signer    the ed25519-sign binary; OPTIONAL -- defaults to the prebuilt ed25519-sign
 #                        fetched from the latest mavericks-ed25519 release (needs gh)
 #            --verifier  the ed25519-verify binary; OPTIONAL -- defaults to the one beside the signer
@@ -28,9 +31,12 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 
+PRODUCT=""; FEEDDIR=""
 SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; CHANNEL=""; VER=""; URL=""; NOTES=""; PKG=""; MINOS="${MAVERICKS_MIN_OS:-10.9.5}"
 while [ $# -gt 0 ]; do
   case "$1" in
+    --product) PRODUCT="$2"; shift 2;;
+    --feed-dir) FEEDDIR="${2%/}"; shift 2;;
     --signer) SIGNER="$2"; shift 2;;
     --verifier) VERIFIER="$2"; shift 2;;
     --pubkey) PUBKEY="$2"; shift 2;;
@@ -44,8 +50,10 @@ while [ $# -gt 0 ]; do
     *) echo "sign_and_appcast: unknown arg: $1" >&2; exit 2;;
   esac
 done
-[ -n "$CHANNEL" ] && [ -n "$VER" ] && [ -n "$URL" ] && [ -n "$NOTES" ] && [ -n "$PKG" ] \
-  || { echo "sign_and_appcast: need --channel-title --version --pkg-url --notes-file --pkg" >&2; exit 2; }
+[ -n "$PRODUCT" ] && [ -n "$FEEDDIR" ] && [ -n "$CHANNEL" ] && [ -n "$VER" ] && [ -n "$URL" ] && [ -n "$NOTES" ] && [ -n "$PKG" ] \
+  || { echo "sign_and_appcast: need --product --feed-dir --channel-title --version --pkg-url --notes-file --pkg" >&2; exit 2; }
+sh "$SELF/product-name.sh" identifier "$PRODUCT" >/dev/null 2>&1 \
+  || { echo "sign_and_appcast: $PRODUCT is not in shipyard's scripts/product-names, so it has no feed" >&2; exit 2; }
 [ -f "$PKG" ] || { echo "sign_and_appcast: no pkg: $PKG" >&2; exit 1; }
 printenv SPARKLE_PRIVATE_KEY | grep -q . \
   || { echo "sign_and_appcast: SPARKLE_PRIVATE_KEY not set" >&2; exit 1; }
@@ -84,4 +92,10 @@ sh "$SELF/assert_update_trusted.sh" "$@" \
 LEN=$(wc -c < "$PKG" | tr -d '[:space:]')
 ENC="sparkle:edSignature=\"$SIG\" length=\"$LEN\""
 
-sh "$SELF/gen_appcast.sh" "$CHANNEL" "$VER" "$URL" "$MINOS" "$NOTES" "$ENC"
+mkdir -p "$FEEDDIR"
+_feed="$(mktemp "$FEEDDIR/.$PRODUCT.xml.XXXXXX")"
+sh "$SELF/gen_appcast.sh" "$CHANNEL" "$VER" "$URL" "$MINOS" "$NOTES" "$ENC" > "$_feed" \
+  || { rm -f "$_feed"; echo "sign_and_appcast: gen_appcast.sh failed; no feed written" >&2; exit 1; }
+chmod 644 "$_feed"
+mv "$_feed" "$FEEDDIR/$PRODUCT.xml"
+echo "sign_and_appcast: wrote $FEEDDIR/$PRODUCT.xml" >&2

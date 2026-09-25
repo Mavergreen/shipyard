@@ -522,10 +522,13 @@ cat > "$_ext/dist/appcast.xml" <<'XML'
   </channel>
 </rss>
 XML
+cp "$_ext/dist/appcast.xml" "$_ext/dist/go126.xml"
 _ext_facts="$(sh "$AF" "$_ext/dist" 1.0.0-mavericks.1 "$_ext")"
 rm -rf "$_ext"
 printf '%s\n' "$_ext_facts" | grep -qxF 'appcast appcast.xml 1.0.0-mavericks.1 p.pkg 4096 10.9.5' \
   || { echo "FAIL: the identifying version and the OS floor are ELEMENTS while the URL and the length are enclosure ATTRIBUTES, so reading either from the wrong half yields unknown/0 -- and the element to read is shortVersionString, not <sparkle:version> 1000, which is the orderable comparison key and deliberately not the release version. Expected 'appcast appcast.xml 1.0.0-mavericks.1 p.pkg 4096 10.9.5', got: $_ext_facts"; exit 1; }
+printf '%s\n' "$_ext_facts" | grep -qxF 'appcast go126.xml 1.0.0-mavericks.1 p.pkg 4096 10.9.5' \
+  || { echo "FAIL: a feed is named <short name>.xml, and any *.xml asset must be read as one: $_ext_facts"; exit 1; }
 
 # spec: RELEASE_NOTES.md -- END TO END, on the real failure rather than a fixture: the exact
 #       dist that regressed. An empty RELEASE_NOTES.md kills the producer before dist/*'s later

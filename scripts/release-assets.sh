@@ -21,6 +21,7 @@ for f in "$dir"/*; do
   b="${f##*/}"
   case "$b" in
     "$notes"|SHA256SUMS) continue ;;
+    appcast*.xml) echo "release-assets: $b is a retired feed name -- a product's feed is <short name>.xml (sign_and_appcast.sh --product), the file its updater polls" >&2; exit 1 ;;
   esac
   printf '%s\n' "$f"
   found=1

@@ -30,9 +30,10 @@ printf 'dummy pkg bytes\n' > "$T/x.pkg"
 printf '## Notes\n\n- thing one\n- thing two\n' > "$T/notes.md"
 LEN=$(wc -c < "$T/x.pkg" | tr -d '[:space:]')
 
-OUT=$(SPARKLE_PRIVATE_KEY="ignored-by-stub" sh "$ROOT/scripts/sign_and_appcast.sh" \
-  --signer "$T/sign" --channel-title "Test Channel" --version 1.2.3 \
-  --pkg-url "https://example.invalid/x.pkg" --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub)
+SPARKLE_PRIVATE_KEY="ignored-by-stub" sh "$ROOT/scripts/sign_and_appcast.sh" \
+  --signer "$T/sign" --product openssh --feed-dir "$T/feeds" --channel-title "Test Channel" --version 1.2.3 \
+  --pkg-url "https://example.invalid/x.pkg" --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub > "$T/stdout"
+OUT="$(cat "$T/feeds/openssh.xml")"
 
 fail() { echo "sign_and_appcast test: $1" >&2; exit 1; }
 printf '%s\n' "$OUT" | grep -q "sparkle:edSignature=\"$SIG\"" || fail "signer's signature not in the enclosure"
@@ -40,5 +41,16 @@ printf '%s\n' "$OUT" | grep -q "length=\"$LEN\"" || fail "pkg length not in the 
 printf '%s\n' "$OUT" | grep -q '<sparkle:version>1.2.3</sparkle:version>' || fail "version missing"
 printf '%s\n' "$OUT" | grep -q 'https://example.invalid/x.pkg' || fail "enclosure url missing"
 printf '%s\n' "$OUT" | grep -q '<li>thing one</li>' || fail "notes not rendered"
+[ ! -s "$T/stdout" ] || fail "the feed goes to --feed-dir as <product>.xml, never to stdout, where a caller could name it anything"
+[ "$(ls -A "$T/feeds")" = openssh.xml ] || fail "only the feed is left in --feed-dir: $(ls -A "$T/feeds")"
+rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product no-such-product \
+  --feed-dir "$T/feeds2" --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
+  --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
+[ "$rc" -eq 2 ] || fail "an unregistered --product has no feed; expected exit 2, got $rc"
+[ ! -e "$T/feeds2" ] || fail "a refused call writes no feed"
+rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh \
+  --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
+  --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
+[ "$rc" -eq 2 ] || fail "--feed-dir is required; expected exit 2, got $rc"
 
 echo "sign_and_appcast OK"

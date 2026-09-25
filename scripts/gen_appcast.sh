@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: gen_appcast.sh <channel-title> <version> <pkg-url> <min-os> <notes-file> <enclosure-attrs>
 #          gen_appcast.sh --render-notes <notes-file>      # emit just the HTML fragment (test seam)
-#          Generates the Sparkle appcast.xml for ONE release, to stdout. Fails if the notes file is
+#          Generates the Sparkle feed (<short name>.xml) for ONE release, to stdout. Fails if the notes file is
 #          missing or empty: the notes ARE the release's <description>.
 #          Release notes (docs/release-notes/vX.Y.Z.md) are rendered from Markdown to a subset of
 #          HTML, inlined into the <description> CDATA:

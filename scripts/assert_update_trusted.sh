@@ -2,8 +2,7 @@
 # platform: host-agnostic
 #   usage: assert_update_trusted.sh --pkg PKG --signature SIG --verifier ED25519_VERIFY
 #                                   [--pubkey B64] [--allow-key-change]
-#          Messages go to stderr (sign_and_appcast.sh's stdout is the appcast). Exit 0 trusted, 1
-#          not, 2 usage.
+#          Messages go to stderr. Exit 0 trusted, 1 not, 2 usage.
 #          --pubkey B64          the pkg installs no updater; name the key installed clients trust
 #                                 yourself.
 #          --allow-key-change    a deliberate hard switch that installed clients will NOT follow;

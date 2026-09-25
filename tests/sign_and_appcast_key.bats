@@ -27,7 +27,8 @@ EOF
 }
 
 sign_and_appcast() {  # [sh flags...] -- the rest of the args are sign_and_appcast.sh's
-  sh "$@" "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --channel-title "Test Channel" \
+  sh "$@" "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds" \
+    --channel-title "Test Channel" \
     --version 1.2.3 --pkg-url "https://example.invalid/x.pkg" --notes-file "$T/notes.md" \
     --pkg "$T/x.pkg" --pubkey stub < /dev/null
 }
@@ -54,15 +55,18 @@ refute_key_in() {  # TEXT
   [ "$status" -eq 0 ]
   [[ "$output" == *"sparkle:edSignature"* ]] || false   # it really ran, traced, to the end
   refute_key_in "$output"
+  refute_key_in "$(cat "$T/feeds/openssh.xml")"
 }
 
 @test "an unset key is refused, before anything is signed" {
   run env -i PATH="$PATH" sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" \
+    --product openssh --feed-dir "$T/feeds" \
     --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
     --notes-file "$T/notes.md" --pkg "$T/x.pkg"
   [ "$status" -ne 0 ]
   [[ "$output" == *"SPARKLE_PRIVATE_KEY"* ]] || false
   [ ! -e "$T/signer-argv" ]
+  [ ! -e "$T/feeds/openssh.xml" ]
 }
 
 @test "an empty key is refused, before anything is signed" {

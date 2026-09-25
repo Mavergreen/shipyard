@@ -64,7 +64,7 @@ of that one line):
 - scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
-- enclosure-url:appcast.xml: the release tag is v<version> (fifteen repos pin @v1 or @vX.Y.Z, so the v is load-bearing) while the pkg and appcast carry the bare version, so the feed's /download/v<version>/ URL reads to this check as another release.
+- enclosure-url:shipyard.xml: the release tag is v<version> (fifteen repos pin @v1 or @vX.Y.Z, so the v is load-bearing) while the pkg and appcast carry the bare version, so the feed's /download/v<version>/ URL reads to this check as another release.
   The check assumes tag == version, which holds everywhere else in the family. Scoped to the one feed:
   release.yml builds that URL from the same version it tags, and the appcast's shortVersionString, length
   and enclosure name are still checked against this release.
