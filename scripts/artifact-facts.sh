@@ -31,6 +31,7 @@ abort() {  # $1 = why.
 }
 
 printf 'expected %s\n' "$version"
+[ -z "${GITHUB_REPOSITORY:-}" ] || printf 'repository %s\n' "$GITHUB_REPOSITORY"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
 #       identity" -- what a pkg INSTALLS, read from its payload rather than from the recipe that built it:
@@ -93,12 +94,15 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
                for (i = 1; i < n; i++) if (c[i] ~ /\.(app|prefPane|kext|bundle|plugin|framework|appex|xpc)$/) nested = 1
                if (!nested) print }' \
       | while IFS= read -r _bd; do
-          _id=none
+          _id=none; _feed=""
           for _ip in Contents/Info.plist Resources/Info.plist Info.plist; do
             [ -f "$_root/$_bd/$_ip" ] || continue
-            _id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$_root/$_bd/$_ip" 2>/dev/null || echo none)"; break
+            _id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$_root/$_bd/$_ip" 2>/dev/null || echo none)"
+            _feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$_root/$_bd/$_ip" 2>/dev/null || true)"; break
           done
           printf 'bundle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" "$(printf '%s' "$_bd" | enc)" "${_id:-none}"
+          [ -z "$_feed" ] || printf 'sparkle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" \
+            "$(printf '%s' "$_bd" | enc)" "$(printf '%s' "$_feed" | tr -s '[:space:]' '_')"
         done
     for _ld in Library/LaunchAgents Library/LaunchDaemons; do
       [ -z "$_loc" ] && [ -d "$_root/$_ld" ] || continue
@@ -119,9 +123,19 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       _mp="$(/usr/libexec/PlistBuddy -c 'Print :product' "$_mf" 2>/dev/null)" || _mp=""
       _mi="$(/usr/libexec/PlistBuddy -c 'Print :identifier' "$_mf" 2>/dev/null)" || _mi=""
       _reg="$(sh "$SELF/product-name.sh" identifier "$_mp" 2>/dev/null)" || _reg=""
+      _repo="$(sh "$SELF/product-name.sh" repo "$_mp" 2>/dev/null)" || _repo=""
+      _dv=""
+      if [ -n "$_repo" ]; then
+        _dv="$(sh "$SELF/product-name.sh" updater-bundle-id "$_mp") $(sh "$SELF/product-name.sh" agent-label "$_mp") $(sh "$SELF/product-name.sh" updater-app "$_mp" | enc) $(sh "$SELF/product-name.sh" feed "$_mp")"
+      fi
+      _ml="$(/usr/libexec/PlistBuddy -c 'Print :line' "$_mf" 2>/dev/null)" || _ml=""
+      _ma="$(/usr/libexec/PlistBuddy -c 'Print :appcast' "$_mf" 2>/dev/null)" || _ma=""
       _mp="$(printf '%s' "${_mp:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest %s %s %s %s\n' "$1" "$_mp" "$(printf '%s' "${_mi:-none}" | tr -s '[:space:]' '_')" "$_dir"
-      printf 'registered %s %s\n' "$_mp" "$(printf '%s' "${_reg:-none}" | tr -s '[:space:]' '_')"
+      printf 'registered %s %s %s\n' "$_mp" "$(printf '%s' "${_reg:-none}" | tr -s '[:space:]' '_')" "${_repo:-none}"
+      printf 'manifest-line %s %s\n' "$1" "$(printf '%s' "${_ml:-none}" | tr -s '[:space:]' '_')"
+      printf 'manifest-appcast %s %s\n' "$1" "$(printf '%s' "${_ma:-none}" | tr -s '[:space:]' '_')"
+      [ -z "$_dv" ] || printf 'derived %s %s\n' "$_mp" "$_dv"
       _k=0
       while _o="$(/usr/libexec/PlistBuddy -c "Print :outside:$_k" "$_mf" 2>/dev/null)"; do
         printf 'manifest-outside %s %s\n' "$1" "$(printf '%s' "$_o" | tr '\n' ' ' | enc)"; _k=$((_k + 1))

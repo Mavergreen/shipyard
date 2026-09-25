@@ -11,8 +11,13 @@
 #            manifest      <file> <product> <identifier> <dir>    one per usr/local/mavergreen/<dir>/mavergreen.plist
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
-#            registered    <product> <identifier|none>            what scripts/product-names registers the product to
-#            appcast       <file> <version> <enclosure> <length>  one per Sparkle appcast
+#            registered    <product> <identifier|none> <repo|none>     what scripts/product-names registers the product to
+#            derived       <product> <bundle-id> <label> <app> <feed>  the updater identity product-name.sh derives for it
+#            manifest-line <file> <line|none>                     that manifest's line
+#            manifest-appcast <file> <url|none>                   that manifest's appcast
+#            sparkle       <file> <path> <SUFeedURL>              one per top-level bundle carrying a Sparkle feed
+#            repository    <owner/name>                           $GITHUB_REPOSITORY, when set
+#            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
 #            asset         <file> <bytes>                         one per file that will be published
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
@@ -209,6 +214,64 @@ EOF
   done < "$tmp/generated-$pk"
 done
 
+# spec: tests/artifact-conformance-test.sh -- line identity: an updater's app, bundle id, label and
+#       feed are the derived record's, a lined product's line is its version and its repo's suffix,
+#       and a release is built in the repo the registry assigns each of its products.
+repository="$(sed -n 's/^repository \([^ ][^ ]*\)$/\1/p' "$facts" | head -1)"
+up="${expected%%-mavericks.*}"; up="${up#v}"
+c1="${up%%.*}"; c12=""
+case "$up" in *.*) _r="${up#*.}"; c12="$c1${_r%%.*}" ;; esac
+while read -r pk P; do
+  repo="$(awk -v m="$P" '$1 == "registered" && $2 == m { print $4; exit }' "$facts")"
+  [ -n "$repo" ] && [ "$repo" != none ] || continue
+  want_id=""; want_label=""; want_app=""; want_feed=""
+  read -r _ _ want_id want_label want_app want_feed <<EOF
+$(awk -v m="$P" '$1 == "derived" && $2 == m { print; exit }' "$facts")
+EOF
+  if [ -n "$want_label" ]; then
+    awk -v p="$pk" '$1 == "sparkle" && $2 == p { print $3, $4 }' "$facts" > "$tmp/sparkle-$pk"
+    while read -r spath sfeed; do
+      [ "$spath" = "$want_app" ] \
+        || fail updater "$pk installs a Sparkle updater at $(dec "$spath"); $P's is $(dec "$want_app"), from scripts/product-names" "$pk"
+      sid="$(awk -v p="$pk" -v b="$spath" '$1 == "bundle" && $2 == p && $3 == b { print $4; exit }' "$facts")"
+      [ "$sid" = "$want_id" ] \
+        || fail updater "$pk's updater $(dec "$spath") is '${sid:-none}'; $P's is $want_id -- build it with mavericks_add_updater_app(PRODUCT $P)" "$pk"
+      [ "$sfeed" = "$want_feed" ] \
+        || fail feed "$pk's updater polls $sfeed; $P's feed is $want_feed" "$pk"
+    done < "$tmp/sparkle-$pk"
+    if [ -s "$tmp/sparkle-$pk" ]; then
+      awk -v p="$pk" -v l="$want_label" '$1 == "launchd" && $2 == p && $4 == l { f = 1 } END { exit !f }' "$facts" \
+        || fail updater "$pk ships $P's updater but no LaunchAgent labelled $want_label -- nothing would run its daily check" "$pk"
+      grep -q "^appcast $P\.xml " "$facts" \
+        || fail feed "$pk ships $P's updater, but the dist carries no $P.xml -- /latest/download/$P.xml would 404 for every installed $P" "$pk"
+      want_ma="$want_feed"
+    else
+      want_ma=none
+    fi
+    ma="$(awk -v p="$pk" '$1 == "manifest-appcast" && $2 == p { print $3; exit }' "$facts")"
+    [ -z "$ma" ] || [ "$ma" = "$want_ma" ] \
+      || fail feed "$pk's manifest names the feed '$ma'; it should name '$want_ma' (a product with no updater names none)" "$pk"
+    awk -v p="$pk" '$1 == "launchd" && $2 == p && index($4, "updatecheck") { print $4 }' "$facts" > "$tmp/uc-$pk"
+    while read -r ul; do
+      [ "$ul" = "$want_label" ] || fail updater "$pk installs the update-check job $ul; $P's is $want_label" "$pk"
+    done < "$tmp/uc-$pk"
+  fi
+  ml="$(awk -v p="$pk" '$1 == "manifest-line" && $2 == p { print $3; exit }' "$facts")"
+  case "$ml" in ''|none|cross) lv="" ;; *-cross) lv="${ml%-cross}" ;; *) lv="$ml" ;; esac
+  if [ -n "$lv" ]; then
+    case "$repo" in
+      *-"$lv") : ;;
+      *) fail line "$pk is line $ml, so its repo is <product>-$lv, but scripts/product-names puts $P in $repo" "$pk" ;;
+    esac
+    [ "$lv" = "$c1" ] || [ "$lv" = "$c12" ] \
+      || fail line "$pk is line $ml, but version $expected is line $c1${c12:+ or $c12}" "$pk"
+  fi
+  if [ -n "$repository" ]; then
+    [ "${repository#*/}" = "$repo" ] \
+      || fail repository "$pk ships $P, which scripts/product-names assigns to $repo, but this release is built in $repository" "$pk"
+  fi
+done < "$tmp/prod-of"
+
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
 #       identity" -- where a family product may put files by default. Anything else is a declared
 #       deviation scoped to the PATH (glob; `*` spans "/" and spaces), so excusing a kext's
@@ -273,6 +336,14 @@ while read -r kind file url; do
     */download/"$expected"/*|*/download/v"$expected"/*) : ;;
     *) fail enclosure-url "$file points outside this release: $url -- Sparkle would silently serve users a different build than the one just published, and every other check here still passes because both artifacts are individually fine" "$file" ;;
   esac
+done < "$facts"
+
+while read -r kind af _ enc _; do
+  [ "$kind" = appcast ] || continue
+  ep="$(awk -v f="$enc" '$1 == f { print $2; exit }' "$tmp/prod-of")"
+  [ -n "$ep" ] || continue
+  [ "$af" = "$ep.xml" ] \
+    || fail feed "$af describes $enc, which ships $ep; its feed is $ep.xml, the file $ep's updater polls" "$af"
 done < "$facts"
 
 # spec: SKILL.md "Release notes", "Three enforcement layers" -- this is the conformance layer: does

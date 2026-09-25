@@ -4,6 +4,7 @@
 #       fabricating real .pkg files; the extraction that produces those facts
 #       (scripts/artifact-facts.sh) is exercised for real in CI at package time.
 set -eu
+unset GITHUB_REPOSITORY
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/check-artifact-conformance.sh"
 
@@ -530,6 +531,16 @@ printf '%s\n' "$_ext_facts" | grep -qxF 'appcast appcast.xml 1.0.0-mavericks.1 p
 printf '%s\n' "$_ext_facts" | grep -qxF 'appcast go126.xml 1.0.0-mavericks.1 p.pkg 4096 10.9.5' \
   || { echo "FAIL: a feed is named <short name>.xml, and any *.xml asset must be read as one: $_ext_facts"; exit 1; }
 
+_rp="$(mktemp -d "${TMPDIR:-/tmp}/af-repository.XXXXXX")"
+mkdir -p "$_rp/dist"; printf 'a\n' > "$_rp/dist/some-asset.txt"
+_rp_set="$(GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$AF" "$_rp/dist" 1.0.0-mavericks.1 "$_rp")"
+_rp_unset="$(sh "$AF" "$_rp/dist" 1.0.0-mavericks.1 "$_rp")"
+rm -rf "$_rp"
+printf '%s\n' "$_rp_set" | grep -qx 'repository Mavergreen/golang-126' \
+  || { echo "FAIL: artifact-facts reports \$GITHUB_REPOSITORY, which conformance holds each product's repo to: $_rp_set"; exit 1; }
+printf '%s\n' "$_rp_unset" | grep -q '^repository ' \
+  && { echo "FAIL: with no \$GITHUB_REPOSITORY there is nothing to compare, so no repository fact: $_rp_unset"; exit 1; }
+
 # spec: RELEASE_NOTES.md -- END TO END, on the real failure rather than a fixture: the exact
 #       dist that regressed. An empty RELEASE_NOTES.md kills the producer before dist/*'s later
 #       entries (RELEASE_NOTES.md sorts first), so the appcast's unrelated description and its
@@ -686,7 +697,8 @@ asset p.pkg 10'
 LAYOUT='component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
-registered x dev.mavergreen.x
+registered x dev.mavergreen.x x
+derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml
 installs p.pkg usr/local/mavergreen/.base/1.0.9/mavergreen
 installs p.pkg usr/local/mavergreen/x/mavergreen.plist'
 
@@ -922,15 +934,108 @@ alone "manifest: an outside entry with an empty segment fails manifest" "manifes
 $LAYOUT
 manifest-outside p.pkg Applications//X.app"
 
+# spec: scripts/product-name.sh -- an updater's identity and feed are the registry's, carried by the
+#       derived record, and a line is its version and its repo.
+UPD="$LAYOUT
+manifest-line p.pkg none
+manifest-outside p.pkg Library/Application%20Support/Mavergreen/x-updater.app
+manifest-outside p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
+installs p.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist
+installs p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
+bundle p.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.x.updater
+sparkle p.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml
+launchd p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck
+manifest-appcast p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
+FEED='asset x.xml 700
+appcast x.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5'
+
+ok "updater: the registry's bundle id, app, label and feed pass" "$REL
+$FEED
+$UPD"
+alone "feed: every updater the dist installs has its <short>.xml in the dist" "feed" "$REL
+$UPD"
+alone "feed: a manifest whose pkg ships an updater names the registry's feed" "feed" "$REL
+$FEED
+$(printf '%s\n' "$UPD" | sed 's|^manifest-appcast p.pkg .*|manifest-appcast p.pkg none|')"
+ok "feed: a product with no updater has an empty appcast and needs no feed" "$REL
+$LAYOUT
+manifest-appcast p.pkg none"
+alone "feed: a product with no updater names no feed -- it would 404" "feed" "$REL
+$LAYOUT
+manifest-appcast p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
+alone "updater: a bundle id the registry did not derive" "updater" "$REL
+$FEED
+$(printf '%s\n' "$UPD" | sed 's/ dev\.mavergreen\.x\.updater$/ dev.mavergreen.XUpdater/')"
+alone "updater: an app the registry did not name" "updater" "$REL
+$FEED
+$(printf '%s\n' "$UPD" | sed '/^derived /!s|Mavergreen/x-updater\.app|Mavergreen/XUpdater.app|')"
+alone "updater: an update-check label the registry did not derive" "updater" "$REL
+$FEED
+$(printf '%s\n' "$UPD" | sed '/^derived /!s/dev\.mavergreen\.x-updatecheck/dev.mavergreen.x.updatecheck/g')"
+alone "feed: an updater polling a feed the registry did not derive" "feed" "$REL
+$FEED
+$(printf '%s\n' "$UPD" | sed '/^sparkle /s|download/x\.xml$|download/appcast.xml|')"
+alone "feed: a release with feeds but not this updater's" "feed" "$REL
+asset y.xml 700
+appcast y.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
+$UPD"
+no "feed: appcast.xml is not a feed any updater polls" "x.xml" "$REL
+asset appcast.xml 700
+appcast appcast.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
+$UPD"
+ok "feed: a declared feed deviation excuses the URL and the name" "$REL
+deviation feed porthole's releases were also consumed as an ingredient under a moving @vMAJOR tag, so /latest/ could name a release that is not the newest product release
+asset appcast.xml 700
+appcast appcast.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
+$(printf '%s\n' "$UPD" | sed '/^sparkle /s|/releases/latest/download/x\.xml$|/releases/download/feed-x/appcast.xml|')"
+
+GO='expected 1.26.8-mavericks.7
+pkg go.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.golang.go126
+asset go.pkg 10
+component go.pkg dev.mavergreen.base
+component go.pkg dev.mavergreen.golang.go126
+manifest go.pkg go126 dev.mavergreen.golang.go126 go126
+registered go126 dev.mavergreen.golang.go126 golang-126
+installs go.pkg usr/local/mavergreen/go126/mavergreen.plist'
+ok "line: go126 is Go 1.26, built in golang-126" "$GO
+manifest-line go.pkg 126"
+ok "line: the cross variant's line is the version plus -cross" "$GO
+manifest-line go.pkg 126-cross"
+alone "line: a line the version does not carry" "line" "$GO
+manifest-line go.pkg 127"
+alone "line: a lined product in a repo not named for its line" "line" "$(printf '%s\n' "$GO" | sed 's/ golang-126$/ golang/')
+manifest-line go.pkg 126"
+ok "line: one component can be the line (22.1.1 is clang 22)" 'expected 22.1.1-mavericks.5
+pkg c.pkg 22.1.1-mavericks.5 10.9.5 dev.mavergreen.clang.clang22
+asset c.pkg 10
+component c.pkg dev.mavergreen.base
+component c.pkg dev.mavergreen.clang.clang22
+manifest c.pkg clang22 dev.mavergreen.clang.clang22 clang22
+registered clang22 dev.mavergreen.clang.clang22 clang-22
+installs c.pkg usr/local/mavergreen/clang22/mavergreen.plist
+manifest-line c.pkg 22'
+ok "line: a variant-only line carries no version, so the product is not lined" "$REL
+$LAYOUT
+manifest-line p.pkg cross"
+ok "repository: built in the repo the registry names" "$GO
+manifest-line go.pkg 126
+repository Mavergreen/golang-126"
+alone "repository: built in any other repo" "repository" "$GO
+manifest-line go.pkg 126
+repository Mavergreen/golang"
+ok "repository: the owner is not compared -- a fork runs the same check" "$GO
+manifest-line go.pkg 126
+repository someone/golang-126"
+
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
 #       top-level bundle, a symlink, and a path with a space are each a way to report the wrong thing.
 if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&1 && [ -x /usr/libexec/PlistBuddy ]; then
   _pk="$(mktemp -d "${TMPDIR:-/tmp}/conformance-pkg.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-  _st="$_pk/stage"; _ap="$_st/Library/Application Support/Mavergreen/XUpdater.app/Contents"
+  _st="$_pk/stage"; _ap="$_st/Library/Application Support/Mavergreen/x-updater.app/Contents"
   mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/usr/local/mavergreen/x/bin" "$_pk/dist" "$_pk/comp" "$_pk/archive"
   _plist() { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>%s</key><string>%s</string></dict></plist>\n' "$1" "$2" > "$3"; }
-  _plist CFBundleIdentifier dev.mavergreen.XUpdater "$_ap/Info.plist"
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.x.updater</string><key>SUFeedURL</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string></dict></plist>\n' > "$_ap/Info.plist"
   _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
   _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
   echo x > "$_st/usr/local/mavergreen/x/bin/x"; ln -s bin/x "$_st/usr/local/mavergreen/x/link"
@@ -940,11 +1045,12 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
   ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
   # platform: guarded macOS-only call -- the enclosing `if command -v pkgbuild` skips this block without it
   /usr/libexec/PlistBuddy -c "Add :product string x" -c "Add :identifier string dev.mavergreen.x" \
-    -c "Add :outside array" -c "Add :outside:0 string Library/Application Support/Mavergreen/XUpdater.app" \
+    -c "Add :outside array" -c "Add :outside:0 string Library/Application Support/Mavergreen/x-updater.app" \
     -c "Add :outside:1 string Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist" \
     -c "Add :generated array" -c "Add :generated:0 string Applications/Linux X.app" \
+    -c "Add :appcast string https://github.com/Mavergreen/x/releases/latest/download/x.xml" \
     "$_st/usr/local/mavergreen/x/mavergreen.plist" >/dev/null
-  printf 'x dev.mavergreen.x\n' > "$_pk/product-names"
+  printf 'x dev.mavergreen.x x\n' > "$_pk/product-names"
   # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
   pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
     "$_pk/dist/x-1.0.0-mavericks.1.pkg"
@@ -959,20 +1065,37 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
     --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavericks.1.pkg" >/dev/null 2>&1 \
     || { echo "FAIL: set_install_floor.sh could not build the archive this fixture reads"; exit 1; }
   _f="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
+  printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"
+  _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavericks.1.pkg" | tr -d ' ')"
+  sh "$GA" X 1.0.0-mavericks.1 https://github.com/Mavergreen/x/releases/download/1.0.0-mavericks.1/x-1.0.0-mavericks.1.pkg \
+    10.9.5 "$_pk/archive/RELEASE_NOTES.md" "sparkle:edSignature=\"x\" length=\"$_alen\"" > "$_pk/archive/x.xml"
   _fa="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/archive" 1.0.0-mavericks.1 "$_pk")"
+  mkdir -p "$_pk/rehearsal"; cp "$_pk/archive/x-1.0.0-mavericks.1.pkg" "$_pk/rehearsal/"
+  MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null \
+    || { echo "FAIL: stand-in-feeds.sh must stage a feed for a build that signs nothing"; exit 1; }
+  [ -f "$_pk/rehearsal/x.xml" ] && [ -s "$_pk/rehearsal/RELEASE_NOTES.md" ] \
+    || { echo "FAIL: stand-in-feeds.sh writes x.xml for x's updater, and stand-in notes for its description"; exit 1; }
+  _sum="$(cksum < "$_pk/rehearsal/x.xml")"
+  MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null
+  [ "$(cksum < "$_pk/rehearsal/x.xml")" = "$_sum" ] || { echo "FAIL: stand-in-feeds.sh never overwrites a feed"; exit 1; }
+  _fr="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/rehearsal" 1.0.0-mavericks.1 "$_pk")"
   rm -rf "$_pk"
   for want in \
-    'installs x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/XUpdater.app/Contents/Info.plist' \
+    'installs x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist' \
     'installs x-1.0.0-mavericks.1.pkg usr/local/mavergreen/x/link' \
     'installs y-1.0.0-mavericks.1.pkg usr/local/y/bin/x' \
-    'bundle x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/XUpdater.app dev.mavergreen.XUpdater' \
+    'bundle x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.x.updater' \
     'launchd x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck' \
     'manifest x-1.0.0-mavericks.1.pkg x dev.mavergreen.x x' \
     'component x-1.0.0-mavericks.1.pkg dev.mavergreen.x' \
-    'registered x dev.mavergreen.x' \
-    'manifest-outside x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/XUpdater.app' \
+    'registered x dev.mavergreen.x x' \
+    'manifest-outside x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app' \
     'manifest-outside x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist' \
-    'manifest-generated x-1.0.0-mavericks.1.pkg Applications/Linux%20X.app'
+    'manifest-generated x-1.0.0-mavericks.1.pkg Applications/Linux%20X.app' \
+    'sparkle x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
+    'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
+    'manifest-line x-1.0.0-mavericks.1.pkg none' \
+    'manifest-appcast x-1.0.0-mavericks.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml'
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
@@ -999,6 +1122,8 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
     || { echo "FAIL: an archive's components are reported in Distribution order, base first: $_fa"; exit 1; }
   _ca="$(printf '%s\n' "$_fa" | sh "$S" 2>&1)" \
     || { echo "FAIL: an archive set_install_floor.sh built from a laid-out stage must pass conformance: $_ca"; exit 1; }
+  _cr="$(printf '%s\n' "$_fr" | sh "$S" 2>&1)" \
+    || { echo "FAIL: a build that signs nothing passes conformance once stand-in-feeds.sh has staged its feed: $_cr"; exit 1; }
 else
   echo "artifact-conformance: no pkgbuild/productbuild/PlistBuddy here -- the real-pkg payload fixture is skipped" >&2
 fi
