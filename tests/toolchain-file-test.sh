@@ -17,9 +17,7 @@ real="${SHIPYARD_CMAKE:-$(command -v shipyard-cmake 2>/dev/null || true)}"
 [ -n "$real" ] || { echo "SKIP: no shipyard-cmake (install the shipyard pkg, or set SHIPYARD_CMAKE)"; exit 77; }
 # platform: MavericksMode.cmake calls a host "native" when sw_vers reports 10.9.x (Darwin 13); the
 #           cross-mode-only backstop in Mavericks.cmake cannot fire there, so this test detects the
-#           same way and skips exactly the cases that assert on it. sw_vers is absent off Darwin, and
-#           this test only runs where shipyard-cmake was found above (a macOS host), so the case falls
-#           through to "not native" there rather than misdetecting.
+#           same way and skips exactly the cases that assert on it.
 native=0
 case "$(sw_vers -productVersion 2>/dev/null)" in
   10.9.*) native=1 ;;

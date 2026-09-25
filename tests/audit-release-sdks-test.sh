@@ -12,8 +12,7 @@ _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/audit-sdks-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 # platform: xcrun vtool arrived with Xcode 11; a 10.9 box (Xcode 6-era Command Line Tools) has none,
 #           and building the fixtures below needs it to stamp an arbitrary recorded SDK version onto
-#           a Mach-O binary. The audit itself (audit-release-sdks.sh) is still exercised on that box
-#           through its --dist mode elsewhere; only this test's fixture-building needs vtool.
+#           a Mach-O binary (the bad fixture must record an SDK that is not the pin).
 xcrun --find vtool >/dev/null 2>&1 || { echo "SKIP: no vtool (pre-Xcode 11) to stamp the fixtures' recorded SDK"; exit 77; }
 printf 'int main(void){return 0;}\n' > "$w/h.c"
 mkdir -p "$w/good/dist" "$w/bad/dist" "$w/repo" "$w/unreadable/dist"
