@@ -389,7 +389,7 @@ printf '#!/bin/sh\ntouch "%s/ran"\nexit 0\n' "$w/outside-hook" > "$w/outside-hoo
 chmod +x "$w/outside-hook/real"
 ln -s "$w/outside-hook/real" "$T/hooklink/libexec/mavergreen/pre-uninstall"
 rc=0; PATH="$stub:$PATH" mg uninstall hooklink 2>"$w/err" || rc=$?
-[ "$rc" -ne 0 ] || fail "a symlinked pre-uninstall hook must be refused, even if its target is a real, in-root file"
+[ "$rc" -ne 0 ] || fail "a symlinked pre-uninstall hook must be refused, whatever it points at"
 grep -qF "$T/hooklink/libexec/mavergreen/pre-uninstall" "$w/err" \
   || fail "the refusal must name the symlinked hook's path: $(cat "$w/err")"
 [ ! -e "$w/outside-hook/ran" ] || fail "a refused symlinked pre-uninstall hook's target must never run"
