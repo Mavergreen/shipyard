@@ -1,18 +1,23 @@
-# spec: tests/product-names-test.sh -- one line per product: <short name> <pkg identifier>.
-#       Adding a product means adding its line here.
-shipyard dev.mavergreen.mavericks-shipyard
-go126 dev.mavergreen.golang.go126
-go126-cross dev.mavergreen.golang.go126-cross
-clang22 dev.mavergreen.clang.clang22
-clang22-cross dev.mavergreen.clang.clang22-cross
-openssh dev.mavergreen.openssh
-tailscale dev.mavergreen.tailscale
-ed25519 dev.mavergreen.ed25519
-porthole dev.mavergreen.porthole
-1password dev.mavergreen.1password
-signal-desktop dev.mavergreen.signal-desktop
-container-tools dev.mavergreen.container-tools
-swift-runtime dev.mavergreen.swift-runtime
-trackpad2 dev.mavergreen.voodooinputmavericks
-legacysupport dev.mavergreen.macports-legacy-support
-node24 dev.mavergreen.nodejs.node24
+# spec: tests/product-names-test.sh -- one line per product: <short name> <pkg identifier> <repo>.
+#       Adding a product means adding its line here. A repo may ship several products.
+shipyard dev.mavergreen.mavericks-shipyard shipyard
+go126 dev.mavergreen.golang.go126 golang-126
+go126-cross dev.mavergreen.golang.go126-cross golang-126
+go127 dev.mavergreen.golang.go127 golang-127
+go127-cross dev.mavergreen.golang.go127-cross golang-127
+clang22 dev.mavergreen.clang.clang22 clang-22
+clang22-cross dev.mavergreen.clang.clang22-cross clang-22
+openssh dev.mavergreen.openssh openssh
+tailscale dev.mavergreen.tailscale tailscale
+ed25519 dev.mavergreen.ed25519 ed25519
+porthole dev.mavergreen.porthole porthole
+1password dev.mavergreen.1password 1password
+signal-desktop dev.mavergreen.signal-desktop signal-desktop
+container-tools dev.mavergreen.container-tools container-tools
+swift-runtime dev.mavergreen.swift-runtime swift-runtime
+trackpad2 dev.mavergreen.voodooinputmavericks magic-trackpad2
+legacysupport dev.mavergreen.macports-legacy-support macports-legacy-support
+node24 dev.mavergreen.nodejs.node24 nodejs-24
+rust dev.mavergreen.rust.rust rust
+rust-cross dev.mavergreen.rust.rust-cross rust
+ca-certs dev.mavergreen.ca-certs ca-certs
