@@ -2072,6 +2072,9 @@ in the same commit.
     everything under `usr/local/mavergreen/<short name>/`; get the install scripts and manifest from
     `stage_product.sh` (product-specific steps as hooks); wrap with `set_install_floor.sh`, which
     adds `dev.mavergreen.base`. See "Install layout and identity".
+13. Configure through the shipyard presets or `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`,
+    never an SDK by hand; a build that calls the compiler itself passes
+    `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`. See "SDK pinning".
 
 ## Consolidation backlog
 

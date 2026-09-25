@@ -29,6 +29,28 @@ set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-s
 add_compile_options(-Wall -Wno-deprecated-declarations)
 
 include(MavericksMode)          # -> MAVERICKS_MODE, guard vs the preset's expected mode
+
+# SKILL.md "SDK pinning": a cross build links the PINNED SDK for its arch, never the runner's. The
+# toolchain file (via the shipyard presets) sets it before project(); anything else is refused here, the
+# earliest point shipyard runs, rather than discovered at package time.
+if(MAVERICKS_MODE STREQUAL "cross")
+  list(LENGTH CMAKE_OSX_ARCHITECTURES _mav_na)
+  if(_mav_na EQUAL 1)
+    execute_process(COMMAND sh "${MAVERICKS_SHARED_DIR}/scripts/fetch_sdk.sh" --arch "${CMAKE_OSX_ARCHITECTURES}"
+                    OUTPUT_VARIABLE _mav_pin OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _mav_prc)
+    get_filename_component(_mav_have "${CMAKE_OSX_SYSROOT}" REALPATH)
+    get_filename_component(_mav_want "${_mav_pin}" REALPATH)
+    if(NOT _mav_prc EQUAL 0 OR NOT _mav_have STREQUAL _mav_want)
+      message(FATAL_ERROR
+        "CMAKE_OSX_SYSROOT '${CMAKE_OSX_SYSROOT}' is not the pinned SDK for ${CMAKE_OSX_ARCHITECTURES} ('${_mav_pin}').\n"
+        "Configure through a shipyard preset (mavericks-cross), or pass "
+        "-DCMAKE_TOOLCHAIN_FILE=${MAVERICKS_SHARED_DIR}/MavericksToolchain.cmake. See SKILL.md \"SDK pinning\".")
+    endif()
+  else()
+    message(FATAL_ERROR "include(Mavericks): one arch per cross configure (got '${CMAKE_OSX_ARCHITECTURES}'); build each and merge")
+  endif()
+endif()
+
 include(RequireAppleClang)      # reject gcc / Homebrew / pkgsrc clang
 include(MavericksFetch)         # mavericks_fetch_sdk()
 include(MavericksCompatGuard)   # mavericks_assert_binary_compatible()

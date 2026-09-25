@@ -18,6 +18,8 @@ if [ "$(grep -c '${sourceDirName}' "$P" || true)" -ne 2 ]; then
 fi
 grep -q '"MAVERICKS_BUILD_ROOT": "\$penv{TMPDIR}/mm-build"' "$P" \
   || say "MAVERICKS_BUILD_ROOT is not defaulted to TMPDIR"
+[ "$(grep -c '"toolchainFile": "${fileDir}/MavericksToolchain.cmake"' "$P" || true)" -eq 2 ] \
+  || say "both hidden presets must use \${fileDir}/MavericksToolchain.cmake, so a consumer's preset pins the SDK by inheriting"
 
 command -v cmake >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
 
@@ -25,10 +27,16 @@ command -v cmake >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
 #       a consumer's preset supplies neither binaryDir nor MAVERICKS_BUILD_ROOT,
 #       it only inherits; this fixture must match that shape or the test
 #       proves nothing about real consumers.
+# spec: mavericks-presets.json's "toolchainFile" is "${fileDir}/MavericksToolchain.cmake" -- ${fileDir}
+#       is the directory of the preset FILE that sets it (the fixture's own copy of
+#       mavericks-presets.json), so the fixture needs its own copy of the toolchain file and the
+#       scripts/ it shells out to, next to it -- exactly how an installed share dir holds them.
 fixture() {  # $1 = directory to populate as a CMake source root
   mkdir -p "$1"
   printf 'cmake_minimum_required(VERSION 3.25)\nproject(t C)\n' > "$1/CMakeLists.txt"
   cp "$P" "$1/mavericks-presets.json"
+  cp "$root/MavericksToolchain.cmake" "$1/MavericksToolchain.cmake"
+  cp -r "$root/scripts" "$1/scripts"
   cat > "$1/CMakePresets.json" <<'JSON'
 { "version": 6,
   "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
@@ -50,7 +58,16 @@ b1="$(basename "$work1")"; b2="$(basename "$work2")"
 bd1="${TMPDIR:-/tmp}/mm-build/${b1}-native"
 bd2="${TMPDIR:-/tmp}/mm-build/${b2}-native"
 bd1cross="${TMPDIR:-/tmp}/mm-build/${b1}-cross"
-trap 'rm -rf "$work1" "$work2" "$bd1" "$bd2" "$bd1cross"' EXIT INT TERM
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- both
+#       presets' toolchainFile now runs on every configure below and fetches the pinned SDK;
+#       pre-seed a fake cached SDK and point fetch_sdk.sh at it, so this test stays offline (both
+#       presets pin CMAKE_OSX_ARCHITECTURES x86_64, so only that SDK is needed).
+work3="$(mktemp -d "${TMPDIR:-/tmp}/presets-sdkcache.XXXXXX")"
+mkdir -p "$work3/MacOSX10.9.sdk/usr/lib"
+MAVERICKS_SDK_CACHE="$work3"; export MAVERICKS_SDK_CACHE
+
+trap 'rm -rf "$work1" "$work2" "$work3" "$bd1" "$bd2" "$bd1cross"' EXIT INT TERM
 
 fixture "$work1"
 fixture "$work2"

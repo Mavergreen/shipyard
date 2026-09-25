@@ -8,6 +8,7 @@
       "displayName": "native -- build on OS X 10.9",
       "environment": { "MAVERICKS_BUILD_ROOT": "$penv{TMPDIR}/mm-build" },
       "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-native",
+      "toolchainFile": "${fileDir}/MavericksToolchain.cmake",
       "cacheVariables": {
         "MAVERICKS_EXPECTED_MODE": "native",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "10.9",
@@ -20,6 +21,7 @@
       "displayName": "cross -- build for 10.9 on a modern host",
       "environment": { "MAVERICKS_BUILD_ROOT": "$penv{TMPDIR}/mm-build" },
       "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-cross",
+      "toolchainFile": "${fileDir}/MavericksToolchain.cmake",
       "cacheVariables": {
         "MAVERICKS_EXPECTED_MODE": "cross",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "10.9",

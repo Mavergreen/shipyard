@@ -74,6 +74,7 @@ install(FILES
   MavericksMode.cmake
   RequireAppleClang.cmake
   MavericksFetch.cmake
+  MavericksToolchain.cmake
   MavericksCompatGuard.cmake
   MavericksSparkle.cmake
   MavericksVersion.cmake
