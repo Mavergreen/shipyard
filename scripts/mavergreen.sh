@@ -337,8 +337,30 @@ $_rl_entries
 EOF
   return "$_rl_rc"
 }
+run_pre_uninstall_hook() {
+  _puh="$MG/$1/libexec/mavergreen/pre-uninstall"
+  _puh_pi=0; parent_in_root "$_puh" || _puh_pi=$?
+  case "$_puh_pi" in
+    2) return 0 ;;
+    0) ;;
+    *) die "refusing to run $1's pre-uninstall hook -- its parent directory resolves outside $ROOT" ;;
+  esac
+  [ -e "$_puh" ] || [ -L "$_puh" ] || return 0
+  [ -x "$_puh" ] \
+    || die "$1's pre-uninstall hook exists but is not executable; uninstall stopped, nothing removed"
+  _puh_rc=0
+  MAVERGREEN_ROOT="$ROOT" MAVERGREEN_PRODUCT="$1" "$_puh" || _puh_rc=$?
+  [ "$_puh_rc" -eq 0 ] || {
+    if [ "$_puh_rc" -gt 128 ]; then
+      die "$1's pre-uninstall hook was cancelled (status $_puh_rc); uninstall stopped, nothing removed" "$_puh_rc"
+    else
+      die "$1's pre-uninstall hook failed (status $_puh_rc); uninstall stopped, nothing removed" "$_puh_rc"
+    fi
+  }
+}
 do_uninstall() {
   need_product "$1"
+  run_pre_uninstall_hook "$1"
   if [ -f "$MG/var/system-replace/$1/.replaced" ]; then
     do_system_restore "$1" \
       || die "system-restore failed for $1; uninstall stopped before removing anything else -- fix it, then retry"

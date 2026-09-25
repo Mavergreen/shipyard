@@ -1513,6 +1513,17 @@ Everything in a product's `bin/`, `sbin/` and `share/man/man*/` is exported by d
 <path in the tree>` keeps one out (shipyard excludes `bin/cmake`, `bin/ctest` and `bin/cpack`, so
 only its `shipyard-*` names reach the farm).
 
+**A product's pre-uninstall hook** is a fixed path in its tree,
+`<product>/libexec/mavergreen/pre-uninstall` — no manifest key. `mavergreen uninstall <product>`
+runs it, by its own shebang, before system-restore, unlink or any removal, with `MAVERGREEN_ROOT`
+set to the helper's root (`/` by default) and `MAVERGREEN_PRODUCT` set to the product; stdin,
+stdout and stderr are inherited, so it may prompt. Exit 0 lets the uninstall proceed; anything else
+stops it before anything is removed, naming the hook and its exit status (above 128, reported as
+cancelled). The hook decides what applies to that root — the helper never skips it for a non-`/`
+root — so work that only makes sense on the running system starts
+`[ "${MAVERGREEN_ROOT:-/}" = / ] || exit 0`. Like any tracked script it is host-declared on line 2,
+and it exits 0 when it has nothing to do.
+
 ### Short names: the registry
 
 **Every product has a short name, registered once, family-wide, in shipyard's
@@ -1603,9 +1614,13 @@ pass Installer's target volume rather than assuming `/`; with any other root it 
 | `system-replace <product>` / `system-restore <product>` | below |
 | `version` | the helper's version |
 
-**`uninstall`** runs `system-restore` first if the product has replaced system files, and **stops
-there if that fails**, removing nothing: the manifest survives, so a retry can finish the restore.
-Then it unlinks; removes each `outside` and `generated` entry (a `generated` entry that does not exist is not an error) — a file or link, or a whole bundle directory (`.app`,
+**`uninstall`** runs the tree's `libexec/mavergreen/pre-uninstall` hook first, if there is one, by its
+own shebang, with `MAVERGREEN_ROOT`/`MAVERGREEN_PRODUCT` set and stdin/stdout/stderr inherited; a
+hook that exists but is not executable, that exits non-zero, or whose parent path resolves outside
+the target volume stops uninstall before anything is removed, naming the hook and its exit status (a
+status above 128 is reported as cancelled, not failed). Then it runs `system-restore` if the product
+has replaced system files, and **stops there if that fails**, removing nothing: the manifest
+survives, so a retry can finish the restore. Then it unlinks; removes each `outside` and `generated` entry (a `generated` entry that does not exist is not an error) — a file or link, or a whole bundle directory (`.app`,
 `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`), unloading a launchd job first when the
 root is `/`; never a
 plain directory, and never an entry that is empty, absolute, ends in `/`, has an empty, `.` or `..` segment or lies under
