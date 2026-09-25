@@ -3,7 +3,9 @@
 #   usage: release-assets.sh <dir> [notes-name]
 #          Prints the release assets in a downloaded artifact directory, one per line: everything
 #          except the notes file and any pre-existing SHA256SUMS (the publish workflow regenerates
-#          that).
+#          that). Refuses, exit 1, a missing directory, a missing or empty notes file, notes carrying
+#          stand-in-feeds.sh's stand-in heading, an asset named appcast*.xml (a retired feed name), an
+#          asset carrying stand-in-feeds.sh's unsigned signature, and a directory with no assets.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Publishing a
 #       release" -- an empty Release body is not a degraded release, it is the defect this refuses to
 #       publish: tailscale shipped one on every release, swift-runtime set no body at all.

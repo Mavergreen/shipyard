@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-ID="dev.mavergreen.mavericks-shipyard"
+registry_need package-pkg identifier shipyard; ID="$REG_V"
 PREFIX_DIR="/usr/local/mavergreen/shipyard"
 registry_need package-pkg updater-app shipyard; APP_REL="$REG_V"
 APP_NAME="${APP_REL##*/}"

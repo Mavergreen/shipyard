@@ -7,9 +7,9 @@
 #          updater app's own Info.plist inside the payload, not from the repo that built it: products
 #          configure the key differently (updater/ed25519_key.pub, updater/updater/ed25519_key.pub,
 #          ED_PUBKEY inline in CMake), and the pkg is what users actually install. Several updaters
-#          (shipyard's own pkg carries one per arch slice) are fine when they agree; when they
-#          disagree, which one a client runs is not ours to guess, so this fails -- so does a pkg
-#          with no updater at all. Exit 0 with an answer, 1 without one, 2 on usage.
+#          are fine when they agree; when they disagree, which one a client runs is not ours to
+#          guess, so this fails -- so does a pkg with no updater at all.
+#          Exit 0 with an answer, 1 without one, 2 on usage.
 # platform: uses `pkgutil --expand` (10.9's pkgutil has no --expand-full) on the gzip'd cpio Payload
 #           that pkgbuild writes on both 10.9 and CI, so this runs unchanged on either.
 # spec: tests/updater_pubkey.bats

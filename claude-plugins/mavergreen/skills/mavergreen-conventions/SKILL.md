@@ -1233,8 +1233,8 @@ signal (see the auto-merge intent above — fix runtime regressions in `-maveric
   circularity — assert with `otool -L`). EdDSA-signed; private key is the `SPARKLE_PRIVATE_KEY` secret.
 - **An updater's identity is derived, never chosen.** From the product's registry line (`<short>
   <pkg identifier> <repo>`), `product-name.sh` derives the bundle id `<pkg identifier>.updater`, the app
-  `/Library/Application Support/Mavergreen/<short>-updater.app`, the update-check LaunchAgent
-  `<pkg identifier>-updatecheck` (plist `<label>.plist`), and the feed
+  `Library/Application Support/Mavergreen/<short>-updater.app` (installed under `/`), the
+  update-check LaunchAgent `<pkg identifier>-updatecheck` (plist `<label>.plist`), and the feed
   `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`.
   `mavericks_add_updater_app(PRODUCT <short> …)` builds the app with that bundle id and feed and refuses
   `NAME`, `BUNDLE_ID` and `FEED_URL`. Its CMake target and the app it builds are both `<short>-updater`,
@@ -1290,10 +1290,11 @@ signal (see the auto-merge intent above — fix runtime regressions in `-maveric
     fails the check, because every installed updater would reject that release. Only a deliberate
     decision to strand installed clients passes `--allow-key-change`, and the workflow must say why.
 - **A menu/systray "Check for Updates" MUST launch the updater via LaunchServices, not fork+exec.** Run
-  `/usr/bin/open "<…>/ProductUpdater.app" --args --user`, NOT `NSTask`/`exec.Command` on the executable
-  inside `Contents/MacOS`. Sparkle's package install runs its privileged helper via
-  `AuthorizationExecuteWithPrivileges`, which needs a LaunchServices session; a fork+exec'd host has none,
-  so the install dies with `SUSparkleErrorDomain 4005` / `errAuthorizationInternal (-60008)` (or hangs).
+  `/usr/bin/open "/Library/Application Support/Mavergreen/<short>-updater.app" --args --user`, NOT
+  `NSTask`/`exec.Command` on the executable inside `Contents/MacOS`. Sparkle's package install runs its
+  privileged helper via `AuthorizationExecuteWithPrivileges`, which needs a LaunchServices session; a
+  fork+exec'd host has none, so the install dies with `SUSparkleErrorDomain 4005` /
+  `errAuthorizationInternal (-60008)` (or hangs).
   The updater's `Info.plist` (a normal app, not `LSUIElement`) exists to satisfy this — the caller must too.
   `--user` = interactive check; the daily LaunchAgent uses `--background` and is unaffected (it never
   runs a privileged install).
@@ -1449,12 +1450,12 @@ Scoping is the point: swift-toolchain republishing swift.org's `.pkg` must not l
 build-support tarball it *does* build to drift. An unscoped deviation quietly covers artifacts nobody
 meant to excuse.
 
-**The same block, and the same parser (`deviations.sh`), covers five of the family-conventions checks**
-— name the check and scope it to the file: `registry-read:<path>`, `msc-template:<path>`,
-`shipyard-cmake-only:<path>`; and, for the whole repo, `artifact-conformance` (check 21) and
-`product-layout` (check 23). One grammar, read identically by the artifact checker and the gate, so a
-declared exception cannot mean two things. An entry with no reason **fails**, in both: an exception
-without one is indistinguishable from drift.
+**The same block, and the same parser (`deviations.sh`), covers six of the family-conventions checks,
+under five names** — name the check and scope it to the file: `registry-read:<path>` (check 16),
+`msc-template:<path>` (check 17), `shipyard-cmake-only:<path>` (check 18); and, for the whole repo,
+`artifact-conformance` (check 21) and `product-layout` (checks 23 and 24). One grammar, read
+identically by the artifact checker and the gate, so a declared exception cannot mean two things.
+An entry with no reason **fails**, in both: an exception without one is indistinguishable from drift.
 
 **A truncated fact stream fails.** The two scripts run as a pipeline
 (`artifact-facts.sh dist "$v" | check-artifact-conformance.sh`); a pipeline's exit status is its LAST
@@ -1520,17 +1521,17 @@ directory and is what people type (`mavergreen select go go126`), and the regist
 uniqueness can be checked: `product-name.sh check` refuses a duplicate name, a duplicate identifier,
 a name outside `[a-z0-9-]` (it becomes a path in a preinstall's `rm -rf`), a name the layout reserves
 (`var`, `bin`, `sbin`, `share`, `mavergreen`, `system-replace`, `base`), an identifier outside
-`dev.mavergreen.*`, and `dev.mavergreen.base`, which is the helper's component. Many short names may
+`dev.mavergreen.*`, and `dev.mavergreen.base`, which is the helper's component. The helper refuses the
+reserved names too, so a hand-made manifest cannot reach them. Many short names may
 share a repo (`golang-126` ships `go126` and `go126-cross`). `check` also refuses a row without a
 repo, and, in a line repo (`<product>-<digits>`), an identifier other than
 `dev.mavergreen.<product>.<short name>`. Every lookup — `identifier`, `repo`, `updater-bundle-id`,
 `agent-label`, `updater-app`, `feed`, and `shorts <repo>` — refuses a reserved or malformed name even
 where a hand-edited registry lists it. **A registered tree path can be a contract.** `ca-certs` is
 registered ahead of its repo, and its tree path
-`/usr/local/mavergreen/ca-certs/etc/openssl/certs/ca-certificates.crt` is reserved: when ca-certs
-ships, it must install its bundle exactly there, and the golang lines then adopt it as the first place
-they search. No golang line searches it yet. The helper refuses
-the reserved names too, so a hand-made manifest cannot reach them.
+`/usr/local/mavergreen/ca-certs/etc/openssl/certs/ca-certificates.crt` is a contract, which nothing
+in code enforces: when ca-certs ships, it must install its bundle exactly there, and the golang lines
+then adopt it as the first place they search. No golang line searches it yet.
 **Adding a product means adding its line there and pushing shipyard**:
 `render-manifest.sh` reads the registry beside it and refuses an unregistered name, so the product
 cannot package until it builds with a shipyard release that carries its line. A variant packaged separately is a product of its own (`go126-cross`).
@@ -1703,7 +1704,7 @@ is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
 | `manifest` | a pkg that installs anything besides the base's staged helper carries exactly one manifest; its `product` is its directory; its `identifier` is the one the registry gives that product, and one of the pkg's components; its `outside` names everything installed outside the tree, exactly as uninstall would remove it (the entry itself, or a bundle directory and what is inside it), with no entry left unused and none in a shape the helper refuses; every `generated` entry has a shape the helper accepts, and need not be in the payload | the pkg filename |
 | `base` | a pkg carrying a manifest lists `dev.mavergreen.base` as its first component | the pkg filename |
 | `updater` | a Sparkle updater (a top-level bundle with `SUFeedURL`) is `Library/Application Support/Mavergreen/<short>-updater.app` with bundle id `<pkg identifier>.updater`; a pkg with an updater installs the LaunchAgent `<pkg identifier>-updatecheck`; every launchd Label containing `updatecheck` is that one | the pkg filename |
-| `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
+| `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
 | `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | with `$GITHUB_REPOSITORY` set, every product a release ships is registered to that repo (by name; the owner is not compared) | the pkg filename |
 

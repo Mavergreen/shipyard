@@ -56,15 +56,11 @@ two subsystems share one namespace under one header.
 
 ## Conformance deviations
 
-`check-artifact-conformance.sh` holds each release's artifacts to the family's schemes. Two of them
-assume a version of the form `<upstream>-mavericks.N` that is also the tag. shipyard's is neither, on
-purpose. Machine-read by `artifact-facts.sh` as `- <check>[:<glob>]: <reason>` (the reason is the rest
-of that one line):
+`check-artifact-conformance.sh` holds each release's artifacts to the family's schemes. One of them,
+`scheme`, assumes a version of the form `<upstream>-mavericks.N`; shipyard's is not, on purpose.
+Machine-read by `artifact-facts.sh` as `- <check>[:<glob>]: <reason>` (the reason is the rest of that
+one line):
 
 - scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
-- enclosure-url:shipyard.xml: the release tag is v<version> (fifteen repos pin @v1 or @vX.Y.Z, so the v is load-bearing) while the pkg and appcast carry the bare version, so the feed's /download/v<version>/ URL reads to this check as another release.
-  The check assumes tag == version, which holds everywhere else in the family. Scoped to the one feed:
-  release.yml builds that URL from the same version it tags, and the appcast's shortVersionString, length
-  and enclosure name are still checked against this release.
