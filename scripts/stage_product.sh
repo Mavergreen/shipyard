@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- render-manifest.sh writes the manifest with PlistBuddy and plutil
 #   usage: stage_product.sh --stage ROOT --product P --name N --version V --scripts-out DIR
 #            [--group G] [--line L] [--appcast URL] [--exclude REL]... [--replaces ABS=REL]...
 #            [--updater-app APP --app-dir DIR --agent-label LABEL]

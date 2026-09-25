@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- pkgbuild builds the component
 #   usage: package-system-replace.sh --product P --title T --version V --out PKG [--base-version V]
 #          package-system-replace.sh --emit-postinstall FILE --product P
 #          The optional second pkg of a product whose manifest declares `replaces`: installing it

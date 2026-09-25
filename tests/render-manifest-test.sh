@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- PlistBuddy reads back the rendered manifest
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/render-manifest.sh"

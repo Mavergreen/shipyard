@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- pkgbuild, productbuild and pkgutil build and read the archive
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 command -v productbuild >/dev/null 2>&1 || { echo "no productbuild -- skipping"; exit 77; }

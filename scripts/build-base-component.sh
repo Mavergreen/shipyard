@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- build_component_pkg.sh builds the component with pkgbuild
 #   usage: build-base-component.sh [--version V] --out COMP.pkg
 #          build-base-component.sh --emit-postinstall FILE --version V
 #          Builds dev.mavergreen.base: the mavergreen helper and the paths.d/manpaths.d entries,

@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- PlistBuddy reads each manifest, and uninstall runs launchctl and pkgutil
 #   usage: mavergreen [--root VOLUME] <command> [args]
 #            link <product>               export a product's commands and manpages
 #            unlink <product>             remove them (never changes a selection)

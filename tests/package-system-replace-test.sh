@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/package-system-replace.sh"
@@ -60,6 +61,7 @@ sh "$S" --emit-postinstall "$w/inject4" --product 'ab cd' 2>/dev/null || rc=$?
 if command -v productbuild >/dev/null 2>&1; then
   sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavericks.5 --out "$w/r.pkg" --base-version 1.0.9 >/dev/null 2>&1 \
     || fail "the pkg must build"
+  # platform: guarded macOS-only call -- the enclosing `if command -v productbuild` skips this block without it
   pkgutil --expand "$w/r.pkg" "$w/x"
   grep -q 'id="dev.mavergreen.openssh.system-replace"' "$w/x/Distribution" || fail "the component is <identifier>.system-replace"
   grep -q 'dev.mavergreen.base' "$w/x/Distribution" || fail "it carries the base like every product archive"

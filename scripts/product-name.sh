@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 # usage: product-name.sh identifier <short-name>
 #        product-name.sh check
 #        Reads the family's short-name registry (scripts/product-names, or $MAVERGREEN_PRODUCT_NAMES).

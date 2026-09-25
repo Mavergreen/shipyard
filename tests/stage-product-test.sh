@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- PlistBuddy reads the manifest stage_product.sh renders
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/stage_product.sh"

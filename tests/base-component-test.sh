@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: host-agnostic
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/build-base-component.sh"
@@ -34,6 +35,7 @@ out="$(sh "$w/post-1.0.9" 2>&1)" && fail "no target volume must fail rather than
 sh "$S" --out "$w/x.pkg" --version 'v1.0' 2>/dev/null && fail "a non-numeric version must be refused -- the compare is numeric"
 if command -v pkgbuild >/dev/null 2>&1; then
   sh "$S" --version 1.0.9 --out "$w/base.pkg" >/dev/null 2>&1 || fail "the component must build"
+  # platform: guarded macOS-only call -- the enclosing `if command -v pkgbuild` skips this block without it
   pkgutil --expand "$w/base.pkg" "$w/x"
   grep -q 'identifier="dev.mavergreen.base"' "$w/x/PackageInfo" || fail "the component is dev.mavergreen.base"
   (cd "$w/x" && gzip -dc Payload | cpio -it 2>/dev/null) | grep -qx './usr/local/mavergreen/.base/1.0.9/mavergreen' \

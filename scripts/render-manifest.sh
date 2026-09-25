@@ -1,4 +1,5 @@
 #!/bin/sh
+# platform: macOS-only -- PlistBuddy reads back and plutil lints the manifest it writes
 #   usage: render-manifest.sh --stage ROOT --product P --name N --version V [--group G] [--line L]
 #            [--appcast URL] [--exclude REL]... [--replaces ABS=REL]...
 #          Writes ROOT/usr/local/mavergreen/P/mavergreen.plist. Run it LAST: `outside` is read from
