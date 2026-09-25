@@ -19,6 +19,12 @@ jobs:
         with:
           fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
 
+      # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavericks-sdk
+          key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh') }}
+
       - id: cm
         uses: ./.github/actions/shipyard-cmake
       - name: Install mavericks-shipyard (self, source-build) -- and bats, so the *.bats suites below can run
@@ -67,6 +73,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
+
+      # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavericks-sdk
+          key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh') }}
+
       - id: cm
         uses: ./.github/actions/shipyard-cmake
       - name: Install mavericks-shipyard (self, source-build)
@@ -97,7 +110,8 @@ jobs:
             set -- $a
             shipyard-cmake -S . -B "$RUNNER_TEMP/upd-$1" -DSHIPYARD_BUILD_UPDATER=ON \
               -DMAVERICKS_ALLOW_GENERIC_ICON=ON -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
-              -DCMAKE_OSX_ARCHITECTURES="$1" -DCMAKE_OSX_DEPLOYMENT_TARGET="$2"
+              -DCMAKE_OSX_ARCHITECTURES="$1" -DCMAKE_OSX_DEPLOYMENT_TARGET="$2" \
+              -DCMAKE_TOOLCHAIN_FILE="$PWD/MavericksToolchain.cmake"
             shipyard-cmake --build "$RUNNER_TEMP/upd-$1"
           done
           sh scripts/lipo-merge-tree.sh \
@@ -127,6 +141,16 @@ jobs:
             --version "$v" \
             --out "$RUNNER_TEMP/dist/mavericks-shipyard-$v.pkg"
           sh scripts/assert_pkg_installs_in_place.sh "$RUNNER_TEMP/dist/mavericks-shipyard-$v.pkg"
+
+      # spec: SKILL.md "SDK pinning" -- the release runs full conformance; the rehearsal has no appcast
+      #       or notes, so it checks the sdk-pin facts alone, before the release ever sees them.
+      - name: SDK pinning (the rehearsed pkg)
+        run: |
+          set -eu
+          v="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"
+          sh scripts/artifact-facts.sh "$RUNNER_TEMP/dist" "$v" \
+            | grep -E '^(expected|deviation|macho|abort|end-of-facts)( |$)' \
+            | sh scripts/check-artifact-conformance.sh
 
       - name: Install smoke (the rehearsed pkg)
         timeout-minutes: 10

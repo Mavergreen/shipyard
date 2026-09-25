@@ -100,6 +100,12 @@ for pat, what in ((r"^sh scripts/lipo-merge-tree\.sh ", "merge the two updater b
         bad.append("ci.yml does not rehearse release.yml's packaging path: it never runs %s, so that "
                    "step's first real execution would be a push that is already publishing" % what)
 
+# spec: SKILL.md "SDK pinning" -- the rehearsal has no appcast or notes, so it checks the sdk-pin facts
+# alone; a change that quietly drops this check would only be caught for real at the release push.
+if not has(ci, r'^sh scripts/artifact-facts\.sh "?\$RUNNER_TEMP/dist"? '):
+    bad.append("ci.yml no longer checks sdk-pin conformance on the rehearsed pkg "
+               '(scripts/artifact-facts.sh "$RUNNER_TEMP/dist")')
+
 # R-P1-22: no `codesign --deep`, in either workflow. The updater app carries Sparkle as a VERSIONED
 # framework, and `--verify --deep` of such an app is ambiguous by design -- "bundle format is
 # ambiguous (could be app or framework)" -- so it fails on every runner. `--deep --sign -` is worse

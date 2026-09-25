@@ -37,7 +37,7 @@ if sh "$S" --arch x86_64 >/dev/null 2>&1; then echo "FAIL: --arch without --min-
 # spec: scripts/build-cmake.sh -- the configure needs CMAKE_SYSTEM_VERSION as a DARWIN release, and
 #       the mapping is arithmetic on --min-os. A floor it cannot map must be refused here, before
 #       anything is downloaded, rather than reaching cmake as an empty or nonsense version.
-if msg="$(sh "$S" --arch x86_64 --min-os banana --prefix "$work/p" 2>&1)"; then
+if msg="$(sh "$S" --arch x86_64 --min-os banana --prefix "$work/p" --sysroot "$work/sdk" 2>&1)"; then
   echo "FAIL: an unmappable --min-os must be refused"; exit 1
 fi
 printf '%s' "$msg" | grep -q 'min-os' || { echo "FAIL: the refusal must name --min-os; got: $msg"; exit 1; }
@@ -48,11 +48,17 @@ printf '%s' "$msg" | grep -q 'min-os' || { echo "FAIL: the refusal must name --m
 if PATH=/usr/bin:/bin command -v cmake >/dev/null 2>&1; then
   echo "SKIP: a cmake is on the minimal PATH here, so the missing-host-cmake refusal cannot be exercised"
 else
-  if msg="$(PATH=/usr/bin:/bin sh "$S" --arch x86_64 --min-os 10.9 --prefix "$work/p" 2>&1)"; then
+  if msg="$(PATH=/usr/bin:/bin sh "$S" --arch x86_64 --min-os 10.9 --prefix "$work/p" --sysroot "$work/sdk" 2>&1)"; then
     echo "FAIL: no cmake on PATH must be refused"; exit 1
   fi
   printf '%s' "$msg" | grep -q 'cmake.org/download' \
     || { echo "FAIL: the refusal must name where to get a cmake; got: $msg"; exit 1; }
 fi
+
+# spec: scripts/build-cmake.sh -- a missing --sysroot must be a usage error naming --sysroot (the
+#       pinned SDK), not a silent fall-through to xcrun --show-sdk-path (the runner's SDK).
+rc=0; out="$(sh "$S" --arch arm64 --min-os 11.0 --prefix "$work/p" 2>&1)" || rc=$?
+[ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q -- '--sysroot' \
+  || { echo "FAIL: no --sysroot must be a usage error naming --sysroot (the pinned SDK), not a silent xcrun fallback; rc=$rc: $out"; exit 1; }
 
 echo "PASS: build-cmake"

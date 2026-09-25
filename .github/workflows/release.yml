@@ -24,6 +24,12 @@ jobs:
         with:
           fetch-depth: 0        # shipyard-version.sh counts commits
 
+      # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavericks-sdk
+          key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh') }}
+
       # spec: R-P1-19 -- shipyard cannot install a RELEASED shipyard to test the one it is about to
       #       release, so it installs itself in source-build mode, and the CMake tree is built HERE
       #       and passed in rather than by install@v1 itself: a `uses: ./...` inside a composite
@@ -84,7 +90,8 @@ jobs:
             set -- $a
             shipyard-cmake -S . -B "$RUNNER_TEMP/upd-$1" -DSHIPYARD_BUILD_UPDATER=ON \
               -DMAVERICKS_ALLOW_GENERIC_ICON=ON -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
-              -DCMAKE_OSX_ARCHITECTURES="$1" -DCMAKE_OSX_DEPLOYMENT_TARGET="$2"
+              -DCMAKE_OSX_ARCHITECTURES="$1" -DCMAKE_OSX_DEPLOYMENT_TARGET="$2" \
+              -DCMAKE_TOOLCHAIN_FILE="$PWD/MavericksToolchain.cmake"
             shipyard-cmake --build "$RUNNER_TEMP/upd-$1"
           done
           sh scripts/lipo-merge-tree.sh \

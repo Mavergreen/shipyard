@@ -83,8 +83,9 @@ elif not any(str(s.get("uses", "")) == "./.github/actions/shipyard-cmake" for s 
 need(r'^for a in "x86_64 10\.9" "arm64 11\.0"; do$',
      "the updater must be built for exactly x86_64/10.9 and arm64/11.0")
 need(r'^shipyard-cmake -S \. -B "?\$RUNNER_TEMP/upd-\$1"? .*-DSHIPYARD_BUILD_UPDATER=ON\b.*'
-     r'-DCMAKE_OSX_ARCHITECTURES="?\$1"? -DCMAKE_OSX_DEPLOYMENT_TARGET="?\$2"?',
-     "no per-arch shipyard-cmake configure of the updater (-DCMAKE_OSX_ARCHITECTURES/-DCMAKE_OSX_DEPLOYMENT_TARGET)")
+     r'-DCMAKE_OSX_ARCHITECTURES="?\$1"? -DCMAKE_OSX_DEPLOYMENT_TARGET="?\$2"?.*-DCMAKE_TOOLCHAIN_FILE="?\$PWD/MavericksToolchain\.cmake"?',
+     "no per-arch shipyard-cmake configure of the updater "
+     "(-DCMAKE_OSX_ARCHITECTURES/-DCMAKE_OSX_DEPLOYMENT_TARGET/-DCMAKE_TOOLCHAIN_FILE=$PWD/MavericksToolchain.cmake)")
 need(r'^shipyard-cmake --build "?\$RUNNER_TEMP/upd-\$1"?$', "the per-arch updater builds are never built")
 need(r"^sh scripts/lipo-merge-tree\.sh .*--require-archs \"x86_64 arm64\"$",
      "the two updater builds are never merged with lipo-merge-tree.sh --require-archs \"x86_64 arm64\"")

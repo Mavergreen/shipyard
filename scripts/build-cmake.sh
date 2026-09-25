@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: macOS-only -- xcrun, lipo and otool build and check the universal CMake
-#   usage: build-cmake.sh --arch x86_64|arm64 --min-os VER --prefix DIR [--jobs N] [--sysroot DIR]
+#   usage: build-cmake.sh --arch x86_64|arm64 --min-os VER --prefix DIR --sysroot DIR [--jobs N]
 #          build-cmake.sh --fetch-only --dest DIR          (download + verify only; prints the path)
 #          Builds the CMake shipyard ships as shipyard-cmake: ONE arch and deployment floor per run,
 #          into a prefix, from Kitware's SOURCE tarball verified against the release's own
@@ -8,8 +8,8 @@
 #          halves use. Universal comes from running this twice (x86_64/10.9, arm64/11.0) and
 #          scripts/lipo-merge-tree.sh. The TARGET compiler is the environment's CC/CXX, which cmake
 #          honours. SHIPYARD_CMAKE_URL_BASE overrides the download base (default
-#          https://github.com/Kitware/CMake/releases/download); --sysroot DIR defaults to
-#          `xcrun --show-sdk-path` and is passed through as CMAKE_OSX_SYSROOT.
+#          https://github.com/Kitware/CMake/releases/download); --sysroot DIR is required (the
+#          pinned SDK: fetch_sdk.sh --arch <arch>) and is passed through as CMAKE_OSX_SYSROOT.
 # platform: CMake is an ordinary CMake project, so another cmake can build it; CMake's own
 #           ./bootstrap first compiles a stage-0 cmake that must RUN on this host, and mavericks-clang
 #           always targets x86_64, so on an arm64 runner that stage-0 needs Rosetta. macOS 28 removes
@@ -58,8 +58,8 @@ if [ -n "$FETCH_ONLY" ]; then
   fetch_verified "$DEST"; exit 0
 fi
 
-[ -n "$ARCH" ] && [ -n "$MINOS" ] && [ -n "$PREFIX" ] \
-  || { echo "build-cmake: need --arch, --min-os and --prefix" >&2; exit 2; }
+[ -n "$ARCH" ] && [ -n "$MINOS" ] && [ -n "$PREFIX" ] && [ -n "$SYSROOT" ] \
+  || { echo "build-cmake: need --arch, --min-os, --prefix and --sysroot (the pinned SDK: fetch_sdk.sh --arch <arch>)" >&2; exit 2; }
 
 # platform: CMAKE_SYSTEM_NAME is what makes CMAKE_CROSSCOMPILING true, so CMake REFUSES to run a
 #           binary it just built for the target instead of running it and silently depending on
@@ -80,7 +80,6 @@ if ! HOSTCMAKE="$(command -v cmake 2>/dev/null)" || ! "$HOSTCMAKE" --version >/d
 fi
 
 [ -n "$JOBS" ] || JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 2)"
-[ -n "$SYSROOT" ] || SYSROOT="$(xcrun --show-sdk-path)"
 [ -d "$SYSROOT" ] || { echo "build-cmake: --sysroot $SYSROOT is not a directory" >&2; exit 2; }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/build-cmake.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
