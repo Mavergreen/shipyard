@@ -56,6 +56,17 @@ grep -q openssh "$w/err" || fail "the refusal must name the owner"
 [ "$(target bin/ssh)" = ../openssh/bin/ssh ] || fail "a refused link must change nothing"
 rm -rf "$T/rogue"
 
+mkproduct xa xg 22 bin/x
+mkproduct xb xg 23 bin/x-22
+mg link xa || fail "setup: link the first member"
+mg link xb || fail "a second member whose file shares a name with the first's versioned link links fine while not selected"
+mg select xg xb 2>"$w/err" && fail "a member must not take a sibling's versioned link x-22 as its bare name"
+grep -q 'xa' "$w/err" || fail "the refusal must name the owner: $(cat "$w/err")"
+[ "$(target bin/x-22)" = ../xa/bin/x ] || fail "a refused select changes nothing: x-22 is still xa's versioned link"
+[ "$(target bin/x)" = ../xa/bin/x ] && [ "$(mg select xg)" = xa ] || fail "a refused select leaves the selection and bare names alone"
+[ "$(target bin/x-22-23)" = ../xb/bin/x-22 ] || fail "the second member keeps its own versioned link"
+mg unlink xa; mg unlink xb; rm -rf "$T/xa" "$T/xb" "$T/var/mavergreen/selections/xg"
+
 mkproduct shipyard shipyard "" bin/cmake bin/shipyard-cmake
 "$PB" -c "Add :exports-exclude array" -c "Add :exports-exclude:0 string bin/cmake" "$T/shipyard/mavergreen.plist"
 mg link shipyard

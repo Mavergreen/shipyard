@@ -76,7 +76,8 @@ refusals() {
     [ -L "$_full" ] || { [ ! -e "$_full" ] || echo "$_link exists and is not a mavergreen link"; continue; }
     _o="$(owner "$_full")"
     [ "$_o" = "$1" ] && continue
-    [ -f "$(manifest "$_o")" ] && [ "$(group_of "$_o")" = "$_g" ] && [ "$_link" = "$_rel" ] && continue
+    [ -f "$(manifest "$_o")" ] && [ "$(group_of "$_o")" = "$_g" ] && [ "$_link" = "$_rel" ] \
+      && [ "$(readlink "$_full")" = "$(up "$_link")$_o/$_link" ] && continue
     echo "$_link is owned by $_o"
   done
 }
