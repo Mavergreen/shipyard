@@ -47,6 +47,23 @@ runs:
         echo "::error::source: build needs a macOS runner -- it builds the universal CMake from Kitware's source against an Apple toolchain. Consumers want the default (source: release)."
         exit 1
 
+    # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- every
+    #       consumer build fetches a pinned SDK, so without a cache every job re-downloads it. The key
+    #       is the sha256 of the sdk-pins.sh this ref ships (hashFiles() cannot see the action's own
+    #       checkout), so a moved pin can never restore a stale SDK.
+    - id: mav-sdk-key
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -eu
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        echo "key=mavericks-sdk-$(shasum -a 256 "$root/scripts/sdk-pins.sh" | cut -c1-16)" >> "$GITHUB_OUTPUT"
+    - if: runner.os == 'macOS'
+      uses: actions/cache@v6
+      with:
+        path: ~/Library/Caches/mavericks-sdk
+        key: ${{ steps.mav-sdk-key.outputs.key }}
+
     - if: inputs.source == 'release' && runner.os == 'macOS'
       shell: bash
       env:
