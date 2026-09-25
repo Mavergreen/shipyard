@@ -41,8 +41,10 @@ sh "$S" --stage "$st" --product openssh --name x --version 1 \
   --generated "Applications/Linux X.app" --generated Applications/Other.app
 [ "$(p generated:0)" = "Applications/Linux X.app" ] && [ "$(p generated:1)" = Applications/Other.app ] \
   || fail "generated entries are written in order, spaces intact -- uninstall removes exactly these"
-for bad in /Applications/X.app Applications/../X.app ./Applications/X.app usr/local/mavergreen usr/local/mavergreen/openssh/x ''; do
+for bad in /Applications/X.app Applications/../X.app ./Applications/X.app usr/local/mavergreen usr/local/mavergreen/openssh/x '' Applications/X.app/ Applications//X.app; do
   sh "$S" --stage "$st" --product openssh --name x --version 1 --generated "$bad" 2>/dev/null \
     && fail "a generated entry the helper would refuse to uninstall must be refused when the manifest is rendered: '$bad'"
 done
+sh "$S" --stage "$st" --product openssh --name x --version 1 --generated "$(printf 'Applications/A.app\nusr/local/mavergreen/sib')" 2>/dev/null \
+  && fail "a generated entry with a newline must be refused -- it would render as two entries"
 echo "PASS: render-manifest"

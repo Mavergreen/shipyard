@@ -149,6 +149,15 @@ rc=0; PATH="$stub:$PATH" mg uninstall badgen 2>"$w/err" || rc=$?
 [ "$rc" -ne 0 ] || fail "a generated entry in a shape the helper refuses must fail uninstall"
 grep -q "unsafe generated path '/Applications'" "$w/err" || fail "uninstall must name the refused generated entry: $(cat "$w/err")"
 [ -d "$V/Applications" ] || fail "a refused generated entry must not be removed"
+mkproduct slashgen slashgen "" bin/slashgen
+mkdir -p "$w/elsewhere/Real.app/Contents"; touch "$w/elsewhere/Real.app/Contents/Info.plist"
+ln -s "$w/elsewhere/Real.app" "$V/Applications/Linux Slash.app"
+"$PB" -c "Add :generated array" -c "Add :generated:0 string Applications/Linux Slash.app/" "$T/slashgen/mavergreen.plist" >/dev/null
+rc=0; PATH="$stub:$PATH" mg uninstall slashgen 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "a generated entry ending in / must fail uninstall"
+grep -q "unsafe generated path 'Applications/Linux Slash.app/'" "$w/err" || fail "uninstall must name a refused trailing-slash entry: $(cat "$w/err")"
+[ -f "$w/elsewhere/Real.app/Contents/Info.plist" ] \
+  || fail "a trailing slash must not make uninstall follow a symlinked bundle and delete its target outside the volume"
 
 mkproduct openssh openssh "" bin/ssh sbin/sshd
 "$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/ssh string bin/ssh" \

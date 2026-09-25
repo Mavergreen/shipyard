@@ -169,7 +169,7 @@ EOF
   awk -v p="$pk" -v pr="$mdir" '
     NR == FNR {
       if ($1 != "manifest-outside" || $2 != p) next
-      if ($3 == "" || $3 ~ /^\// || index("/" $3 "/", "/./") || index("/" $3 "/", "/../") \
+      if ($3 == "" || $3 ~ /^\// || $3 ~ /\/$/ || index($3, "//") || index("/" $3 "/", "/./") || index("/" $3 "/", "/../") \
           || $3 == "usr/local/mavergreen" || index($3, "usr/local/mavergreen/") == 1) print "badshape " $3
       else o[$3] = 1
       next
@@ -193,7 +193,7 @@ EOF
       unlisted) unlisted=$((unlisted + 1)); [ "$unlisted" -le 20 ] || continue
         fail manifest "$pk installs $(dec "$op") outside its tree, and its manifest's outside list does not name it -- uninstall would leave it behind" "$pk" ;;
       unused) fail manifest "$pk's manifest lists $(dec "$op") in outside, but the pkg installs nothing it would remove -- uninstall deletes an entry only as that exact file or link, or as a whole .app, .kext, .prefPane, .plugin, .bundle or .framework directory" "$pk" ;;
-      badshape) fail manifest "$pk's manifest lists outside entry '$(dec "$op")' in a shape the helper refuses to uninstall -- empty, absolute, a . or .. segment, or under usr/local/mavergreen" "$pk" ;;
+      badshape) fail manifest "$pk's manifest lists outside entry '$(dec "$op")' in a shape the helper refuses to uninstall -- empty, absolute, ending in /, an empty, . or .. segment, or under usr/local/mavergreen" "$pk" ;;
     esac
   done < "$tmp/outside-$pk"
   [ "$unlisted" -le 20 ] \
@@ -201,11 +201,11 @@ EOF
   awk -v p="$pk" '$1 == "manifest-generated" && $2 == p { print $3 }' "$facts" > "$tmp/generated-$pk"
   while IFS= read -r gp; do
     case "$gp" in
-      ''|/*|usr/local/mavergreen|usr/local/mavergreen/*) gbad=1 ;;
+      ''|/*|*/|*//*|usr/local/mavergreen|usr/local/mavergreen/*) gbad=1 ;;
       *) case "/$gp/" in *"/./"*|*"/../"*) gbad=1 ;; *) gbad=0 ;; esac ;;
     esac
     [ "$gbad" -eq 0 ] \
-      || fail manifest "$pk's manifest lists generated entry '$(dec "$gp")' in a shape the helper refuses to uninstall -- empty, absolute, a . or .. segment, or under usr/local/mavergreen" "$pk"
+      || fail manifest "$pk's manifest lists generated entry '$(dec "$gp")' in a shape the helper refuses to uninstall -- empty, absolute, ending in /, an empty, . or .. segment, or under usr/local/mavergreen" "$pk"
   done < "$tmp/generated-$pk"
 done
 

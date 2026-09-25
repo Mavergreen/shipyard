@@ -284,7 +284,7 @@ unload() {
   esac
 }
 outside_shape_ok() {
-  case "$1" in ''|/*) return 1 ;; esac
+  case "$1" in ''|/*|*/|*//*) return 1 ;; esac
   case "/$1/" in *"/./"*|*"/../"*) return 1 ;; esac
   case "$1" in usr/local/mavergreen|usr/local/mavergreen/*) return 1 ;; esac
   return 0

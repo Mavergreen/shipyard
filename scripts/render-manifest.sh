@@ -37,6 +37,8 @@ while [ $# -gt 0 ]; do
     --generated)
       case "$2" in
         ''|/*) echo "render-manifest: --generated wants a /-relative path, got '$2'" >&2; exit 2 ;;
+        *"$nl"*) echo "render-manifest: --generated may not contain a newline: $2" >&2; exit 2 ;;
+        */|*//*) echo "render-manifest: --generated may not end in / or have an empty segment: $2" >&2; exit 2 ;;
         usr/local/mavergreen|usr/local/mavergreen/*) echo "render-manifest: --generated may not name anything under usr/local/mavergreen: $2" >&2; exit 2 ;;
       esac
       if dotty "$2"; then echo "render-manifest: --generated has a . or .. component: $2" >&2; exit 2; fi

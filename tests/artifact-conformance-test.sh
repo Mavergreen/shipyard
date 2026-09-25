@@ -887,6 +887,18 @@ alone "manifest: a generated entry under usr/local/mavergreen fails manifest" "m
 $LAYOUT
 manifest-generated p.pkg usr/local/mavergreen/y/bin/y"
 
+alone "manifest: a generated entry ending in / fails manifest" "manifest" "$REL
+$LAYOUT
+manifest-generated p.pkg Applications/X.app/"
+
+alone "manifest: a generated entry with an empty segment fails manifest" "manifest" "$REL
+$LAYOUT
+manifest-generated p.pkg Applications//X.app"
+
+alone "manifest: an outside entry ending in / fails manifest" "manifest" "$REL
+$LAYOUT
+manifest-outside p.pkg Applications/X.app/"
+
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
 #       top-level bundle, a symlink, and a path with a space are each a way to report the wrong thing.

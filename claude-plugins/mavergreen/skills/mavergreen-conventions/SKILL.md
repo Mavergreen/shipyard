@@ -1552,7 +1552,7 @@ there if that fails**, removing nothing: the manifest survives, so a retry can f
 Then it unlinks; removes each `outside` and `generated` entry (a `generated` entry that does not exist is not an error) — a file or link, or a whole bundle directory (`.app`,
 `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`), unloading a launchd job first when the
 root is `/`; never a
-plain directory, and never an entry that is empty, absolute, has a `.` or `..` segment or lies under
+plain directory, and never an entry that is empty, absolute, ends in `/`, has an empty, `.` or `..` segment or lies under
 `usr/local/mavergreen/`; removes the tree and `var/<product>`; re-selects (above); and forgets the
 receipt. Past the restore it is **best-effort-then-fail**: every step runs, each failure is reported,
 and it exits non-zero at the end — neither a silent success nor a half-uninstall that stopped at
