@@ -24,6 +24,13 @@ setup() {
   "$CC" -arch x86_64 -mmacosx-version-min=10.9 -framework AppKit "$WORK/sel_bad.m" -o "$WORK/sel_bad" 2>/dev/null || true
   printf '#import <AppKit/AppKit.h>\nint main(void){(void)[NSColor blackColor];return 0;}\n' > "$WORK/sel_ok.m"
   "$CC" -arch x86_64 -mmacosx-version-min=10.9 -framework AppKit "$WORK/sel_ok.m" -o "$WORK/sel_ok" 2>/dev/null || true
+  # platform: vtool rewrites the recorded SDK without needing that SDK; it cannot write in place.
+  # platform: on the 10.9 box there is no vtool, and none is needed: its native SDK already records 10.9.
+  xcrun --find vtool >/dev/null 2>&1 && for fx in clean shim leak sel_bad sel_ok; do
+    [ -f "$WORK/$fx" ] || continue
+    xcrun vtool -set-version-min macos 10.9 10.9 -replace -output "$WORK/$fx.stamped" "$WORK/$fx" \
+      && mv "$WORK/$fx.stamped" "$WORK/$fx"
+  done
 }
 teardown() { rm -rf "$WORK"; }
 
@@ -37,6 +44,7 @@ teardown() { rm -rf "$WORK"; }
   [ -f "$WORK/leak" ] || skip "leak fixture did not build"
   run env MAVERICKS_POST_10_9_SYMBOLS='_mav_test_post109' sh "$GUARD" "$WORK/leak"
   [ "$status" -ne 0 ]
+  [[ "$output" == *_mav_test_post109* ]] || false
 }
 
 @test "MAVERICKS_REQUIRE_DEFINED_SYMBOLS passes when the symbol is defined" {
@@ -68,4 +76,72 @@ teardown() { rm -rf "$WORK"; }
   [ -f "$WORK/sel_bad" ] || skip "sel_bad fixture did not build"
   run env MAVERICKS_ALLOW_SELECTORS=labelColor sh "$GUARD" "$WORK/sel_bad"
   [ "$status" -eq 0 ]
+}
+
+mk_stamped() {  # $1 out, $2 arch, $3 minos, $4 sdk
+  # platform: vtool arrived with Xcode 11; the 10.9 box (Xcode 6) runs this suite too and has none.
+  xcrun --find vtool >/dev/null 2>&1 || skip "no vtool (pre-Xcode 11) to stamp fixtures"
+  printf 'int main(void){return 0;}\n' > "$WORK/s.c"
+  "$CC" -arch "$2" -mmacosx-version-min="$3" "$WORK/s.c" -o "$WORK/s.$2"
+  case "$2" in
+    x86_64) xcrun vtool -set-version-min macos "$3" "$4" -replace -output "$1" "$WORK/s.$2" ;;
+    *)      xcrun vtool -set-build-version macos "$3" "$4" -replace -output "$1" "$WORK/s.$2" ;;
+  esac
+}
+
+@test "x86_64 recording the runner's SDK fails -- the audit's blind spot" {
+  mk_stamped "$WORK/r265" x86_64 10.9 26.5
+  run sh "$GUARD" "$WORK/r265"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"sdk 26.5"* ]] || false
+}
+
+@test "x86_64 recording the pinned 10.9 SDK passes" {
+  mk_stamped "$WORK/p109" x86_64 10.9 10.9
+  run sh "$GUARD" "$WORK/p109"
+  [ "$status" -eq 0 ]
+}
+
+@test "an arm64 slice needs MAVERICKS_ALLOW_ARCHS, and then the 11.3 pin" {
+  mk_stamped "$WORK/a113" arm64 11.0 11.3
+  run sh "$GUARD" "$WORK/a113"
+  [ "$status" -ne 0 ]
+  run env MAVERICKS_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a113"
+  [ "$status" -eq 0 ]
+  mk_stamped "$WORK/a265" arm64 11.0 26.5
+  run env MAVERICKS_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a265"
+  [ "$status" -ne 0 ]
+}
+
+@test "a universal binary with one bad slice fails and names that slice" {
+  mk_stamped "$WORK/p109" x86_64 10.9 10.9
+  mk_stamped "$WORK/a265" arm64 11.0 26.5
+  lipo -create "$WORK/p109" "$WORK/a265" -output "$WORK/fatbad"
+  run env MAVERICKS_ALLOW_ARCHS="x86_64 arm64" sh "$GUARD" "$WORK/fatbad"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"arm64 records minos 11.0 sdk 26.5"* ]] || false
+  mk_stamped "$WORK/a113" arm64 11.0 11.3
+  lipo -create "$WORK/p109" "$WORK/a113" -output "$WORK/fatok"
+  run env MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
+  [ "$status" -eq 0 ]
+}
+
+@test "post-10.9 imports are still caught in a fat binary's x86_64 slice" {
+  [ -f "$WORK/leak" ] || skip "leak fixture did not build"
+  xcrun --find vtool >/dev/null 2>&1 || skip "no vtool (pre-Xcode 11) to stamp fixtures"
+  xcrun vtool -set-version-min macos 10.9 10.9 -replace -output "$WORK/leak109" "$WORK/leak"
+  mk_stamped "$WORK/a113" arm64 11.0 11.3
+  lipo -create "$WORK/leak109" "$WORK/a113" -output "$WORK/fatleak"
+  run env MAVERICKS_ALLOW_ARCHS="x86_64 arm64" MAVERICKS_POST_10_9_SYMBOLS='_mav_test_post109' sh "$GUARD" "$WORK/fatleak"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *_mav_test_post109* ]] || false
+}
+
+@test "a pinned third-party binary passes on its content, and only on its exact bytes" {
+  fw="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sparkle_framework.sh")" || skip "no network to fetch Sparkle"
+  run sh "$GUARD" "$fw/Versions/A/Resources/Autoupdate.app/Contents/MacOS/fileop"
+  [ "$status" -eq 0 ]
+  cp "$fw/Versions/A/Resources/Autoupdate.app/Contents/MacOS/fileop" "$WORK/fileop"; printf 'x' >> "$WORK/fileop"
+  run sh "$GUARD" "$WORK/fileop"
+  [ "$status" -ne 0 ]
 }

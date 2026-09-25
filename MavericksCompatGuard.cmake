@@ -14,6 +14,11 @@ set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-s
 function(mavericks_assert_binary_compatible tgt)
   set(_cmd sh "${MAVERICKS_SHARED_DIR}/scripts/assert_binary_compatible.sh" "$<TARGET_FILE:${tgt}>")
   set(_env)
+  # The exact arch set this configure builds: an arm64-only updater slice is not an x86_64 binary.
+  if(CMAKE_OSX_ARCHITECTURES)
+    string(REPLACE ";" " " _archs "${CMAKE_OSX_ARCHITECTURES}")
+    list(APPEND _env "MAVERICKS_ALLOW_ARCHS=${_archs}")
+  endif()
   if(MAVERICKS_POST_10_9_SYMBOLS)
     list(APPEND _env "MAVERICKS_POST_10_9_SYMBOLS=${MAVERICKS_POST_10_9_SYMBOLS}")
   endif()
