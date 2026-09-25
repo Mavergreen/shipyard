@@ -999,6 +999,7 @@ component go126.pkg dev.mavergreen.base
 component go126.pkg dev.mavergreen.golang.go126
 manifest go126.pkg go126 dev.mavergreen.golang.go126 go126
 registered go126 dev.mavergreen.golang.go126 golang-126
+manifest-line go126.pkg 126
 installs go126.pkg usr/local/mavergreen/go126/mavergreen.plist
 pkg go126-cross.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.golang.go126-cross
 asset go126-cross.pkg 10
@@ -1006,6 +1007,7 @@ component go126-cross.pkg dev.mavergreen.base
 component go126-cross.pkg dev.mavergreen.golang.go126-cross
 manifest go126-cross.pkg go126-cross dev.mavergreen.golang.go126-cross go126-cross
 registered go126-cross dev.mavergreen.golang.go126-cross golang-126
+manifest-line go126-cross.pkg 126-cross
 installs go126-cross.pkg usr/local/mavergreen/go126-cross/mavergreen.plist
 asset go126.xml 700
 appcast go126.xml 1.26.8-mavericks.7 go126-cross.pkg 10 10.9.5
@@ -1027,6 +1029,11 @@ ok "line: the cross variant's line is the version plus -cross" "$GO
 manifest-line go.pkg 126-cross"
 alone "line: a line the version does not carry" "line" "$GO
 manifest-line go.pkg 127"
+alone "line: a product of a line repo whose manifest declares no line" "line" "$GO
+manifest-line go.pkg none"
+alone "line: a product of a line repo with no manifest-line fact at all" "line" "$GO"
+alone "line: a line repo's product whose only line is a variant" "line" "$GO
+manifest-line go.pkg cross"
 alone "line: a lined product in a repo not named for its line" "line" "$(printf '%s\n' "$GO" | sed 's/ golang-126$/ golang/')
 manifest-line go.pkg 126"
 ok "line: one component can be the line (22.1.1 is clang 22)" 'expected 22.1.1-mavericks.5

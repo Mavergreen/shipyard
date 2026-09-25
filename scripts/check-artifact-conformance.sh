@@ -258,6 +258,12 @@ EOF
   fi
   ml="$(awk -v p="$pk" '$1 == "manifest-line" && $2 == p { print $3; exit }' "$facts")"
   case "$ml" in ''|none|cross) lv="" ;; *-cross) lv="${ml%-cross}" ;; *) lv="$ml" ;; esac
+  case "$repo" in
+    *-*) case "${repo##*-}" in
+           ''|*[!0-9]*) : ;;
+           *) [ -n "$lv" ] || fail line "$pk ships $P from the line repo $repo, so its manifest must declare line ${repo##*-} (or ${repo##*-}-cross); it declares '${ml:-none}'" "$pk" ;;
+         esac ;;
+  esac
   if [ -n "$lv" ]; then
     case "$repo" in
       *-"$lv") : ;;

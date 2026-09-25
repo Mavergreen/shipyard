@@ -1704,7 +1704,7 @@ is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
 | `base` | a pkg carrying a manifest lists `dev.mavergreen.base` as its first component | the pkg filename |
 | `updater` | a Sparkle updater (a top-level bundle with `SUFeedURL`) is `Library/Application Support/Mavergreen/<short>-updater.app` with bundle id `<pkg identifier>.updater`; a pkg with an updater installs the LaunchAgent `<pkg identifier>-updatecheck`; every launchd Label containing `updatecheck` is that one | the pkg filename |
 | `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
-| `line` | a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
+| `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | with `$GITHUB_REPOSITORY` set, every product a release ships is registered to that repo (by name; the owner is not compared) | the pkg filename |
 
 Paths are relative to `/`, after each component's `install-location`; a manifest is read only from a
