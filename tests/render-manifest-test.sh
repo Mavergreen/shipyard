@@ -13,21 +13,26 @@ touch "$st/usr/local/mavergreen/openssh/bin/ssh" "$st/Applications/Mavericks X.a
       "$st/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" \
       "$st/Library/Application Support/Mavergreen/OpenSSHUpdater.app/Contents/Info.plist"
 sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version 10.5p1-mavericks.5 \
-  --appcast https://example/appcast.xml --replaces /usr/bin/ssh=bin/ssh
+  --replaces /usr/bin/ssh=bin/ssh
 M="$st/usr/local/mavergreen/openssh/mavergreen.plist"
 p() { "$PB" -c "Print :$1" "$M"; }
 [ "$(p identifier)" = dev.mavergreen.openssh ] || fail "the identifier comes from the registry"
 [ "$(p group)" = openssh ] && [ "$(p line)" = "" ] || fail "group defaults to the product, line to empty"
 [ "$(p replaces:/usr/bin/ssh)" = bin/ssh ] || fail "replaces is carried"
+[ "$(p appcast)" = "" ] || fail "a manifest rendered without --has-updater names no feed: the product has no updater"
+sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version 10.5p1-mavericks.5 \
+  --replaces /usr/bin/ssh=bin/ssh --has-updater
+[ "$(p appcast)" = https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml ] \
+  || fail "with an updater, the feed comes from the registry: openssh's repo, openssh.xml"
+sh "$S" --stage "$st" --product openssh --name x --version 1 --appcast https://example/appcast.xml 2>/dev/null \
+  && fail "--appcast must be refused: the registry, not the repo, names the feed"
 outside="$(i=0; while v="$("$PB" -c "Print :outside:$i" "$M" 2>/dev/null)"; do echo "$v"; i=$((i+1)); done)"
 [ "$outside" = "$(printf '%s\n' 'Applications/Mavericks X.app' 'Library/Application Support/Mavergreen/OpenSSHUpdater.app' 'Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist')" ] \
   || fail "outside lists what is installed outside the tree, bundles collapsed, spaces intact: $outside"
 nasty_name='O'\''Brien "quoted" \back & <angle>'
-nasty_appcast='https://example/appcast.xml?x=1&y=2'
-sh "$S" --stage "$st" --product openssh --name "$nasty_name" --version 1 --appcast "$nasty_appcast"
+sh "$S" --stage "$st" --product openssh --name "$nasty_name" --version 1
 [ "$(p name)" = "$nasty_name" ] \
   || fail "name must round-trip exactly through PlistBuddy, including apostrophe/quotes/backslash/ampersand/angle-brackets"
-[ "$(p appcast)" = "$nasty_appcast" ] || fail "appcast must round-trip exactly, including an ampersand in a query string"
 sh "$S" --stage "$st" --product not-registered --name x --version 1 2>/dev/null && fail "an unregistered product must be refused"
 sh "$S" --stage "$st" --product openssh --name x --version 1 --replaces usr/bin/ssh=bin/ssh 2>/dev/null \
   && fail "a replaces target must be an absolute system path"

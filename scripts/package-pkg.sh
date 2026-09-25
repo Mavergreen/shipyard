@@ -35,10 +35,8 @@ done
 
 ID="dev.mavergreen.mavericks-shipyard"
 PREFIX_DIR="/usr/local/mavergreen/shipyard"
-APPDIR="/Library/Application Support/Mavergreen"
 APP_REL="$(sh "$SELF/product-name.sh" updater-app shipyard)"
 APP_NAME="${APP_REL##*/}"
-LABEL="dev.mavergreen.mavericks-shipyard-updatecheck"
 
 : "${TREE:?package-pkg: --cmake-tree required}"
 : "${SPREFIX:?package-pkg: --shipyard-prefix required}"
@@ -119,9 +117,8 @@ ln -s cpack "$STAGE$PREFIX_DIR/bin/shipyard-cpack"
 strip_appledouble() { find "$STAGE" -name '._*' -delete 2>/dev/null || true; }
 strip_appledouble
 sh "$SELF/stage_product.sh" --stage "$STAGE" --product shipyard --name "Mavericks Shipyard" \
-  --version "$VER" --appcast https://github.com/Mavergreen/shipyard/releases/latest/download/appcast.xml \
-  --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack \
-  --updater-app "$APP" --app-dir "$APPDIR" --agent-label "$LABEL" --scripts-out "$SCR"
+  --version "$VER" --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack \
+  --updater-app "$APP" --scripts-out "$SCR"
 strip_appledouble
 
 # platform: pkgbuild makes a payload holding a .app relocatable and version-checked, so a locally

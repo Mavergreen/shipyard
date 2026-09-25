@@ -1,54 +1,53 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: stage_updater.sh --stage ROOT --app UPDATER.app \
-#            --app-dir "/Library/Application Support/Mavergreen" \
-#            --agent-label dev.mavergreen.<product>-updatecheck \
-#            [--scripts-out DIR] [--snippet-out FILE]
-#          Stages a Sparkle updater .app + its daily-check LaunchAgent into a pkg payload root, and
-#          emits the postinstall logic that loads the agent, rendered from the shared updater/*.in
-#          templates so each product supplies only its label and paths.
+#   usage: stage_updater.sh --stage ROOT --app APP --product P [--scripts-out DIR] [--snippet-out FILE]
+#          Stages product P's Sparkle updater and its daily-check LaunchAgent into a pkg payload root,
+#          and emits the postinstall logic that loads the agent, rendered from the shared updater/*.in
+#          templates. Where the app goes, what it is called and the agent's label are P's, derived by
+#          product-name.sh from shipyard's scripts/product-names; --app-dir and --agent-label are refused.
 #            --stage        payload root that pkgbuild --root will package
-#            --app          the built updater .app (its basename minus .app is the executable name)
-#            --app-dir      ABSOLUTE install dir for the .app; may contain spaces
-#            --agent-label  LaunchAgent Label; the installed plist is <label>.plist
-#            --scripts-out  dir to write a complete `postinstall` into (pass as --scripts to
-#                           pkgbuild)
-#            --snippet-out  file to write JUST the agent-load fragment into, for a product that
-#                           already has its own postinstall to `.` it from
-#          Both outputs are optional: pass whichever the product needs, or neither to stage payload
-#          only. There is deliberately NO manual-trigger shim in /usr/local/bin: the agent checks
-#          daily on its own, and a command nobody documented is a command nobody runs.
+#            --app          the built updater, P-updater.app (mavericks_add_updater_app(PRODUCT P))
+#            --product      P, a registered short name
+#            --scripts-out  dir to write a complete `postinstall` into (pass as --scripts to pkgbuild)
+#            --snippet-out  file to write JUST the agent-load fragment into, for a postinstall to source
+#          Both outputs are optional. There is deliberately NO manual-trigger shim in /usr/local/bin:
+#          the agent checks daily on its own, and a command nobody documented is a command nobody runs.
 # spec: tests/stage_updater.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 TPL="$SELF/../updater"
 
-STAGE=""; APP=""; APPDIR=""; LABEL=""; SCRIPTSOUT=""; SNIPPETOUT=""
+STAGE=""; APP=""; P=""; SCRIPTSOUT=""; SNIPPETOUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --stage) STAGE="$2"; shift 2;;
-    --app) APP="$2"; shift 2;;
-    --app-dir) APPDIR="$2"; shift 2;;
-    --agent-label) LABEL="$2"; shift 2;;
+    --app) APP="${2%/}"; shift 2;;
+    --product) P="$2"; shift 2;;
     --scripts-out) SCRIPTSOUT="$2"; shift 2;;
     --snippet-out) SNIPPETOUT="$2"; shift 2;;
+    --app-dir|--agent-label) echo "stage_updater: $1 is derived from shipyard's scripts/product-names; pass --product" >&2; exit 2;;
     *) echo "stage_updater: unknown arg: $1" >&2; exit 2;;
   esac
 done
-[ -n "$STAGE" ] && [ -n "$APP" ] && [ -n "$APPDIR" ] && [ -n "$LABEL" ] \
-  || { echo "stage_updater: need --stage --app --app-dir --agent-label" >&2; exit 2; }
+[ -n "$STAGE" ] && [ -n "$APP" ] && [ -n "$P" ] \
+  || { echo "stage_updater: need --stage --app --product" >&2; exit 2; }
 [ -d "$APP" ] || { echo "stage_updater: no updater .app: $APP" >&2; exit 1; }
-case "$APPDIR" in /*) ;; *) echo "stage_updater: --app-dir must be absolute: $APPDIR" >&2; exit 2;; esac
+REL="$(sh "$SELF/product-name.sh" updater-app "$P")" \
+  || { echo "stage_updater: $P is not in shipyard's scripts/product-names" >&2; exit 1; }
+LABEL="$(sh "$SELF/product-name.sh" agent-label "$P")"
+APPDIR="/${REL%/*}"
+appbase="${REL##*/}"
+[ "${APP##*/}" = "$appbase" ] \
+  || { echo "stage_updater: $P's updater is $appbase, built by mavericks_add_updater_app(PRODUCT $P); got ${APP##*/}" >&2; exit 2; }
 for t in updatecheck.plist.in agent-load.in; do
   [ -f "$TPL/$t" ] || { echo "stage_updater: missing template $TPL/$t" >&2; exit 1; }
 done
 
-appbase=$(basename "$APP")            # DockerUpdater.app
-exec_name=${appbase%.app}             # DockerUpdater
-installed_app="$APPDIR/$appbase"      # /Library/Application Support/Mavergreen/DockerUpdater.app
+exec_name=${appbase%.app}
+installed_app="$APPDIR/$appbase"
 installed_exec="$installed_app/Contents/MacOS/$exec_name"
 
-export COPYFILE_DISABLE=1             # no ._AppleDouble sidecars in the payload
+export COPYFILE_DISABLE=1
 mkdir -p "$STAGE$APPDIR" "$STAGE/Library/LaunchAgents"
 rm -rf "$STAGE$APPDIR/$appbase"
 cp -R "$APP" "$STAGE$APPDIR/"

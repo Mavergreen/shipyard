@@ -67,16 +67,54 @@ sh "$S" --stage "$so" --product swift-runtime --name "Swift Runtime" --version 1
 grep -q 'rm -rf "$ROOT/usr/local/mavergreen/openssh"' "$w/scr/preinstall" \
   || fail "the preinstall's destructive path is a literal, never built from a variable that could be empty"
 
-APP="$w/FakeUpdater.app"
+APP="$w/openssh-updater.app"
 mkdir -p "$APP/Contents/MacOS"
-printf '#!/bin/sh\n' > "$APP/Contents/MacOS/FakeUpdater"
-chmod +x "$APP/Contents/MacOS/FakeUpdater"
-printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.FakeUpdater</string></dict></plist>\n' > "$APP/Contents/Info.plist"
+printf '#!/bin/sh\n' > "$APP/Contents/MacOS/openssh-updater"
+chmod +x "$APP/Contents/MacOS/openssh-updater"
+/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string dev.mavergreen.openssh.updater" \
+  -c "Add :SUFeedURL string https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml" \
+  "$APP/Contents/Info.plist" >/dev/null
 SCRU="$w/scr-updater"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$SCRU" \
-  --updater-app "$APP" --app-dir "/Library/Application Support/Mavergreen" \
-  --agent-label dev.mavergreen.openssh-updatecheck \
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$SCRU" --updater-app "$APP" \
   || fail "stage_product with --updater-app must succeed"
+[ -d "$st/Library/Application Support/Mavergreen/openssh-updater.app" ] \
+  || fail "the updater lands where the registry puts openssh's"
+[ -f "$st/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" ] \
+  || fail "the update-check job carries the registry's label for openssh"
+[ "$(/usr/libexec/PlistBuddy -c 'Print :appcast' "$st/usr/local/mavergreen/openssh/mavergreen.plist")" = https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml ] \
+  || fail "a product that stages an updater names the registry's feed in its manifest"
+[ -z "$(/usr/libexec/PlistBuddy -c 'Print :appcast' "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist")" ] \
+  || fail "a product with no updater has no feed, so its manifest's appcast is empty -- never a URL that 404s"
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-hu" --has-updater 2>/dev/null \
+  && fail "--has-updater is stage_product's to pass, never a caller's"
+for f in --appcast --app-dir --agent-label; do
+  rc=0; sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-refused" \
+    --updater-app "$APP" "$f" x 2>/dev/null || rc=$?
+  [ "$rc" -eq 2 ] || fail "$f is derived from the registry, so passing it is a usage error (exit 2); got $rc"
+done
+WRONG="$w/wrong/openssh-updater.app"; mkdir -p "$WRONG/Contents/MacOS"
+printf '#!/bin/sh\n' > "$WRONG/Contents/MacOS/openssh-updater"
+/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string dev.mavergreen.OpenSSHUpdater" \
+  -c "Add :SUFeedURL string https://github.com/Mavergreen/openssh/releases/latest/download/appcast.xml" \
+  "$WRONG/Contents/Info.plist" >/dev/null
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-wrong" \
+  --updater-app "$WRONG" 2>"$w/err" \
+  && fail "an updater built with another bundle id or feed than the registry's must be refused -- the app and its stage would disagree"
+grep -q 'dev.mavergreen.openssh.updater' "$w/err" || fail "the refusal names the identity the registry expects: $(cat "$w/err")"
+ol() { _i=0; while _v="$(/usr/libexec/PlistBuddy -c "Print :outside:$_i" "$1" 2>/dev/null)"; do echo "$_v"; _i=$((_i + 1)); done; }
+for s in go126 go127; do
+  a="$w/lines/$s-updater.app"; mkdir -p "$a/Contents/MacOS"; printf '#!/bin/sh\n' > "$a/Contents/MacOS/$s-updater"
+  /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $(sh "$here/../scripts/product-name.sh" updater-bundle-id "$s")" \
+    -c "Add :SUFeedURL string $(sh "$here/../scripts/product-name.sh" feed "$s")" "$a/Contents/Info.plist" >/dev/null
+  sl="$w/stage-$s"; mkdir -p "$sl/usr/local/mavergreen/$s/bin"; echo go > "$sl/usr/local/mavergreen/$s/bin/go"
+  sh "$S" --stage "$sl" --product "$s" --name Go --version 1 --group go --line "${s#go}" \
+    --scripts-out "$w/scr-$s" --updater-app "$a" || fail "staging $s with its own updater must succeed"
+  ol "$sl/usr/local/mavergreen/$s/mavergreen.plist" > "$w/outside-$s"
+done
+grep -qx 'Library/Application Support/Mavergreen/go126-updater.app' "$w/outside-go126" \
+  || fail "go126's manifest lists its own updater in outside: $(cat "$w/outside-go126")"
+[ -z "$(grep -Fxf "$w/outside-go126" "$w/outside-go127")" ] \
+  || fail "two lines' manifests share an outside entry, so uninstalling one line would remove the other's updater"
 sh -n "$SCRU/preinstall" || fail "generated preinstall (with updater) must be valid sh"
 sh -n "$SCRU/postinstall" || fail "generated postinstall (with updater) must be valid sh"
 grep -q MAV_AGENT_PLIST "$SCRU/postinstall" \
@@ -109,6 +147,7 @@ grep -q '^launchctl bootstrap gui/501 ' "$alog" \
 
 fake="$w/fake"; mkdir -p "$fake"
 cp "$S" "$fake/stage_product.sh"
+cp "$here/../scripts/product-name.sh" "$here/../scripts/product-names" "$fake/"
 RM_LOG="$w/rm.log"; export RM_LOG
 cat > "$fake/render-manifest.sh" <<'EOF'
 #!/bin/sh
@@ -130,13 +169,10 @@ EOF
 st2="$w/stage2"; mkdir -p "$st2/usr/local/mavergreen/openssh/bin"; echo ssh > "$st2/usr/local/mavergreen/openssh/bin/ssh"
 sh "$fake/stage_product.sh" --stage "$st2" --product openssh \
   --name "Open SSH Suite" --version 1.2.3 --group opengrp --line 9 \
-  --appcast "https://example/x?a=1&b=2" \
   --exclude "bin/extra one" --exclude "share/man/man1/extra.1" \
   --replaces "/usr/bin/ssh=bin/ssh" --replaces "/usr/bin/scp=bin/scp two" \
   --scripts-out "$w/scr3" \
-  --updater-app "$w/FakeUpdater.app" \
-  --app-dir "/Library/Application Support/Mavergreen" \
-  --agent-label dev.mavergreen.openssh-updatecheck \
+  --updater-app "$APP" \
   --preinstall-hook "$w/hook" --postinstall-hook "$w/hook" \
   || fail "stage_product with a stubbed render-manifest/stage_updater must still succeed"
 expected="$(printf '%s\n' \
@@ -146,17 +182,19 @@ expected="$(printf '%s\n' \
   --version 1.2.3 \
   --group opengrp \
   --line 9 \
-  --appcast "https://example/x?a=1&b=2" \
   --exclude "bin/extra one" \
   --exclude "share/man/man1/extra.1" \
   --replaces "/usr/bin/ssh=bin/ssh" \
-  --replaces "/usr/bin/scp=bin/scp two")"
+  --replaces "/usr/bin/scp=bin/scp two" \
+  --has-updater)"
 [ "$(cat "$w/rm.log")" = "$expected" ] \
   || fail "every render-manifest option, in order, with repeats and embedded spaces, must reach render-manifest intact: got [$(cat "$w/rm.log")]"
 grep -qE -- '--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook' "$w/rm.log" \
   && fail "a stage_product-only option must never reach render-manifest"
 grep -qF "$w/scr3" "$w/rm.log" && fail "a stage_product-only option's VALUE must never reach render-manifest either"
 grep -qF "Application Support" "$w/rm.log" && fail "the updater's app-dir value must never reach render-manifest"
+[ "$(sed -n '/^--product$/{n;p;}' "$w/rmu.log")" = openssh ] \
+  || fail "stage_updater is told the product, and derives the rest: got [$(cat "$w/rmu.log")]"
 
 rc1="$w/rc1"
 if run_with_timeout 5 "$rc1" sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out; then

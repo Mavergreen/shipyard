@@ -12,25 +12,24 @@ trap 'rm -rf "$T"' EXIT
 # platform: the install dir contains a SPACE, as the real one does -- this pins that the
 #           rendered paths survive it.
 APPDIR="/Library/Application Support/Mavergreen"
-LABEL=dev.mavergreen.test-updatecheck
-APP="$T/TestUpdater.app"
+LABEL=dev.mavergreen.openssh-updatecheck
+APP="$T/openssh-updater.app"
 mkdir -p "$APP/Contents/MacOS"
-printf '#!/bin/sh\n' > "$APP/Contents/MacOS/TestUpdater"
-printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.TestUpdater</string></dict></plist>\n' > "$APP/Contents/Info.plist"
-chmod +x "$APP/Contents/MacOS/TestUpdater"
+printf '#!/bin/sh\n' > "$APP/Contents/MacOS/openssh-updater"
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.openssh.updater</string></dict></plist>\n' > "$APP/Contents/Info.plist"
+chmod +x "$APP/Contents/MacOS/openssh-updater"
 
 fail() { echo "stage_updater test: $1" >&2; exit 1; }
 no_token() { if grep -q '@MAVERICKS' "$1"; then fail "unsubstituted token in $1"; fi; }
 
 STAGE="$T/stage"; SCR="$T/scripts"
-sh "$ROOT/scripts/stage_updater.sh" --stage "$STAGE" --app "$APP" \
-  --app-dir "$APPDIR" --agent-label "$LABEL" --scripts-out "$SCR"
+sh "$ROOT/scripts/stage_updater.sh" --stage "$STAGE" --app "$APP" --product openssh --scripts-out "$SCR"
 
-installed_exe="$APPDIR/TestUpdater.app/Contents/MacOS/TestUpdater"
-[ -x "$STAGE$installed_exe" ] || fail "app not staged"
+installed_exe="$APPDIR/openssh-updater.app/Contents/MacOS/openssh-updater"
+[ -x "$STAGE$installed_exe" ] || fail "app not staged where the registry puts openssh's updater"
 
 PL="$STAGE/Library/LaunchAgents/$LABEL.plist"
-[ -f "$PL" ] || fail "no agent plist"
+[ -f "$PL" ] || fail "no agent plist at the registry's label for openssh"
 grep -q "<string>$LABEL</string>" "$PL" || fail "agent label not set"
 grep -q "<string>$installed_exe</string>" "$PL" \
   || fail "agent exec path not set to the INSTALLED path (the staged file lives under \$STAGE, but the plist must reference the path with no \$STAGE prefix)"
@@ -46,8 +45,7 @@ no_token "$PI"
 [ ! -d "$STAGE/usr/local/bin" ] || fail "staged something into /usr/local/bin -- the daily agent is the only check, with no manual-trigger shim"
 
 STAGE2="$T/stage2"; SNIP="$T/snips/agent-load.sh"
-sh "$ROOT/scripts/stage_updater.sh" --stage "$STAGE2" --app "$APP" \
-  --app-dir "$APPDIR" --agent-label "$LABEL" --snippet-out "$SNIP"
+sh "$ROOT/scripts/stage_updater.sh" --stage "$STAGE2" --app "$APP" --product openssh --snippet-out "$SNIP"
 [ -f "$SNIP" ] || fail "no snippet"
 no_token "$SNIP"
 sh -n "$SNIP" || fail "snippet is not valid sh"
@@ -75,14 +73,23 @@ PATH="$stubs:$PATH" sh -c '. "$0"' "$T/snip-redirected" /x.pkg /Volumes/Other /V
 grep -q 'MAV_AGENT_PLIST' "$PI" || fail "postinstall does not carry the shared agent-load logic -- both outputs must render the same logic (the postinstall is the snippet plus a shebang and exit)"
 
 STAGE3="$T/stage3"
-sh "$ROOT/scripts/stage_updater.sh" --stage "$STAGE3" --app "$APP" \
-  --app-dir "$APPDIR" --agent-label "$LABEL"
+sh "$ROOT/scripts/stage_updater.sh" --stage "$STAGE3" --app "$APP" --product openssh
 [ -x "$STAGE3$installed_exe" ] || fail "app not staged in payload-only mode"
 
-if sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s4" --app "$APP" --app-dir "$APPDIR" \
-     --agent-label x --no-such-flag whatever 2>/dev/null; then
+for f in --app-dir --agent-label; do
+  rc=0; sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s5" --app "$APP" --product openssh "$f" x 2>/dev/null || rc=$?
+  [ "$rc" -eq 2 ] || fail "$f is derived from the registry, so passing it is a usage error (exit 2); got $rc"
+done
+mkdir -p "$T/other/OpenSSHUpdater.app"
+rc=0; sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s6" --app "$T/other/OpenSSHUpdater.app" --product openssh 2>/dev/null || rc=$?
+[ "$rc" -eq 2 ] || fail "an updater not named openssh-updater.app would install where its LaunchAgent does not look; got $rc"
+[ ! -e "$T/s6" ] || fail "a refused updater stages nothing"
+sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s7" --app "$APP" --product no-such-product 2>/dev/null \
+  && fail "an unregistered product has no updater identity to stage"
+
+if sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s4" --app "$APP" --product openssh \
+     --no-such-flag whatever 2>/dev/null; then
   fail "an unknown argument was accepted -- a caller asking for something this script does not do should fail loudly rather than get a payload quietly missing it"
 fi
-
 
 echo "stage_updater OK"

@@ -24,10 +24,11 @@ project(MavericksShipyard VERSION ${_MSC_VERSION} LANGUAGES NONE)
 # and compiles nothing, so `cmake --install` works on a box with no ObjC compiler -- and the payload
 # stays buildable where there is no Objective-C at all. Only the pkg job turns this on.
 #
-# Built once per arch (x86_64/10.9 and arm64/11.0) rather than a single fat build: CMAKE_OSX_ARCHITECTURES
-# and the deployment target are directory-scoped, and a fat CMAKE_OSX_ARCHITECTURES can't carry two
-# floors -- arm64 has no 10.9. The two single-arch builds share the same PRODUCT, so the same name and bundle id, and are
-# merged into ONE universal .app by scripts/lipo-merge-tree.sh in the release, not picked between.
+# Built once per arch (x86_64/10.9 and arm64/11.0) rather than a single fat build:
+# CMAKE_OSX_ARCHITECTURES and the deployment target are directory-scoped, and a fat
+# CMAKE_OSX_ARCHITECTURES can't carry two floors -- arm64 has no 10.9. The two single-arch builds
+# share the same PRODUCT, so the same name and bundle id, and are merged into ONE universal .app by
+# scripts/lipo-merge-tree.sh in the release, not picked between.
 option(SHIPYARD_BUILD_UPDATER "Build the Sparkle updater app (needed only to package the pkg)" OFF)
 if(SHIPYARD_BUILD_UPDATER)
   enable_language(OBJC)

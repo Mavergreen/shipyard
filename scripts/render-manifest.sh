@@ -1,14 +1,15 @@
 #!/bin/sh
 # platform: macOS-only -- PlistBuddy reads back and plutil lints the manifest it writes
 #   usage: render-manifest.sh --stage ROOT --product P --name N --version V [--group G] [--line L]
-#            [--appcast URL] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
+#            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]... [--has-updater]
 #          Writes ROOT/usr/local/mavergreen/P/mavergreen.plist. Run it LAST: `outside` is read from
 #          whatever is staged at that moment.
+#          With --has-updater the manifest's appcast is the product's feed, from scripts/product-names; else empty.
 # spec: tests/render-manifest-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 PB=/usr/libexec/PlistBuddy
-ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; EXCL=""; REPL=""; GEN=""
+ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; HASUPD=""; EXCL=""; REPL=""; GEN=""
 nl='
 '
 dotty() { case "/$1/" in *"/./"*|*"/../"*) return 0 ;; esac; return 1; }
@@ -22,7 +23,8 @@ while [ $# -gt 0 ]; do
     --version) VER="$2"; shift 2 ;;
     --group) G="$2"; shift 2 ;;
     --line) L="$2"; shift 2 ;;
-    --appcast) AC="$2"; shift 2 ;;
+    --appcast) echo "render-manifest: --appcast is derived from shipyard's scripts/product-names; stop passing it" >&2; exit 2 ;;
+    --has-updater) HASUPD=1; shift ;;
     --exclude) EXCL="$EXCL$2$nl"; shift 2 ;;
     --replaces)
       case "$2" in
@@ -48,6 +50,9 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$ST" ] && [ -n "$P" ] && [ -n "$NAME" ] && [ -n "$VER" ] || { echo "render-manifest: need --stage --product --name --version" >&2; exit 2; }
 ID="$(sh "$SELF/product-name.sh" identifier "$P")" || { echo "render-manifest: $P is not in shipyard's scripts/product-names" >&2; exit 1; }
+if [ -n "$HASUPD" ]; then
+  AC="$(sh "$SELF/product-name.sh" feed "$P")" || { echo "render-manifest: $P has no repo in shipyard's scripts/product-names" >&2; exit 1; }
+fi
 case "${G:-$P}" in *[!a-z0-9-]*|-*) echo "render-manifest: bad group ${G:-$P}" >&2; exit 2 ;; esac
 case "$L" in *[!0-9a-z.-]*) echo "render-manifest: bad line $L" >&2; exit 2 ;; esac
 T="$ST/usr/local/mavergreen/$P"; M="$T/mavergreen.plist"

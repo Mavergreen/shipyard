@@ -1,19 +1,20 @@
 #!/bin/sh
-# platform: macOS-only -- render-manifest.sh reads its manifest back with PlistBuddy and lints it with plutil
+# platform: macOS-only -- PlistBuddy reads the updater's identity, and render-manifest.sh reads back and lints the manifest
 #   usage: stage_product.sh --stage ROOT --product P --name N --version V --scripts-out DIR
-#            [--group G] [--line L] [--appcast URL] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
-#            [--updater-app APP --app-dir DIR --agent-label LABEL]
-#            [--preinstall-hook FILE] [--postinstall-hook FILE]
+#            [--group G] [--line L] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
+#            [--updater-app P-updater.app] [--preinstall-hook FILE] [--postinstall-hook FILE]
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
 #          staged its files under ROOT/usr/local/mavergreen/P/ (and anything the OS dictates elsewhere).
+#          The updater's place, label and feed are P's, from scripts/product-names: an updater built
+#          for anything else is refused, and so are --appcast, --app-dir and --agent-label.
 # spec: tests/stage-product-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-ST=""; P=""; SCR=""; APP=""; APPDIR=""; LABEL=""; PREH=""; POSTH=""
+ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
-    --stage|--product|--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--appcast|--exclude|--replaces|--generated)
+    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--exclude|--replaces|--generated)
       [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
@@ -21,11 +22,10 @@ while [ "$1" != --end ]; do
     --product) P="$2"; set -- "$@" "$1" "$2"; shift 2 ;;
     --scripts-out) SCR="$2"; shift 2 ;;
     --updater-app) APP="$2"; shift 2 ;;
-    --app-dir) APPDIR="$2"; shift 2 ;;
-    --agent-label) LABEL="$2"; shift 2 ;;
     --preinstall-hook) PREH="$2"; shift 2 ;;
     --postinstall-hook) POSTH="$2"; shift 2 ;;
-    --name|--version|--group|--line|--appcast|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
+    --name|--version|--group|--line|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
+    --appcast|--app-dir|--agent-label) echo "stage_product: $1 is derived from shipyard's scripts/product-names; stop passing it" >&2; exit 2 ;;
     *) echo "stage_product: unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -42,8 +42,16 @@ mkdir -p "$ST/usr/local/mavergreen/$P"
 mkdir -p "$SCR"
 snippet=""
 if [ -n "$APP" ]; then
+  _want_id="$(sh "$SELF/product-name.sh" updater-bundle-id "$P")" \
+    || { echo "stage_product: $P is not in shipyard's scripts/product-names" >&2; exit 1; }
+  _want_feed="$(sh "$SELF/product-name.sh" feed "$P")"
+  _got_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist" 2>/dev/null)" || _got_id=""
+  _got_feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP/Contents/Info.plist" 2>/dev/null)" || _got_feed=""
+  [ "$_got_id" = "$_want_id" ] && [ "$_got_feed" = "$_want_feed" ] \
+    || { echo "stage_product: $APP was not built for $P: it is '${_got_id:-none}' polling '${_got_feed:-none}', and the registry says $_want_id polling $_want_feed -- build it with mavericks_add_updater_app(PRODUCT $P)" >&2; exit 1; }
   snippet="$SCR/.agent-load"
-  sh "$SELF/stage_updater.sh" --stage "$ST" --app "$APP" --app-dir "$APPDIR" --agent-label "$LABEL" --snippet-out "$snippet"
+  sh "$SELF/stage_updater.sh" --stage "$ST" --app "$APP" --product "$P" --snippet-out "$snippet"
+  set -- "$@" --has-updater
 fi
 sh "$SELF/render-manifest.sh" "$@"
 {
