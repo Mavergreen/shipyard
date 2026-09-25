@@ -13,6 +13,10 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 . "$here/lib/cmake_fixture.sh"
 real="$(command -v cmake 2>/dev/null)" || { echo "SKIP: no cmake"; exit 77; }
+# platform: on a Linux runner, install@v1 exports MavericksShipyard_DIR (and a caller may carry a
+#           CMAKE_PREFIX_PATH) for the whole job; either outranks the prefix search every case here
+#           tests, so clear both and let the cases that want one set it themselves.
+unset MavericksShipyard_DIR CMAKE_PREFIX_PATH
 # platform: macOS sets TMPDIR with a trailing slash, and cmake normalizes "//" away when it prints
 #           MavericksShipyard_DIR -- so an unstripped slash makes case 1's grep fail on every real
 #           macOS session while looking fine here with TMPDIR unset.
