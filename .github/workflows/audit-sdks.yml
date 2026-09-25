@@ -1,0 +1,24 @@
+name: audit-sdks
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the family
+#       acceptance audit, run by hand: every repo's latest release against the sdk-pin rule.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repos:
+        description: "space-separated owner/repo list"
+        required: true
+        type: string
+
+jobs:
+  audit:
+    runs-on: macos-26
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh scripts/audit-release-sdks.sh ${{ inputs.repos }}
