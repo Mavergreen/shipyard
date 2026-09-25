@@ -73,6 +73,15 @@ MAVERICKS_SDK_CACHE="$work3"; export MAVERICKS_SDK_CACHE
 
 trap 'rm -rf "$work1" "$work2" "$work3" "$bd1" "$bd2" "$bd1cross"' EXIT INT TERM
 sdk="$work3/MacOSX10.9.sdk"
+# platform: MavericksToolchain.cmake picks native mode by the HOST, not the preset: on a 10.9 host it
+#           pins xcrun's own 10.9 SDK when xcrun finds one, so both presets must record that there.
+# platform: guarded macOS-only call -- sw_vers only prints 10.9.x on a 10.9 host; elsewhere the case falls through
+case "$(sw_vers -productVersion 2>/dev/null || true)" in
+  10.9.*)
+    # platform: guarded macOS-only call -- inside the 10.9.* arm above, so only on a 10.9 host
+    x="$(xcrun --sdk macosx10.9 --show-sdk-path 2>/dev/null || true)"
+    if [ -n "$x" ] && [ -d "$x" ]; then sdk="$x"; fi ;;
+esac
 
 fixture "$work1"
 fixture "$work2"

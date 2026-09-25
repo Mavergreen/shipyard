@@ -3,8 +3,8 @@
 #   usage: fetch_sdk.sh [--arch x86_64|arm64]
 #          Fetches + caches + checksum-verifies the family's PINNED SDK for one arch (sdk-pins.sh):
 #          MacOSX10.9.sdk for x86_64 (the default), MacOSX11.3.sdk for arm64. Prints the SDK root on
-#          stdout. A native 10.9 box uses its own system SDK instead. Apple SDK bytes are never
-#          committed -- this is a build-time fetch. The cache default is per-machine and durable:
+#          stdout. A native 10.9 box uses xcrun's own 10.9 SDK when it has one (MavericksToolchain.cmake),
+#          and this pin otherwise. Apple SDK bytes are never committed -- this is a build-time fetch. The cache default is per-machine and durable:
 #          TMPDIR gets purged by macOS (stranding the path CMake cached at configure time).
 #          MAVERICKS_SDK_URL / MAVERICKS_SDK_SHA256 override the selected arch's pin (the tests use
 #          them); MAVERICKS_SDK_CACHE moves the cache. Exit 2 on a usage error or an arch with no pin.

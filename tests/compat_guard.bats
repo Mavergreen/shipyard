@@ -9,8 +9,9 @@ setup() {
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/compat_guard_test.XXXXXX")"
   CC=$(command -v clang || command -v cc)
   # platform: no vtool (pre-Xcode 11, e.g. the 10.9 box) to restamp fixtures, and that box's
-  #           default SDK may be 10.10 -- so build them against the pinned 10.9 SDK instead;
-  #           clang honours SDKROOT.
+  #           default SDK may be 10.10 (Xcode 6.1+; MavericksToolchain.cmake pins native mode for
+  #           the same reason) -- so build them against the pinned 10.9 SDK instead; clang honours
+  #           SDKROOT.
   if ! xcrun --find vtool >/dev/null 2>&1; then
     SDKROOT="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh")" && export SDKROOT
   fi

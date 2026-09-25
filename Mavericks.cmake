@@ -32,7 +32,9 @@ include(MavericksMode)          # -> MAVERICKS_MODE, guard vs the preset's expec
 
 # SKILL.md "SDK pinning": a cross build links the PINNED SDK for its arch, never the runner's. The
 # toolchain file (via the shipyard presets) sets it before project(); anything else is refused here, the
-# earliest point shipyard runs, rather than discovered at package time.
+# earliest point shipyard runs, rather than discovered at package time. Native builds are pinned by the
+# toolchain file too, but may use xcrun's own 10.9 SDK rather than the fetched one, so this check is
+# cross-only; package-time conformance checks what every build records.
 if(MAVERICKS_MODE STREQUAL "cross")
   list(LENGTH CMAKE_OSX_ARCHITECTURES _mav_na)
   if(_mav_na EQUAL 1)
