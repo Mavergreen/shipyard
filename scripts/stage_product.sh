@@ -46,7 +46,12 @@ sh "$SELF/render-manifest.sh" "$@"
   printf '[ -n "${3:-}" ] || { echo "%s: preinstall got no target volume; removing nothing" >&2; exit 0; }\n' "$P"
   printf 'ROOT="${3%%/}"\n'
   printf 'if [ -x "$ROOT/usr/local/bin/mavergreen" ]; then "$ROOT/usr/local/bin/mavergreen" --root "$ROOT/" unlink %s 2>/dev/null || true; fi\n' "$P"
-  if [ -n "$PREH" ]; then cat "$PREH"; printf '\n'; fi
+  if [ -n "$PREH" ]; then
+    printf '(\n:\n'; cat "$PREH"; printf '\n) || {\n'
+    printf '  echo "%s: preinstall hook failed; the installed version is left in place" >&2\n' "$P"
+    printf '  if [ -x "$ROOT/usr/local/bin/mavergreen" ]; then "$ROOT/usr/local/bin/mavergreen" --root "$ROOT/" link %s >/dev/null 2>&1 || true; fi\n' "$P"
+    printf '  exit 1\n}\n'
+  fi
   printf 'rm -rf "$ROOT/usr/local/mavergreen/%s" 2>/dev/null || echo "%s: could not clear $ROOT/usr/local/mavergreen/%s; files dropped from this version may linger" >&2\n' "$P" "$P" "$P"
   printf 'exit 0\n'
 } > "$SCR/preinstall"
@@ -80,7 +85,9 @@ HELPERPICK
   printf '[ -n "$MG" ] && [ -x "$MG" ] || { echo "%s: no mavergreen helper on this volume" >&2; exit 1; }\n' "$P"
   printf '"$MG" --root "$ROOT/" link %s || exit 1\n' "$P"
   if [ -n "$snippet" ]; then cat "$snippet"; printf '\n'; fi
-  if [ -n "$POSTH" ]; then cat "$POSTH"; printf '\n'; fi
+  if [ -n "$POSTH" ]; then
+    printf '(\n:\n'; cat "$POSTH"; printf '\n) || { echo "%s: postinstall hook failed" >&2; exit 1; }\n' "$P"
+  fi
   printf 'exit 0\n'
 } > "$SCR/postinstall"
 rm -f "$SCR/.agent-load"

@@ -256,4 +256,32 @@ else
   [ -d "$MGp/openssh" ] || fail "fixture: the unwritable parent must have kept the tree"
 fi
 
+V2="$w/vol-hooks"; T2="$V2/usr/local/mavergreen"; mkdir -p "$V2/usr/local/bin" "$T2"
+sed 's/@MAVERGREEN_VERSION@/9.9/' "$here/../scripts/mavergreen.sh" > "$V2/usr/local/bin/mavergreen"
+chmod +x "$V2/usr/local/bin/mavergreen"
+printf 'false\n' > "$w/hook-false"
+printf 'exit 0\n' > "$w/hook-exit"
+printf 'if [ -z "$ROOT" ]; then false; fi\n' > "$w/hook-guarded"
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-false" \
+  --preinstall-hook "$w/hook-false" --postinstall-hook "$w/hook-false" || fail "staging with failing hooks must succeed"
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-exit" \
+  --preinstall-hook "$w/hook-exit" || fail "staging with an exiting hook must succeed"
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-guarded" \
+  --postinstall-hook "$w/hook-guarded" || fail "staging with a guarded hook must succeed"
+cp -R "$st/usr/local/mavergreen/openssh" "$T2/"
+"$V2/usr/local/bin/mavergreen" --root "$V2/" link openssh || fail "setup: link the installed version"
+rc=0; sh "$w/scr-false/preinstall" /x.pkg "$V2/" "$V2/" 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "a failing preinstall hook must fail the install -- it is how a preset refuses a missing dependency"
+[ -f "$T2/openssh/mavergreen.plist" ] || fail "a failing preinstall hook must stop the install before the tree is removed"
+[ -L "$T2/bin/ssh" ] || fail "a failing preinstall hook must leave the installed version linked, as it was"
+grep -q 'preinstall hook failed' "$w/err" || fail "the failure names the preinstall hook: $(cat "$w/err")"
+sh "$w/scr-exit/preinstall" /x.pkg "$V2/" "$V2/" || fail "a hook that exits 0 early is not a failure"
+[ ! -e "$T2/openssh" ] || fail "a hook's exit must not skip the tree removal -- each hook runs in a subshell"
+cp -R "$st/usr/local/mavergreen/openssh" "$T2/"
+rc=0; sh "$w/scr-false/postinstall" /x.pkg "$V2/" "$V2/" 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "a failing postinstall hook must fail the install, not be masked by the trailing exit 0"
+grep -q 'postinstall hook failed' "$w/err" || fail "the failure names the postinstall hook: $(cat "$w/err")"
+sh "$w/scr-guarded/postinstall" /x.pkg "$V2/" "$V2/" \
+  || fail "a running-system step guarded by if [ -z \$ROOT ] is skipped on another volume, and the hook still succeeds"
+
 echo "PASS: stage-product"

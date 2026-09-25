@@ -1618,9 +1618,16 @@ Both anchor on Installer's target volume and never on `/`: with none, the preins
 and the postinstall fails. **A product's own steps go in the hooks**, appended to the generated
 scripts, never in a hand-written script: that is what keeps unlink-remove-link the same in every
 product, and check 23 enforces the call. Hooks see the volume as `$ROOT` (empty for the boot
-volume), and **a hook touches the running system (`launchctl`, `kextload`, …) only when `$ROOT` is
-empty**: an install to another volume must not load that volume's jobs or kexts into the system
-doing the installing. The updater's agent load follows the same rule.
+volume), and **a hook touches the running system (`launchctl`, `kextload`, `open`, …) only inside
+`if [ -z "$ROOT" ]; then … fi`**: an install to another volume must not load that volume's jobs or
+kexts into the system doing the installing. The updater's agent load follows the same rule. **Each
+hook runs in a subshell, and its last command's status is its verdict.** A failing preinstall hook
+stops the install before the tree is removed (the outgoing version is relinked), which is how a
+preset refuses a missing dependency. A failing postinstall hook fails the install. So a best-effort
+step ends `|| true`, an essential one records its failure (`|| _rc=1`) and the hook ends
+`[ "$_rc" -eq 0 ]`, and a guard is written as `if [ -z "$ROOT" ]; then …; fi`, never as
+`[ -z "$ROOT" ] && …` on the last line (that line is false on another volume). A hook contains no
+`exit` and no `set -e`.
 
 ### Where a product may install
 
