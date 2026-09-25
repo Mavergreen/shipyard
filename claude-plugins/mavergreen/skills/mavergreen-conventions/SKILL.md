@@ -1805,8 +1805,8 @@ two consumers within the hour it shipped.
 `*.sh`, `*.bats`, `*.bash` and `*.py`, every file tracked executable, and every file starting `#!`.
 Those three shapes are exactly where check 18 is blind. `scripts/templates/` is skipped, because
 check 17 byte-compares `msc.sh` there against other repos (the other template, `base-postinstall.sh`,
-becomes the base component's pkg postinstall and runs only on the Mac it installs to), and so is
-any OTHER tracked file that is byte-identical to a template there -- a consumer's own copy of it
+is a template `build-base-component.sh` renders, filling in `@MAVERGREEN_VERSION@`, and never runs
+as itself), and so is any OTHER tracked file that is byte-identical to a template there -- a consumer's own copy of it
 (`build/msc.sh`, e.g.), which check 17 requires to stay byte-identical and which therefore cannot
 carry its own declaration.
 

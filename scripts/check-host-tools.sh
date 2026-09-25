@@ -4,7 +4,7 @@
 #          Scans the WHOLE tracked tree, tests/ included: every *.sh, *.bats, *.bash and *.py,
 #          every file git tracks as executable, and every file whose first line is "#!".
 #          scripts/templates/ is skipped -- msc.sh there is compared byte for byte by check 17,
-#          and base-postinstall.sh runs only as a pkg postinstall on the Mac it installs to --
+#          and base-postinstall.sh is a template build-base-component.sh renders, never run as itself --
 #          and so is any tracked script that is byte-identical to
 #          $SELF/templates/<its basename>: that is a consumer's copy of one, and check 17 owns it
 #          too. Each script must declare its host in its header (host-of.sh), and
