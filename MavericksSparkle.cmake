@@ -1,6 +1,6 @@
 # MavericksSparkle.cmake -- Sparkle auto-update tooling shared across mavericks-* products.
 # No side effects on include (mirrors MavericksFetch.cmake). Provides:
-#   mavericks_fetch_sparkle(<out_framework>)   -- fetch+thin Sparkle 1.27.3, return the .framework path
+#   mavericks_fetch_sparkle(<out_framework>)   -- fetch the pinned Sparkle 1.27.3 verbatim, return the .framework path
 #   mavericks_add_updater_app(...)             -- build a Sparkle-hosting .app (Cocoa-only, NO Swift)
 # The EdDSA signing tools are NOT built here -- use the prebuilt ed25519-keygen / ed25519-sign from
 # mavericks-ed25519 (https://github.com/Mavergreen/ed25519). Sign+appcast + payload staging are
@@ -12,26 +12,13 @@ set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-s
 include("${MAVERICKS_SHARED_DIR}/MavericksDecisions.cmake")   # mavericks_reject_placeholder_icon()
 
 function(mavericks_fetch_sparkle out_var)
-  # The Sparkle slice MUST match the arch of the updater that links it, so derive it from
-  # CMAKE_OSX_ARCHITECTURES (x86_64 -> 10.9 Intel slice, arm64 -> Apple-Silicon slice, both
-  # -> fat). A project never hand-plumbs the arch; a mismatch is impossible by construction.
-  # An explicit MAVERICKS_SPARKLE_ARCH in the environment still wins (escape hatch).
-  set(_arch "$ENV{MAVERICKS_SPARKLE_ARCH}")
-  if(NOT _arch)
-    if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64" AND CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
-      set(_arch all)
-    elseif(CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
-      set(_arch arm64)
-    else()
-      set(_arch x86_64)
-    endif()
-  endif()
+  # The pinned framework, verbatim and fat: a fat framework links into an updater of either arch, and
+  # thinning it would break the seal its code signature puts on every file (Autoupdate included).
   execute_process(
-    COMMAND ${CMAKE_COMMAND} -E env "MAVERICKS_SPARKLE_ARCH=${_arch}"
-            sh "${MAVERICKS_SHARED_DIR}/scripts/fetch_sparkle_framework.sh"
+    COMMAND sh "${MAVERICKS_SHARED_DIR}/scripts/fetch_sparkle_framework.sh"
     OUTPUT_VARIABLE _v OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _rc)
   if(NOT _rc EQUAL 0)
-    message(FATAL_ERROR "fetch_sparkle_framework.sh failed (arch=${_arch})")
+    message(FATAL_ERROR "fetch_sparkle_framework.sh failed")
   endif()
   set(${out_var} "${_v}" PARENT_SCOPE)
 endfunction()

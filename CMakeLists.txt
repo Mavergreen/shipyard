@@ -33,7 +33,6 @@ if(SHIPYARD_BUILD_UPDATER)
   enable_language(OBJC)
   # Every slice embeds Sparkle's FAT framework, so the two single-arch builds carry an identical
   # framework and lipo-merge-tree.sh only has to merge the updater's own executable.
-  set(ENV{MAVERICKS_SPARKLE_ARCH} all)
   include("${CMAKE_CURRENT_SOURCE_DIR}/MavericksSparkle.cmake")
 
   # ONE universal app (spec 2026-09-11): built once per arch -- x86_64/10.9 and arm64/11.0, since a
