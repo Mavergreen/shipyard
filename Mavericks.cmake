@@ -46,6 +46,16 @@ if(MAVERICKS_MODE STREQUAL "cross")
         "Configure through a shipyard preset (mavericks-cross), or pass "
         "-DCMAKE_TOOLCHAIN_FILE=${MAVERICKS_SHARED_DIR}/MavericksToolchain.cmake. See SKILL.md \"SDK pinning\".")
     endif()
+  elseif(_mav_na EQUAL 0)
+    # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a plain
+    # `cmake -S . -B b` on a modern Mac sets no CMAKE_OSX_ARCHITECTURES at all (it comes only from the
+    # preset / toolchain file / an explicit -D, never from AppleClang detection). That is the FIRST
+    # thing every newly-red consumer hits, so it gets the same actionable guidance as a wrong sysroot,
+    # not the "one arch per cross configure" message meant for 2+ arches.
+    message(FATAL_ERROR
+      "CMAKE_OSX_ARCHITECTURES is empty -- no arch means no pinned SDK to check.\n"
+      "Configure through a shipyard preset (mavericks-cross), or pass "
+      "-DCMAKE_TOOLCHAIN_FILE=${MAVERICKS_SHARED_DIR}/MavericksToolchain.cmake. See SKILL.md \"SDK pinning\".")
   else()
     message(FATAL_ERROR "include(Mavericks): one arch per cross configure (got '${CMAKE_OSX_ARCHITECTURES}'); build each and merge")
   endif()
