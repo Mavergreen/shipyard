@@ -13,12 +13,13 @@
 registry_lookup() {
   REG_V=""; REG_WHY=""
   _rl_rc=0
-  _rl_out="$(sh "$SELF/product-name.sh" "$1" "$2" 2>&1)" || _rl_rc=$?
+  _rl_out="$(sh "$SELF/product-name.sh" "$1" "$2" 2>/dev/null)" || _rl_rc=$?
   if [ "$_rl_rc" -eq 0 ] && [ -n "$_rl_out" ]; then
     REG_V="$_rl_out"; return 0
   fi
   [ "$_rl_rc" -ne 1 ] || return 1
-  REG_WHY="${_rl_out:-product-name.sh $1 $2 exited $_rl_rc with no answer}"
+  _rl_why="$(sh "$SELF/product-name.sh" "$1" "$2" 2>&1 >/dev/null)" || :
+  REG_WHY="${_rl_why:-product-name.sh $1 $2 exited $_rl_rc with no answer}"
   return 2
 }
 
