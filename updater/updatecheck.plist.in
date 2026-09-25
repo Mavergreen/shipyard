@@ -2,8 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Per-user GUI-session agent: daily SILENT Sparkle check. --background shows no UI; on finding
-         an update it posts a user notification (click -> foreground install) and exits. LaunchAgent
+    <!-- Per-user GUI-session agent: daily SILENT Sparkle check. ProgramArguments' background flag
+         (below) shows no UI; on finding an update it posts a user notification (click -> foreground
+         install) and exits. LaunchAgent
          (not Daemon) so notifications reach the Aqua session. Short-lived; no KeepAlive.
          Rendered per product by stage_updater.sh from this template. -->
     <key>Label</key>

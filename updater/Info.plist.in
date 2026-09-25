@@ -20,7 +20,7 @@
 	<string>6.0</string>
 	<!-- Short string = the human "X.Y.Z-mavericks.N" (shown in Sparkle's dialogs). CFBundleVersion is
 	     what Sparkle actually COMPARES, and its comparator can't order "-mavericks.N", so this is the
-	     numeric-only form (X.Y.Z.N) -- see MavericksSparkle.cmake / gen_appcast.sh. -->
+	     numeric-only form (X.Y.Z.N); see MavericksSparkle.cmake / gen_appcast.sh. -->
 	<key>CFBundleShortVersionString</key>
 	<string>@MAVERICKS_VERSION@</string>
 	<key>CFBundleVersion</key>
@@ -36,7 +36,7 @@
 	     target: a universal app is built once per arch and merged by lipo-merge-tree.sh, which
 	     expects this Info.plist to come out byte-identical between the x86_64 and arm64 builds.
 	     An arch-dependent value here would make the two builds' plists diverge and break that
-	     merge (or force it onto --allow-differ, which is not what this is for). -->
+	     merge (or force it onto lipo-merge-tree.sh's allow-differ option, which is not what this is for). -->
 	<key>LSMinimumSystemVersion</key>
 	<string>10.9</string>
 	<key>SUFeedURL</key>

@@ -10,6 +10,7 @@
 #   scripts/sign_and_appcast.sh  -- sign a .pkg (via ed25519-sign) then emit appcast.xml (gen_appcast.sh)
 set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
 include("${MAVERICKS_SHARED_DIR}/MavericksDecisions.cmake")   # mavericks_reject_placeholder_icon()
+include("${MAVERICKS_SHARED_DIR}/MavericksCompatGuard.cmake")   # mavericks_assert_binary_compatible()
 
 function(mavericks_fetch_sparkle out_var)
   # The pinned framework, verbatim and fat: a fat framework links into an updater of either arch, and
@@ -148,8 +149,15 @@ function(mavericks_add_updater_app)
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_app}/Contents/Resources
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${A_NAME}> ${_app}/Contents/MacOS/${A_NAME}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/${A_NAME}-Info.plist ${_app}/Contents/Info.plist
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${A_SPARKLE_FRAMEWORK} ${_app}/Contents/Frameworks/Sparkle.framework
+    # SKILL.md "SDK pinning": cp -R keeps Sparkle's version symlinks as symlinks (copy_directory
+    # dereferenced them into copies), and the pristine check proves the embedded framework is the
+    # pinned one byte for byte, which is what keeps its code-signature seal valid.
+    COMMAND rm -rf ${_app}/Contents/Frameworks/Sparkle.framework
+    COMMAND cp -R ${A_SPARKLE_FRAMEWORK} ${_app}/Contents/Frameworks/Sparkle.framework
+    COMMAND sh ${MAVERICKS_SHARED_DIR}/scripts/assert_sparkle_pristine.sh
+            ${_app}/Contents/Frameworks/Sparkle.framework ${A_SPARKLE_FRAMEWORK}
     COMMENT "Assembling ${A_NAME}.app")
+  mavericks_assert_binary_compatible(${A_NAME})
   if(A_ICON)
     add_custom_command(TARGET ${A_NAME} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy ${A_ICON} ${_app}/Contents/Resources/${MAVERICKS_ICON_NAME}.icns
