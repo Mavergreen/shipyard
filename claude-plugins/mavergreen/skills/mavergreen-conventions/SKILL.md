@@ -1520,8 +1520,11 @@ fails unless the product is installed.
 so any single product installs on a clean box. `set_install_floor.sh` adds it — built by
 `build-base-component.sh` from the packaging shipyard's own copy of the helper, and versioned with
 that shipyard — checks that it came out first, and refuses `--identifier dev.mavergreen.base` for the
-product itself. First, because the product's postinstall runs the helper and the base's payload must
-already be down; the product postinstall also falls back to the newest helper staged under `.base/`.
+product itself. First, for its postinstall: Installer lays down every payload before running any
+postinstall, then runs the postinstalls in Distribution order, so a base listed first has installed
+or upgraded `/usr/local/bin/mavergreen` before the product's postinstall runs it (a product's
+*preinstall* runs before the base's payload lands, so it uses the helper only if one is already
+installed). The product postinstall also falls back to the newest helper staged under `.base/`.
 
 **The base never downgrades.** Its payload is only staged, under `.base/<version>/`; its postinstall
 installs the helper and the `paths.d`/`manpaths.d` entries only over a missing helper, a missing or malformed

@@ -11,8 +11,21 @@ sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title
 pkgutil --expand "$w/out.pkg" "$w/x"
 [ -d "$w/x/mavergreen-base.pkg" ] || fail "the archive carries the base component"
 first="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$w/x/Distribution" | grep -v '^default$' | head -1)"
-[ "$first" = dev.mavergreen.base ] || fail "the base component is listed first, so its payload lands before the product's scripts run: got $first"
+[ "$first" = dev.mavergreen.base ] || fail "the base component is listed first, so its postinstall installs or upgrades the helper before the product's postinstall runs it: got $first"
 grep -q 'os-version min="10.9.5"' "$w/x/Distribution" || fail "the floor is still enforced"
+
+real_pb="$(command -v productbuild)"; mkdir -p "$w/pbwrap"
+{
+  printf '#!/bin/sh\nprev=""\nfor a in "$@"; do\n'
+  printf '  if [ "$prev" = --distribution ]; then cp "$a" "%s"; fi\n  prev="$a"\ndone\n' "$w/dist-as-written.xml"
+  printf 'exec "%s" "$@"\n' "$real_pb"
+} > "$w/pbwrap/productbuild"
+chmod +x "$w/pbwrap/productbuild"
+PATH="$w/pbwrap:$PATH" sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X \
+  --component "$w/c/x.pkg" --out "$w/out-w.pkg" --base-version 1.0.9 >/dev/null 2>&1 || fail "the archive must build through the wrapper"
+[ -f "$w/dist-as-written.xml" ] || fail "the test must capture the distribution set_install_floor.sh writes, or it proves nothing"
+awk '{ n += gsub(/<line choice=/, "&"); if (gsub(/<line choice=/, "&") > 1) bad = 1 } END { exit !(n == 3 && !bad) }' "$w/dist-as-written.xml" \
+  || fail "the distribution as written carries one <line choice=...> per line, so a line-oriented parse never depends on productbuild reformatting it: $(grep -n 'line choice' "$w/dist-as-written.xml")"
 
 rc=0
 sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.base --title Base --component "$w/c/x.pkg" \

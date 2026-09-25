@@ -6,20 +6,20 @@
 #          Wraps a flat component pkg into a distributable product archive that enforces a hard OS
 #          install floor (default MAVERICKS_MIN_OS, the single source of truth for "the Mavericks
 #          install floor" across the family) via productbuild --distribution -- a bare pkgbuild
-#          product cannot express an OS floor. Generates distribution.xml from flags (single-
-#          component installer), runs productbuild, then self-checks that the floor made it into the
-#          output pkg. Every archive also carries dev.mavergreen.base (built via
-#          build-base-component.sh, --base-version picks its version; default: the base's own
-#          default) and lists it FIRST in the choices-outline, so its payload lands before the
-#          product's own scripts run. The base component is built into a private temp directory, not
-#          the caller's --component directory, so a caller that globs that directory afterward never
-#          sees it.
+#          product cannot express an OS floor. Generates distribution.xml from flags, runs
+#          productbuild, then self-checks that the floor made it into the output pkg. Every archive
+#          also carries dev.mavergreen.base (built via build-base-component.sh, --base-version picks
+#          its version; default: the base's own default) and lists it FIRST in the choices-outline,
+#          so its postinstall -- which installs or upgrades /usr/local/bin/mavergreen -- runs before
+#          the product's postinstall runs the helper. The base component is built into a private
+#          temp directory, not the caller's --component directory, so a caller that globs that
+#          directory afterward never sees it.
 # spec: tests/shipyard-package-pkg-test.sh -- package-pkg.sh's own integration coverage exercises
 #       --host-arch end to end (both architectures must reach the Distribution).
 # spec: tests/set-install-floor-base-test.sh -- the base component must be first in the
-#       choices-outline: Installer lays down every component's payload before running any
-#       postinstall, in Distribution order, so a product's postinstall can rely on the helper only
-#       if the base's payload already landed.
+#       choices-outline: Installer runs the components' postinstalls in Distribution order, after
+#       every payload has landed, so only a base listed first has installed or upgraded the helper
+#       by the time the product's postinstall runs it.
 set -eu
 
 MIN_OS="${MAVERICKS_MIN_OS:-10.9.5}"
@@ -72,7 +72,12 @@ _opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\""
   [ -n "$LICENSE" ] && echo "    <license file=\"$(basename "$LICENSE")\"/>"
   echo "    <allowed-os-versions><os-version min=\"$MIN_OS\"/></allowed-os-versions>"
   echo "    <options $_opts/>"
-  echo "    <choices-outline><line choice=\"default\"><line choice=\"dev.mavergreen.base\"/><line choice=\"$ID\"/></line></choices-outline>"
+  echo '    <choices-outline>'
+  echo '        <line choice="default">'
+  echo '            <line choice="dev.mavergreen.base"/>'
+  echo "            <line choice=\"$ID\"/>"
+  echo '        </line>'
+  echo '    </choices-outline>'
   echo '    <choice id="default"/>'
   echo '    <choice id="dev.mavergreen.base" visible="false"><pkg-ref id="dev.mavergreen.base"/></choice>'
   echo "    <choice id=\"$ID\" visible=\"false\"><pkg-ref id=\"$ID\"/></choice>"

@@ -146,11 +146,11 @@ done < "$facts"
 # spec: tests/artifact-conformance-test.sh -- a pkg that installs a product carries exactly one
 #       manifest, naming a product registered to one of its components; it installs only into
 #       that product's tree and what the manifest lists as outside (else uninstall leaves files
-#       behind); and its first component is dev.mavergreen.base, the only way the helper its
-#       postinstall runs is on disk by then. Coverage mirrors scripts/mavergreen.sh uninstall,
-#       which removes an outside entry only as an exact file or link, or as a directory whose name
-#       ends in one of the bundle extensions render-manifest.sh collapses to, and refuses the shapes
-#       outside_shape_ok rejects.
+#       behind); and its first component is dev.mavergreen.base, whose postinstall installs or
+#       upgrades the helper before the product's postinstall runs it. Coverage mirrors
+#       scripts/mavergreen.sh uninstall, which removes an outside entry only as an exact file or
+#       link, or as a directory whose name ends in one of the bundle extensions render-manifest.sh
+#       collapses to, and refuses the shapes outside_shape_ok rejects.
 grep '^manifest ' "$facts" > "$tmp/manifests" || true
 grep '^component ' "$facts" > "$tmp/components" || true
 : > "$tmp/prod-of"
@@ -174,7 +174,7 @@ EOF
     || fail manifest "$pk's manifest names identifier $mid, which is not one of its components" "$pk"
   first="$(awk -v p="$pk" '$2 == p { print $3; exit }' "$tmp/components")"
   [ "$first" = dev.mavergreen.base ] \
-    || fail base "$pk installs a product but its first component is '${first:-none}', not dev.mavergreen.base -- the helper its postinstall runs would not be there" "$pk"
+    || fail base "$pk installs a product but its first component is '${first:-none}', not dev.mavergreen.base -- its postinstall would run the helper before the base had installed or upgraded it" "$pk"
   printf '%s %s\n' "$pk" "$mdir" >> "$tmp/prod-of"
   awk -v p="$pk" -v pr="$mdir" '
     NR == FNR {
@@ -214,9 +214,7 @@ done
 #       identity" -- where a family product may put files by default. Anything else is a declared
 #       deviation scoped to the PATH (glob; `*` spans "/" and spaces), so excusing a kext's
 #       directory cannot quietly excuse a stray file elsewhere in the same pkg. Reported once per
-#       reason and capped, since one wrong directory can hold thousands of files. Matched while
-#       still encoded (encoding preserves these prefixes), so only a path that needs a deviation
-#       costs a decode.
+#       reason and capped, since one wrong directory can hold thousands of files.
 installs_seen=0
 last_file=""; prod=""; has_base=no
 : > "$tmp/ip-dev"; : > "$tmp/ip-fail"
