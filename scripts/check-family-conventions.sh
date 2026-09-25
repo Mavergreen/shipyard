@@ -607,6 +607,14 @@ if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
                           "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare '- product-layout: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
+# spec: SKILL.md "Family conventions" check 24 -- every feed URL and updater identity is derived from
+#       the registry's repo, so a pkg-building repo the registry does not name publishes feeds nothing polls.
+if [ -n "$builds_pkg" ] && [ -n "${GITHUB_REPOSITORY:-}" ] && ! deviated product-layout "$REL"; then
+  sh "$SELF/product-name.sh" shorts "${GITHUB_REPOSITORY#*/}" >/dev/null 2>&1 \
+    || fail "this repo builds a .pkg ($builds_pkg), but shipyard's scripts/product-names assigns no product to ${GITHUB_REPOSITORY#*/}" \
+            "register its short names with this repo in scripts/product-names, or rename the repo to the one registered"
+fi
+
 [ "$status" -eq 0 ] && echo "check-family-conventions: ok"
 
 exit "$status"

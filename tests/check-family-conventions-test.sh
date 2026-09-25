@@ -1,6 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 set -eu
+unset GITHUB_REPOSITORY
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/check-family-conventions.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/family-conventions.XXXXXX")"; trap 'rm -rf "$work"' EXIT  # template: 10.9 BSD mktemp requires one
@@ -1281,5 +1282,17 @@ out="$(cd "$work/host" && sh "$S" 2>&1)" && { echo "FAIL: a host-agnostic script
 printf '%s\n' "$out" | grep -q 'check-host-tools' || { echo "FAIL: check 22 should report through check-host-tools: $out"; exit 1; }
 printf '#!/bin/sh\n# platform: host-agnostic\nexit 0\n' > "$work/host/tests/a-test.sh"
 (cd "$work/host" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a clean, declared repo should pass check 22: $(cd "$work/host" && sh "$S" 2>&1)"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 24 -- a pkg-building repo is one scripts/product-names
+#       assigns products to, compared by name (a fork runs the same gate).
+out="$(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" 2>&1)" \
+  && { echo "FAIL: check 24: a pkg repo the registry does not name must fail"; exit 1; }
+printf '%s\n' "$out" | grep -q 'scripts/product-names' || { echo "FAIL: check 24 should name the registry: $out"; exit 1; }
+(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 24: a registered repo passes: $(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$S" 2>&1)"; exit 1; }
+(cd "$work/pk" && GITHUB_REPOSITORY=someone/golang-126 sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 24 compares the repo's name, not its owner"; exit 1; }
+(cd "$work/ok" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 24: a repo that builds no pkg ships no short name, and is not asked"; exit 1; }
 
 echo "PASS: check-family-conventions"
