@@ -28,10 +28,11 @@ mav_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk
     arm64)  _want_min=11.0; _want_sdk=11.3 ;;
     *) echo "arch $1 has no pinned SDK (only x86_64 and arm64 do)"; return 1 ;;
   esac
-  # platform: an object file (a static archive's member) records sdk "n/a" when compiled against the
-  #           10.9 SDK, which ships no SDKSettings.json to read a version from -- so a member can prove
-  #           its minos but not its SDK.
-  [ "$2" = OBJECT ] && [ "$4" = n/a ] && [ "$3" = "$_want_min" ] && return 0
+  # platform: an object file (a static archive's member, x86_64 only) may record sdk "n/a" when
+  #           compiled against the 10.9 SDK, which ships no SDKSettings.json to read a version from --
+  #           so a member can prove its minos but not its SDK. The 11.3 arm64 SDK includes
+  #           SDKSettings.json, so arm64 members must record their SDK version.
+  [ "$1" = x86_64 ] && [ "$2" = OBJECT ] && [ "$4" = n/a ] && [ "$3" = "$_want_min" ] && return 0
   [ "$3" = "$_want_min" ] && [ "$4" = "$_want_sdk" ] && return 0
   echo "$1 records minos $3 sdk $4; the pin is minos $_want_min sdk $_want_sdk"; return 1
 }

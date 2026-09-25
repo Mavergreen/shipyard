@@ -20,6 +20,7 @@ yes x86_64 KEXTBUNDLE - -         # kexts record no version (spec D6)
 no  arm64 KEXTBUNDLE - -
 yes x86_64 OBJECT 10.9 n/a        # a 10.9-SDK archive member cannot record its SDK
 no  x86_64 OBJECT 10.7 n/a
+no  arm64 OBJECT 11.0 n/a         # arm64 SDK has SDKSettings.json, so no n/a allowance
 no  x86_64 EXECUTE 10.9 n/a       # only an OBJECT gets the n/a allowance
 no  i386 OBJECT 10.7 26.5
 no  arm64e OBJECT 11.0 26.5
