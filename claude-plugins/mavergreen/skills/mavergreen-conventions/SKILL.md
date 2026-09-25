@@ -455,6 +455,10 @@ natural (and, for a repackaged third-party product, nominative rather than co-br
   Mavericks OS"). Use for: the `.pkg` installer `--title`, the appcast `--channel-title`, README prose,
   and release notes.
 
+**A line's display names carry its line version.** Prose: "Go 1.27 for Mavericks". The updater's
+`CFBundleName` (`PRODUCT_NAME`): "Mavericks Go 1.27", with " (cross)" appended for the cross variant.
+Not gated.
+
 "Mavericks" here is the **OS** (10.9), so "Mavericks Tailscale" = "the Mavericks build of Tailscale" —
 which helps rather than hurts on the trademark front; keep the "unofficial community build, not affiliated
 with <upstream>" disclaimer regardless. Where the product name is a third-party trademark used
@@ -462,8 +466,10 @@ nominatively (Tailscale), this is fine; where you can't use the upstream noun at
 Tools"), the descriptor already IS your name, so "Mavericks Container Tools" is simply your product line.
 
 Never rename **functional identifiers** to match the display name: bundle IDs, executable names,
-`launchd` labels, `hostinfo.SetPackage`/equivalent, internal helper bundles (e.g. the `*Updater.app`), and
-asset filenames stay as they are. A `.app` name with a space is fine; quote the path in shell/plists.
+`launchd` labels, `hostinfo.SetPackage`/equivalent, internal helper bundles, and asset filenames stay
+as they are. A Sparkle updater's functional identifiers are not chosen at all: its bundle id, app name,
+update-check label and feed are derived from the product's registry line (see "Sparkle updater").
+A `.app` name with a space is fine; quote the path in shell/plists.
 What those identifiers must LOOK like — `dev.mavergreen.*`, and where a product may install — is
 checked at package time: see "Install layout and identity" below. A product's registered **short
 name** (`go126`, `openssh`, `shipyard`) is a third register, and a functional one: it names the
@@ -545,17 +551,19 @@ that users legitimately pin to independently — Go minors (`1.26.x`, `1.27.x`),
 line (2026-09-22); no family repo carries `lines/` any more. `check-family-conventions.sh`'s check 7b
 fails the build if one reappears.
 
-**The shape, golang (`062e173`) as the worked example:** the existing repo keeps its name — installed
-Sparkle updaters poll its existing feed, so renaming it would strand them — and serves the line it
-already ships, from the repo root: `UPSTREAM_VERSION` and `patches/` live there, and `GO_LINE` stays
-*derived* from `UPSTREAM_VERSION`, never a separate input. The shipping line is capped in Renovate
-(the `packageRules` entry `matchDepNames: ["go-126"]` sets `allowedVersions: "<1.27"`), which is
-what keeps this repo on its line. A new line is a **new repo**, forked from it (`golang-127`,
-`nodejs-26`): its own short name, pkg identifier, product title and feed, all derived the same
-way from its own `UPSTREAM_VERSION`, with its own cap. Side-by-side installs still force per-line
-functional identifiers — a registered short name per line, hence a tree per line
-(`/usr/local/mavergreen/go126`, `/usr/local/mavergreen/go127`), per-line pkg receipts and updater
-bundle ids.
+**The shape.** A product whose line carries a version part is **lined**, and each line is a repo
+named `<product>-<line version>`: `Mavergreen/golang-126`, `Mavergreen/clang-22`,
+`Mavergreen/nodejs-24`. A variant-only line (rust-cross's `cross`) does not make a product lined, so
+it stays in the product's repo (`Mavergreen/rust`). One line's native and cross products share its
+repo (`golang-126` ships `go126` and `go126-cross`). The line repo serves its line from the root:
+`UPSTREAM_VERSION` and `patches/` live there, the line is *derived* from `UPSTREAM_VERSION`, never a
+separate input, and Renovate caps the repo at the next line (`matchDepNames: ["go-126"]`,
+`allowedVersions: "<1.27"`). A lined product's pkg identifier is `dev.mavergreen.<product>.<short
+name>` (`product-name.sh check` enforces it), and its updater's bundle id, app, label and feed follow
+from its registry line, so two lines never share one. Every feed is
+`/releases/latest/download/<short name>.xml` on the line's own repo, whose newest release is always
+that line's, so no line needs a fixed per-line feed release. Renaming a line repo is a flag-day step
+and is asked for, never done in passing.
 
 **The lines of one upstream share a group.** Each line repo stages with the same `--group` (`go`)
 and its own `--line` (`126`, `127`). Every member always exports `<cmd>-<line>` (`go-126`,
@@ -564,16 +572,36 @@ The first member installed is selected; installing another never takes the selec
 does upgrading one; `mavergreen select go go127` moves it. The mechanism is in "Install layout and
 identity".
 
-**No shared buildkit until a second line repo exists.** Extracting one now means designing an
-interface against a single caller. Once a second line repo exists, factor the duplicated
-`build/*`/CI into a `golang-buildkit`-style reusable workflow, consumed at a moving `@v1` the way
-shipyard's own workflows are.
+**Ports.** A product with several lines that carries changes or infrastructure every line needs
+splits into `<product>-port` and `<product>-<line>` repos. The port is a self-upstream ingredient
+product: semver, a source tarball + `SHA256SUMS` via `publish-release.yml`, no `.pkg`, no updater, no
+short name. Lines pin it (`components/<product>-port/version`, verified against the port release's
+`SHA256SUMS`, Renovate `github-releases`, `repackage-on-ingredient-bump`) — never a moving tag, since
+it is baked into shipped artifacts. Line repos keep only what is genuinely per-line:
+`UPSTREAM_VERSION`, patches that hook upstream files, workflows, Renovate, notes. Every carried
+change is explained in the port's tracked `PORT.md` (what, why, the invariant, when to reconsider) —
+a carried change whose reason lives only in gitignored docs gets quietly undone at the next port. A
+single-line product keeps its port in its own repo; when it gains a second line, extract
+`<product>-port` and rename the repo to `<product>-<line>`.
 
 **How a new line gets noticed:** not by a watch file or a notification-only PR — golang tried one
 and dropped it (2026-09-22). A capped repo structurally can't see past its own cap, so the signal
 is a *consumer's* routine Renovate PR failing its build because it needs the next line (a tailscale
 bump that needs Go 1.27, say). Across the ecosystem, that failure is signal enough to decide whether
 a new line repo is warranted.
+
+**Starting a new line.**
+1. Fork the previous line's repo as `<product>-<line>` (`golang-127`).
+2. Register its short names in shipyard's `scripts/product-names` with the new repo
+   (`go127 dev.mavergreen.golang.go127 golang-127`, and the `-cross` row), and push shipyard first:
+   nothing packages, and no updater builds, for an unregistered name.
+3. Set the Renovate cap to the next line.
+4. Set the bootstrap cap, where the product has one.
+5. Enable `allow_auto_merge`, and branch protection requiring the real PR check context.
+6. Set `SPARKLE_PRIVATE_KEY`.
+7. Get a README a human has read (`publish-release.yml` refuses a first release without one).
+8. Pass `--line <tag prefix>` to `release-notes.sh` (`--line 1.27`, the prefix the tags carry).
+9. Consumers move by hand, repo and short name, when one of their own bumps needs the line.
 
 ## Pushing is a request for CI feedback, not a save button
 
@@ -1203,6 +1231,20 @@ signal (see the auto-merge intent above — fix runtime regressions in `-maveric
 
 - Every product ships a Sparkle updater `.app` that **must not link the product it updates** (self-update
   circularity — assert with `otool -L`). EdDSA-signed; private key is the `SPARKLE_PRIVATE_KEY` secret.
+- **An updater's identity is derived, never chosen.** From the product's registry line (`<short>
+  <pkg identifier> <repo>`), `product-name.sh` derives the bundle id `<pkg identifier>.updater`, the app
+  `/Library/Application Support/Mavergreen/<short>-updater.app`, the update-check LaunchAgent
+  `<pkg identifier>-updatecheck` (plist `<label>.plist`), and the feed
+  `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`.
+  `mavericks_add_updater_app(PRODUCT <short> …)` builds the app with that bundle id and feed and refuses
+  `NAME`, `BUNDLE_ID` and `FEED_URL`. `stage_product.sh --updater-app` stages it, refuses one built with
+  another identity, and refuses `--appcast`, `--app-dir` and `--agent-label`.
+  `sign_and_appcast.sh --product <short> --feed-dir dist` writes the feed as `dist/<short>.xml`, and
+  `publish-release.yml` attaches it with the other assets, publishing only after every upload, so
+  `/latest/` always has it. There is no `appcast.xml`: every release carries `<short>.xml` for every
+  updater its pkgs install, and `release-assets.sh` refuses the retired name. A product with no updater
+  has no feed, and its manifest's `appcast` is empty. Conformance's `updater` and `feed` checks hold
+  what ships to all of it.
 - `mavericks_add_updater_app()` self-fetches the Sparkle framework at configure time; signing/appcast use
   the shared `sign_and_appcast.sh` (fetches `ed25519-sign` via `gh` → needs `GH_TOKEN`).
 - **The signing key never meets a command line or a trace.** A public repo's Actions logs are public,
@@ -1469,12 +1511,21 @@ only its `shipyard-*` names reach the farm).
 ### Short names: the registry
 
 **Every product has a short name, registered once, family-wide, in shipyard's
-`scripts/product-names`** — one line, `<short name> <pkg identifier>`. It names the product's
+`scripts/product-names`** — one line, `<short name> <pkg identifier> <repo>`. It names the product's
 directory and is what people type (`mavergreen select go go126`), and the registry is the only place
 uniqueness can be checked: `product-name.sh check` refuses a duplicate name, a duplicate identifier,
 a name outside `[a-z0-9-]` (it becomes a path in a preinstall's `rm -rf`), a name the layout reserves
 (`var`, `bin`, `sbin`, `share`, `mavergreen`, `system-replace`, `base`), an identifier outside
-`dev.mavergreen.*`, and `dev.mavergreen.base`, which is the helper's component. The helper refuses
+`dev.mavergreen.*`, and `dev.mavergreen.base`, which is the helper's component. Many short names may
+share a repo (`golang-126` ships `go126` and `go126-cross`). `check` also refuses a row without a
+repo, and, in a line repo (`<product>-<digits>`), an identifier other than
+`dev.mavergreen.<product>.<short name>`. Every lookup — `identifier`, `repo`, `updater-bundle-id`,
+`agent-label`, `updater-app`, `feed`, and `shorts <repo>` — refuses a reserved or malformed name even
+where a hand-edited registry lists it. **A registered tree path can be a contract.** `ca-certs` is
+registered ahead of its repo, and its tree path
+`/usr/local/mavergreen/ca-certs/etc/openssl/certs/ca-certificates.crt` is reserved: when ca-certs
+ships, it must install its bundle exactly there, and the golang lines then adopt it as the first place
+they search. No golang line searches it yet. The helper refuses
 the reserved names too, so a hand-made manifest cannot reach them.
 **Adding a product means adding its line there and pushing shipyard**:
 `render-manifest.sh` reads the registry beside it and refuses an unregistered name, so the product
@@ -1494,7 +1545,7 @@ has nothing left to prune.
 | `group` | `--group` | defaults to `product` |
 | `line` | `--line` | empty for a product with one line |
 | `version` | `--version` | |
-| `appcast` | `--appcast` | |
+| `appcast` | the registry | the product's feed (`product-name.sh feed <product>`) when it stages an updater, else empty; `--appcast` is refused |
 | `exports-exclude` | `--exclude`, repeatable | tree-relative paths kept out of the farm |
 | `replaces` | `--replaces /abs/path=tree/path`, repeatable | system-replace, below |
 | `outside` | **the stage itself** | every file or link staged outside the tree, collapsed to its enclosing `.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle` or `.framework` |
@@ -1612,7 +1663,7 @@ scripts:
   `/usr/local/mavergreen/<product>` (never `var/`). A tree it cannot remove is reported,
   never failing the install: files the new version dropped may linger.
 - **postinstall**: `mavergreen link <product>`, failing the install if it fails; then the updater's
-  agent load (`--updater-app`, `--app-dir`, `--agent-label`); then the `--postinstall-hook`.
+  agent load (`--updater-app`, whose place and label come from the registry); then the `--postinstall-hook`.
 
 Both anchor on Installer's target volume and never on `/`: with none, the preinstall removes nothing
 and the postinstall fails. **A product's own steps go in the hooks**, appended to the generated
@@ -1637,7 +1688,7 @@ left of `||`, so `set -e` inside it is silently ignored, not enforced.
 
 **Everything a pkg installs says it is ours, and lands where the family puts things.** Read from the
 payload itself (`artifact-facts.sh` expands each pkg; a filename or a recipe is a claim, the payload
-is the fact), six checks, each excusable only by a scoped, reasoned deviation:
+is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
 
 | Check | Default rule | Deviation scoped to |
 |---|---|---|
@@ -1647,6 +1698,10 @@ is the fact), six checks, each excusable only by a scoped, reasoned deviation:
 | `install-path` | every installed file or link is under `usr/local/mavergreen/<the product its manifest names>/`, `Applications/` or `Library/Application Support/Mavergreen/`, or is a `dev.mavergreen.*` launchd plist — or is under `usr/local/mavergreen/.base/` in an archive that carries `dev.mavergreen.base` | the installed path (glob; `*` spans `/` and spaces) |
 | `manifest` | a pkg that installs anything besides the base's staged helper carries exactly one manifest; its `product` is its directory; its `identifier` is the one the registry gives that product, and one of the pkg's components; its `outside` names everything installed outside the tree, exactly as uninstall would remove it (the entry itself, or a bundle directory and what is inside it), with no entry left unused and none in a shape the helper refuses; every `generated` entry has a shape the helper accepts, and need not be in the payload | the pkg filename |
 | `base` | a pkg carrying a manifest lists `dev.mavergreen.base` as its first component | the pkg filename |
+| `updater` | a Sparkle updater (a top-level bundle with `SUFeedURL`) is `Library/Application Support/Mavergreen/<short>-updater.app` with bundle id `<pkg identifier>.updater`; a pkg with an updater installs the LaunchAgent `<pkg identifier>-updatecheck`; every launchd Label containing `updatecheck` is that one | the pkg filename |
+| `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
+| `line` | a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
+| `repository` | with `$GITHUB_REPOSITORY` set, every product a release ships is registered to that repo (by name; the owner is not compared) | the pkg filename |
 
 Paths are relative to `/`, after each component's `install-location`; a manifest is read only from a
 component installed at `/`, since a product tree always is.
@@ -1844,6 +1899,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **18.** No plain `cmake` / `ctest` / `cpack` at command position — in workflow `run:` bodies or in committed `*.sh` outside `tests/` | `MavericksShipyardConfig.cmake` refuses any other cmake at configure time; this finds the call in the PR instead of in the release. `tests/` is excluded because fixtures quote the command on purpose |
 | **22.** Every tracked script declares its host in its header — `# platform: host-agnostic` or `# platform: macOS-only -- <why>` — and a host-agnostic one runs no macOS-only tool at command position (`check-host-tools.sh`); **opt-in**, in a repo where at least one script declares | Nothing stopped a script that a Linux job depends on from growing an `otool` or `sw_vers`: it passed every gate and broke on the runner. `check-shell-portability.sh` cannot see it — flawless POSIX sh can still call `lipo`. An undeclared script **fails** rather than defaulting to host-agnostic, because a default makes the gate silently incomplete. Opt-in, like 15, so `@v1` reaching fourteen consumers reddens none of them |
 | **23.** A repo that builds a `.pkg` (the same test as 21) calls `stage_product.sh`, on a non-comment line of a tracked, non-test `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt`, at command position — line start, after `;` `&` `\|` or a backtick, after `$(`, `then`, `do` or `exec`, after a YAML `run:` or a CMake `COMMAND`, any of these optionally followed by `if`, `elif`, `while`, `until` or `!` — spelled `sh` or `/bin/sh` (with any option flags, `sh -e`) and a word ending `stage_product.sh`, or a word ending `/stage_product.sh` (`"$SHIPYARD_SCRIPTS"/stage_product.sh`, `./stage_product.sh`); or declares `- product-layout: <reason>` | Conformance enforces the install layout, and `stage_product.sh` is what produces it: the manifest, and the unlink–remove–link install scripts that make an upgrade replace the tree while keeping the selection. A hand-rolled pkg fails `manifest` only at package time; this finds it on the PR. A mention is not a call — `echo "sh stage_product.sh"` does not count, and neither does an assignment (`SP="$S/stage_product.sh"`: a word holding `=`). **Known false negatives:** a bare `stage_product.sh` found on `PATH`; `bash` or `.` instead of `sh`; a call behind a prefix command (`sudo`, `env`, `time`, `command`) or opening a `{ … }` group or a `( … )` subshell; a path with a space or `=` in it (`"$(dirname "$0")"/stage_product.sh`); and a call followed directly by `;` or `)` (`then sh "$S/stage_product.sh"; fi`, `$(sh …/stage_product.sh)`) — give the call its own line, or at least a space before the separator |
+| **24.** A repo that builds a `.pkg` (the same test as 21), where `$GITHUB_REPOSITORY` is set, is the repo of at least one short name in shipyard's `scripts/product-names` (by name, not owner); a `product-layout` deviation exempts it | Every feed URL and updater identity is derived from the registry's repo, so a repo the registry does not name publishes feeds no installed updater polls. The short names themselves are known only at package time, where conformance's `repository` check holds each to its registered repo; this finds an unregistered or renamed repo on the PR |
 
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,
@@ -2100,7 +2156,8 @@ in the same commit.
     documents this trap in `scan-for-key.yml`'s header; say it here too, because this is the caller
     people will copy); do not add a `tags:` trigger — tags are retired as an input, and dispatch
     covers every case they served (`gh workflow run … --ref <any ref>`).
-12. If it ships a `.pkg`: register its short name in shipyard's `scripts/product-names` first; stage
+12. If it ships a `.pkg`: register its short name, pkg identifier and repo in shipyard's
+    `scripts/product-names` first; stage
     everything under `usr/local/mavergreen/<short name>/`; get the install scripts and manifest from
     `stage_product.sh` (product-specific steps as hooks); wrap with `set_install_floor.sh`, which
     adds `dev.mavergreen.base`. See "Install layout and identity".
