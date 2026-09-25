@@ -30,6 +30,10 @@ st="$w/stage"; mkdir -p "$st/usr/local/mavergreen/openssh/bin"; echo ssh > "$st/
 printf 'echo post-hook-ran "$ROOT" >> "$ROOT/hook.log"\n' > "$w/hook"
 sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr" --postinstall-hook "$w/hook"
 [ -f "$st/usr/local/mavergreen/openssh/mavergreen.plist" ] || fail "the manifest is rendered"
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-gen" \
+  --generated "Applications/Linux X.app" || fail "stage_product must accept --generated"
+[ "$(/usr/libexec/PlistBuddy -c 'Print :generated:0' "$st/usr/local/mavergreen/openssh/mavergreen.plist")" = "Applications/Linux X.app" ] \
+  || fail "stage_product passes --generated through to the manifest"
 
 sh -n "$w/scr/preinstall" || fail "generated preinstall must be valid sh"
 sh -n "$w/scr/postinstall" || fail "generated postinstall must be valid sh"

@@ -37,4 +37,12 @@ sh "$S" --stage "$st" --product openssh --name x --version 1 --replaces /usr/bin
   && fail "a replaces value must not itself be an absolute path"
 sh "$S" --stage "$st" --product openssh --name x --version 1 --replaces /usr/../bin/ssh=bin/ssh 2>/dev/null \
   && fail "a replaces key with a .. component must be refused"
+sh "$S" --stage "$st" --product openssh --name x --version 1 \
+  --generated "Applications/Linux X.app" --generated Applications/Other.app
+[ "$(p generated:0)" = "Applications/Linux X.app" ] && [ "$(p generated:1)" = Applications/Other.app ] \
+  || fail "generated entries are written in order, spaces intact -- uninstall removes exactly these"
+for bad in /Applications/X.app Applications/../X.app ./Applications/X.app usr/local/mavergreen usr/local/mavergreen/openssh/x ''; do
+  sh "$S" --stage "$st" --product openssh --name x --version 1 --generated "$bad" 2>/dev/null \
+    && fail "a generated entry the helper would refuse to uninstall must be refused when the manifest is rendered: '$bad'"
+done
 echo "PASS: render-manifest"

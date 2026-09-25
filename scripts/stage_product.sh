@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: macOS-only -- render-manifest.sh reads its manifest back with PlistBuddy and lints it with plutil
 #   usage: stage_product.sh --stage ROOT --product P --name N --version V --scripts-out DIR
-#            [--group G] [--line L] [--appcast URL] [--exclude REL]... [--replaces ABS=REL]...
+#            [--group G] [--line L] [--appcast URL] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
 #            [--updater-app APP --app-dir DIR --agent-label LABEL]
 #            [--preinstall-hook FILE] [--postinstall-hook FILE]
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
@@ -13,7 +13,7 @@ ST=""; P=""; SCR=""; APP=""; APPDIR=""; LABEL=""; PREH=""; POSTH=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
-    --stage|--product|--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--appcast|--exclude|--replaces)
+    --stage|--product|--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--appcast|--exclude|--replaces|--generated)
       [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
@@ -25,7 +25,7 @@ while [ "$1" != --end ]; do
     --agent-label) LABEL="$2"; shift 2 ;;
     --preinstall-hook) PREH="$2"; shift 2 ;;
     --postinstall-hook) POSTH="$2"; shift 2 ;;
-    --name|--version|--group|--line|--appcast|--exclude|--replaces) set -- "$@" "$1" "$2"; shift 2 ;;
+    --name|--version|--group|--line|--appcast|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
     *) echo "stage_product: unknown option $1" >&2; exit 2 ;;
   esac
 done

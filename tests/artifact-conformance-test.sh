@@ -875,6 +875,18 @@ deviation manifest:p.pkg upstream's own pkg, mirrored unmodified
 deviation install-path:usr/local/upstream/* upstream's own layout
 installs p.pkg usr/local/upstream/bin/u"
 
+ok "manifest: a generated entry need not be in the payload" "$REL
+$LAYOUT
+manifest-generated p.pkg Applications/Linux%20X.app"
+
+alone "manifest: an absolute generated entry fails manifest" "manifest" "$REL
+$LAYOUT
+manifest-generated p.pkg /Applications/X.app"
+
+alone "manifest: a generated entry under usr/local/mavergreen fails manifest" "manifest" "$REL
+$LAYOUT
+manifest-generated p.pkg usr/local/mavergreen/y/bin/y"
+
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
 #       top-level bundle, a symlink, and a path with a space are each a way to report the wrong thing.
@@ -895,6 +907,7 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
   /usr/libexec/PlistBuddy -c "Add :product string x" -c "Add :identifier string dev.mavergreen.x" \
     -c "Add :outside array" -c "Add :outside:0 string Library/Application Support/Mavergreen/XUpdater.app" \
     -c "Add :outside:1 string Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist" \
+    -c "Add :generated array" -c "Add :generated:0 string Applications/Linux X.app" \
     "$_st/usr/local/mavergreen/x/mavergreen.plist" >/dev/null
   printf 'x dev.mavergreen.x\n' > "$_pk/product-names"
   # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
@@ -923,7 +936,8 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
     'component x-1.0.0-mavericks.1.pkg dev.mavergreen.x' \
     'registered x dev.mavergreen.x' \
     'manifest-outside x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/XUpdater.app' \
-    'manifest-outside x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist'
+    'manifest-outside x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist' \
+    'manifest-generated x-1.0.0-mavericks.1.pkg Applications/Linux%20X.app'
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done

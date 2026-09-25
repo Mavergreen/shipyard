@@ -126,6 +126,10 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       while _o="$(/usr/libexec/PlistBuddy -c "Print :outside:$_k" "$_mf" 2>/dev/null)"; do
         printf 'manifest-outside %s %s\n' "$1" "$(printf '%s' "$_o" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
       done
+      _k=0
+      while _g="$(/usr/libexec/PlistBuddy -c "Print :generated:$_k" "$_mf" 2>/dev/null)"; do
+        printf 'manifest-generated %s %s\n' "$1" "$(printf '%s' "$_g" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
+      done
     done
   done
   return 0

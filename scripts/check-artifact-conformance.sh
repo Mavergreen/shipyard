@@ -10,6 +10,7 @@
 #            launchd       <file> <path> <Label>                  one per launchd job
 #            manifest      <file> <product> <identifier> <dir>    one per usr/local/mavergreen/<dir>/mavergreen.plist
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
+#            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
 #            registered    <product> <identifier|none>            what scripts/product-names registers the product to
 #            appcast       <file> <version> <enclosure> <length>  one per Sparkle appcast
 #            asset         <file> <bytes>                         one per file that will be published
@@ -197,6 +198,15 @@ EOF
   done < "$tmp/outside-$pk"
   [ "$unlisted" -le 20 ] \
     || fail manifest "$pk installs $((unlisted - 20)) more files outside its tree that its manifest's outside list does not name" "$pk"
+  awk -v p="$pk" '$1 == "manifest-generated" && $2 == p { print $3 }' "$facts" > "$tmp/generated-$pk"
+  while IFS= read -r gp; do
+    case "$gp" in
+      ''|/*|usr/local/mavergreen|usr/local/mavergreen/*) gbad=1 ;;
+      *) case "/$gp/" in *"/./"*|*"/../"*) gbad=1 ;; *) gbad=0 ;; esac ;;
+    esac
+    [ "$gbad" -eq 0 ] \
+      || fail manifest "$pk's manifest lists generated entry '$(dec "$gp")' in a shape the helper refuses to uninstall -- empty, absolute, a . or .. segment, or under usr/local/mavergreen" "$pk"
+  done < "$tmp/generated-$pk"
 done
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and

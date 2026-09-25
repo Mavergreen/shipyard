@@ -135,6 +135,20 @@ grep -q "unsafe outside path 'usr/local/mavergreen/sibling'" "$w/err" \
   || fail "a plain directory like Library/Extensions must be refused, not rm -rf'd whole"
 [ ! -e "$V/Library/LaunchAgents/dev.mavergreen.widget-updatecheck.plist" ] \
   || fail "an outside entry AFTER a refused one must still be removed (best-effort, not abort-on-first-failure)"
+mkproduct preset preset "" bin/preset
+mkdir -p "$V/Applications/Linux Preset.app/Contents"
+"$PB" -c "Add :generated array" -c "Add :generated:0 string Applications/Linux Preset.app" \
+      -c "Add :generated:1 string Applications/Never Materialized.app" "$T/preset/mavergreen.plist" >/dev/null
+PATH="$stub:$PATH" mg uninstall preset 2>"$w/err" \
+  || fail "uninstall must succeed when a generated entry was never created: $(cat "$w/err")"
+[ ! -e "$V/Applications/Linux Preset.app" ] \
+  || fail "uninstall removes an app the product generated at install time, which no payload carries"
+mkproduct badgen badgen "" bin/badgen
+"$PB" -c "Add :generated array" -c "Add :generated:0 string /Applications" "$T/badgen/mavergreen.plist" >/dev/null
+rc=0; PATH="$stub:$PATH" mg uninstall badgen 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "a generated entry in a shape the helper refuses must fail uninstall"
+grep -q "unsafe generated path '/Applications'" "$w/err" || fail "uninstall must name the refused generated entry: $(cat "$w/err")"
+[ -d "$V/Applications" ] || fail "a refused generated entry must not be removed"
 
 mkproduct openssh openssh "" bin/ssh sbin/sshd
 "$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/ssh string bin/ssh" \

@@ -6,7 +6,7 @@
 #            select <group> [<product>]   show or change which member owns the bare names
 #            list                         installed products, groups, lines, selections
 #            check                        verify the farm's links and manifests; problems to stderr
-#            uninstall <product>          remove it, its farm links, and what its manifest owns outside the tree
+#            uninstall <product>          remove it, its farm links, and what its manifest lists as outside or generated
 #            system-replace <product>     swap the manifest's :replaces system paths for links into the tree (10.9 only)
 #            system-restore <product>     put those system paths back
 #            version                      print the mavergreen helper's stamped version
@@ -309,6 +309,22 @@ remove_outside() {
   fi
   return 0
 }
+remove_listed() {
+  _rl_rc=0
+  _rl_entries="$(mf_array "$1" "$2")"
+  while IFS= read -r _o; do
+    [ -n "$_o" ] || continue
+    if outside_shape_ok "$_o"; then
+      remove_outside "$_o" || _rl_rc=1
+    else
+      echo "mavergreen: refusing to remove unsafe $2 path '$_o'" >&2
+      _rl_rc=1
+    fi
+  done <<EOF
+$_rl_entries
+EOF
+  return "$_rl_rc"
+}
 do_uninstall() {
   need_product "$1"
   if [ -f "$MG/var/system-replace/$1/.replaced" ]; then
@@ -318,18 +334,8 @@ do_uninstall() {
   _g="$(group_of "$1")"; _id="$(mf "$1" identifier)"
   _failed=0
   unlink_product "$1"
-  _outside="$(mf_array "$1" outside)"
-  while IFS= read -r _o; do
-    [ -n "$_o" ] || continue
-    if outside_shape_ok "$_o"; then
-      remove_outside "$_o" || _failed=1
-    else
-      echo "mavergreen: refusing to remove unsafe outside path '$_o'" >&2
-      _failed=1
-    fi
-  done <<EOF
-$_outside
-EOF
+  remove_listed "$1" outside || _failed=1
+  remove_listed "$1" generated || _failed=1
   rm -rf "$MG/$1" "$MG/var/$1" || { echo "mavergreen: could not remove $1's tree" >&2; _failed=1; }
   if [ "$(selection "$_g")" = "$1" ]; then
     _left="$(for _p in $(installed); do if [ "$(group_of "$_p")" = "$_g" ]; then echo "$_p"; fi; done)"
