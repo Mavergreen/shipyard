@@ -39,11 +39,13 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 
 ## shipyard: consume its facilities, never hand-roll them
 
-- Install via its **action**: `uses: Mavergreen/shipyard/.github/actions/install@v1`. It installs
-  the released `.pkg`, adds `/usr/local/mavergreen/bin` to `$GITHUB_PATH` (a job's steps are not
-  login shells, so `paths.d` never reaches them) and exports `SHIPYARD_SCRIPTS`
-  (`/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts`); consume the CMake side
-  with `find_package` — **no `CMAKE_PREFIX_PATH`, no vendored copy, no hand-run `--install`.**
+- Install via its **action**: `uses: Mavergreen/shipyard/.github/actions/install@v1`. On a macOS
+  runner it installs the released `.pkg`, adds `/usr/local/mavergreen/bin` to `$GITHUB_PATH` (a
+  job's steps are not login shells, so `paths.d` never reaches them) and exports `SHIPYARD_SCRIPTS`
+  (`/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts`). On any other runner
+  it installs nothing and adds nothing to `PATH`: `SHIPYARD_SCRIPTS` is the action checkout's own
+  `scripts/`, and `MavericksShipyard_DIR` points `find_package` at that checkout. Consume the CMake
+  side with `find_package` — **no `CMAKE_PREFIX_PATH`, no vendored copy, no hand-run `--install`.**
 
   **Installing shipyard: the pkg.** Download it from the latest release
   (`gh release download -R Mavergreen/shipyard --pattern '*.pkg'`) and install it. It is a family
@@ -1382,8 +1384,8 @@ uninstall is complete. Commands and manpages are still found without the user do
     mavergreen.plist                       the manifest
     bin/ sbin/ lib/ libexec/ share/ etc/   the product's own layout
   var/<product>/                           state that survives an upgrade; uninstall removes it
-  var/mavergreen/selections/<group>        the helper's only state
-  var/system-replace/<product>/            system files saved by system-replace
+  var/mavergreen/selections/<group>        which member owns the group's bare names
+  var/system-replace/<product>/            system files saved by system-replace, and its marker
   .base/<version>/                         the staged helper, removed by the base postinstall
   .base/installed-version                  the helper version last installed
 ```
@@ -1392,8 +1394,8 @@ uninstall is complete. Commands and manpages are still found without the user do
 reads `paths.d` for every login shell, identically on 10.9 and modern macOS, and a farm of our own
 can never collide with Tigerbrew, MacPorts-in-`/usr/local` or hand-built software. The cost:
 already-open shells, launchd jobs, GUI apps (IDEs) and CI steps never run a login shell and do not
-see it, so they use the absolute path, `/usr/local/mavergreen/bin/<cmd>` — `install@v1` adds that
-directory to `$GITHUB_PATH` for the job. Reconsider if a real user workflow cannot be made to work
+see it, so they use the absolute path, `/usr/local/mavergreen/bin/<cmd>` — on a macOS runner, `install@v1`
+adds that directory to `$GITHUB_PATH` for the job. Reconsider if a real user workflow cannot be made to work
 through `paths.d` plus absolute paths.
 
 Everything in a product's `bin/`, `sbin/` and `share/man/man*/` is exported by default; `--exclude
@@ -1447,14 +1449,16 @@ the members of a multi-member group each declare a line.
 - **`unlink` never changes a selection.** Every upgrade's preinstall runs it, and re-selecting there
   would flip `go` to another line on every upgrade of the selected one; the postinstall's `link`
   puts the bare names back.
-- **`select` moves it.** Besides `select` and a group's first `link`, **only `uninstall` changes a
-  selection**: uninstalling the selected member selects the one member left, if exactly one is, and
-  otherwise clears the selection for the user to choose.
+- **`select` moves it.** Besides `select`, and a `link` into a group with no selection or whose
+  selected member is gone, **only `uninstall` changes a selection**: uninstalling the selected
+  member selects the one member left, if exactly one is, and otherwise clears the selection for the
+  user to choose.
 - **A name owned by another group is an error, never an overwrite.** `link` and `select` refuse,
   naming the owner — and refuse a farm path that is not the helper's link at all.
 
 Ownership is derived from each link's target, not recorded, so there is no database to drift: the
-selection file is the helper's only state. A product with one line is a group of one, so adding a
+selection files are the only state the link farm depends on (system-replace keeps its own, under
+`var/system-replace/<product>/`). A product with one line is a group of one, so adding a
 second line later is a new product joining the group, not a rename. Reconsider when a group's
 members need different bare names selected independently (one line's `go` with another's `gofmt`).
 
