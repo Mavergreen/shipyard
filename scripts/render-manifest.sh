@@ -8,6 +8,7 @@
 # spec: tests/render-manifest-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/registry-lookup.sh"
 PB=/usr/libexec/PlistBuddy
 ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; HASUPD=""; EXCL=""; REPL=""; GEN=""
 nl='
@@ -49,9 +50,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$ST" ] && [ -n "$P" ] && [ -n "$NAME" ] && [ -n "$VER" ] || { echo "render-manifest: need --stage --product --name --version" >&2; exit 2; }
-ID="$(sh "$SELF/product-name.sh" identifier "$P")" || { echo "render-manifest: $P is not in shipyard's scripts/product-names" >&2; exit 1; }
+registry_need render-manifest identifier "$P"; ID="$REG_V"
 if [ -n "$HASUPD" ]; then
-  AC="$(sh "$SELF/product-name.sh" feed "$P")" || { echo "render-manifest: $P has no repo in shipyard's scripts/product-names" >&2; exit 1; }
+  registry_need render-manifest feed "$P"; AC="$REG_V"
 fi
 case "${G:-$P}" in *[!a-z0-9-]*|-*) echo "render-manifest: bad group ${G:-$P}" >&2; exit 2 ;; esac
 case "$L" in *[!0-9a-z.-]*) echo "render-manifest: bad line $L" >&2; exit 2 ;; esac

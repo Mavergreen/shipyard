@@ -15,6 +15,7 @@
 # spec: tests/stage_updater.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/registry-lookup.sh"
 TPL="$SELF/../updater"
 
 STAGE=""; APP=""; P=""; SCRIPTSOUT=""; SNIPPETOUT=""
@@ -32,9 +33,8 @@ done
 [ -n "$STAGE" ] && [ -n "$APP" ] && [ -n "$P" ] \
   || { echo "stage_updater: need --stage --app --product" >&2; exit 2; }
 [ -d "$APP" ] || { echo "stage_updater: no updater .app: $APP" >&2; exit 1; }
-REL="$(sh "$SELF/product-name.sh" updater-app "$P")" \
-  || { echo "stage_updater: $P is not in shipyard's scripts/product-names" >&2; exit 1; }
-LABEL="$(sh "$SELF/product-name.sh" agent-label "$P")"
+registry_need stage_updater updater-app "$P"; REL="$REG_V"
+registry_need stage_updater agent-label "$P"; LABEL="$REG_V"
 APPDIR="/${REL%/*}"
 appbase="${REL##*/}"
 [ "${APP##*/}" = "$appbase" ] \

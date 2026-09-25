@@ -1103,6 +1103,14 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
   MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null
   [ "$(cksum < "$_pk/rehearsal/x.xml")" = "$_sum" ] || { echo "FAIL: stand-in-feeds.sh never overwrites a feed"; exit 1; }
   _fr="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/rehearsal" 1.0.0-mavericks.1 "$_pk")"
+  _nr=0; _fn="$(MAVERGREEN_PRODUCT_NAMES="$_pk/absent-registry" sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk" 2>"$_pk/err")" || _nr=$?
+  [ "$_nr" -ne 0 ] || { echo "FAIL: artifact-facts must fail when the registry cannot be read, not report the product unregistered"; exit 1; }
+  printf '%s\n' "$_fn" | grep -q '^registered x none' \
+    && { echo "FAIL: an unreadable registry must not read as 'registered x none'"; exit 1; }
+  grep -q "cannot look up x in shipyard's registry" "$_pk/err" && grep -q absent-registry "$_pk/err" \
+    || { echo "FAIL: artifact-facts says the registry cannot be read, with product-name.sh's reason: $(cat "$_pk/err")"; exit 1; }
+  printf '%s\n' "$_fn" | grep -q "^abort cannot look up x in shipyard's registry" \
+    || { echo "FAIL: the fact stream carries why it stopped: $_fn"; exit 1; }
   rm -rf "$_pk"
   for want in \
     'installs x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist' \

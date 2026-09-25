@@ -30,6 +30,7 @@
 #       (`printenv SPARKLE_PRIVATE_KEY |`), never expanded into a command.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/registry-lookup.sh"
 
 PRODUCT=""; FEEDDIR=""
 SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; CHANNEL=""; VER=""; URL=""; NOTES=""; PKG=""; MINOS="${MAVERICKS_MIN_OS:-10.9.5}"
@@ -52,8 +53,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$PRODUCT" ] && [ -n "$FEEDDIR" ] && [ -n "$CHANNEL" ] && [ -n "$VER" ] && [ -n "$URL" ] && [ -n "$NOTES" ] && [ -n "$PKG" ] \
   || { echo "sign_and_appcast: need --product --feed-dir --channel-title --version --pkg-url --notes-file --pkg" >&2; exit 2; }
-sh "$SELF/product-name.sh" identifier "$PRODUCT" >/dev/null 2>&1 \
-  || { echo "sign_and_appcast: $PRODUCT is not in shipyard's scripts/product-names, so it has no feed" >&2; exit 2; }
+(registry_need sign_and_appcast identifier "$PRODUCT") || exit 2
 [ -f "$PKG" ] || { echo "sign_and_appcast: no pkg: $PKG" >&2; exit 1; }
 printenv SPARKLE_PRIVATE_KEY | grep -q . \
   || { echo "sign_and_appcast: SPARKLE_PRIVATE_KEY not set" >&2; exit 1; }

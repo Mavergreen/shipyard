@@ -6,6 +6,7 @@
 #       lives there; each check's fail() message carries the actionable summary.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (.shipyard/scripts in a consumer)
+. "$SELF/registry-lookup.sh"
 REL=".github/workflows/release.yml"
 [ -f "$REL" ] || { echo "check-family-conventions: no $REL — not a product repo, nothing to check"; exit 0; }
 
@@ -610,9 +611,15 @@ fi
 # spec: SKILL.md "Family conventions" check 24 -- every feed URL and updater identity is derived from
 #       the registry's repo, so a pkg-building repo the registry does not name publishes feeds nothing polls.
 if [ -n "$builds_pkg" ] && [ -n "${GITHUB_REPOSITORY:-}" ] && ! deviated product-layout "$REL"; then
-  sh "$SELF/product-name.sh" shorts "${GITHUB_REPOSITORY#*/}" >/dev/null 2>&1 \
-    || fail "this repo builds a .pkg ($builds_pkg), but shipyard's scripts/product-names assigns no product to ${GITHUB_REPOSITORY#*/}" \
-            "register its short names with this repo in scripts/product-names, or rename the repo to the one registered"
+  _c24=0; registry_lookup shorts "${GITHUB_REPOSITORY#*/}" || _c24=$?
+  case "$_c24" in
+    0) ;;
+    1) fail "this repo builds a .pkg ($builds_pkg), but shipyard's scripts/product-names assigns no product to ${GITHUB_REPOSITORY#*/}" \
+            "register its short names with this repo in scripts/product-names, or rename the repo to the one registered" ;;
+    *) fail "cannot look up ${GITHUB_REPOSITORY#*/} in shipyard's registry
+$REG_WHY" \
+            "fix shipyard's scripts/product-names -- sh product-name.sh check says what is wrong with it" ;;
+  esac
 fi
 
 [ "$status" -eq 0 ] && echo "check-family-conventions: ok"

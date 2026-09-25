@@ -8,6 +8,7 @@
 # spec: tests/artifact-conformance-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/registry-lookup.sh"
 . "$SELF/stand-in-marker.sh"
 dist="${1:?stand-in-feeds: dist directory required}"
 ver="${2:?stand-in-feeds: version required}"
@@ -20,7 +21,7 @@ while IFS= read -r pk; do
   P="$(awk -v p="$pk" '$1 == "manifest" && $2 == p { print $3; exit }' "$_t/facts")"
   [ -n "$P" ] || continue
   [ ! -e "$dist/$P.xml" ] || continue
-  repo="$(sh "$SELF/product-name.sh" repo "$P")" || { echo "stand-in-feeds: $P is not in scripts/product-names" >&2; exit 1; }
+  registry_need stand-in-feeds repo "$P"; repo="$REG_V"
   [ -s "$dist/RELEASE_NOTES.md" ] || printf '%s\n\n- nothing is published from it\n' "$STAND_IN_NOTES_HEADING" > "$dist/RELEASE_NOTES.md"
   len="$(wc -c < "$dist/$pk" | tr -d ' ')"
   sh "$SELF/gen_appcast.sh" "$P" "$ver" "https://github.com/Mavergreen/$repo/releases/download/$ver/$pk" 10.9.5 \

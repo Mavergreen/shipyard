@@ -10,6 +10,7 @@
 #       component behind set_install_floor.sh's base-first product archive.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/registry-lookup.sh"
 P=""; TITLE=""; VER=""; OUT=""; BASEVER=""; EMIT=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -29,7 +30,7 @@ done
 case "$P" in
   ''|-*|*[!a-z0-9-]*) echo "package-system-replace: not a product name: '$P'" >&2; exit 2 ;;
 esac
-ID="$(sh "$SELF/product-name.sh" identifier "$P")" || { echo "package-system-replace: $P is not registered" >&2; exit 1; }
+registry_need package-system-replace identifier "$P"; ID="$REG_V"
 emit() {
   { printf '#!/bin/sh\n'
     printf '[ -n "${3:-}" ] || { echo "%s: system-replace got no target volume" >&2; exit 1; }\n' "$P"

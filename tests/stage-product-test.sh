@@ -101,6 +101,17 @@ sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out
   --updater-app "$WRONG" 2>"$w/err" \
   && fail "an updater built with another bundle id or feed than the registry's must be refused -- the app and its stage would disagree"
 grep -q 'dev.mavergreen.openssh.updater' "$w/err" || fail "the refusal names the identity the registry expects: $(cat "$w/err")"
+MAVERGREEN_PRODUCT_NAMES="$w/absent-registry" sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 \
+  --scripts-out "$w/scr-noreg" --updater-app "$APP" 2>"$w/err" \
+  && fail "an unreadable registry must refuse staging an updater"
+grep -q "cannot look up openssh in shipyard's registry" "$w/err" && grep -q absent-registry "$w/err" \
+  || fail "an unreadable registry is reported as such, with product-name.sh's reason: $(cat "$w/err")"
+printf 'openssh dev.mavergreen.openssh Bad_Repo\n' > "$w/badrepo-names"
+MAVERGREEN_PRODUCT_NAMES="$w/badrepo-names" sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 \
+  --scripts-out "$w/scr-badrepo" --updater-app "$APP" 2>"$w/err" \
+  && fail "a registry row with a malformed repo must refuse staging an updater"
+grep -q "cannot look up openssh in shipyard's registry" "$w/err" \
+  || fail "the feed lookup's failure is reported, not silent: [$(cat "$w/err")]"
 ol() { _i=0; while _v="$(/usr/libexec/PlistBuddy -c "Print :outside:$_i" "$1" 2>/dev/null)"; do echo "$_v"; _i=$((_i + 1)); done; }
 for s in go126 go127; do
   a="$w/lines/$s-updater.app"; mkdir -p "$a/Contents/MacOS"; printf '#!/bin/sh\n' > "$a/Contents/MacOS/$s-updater"
@@ -147,7 +158,7 @@ grep -q '^launchctl bootstrap gui/501 ' "$alog" \
 
 fake="$w/fake"; mkdir -p "$fake"
 cp "$S" "$fake/stage_product.sh"
-cp "$here/../scripts/product-name.sh" "$here/../scripts/product-names" "$fake/"
+cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$fake/"
 RM_LOG="$w/rm.log"; export RM_LOG
 cat > "$fake/render-manifest.sh" <<'EOF'
 #!/bin/sh

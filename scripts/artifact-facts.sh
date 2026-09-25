@@ -13,6 +13,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
 . "$SELF/deviation-reason.sh"
+. "$SELF/registry-lookup.sh"
 dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"
 root="${3:-$(pwd)}"
@@ -72,7 +73,8 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
   done < "$_ml"
   rm -f "$_ml"
 }
-payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read.
+payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read, or the registry cannot answer (why in _pf_why).
+  _pf_why=""
   for _pl in $(find "$2" -name Payload -type f | sed 's/ /%20/g'); do
     _pl="$(printf '%s' "$_pl" | sed 's/%20/ /g')"
     _dir="${_pl%/Payload}"
@@ -122,12 +124,19 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       _dir="$(basename "$(dirname "$_mf")" | enc)"
       _mp="$(/usr/libexec/PlistBuddy -c 'Print :product' "$_mf" 2>/dev/null)" || _mp=""
       _mi="$(/usr/libexec/PlistBuddy -c 'Print :identifier' "$_mf" 2>/dev/null)" || _mi=""
-      _reg="$(sh "$SELF/product-name.sh" identifier "$_mp" 2>/dev/null)" || _reg=""
-      _repo="$(sh "$SELF/product-name.sh" repo "$_mp" 2>/dev/null)" || _repo=""
-      _dv=""
-      if [ -n "$_repo" ]; then
-        _dv="$(sh "$SELF/product-name.sh" updater-bundle-id "$_mp") $(sh "$SELF/product-name.sh" agent-label "$_mp") $(sh "$SELF/product-name.sh" updater-app "$_mp" | enc) $(sh "$SELF/product-name.sh" feed "$_mp")"
-      fi
+      _reg=""; _repo=""; _dv=""
+      for _q in identifier repo updater-bundle-id agent-label updater-app feed; do
+        _rc=0; registry_lookup "$_q" "$_mp" || _rc=$?
+        [ "$_rc" -ne 1 ] || break
+        [ "$_rc" -eq 0 ] || { _pf_why="cannot look up $_mp in shipyard's registry: $(printf '%s' "$REG_WHY" | tr '\n' ' ')"; return 1; }
+        case "$_q" in
+          identifier) _reg="$REG_V" ;;
+          repo) _repo="$REG_V" ;;
+          updater-app) _dv="$_dv $(printf '%s' "$REG_V" | enc)" ;;
+          *) _dv="$_dv $REG_V" ;;
+        esac
+      done
+      _dv="${_dv# }"
       _ml="$(/usr/libexec/PlistBuddy -c 'Print :line' "$_mf" 2>/dev/null)" || _ml=""
       _ma="$(/usr/libexec/PlistBuddy -c 'Print :appcast' "$_mf" 2>/dev/null)" || _ma=""
       _mp="$(printf '%s' "${_mp:-none}" | tr -s '[:space:]' '_')"
@@ -207,7 +216,7 @@ for f in "$dist"/*; do
         printf '%s\n' "$comps" | while IFS= read -r c; do
           [ -z "$c" ] || printf 'component %s %s\n' "$b" "$(printf '%s' "$c" | tr -s '[:space:]' '_')"
         done
-        payload_facts "$b" "$x/x" || { rm -rf "$x"; abort "cannot read the payload of $b"; }
+        payload_facts "$b" "$x/x" || { rm -rf "$x"; abort "${_pf_why:-cannot read the payload of $b}"; }
       else
         printf 'pkg %s unreadable none none\n' "$b"
       fi

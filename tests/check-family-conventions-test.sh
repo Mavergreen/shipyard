@@ -1294,5 +1294,13 @@ printf '%s\n' "$out" | grep -q 'scripts/product-names' || { echo "FAIL: check 24
   || { echo "FAIL: check 24 compares the repo's name, not its owner"; exit 1; }
 (cd "$work/ok" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 24: a repo that builds no pkg ships no short name, and is not asked"; exit 1; }
+out="$(cd "$work/pk" && MAVERGREEN_PRODUCT_NAMES="$work/absent-registry" GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$S" 2>&1)" \
+  && { echo "FAIL: check 24: a registry that cannot be read must fail the gate"; exit 1; }
+printf '%s\n' "$out" | grep -q "cannot look up golang-126 in shipyard's registry" \
+  || { echo "FAIL: check 24 must say the registry cannot be read, not that the repo is unregistered: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'absent-registry' \
+  || { echo "FAIL: check 24 must pass on product-name.sh's own reason: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'assigns no product' \
+  && { echo "FAIL: check 24 must not call an unreadable registry an unregistered repo: $out"; exit 1; }
 
 echo "PASS: check-family-conventions"

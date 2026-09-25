@@ -34,6 +34,10 @@ sh "$S" --stage "$st" --product openssh --name "$nasty_name" --version 1
 [ "$(p name)" = "$nasty_name" ] \
   || fail "name must round-trip exactly through PlistBuddy, including apostrophe/quotes/backslash/ampersand/angle-brackets"
 sh "$S" --stage "$st" --product not-registered --name x --version 1 2>/dev/null && fail "an unregistered product must be refused"
+MAVERGREEN_PRODUCT_NAMES="$w/absent-registry" sh "$S" --stage "$st" --product openssh --name x --version 1 2>"$w/err" \
+  && fail "an unreadable registry must refuse the manifest"
+grep -q "cannot look up openssh in shipyard's registry" "$w/err" && grep -q absent-registry "$w/err" \
+  || fail "an unreadable registry is reported as such, with product-name.sh's reason: $(cat "$w/err")"
 sh "$S" --stage "$st" --product openssh --name x --version 1 --replaces usr/bin/ssh=bin/ssh 2>/dev/null \
   && fail "a replaces target must be an absolute system path"
 sh "$S" --stage "$st" --product openssh --name x --version 1 --replaces /usr/bin/ssh=../bin/ssh 2>/dev/null \

@@ -6,6 +6,9 @@
 #        Reads the family's registry (scripts/product-names, or $MAVERGREEN_PRODUCT_NAMES), one line per
 #        product: <short name> <pkg identifier> <repo>. Every updater identity and feed URL the family
 #        uses is derived here from those three, and nowhere else.
+#        A lookup exits 1 when the name (for shorts, the repo) is not registered, and 2 when the
+#        registry cannot answer: it is unreadable, the name's row names no valid repo, or the call
+#        is malformed.
 set -eu
 REG="${MAVERGREEN_PRODUCT_NAMES:-$(cd "$(dirname "$0")" && pwd)/product-names}"
 [ -f "$REG" ] && [ -r "$REG" ] || { echo "product-name.sh: cannot read the registry $REG" >&2; exit 2; }
@@ -26,8 +29,11 @@ row_field() {
   printf '%s\n' "$_v"
 }
 repo_of() {
-  _r="$(row_field "$1" 3)" || return 1
-  case "$_r" in -*|*[!a-z0-9-]*) return 1 ;; esac
+  row_field "$1" 2 >/dev/null || return 1
+  _r="$(row_field "$1" 3)" || _r=""
+  case "$_r" in
+    ''|-*|*[!a-z0-9-]*) echo "product-name.sh: $1 is registered in $REG, but its row names no valid repo: '$_r'" >&2; exit 2 ;;
+  esac
   printf '%s\n' "$_r"
 }
 case "${1:-}" in

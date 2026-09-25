@@ -21,6 +21,7 @@
 # spec: tests/shipyard-package-pkg-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/registry-lookup.sh"
 TREE=""; SPREFIX=""; APP=""; VER=""; OUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -35,7 +36,7 @@ done
 
 ID="dev.mavergreen.mavericks-shipyard"
 PREFIX_DIR="/usr/local/mavergreen/shipyard"
-APP_REL="$(sh "$SELF/product-name.sh" updater-app shipyard)"
+registry_need package-pkg updater-app shipyard; APP_REL="$REG_V"
 APP_NAME="${APP_REL##*/}"
 
 : "${TREE:?package-pkg: --cmake-tree required}"

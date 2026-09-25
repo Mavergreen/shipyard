@@ -81,6 +81,14 @@ for q in repo feed; do
   MAVERGREEN_PRODUCT_NAMES="$w/unsafe-row" sh "$S" "$q" b >/dev/null 2>&1 \
     && fail "$q must refuse a repo outside [a-z0-9-] even when a hand-edited registry lists it"
 done
+for q in repo feed; do
+  rc=0; err="$(MAVERGREEN_PRODUCT_NAMES="$w/unsafe-row" sh "$S" "$q" b 2>&1 >/dev/null)" || rc=$?
+  [ "$rc" -eq 2 ] && [ -n "$err" ] \
+    || fail "$q of a registered name whose row is malformed must exit 2 and say why -- exit 1 means not registered: rc $rc [$err]"
+  rc=0; err="$(MAVERGREEN_PRODUCT_NAMES="$w/two-col" sh "$S" "$q" a 2>&1 >/dev/null)" || rc=$?
+  [ "$rc" -eq 2 ] && [ -n "$err" ] \
+    || fail "$q of a registered name whose row has no repo must exit 2 and say why: rc $rc [$err]"
+done
 
 missing_registry() {
   err="$(MAVERGREEN_PRODUCT_NAMES="$w/absent" sh "$S" "$@" 2>&1 >/dev/null)" \

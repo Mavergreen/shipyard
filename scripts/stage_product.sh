@@ -10,6 +10,7 @@
 # spec: tests/stage-product-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/registry-lookup.sh"
 ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
@@ -42,9 +43,8 @@ mkdir -p "$ST/usr/local/mavergreen/$P"
 mkdir -p "$SCR"
 snippet=""
 if [ -n "$APP" ]; then
-  _want_id="$(sh "$SELF/product-name.sh" updater-bundle-id "$P")" \
-    || { echo "stage_product: $P is not in shipyard's scripts/product-names" >&2; exit 1; }
-  _want_feed="$(sh "$SELF/product-name.sh" feed "$P")"
+  registry_need stage_product updater-bundle-id "$P"; _want_id="$REG_V"
+  registry_need stage_product feed "$P"; _want_feed="$REG_V"
   _got_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist" 2>/dev/null)" || _got_id=""
   _got_feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP/Contents/Info.plist" 2>/dev/null)" || _got_feed=""
   [ "$_got_id" = "$_want_id" ] && [ "$_got_feed" = "$_want_feed" ] \
