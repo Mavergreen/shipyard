@@ -991,8 +991,7 @@ $(printf '%s\n' "$UPD" | sed '/^sparkle /s|/releases/latest/download/x\.xml$|/re
 
 # spec: scripts/check-artifact-conformance.sh -- a feed's enclosure names the pkg it describes;
 #       two products' feeds naming EACH OTHER's pkg must fail through the enclosure-name check
-#       alone, not through the per-updater derived checks (neither product here has a repo/derived
-#       record at all).
+#       alone: neither product carries a derived fact, so the per-updater checks never run.
 SWAP='expected 1.26.8-mavericks.7
 pkg go126.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.golang.go126
 asset go126.pkg 10
