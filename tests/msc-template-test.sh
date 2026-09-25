@@ -20,22 +20,16 @@ got="$(env -i PATH=/usr/bin:/bin SHIPYARD_SCRIPTS="$w/s" sh -c ". '$T'; printf '
   || { echo "FAIL: with SHIPYARD_SCRIPTS set, msc.sh must succeed"; exit 1; }
 [ "$got" = "$w/s" ] || { echo "FAIL: SHIPYARD must be \$SHIPYARD_SCRIPTS; got '$got'"; exit 1; }
 
-# platform: the template falls back to the absolute /usr/local/mavergreen/bin/shipyard-cmake when
-#           shipyard-cmake is not on PATH, so on a box with shipyard installed there is no "nothing
-#           to find" -- there the same stripped PATH proves the fallback instead.
 installed_cm=/usr/local/mavergreen/bin/shipyard-cmake
-if [ -x "$installed_cm" ]; then
-  got="$(env -i PATH=/usr/bin:/bin TMPDIR="${TMPDIR:-/tmp}" sh -c ". '$T'; printf '%s' \"\$SHIPYARD\"")" \
-    || { echo "FAIL: with shipyard-cmake off PATH (a launchd job, a non-login shell), msc.sh must fall back to $installed_cm"; exit 1; }
-  [ "$got" = /usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts ] \
-    || { echo "FAIL: the fallback to $installed_cm must find the installed shipyard's scripts; got '$got'"; exit 1; }
-else
-  if msg="$(env -i PATH=/usr/bin:/bin sh -c ". '$T'" 2>&1)"; then echo "FAIL: must fail with nothing to find"; exit 1; fi
-  printf '%s' "$msg" | grep -q 'install the shipyard pkg' || { echo "FAIL: message must say to install the pkg; got: $msg"; exit 1; }
-  got="$(env -i PATH=/usr/bin:/bin sh -c ". '$T' >/dev/null 2>&1; printf '%s' \"\$SHIPYARD\"" || true)"
-  [ "$got" != "/scripts" ] || { echo "FAIL: a failed probe set SHIPYARD to the literal '/scripts'"; exit 1; }
-  [ -z "$got" ] || { echo "FAIL: a failed probe must leave SHIPYARD empty; got '$got'"; exit 1; }
-fi
+grep -qF "$installed_cm" "$T" || { echo "FAIL: msc.sh must fall back to $installed_cm when shipyard-cmake is off PATH (a launchd job, a non-login shell)"; exit 1; }
+# platform: both cases run against a copy whose absolute fallback is rewritten, so neither depends on
+#           whether this box has shipyard installed.
+sed "s#$installed_cm#$w/nowhere/shipyard-cmake#g" "$T" > "$w/msc-nofallback.sh"
+if msg="$(env -i PATH=/usr/bin:/bin sh -c ". '$w/msc-nofallback.sh'" 2>&1)"; then echo "FAIL: must fail with nothing to find"; exit 1; fi
+printf '%s' "$msg" | grep -q 'install the shipyard pkg' || { echo "FAIL: message must say to install the pkg; got: $msg"; exit 1; }
+got="$(env -i PATH=/usr/bin:/bin sh -c ". '$w/msc-nofallback.sh' >/dev/null 2>&1; printf '%s' \"\$SHIPYARD\"" || true)"
+[ "$got" != "/scripts" ] || { echo "FAIL: a failed probe set SHIPYARD to the literal '/scripts'"; exit 1; }
+[ -z "$got" ] || { echo "FAIL: a failed probe must leave SHIPYARD empty; got '$got'"; exit 1; }
 
 real="$(command -v cmake 2>/dev/null)" || { echo "SKIP: no cmake for the probe case"; exit 77; }
 croot="$(printf 'message("${CMAKE_ROOT}")\n' > "$w/r.cmake"; "$real" -P "$w/r.cmake" 2>&1)"
@@ -55,5 +49,11 @@ got="$(env -i PATH="$w/pbin:/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" sh -c ". '$T
   || { echo "FAIL: the probe must find the fixture's shipyard"; exit 1; }
 want="$fx/share/cmake/MavericksShipyard/scripts"
 [ "$got" = "$want|$want" ] || { echo "FAIL: probe gave '$got', want '$want|$want'"; exit 1; }
+
+mkdir -p "$w/fallback"; ln -s "$fx/bin/cmake" "$w/fallback/shipyard-cmake"
+sed "s#$installed_cm#$w/fallback/shipyard-cmake#g" "$T" > "$w/msc-fallback.sh"
+got="$(env -i PATH=/usr/bin:/bin TMPDIR="${TMPDIR:-/tmp}" sh -c ". '$w/msc-fallback.sh'; printf '%s' \"\$SHIPYARD\"")" \
+  || { echo "FAIL: with shipyard-cmake off PATH (a launchd job, a non-login shell), msc.sh must fall back to the absolute $installed_cm"; exit 1; }
+[ "$got" = "$want" ] || { echo "FAIL: the absolute fallback must find that shipyard's scripts; got '$got', want '$want'"; exit 1; }
 
 echo "PASS: msc-template"
