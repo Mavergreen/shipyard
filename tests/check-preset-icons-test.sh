@@ -11,10 +11,15 @@ W=$(mktemp -d "${TMPDIR:-/tmp}/cpi-test.XXXXXX"); trap 'rm -rf "$W"' EXIT
 
 printf '\211PNG\r\n\032\n' > "$W/good.png"; printf '<html/>' > "$W/page.png"
 mkdir -p "$W/repo/dists/stable/main/binary-amd64" "$W/repo/pool"
-for v in 1.0 2.0; do
-  d="$W/pkg$v"; mkdir -p "$d/DEBIAN" "$d/usr/share/icons/hicolor/512x512/apps"
+for v in 2.0 3.0 1.0; do
+  d="$W/pkg$v"; mkdir -p "$d/DEBIAN"
   printf 'Package: demo\nVersion: %s\nArchitecture: amd64\nMaintainer: x\nDescription: x\n' "$v" > "$d/DEBIAN/control"
-  if [ "$v" = 2.0 ]; then cp "$W/good.png" "$d/usr/share/icons/hicolor/512x512/apps/demo.png"; fi
+  case $v in
+    2.0) i="$d/usr/share/icons/hicolor/512x512/apps" ;;
+    3.0) i="$d/usr/share/icons/hicolor/512x512/extra/apps" ;;
+    1.0) i= ;;
+  esac
+  [ -z "$i" ] || { mkdir -p "$i"; cp "$W/good.png" "$i/demo.png"; }
   dpkg-deb -b "$d" "$W/repo/pool/demo_$v.deb" >/dev/null
   printf 'Package: demo\nVersion: %s\nFilename: pool/demo_%s.deb\n\n' "$v" "$v" >> "$W/repo/dists/stable/main/binary-amd64/Packages"
 done
@@ -28,9 +33,11 @@ no() {
   printf '%s\n' "$out" | grep -q "$2" || { echo "FAIL $1: should mention $2, got: $out"; exit 1; }
 }
 
-conf "file://$W/good.png" '/usr/share/icons/hicolor/*/apps/demo.png'; ok "both sources work, and the newest version is the one checked"
-conf "file://$W/gone.png" '/usr/share/icons/hicolor/*/apps/demo.png'; no "a 404 ICON_URL" ICON_URL
-conf "file://$W/page.png" '/usr/share/icons/hicolor/*/apps/demo.png'; no "a non-PNG ICON_URL" ICON_URL
-conf "file://$W/good.png" '/opt/moved/*.png';                          no "an ICON_GLOB the package no longer has" ICON_GLOB
-conf "" '/usr/share/icons/hicolor/*/apps/demo.png';                     ok "no ICON_URL is fine"
+deep='/usr/share/icons/hicolor/*/*/apps/demo.png'
+conf "file://$W/good.png" "$deep";                                    ok "both sources work, and the newest version (listed mid-way) is the one checked"
+conf "file://$W/gone.png" "$deep";                                    no "a 404 ICON_URL" ICON_URL
+conf "file://$W/page.png" "$deep";                                    no "a non-PNG ICON_URL" ICON_URL
+conf "file://$W/good.png" '/opt/moved/*.png';                         no "an ICON_GLOB the package no longer has" ICON_GLOB
+conf "file://$W/good.png" '/usr/share/icons/hicolor/*/apps/demo.png'; no "an icon moved one directory deeper (a * never crosses /)" ICON_GLOB
+conf "" "$deep";                                                      ok "no ICON_URL is fine"
 echo "ok check-preset-icons"

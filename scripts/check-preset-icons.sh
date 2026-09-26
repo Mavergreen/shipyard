@@ -4,10 +4,11 @@
 #          A Porthole preset names where its app icon comes from: ICON_URL, a vendor-hosted PNG that
 #          Porthole fetches on the user's Mac at install, and ICON_GLOB, the icon's path inside the
 #          vendor's package, which Porthole extracts from the app's container. Either can move. This
-#          fails when ICON_URL no longer serves a PNG, or when ICON_GLOB matches nothing in the newest
-#          package named first in APT_PKGS from APT_REPO (checked only when APT_KEY_URL and APT_REPO
-#          are set). Preset repos run it on push and weekly through preset-icons.yml, so a moved
-#          source turns a run red between releases.
+#          fails when ICON_URL no longer serves a PNG, or when ICON_GLOB (one path segment per *, as
+#          the container's shell expands it) matches nothing in the newest package named first in
+#          APT_PKGS from APT_REPO (checked only when APT_KEY_URL and APT_REPO are set). Preset repos
+#          run it on push and weekly through preset-icons.yml, so a moved source turns a run red
+#          between releases.
 # spec: tests/check-preset-icons-test.sh
 set -eu
 CONF="${1:?usage: check-preset-icons.sh CONF}"
@@ -47,8 +48,11 @@ if [ -n "$ICON_GLOB" ] && [ -n "$APT_REPO" ] && [ -n "$APT_KEY_URL" ]; then
   else
     curl -fsSL -o "$W/pkg.deb" "$base/$best"
     dpkg-deb -c "$W/pkg.deb" | awk '{ print substr($6, 2) }' > "$W/files"
+    depth() { printf '%s' "$1" | tr -cd / | wc -c | tr -d ' '; }
+    want=$(depth "$ICON_GLOB")
     found=
     while read -r path; do
+      [ "$(depth "$path")" = "$want" ] || continue
       case "$path" in $ICON_GLOB) found=$path; break ;; esac
     done < "$W/files"
     if [ -n "$found" ]; then
