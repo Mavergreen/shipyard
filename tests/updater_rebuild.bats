@@ -19,7 +19,8 @@ EOF
 }
 
 build_at() {
-  "$SC" -S "$d" -B "$d/b" -DV="$1" >/dev/null && "$SC" --build "$d/b"
+  "$SC" -S "$d" -B "$d/b" -DV="$1" -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
+    -DCMAKE_TOOLCHAIN_FILE="$SHARED/MavericksToolchain.cmake" >/dev/null && "$SC" --build "$d/b"
 }
 
 key() { /usr/libexec/PlistBuddy -c "Print :$1" "$d/b/openssh-updater.app/Contents/Info.plist"; }
