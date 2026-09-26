@@ -627,14 +627,14 @@ Two release models — **pick by how you publish**:
   `<upstream>-mavericks.1` by itself. The publish decision lives in the build job
   (`steps.ver.outputs.release`). Use this when Renovate merging the bump should *itself* release.
 - **Deliberate publish** — build and gate on every push/PR, but publish only from an explicit
-  `workflow_dispatch`. Use this when a human decides when to cut, or the build is too heavy or too risky
+  `workflow_dispatch` (or a legacy `tags:` trigger, where one remains). Use this when a human decides when to cut, or the build is too heavy or too risky
   to release unattended.
 
 **Which repo is which** (checked 2026-09-22; a repo's `release.yml` **`ver`/version step is the
 authority, not its header comment** — a header can drift out of sync with what the step actually does,
 as clang's did):
 
-| auto-cut on a push to `main` | publishes only from a dispatch |
+| auto-cut on a push to `main` | publishes only from a dispatch (or a legacy tag trigger) |
 |---|---|
 | golang, openssh, 1password, signal-desktop, swift-toolchain, swift-runtime, ed25519, legacysupport, clang | macho-tools, container-tools, tailscale, porthole, magic-trackpad2 |
 
