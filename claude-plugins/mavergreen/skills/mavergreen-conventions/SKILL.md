@@ -1748,9 +1748,15 @@ nothing in it; a product whose every file lives where the OS dictates (swift-run
 scripts:
 
 - **preinstall**: `mavergreen unlink <product>` if a helper exists; then the product's
-  `--preinstall-hook`, which still sees the outgoing version's tree; then removes
-  `/usr/local/mavergreen/<product>` (never `var/`). A tree it cannot remove is reported,
-  never failing the install: files the new version dropped may linger.
+  `--preinstall-hook`, which still sees the outgoing version's tree and bundles; then removes each
+  bundle directory (`.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`) that the
+  installed manifest lists in `outside`, so a file the new version drops (from Sparkle, say) cannot
+  linger inside a bundle and break its code-signature seal; then removes
+  `/usr/local/mavergreen/<product>` (never `var/`). Listed files are left for the payload to
+  overwrite, and an entry the helper's uninstall would refuse (absolute, `.`/`..`, in the tree, a
+  symlink, or under a parent that resolves off the volume) is left alone. With no readable manifest,
+  no bundle is removed. A bundle or tree it cannot remove is reported, never failing the install:
+  files the new version dropped may linger.
 - **postinstall**: `mavergreen link <product>`, failing the install if it fails; then the updater's
   agent load (`--updater-app`, whose place and label come from the registry); then the `--postinstall-hook`.
 

@@ -69,6 +69,25 @@ sh "$SELF/render-manifest.sh" "$@"
     printf '  fi\n'
     printf '  exit 1\n}\n'
   fi
+  sed "s/@P@/$P/g" <<'CLEARBUNDLES'
+_mf="$ROOT/usr/local/mavergreen/@P@/mavergreen.plist"
+_rr=""
+if [ -f "$_mf" ] && [ ! -L "$_mf" ]; then _rr="$(cd -P "$ROOT/" 2>/dev/null && pwd -P)" || _rr=""; fi
+_i=0
+while [ -n "$_rr" ] && _o="$(/usr/libexec/PlistBuddy -c "Print :outside:$_i" "$_mf" 2>/dev/null)"; do
+  _i=$((_i + 1))
+  case "$_o" in ''|/*|*/|*//*|usr/local/mavergreen|usr/local/mavergreen/*) continue ;; esac
+  case "/$_o/" in *"/./"*|*"/../"*) continue ;; esac
+  case "${_o##*/}" in *.app|*.kext|*.prefPane|*.plugin|*.bundle|*.framework) ;; *) continue ;; esac
+  _b="$ROOT/$_o"
+  if [ -L "$_b" ] || [ ! -d "$_b" ]; then continue; fi
+  _pd="$(cd -P "$(dirname "$_b")" 2>/dev/null && pwd -P)" || continue
+  case "$_pd/" in
+    "${_rr%/}/"*) rm -rf "$_b" 2>/dev/null || echo "@P@: could not clear $_o; files dropped from it may linger" >&2 ;;
+    *) echo "@P@: not clearing $_o -- its parent directory resolves outside $ROOT/" >&2 ;;
+  esac
+done
+CLEARBUNDLES
   printf 'rm -rf "$ROOT/usr/local/mavergreen/%s" 2>/dev/null || echo "%s: could not clear $ROOT/usr/local/mavergreen/%s; files dropped from this version may linger" >&2\n' "$P" "$P" "$P"
   printf 'exit 0\n'
 } > "$SCR/preinstall"

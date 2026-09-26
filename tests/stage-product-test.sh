@@ -364,4 +364,43 @@ else
   ! grep -q 'left in place' "$w/err" || fail "a failed relink must not claim the installed version is left in place: $(cat "$w/err")"
 fi
 
+printf 'if [ -f "$ROOT/Library/Application Support/Mavergreen/openssh-updater.app/Contents/Stale" ]; then echo saw-old-bundle >> "$ROOT/bundlehook.log"; else echo bundle-gone >> "$ROOT/bundlehook.log"; fi\n' > "$w/bundlehook"
+sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-bundle" \
+  --updater-app "$APP" --preinstall-hook "$w/bundlehook" || fail "staging with an updater and a preinstall hook must succeed"
+mkvol() {
+  _v="$1"; rm -rf "$_v" "$_v.out"; mkdir -p "$_v.out/escape.app" "$_v.out/linked/x.app"
+  _u="$_v/Library/Application Support/Mavergreen"
+  mkdir -p "$_u/openssh-updater.app/Contents" "$_u/other-updater.app" "$_v/Library/LaunchAgents" "$_v/Library/NotABundle" \
+    "$_v/usr/local/mavergreen/openssh" "$_v/usr/local/mavergreen/other/x.app"
+  : > "$_u/openssh-updater.app/Contents/Stale"; : > "$_u/openssh-updater.app/Contents/Info.plist"
+  : > "$_v/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist"; : > "$_v/Library/NotABundle/f"
+  ln -s "$_v.out/linked" "$_v/Library/Linked"; ln -s "$_v.out/escape.app" "$_v/Library/Symlinked.app"
+}
+V4="$w/vol-bundles"; mkvol "$V4"; M4="$V4/usr/local/mavergreen/openssh/mavergreen.plist"
+_i=0; /usr/libexec/PlistBuddy -c 'Add :outside array' "$M4" >/dev/null
+for o in "Library/Application Support/Mavergreen/openssh-updater.app" "Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" \
+  Library/NotABundle ../vol-bundles.out/escape.app "$V4.out/escape.app" Library/Linked/x.app Library/Symlinked.app \
+  usr/local/mavergreen/other/x.app "Library/./Application Support/Mavergreen/other-updater.app" "Library/Missing.app"; do
+  /usr/libexec/PlistBuddy -c "Add :outside:$_i string $o" "$M4" >/dev/null; _i=$((_i + 1))
+done
+sh "$w/scr-bundle/preinstall" /x.pkg "$V4/" "$V4/" 2>"$w/err" || fail "a preinstall that clears the installed bundles must succeed: $(cat "$w/err")"
+[ "$(cat "$V4/bundlehook.log")" = saw-old-bundle ] \
+  || fail "the product's preinstall hook runs before its bundles are cleared, so it can unload a kext first"
+[ ! -e "$V4/Library/Application Support/Mavergreen/openssh-updater.app" ] \
+  || fail "the installed manifest's updater bundle is cleared, so a file the new version drops cannot break its seal"
+[ -f "$V4/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" ] || fail "a listed file is left for the payload to overwrite"
+[ -f "$V4/Library/NotABundle/f" ] || fail "a listed directory that is not a bundle is never cleared"
+[ -d "$V4.out/escape.app" ] || fail "an entry that climbs out of the volume is never cleared"
+[ -d "$V4.out/linked/x.app" ] || fail "an entry whose parent resolves outside the volume is never cleared"
+[ -L "$V4/Library/Symlinked.app" ] || fail "a bundle entry that is a symlink is not a bundle directory, and is left alone"
+[ -d "$V4/usr/local/mavergreen/other/x.app" ] || fail "an entry inside the mavergreen tree is never cleared"
+[ -d "$V4/Library/Application Support/Mavergreen/other-updater.app" ] || fail "an entry with a ./ component is never cleared"
+for nm in missing invalid; do
+  V5="$w/vol-$nm"; mkvol "$V5"
+  [ "$nm" = missing ] || printf 'not a plist\n' > "$V5/usr/local/mavergreen/openssh/mavergreen.plist"
+  sh "$w/scr-bundle/preinstall" /x.pkg "$V5/" "$V5/" 2>"$w/err" || fail "a preinstall with a $nm installed manifest must succeed: $(cat "$w/err")"
+  [ -f "$V5/Library/Application Support/Mavergreen/openssh-updater.app/Contents/Stale" ] \
+    || fail "with a $nm installed manifest, no bundle is cleared"
+done
+
 echo "PASS: stage-product"
