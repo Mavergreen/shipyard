@@ -179,7 +179,6 @@ function(mavericks_add_updater_app)
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_app}/Contents/Frameworks
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_app}/Contents/Resources
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${A_NAME}> ${_app}/Contents/MacOS/${A_NAME}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/${A_NAME}-Info.plist ${_app}/Contents/Info.plist
     # SKILL.md "SDK pinning": cp -R keeps Sparkle's version symlinks as symlinks (copy_directory
     # dereferenced them into copies), and the pristine check proves the embedded framework is the
     # pinned one byte for byte, which is what keeps its code-signature seal valid.
@@ -188,6 +187,10 @@ function(mavericks_add_updater_app)
     COMMAND sh ${MAVERICKS_SHARED_DIR}/scripts/assert_sparkle_pristine.sh
             ${_app}/Contents/Frameworks/Sparkle.framework ${A_SPARKLE_FRAMEWORK}
     COMMENT "Assembling ${A_NAME}.app")
+  add_custom_target(${A_NAME}_info_plist
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${_app}/Contents
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/${A_NAME}-Info.plist ${_app}/Contents/Info.plist)
+  add_dependencies(${A_NAME} ${A_NAME}_info_plist)
   mavericks_assert_binary_compatible(${A_NAME})
   if(A_ICON)
     add_custom_command(TARGET ${A_NAME} POST_BUILD
