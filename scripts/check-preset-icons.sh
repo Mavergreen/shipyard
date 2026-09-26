@@ -16,7 +16,7 @@ for t in curl dpkg-deb dpkg; do
   command -v "$t" >/dev/null 2>&1 || { echo "SKIP: check-preset-icons needs $t"; exit 77; }
 done
 ICON_URL= ICON_GLOB= APT_REPO= APT_KEY_URL= APT_PKGS=
-. "$CONF"
+case "$CONF" in */*) . "$CONF" ;; *) . "./$CONF" ;; esac
 W=$(mktemp -d "${TMPDIR:-/tmp}/check-preset-icons.XXXXXX"); trap 'rm -rf "$W"' EXIT
 fail=0
 

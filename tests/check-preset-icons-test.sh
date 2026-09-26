@@ -40,4 +40,6 @@ conf "file://$W/page.png" "$deep";                                    no "a non-
 conf "file://$W/good.png" '/opt/moved/*.png';                         no "an ICON_GLOB the package no longer has" ICON_GLOB
 conf "file://$W/good.png" '/usr/share/icons/hicolor/*/apps/demo.png'; no "an icon moved one directory deeper (a * never crosses /)" ICON_GLOB
 conf "" "$deep";                                                      ok "no ICON_URL is fine"
+conf "file://$W/good.png" "$deep"
+( cd "$W" && sh "$S" demo.conf >/dev/null 2>&1 ) || { echo "FAIL a conf named relative to the current directory (as preset-icons.yml passes it)"; ( cd "$W" && sh "$S" demo.conf ); exit 1; }
 echo "ok check-preset-icons"
