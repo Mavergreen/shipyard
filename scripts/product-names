@@ -15,6 +15,7 @@ porthole dev.mavergreen.porthole porthole
 signal-desktop dev.mavergreen.signal-desktop signal-desktop
 container-tools dev.mavergreen.container-tools container-tools
 swift-runtime dev.mavergreen.swift-runtime swift
+swift-toolchain dev.mavergreen.swift-toolchain swift
 trackpad2 dev.mavergreen.voodooinputmavericks magic-trackpad2
 legacysupport dev.mavergreen.macports-legacy-support macports-legacy-support
 node24 dev.mavergreen.nodejs.node24 nodejs-24
