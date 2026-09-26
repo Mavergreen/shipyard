@@ -770,9 +770,16 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   workflow when nothing realises the declared state — it reads and dispatches only
   (`contents: read`, `actions: write`) and never writes a release body. **Deliberately cheap**: a
   quiet night costs one API call per repo, not a build — a scheduled job that built each product to
-  check it would be fourteen macOS builds a night. And **idempotent by construction**: the dispatched
-  run recomputes the same digest and stops if the release turned up in between, so a reconcile run
-  racing a push-triggered release cannot double-publish.
+  check it would be fourteen macOS builds a night. **Idempotent only if the caller's `release.yml`
+  makes it so**: `reconcile.yml` dispatches unconditionally once `release-needed.sh` says `PUBLISH`;
+  nothing stops a second dispatch, or a reconcile run racing a push-triggered release, from also
+  answering `PUBLISH` before the first run's release lands. The dispatched run is safe from
+  double-publishing only when its own `release.yml` re-checks before it cuts a tag — gates its
+  publish decision on `release-needed.sh` (or an equivalent digest check) rather than on version.sh
+  alone. A `workflow_dispatch` mode that always cuts `N+1` (a `local_release=true` path whose
+  version.sh runs in `local` mode unconditionally, the way ca-certs' and ed25519's do today) has no
+  such gate: it gets a new release on every dispatch, race or not, and "recomputes the same digest
+  and stops" does not hold for it.
 - **A version match is NEVER a state match, and `release-needed.sh` does not look at the version.**
   `version.sh auto` returns the *existing* tag's `N` whenever the upstream already has one, so it maps
   every declared state of a given upstream to **one** version. An earlier cut inferred

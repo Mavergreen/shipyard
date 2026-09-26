@@ -53,13 +53,21 @@ jobs:
 
       # spec: mavergreen-conventions SKILL.md, "A release is a declared state, not an event" --
       #       upstream must name the file version.sh reads; this is the reconcile.yml half of that.
+      # spec: tests/reconcile-workflow-test.sh -- a repo whose upstream is a committed pin
+      #       (ca-certs' NSS_TAG) needs build/derive-upstream-version.sh run, with no argument,
+      #       before version.sh, only when the repo tracks that script; version.sh's own failure
+      #       must fail this step, not the sed after it.
       - id: state
         env:
           MAVERICKS_UPSTREAM_FILE: ${{ inputs.upstream-file }}
         run: |
           set -eu
+          if git ls-files --error-unmatch build/derive-upstream-version.sh >/dev/null 2>&1; then
+            sh build/derive-upstream-version.sh >/dev/null
+          fi
           digest="$(sh "$SHIPYARD_SCRIPTS/release-state.sh")"
-          version="$(sh "$SHIPYARD_SCRIPTS/version.sh" auto | sed -n 's/^FULL=//p')"
+          out="$(sh "$SHIPYARD_SCRIPTS/version.sh" auto)"
+          version="$(printf '%s\n' "$out" | sed -n 's/^FULL=//p')"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "declared state: $digest (would publish $version)"
