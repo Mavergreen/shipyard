@@ -1345,6 +1345,13 @@ release until real artwork (a different hash) replaces it, or someone opts in on
 entry points call the shared `mavericks_reject_placeholder_icon`, so neither the main-app nor the
 updater path can smuggle one through.
 
+**Porthole presets' vendor icons.** A preset never ships its app's icon; it names where the user's
+Mac gets it: `ICON_URL` (a vendor-hosted PNG, fetched at install) and `ICON_GLOB` (the icon's path in
+the vendor's package, extracted from the app's container). Vendors move these, so each preset repo
+calls `preset-icons.yml@v1` with its conf on push and on a weekly schedule; its
+`check-preset-icons.sh` fails when `ICON_URL` stops serving a PNG or `ICON_GLOB` matches nothing in
+the vendor's newest package.
+
 ## SDK pinning (checked on what ships)
 
 **Every Mach-O we compile that is installed on anyone's Mac records a PINNED SDK, never the runner's:**

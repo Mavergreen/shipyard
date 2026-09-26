@@ -1,0 +1,32 @@
+name: preset-icons
+
+# spec: mavergreen-conventions SKILL.md, "App icons" -- "Porthole presets' vendor icons"
+
+on:
+  workflow_call:
+    inputs:
+      conf:
+        description: "Path to the preset conf in the caller's repo."
+        type: string
+        required: true
+      shipyard-ref:
+        description: "shipyard ref to take the check from. Default v1 (the moving major tag)."
+        type: string
+        required: false
+        default: v1
+
+jobs:
+  icons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out shipyard (for the check script)
+        uses: actions/checkout@v7
+        with:
+          repository: Mavergreen/shipyard
+          ref: ${{ inputs.shipyard-ref }}
+          path: .shipyard
+
+      - name: The preset's icon sources still work
+        run: sh .shipyard/scripts/check-preset-icons.sh "${{ inputs.conf }}"
