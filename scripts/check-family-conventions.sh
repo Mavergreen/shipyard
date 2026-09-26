@@ -651,8 +651,10 @@ fi
 #       Rosetta, so an undeclared use is swept before macOS 28 removes Rosetta for good, not found
 #       the day it does. Neither the pattern nor a fail() message below may spell what it scans for
 #       as one contiguous run of a command word, a space, and its flag -- the same self-match
-#       check 16 avoids by writing "package[s]" -- or this check is its own first offender.
-for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*.bats' 2>/dev/null | grep -v '^tests/'); do
+#       check 16 avoids by writing "package[s]" -- or this check is its own first offender. tests/
+#       is scanned too: a best-effort test that SKIPs (77) without Rosetta still runs translated
+#       when it doesn't skip, so it still needs a declaration -- see "Rosetta", above.
+for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*.bats' 2>/dev/null); do
   # spec: SKILL.md "Family conventions" check 25 -- a trailing " #..." remark is stripped (a "#"
   #       preceded by whitespace) before matching, so it cannot force a bogus declaration.
   hit="$(grep -v '^[[:space:]]*#' "$f" 2>/dev/null \

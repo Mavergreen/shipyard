@@ -1342,15 +1342,18 @@ printf '%s\n' "$out" | grep -q 'assigns no product' \
   && { echo "FAIL: check 24 must not call an unreadable registry an unregistered repo: $out"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 25 -- the family is retiring Rosetta (see the
-#       conventions skill, "Rosetta"). An undeclared arch -x86_64 call outside tests/ must fail,
-#       naming rosetta and the declaration form; a declared rosetta:<path> deviation must excuse
-#       it; a comment-only mention must pass undeclared; and a call inside tests/ must pass
-#       undeclared, because a test that runs the shipped product under Rosetta only when it is
-#       already present (SKIPping otherwise) is coverage, not a build dependency.
+#       conventions skill, "Rosetta"). An undeclared translated-arch call must fail, naming
+#       rosetta and the declaration form; a declared rosetta:<path> deviation must excuse it; a
+#       comment-only mention must pass undeclared; and there is no tests/ exemption -- a call
+#       there must fail undeclared and pass declared, exactly like one anywhere else.
+# spec: scripts/check-family-conventions.sh check 25's own self-match-avoidance rule -- these two
+#       pieces, joined only through %s at printf time, keep this file's own source from spelling
+#       the flag contiguously (the same avoidance check 16 makes by writing "package[s]").
+_arch="arch"; _x64="-x86_64"
 mkrepo "$work/rosetta"
 printf '#!/bin/sh\narch -x86_64 ./host-tool\n' > "$work/rosetta/build/cross.sh"
 (cd "$work/rosetta" && git add -A) >/dev/null 2>&1
-out="$(cd "$work/rosetta" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared arch -x86_64 call must fail"; exit 1; }
+out="$(cd "$work/rosetta" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call must fail"; exit 1; }
 printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'Rosetta' || { echo "FAIL: check 25 should point at the SKILL \"Rosetta\" section: $out"; exit 1; }
 printf '\n## Conformance deviations\n\n- rosetta:build/cross.sh: the cross build runs a host tool under Rosetta; reconsider when an arm64 host tool exists, and at the latest before macOS 28\n' >> "$work/rosetta/INGREDIENTS.md"
@@ -1367,15 +1370,21 @@ mkrepo "$work/rosetta3"; printf '#!/bin/sh\n/usr/bin/arch -x86_64 ./host-tool\n'
 
 # spec: scripts/check-family-conventions.sh check 25 -- a comment-only mention is prose, not a call.
 mkrepo "$work/rosettac"
-printf '#!/bin/sh\n# arch -x86_64 ./host-tool -- no longer true, kept as a note\nexit 0\n' > "$work/rosettac/build/cross.sh"
+printf '#!/bin/sh\n# %s %s ./host-tool -- no longer true, kept as a note\nexit 0\n' "$_arch" "$_x64" > "$work/rosettac/build/cross.sh"
 (cd "$work/rosettac" && git add -A && sh "$S" >/dev/null 2>&1) \
-  || { echo "FAIL: check 25: a comment-only mention of arch -x86_64 must not fail: $(cd "$work/rosettac" && sh "$S" 2>&1)"; exit 1; }
+  || { echo "FAIL: check 25: a comment-only mention of the flag must not fail: $(cd "$work/rosettac" && sh "$S" 2>&1)"; exit 1; }
 
-# spec: SKILL.md "Family conventions" check 25 -- tests/ is excluded, per "Rosetta", above.
+# spec: SKILL.md "Family conventions" check 25 -- there is no tests/ exemption, per "Rosetta",
+#       above: a best-effort test that SKIPs (77) without Rosetta still runs translated when it
+#       doesn't skip, so a hit under tests/ fails undeclared and passes declared, like any other.
 mkrepo "$work/rosettat"
 printf '#!/bin/sh\narch -x86_64 ./product --version\n' > "$work/rosettat/tests/rosetta-smoke.sh"
+(cd "$work/rosettat" && git add -A) >/dev/null 2>&1
+(cd "$work/rosettat" && sh "$S" >/dev/null 2>&1) \
+  && { echo "FAIL: check 25: a call under tests/ must fail undeclared: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
+printf '\n## Conformance deviations\n\n- rosetta:tests/rosetta-smoke.sh: best-effort smoke that runs the shipped x86_64 product under Rosetta when present, SKIPping (77) otherwise; reconsider when an arm64 test box exists, and at the latest before macOS 28\n' >> "$work/rosettat/INGREDIENTS.md"
 (cd "$work/rosettat" && git add -A && sh "$S" >/dev/null 2>&1) \
-  || { echo "FAIL: check 25: a call under tests/ must pass undeclared: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
+  || { echo "FAIL: check 25: a declared rosetta:tests/rosetta-smoke.sh deviation should excuse it: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 25 -- the regex matches anywhere on a non-comment
 #       line, not just at command position (unlike check 23). A trailing " #..." remark is
@@ -1388,17 +1397,17 @@ printf '#!/bin/sh\necho hello there # not Rosetta, just mentions arch -x86_64 in
 (cd "$work/rosettatrail" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a trailing # remark mentioning arch -x86_64 must not force a declaration: $(cd "$work/rosettatrail" && sh "$S" 2>&1)"; exit 1; }
 mkrepo "$work/rosettaquote"
-printf '#!/bin/sh\necho "legacy builds used arch -x86_64 here"\n' > "$work/rosettaquote/build/cross.sh"
+printf '#!/bin/sh\necho "legacy builds used %s %s here"\n' "$_arch" "$_x64" > "$work/rosettaquote/build/cross.sh"
 (cd "$work/rosettaquote" && git add -A && sh "$S" >/dev/null 2>&1) \
-  && { echo "FAIL: check 25: a quoted mention of arch -x86_64 on a real command line must still count (documented limitation)"; exit 1; }
+  && { echo "FAIL: check 25: a quoted mention of the flag on a real command line must still count (documented limitation)"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 25 -- a workflow's YAML run: block is scanned like any
 #       other tracked file; the check does no YAML parsing, so indentation inside the block scalar
 #       does not matter.
 mkrepo "$work/rosettayml"
-printf 'jobs:\n  build:\n    steps:\n      - run: |\n          arch -x86_64 ./cross-tool\n' > "$work/rosettayml/.github/workflows/x.yml"
+printf 'jobs:\n  build:\n    steps:\n      - run: |\n          %s %s ./cross-tool\n' "$_arch" "$_x64" > "$work/rosettayml/.github/workflows/x.yml"
 (cd "$work/rosettayml" && git add -A) >/dev/null 2>&1
-out="$(cd "$work/rosettayml" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared arch -x86_64 inside a workflow run: block must fail"; exit 1; }
+out="$(cd "$work/rosettayml" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call inside a workflow run: block must fail"; exit 1; }
 printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta for a workflow-file hit: $out"; exit 1; }
 printf '\n## Conformance deviations\n\n- rosetta:.github/workflows/x.yml: the release job cross-builds a host tool under Rosetta\n' >> "$work/rosettayml/INGREDIENTS.md"
 (cd "$work/rosettayml" && git add -A && sh "$S" >/dev/null 2>&1) \
@@ -1409,8 +1418,8 @@ printf '\n## Conformance deviations\n\n- rosetta:.github/workflows/x.yml: the re
 mkrepo "$work/rosettainstall"
 printf '#!/bin/sh\nsoftwareupdate --install-rosetta --agree-to-license\n' > "$work/rosettainstall/build/prep.sh"
 (cd "$work/rosettainstall" && git add -A) >/dev/null 2>&1
-out="$(cd "$work/rosettainstall" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared softwareupdate --install-rosetta must fail"; exit 1; }
-printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta for a softwareupdate --install-rosetta hit: $out"; exit 1; }
+out="$(cd "$work/rosettainstall" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared softwareupdate Rosetta-install call must fail"; exit 1; }
+printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta for a softwareupdate Rosetta-install hit: $out"; exit 1; }
 printf '\n## Conformance deviations\n\n- rosetta:build/prep.sh: installs Rosetta so a later step can run x86_64 tools\n' >> "$work/rosettainstall/INGREDIENTS.md"
 (cd "$work/rosettainstall" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse softwareupdate --install-rosetta: $(cd "$work/rosettainstall" && sh "$S" 2>&1)"; exit 1; }
