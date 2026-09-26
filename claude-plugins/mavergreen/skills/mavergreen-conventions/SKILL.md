@@ -636,7 +636,7 @@ as clang's did):
 
 | auto-cut on a push to `main` | publishes only from a dispatch (or a legacy tag trigger) |
 |---|---|
-| golang, openssh, 1password, signal-desktop, swift-toolchain, swift-runtime, ed25519, legacysupport, clang | macho-tools, container-tools, tailscale, porthole, magic-trackpad2 |
+| golang, openssh, 1password, signal-desktop, swift, ed25519, legacysupport, clang | macho-tools, container-tools, tailscale, porthole, magic-trackpad2 |
 
 tailscale's `release.yml` has no `push: branches:[main]` trigger at all — only tags and
 `workflow_dispatch` — but a push to its `main` that moves `components/**` is still a release:
@@ -921,8 +921,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   | macports-legacy-support | `MacPorts legacy-support` | |
   | ed25519 | `ed25519` (lowercase) | upstream's own spelling |
   | tailscale | `Tailscale` | |
-  | swift-toolchain | `Swift Toolchain` | decided; ships no floored end-user `.pkg` (mirrors swift.org's build environment) |
-  | swift-runtime | `Swift` | |
+  | swift | `Swift` | |
   | magic-trackpad2 | `Mavericks Trackpad 2` | genuinely self-upstream (`vX.Y.Z`, no `-mavericks.N`) |
 
   (shipyard itself, a caller but not a "product", passes `Shipyard`.)
@@ -946,8 +945,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 
   | `--min-os` passed | Repos |
   |---|---|
-    | `10.9.5` | 1password, signal-desktop, porthole (bare `10.9` until the 2026-09-22 flag day, which found it was drift), openssh, container-tools, clang, golang, macports-legacy-support, ed25519, tailscale, swift-runtime, magic-trackpad2, shipyard |
-  | *(omitted)* — no floored end-user `.pkg` | swift-toolchain |
+    | `10.9.5` | 1password, signal-desktop, porthole (bare `10.9` until the 2026-09-22 flag day, which found it was drift), openssh, container-tools, clang, golang, macports-legacy-support, ed25519, tailscale, swift, magic-trackpad2, shipyard |
 
   **Dual-variant repos (clang, golang): the notes' floor line describes the NATIVE `.pkg`, while each
   appcast enforces its own artifact's real minimum — this split is deliberate, do not "fix" it.** Both
@@ -1743,8 +1741,8 @@ product archives.
 
 Stage the product's files under `<stage>/usr/local/mavergreen/<product>/` (and anything the OS
 dictates elsewhere), then call `sh "$SHIPYARD_SCRIPTS/stage_product.sh"`. It refuses a stage with
-nothing in it; a product whose every file lives where the OS dictates (swift-runtime's
-`usr/lib/swift`) still gets a tree, holding just its manifest. It writes the manifest and both
+nothing in it; a product whose every file lives where the OS dictates still gets a tree, holding just
+its manifest. It writes the manifest and both
 scripts:
 
 - **preinstall**: `mavergreen unlink <product>` if a helper exists; then the product's
@@ -1806,9 +1804,9 @@ someone else's: tailscale once installed its daemon as `com.tailscale.tailscaled
 own `tailscaled install-system-daemon` writes, so the two installs could silently overwrite each other.
 But some products genuinely must go elsewhere, only where the OS dictates, and those say so: a kext
 loads only from `/Library/Extensions`, a prefpane only from `/Library/PreferencePanes`, a
-BezelServices plugin only from where BezelServices looks, and swift-runtime keeps `/usr/lib/swift`
-because back-deployed Swift binaries reference those install names (reconsider if the family's Swift
-consumers can be built with an rpath into the product tree). Each such file is still in `outside`,
+BezelServices plugin only from where BezelServices looks. (swift-runtime once kept `/usr/lib/swift` on
+this ground; since 6.4.0-mavericks.2 programs find it through an rpath into its tree,
+`/usr/local/mavergreen/swift-runtime/lib/swift`, so it needs no exception.) Each such file is still in `outside`,
 because rendering lists it, so uninstall removes it; and even a product whose every file lives where
 the OS dictates still stages a tree, since its manifest is how uninstall finds them. Sparkle updaters
 stay in `Library/Application Support/Mavergreen/` until Mavericks Lineup retires them.
@@ -1817,7 +1815,6 @@ stay in `Library/Application Support/Mavergreen/` until Mavericks Lineup retires
 ## Conformance deviations
 
 - install-path:Library/Extensions/*: 10.9 loads third-party kexts only from here
-- install-path:usr/lib/swift/*: back-deployed Swift binaries reference these install names
 - bundle-id:as.acidanthera.*: upstream's kext, shipped unmodified under upstream's identity
 ```
 
