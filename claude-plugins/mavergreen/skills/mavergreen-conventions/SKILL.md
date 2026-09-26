@@ -650,9 +650,11 @@ before you push to its `main` — in the left column, that push is a release.
 **Shared shape (both models):**
 
 - Three entry points: `push: branches:[main]`, `pull_request: branches:[main]` (the automerge gate),
-  `workflow_dispatch` with a `local_release` boolean (repackage escape hatch). **No `tags:` trigger** —
-  tags are retired as a release input; a `workflow_dispatch` covers every case a tag used to
-  (`gh workflow run … --ref <any ref>`).
+  `workflow_dispatch` with a `local_release` boolean (repackage escape hatch). **A new repo adds no
+  `tags:` trigger** — tags are retired as a release input; a `workflow_dispatch` covers every case a
+  tag used to (`gh workflow run … --ref <any ref>`). Most existing product repos still carry a
+  `push: tags: ['*-mavericks.*']` trigger (checked 2026-09-26); it is legacy, to be removed, not a
+  pattern to copy.
 - `checkout` with `fetch-depth: 0` (version.sh counts tags).
 - A **`ver` step** (id `ver`) runs `version.sh auto|local`, then **forces `rel=no` unless this run is a
   push to `refs/heads/main` or an explicit `workflow_dispatch`** (so PRs and non-main-branch pushes never
@@ -867,11 +869,13 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   would ship a version using the *previous* version's tooling, which by construction cannot catch a
   defect in the tooling being shipped. The same reasoning applies to any repo whose release artifacts
   are what the release process runs on.
-- **An existing tag refuses the publish.** Two runs can compute the same `-mavericks.(N+1)` and both
-  build it; the loser must not publish and must not relabel (the version is already baked into the pkg
-  and the appcast). `assert_tag_publishable.sh` refuses whenever that version's tag already exists;
-  nothing is published, and the fix is to re-dispatch — it computes the next `-mavericks.N` and rebuilds
-  with that version baked in.
+- **An existing tag refuses the publish — except the tag that triggered the run.** Two runs can compute
+  the same `-mavericks.(N+1)` and both build it; the loser must not publish and must not relabel (the
+  version is already baked into the pkg and the appcast), so it re-dispatches. But a run started by a
+  pushed tag always finds its own tag, and blanket refusal made the documented "publish from a tag"
+  model impossible — clang had no working release path at all. `assert_tag_publishable.sh` allows
+  exactly that case: the run's ref IS this version's tag, and the tag names the commit being published.
+  The exception serves only the legacy `tags:` triggers still in existing repos; it goes with them.
 
 ## Release notes
 
