@@ -35,7 +35,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 |---|---|---|
 | **mavericks-golang** | the whole modern shape: `UPSTREAM_VERSION` + `build/version.sh`, green-gated `release.yml`, `renovate.json` | most complete reference |
 | **mavericks-legacysupport** | the `version.sh`/`lib.sh`/`release-notes-file.sh` scripts verbatim | origin of the auto-cut pattern |
-| swift-toolchain, swift-runtime | the **tag-only-publish** release model (see below) | when you don't auto-cut on main |
+| macho-tools, container-tools | the **deliberate-publish** release model (see below) | when you don't auto-cut on main |
 
 ## shipyard: consume its facilities, never hand-roll them
 
@@ -626,7 +626,7 @@ Two release models — **pick by how you publish**:
 - **Auto-cut on main** — a push to `main` whose upstream has no release yet cuts
   `<upstream>-mavericks.1` by itself. The publish decision lives in the build job
   (`steps.ver.outputs.release`). Use this when Renovate merging the bump should *itself* release.
-- **Deliberate publish** — build and gate on every push/PR, but publish only from an explicit tag or a
+- **Deliberate publish** — build and gate on every push/PR, but publish only from an explicit
   `workflow_dispatch`. Use this when a human decides when to cut, or the build is too heavy or too risky
   to release unattended.
 
@@ -634,7 +634,7 @@ Two release models — **pick by how you publish**:
 authority, not its header comment** — a header can drift out of sync with what the step actually does,
 as clang's did):
 
-| auto-cut on a push to `main` | publishes only from a tag or a dispatch |
+| auto-cut on a push to `main` | publishes only from a dispatch |
 |---|---|
 | golang, openssh, 1password, signal-desktop, swift-toolchain, swift-runtime, ed25519, legacysupport, clang | macho-tools, container-tools, tailscale, porthole, magic-trackpad2 |
 
@@ -649,12 +649,14 @@ before you push to its `main` — in the left column, that push is a release.
 
 **Shared shape (both models):**
 
-- Three entry points: `push: branches:[main] + tags:['*-mavericks.*']`, `pull_request: branches:[main]`
-  (the automerge gate), `workflow_dispatch` with a `local_release` boolean (repackage escape hatch).
+- Three entry points: `push: branches:[main]`, `pull_request: branches:[main]` (the automerge gate),
+  `workflow_dispatch` with a `local_release` boolean (repackage escape hatch). **No `tags:` trigger** —
+  tags are retired as a release input; a `workflow_dispatch` covers every case a tag used to
+  (`gh workflow run … --ref <any ref>`).
 - `checkout` with `fetch-depth: 0` (version.sh counts tags).
-- A **`ver` step** (id `ver`) that: on a tag, takes `full=tag=$GITHUB_REF_NAME`, `rel=yes`; else runs
-  `version.sh auto|local`, then **forces `rel=no` when `$GITHUB_REF_NAME != main`** (so PRs and non-main
-  branches never publish); writes `VERSION`; sets outputs `full`/`tag`/`release`.
+- A **`ver` step** (id `ver`) runs `version.sh auto|local`, then **forces `rel=no` unless this run is a
+  push to `refs/heads/main` or an explicit `workflow_dispatch`** (so PRs and non-main-branch pushes never
+  publish); writes `VERSION`; sets outputs `full`/`tag`/`release`.
 - **`gh release create "$TAG" dist/* …` mints the tag itself** — no `git tag`/push, **no PAT**. A
   `GITHUB_TOKEN`-created tag can't retrigger the workflow, so no second-hop/loop. (Don't reach for
   `softprops/action-gh-release` + a PAT; `gh release create` is the family way.)
@@ -865,12 +867,11 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   would ship a version using the *previous* version's tooling, which by construction cannot catch a
   defect in the tooling being shipped. The same reasoning applies to any repo whose release artifacts
   are what the release process runs on.
-- **An existing tag refuses the publish — except the tag that triggered the run.** Two runs can compute
-  the same `-mavericks.(N+1)` and both build it; the loser must not publish and must not relabel (the
-  version is already baked into the pkg and the appcast), so it re-dispatches. But a run started by a
-  pushed tag always finds its own tag, and blanket refusal made the documented "publish from a tag"
-  model impossible — clang had no working release path at all. `assert_tag_publishable.sh` allows
-  exactly that case: the run's ref IS this version's tag, and the tag names the commit being published.
+- **An existing tag refuses the publish.** Two runs can compute the same `-mavericks.(N+1)` and both
+  build it; the loser must not publish and must not relabel (the version is already baked into the pkg
+  and the appcast). `assert_tag_publishable.sh` refuses whenever that version's tag already exists;
+  nothing is published, and the fix is to re-dispatch — it computes the next `-mavericks.N` and rebuilds
+  with that version baked in.
 
 ## Release notes
 
@@ -1137,8 +1138,8 @@ toolchain and automerges. Two things to wire deliberately:
   `GITHUB_TOKEN`-pushed tag can't trigger `release.yml` (GitHub's recursion guard), whereas
   `workflow_dispatch` IS `GITHUB_TOKEN`-triggerable. So the consumer's `release.yml` needs a
   `workflow_dispatch` `local_release` input that computes `-mavericks.(N+1)` and **publishes inline** in
-  that same run (golang/legacysupport have it via `version.sh local`; tag-only repos must add it — the same
-  fix repairs any `release-on-bump.yml` that relies on a pushed tag). CI-only bumps (`.github/**` action
+  that same run (golang/legacysupport have it via `version.sh local`; dispatch-cut repos must add it —
+  the same fix repairs any `release-on-bump.yml` that relies on a pushed tag). CI-only bumps (`.github/**` action
   `uses:`) aren't in the caller's `paths:`, so they never repackage. This automates the `-mavericks.N` axis,
   driven by a dependency instead of a hand-run `local_release`.
 - **Name that caller `.github/workflows/repackage-on-ingredient-bump.yml`.** The notes generator reads
@@ -2160,8 +2161,9 @@ in the same commit.
    writing file headers explaining what the code does and sweeping them out later; it starts with the
    file in place and check 15 already green.
 3. `UPSTREAM_VERSION` (bare); `/VERSION` in `.gitignore`.
-4. `build/lib.sh` (`upstream_version()`), `build/version.sh`, `build/release-notes-file.sh` — copy from
-   legacysupport/golang.
+4. `build/lib.sh` (`upstream_version()`), `build/version.sh` — copy from legacysupport/golang; call
+   `$SHIPYARD_SCRIPTS/release-notes.sh` directly from `release.yml` (see Release notes, above) — do not
+   copy `build/release-notes-file.sh`, which is legacy with zero product callers.
 5. `release.yml`: pick a release model; three triggers; `ver` step with the non-main guard; `gh release
    create`; the `concurrency:` block from "Release workflow" above — group keyed on `github.run_id`,
    `cancel-in-progress` naming `pull_request`. (Not `cancel-in-progress: false`: it protects the
@@ -2199,9 +2201,9 @@ in the same commit.
    `plugin.json` deliberately has no `version`, so every push to shipyard's `main` is an update —
    with one pinned, contributors got an update only when someone remembered to bump it (three bumps
    against ten-plus skill edits left installs 200 lines behind).
-10. Copy `$SHIPYARD_SCRIPTS/templates/msc.sh` to `build/msc.sh` and commit it — the gate checks it
+11. Copy `$SHIPYARD_SCRIPTS/templates/msc.sh` to `build/msc.sh` and commit it — the gate checks it
    **verbatim**, so never edit your copy; fix the template in shipyard instead.
-11. Use `shipyard-cmake` / `shipyard-ctest` / `shipyard-cpack` everywhere — workflows and `build/*.sh`.
+12. Use `shipyard-cmake` / `shipyard-ctest` / `shipyard-cpack` everywhere — workflows and `build/*.sh`.
    No plain `cmake`, and nothing that reads `~/.cmake/packages`; both are gate failures.
 
    **When a human has to act, in general.** A marketplace's catalog refreshes only three ways: the
@@ -2217,7 +2219,7 @@ in the same commit.
    - refresh is suppressed — `DISABLE_AUTOUPDATER`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, a
      seeded plugin dir, managed settings blocking the marketplace, or being offline.
    Docs: code.claude.com/docs/en/discover-plugins, /plugins-reference, /plugin-marketplaces.
-11. Declare release state (see "A release is a declared state, not an event" above): add a
+13. Declare release state (see "A release is a declared state, not an event" above): add a
     `## Declared state` section to `INGREDIENTS.md` (`- upstream: UPSTREAM_VERSION`, or the version
     file the product commits if it is its own source); call `release-state-record.sh --notes-file
     dist/RELEASE_NOTES.md --digest "$(release-state.sh)"` in the build job, BEFORE
@@ -2236,12 +2238,12 @@ in the same commit.
     documents this trap in `scan-for-key.yml`'s header; say it here too, because this is the caller
     people will copy); do not add a `tags:` trigger — tags are retired as an input, and dispatch
     covers every case they served (`gh workflow run … --ref <any ref>`).
-12. If it ships a `.pkg`: register its short name, pkg identifier and repo in shipyard's
+14. If it ships a `.pkg`: register its short name, pkg identifier and repo in shipyard's
     `scripts/product-names` first; stage
     everything under `usr/local/mavergreen/<short name>/`; get the install scripts and manifest from
     `stage_product.sh` (product-specific steps as hooks); wrap with `set_install_floor.sh`, which
     adds `dev.mavergreen.base`. See "Install layout and identity".
-13. Configure through the shipyard presets or `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`,
+15. Configure through the shipyard presets or `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`,
     never an SDK by hand; a build that calls the compiler itself passes
     `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`. See "SDK pinning".
 
