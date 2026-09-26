@@ -184,6 +184,7 @@ sh "$fake/stage_product.sh" --stage "$st2" --product openssh \
   --replaces "/usr/bin/ssh=bin/ssh" --replaces "/usr/bin/scp=bin/scp two" \
   --scripts-out "$w/scr3" \
   --updater-app "$APP" \
+  --requires container-tools \
   --preinstall-hook "$w/hook" --postinstall-hook "$w/hook" \
   || fail "stage_product with a stubbed render-manifest/stage_updater must still succeed"
 expected="$(printf '%s\n' \
@@ -200,10 +201,11 @@ expected="$(printf '%s\n' \
   --has-updater)"
 [ "$(cat "$w/rm.log")" = "$expected" ] \
   || fail "every render-manifest option, in order, with repeats and embedded spaces, must reach render-manifest intact: got [$(cat "$w/rm.log")]"
-grep -qE -- '--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook' "$w/rm.log" \
+grep -qE -- '--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook|--requires' "$w/rm.log" \
   && fail "a stage_product-only option must never reach render-manifest"
 grep -qF "$w/scr3" "$w/rm.log" && fail "a stage_product-only option's VALUE must never reach render-manifest either"
 grep -qF "Application Support" "$w/rm.log" && fail "the updater's app-dir value must never reach render-manifest"
+grep -qF container-tools "$w/rm.log" && fail "--requires's value must never reach render-manifest either"
 [ "$(sed -n '/^--product$/{n;p;}' "$w/rmu.log")" = openssh ] \
   || fail "stage_updater is told the product, and derives the rest: got [$(cat "$w/rmu.log")]"
 
@@ -402,5 +404,53 @@ for nm in missing invalid; do
   [ -f "$V5/Library/Application Support/Mavergreen/openssh-updater.app/Contents/Stale" ] \
     || fail "with a $nm installed manifest, no bundle is cleared"
 done
+
+stp="$w/stage-porthole"; mkdir -p "$stp/usr/local/mavergreen/porthole/bin"
+echo porthole > "$stp/usr/local/mavergreen/porthole/bin/porthole"
+SCRP="$w/scr-porthole"
+sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRP" \
+  --requires container-tools \
+  || fail "staging porthole with --requires container-tools must succeed"
+sh -n "$SCRP/preinstall" || fail "generated preinstall with --requires must be valid sh"
+
+Vreq="$w/vol-requires-ok"; mkdir -p "$Vreq/usr/local/mavergreen/container-tools"
+: > "$Vreq/usr/local/mavergreen/container-tools/mavergreen.plist"
+sh "$SCRP/preinstall" /x.pkg "$Vreq/" "$Vreq/" || fail "preinstall proceeds when the required product's manifest exists"
+
+Vmiss="$w/vol-requires-missing"; mkdir -p "$Vmiss/usr/local/mavergreen/porthole/bin" "$Vmiss/usr/local/bin"
+echo old > "$Vmiss/usr/local/mavergreen/porthole/bin/porthole"
+mglog="$w/mg-req.log"; : > "$mglog"
+printf '#!/bin/sh\necho called "$@" >> "%s"\n' "$mglog" > "$Vmiss/usr/local/bin/mavergreen"
+chmod +x "$Vmiss/usr/local/bin/mavergreen"
+rc=0; sh "$SCRP/preinstall" /x.pkg "$Vmiss/" "$Vmiss/" 2>"$w/req-err" || rc=$?
+[ "$rc" -eq 1 ] || fail "preinstall must exit 1 when a required product is missing, got $rc"
+grep -q "Porthole needs container-tools installed first" "$w/req-err" \
+  || fail "the refusal names this product's display name and the missing requirement: $(cat "$w/req-err")"
+grep -q "https://github.com/Mavergreen/container-tools/releases/latest" "$w/req-err" \
+  || fail "the refusal names the missing requirement's releases URL: $(cat "$w/req-err")"
+[ -f "$Vmiss/usr/local/mavergreen/porthole/bin/porthole" ] \
+  || fail "a missing requirement must leave the existing installed tree untouched"
+[ ! -s "$mglog" ] || fail "a missing requirement is checked before mavergreen unlink runs: $(cat "$mglog")"
+
+SCRP2="$w/scr-porthole2"
+sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRP2" \
+  --requires container-tools --requires openssh \
+  || fail "staging porthole with two --requires must succeed"
+Vtwo="$w/vol-requires-two"; mkdir -p "$Vtwo/usr/local/mavergreen/openssh"
+: > "$Vtwo/usr/local/mavergreen/openssh/mavergreen.plist"
+rc=0; sh "$SCRP2/preinstall" /x.pkg "$Vtwo/" "$Vtwo/" 2>"$w/req-err2" || rc=$?
+[ "$rc" -eq 1 ] || fail "preinstall must exit 1 when one of two requirements is missing, got $rc"
+grep -q "container-tools" "$w/req-err2" || fail "the missing requirement (container-tools) must be named: $(cat "$w/req-err2")"
+grep -q "openssh" "$w/req-err2" && fail "the satisfied requirement (openssh) must not be named: $(cat "$w/req-err2")"
+
+rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-badreq" \
+  --requires nonexistent-product 2>"$w/err" || rc=$?
+[ "$rc" -eq 2 ] || fail "staging with an unregistered --requires must exit 2, got $rc"
+grep -q nonexistent-product "$w/err" || fail "the refusal names the unregistered requirement: $(cat "$w/err")"
+
+rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-selfreq" \
+  --requires porthole 2>"$w/err" || rc=$?
+[ "$rc" -eq 2 ] || fail "staging with --requires naming the product itself must exit 2, got $rc"
+grep -q porthole "$w/err" || fail "the refusal names the self-requirement: $(cat "$w/err")"
 
 echo "PASS: stage-product"

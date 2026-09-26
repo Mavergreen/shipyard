@@ -2,20 +2,27 @@
 # platform: macOS-only -- PlistBuddy reads the updater's identity, and render-manifest.sh reads back and lints the manifest
 #   usage: stage_product.sh --stage ROOT --product P --name N --version V --scripts-out DIR
 #            [--group G] [--line L] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
-#            [--updater-app P-updater.app] [--preinstall-hook FILE] [--postinstall-hook FILE]
+#            [--requires SHORT]... [--updater-app P-updater.app] [--preinstall-hook FILE]
+#            [--postinstall-hook FILE]
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
 #          staged its files under ROOT/usr/local/mavergreen/P/ (and anything the OS dictates elsewhere).
 #          The updater's place, label and feed are P's, from scripts/product-names: an updater built
 #          for anything else is refused, and so are --appcast, --app-dir and --agent-label.
+#          --requires SHORT (repeatable) makes the generated preinstall refuse to run, before
+#          anything is removed, when SHORT's product is not installed on the target volume. SHORT
+#          must be a different, registered product; stage_product refuses otherwise.
 # spec: tests/stage-product-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
-ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""
+nl='
+'
+shq() { printf '%s' "$1" | sed "s/'/'\\\\''/g"; }
+ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; NAME=""; REQ=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
-    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--exclude|--replaces|--generated)
+    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--exclude|--replaces|--generated|--requires)
       [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
@@ -25,7 +32,9 @@ while [ "$1" != --end ]; do
     --updater-app) APP="$2"; shift 2 ;;
     --preinstall-hook) PREH="$2"; shift 2 ;;
     --postinstall-hook) POSTH="$2"; shift 2 ;;
-    --name|--version|--group|--line|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
+    --name) NAME="$2"; set -- "$@" "$1" "$2"; shift 2 ;;
+    --requires) REQ="$REQ$2$nl"; shift 2 ;;
+    --version|--group|--line|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
     --appcast|--app-dir|--agent-label) echo "stage_product: $1 is derived from shipyard's scripts/product-names; stop passing it" >&2; exit 2 ;;
     *) echo "stage_product: unknown option $1" >&2; exit 2 ;;
   esac
@@ -34,6 +43,22 @@ shift
 [ -n "$ST" ] && [ -n "$P" ] && [ -n "$SCR" ] || { echo "stage_product: need --stage --product --scripts-out" >&2; exit 2; }
 case "$P" in ''|-*|*[!a-z0-9-]*) echo "stage_product: bad product name '$P'" >&2; exit 2 ;; esac
 [ -n "$(find "$ST" \( -type f -o -type l \) 2>/dev/null | head -n 1)" ] || { echo "stage_product: nothing staged under $ST" >&2; exit 1; }
+_ifs="$IFS"; IFS="$nl"
+for r in $REQ; do
+  IFS="$_ifs"
+  case "$r" in
+    "$P") echo "stage_product: --requires $r: a product cannot require itself" >&2; exit 2 ;;
+  esac
+  _rlrc=0
+  registry_lookup repo "$r" || _rlrc=$?
+  case "$_rlrc" in
+    0) : ;;
+    1) echo "stage_product: --requires $r is not in shipyard's scripts/product-names -- register it there first" >&2; exit 2 ;;
+    *) printf 'stage_product: cannot look up %s in shipyard'"'"'s registry\n%s\n' "$r" "$REG_WHY" >&2; exit 2 ;;
+  esac
+  IFS="$nl"
+done
+IFS="$_ifs"
 for h in "$PREH" "$POSTH"; do
   if [ -n "$h" ]; then
     sh -n "$h" || { echo "stage_product: hook $h is not valid sh; refusing to stage" >&2; exit 1; }
@@ -58,6 +83,22 @@ sh "$SELF/render-manifest.sh" "$@"
   printf '#!/bin/sh\n'
   printf '[ -n "${3:-}" ] || { echo "%s: preinstall got no target volume; removing nothing" >&2; exit 0; }\n' "$P"
   printf 'ROOT="${3%%/}"\n'
+  if [ -n "$REQ" ]; then
+    printf '_reqs_missing=0\n'
+    _ifs="$IFS"; IFS="$nl"
+    for r in $REQ; do
+      IFS="$_ifs"
+      registry_need stage_product repo "$r"; _reqrepo="$REG_V"
+      _reqmsg="$NAME needs $r installed first: https://github.com/Mavergreen/$_reqrepo/releases/latest -- install it, then run this installer again."
+      printf 'if [ ! -f "$ROOT/usr/local/mavergreen/%s/mavergreen.plist" ]; then\n' "$r"
+      printf "  echo '%s' >&2\n" "$(shq "$_reqmsg")"
+      printf '  _reqs_missing=1\n'
+      printf 'fi\n'
+      IFS="$nl"
+    done
+    IFS="$_ifs"
+    printf '[ "$_reqs_missing" -eq 0 ] || exit 1\n'
+  fi
   printf 'if [ -x "$ROOT/usr/local/bin/mavergreen" ]; then "$ROOT/usr/local/bin/mavergreen" --root "$ROOT/" unlink %s 2>/dev/null || true; fi\n' "$P"
   if [ -n "$PREH" ]; then
     printf '(\n:\n'; cat "$PREH"; printf '\n) || {\n'
