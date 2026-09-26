@@ -176,4 +176,62 @@ got="$(MAVERICKS_UPSTREAM_FILE=components/foo/version sh "$S" --root "$w/p")"
 got="$(MAVERICKS_UPSTREAM_FILE="$w/p/components/foo/version" sh "$S" --root "$w/p")"
 [ "$got" = "$GOLD" ] || { echo "FAIL: an absolute override rooted at the repo is the same path, and must be accepted as one -- was read as a different file: got '$got'"; exit 1; }
 
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A release is a
+#       declared state, not an event" -- a repo whose upstream is DERIVED (ca-certs' NSS_TAG,
+#       ed25519's UPSTREAM_COMMIT) commits the pin, not version.sh's input, so this is the one
+#       case where 'upstream' and version.sh's input may legitimately differ: only when
+#       build/derive-upstream-version.sh is tracked and its own text names both files.
+mkg() {   # $1 = dir; a derived-pin product: NSS_TAG committed, version.sh reads UPSTREAM_VERSION
+  $GIT init -q "$1"
+  printf '9.9.9\n' > "$1/NSS_TAG"
+  printf '%s\n' '# Build ingredients' '' '## Declared state' '' '- upstream: NSS_TAG' > "$1/INGREDIENTS.md"
+}
+DERIVE_GOLD="v1:sha256:$(printf 'upstream=9.9.9\n' | shasum -a 256 | cut -d' ' -f1)"
+
+q="$w/q"
+mkg "$q"
+mkdir -p "$q/build"
+printf '%s\n' '#!/bin/sh' 'NEW="$(cat NSS_TAG)"' 'printf "%s\n" "$NEW" > UPSTREAM_VERSION' > "$q/build/derive-upstream-version.sh"
+$GIT -C "$q" add -A
+$GIT -C "$q" commit -q -m 'derived pin: NSS_TAG -> UPSTREAM_VERSION'
+got="$(sh "$S" --root "$q")"
+[ "$got" = "$DERIVE_GOLD" ] \
+  || { echo "FAIL: a derived pin with a tracked build/derive-upstream-version.sh naming both files must pass: got '$got', want '$DERIVE_GOLD'"; exit 1; }
+
+qb="$w/qb"
+mkg "$qb"
+$GIT -C "$qb" add -A
+$GIT -C "$qb" commit -q -m 'pin with no derive script'
+rc=0; sh "$S" --root "$qb" >"$w/qb.out" 2>&1 || rc=$?
+[ "$rc" = 2 ] || { echo "FAIL: a derived pin with NO derive script at all must still be refused, got $rc"; exit 1; }
+grep -q 'NSS_TAG' "$w/qb.out" || { echo "FAIL missing-derive-script error does not name the declared path"; exit 1; }
+grep -q 'UPSTREAM_VERSION' "$w/qb.out" || { echo "FAIL missing-derive-script error does not name version.sh's input"; exit 1; }
+grep -q 'derive-upstream-version.sh' "$w/qb.out" || { echo "FAIL missing-derive-script error does not mention the derived-pin escape hatch"; exit 1; }
+
+qc="$w/qc"
+mkg "$qc"
+mkdir -p "$qc/build"
+printf '%s\n' '#!/bin/sh' 'printf "1\n" > UPSTREAM_VERSION' > "$qc/build/derive-upstream-version.sh"
+$GIT -C "$qc" add -A
+$GIT -C "$qc" commit -q -m 'derive script exists but never names the pin'
+rc=0; sh "$S" --root "$qc" >"$w/qc.out" 2>&1 || rc=$?
+[ "$rc" = 2 ] || { echo "FAIL: a derive script that never names the declared pin must be refused, got $rc"; exit 1; }
+grep -q 'NSS_TAG' "$w/qc.out" || { echo "FAIL derive-script-present-but-silent error does not name the declared path"; exit 1; }
+
+qd="$w/qd"
+mkg "$qd"
+mkdir -p "$qd/build"
+printf '%s\n' '#!/bin/sh' 'NEW="$(cat NSS_TAG)"' 'printf "%s\n" "$NEW" > UPSTREAM_VERSION' > "$qd/build/derive-upstream-version.sh"
+$GIT -C "$qd" add -A
+$GIT -C "$qd" commit -q -m 'derived pin, valid derive script'
+$GIT -C "$qd" tag derived-pin-1
+rm "$qd/build/derive-upstream-version.sh"
+$GIT -C "$qd" add -A
+$GIT -C "$qd" commit -q -m 'derive script removed (regression)'
+rc=0; sh "$S" --root "$qd" >"$w/qd-head.out" 2>&1 || rc=$?
+[ "$rc" = 2 ] || { echo "FAIL: HEAD with the derive script removed must refuse, got $rc"; exit 1; }
+got="$(sh "$S" --root "$qd" --ref derived-pin-1)"
+[ "$got" = "$DERIVE_GOLD" ] \
+  || { echo "FAIL: --ref to a revision whose OWN tree has a valid derive script must pass, reading that revision's script rather than the working tree's: got '$got'"; exit 1; }
+
 echo "PASS: release-state"

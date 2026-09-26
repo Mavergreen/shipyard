@@ -72,18 +72,42 @@ entry_bytes() {   # $1 = declared path, relative to the repo root
   fi
 }
 
+DERIVE_SCRIPT="build/derive-upstream-version.sh"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A release is a
+#       declared state, not an event" -- a repo whose upstream is DERIVED (ca-certs' NSS_TAG,
+#       ed25519's UPSTREAM_COMMIT) commits the pin, not version.sh's input, so 'upstream' and
+#       version.sh's input may legitimately differ. That is safe only when one committed script
+#       ties them together: the SAME text that reads the pin also names version.sh's input as
+#       what it writes, so the digest and the version can never drift apart from two unrelated
+#       edits. Read $DERIVE_SCRIPT with the same tree-reading mechanism entry_bytes uses, so
+#       --ref judges the ref's own script, never the working tree's.
+derive_script_names_both() {   # $1 = declared path (got)  $2 = version.sh's input (want)
+  if [ -n "$REF" ]; then
+    git -C "$ROOT" show "$REF:$DERIVE_SCRIPT" > "$work/derive" 2>/dev/null || return 1
+  else
+    git -C "$ROOT" ls-files --error-unmatch -- "$DERIVE_SCRIPT" >/dev/null 2>&1 || return 1
+    cat "$ROOT/$DERIVE_SCRIPT" > "$work/derive" 2>/dev/null || return 1
+  fi
+  grep -qF -- "$1" "$work/derive" && grep -qF -- "$2" "$work/derive"
+}
+
 assert_upstream_is_version_sh_input() {   # $1 = the declared path
   want="${MAVERICKS_UPSTREAM_FILE:-UPSTREAM_VERSION}"
   case "$want" in "$ROOT"/*) want="${want#"$ROOT"/}" ;; esac
   want="${want#./}"
   got="${1#./}"
   [ "$got" != "$want" ] || return 0
+  derive_script_names_both "$got" "$want" && return 0
   echo "release-state: the declared 'upstream' is not the file version.sh reads" >&2
   echo "    declared in INGREDIENTS.md: $got" >&2
   echo "    read by version.sh:         $want" >&2
   echo "    A digest tracking one file while the version is derived from another publishes N+1 of" >&2
   echo "    the PREVIOUS upstream carrying the NEW upstream's contents. Point them at one file, or" >&2
   echo "    export MAVERICKS_UPSTREAM_FILE here too (it is already needed for version.sh)." >&2
+  echo "    A derived pin is allowed instead, but only when $DERIVE_SCRIPT is tracked and its own" >&2
+  echo "    text names BOTH files above -- the same script that reads '$got' must write '$want', so" >&2
+  echo "    the digest and the version can never come from two unrelated edits." >&2
   exit 2
 }
 

@@ -721,6 +721,17 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   state: wherever it calls `version.sh`, *and* wherever it calls `release-state.sh` (in `release.yml`,
   and via `reconcile.yml`'s `upstream-file` input, which sets it for that workflow's state step).
   Setting it in only one is the drift the check exists to catch.
+  **One exception: a derived pin.** A repo whose upstream is DERIVED from a committed pin —
+  ca-certs' `NSS_TAG`, ed25519's `UPSTREAM_COMMIT` — commits the pin, not `version.sh`'s input, so
+  `upstream` may name that pin file even though it differs from `${MAVERICKS_UPSTREAM_FILE:-UPSTREAM_VERSION}`,
+  **but only when `build/derive-upstream-version.sh` is tracked and its own text names BOTH files** —
+  the pin it reads and the file it writes. `release-state.sh` reads that script's tracked text (at
+  `--ref`, from that revision's tree, never the working tree's) to check this; if the script is
+  missing, or exists but never mentions the declared pin, it refuses exactly as it would for any
+  other mismatch. The no-drift property still holds because the version and the digest come from the
+  *same* pin, one hop apart: `derive-upstream-version.sh` turns the pin into `version.sh`'s input, so
+  a change to the pin moves both the version and the digest together, and a product can no longer
+  track one file for its digest while the version comes from an unrelated one.
   **One list**: this section is authoritative for release identity, and is deliberately a SUBSET of
   the file's prose table above it, which documents everything baked in — including things that must
   never cut a release (bats; an SDK pinned by hash that will never move). `scripts/declared-state.sh`
@@ -2249,7 +2260,10 @@ in the same commit.
     **both** places state is rendered — the `release.yml` step that calls `release-state.sh`, and the
     `reconcile.yml` caller's `upstream-file:` input — because `release-state.sh` exits 2 when the
     declared `upstream` is not the file `version.sh` reads, so setting it for `version.sh` alone
-    hard-fails the backstop nightly from its first run; add the ten-line
+    hard-fails the backstop nightly from its first run (the one alternative: a repo whose upstream
+    is a committed pin `version.sh` never reads directly — ca-certs, ed25519 — declares `upstream`
+    as that pin instead, with a tracked `build/derive-upstream-version.sh` naming both files; see
+    "A release is a declared state, not an event" above); add the ten-line
     `reconcile.yml` caller **with its own `permissions: {contents: read, actions: write}`** — a called
     workflow may not ask for more than its caller grants, so a stub that omits them leaves the
     backstop unable to read state or
