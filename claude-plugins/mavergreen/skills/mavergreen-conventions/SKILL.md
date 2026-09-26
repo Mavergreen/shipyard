@@ -2258,6 +2258,11 @@ in the same commit.
 15. Configure through the shipyard presets or `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`,
     never an SDK by hand; a build that calls the compiler itself passes
     `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`. See "SDK pinning".
+16. **Before the first push, rewrite the local history into clean, sequential commits** — each one a
+    step a reader can follow in order, each building and passing, with the working-it-out (fixups,
+    reverts, review rounds) folded in. Show the maintainer the resulting `git log` and push only on their
+    okay (maintainer, 2026-09-26: "I will always want this before initial push"). The first push fixes
+    the history for good; a repo that has already been pushed is never rewritten.
 
 ## Consolidation backlog
 
