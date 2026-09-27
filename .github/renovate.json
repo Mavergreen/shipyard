@@ -18,7 +18,7 @@
       "managerFilePatterns": ["/^mavericks-clang\\.pin$/"],
       "matchStrings": ["MAVERICKS_CLANG_VERSION=(?<currentValue>\\S+)"],
       "depNameTemplate": "mavericks-clang",
-      "packageNameTemplate": "Mavergreen/clang",
+      "packageNameTemplate": "Mavergreen/clang-22",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
     }
