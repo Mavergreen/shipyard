@@ -1434,13 +1434,29 @@ there: the toolchain file uses xcrun's own 10.9 SDK when it has one, and the fet
   records neither minos nor SDK is accepted. Every modern toolchain writes one, so only a 10.9-era build
   produces that absence.
 
-## Rosetta: avoided where possible, declared where not
+## Rosetta: declared wherever used, never avoided at the cost of a test
 
 **The family is transitioning off Rosetta.** macOS 28 removes it — `build-cmake.sh` already drops its
 `./bootstrap` stage-0 rather than working around the loss: "macOS 28 removes Rosetta, so the stage-0 is
-gone from this recipe rather than worked around." The maintainer's rule: Rosetta is to be avoided
-wherever possible, and declared wherever necessary, so the family can take inventory and sweep the
-remainders before it goes.
+gone from this recipe rather than worked around." The maintainer's rule: every use of Rosetta is
+declared, so the family can take inventory and sweep the remainders before it goes.
+
+**Sweep BUILD uses; keep TEST uses running.** The two kinds are not equally worth removing:
+
+- **A build or packaging step that runs translated** (an x86_64 code generator, a host tool, a stage-0)
+  has an arm64-native alternative that produces the same output — nodejs's host toolset, below. Find
+  it; that is the sweep.
+- **A test that executes the SHIPPED x86_64 product** has no native alternative on an arm64 runner: the
+  thing under test IS x86_64. Run it — under Rosetta, declared — and **never skip it in CI to avoid
+  Rosetta.** A skipped test verifies nothing, and a release whose x86_64 binaries were never executed
+  before they shipped is worse than one that used Rosetta to execute them. The CI job primes Rosetta
+  (`softwareupdate --install-rosetta --agree-to-license`, porthole's "Ensure this runner can run x86_64
+  (Rosetta)" step), so on a CI runner the test runs and its 77 never fires. The 77 is for a DEVELOPER's
+  Apple-Silicon Mac without Rosetta installed, where "cannot run here" is true (see "Running a repo's
+  tests" below); on a CI runner it would be a test the job chose not to run.
+- **Losing Rosetta moves a test; it never deletes one.** When macOS 28 arrives, each declared test use
+  moves to an x86_64 host (the 10.9 box, an Intel runner) — that is its declaration's exit, not
+  "made to SKIP without Rosetta".
 
 **What counts as a use that needs declaring:** anything a build, packaging step, or CI job runs
 TRANSLATED — an x86_64 host tool executed as part of an arm64 cross build (a code generator, e.g.),
@@ -1449,10 +1465,10 @@ TRANSLATED — an x86_64 host tool executed as part of an arm64 cross build (a c
 in the same job is still Rosetta, and the declaration rule holds whether or not any gate can see the
 use.
 
-**Every use is declared, tests included.** There is no exemption for a best-effort test that exercises
-the SHIPPED x86_64 product under Rosetta only when Rosetta is already present, SKIPping (77) otherwise —
-it still runs translated, so it still needs a `rosetta:<path>` entry. Its reason says what the test
-covers and its exit: when it SKIPs, and under what condition the declaration itself goes.
+**Every use is declared, tests included.** A test that exercises the SHIPPED x86_64 product under
+Rosetta runs translated, so it needs a `rosetta:<path>` entry like any other use — and so does the CI
+step that primes Rosetta for it. The reason says what the test covers, that CI runs it, and its exit:
+the x86_64 host it moves to when Rosetta goes.
 
 **How to declare:** an `INGREDIENTS.md` entry under `## Conformance deviations`, key `rosetta:<scope>`
 (the build leg or file, e.g. `rosetta:build/cross.sh`), whose text says what runs translated, why it
@@ -1462,6 +1478,10 @@ what/why/cost. porthole's real declaration:
 ```markdown
 - rosetta:.github/workflows/release.yml: the release job runs on an Apple Silicon (arm64) runner and primes + uses Rosetta ("Ensure this runner can run x86_64 (Rosetta)") so the `transport` CMake target's `build/check-transport.sh` can execute the cross-built x86_64/10.9 skalibs/s6 binaries before they ship. It cannot run natively: the binaries under test are the shipped x86_64 ones, and the release runner is arm64 with no Intel runner to use instead. Native 10.9 users run these binaries natively; only this arm64 CI leg is translated. Reconsider when the check can move to an x86_64 host (the 10.9 box or an Intel runner), or when check-transport.sh is made to SKIP without Rosetta; at the latest before macOS 28 removes it.
 ```
+
+Its shape is the model: what runs translated, why it cannot be native, the exit. Its second exit is
+not one — "made to SKIP without Rosetta" trades the test away (see "Sweep BUILD uses; keep TEST uses
+running", above); the move to an x86_64 host is the exit.
 
 A Rosetta dependency need not spell `arch -x86_64` anywhere: a cross build whose `make` executes x86_64
 host tools it compiled runs them translated without saying so where a gate can read. The declaration
@@ -1480,7 +1500,8 @@ rule is about modern-host (arm64 runner) legs only.
 
 **Revisit the rule's shape** — a declared exception per use, gated only where the gate can see one —
 when the family-wide inventory above is empty (then make any Rosetta use a hard failure, not just an
-undeclared one), or when macOS 28 ships, whichever comes first.
+undeclared one), or when macOS 28 ships, whichever comes first. Declared test uses keep the inventory
+non-empty until they have moved to an x86_64 host; that is expected, and not a reason to skip them.
 
 ## Artifact conformance (checked at package time)
 
@@ -2028,7 +2049,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **22.** Every tracked script declares its host in its header — `# platform: host-agnostic` or `# platform: macOS-only -- <why>` — and a host-agnostic one runs no macOS-only tool at command position (`check-host-tools.sh`); **opt-in**, in a repo where at least one script declares | Nothing stopped a script that a Linux job depends on from growing an `otool` or `sw_vers`: it passed every gate and broke on the runner. `check-shell-portability.sh` cannot see it — flawless POSIX sh can still call `lipo`. An undeclared script **fails** rather than defaulting to host-agnostic, because a default makes the gate silently incomplete. Opt-in, like 15, so `@v1` reaching fourteen consumers reddens none of them |
 | **23.** A repo that builds a `.pkg` (the same test as 21) calls `stage_product.sh`, on a non-comment line of a tracked, non-test `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt`, at command position — line start, after `;` `&` `\|` or a backtick, after `$(`, `then`, `do` or `exec`, after a YAML `run:` or a CMake `COMMAND`, any of these optionally followed by `if`, `elif`, `while`, `until` or `!` — spelled `sh` or `/bin/sh` (with any option flags, `sh -e`) and a word ending `stage_product.sh`, or a word ending `/stage_product.sh` (`"$SHIPYARD_SCRIPTS"/stage_product.sh`, `./stage_product.sh`); or declares `- product-layout: <reason>` | Conformance enforces the install layout, and `stage_product.sh` is what produces it: the manifest, and the unlink–remove–link install scripts that make an upgrade replace the tree while keeping the selection. A hand-rolled pkg fails `manifest` only at package time; this finds it on the PR. A mention is not a call — `echo "sh stage_product.sh"` does not count, and neither does an assignment (`SP="$S/stage_product.sh"`: a word holding `=`). **Known false negatives:** a bare `stage_product.sh` found on `PATH`; `bash` or `.` instead of `sh`; a call behind a prefix command (`sudo`, `env`, `time`, `command`) or opening a `{ … }` group or a `( … )` subshell; a path with a space or `=` in it (`"$(dirname "$0")"/stage_product.sh`); and a call followed directly by `;` or `)` (`then sh "$S/stage_product.sh"; fi`, `$(sh …/stage_product.sh)`) — give the call its own line, or at least a space before the separator |
 | **24.** A repo that builds a `.pkg` (the same test as 21), where `$GITHUB_REPOSITORY` is set, is the repo of at least one short name in shipyard's `scripts/product-names` (by name, not owner); a `product-layout` deviation exempts it | Every feed URL and updater identity is derived from the registry's repo, so a repo the registry does not name publishes feeds no installed updater polls. The short names themselves are known only at package time, where conformance's `repository` check holds each to its registered repo; this finds an unregistered or renamed repo on the PR |
-| **25.** A tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt` or `*.bats` file, `tests/` included, whose content — outside a whole comment line or a trailing ` #…` remark — contains `arch -x86_64`, `arch -arch x86_64`, `/usr/bin/arch -x86_64` or `softwareupdate --install-rosetta`, carries a matching `rosetta:<path>` deviation | The family is retiring Rosetta (see "Rosetta", above) — an undeclared use is invisible until someone has to sweep every repo by hand the day macOS 28 ships. There is no exemption for `tests/`: a best-effort test that runs the shipped x86_64 product under Rosetta only when it is already present, SKIPping (77) otherwise, still runs translated, so it still needs a declaration. This is a text match, not a command-position check like 23's: a quoted MENTION on an otherwise-unrelated line (`echo "… arch -x86_64 …"`) still counts, because excluding quotes reliably is not practical in BWK awk/sed. **Known limits:** `arch -e VAR=… -x86_64` (something between `arch` and its flag) and `arch "-x86_64"` (the flag itself quoted) are both invisible, since the match needs the literal flag text directly after `arch`; so is a build that runs an x86_64 binary it built earlier some other way (a cross build whose `make` just executes x86_64 host tools it compiled). Both still need a declaration and rely on it alone, not on being caught |
+| **25.** A tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt` or `*.bats` file, `tests/` included, whose content — outside a whole comment line or a trailing ` #…` remark — contains `arch -x86_64`, `arch -arch x86_64`, `/usr/bin/arch -x86_64` or `softwareupdate --install-rosetta`, carries a matching `rosetta:<path>` deviation | The family is retiring Rosetta (see "Rosetta", above) — an undeclared use is invisible until someone has to sweep every repo by hand the day macOS 28 ships. There is no exemption for `tests/`: a test that runs the shipped x86_64 product under Rosetta, which CI runs rather than skips, still runs translated, so it still needs a declaration. This is a text match, not a command-position check like 23's: a quoted MENTION on an otherwise-unrelated line (`echo "… arch -x86_64 …"`) still counts, because excluding quotes reliably is not practical in BWK awk/sed. **Known limits:** `arch -e VAR=… -x86_64` (something between `arch` and its flag) and `arch "-x86_64"` (the flag itself quoted) are both invisible, since the match needs the literal flag text directly after `arch`; so is a build that runs an x86_64 binary it built earlier some other way (a cross build whose `make` just executes x86_64 host tools it compiled). Both still need a declaration and rely on it alone, not on being caught |
 
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,
@@ -2176,7 +2197,9 @@ in the same commit.
   points, not tests to run.
 - **A test that cannot run yet exits 77 to SKIP**, the same idiom as ctest's `SKIP_RETURN_CODE 77`.
   Guard on the artifact you need (`[ -d "$OUT" ] || { echo "not built — skipping"; exit 77; }`) rather
-  than failing a CI run that was never going to have it.
+  than failing a CI run that was never going to have it. **"Cannot run" is a fact about the host, never
+  a choice CI makes:** a test that executes x86_64 binaries SKIPs on a developer's Mac without Rosetta,
+  but CI primes Rosetta and runs it (see "Rosetta", above).
 - **A test declares where it can run** (check 22's header line). One declared `# platform: macOS-only --
   <why>` is not run off macOS: the runner prints `SKIP <file> (macOS-only)` instead.
   `run-repo-tests.sh --strict-host` is for a job whose purpose is proving the host-agnostic half works
