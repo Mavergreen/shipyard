@@ -33,7 +33,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 
 | Copy from | For | Notes |
 |---|---|---|
-| **mavericks-golang** | the whole modern shape: `UPSTREAM_VERSION` + `build/version.sh`, green-gated `release.yml`, `renovate.json` | most complete reference |
+| **mavericks-golang** | the whole modern shape: `UPSTREAM_VERSION` + `build/version.sh`, green-gated `release.yml`, `.github/renovate.json` | most complete reference |
 | **mavericks-legacysupport** | the `version.sh`/`lib.sh`/`release-notes-file.sh` scripts verbatim | origin of the auto-cut pattern |
 | macho-tools, container-tools | the **deliberate-publish** release model (see below) | when you don't auto-cut on main |
 
@@ -285,8 +285,23 @@ runtime back-fills).
 
 ## Renovate & automerge
 
-Consumer `renovate.json` is `{"$schema", "extends": ["github>Mavergreen/shipyard"]}` plus
-your upstream manager and rules. The shared preset provides `config:recommended` + `automerge: true`.
+A consumer's Renovate config is **`.github/renovate.json`**: `{"$schema", "extends":
+["github>Mavergreen/shipyard"]}` plus your upstream manager and rules. The shared preset provides
+`config:recommended` + `automerge: true`.
+
+**That path, and no other.** Renovate itself accepts a config at the repo root, in `.github/`,
+`.gitlab/` or as `.renovaterc*`, but the family uses exactly one:
+- `MavericksShipyardConfig.cmake` scaffolds `.github/renovate.json` on every configure when it is
+  absent (opt out with `-DMAVERICKS_NO_RENOVATE_SCAFFOLD=ON`). So a repo that keeps its config
+  anywhere else, and configures through shipyard's CMake package, gets a second, preset-only config
+  written beside it by its first build. That dirties the tree `assert-tree-clean.sh` checks, and
+  Renovate reads only the first config it finds, so one of the two is silently dead.
+- `check-family-conventions.sh` reads only `.github/renovate.json`. Checks 4, 4b and 13 never see
+  a config kept at the root, so such a repo is exempt from them without anyone deciding it should
+  be.
+
+When you find a root `renovate.json`, move it (`git mv renovate.json .github/renovate.json`); do not
+copy it.
 
 **The `ignoreTests` policy (load-bearing):** the preset now defaults **`ignoreTests: false`** — automerge
 waits for a green build. That only works if **your repo produces a CI status check on Renovate PRs**:
@@ -2223,7 +2238,7 @@ in the same commit.
 
 ## New-project checklist
 
-1. `renovate.json`: extend shipyard; add the upstream `customManager` + patch/minor rules; ensure a
+1. `.github/renovate.json` (that path; see "Renovate & automerge"): extend shipyard; add the upstream `customManager` + patch/minor rules; ensure a
    PR check exists (or set `ignoreTests: true` if no build). For *prompt* automerge, enable **Allow
    auto-merge** AND add **branch protection requiring the build check** — both are needed (see the
    Renovate section for the exact commands and the typo-blocks-all-merges caveat).
