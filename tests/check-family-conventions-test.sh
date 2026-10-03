@@ -1424,4 +1424,37 @@ printf '\n## Conformance deviations\n\n- rosetta:build/prep.sh: installs Rosetta
 (cd "$work/rosettainstall" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse softwareupdate --install-rosetta: $(cd "$work/rosettainstall" && sh "$S" 2>&1)"; exit 1; }
 
+# spec: SKILL.md "Family conventions" check 26 -- a Renovate config tracked anywhere but
+#       .github/renovate.json fails, naming the path and the git mv. The baseline (only
+#       .github/renovate.json) passes at the top of this file. Each location Renovate itself searches
+#       is a case; a repo holding BOTH fails (one is dead config); an UNTRACKED stray is not the
+#       repo's (check 7's rule); a declared renovate-path:<path> deviation excuses exactly that path.
+for loc in renovate.json renovate.json5 .renovaterc .renovaterc.json .renovaterc.json5 \
+           .github/renovate.json5 .gitlab/renovate.json .gitlab/renovate.json5; do
+  d="$work/rp-$(printf '%s' "$loc" | tr '/.' '__')"
+  mkrepo "$d"
+  mkdir -p "$d/$(dirname "$loc")"; printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$d/$loc"
+  (cd "$d" && git add -A) >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 26: tracked $loc beside .github/renovate.json must fail"; exit 1; }
+  printf '%s\n' "$out" | grep -q "$loc is a tracked Renovate config" || { echo "FAIL: check 26 should name $loc: $out"; exit 1; }
+  printf '%s\n' "$out" | grep -q 'git mv .* .github/renovate.json' || { echo "FAIL: check 26 should say to git mv to .github/renovate.json: $out"; exit 1; }
+done
+
+# spec: SKILL.md "Family conventions" check 26 -- the OTHER way round: the alternate path alone (no
+#       .github/renovate.json), the very shape that exempts a repo from checks 4, 4b and 13, fails too.
+mkrepo "$work/rp-only"
+git -C "$work/rp-only" mv .github/renovate.json renovate.json
+out="$(cd "$work/rp-only" && sh "$S" 2>&1)" && { echo "FAIL: check 26: a root renovate.json alone must fail"; exit 1; }
+printf '%s\n' "$out" | grep -q 'renovate.json is a tracked Renovate config' || { echo "FAIL: check 26 should name the root renovate.json: $out"; exit 1; }
+
+mkrepo "$work/rp-untracked"; printf '{}\n' > "$work/rp-untracked/renovate.json"
+(cd "$work/rp-untracked" && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 26: an UNTRACKED renovate.json is not the repo's and must not fail: $(cd "$work/rp-untracked" && sh "$S" 2>&1)"; exit 1; }
+
+printf '\n## Conformance deviations\n\n- renovate-path:renovate.json: legacy consumer config read by an external bot; move before the next release\n' >> "$work/rp-renovate_json/INGREDIENTS.md"
+(cd "$work/rp-renovate_json" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 26: a declared renovate-path:renovate.json deviation should excuse it: $(cd "$work/rp-renovate_json" && sh "$S" 2>&1)"; exit 1; }
+(cd "$work/rp-renovate_json5" && git add -A && sh "$S" >/dev/null 2>&1) \
+  && { echo "FAIL: check 26: a deviation for renovate.json must not excuse renovate.json5"; exit 1; }
+
 echo "PASS: check-family-conventions"

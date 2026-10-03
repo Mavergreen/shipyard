@@ -465,6 +465,21 @@ for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*
        "source msc.sh (it asks shipyard-cmake and exports SHIPYARD_SCRIPTS), or use \$SHIPYARD_SCRIPTS in CI"
 done
 
+# spec: SKILL.md "Family conventions" check 26 -- a family repo's Renovate config is
+#       .github/renovate.json and no other path: checks 4, 4b and 13 read only that file, and
+#       shipyard's configure step scaffolds it when absent, so a config tracked anywhere else is dead
+#       beside the scaffold and exempts its repo from those checks. These are every other place
+#       Renovate itself looks for a config file (package.json's "renovate" key is not a file and is
+#       not scanned). Tracked paths only, like checks 7 and 16; a repo holding BOTH fails too, since
+#       Renovate takes one by precedence and the other is dead config.
+for f in renovate.json renovate.json5 .renovaterc .renovaterc.json .renovaterc.json5 \
+         .github/renovate.json5 .gitlab/renovate.json .gitlab/renovate.json5; do
+  git ls-files --error-unmatch -- "$f" >/dev/null 2>&1 || continue
+  deviated renovate-path "$f" && continue
+  fail "$f is a tracked Renovate config, and the family's is .github/renovate.json only -- checks 4, 4b and 13 never read $f" \
+       "git mv $f .github/renovate.json (merge into the existing .github/renovate.json instead if there is one), or declare '- renovate-path:$f: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+done
+
 # spec: SKILL.md "Family conventions" check 17 -- a product's msc.sh must equal shipyard's canonical
 #       template byte for byte. TRACKED copies only, the same rule checks 7c/7d apply: an untracked
 #       build/msc.sh in a developer's worktree is not what the repo ships, and failing on it would
