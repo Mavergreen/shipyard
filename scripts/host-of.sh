@@ -8,7 +8,9 @@
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22
 set -eu
 [ "$#" -eq 1 ] && [ -f "$1" ] && [ -r "$1" ] || { echo "usage: host-of.sh FILE (a readable file)" >&2; exit 2; }
-awk '
+# platform: macOS 26's awk exits 2 ("towc: multibyte conversion failure") on a byte its UTF-8
+#           locale cannot decode; byte-wise, any file reads.
+LC_ALL=C awk '
   NR == 1 && /^#!/ { next }
   /^# platform: host-agnostic( -- .+)?$/ { n++; v = "host-agnostic"; next }
   /^# platform: macOS-only -- .+$/       { n++; v = "macOS-only"; next }

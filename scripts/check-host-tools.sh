@@ -63,7 +63,9 @@ while IFS="$TAB" read -r meta p; do
   esac
   if [ "$host" = macOS-only ]; then nmacos=$((nmacos + 1)); continue; fi
   nagnostic=$((nagnostic + 1))
-  awk -f "$SELF/host-tools.awk" "$p" > "$hits"
+  # platform: macOS 26's awk exits 2 ("towc: multibyte conversion failure") on a byte its UTF-8
+  #           locale cannot decode; byte-wise, any file reads.
+  LC_ALL=C awk -f "$SELF/host-tools.awk" "$p" > "$hits"
   while IFS="$TAB" read -r ln tool text; do
     fail "$p:$ln: declares itself host-agnostic but runs $tool, which Linux does not have: $(printf '%s' "$text" | sed 's/^[[:space:]]*//' | cut -c1-70)" \
          "declare the file '# platform: macOS-only -- $tool', or guard the call and say so on the line above it: # platform: guarded macOS-only call -- <the guard>"

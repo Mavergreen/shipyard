@@ -121,6 +121,16 @@ fails guardonce "the guard comment covers one line, not the rest of the file"
 mk guardcomment "scripts/g.sh${T}#!/bin/sh\n$AGN\n# platform: guarded macOS-only call -- uname\n# note\nsw_vers\n"
 fails guardcomment "an unrelated comment line between the guard and the call must not keep the guard alive"
 
+# spec: 2026-10-03, drydock's CI -- macOS 26's awk read a byte its UTF-8 locale could not decode
+#       ("towc: multibyte conversion failure"), exited 2, and the file was reported unreadable.
+mk latin1 "scripts/l.sh${T}#!/bin/sh\n$AGN\necho caf\351\n"
+(cd "$work/latin1" && LC_ALL=en_US.UTF-8 sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: a host-agnostic script holding a non-UTF-8 byte must pass under a UTF-8 locale:"; (cd "$work/latin1" && LC_ALL=en_US.UTF-8 sh "$S" 2>&1 | sed 's/^/    | /'); exit 1; }
+mk latin1tool "scripts/l.sh${T}#!/bin/sh\n$AGN\necho caf\351\notool -L x\n"
+out="$(cd "$work/latin1tool" && LC_ALL=en_US.UTF-8 sh "$S" 2>&1 || true)"
+printf '%s\n' "$out" | grep -q 'scripts/l.sh:4' \
+  || { echo "FAIL: past a non-UTF-8 byte, under a UTF-8 locale, the otool call must still be found and named: $out"; exit 1; }
+
 out="$(cd "$work/agnotool" && sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'scripts/a.sh:3' || { echo "FAIL: a violation must name file:line: $out"; exit 1; }
 out="$(cd "$work/ok" && sh "$S" 2>&1)"
