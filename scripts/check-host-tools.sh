@@ -2,7 +2,8 @@
 # platform: host-agnostic
 #   usage: check-host-tools.sh [--required]
 #          Scans the WHOLE tracked tree, tests/ included: every *.sh, *.bats, *.bash and *.py,
-#          every file git tracks as executable, and every file whose first line is "#!".
+#          every file git tracks as executable but a compiled one (no "#!", and a NUL byte), and
+#          every file whose first line is "#!".
 #          scripts/templates/ is skipped -- msc.sh there is compared byte for byte by check 17,
 #          and base-postinstall.sh is a template build-base-component.sh renders, never run as itself --
 #          and so is any tracked script that is byte-identical to
@@ -49,7 +50,7 @@ while IFS="$TAB" read -r meta p; do
   case "$p" in
     *.sh|*.bats|*.bash|*.py) ;;
     *) case "$meta" in
-         100755' '*) ;;
+         100755' '*) [ "$(head -c 2 "$p")" = '#!' ] || LC_ALL=C tr -d '\000' < "$p" | cmp -s - "$p" || continue ;;
          *) [ "$(head -c 2 "$p")" = '#!' ] || continue ;;
        esac ;;
   esac

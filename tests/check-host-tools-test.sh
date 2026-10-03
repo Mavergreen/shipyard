@@ -63,6 +63,16 @@ fails testsh "a tests/*.sh file"
 mk extless "bin/tool${T}$AGN\notool -L x\n"
 chmod +x "$work/extless/bin/tool"; (cd "$work/extless" && git add -A) >/dev/null 2>&1
 fails extless "an extensionless executable"
+mk compiled "tests/fixture.macho${T}\317\372\355\376\007\000\000\001\nnot a script\n"
+chmod +x "$work/compiled/tests/fixture.macho"; (cd "$work/compiled" && git add -A) >/dev/null 2>&1
+passes compiled "a tracked-executable binary (a NUL byte, no #!) is compiled, not a script, and declares nothing"
+(cd "$work/compiled" && sh "$S" 2>&1) | grep -q '1 tracked scripts' \
+  || { echo "FAIL: a compiled executable must not be counted as a script: $(cd "$work/compiled" && sh "$S" 2>&1)"; exit 1; }
+mk latin1exe "bin/tool${T}$AGN\necho caf\351\notool -L x\n"
+chmod +x "$work/latin1exe/bin/tool"; (cd "$work/latin1exe" && git add -A) >/dev/null 2>&1
+out="$(cd "$work/latin1exe" && LC_ALL=en_US.UTF-8 sh "$S" 2>&1 || true)"
+printf '%s\n' "$out" | grep -q 'bin/tool:3' \
+  || { echo "FAIL: an executable script holding a non-UTF-8 byte is text, not compiled, under a UTF-8 locale too: $out"; exit 1; }
 mk shebang "libexec/helper${T}#!/bin/sh\n$AGN\notool -L x\n"
 fails shebang "an extensionless, non-executable #! script"
 mk extundecl "bin/tool${T}#!/bin/sh\necho hi\n"

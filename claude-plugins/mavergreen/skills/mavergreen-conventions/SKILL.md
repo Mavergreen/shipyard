@@ -2103,7 +2103,9 @@ two consumers within the hour it shipped.
 
 **Check 22** is `check-host-tools.sh`. It scans the **whole tracked tree**, `tests/` included: every
 `*.sh`, `*.bats`, `*.bash` and `*.py`, every file tracked executable, and every file starting `#!`.
-Those three shapes are exactly where check 18 is blind. `scripts/templates/` is skipped, because
+Those three shapes are exactly where check 18 is blind. A tracked executable with no `#!` that holds
+a NUL byte is compiled, not a script (drydock's Mach-O test fixture), and is not scanned: it can
+carry no declaration. `scripts/templates/` is skipped, because
 check 17 byte-compares `msc.sh` there against other repos (the other template, `base-postinstall.sh`,
 is a template `build-base-component.sh` renders, filling in `@MAVERGREEN_VERSION@`, and never runs
 as itself), and so is any OTHER tracked file that is byte-identical to a template there -- a consumer's own copy of it
