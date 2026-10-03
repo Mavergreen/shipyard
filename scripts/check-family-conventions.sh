@@ -191,7 +191,7 @@ if [ -n "$CI_FILES" ] && command -v python3 >/dev/null 2>&1; then
   # platform: GitHub's macOS runner python3 ships without PyYAML.
   if ! python3 -c 'import yaml' >/dev/null 2>&1; then
     fail "python3 has no PyYAML — cannot verify that the workflows parse, so a duplicate key would ship unseen" \
-         "install it (python3 -m pip install pyyaml); shipyard's .github/actions/install does this for CI"
+         "install it (python3 -m pip install pyyaml); a CI job provisions its own, as shipyard's ci.yml does -- .github/actions/install does not"
   else
   # shellcheck disable=SC2086  # deliberate word-split list of paths
   python3 - $CI_FILES <<'PYEOF' || status=1
