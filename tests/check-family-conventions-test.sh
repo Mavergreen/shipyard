@@ -379,6 +379,21 @@ if printf '%s\n' "$out" | grep -qi 'Traceback'; then
   echo "FAIL should not dump a traceback: $out"; exit 1
 fi
 
+# spec: 2026-10-03 -- with no python3 at all, the parse check was skipped and the gate passed.
+#       A PATH holding every command but python3 stands in for a 10.9 box without pkgsrc's.
+nopy="$work/nopy"; mkdir -p "$nopy"
+for d in $(printf '%s' "$PATH" | tr ':' ' '); do
+  for f in "$d"/*; do
+    case "${f##*/}" in python3*) continue ;; esac
+    if [ -x "$f" ] && [ ! -e "$nopy/${f##*/}" ]; then ln -s "$f" "$nopy/${f##*/}"; fi
+  done
+done
+PATH="$nopy" sh -c 'command -v python3' >/dev/null 2>&1 && { echo "FAIL the no-python3 PATH still finds python3"; exit 1; }
+if out="$(cd "$work/y3" && PATH="$nopy" sh "$S" 2>&1)"; then
+  echo "FAIL missing python3 should fail (cannot-verify is not a pass)"; exit 1
+fi
+printf '%s\n' "$out" | grep -q 'no python3' || { echo "FAIL should name python3: $out"; exit 1; }
+
 # spec: scripts/check-family-conventions.sh -- the 10.9-portability lint runs as part of this gate, so every consumer gets it from the
 #       @v1 they already pin. Asserted HERE and not only in shell-portability-test.sh because the
 #       wiring is the part that can rot: check-shell-portability.sh could keep passing its own

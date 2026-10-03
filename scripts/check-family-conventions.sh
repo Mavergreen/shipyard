@@ -185,9 +185,12 @@ fi
 
 # spec: SKILL.md "Family conventions" check 8 -- every workflow must PARSE with duplicate keys
 #       rejected; GitHub silently refuses to run a workflow with one, so nothing else in CI can catch
-#       it. Cannot-verify (no PyYAML) still FAILS -- SKILL.md "Cannot-verify is a FAILURE, never a
-#       pass."
-if [ -n "$CI_FILES" ] && command -v python3 >/dev/null 2>&1; then
+#       it. Cannot-verify (no python3, no PyYAML) still FAILS -- SKILL.md "Cannot-verify is a FAILURE,
+#       never a pass."
+if [ -n "$CI_FILES" ] && ! command -v python3 >/dev/null 2>&1; then
+  fail "no python3 — cannot verify that the workflows parse, so a duplicate key would ship unseen" \
+       "install python3 with PyYAML (10.9 ships only Python 2)"
+elif [ -n "$CI_FILES" ]; then
   # platform: GitHub's macOS runner python3 ships without PyYAML.
   if ! python3 -c 'import yaml' >/dev/null 2>&1; then
     fail "python3 has no PyYAML — cannot verify that the workflows parse, so a duplicate key would ship unseen" \
