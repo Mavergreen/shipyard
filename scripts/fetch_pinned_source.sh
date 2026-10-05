@@ -45,17 +45,17 @@ case "$SHA256" in
   *[!0-9a-f]*|'') echo "fetch_pinned_source: '$SHA256' is not a SHA-256 (64 hex digits)" >&2; exit 2 ;;
 esac
 [ "${#SHA256}" -eq 64 ] || { echo "fetch_pinned_source: '$SHA256' is not a SHA-256 (64 hex digits)" >&2; exit 2; }
+while [ "${DEST%/}" != "$DEST" ]; do DEST="${DEST%/}"; done
 case "$DEST" in
-  ''|/|.|..) echo "fetch_pinned_source: refusing DEST '$DEST'" >&2; exit 2 ;;
+  ''|.|..) echo "fetch_pinned_source: refusing DEST '$DEST'" >&2; exit 2 ;;
 esac
 . "$SELF/mavericks_fetch.sh"
 CACHE="${MAVERICKS_SOURCE_CACHE:-$HOME/Library/Caches/mavericks-sources}"
 TOP="$NAME-$DIGEST"
 mav_fetch_verified "$URL" "$SHA256" "$CACHE" "$TOP.tar.gz" || {
   echo "fetch_pinned_source: could not fetch and verify $URL" >&2; exit 1; }
-DEST="${DEST%/}"
 mkdir -p "$(dirname "$DEST")"
-tmp="$(mktemp -d "$DEST.tmp.XXXXXX")"; old=""
+tmp=""; old=""
 cleanup() {  # whatever ends this: the old DEST back if the new one is not in place, then no temp dirs
   if [ -n "$old" ] && [ -e "$old/dest" ] && [ ! -e "$DEST" ]; then mv "$old/dest" "$DEST"; fi
   rm -rf "$tmp" ${old:+"$old"}
@@ -63,6 +63,7 @@ cleanup() {  # whatever ends this: the old DEST back if the new one is not in pl
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+tmp="$(mktemp -d "$DEST.tmp.XXXXXX")"
 tar xzf "$CACHE/$TOP.tar.gz" -C "$tmp" || { echo "fetch_pinned_source: could not extract $CACHE/$TOP.tar.gz" >&2; exit 1; }
 [ "$(ls -A "$tmp")" = "$TOP" ] && [ -d "$tmp/$TOP" ] || {
   echo "fetch_pinned_source: $CACHE/$TOP.tar.gz holds $(ls -A "$tmp" | tr '\n' ' ')rather than the one directory $TOP" >&2; exit 1; }

@@ -82,6 +82,9 @@ teardown() { rm -rf "$WORK"; }
   run sh "$HELPER" "$REPO" "$D" abc123 "$DEST"; [ "$status" -eq 2 ]
   run sh "$HELPER" "$REPO" "$D" "$SHA" ""; [ "$status" -eq 2 ]
   run sh "$HELPER" "$REPO" "$D" "$SHA"; [ "$status" -eq 2 ]
+  run sh "$HELPER" "$REPO" "$D" "$SHA" "//"; [ "$status" -eq 2 ]
+  run sh "$HELPER" "$REPO" "$D" "$SHA" "./"; [ "$status" -eq 2 ]
+  run sh "$HELPER" "$REPO" "$D" "$SHA" "../"; [ "$status" -eq 2 ]
 }
 
 @test "a rename that fails puts the old DEST back and leaves no temp dirs beside it" {
@@ -101,4 +104,44 @@ teardown() { rm -rf "$WORK"; }
   [ "$status" -eq 143 ]
   [ "$(cat "$DEST/sub/file.txt")" = hello ]
   [ "$(ls -A "$WORK/build")" = widget ]
+}
+
+@test "an INT during the extraction exits 130, leaves DEST as it was and no temp dirs beside it" {
+  mkdir -p "$DEST" "$WORK/bin"; echo old > "$DEST/old.txt"
+  printf '#!/bin/sh\nkill -INT $PPID\nsleep 1\nexit 1\n' > "$WORK/bin/tar"; chmod +x "$WORK/bin/tar"
+  run sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"; [ "$status" -eq 0 ]
+  run env PATH="$WORK/bin:$PATH" sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"
+  [ "$status" -eq 130 ]
+  [ "$(cat "$DEST/sub/file.txt")" = hello ]
+  [ "$(ls -A "$WORK/build")" = widget ]
+}
+
+@test "a tarball with a path-traversal or absolute member is refused or contained, DEST unchanged" {
+  command -v python3 >/dev/null || skip "no python3 to craft the tarball"
+  mkdir -p "$DEST"; echo old > "$DEST/old.txt"
+  python3 - "$WORK/codeload/acme/widget/tar.gz/$D" "widget-$D" "$WORK/abs-evil" <<'PY'
+import sys, tarfile, io
+out, top, absname = sys.argv[1:4]
+with tarfile.open(out, "w:gz") as t:
+    d = tarfile.TarInfo(top); d.type = tarfile.DIRTYPE; d.mode = 0o755; t.addfile(d)
+    for name in ("../evil", absname):
+        i = tarfile.TarInfo(name); data = b"x"; i.size = 1; t.addfile(i, io.BytesIO(data))
+PY
+  S2="$(shasum -a 256 < "$WORK/codeload/acme/widget/tar.gz/$D" | cut -c1-64)"
+  run sh "$HELPER" "$REPO" "$D" "$S2" "$DEST"
+  [ "$status" -eq 1 ]
+  [ ! -e "$WORK/build/evil" ]
+  [ ! -e "$WORK/abs-evil" ]
+  [ "$(cat "$DEST/old.txt")" = old ]
+  [ "$(ls -A "$WORK/build")" = widget ]
+}
+
+@test "a cached tarball that was corrupted is re-verified and refused, DEST unchanged" {
+  run sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"; [ "$status" -eq 0 ]
+  echo old > "$DEST/old.txt"
+  echo junk >> "$WORK/cache/widget-$D.tar.gz"
+  run env MAVERICKS_CODELOAD=file:///no/such/codeload sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"
+  [ "$status" -eq 1 ]
+  [ ! -e "$WORK/cache/widget-$D.tar.gz" ]
+  [ "$(cat "$DEST/old.txt")" = old ]
 }
