@@ -715,8 +715,8 @@ before you push to its `main` — in the left column, that push is a release.
 
 ### A release is a declared state, not an event
 
-A release is the realisation of a declared state, not the side effect of an event. Spec:
-`docs/superpowers/specs/2026-09-12-release-doctrine-design.md`. It changes what "should this push
+A release is the realisation of a declared state, not the side effect of an event. The design spec
+was a superpowers working file and is not tracked; this section is its durable form. It changes what "should this push
 publish" means: not "did something happen" but "does a release already carry this exact state" —
 which is why publishing is idempotent rather than triggered.
 
@@ -2067,6 +2067,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **24.** A repo that builds a `.pkg` (the same test as 21), where `$GITHUB_REPOSITORY` is set, is the repo of at least one short name in shipyard's `scripts/product-names` (by name, not owner); a `product-layout` deviation exempts it | Every feed URL and updater identity is derived from the registry's repo, so a repo the registry does not name publishes feeds no installed updater polls. The short names themselves are known only at package time, where conformance's `repository` check holds each to its registered repo; this finds an unregistered or renamed repo on the PR |
 | **25.** A tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt` or `*.bats` file, `tests/` included, whose content — outside a whole comment line or a trailing ` #…` remark — contains `arch -x86_64`, `arch -arch x86_64`, `/usr/bin/arch -x86_64` or `softwareupdate --install-rosetta`, carries a matching `rosetta:<path>` deviation | The family is retiring Rosetta (see "Rosetta", above) — an undeclared use is invisible until someone has to sweep every repo by hand the day macOS 28 ships. There is no exemption for `tests/`: a test that runs the shipped x86_64 product under Rosetta, which CI runs rather than skips, still runs translated, so it still needs a declaration. This is a text match, not a command-position check like 23's: a quoted MENTION on an otherwise-unrelated line (`echo "… arch -x86_64 …"`) still counts, because excluding quotes reliably is not practical in BWK awk/sed. **Known limits:** `arch -e VAR=… -x86_64` (something between `arch` and its flag) and `arch "-x86_64"` (the flag itself quoted) are both invisible, since the match needs the literal flag text directly after `arch`; so is a build that runs an x86_64 binary it built earlier some other way (a cross build whose `make` just executes x86_64 host tools it compiled). Both still need a declaration and rely on it alone, not on being caught |
 | **26.** No tracked Renovate config other than `.github/renovate.json` (`renovate.json`, `renovate.json5`, `.renovaterc`, `.renovaterc.json`, `.renovaterc.json5`, `.github/renovate.json5`, `.gitlab/renovate.json`, `.gitlab/renovate.json5`), alone **or** beside it; a path is excused by `- renovate-path:<path>: <reason>` | Checks 4, 4b and 13 read only `.github/renovate.json`, and shipyard's configure step scaffolds it when absent, so a config kept elsewhere exempts its repo from them without anyone deciding it should, and beside the scaffold is dead config (Renovate takes one by precedence). Fix: `git mv <path> .github/renovate.json` |
+| **27.** `.gitignore` has a line ignoring `.superpowers/` and one ignoring `.idea/` (`.superpowers/`, `/.superpowers/`, `.superpowers` or `/.superpowers`, likewise for `.idea`), and no file is tracked under `.superpowers/`, `docs/superpowers/` or `.idea/` | Superpowers specs, plans, ledgers and backlogs are ephemeral: a plan describes a transition, not a system, and once the transition lands the plan is wrong about the system it produced. Committed, it reads as documentation and misleads the next reader (and `docs/superpowers/` is not a place the family uses at all). An IDE's per-user state is the user's, not the project's: committed, it churns on every checkout and fights each contributor's own settings. Both belong in the working tree and out of history, and an ignore line alone is not enough, since it does nothing for a file already tracked, so the check asks git as well |
 
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,
@@ -2348,8 +2349,8 @@ in the same commit.
 ## Consolidation backlog
 
 The family is mid-consolidation: each item below replaces per-repo machinery with one shared
-implementation. Detail lives in `docs/superpowers/specs/2026-07-30-family-consolidation-umbrella.md`
-in shipyard (that dir is gitignored, so this list is the durable half). **When you land one, strike
+implementation. The detailed spec was a superpowers working file, kept only in the maintainer's
+untracked checkout, so this list is the durable half. **When you land one, strike
 it here.** A silently dropped increment is how the family drifted in the first place.
 
 - [x] Shared scripts dir (`$SHIPYARD_SCRIPTS`), shared test runner, conventions gate — done 2026-07-30

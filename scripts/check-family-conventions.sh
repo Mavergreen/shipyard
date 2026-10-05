@@ -685,6 +685,25 @@ for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*
        "declare what runs translated, why it can't be native yet, and when to reconsider under INGREDIENTS.md's ## Conformance deviations as '- rosetta:$f: <reason>' (see the conventions skill, 'Rosetta')"
 done
 
+# spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
+#       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
+#       ignored AND nothing may be tracked under them or under docs/superpowers/. Needs git, like check 7.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  for _d in .superpowers .idea; do
+    grep -qxE "/?$_d/?" .gitignore 2>/dev/null \
+      || fail ".gitignore has no line ignoring $_d/" \
+              "add a line '$_d/' to .gitignore"
+  done
+  for _d in .superpowers docs/superpowers .idea; do
+    if [ -n "$(git ls-files -- "$_d/" | head -1)" ]; then
+      fail "files are tracked under $_d/, which is never committed" \
+           "git rm -r --cached $_d (the files stay on disk), and make sure .gitignore ignores it"
+    fi
+  done
+else
+  echo "check-family-conventions: not a git checkout — cannot check .superpowers/ and .idea/" >&2; status=1
+fi
+
 [ "$status" -eq 0 ] && echo "check-family-conventions: ok"
 
 exit "$status"

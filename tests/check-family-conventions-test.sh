@@ -41,7 +41,7 @@ YML
   #       fixture has to be a real checkout. It also
   #       says where upstream's own release notes live, for a release that ships a new upstream.
   printf '1.0.0\n' > "$1/UPSTREAM_VERSION"
-  printf '/VERSION\n' > "$1/.gitignore"
+  printf '/VERSION\n.superpowers/\n.idea/\n' > "$1/.gitignore"
   mkdir -p "$1/build"
   printf '#!/bin/sh\nprintf "https://example.com/v%%s\\n" "$1"\n' > "$1/build/upstream-release-notes-url.sh"
   (cd "$1" && git init -q && git add -A) >/dev/null 2>&1
@@ -1471,5 +1471,42 @@ printf '\n## Conformance deviations\n\n- renovate-path:renovate.json: legacy con
   || { echo "FAIL: check 26: a declared renovate-path:renovate.json deviation should excuse it: $(cd "$work/rp-renovate_json" && sh "$S" 2>&1)"; exit 1; }
 (cd "$work/rp-renovate_json5" && git add -A && sh "$S" >/dev/null 2>&1) \
   && { echo "FAIL: check 26: a deviation for renovate.json must not excuse renovate.json5"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 27 -- .superpowers/ and .idea/ are ignored, and nothing is
+#       tracked under .superpowers/, docs/superpowers/ or .idea/. The baseline (mkrepo) is the positive control.
+for form in '.superpowers/' '/.superpowers/' '.superpowers' '/.superpowers'; do
+  d="$work/sp-ok$(printf '%s' "$form" | tr -c 'A-Za-z' _)"; mkrepo "$d"
+  printf '/VERSION\n%s\n.idea/\n' "$form" > "$d/.gitignore"
+  (cd "$d" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 27: ignore line '$form' should pass: $(cd "$d" && sh "$S" 2>&1)"; exit 1; }
+done
+for form in '.idea/' '/.idea/' '.idea' '/.idea'; do
+  d="$work/idea-ok$(printf '%s' "$form" | tr -c 'A-Za-z' _)"; mkrepo "$d"
+  printf '/VERSION\n.superpowers/\n%s\n' "$form" > "$d/.gitignore"
+  (cd "$d" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 27: ignore line '$form' should pass: $(cd "$d" && sh "$S" 2>&1)"; exit 1; }
+done
+
+mkrepo "$work/sp1"; printf '/VERSION\n.idea/\n' > "$work/sp1/.gitignore"
+out="$(cd "$work/sp1" && sh "$S" 2>&1)" && { echo "FAIL: check 27: no .superpowers/ ignore line must fail"; exit 1; }
+printf '%s\n' "$out" | grep -q "add a line '.superpowers/' to .gitignore" || { echo "FAIL: check 27 should say to add .superpowers/: $out"; exit 1; }
+
+mkrepo "$work/sp2"; printf '/VERSION\n.superpowers/\n' > "$work/sp2/.gitignore"
+out="$(cd "$work/sp2" && sh "$S" 2>&1)" && { echo "FAIL: check 27: no .idea/ ignore line must fail"; exit 1; }
+printf '%s\n' "$out" | grep -q "add a line '.idea/' to .gitignore" || { echo "FAIL: check 27 should say to add .idea/: $out"; exit 1; }
+
+for tracked in .superpowers/plan.md docs/superpowers/specs/x.md .idea/misc.xml; do
+  d="$work/tr-$(printf '%s' "$tracked" | tr -c 'A-Za-z' _)"; mkrepo "$d"
+  mkdir -p "$d/$(dirname "$tracked")"; printf 'x\n' > "$d/$tracked"
+  (cd "$d" && git add -f "$tracked") >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: tracked $tracked must fail"; exit 1; }
+  dir="${tracked%%/*}"; [ "$dir" = docs ] && dir=docs/superpowers
+  printf '%s\n' "$out" | grep -q "git rm -r --cached $dir " || { echo "FAIL: check 27 should say git rm -r --cached $dir: $out"; exit 1; }
+done
+
+mkrepo "$work/sp-untracked"; mkdir -p "$work/sp-untracked/.idea"; printf 'x\n' > "$work/sp-untracked/.idea/misc.xml"
+(cd "$work/sp-untracked" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 27: an untracked, ignored .idea/ must pass"; exit 1; }
+
+mkrepo "$work/sp-nogit"; rm -rf "$work/sp-nogit/.git"
+out="$(cd "$work/sp-nogit" && sh "$S" 2>&1)" && { echo "FAIL: check 27: outside a git checkout must fail (cannot verify)"; exit 1; }
+printf '%s\n' "$out" | grep -q 'cannot check .superpowers/' || { echo "FAIL: check 27 should say it cannot verify: $out"; exit 1; }
 
 echo "PASS: check-family-conventions"
