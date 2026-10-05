@@ -24,3 +24,4 @@ rust dev.mavergreen.rust.rust rust
 rust-cross dev.mavergreen.rust.rust-cross rust
 ca-certs dev.mavergreen.ca-certs ca-certs
 avxemu dev.mavergreen.avxemu avxemu
+drydock dev.mavergreen.drydock drydock
