@@ -61,9 +61,12 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
       cafebabe|cafebabf|213c6172) _strict=0 ;;
       *) continue ;;
     esac
-    if ! _sl="$(sh "$SELF/macho-slices.sh" "$2/$_mf")"; then
-      [ "$_strict" = 0 ] && continue
-      echo "artifact-facts: cannot read Mach-O $1:$_mf" >&2; rm -f "$_ml"; return 1
+    _rc=0; _sl="$(sh "$SELF/macho-slices.sh" "$2/$_mf")" || _rc=$?
+    # spec: scripts/macho-slices.sh -- exit 1 is "not Mach-O" (skipped for the ambiguous magics); exit 4 is a
+    #       reader that is missing or failed, and any other status is unexpected: both abort, never vanish.
+    if [ "$_rc" -ne 0 ]; then
+      [ "$_strict" = 0 ] && [ "$_rc" -eq 1 ] && continue
+      echo "artifact-facts: cannot read Mach-O $1:$_mf (macho-slices.sh exit $_rc)" >&2; rm -f "$_ml"; return 1
     fi
     _sha="$(shasum -a 256 "$2/$_mf" | awk '{print $1}')"
     _p="$3$(printf '%s' "$_mf" | enc)"

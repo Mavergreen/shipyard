@@ -233,7 +233,7 @@ mk_readers() {
   [[ "$output" == *"CANNOT MEASURE"*"could not read"* ]] || false
 }
 
-# A reader that runs the host's own tool, except where it is told to fail or to warn.
+# A fat x86_64/10.9 + arm64/11.3 fixture, "$WORK/fatok".
 mk_fat() {
   mk_stamped "$WORK/p109" x86_64 10.9 10.9
   mk_stamped "$WORK/a113" arm64 11.0 11.3
@@ -241,6 +241,7 @@ mk_fat() {
 }
 
 @test "LIPO is the reader that thins a fat binary's x86_64 slice" {
+  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
   mk_fat
   mk_readers
   run env LIPO="$WORK/readers/lipo" MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"

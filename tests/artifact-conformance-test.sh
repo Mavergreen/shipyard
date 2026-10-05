@@ -624,6 +624,34 @@ printf '%s\n' "$_fc1_facts" | sh "$S" >/dev/null 2>&1 \
   && { rm -rf "$_fc1"; echo "FAIL: piping an aborted stream to the checker must not exit 0"; exit 1; }
 rm -rf "$_fc1"
 
+# spec: scripts/macho-slices.sh -- exit 1 is "not Mach-O", exit 4 a reader that failed. A fat binary (the
+#       ambiguous cafebabe magic) skipped on 1 must still abort on 4: a failing OTOOL must not make the file
+#       vanish from the stream. Needs a host that builds and lipo-merges two arches.
+_fc4="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-d.XXXXXX")"
+mkdir -p "$_fc4/src" "$_fc4/dist" "$_fc4/bin"
+printf 'int main(void){return 0;}\n' > "$_fc4/m.c"
+_fc4_ok=0
+# platform: guarded macOS-only call -- clang -arch must build both slices first, so Linux (no -arch) skips below
+if clang -arch x86_64 -mmacosx-version-min=10.9 "$_fc4/m.c" -o "$_fc4/x" 2>/dev/null \
+   && clang -arch arm64 "$_fc4/m.c" -o "$_fc4/a" 2>/dev/null; then
+  # platform: guarded macOS-only call -- reached only once both -arch builds above succeeded
+  lipo -create "$_fc4/x" "$_fc4/a" -output "$_fc4/src/fat" 2>/dev/null && _fc4_ok=1
+fi
+if [ "$_fc4_ok" = 1 ]; then
+  ( cd "$_fc4/src" && tar -czf "$_fc4/dist/fat.tar.gz" fat )
+  printf '#!/bin/sh\ncase "$1" in -l) echo "otool: -l broke" >&2; exit 1 ;; esac\nexec otool "$@"\n' > "$_fc4/bin/otool"
+  chmod +x "$_fc4/bin/otool"
+  _fc4_facts="$(OTOOL="$_fc4/bin/otool" sh "$AF" "$_fc4/dist" 1.0.0-mavericks.1 "$_fc4" 2>/dev/null)" \
+    && { rm -rf "$_fc4"; echo "FAIL: a fat binary whose reader fails must abort, not vanish from the stream; got: $_fc4_facts"; exit 1; }
+  printf '%s\n' "$_fc4_facts" | grep -q '^abort cannot read a Mach-O' \
+    || { rm -rf "$_fc4"; echo "FAIL: expected an 'abort cannot read a Mach-O' record for a failing reader; got: $_fc4_facts"; exit 1; }
+  printf '%s\n' "$_fc4_facts" | grep -qx 'end-of-facts' \
+    && { rm -rf "$_fc4"; echo "FAIL: an aborted stream must not also carry end-of-facts"; exit 1; }
+else
+  echo "artifact-conformance: skip: the fat-binary reader-failure fixture needs clang and lipo for two arches"
+fi
+rm -rf "$_fc4"
+
 # spec: scripts/artifact-facts.sh "macho_facts" -- a file named *.tgz that is not actually a
 #       tarball must abort extraction, not be silently skipped as though it carried no Mach-O.
 _fc2="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-b.XXXXXX")"

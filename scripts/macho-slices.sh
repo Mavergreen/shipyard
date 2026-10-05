@@ -4,7 +4,8 @@
 #          Prints one line per distinct (arch, filetype, minos, sdk) in FILE: "<arch> <filetype> <minos> <sdk>",
 #          "-" where a slice records no version load command (a kext), "?" for a missing field. A static
 #          archive yields one line per distinct pair across its members. Exit 0 with lines; 1 if FILE is
-#          not Mach-O; 2 on a usage error.
+#          not Mach-O; 2 on a usage error; 4 if a reader (LIPO or OTOOL) is missing or failed on a file
+#          the other reader already read, which a caller must not mistake for 1.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the ONE parser
 #       of recorded versions, shared by the compat guard and artifact-facts.sh.
 set -eu
