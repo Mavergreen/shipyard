@@ -70,6 +70,23 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
   [[ "$output" == *"otool: -l broke"* ]] || false
 }
 
+@test "an OTOOL that fails only for -hv, on a file LIPO read, fails closed (exit 4)" {
+  printf '#!/bin/sh\ncase "$1" in -hv) echo "otool: -hv broke" >&2; exit 1 ;; esac\nexec "%s" "$@"\n' "$(command -v otool)" > "$WORK/otool-nohv"
+  chmod +x "$WORK/otool-nohv"
+  for f in x109 fat; do
+    run env OTOOL="$WORK/otool-nohv" sh "$S" "$WORK/$f"
+    [ "$status" -eq 4 ]
+    [[ "$output" == *"-hv could not read"* ]] || false
+    [[ "$output" == *"otool: -hv broke"* ]] || false
+  done
+}
+
+@test "a Java class file (cafebabe) is not Mach-O: exit 1" {
+  printf '\312\376\272\276\000\000\000\064junk' > "$WORK/C.class"
+  run sh "$S" "$WORK/C.class"
+  [ "$status" -eq 1 ]
+}
+
 @test "a LIPO or OTOOL that cannot run is exit 4 naming it; a non-Mach-O file stays exit 1" {
   run env LIPO=/nonexistent/lipo sh "$S" "$WORK/x109"
   [ "$status" -eq 4 ]

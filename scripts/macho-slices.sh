@@ -32,7 +32,7 @@ for a in $archs; do
   case "$info" in Architectures*) "${LIPO:-lipo}" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>"$t/err" || reader_died "${LIPO:-lipo} -thin $a"; s="$t/$a" ;; esac
   # platform: `otool -hv` prints the header table; the filetype is the 5th column of its data row. An
   #           archive prints one table per member, and every member of one arch shares a filetype.
-  hv="$("${OTOOL:-otool}" -hv "$s" 2>/dev/null)" || exit 1
+  hv="$("${OTOOL:-otool}" -hv "$s" 2>"$t/err")" || reader_died "${OTOOL:-otool} -hv"
   ft="$(printf '%s\n' "$hv" | awk '$1 ~ /^MH_MAGIC/ {print $5; exit}')"
   [ -n "$ft" ] || exit 1
   # platform: LC_VERSION_MIN_MACOSX carries "version" and "sdk". LC_BUILD_VERSION carries "sdk" BEFORE
