@@ -34,11 +34,20 @@ if [ ! -d "$SDK" ]; then
   #           exists (a modern host; never the 10.9 box), convert those stubs to .tbd once at
   #           extract time: same exported symbols, no warnings. Pinned to tbd-v4 (YAML): the default
   #           v5 is JSON, which some downstream tools can't parse.
-  # platform: guarded macOS-only call -- xcrun is absent off macOS, so the `if` skips the whole conversion
-  if TAPI=$(xcrun --find tapi 2>/dev/null); then
+  # platform: OS X 10.9 has no tapi (the Command Line Tools for Xcode 6.2 carry none) and, without them, no
+  #           xcrun to ask: there it is never asked, so a first fetch on 10.9 runs no Command Line Tools name.
+  # platform: guarded macOS-only call -- sw_vers is absent off macOS, where `|| :` leaves the version empty
+  OSV="$(sw_vers -productVersion 2>/dev/null || :)"
+  TAPI=""
+  case "$OSV" in
+    10.9.*) ;;
+    # platform: guarded macOS-only call -- xcrun is absent off macOS, where `|| :` leaves TAPI empty and the `if` skips the conversion
+    *) TAPI="$(xcrun --find tapi 2>/dev/null || :)" ;;
+  esac
+  if [ -n "$TAPI" ]; then
     LIBDIRS="$SDK/usr/lib $SDK/System/Library/Frameworks"
     find $LIBDIRS -type f \( -name '*.dylib' -o ! -name '*.*' \) | while IFS= read -r f; do
-      # platform: guarded macOS-only call -- inside the `if TAPI=$(xcrun ...)` above, so only where xcrun exists
+      # platform: guarded macOS-only call -- inside the `if [ -n "$TAPI" ]` above, so only where xcrun found tapi
       [ "$(otool -h "$f" 2>/dev/null | awk 'NR==4 {print $5}')" = 9 ] || continue
       "$TAPI" stubify --filetype=tbd-v4 --delete-input-file "$f" 2>/dev/null || :  # unconvertible: keep stub
     done

@@ -46,4 +46,17 @@ rc=0; err="$(sh "$w/lonely/fetch_sdk.sh" 2>&1 >/dev/null)" || rc=$?
 printf '%s' "$err" | grep -q 'sdk-pins\.sh is missing' \
   || { echo "FAIL: fetch_sdk.sh without sdk-pins.sh must say sdk-pins.sh is missing, got: $err"; exit 1; }
 
+# platform: OS X 10.9 has no tapi and, without the Command Line Tools, no xcrun to ask: a first fetch there
+#           asks nothing; a newer macOS still asks xcrun for tapi. Fake sw_vers and xcrun, logging, on PATH.
+mkdir -p "$w/bin"
+printf '#!/bin/sh\necho "xcrun $*" >> "%s/xcrun.log"\nexit 1\n' "$w" > "$w/bin/xcrun"
+printf '#!/bin/sh\necho "$FAKE_OS"\n' > "$w/bin/sw_vers"; chmod +x "$w/bin/xcrun" "$w/bin/sw_vers"
+: > "$w/xcrun.log"
+FAKE_OS=10.9.5 PATH="$w/bin:$PATH" MAVERICKS_SDK_CACHE="$w/c4" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" \
+  sh "$S" > /dev/null || { echo "FAIL: a first fetch on 10.9 must succeed"; exit 1; }
+[ ! -s "$w/xcrun.log" ] || { echo "FAIL: a first fetch on 10.9 asked xcrun: $(cat "$w/xcrun.log")"; exit 1; }
+FAKE_OS=15.6 PATH="$w/bin:$PATH" MAVERICKS_SDK_CACHE="$w/c5" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" \
+  sh "$S" > /dev/null || { echo "FAIL: a first fetch on 15.6 must succeed"; exit 1; }
+[ "$(cat "$w/xcrun.log")" = "xcrun --find tapi" ] || { echo "FAIL: a first fetch on 15.6 must ask xcrun for tapi, asked: $(cat "$w/xcrun.log")"; exit 1; }
+
 echo "PASS: fetch-sdk"
