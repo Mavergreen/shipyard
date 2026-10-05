@@ -29,8 +29,7 @@ Four more scripts (`scripts/declared-state.sh`, `scripts/release-state.sh`,
 `scripts/release-needed.sh`, `scripts/release-state-record.sh`) and one more reusable workflow
 (`.github/workflows/reconcile.yml`) ship as of this release. Consumers reach all five the same way
 they reach everything else here: through the moving `@v1` tag. What they do and how a product wires
-them in is documented in the conventions skill ("A release is a declared state, not an event") and
-the design spec, `docs/superpowers/specs/2026-09-12-release-doctrine-design.md`.
+them in is documented in the conventions skill, "A release is a declared state, not an event".
 
 shipyard itself carries no `## Declared state` section. Its version is
 `<UPSTREAM_VERSION>.<commit count>` (see the last row of the table above), so its own state changes
