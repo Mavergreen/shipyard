@@ -317,8 +317,19 @@ grep -q '^3 comments cite no reason$' "$w/countcheck.out" \
 grep -q 'comments cite no reason' "$w/shebang.out" \
   && { echo "FAIL shebang: the count line must appear only when something was found, but a clean file printed one: $(cat "$w/shebang.out")"; exit 1; }
 
-dangling="$( (cd "$here/.." && git ls-files -z '*.sh' '*.yml' | xargs -0 grep -n -E 'docs/superpower[s]|[.]superpower[s]/') || true )"
+# spec: scripts/check-family-conventions.sh check 27 -- a CITATION is a path INTO those directories; a bare directory name (a gate that checks they
+#       are ignored and untracked) cites nothing. The sample lines are built at run time so this file
+#       holds no citation itself.
+dangling_re='(docs/superpower[s]|[.]superpower[s])/[A-Za-z0-9_]'
+cite_a="docs/superpowers"; cite_b=".superpowers"
+for base in "$cite_a" "$cite_b"; do
+  printf '# see %s/specs/x.md\n' "$base" | grep -q -E "$dangling_re" \
+    || { echo "FAIL dangling-citation control: a path into $base must be flagged"; exit 1; }
+  printf '# nothing may be tracked under %s/ or %s\n' "$base" "$base" | grep -q -E "$dangling_re" \
+    && { echo "FAIL dangling-citation control: a bare $base directory name must not be flagged"; exit 1; }
+done
+dangling="$( (cd "$here/.." && git ls-files -z '*.sh' '*.yml' | xargs -0 grep -n -E "$dangling_re") || true )"
 [ -z "$dangling" ] \
-  || { echo "FAIL dangling-citation: the spec and plan directories named on those lines are gitignored, so the citation resolves for nobody -- not for the fourteen consumers that receive these scripts through @v1, and not for a fresh clone of shipyard. Cite something tracked (SKILL.md, a test, a script): $dangling"; exit 1; }
+  || { echo "FAIL dangling-citation: a path into the spec and plan directories is cited on those lines, and the directories are gitignored, so the citation resolves for nobody -- not for the fourteen consumers that receive these scripts through @v1, and not for a fresh clone of shipyard. Cite something tracked (SKILL.md, a test, a script): $dangling"; exit 1; }
 
 echo "PASS: check-comments"

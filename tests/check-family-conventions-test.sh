@@ -1497,12 +1497,12 @@ mkrepo "$work/sp2"; printf '/VERSION\n.superpowers/\n' > "$work/sp2/.gitignore"
 out="$(cd "$work/sp2" && sh "$S" 2>&1)" && { echo "FAIL: check 27: no .idea/ ignore line must fail"; exit 1; }
 printf '%s\n' "$out" | grep -q "add a line '.idea/' to .gitignore" || { echo "FAIL: check 27 should say to add .idea/: $out"; exit 1; }
 
-for tracked in .superpowers/plan.md docs/superpowers/specs/x.md .idea/misc.xml; do
-  d="$work/tr-$(printf '%s' "$tracked" | tr -c 'A-Za-z' _)"; mkrepo "$d"
-  mkdir -p "$d/$(dirname "$tracked")"; printf 'x\n' > "$d/$tracked"
+for dir in .superpowers docs/superpowers .idea; do
+  tracked="$dir/sub/f.txt"
+  d="$work/tr-$(printf '%s' "$dir" | tr -c 'A-Za-z' _)"; mkrepo "$d"
+  mkdir -p "$d/$dir/sub"; printf 'x\n' > "$d/$tracked"
   (cd "$d" && git add -f "$tracked") >/dev/null 2>&1
-  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: tracked $tracked must fail"; exit 1; }
-  dir="${tracked%%/*}"; [ "$dir" = docs ] && dir=docs/superpowers
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a file tracked under $dir must fail"; exit 1; }
   printf '%s\n' "$out" | grep -q "git rm -r --cached $dir " || { echo "FAIL: check 27 should say git rm -r --cached $dir: $out"; exit 1; }
 done
 
