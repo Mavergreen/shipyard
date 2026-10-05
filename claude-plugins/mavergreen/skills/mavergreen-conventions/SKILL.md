@@ -137,6 +137,7 @@ updaters, signing, or compat checks:**
 | `set_install_floor.sh` | stamps the 10.9.5 install floor on the `.pkg` | editing the pkg Distribution |
 | `sign_and_appcast.sh` · `gen_appcast.sh` | EdDSA-signs + renders the appcast (fetches `ed25519-sign` via `gh`) | rolling your own signing |
 | `mavericks_fetch` · `MavericksFetch` · `mavericks_fetch.sh` | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
+| `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
 
 ## The build must also run natively ON 10.9
 
@@ -1232,6 +1233,7 @@ upstream publishes — pick the strongest available and note the choice:
 | a checksum feed/file | fetch that checksum, verify the download against it (frozen by the pinned version) | golang → go.dev `?mode=json` SHA256 |
 | signed artifacts | signature/identity (verifies a version that doesn't exist yet) | swift-toolchain → Apple installer signer |
 | a git source we clone | pin the **commit digest** and verify the checkout against it | container-tools/tailscale/ed25519 → git-refs |
+| a git source a native 10.9 build fetches (no git there) | pin the commit digest **and** the SHA-256 of GitHub's tarball of that commit (`fetch_pinned_source.sh`) | swift → llvm-project, swift, swift-cmark |
 
 Record the resulting digest in `SHA256SUMS` for the record even when the gate is a signature. **Don't
 invent a hand-maintained pinned hash when upstream already publishes one** — that's a divergence to avoid.
@@ -1263,6 +1265,32 @@ There is deliberately **no separately-maintained artifact hash** (`golden.sha256
 on-box "bless" step**: the commit digest *is* the reproducibility pin, Renovate bumps it, and a
 per-bump characterization/fingerprint of the *built* output only blocks merges without a shippability
 signal (see the auto-merge intent above — fix runtime regressions in `-mavericks.2`).
+
+### Git sources a 10.9 build fetches: the commit's tarball, by SHA-256
+
+A build that runs natively on 10.9 without the Command Line Tools has no git, so `clone_pinned.sh` is
+not available to it. It fetches **GitHub's tarball of the pinned commit** with
+**`scripts/fetch_pinned_source.sh REPO DIGEST SHA256 DEST`** (bats-tested): the tarball is cached,
+verified against the pinned SHA-256 (fail closed; a mismatch prints the SHA-256 it got), and DEST is
+replaced by a fresh extraction of it, with a `.mavergreen-source` stamp, so a build that patches the
+tree starts from upstream's bytes every time. `--url REPO DIGEST` prints the tarball's URL.
+
+The SHA-256 is the one hash here Renovate cannot move: it moves the commit, and the repo carries a script
+that writes the hash after checking, with git where git is, that the tarball holds exactly the commit's
+tree (swift's `scripts/pin-source-tarballs.sh`). A bot runs it on the bump's own branch, so the bump still
+merges on green: swift's `.github/workflows/pins-bot.yml`, on pushes to `renovate/**`. Its first job, with
+`contents: read` only, fetches the tarballs and computes and checks the pins: upstream's bytes are read
+there, never run, and never beside a token that can write. Its second job, which touches no upstream
+byte, writes the checked values, commits them with `GITHUB_TOKEN` and pushes to the branch. (That rule
+is about the bot's own two jobs. The build it starts, below, runs with `release.yml`'s own permissions,
+as every push to the branch already does: swift's grants `contents: write` workflow-wide and its
+checkouts keep the token. Narrowing that is `release.yml`'s own work, not the bot's.) A
+`GITHUB_TOKEN` push starts no workflow, so that job then **dispatches** `release.yml` on the branch
+(`workflow_dispatch` is `GITHUB_TOKEN`-triggerable, as the repackage path above relies on), and that
+run's `build` is the required check on the new head; `gitIgnoredAuthors` in the repo's Renovate config
+keeps the bot's commit from marking the branch as someone else's. Until the bot has run, the build fails
+at the fetch, naming the pin. GitHub's generated archives have been byte-stable (the same SHA-256 from
+10.9's curl and a modern Mac's); if they ever change, the fetch fails rather than build other bytes.
 
 ## Sparkle updater
 

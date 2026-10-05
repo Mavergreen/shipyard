@@ -47,8 +47,9 @@ required to use, the limitation is everyone's: **fetch with the shipyard helpers
 integrity-checked in a way `file(DOWNLOAD)` never was —
 
 ```sh
-sh "$SHIPYARD_SCRIPTS/mavericks_fetch.sh"  # a tarball, verified against a pinned SHA-256
-sh "$SHIPYARD_SCRIPTS/clone_pinned.sh"     # a git source, pinned to a digest
+sh "$SHIPYARD_SCRIPTS/mavericks_fetch.sh"        # a tarball, verified against a pinned SHA-256
+sh "$SHIPYARD_SCRIPTS/clone_pinned.sh"           # a git source, pinned to a digest
+sh "$SHIPYARD_SCRIPTS/fetch_pinned_source.sh"    # a GitHub source's commit as a tarball, pinned SHA-256 (no git)
 ```
 
 Nothing in the org used CMake-level downloads, so nothing broke; if you are porting something that

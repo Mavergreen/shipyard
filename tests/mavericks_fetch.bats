@@ -73,3 +73,15 @@ teardown() { rm -rf "$WORK"; }
   [ ! -e "$CACHE/payload" ]
   [ -z "$(find "$CACHE" -mindepth 1 ! -name cut.tar)" ]
 }
+
+@test "mav_fetch_verified verifies without extracting, and a mismatch says what it got" {
+  run mav_fetch_verified "$URL" "$SHA" "$CACHE" fixture.tar
+  [ "$status" -eq 0 ]
+  [ -f "$CACHE/fixture.tar" ]
+  [ ! -e "$CACHE/payload" ]
+  BAD=0000000000000000000000000000000000000000000000000000000000000000
+  run mav_fetch_verified "$URL" "$BAD" "$CACHE" fixture.tar
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"is sha256 $SHA, not the pinned $BAD"* ]] || false
+  [ ! -e "$CACHE/fixture.tar" ]
+}
