@@ -200,3 +200,35 @@ declare_deviation() { printf '## Conformance deviations\n%s\n' "$1" > "$WORK/ING
   run env MAVERICKS_DEVIATIONS_ROOT="$WORK" MAVERICKS_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a265"
   [ "$status" -eq 0 ]
 }
+
+# A recording reader for each knob: logs its name, then runs the host's own tool.
+mk_readers() {
+  mkdir -p "$WORK/readers"
+  for t in lipo nm otool strings; do
+    printf '#!/bin/sh\necho %s >> "%s/readers.log"\nexec "%s" "$@"\n' "$t" "$WORK" "$(command -v "$t")" > "$WORK/readers/$t"
+    chmod +x "$WORK/readers/$t"
+  done
+}
+
+@test "LIPO, NM, STRINGS and OTOOL name the readers the guard runs" {
+  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
+  mk_readers
+  R="$WORK/readers"
+  run env LIPO="$R/lipo" NM="$R/nm" STRINGS="$R/strings" OTOOL="$R/otool" sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 0 ]
+  for t in lipo nm otool strings; do grep -qx "$t" "$WORK/readers.log"; done
+}
+
+@test "an NM that cannot read the binary fails the guard closed" {
+  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
+  run env NM=false sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"CANNOT MEASURE"*"could not read"* ]] || false
+}
+
+@test "a STRINGS that cannot read the binary fails the guard closed" {
+  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
+  run env STRINGS=false sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"CANNOT MEASURE"*"could not read"* ]] || false
+}

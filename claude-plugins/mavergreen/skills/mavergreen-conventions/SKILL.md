@@ -150,11 +150,20 @@ Practically, for anything a **native 10.9 build executes** — `versions.sh`, `v
 `build/*.sh` chain, packaging:
 
 - **POSIX `/bin/sh` only.** No bashisms; 10.9's `/bin/sh` is old.
-- **Assume 10.9-vintage tools.** `patch` is Apple's 2.0 (it has `-F` fuzz, it does **not** have
-  `--merge`). Do not assume GNU behaviour from coreutils flags — `sort -V` in particular is not
-  something to rely on there.
+- **Assume 10.9-vintage tools.** 10.9's `patch` is GNU patch 2.5.8 (a modern Mac's is BSD patch 2.0):
+  both have `-F` fuzz and neither has `--merge`, and both leave a `.orig` beside a file a hunk reached
+  at an offset unless given `-V none`. Do not assume GNU behaviour from coreutils flags — `sort -V` in
+  particular is not something to rely on there.
 - **No `python3`.** 10.9 ships Python 2 only.
-- Prefer git plumbing and plain shell over anything that arrived with Homebrew.
+- **No git, and none of Xcode's tools, unless the Command Line Tools are installed.** 10.9's own
+  `/usr/bin/git`, `otool`, `lipo`, `nm`, `strings`, `ar`, `libtool`, `ranlib`, `install_name_tool`,
+  `make` and `clang` are stubs that need them (Xcode 6.2's, which takes an Apple ID to download). A
+  native build that must not need them fetches its sources with `fetch_pinned_source.sh`, and reads
+  Mach-O with mavericks-clang-22's `llvm-otool`, `llvm-lipo`, `llvm-nm` and `llvm-strings` (the compat
+  guard takes them as `OTOOL`, `LIPO`, `NM` and `STRINGS`). The OS itself has `curl` (7.30, TLS that
+  reaches GitHub), `tar` (bsdtar 2.8.3, which reads `.tar.gz` and `.tar.xz`), `patch`, `shasum` and
+  `python` 2.7.
+- Otherwise prefer plain shell over anything that arrived with Homebrew.
 
 Scripts that only ever run **in CI** (the conventions gate, release-notes generation, the publish path)
 may use `python3`, `sort -V`, and modern tools freely — but say so, so the next person knows which side

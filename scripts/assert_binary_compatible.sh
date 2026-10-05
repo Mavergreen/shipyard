@@ -22,6 +22,13 @@
 #            MAVERICKS_ALLOW_SELECTORS         post-10.9 selectors the code guards with
 #                                               -respondsToSelector:.
 #            MAVERICKS_REQUIRE_DEFINED_SYMBOLS symbols that MUST be DEFINED (a project's 10.9 shims).
+#            LIPO, NM, STRINGS, OTOOL          the Mach-O readers (default: lipo, nm, strings and
+#                                               otool from PATH; macho-slices.sh reads LIPO and
+#                                               OTOOL). A 10.9 build without Xcode's Command Line
+#                                               Tools, whose lipo, nm, otool and strings are stubs,
+#                                               names mavericks-clang-22's llvm-lipo, llvm-nm,
+#                                               llvm-strings and llvm-otool, which give this guard
+#                                               the same answers. A reader that fails is fail-closed.
 #            MAVERICKS_ALLOW_GUARDED_WEAK      grep -E alternation of post-10.9 symbols permitted
 #                                               ONLY when imported *weak*, for a runtime (e.g.
 #                                               mavericks-swift) that weak-links a post-10.9 SPI and
@@ -80,7 +87,8 @@ printf '%s\n' "$_devs" | mav_deviation_facts > "$work/devs"
 #           up)", left $NF = "up)" for a dynamic_lookup undefined, and the hard import slipped past
 #           the guard.
 mav_undefs() {
-  nm -m "$1" 2>/dev/null | grep -F '(undefined)' | sed -E 's/ \([^)]*\)$//' \
+  _nm_out="$("${NM:-nm}" -m "$1")" || return 1
+  printf '%s\n' "$_nm_out" | grep -F '(undefined)' | sed -E 's/ \([^)]*\)$//' \
     | awk '{ w = (/ weak /) ? "W" : "H"; print w, $NF }'
 }
 
@@ -117,11 +125,11 @@ EOF
   x="$b"
   if [ "$archs" != x86_64 ]; then
     x="$work/x86_64.$checked"
-    lipo -thin x86_64 "$b" -output "$x" 2>/dev/null \
+    "${LIPO:-lipo}" -thin x86_64 "$b" -output "$x" 2>/dev/null \
       || { echo "compat guard: cannot thin the x86_64 slice of $b" >&2; fail=1; continue; }
   fi
 
-  U=$(mav_undefs "$x")
+  U=$(mav_undefs "$x") || mav_die "${NM:-nm} -m could not read $b's symbols"
   hard_leak=$(printf '%s\n' "$U" | awk '$1=="H"{print $2}' | grep -xE "($POST_10_9)" || true)
   weak_leak=$(printf '%s\n' "$U" | awk '$1=="W"{print $2}' | grep -xE "($POST_10_9)" || true)
   if [ -n "$ALLOW_WEAK" ]; then
@@ -130,7 +138,8 @@ EOF
   leak=$(printf '%s\n%s\n' "$hard_leak" "$weak_leak" | grep -v '^$' || true)
   [ -z "$leak" ] || { echo "compat guard: post-10.9 undefined import(s) in $b:" >&2; printf '%s\n' "$leak" | sed 's/^/  /' >&2; fail=1; }
 
-  sel_leak=$(strings -a "$x" 2>/dev/null | grep -xE "($POST_10_9_SEL)" | sort -u || true)
+  _strings_out="$("${STRINGS:-strings}" -a "$x")" || mav_die "${STRINGS:-strings} -a could not read $b"
+  sel_leak=$(printf '%s\n' "$_strings_out" | grep -xE "($POST_10_9_SEL)" | sort -u || true)
   if [ -n "$ALLOW_SEL" ]; then
     sel_leak=$(printf '%s\n' "$sel_leak" | grep -vxE "($ALLOW_SEL)" || true)
   fi
@@ -140,7 +149,8 @@ EOF
   if [ -n "$REQUIRE_DEFINED" ]; then
     # platform: nm marks an undefined symbol's line with a leading 'U'/'u'; everything else counts
     #           as defined.
-    defined=$(nm "$x" 2>/dev/null | grep -vE '^[[:space:]]*[Uu] ' | awk '{print $NF}')
+    _nm_all="$("${NM:-nm}" "$x")" || mav_die "${NM:-nm} could not read $b's symbols"
+    defined=$(printf '%s\n' "$_nm_all" | grep -vE '^[[:space:]]*[Uu] ' | awk '{print $NF}')
     for _req in $(printf '%s\n' "$REQUIRE_DEFINED" | tr '|' ' '); do
       printf '%s\n' "$defined" | grep -xq "$_req" \
         || { echo "compat guard: required symbol '$_req' not DEFINED in $b" >&2; fail=1; }

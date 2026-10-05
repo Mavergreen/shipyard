@@ -44,3 +44,19 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
   run sh "$S" "$WORK/t"
   [ "$status" -eq 1 ]
 }
+
+@test "LIPO and OTOOL name the readers it runs, with the same answer" {
+  mkdir -p "$WORK/readers"
+  for t in lipo otool; do
+    printf '#!/bin/sh\necho "%s $1" >> "%s/readers.log"\nexec "%s" "$@"\n' "$t" "$WORK" "$(command -v "$t")" > "$WORK/readers/$t"
+    chmod +x "$WORK/readers/$t"
+  done
+  run env LIPO="$WORK/readers/lipo" OTOOL="$WORK/readers/otool" sh "$S" "$WORK/fat"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"x86_64 EXECUTE 10.9 10.9"* ]] || false
+  [[ "$output" == *"arm64 EXECUTE 11.0 11.3"* ]] || false
+  grep -qx 'lipo -info' "$WORK/readers.log"
+  grep -qx 'lipo -thin' "$WORK/readers.log"
+  grep -qx 'otool -hv' "$WORK/readers.log"
+  grep -qx 'otool -l' "$WORK/readers.log"
+}
