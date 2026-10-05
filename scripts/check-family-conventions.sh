@@ -690,7 +690,7 @@ done
 #       ignored AND nothing may be tracked under them or under docs/superpowers/. Needs git, like check 7.
 if git rev-parse --git-dir >/dev/null 2>&1; then
   for _d in .superpowers .idea; do
-    grep -qxE "/?$_d/?" .gitignore 2>/dev/null \
+    grep -qxE "/?\\$_d/?" .gitignore 2>/dev/null \
       || fail ".gitignore has no line ignoring $_d/" \
               "add a line '$_d/' to .gitignore"
   done

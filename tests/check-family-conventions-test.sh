@@ -1489,6 +1489,10 @@ mkrepo "$work/sp1"; printf '/VERSION\n.idea/\n' > "$work/sp1/.gitignore"
 out="$(cd "$work/sp1" && sh "$S" 2>&1)" && { echo "FAIL: check 27: no .superpowers/ ignore line must fail"; exit 1; }
 printf '%s\n' "$out" | grep -q "add a line '.superpowers/' to .gitignore" || { echo "FAIL: check 27 should say to add .superpowers/: $out"; exit 1; }
 
+mkrepo "$work/sp-dot"; printf '/VERSION\nxsuperpowers/\nxidea/\n' > "$work/sp-dot/.gitignore"
+out="$(cd "$work/sp-dot" && sh "$S" 2>&1)" && { echo "FAIL: check 27: xsuperpowers/ and xidea/ must not count as ignoring the dotted dirs"; exit 1; }
+printf '%s\n' "$out" | grep -q "add a line '.superpowers/'" && printf '%s\n' "$out" | grep -q "add a line '.idea/'" || { echo "FAIL: check 27 should fail both for the undotted lines: $out"; exit 1; }
+
 mkrepo "$work/sp2"; printf '/VERSION\n.superpowers/\n' > "$work/sp2/.gitignore"
 out="$(cd "$work/sp2" && sh "$S" 2>&1)" && { echo "FAIL: check 27: no .idea/ ignore line must fail"; exit 1; }
 printf '%s\n' "$out" | grep -q "add a line '.idea/' to .gitignore" || { echo "FAIL: check 27 should say to add .idea/: $out"; exit 1; }

@@ -2015,6 +2015,18 @@ reads — but not its grammar: that checker's `<check>:<glob>` scoping is reject
 the deviation is repo-wide, takes no glob, and a scoped form (`- comments:vendor/* …`) fails the gate
 rather than narrowing it.
 
+## Where superpowers working files go
+
+Specs go in `.superpowers/specs/`, plans in `.superpowers/plans/`, subagent-driven-development ledgers
+in `.superpowers/sdd/` (its default), and a repo's backlog in `.superpowers/QUEUE.md`. All of
+`.superpowers/` is gitignored and never committed. This overrides the superpowers skills' defaults of
+`docs/superpowers/specs/` and `docs/superpowers/plans/`, which those skills honour as a user preference.
+
+They are ephemeral: a plan describes a transition, not a system, and is wrong about the system it
+produced once the transition lands. So no tracked file cites one of them, or a plan task, review
+finding or round: write the reason in, where a reader without the file can use it. `.idea/` (an IDE's
+per-user state) is likewise ignored and never tracked. Check 27 below enforces both.
+
 ## Family conventions (checked, not just written down)
 
 `sh "$SHIPYARD_SCRIPTS/check-family-conventions.sh"` runs in every product repo's CI and **fails the build**
@@ -2251,7 +2263,8 @@ in the same commit.
    "Comments cite a reason", above. A new project has no comment debt to sweep, so it does not start by
    writing file headers explaining what the code does and sweeping them out later; it starts with the
    file in place and check 15 already green.
-3. `UPSTREAM_VERSION` (bare); `/VERSION` in `.gitignore`.
+3. `UPSTREAM_VERSION` (bare); `/VERSION` in `.gitignore`, and `.superpowers/` and `.idea/` there too (check 27;
+   see "Where superpowers working files go").
 4. `build/lib.sh` (`upstream_version()`), `build/version.sh` — copy from legacysupport/golang; call
    `$SHIPYARD_SCRIPTS/release-notes.sh` directly from `release.yml` (see Release notes, above) — do not
    copy `build/release-notes-file.sh`, which is legacy with zero product callers.
