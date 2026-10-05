@@ -12,22 +12,33 @@ set -eu
 f="$1"
 # platform: `lipo -info` exists on every macOS; -archs does not exist on 10.9. It prints either
 #           "Architectures in the fat file: F are: a b" or "Non-fat file: F is architecture: a".
+_tmp="${TMPDIR:-/tmp}"
+t="$(mktemp -d "${_tmp%/}/macho-slices.XXXXXX")"; trap 'rm -rf "$t"' EXIT
+# platform: a bash 3.2 sh (10.9's, and this Mac's) reports a missing command inside $( ) under set -e as
+#           status 1, not 127, so a reader that is not there is checked by name. A file that is not Mach-O is
+#           exit 1; a reader that is missing, or fails on a file its sibling reader already read, is exit 4,
+#           naming the reader and replaying its own error, so the guard fails closed instead of reading it
+#           as "not Mach-O".
+reader_died() { echo "macho-slices: $1 could not read $f" >&2; cat "$t/err" >&2; exit 4; }
+: > "$t/err"
+command -v "${LIPO:-lipo}" >/dev/null 2>&1 || reader_died "${LIPO:-lipo} (not found)"
+command -v "${OTOOL:-otool}" >/dev/null 2>&1 || reader_died "${OTOOL:-otool} (not found)"
 info="$("${LIPO:-lipo}" -info "$f" 2>/dev/null)" || exit 1
 archs="$(printf '%s\n' "$info" | sed -n 's/.*: //p' | xargs)"
 [ -n "$archs" ] || exit 1
-_tmp="${TMPDIR:-/tmp}"
-t="$(mktemp -d "${_tmp%/}/macho-slices.XXXXXX")"; trap 'rm -rf "$t"' EXIT
 for a in $archs; do
   s="$f"
-  case "$info" in Architectures*) "${LIPO:-lipo}" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>&1 || exit 1; s="$t/$a" ;; esac
+  case "$info" in Architectures*) "${LIPO:-lipo}" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>"$t/err" || reader_died "${LIPO:-lipo} -thin $a"; s="$t/$a" ;; esac
   # platform: `otool -hv` prints the header table; the filetype is the 5th column of its data row. An
   #           archive prints one table per member, and every member of one arch shares a filetype.
-  ft="$("${OTOOL:-otool}" -hv "$s" 2>/dev/null | awk '$1 ~ /^MH_MAGIC/ {print $5; exit}')"
+  hv="$("${OTOOL:-otool}" -hv "$s" 2>/dev/null)" || exit 1
+  ft="$(printf '%s\n' "$hv" | awk '$1 ~ /^MH_MAGIC/ {print $5; exit}')"
   [ -n "$ft" ] || exit 1
   # platform: LC_VERSION_MIN_MACOSX carries "version" and "sdk". LC_BUILD_VERSION carries "sdk" BEFORE
   #           "minos", then a tools list whose "version" lines are the LINKER's version -- so minos is
   #           read only from "minos" there, and the pair is emitted when the load command ends.
-  "${OTOOL:-otool}" -l "$s" 2>/dev/null | awk -v a="$a" -v ft="$ft" '
+  lc="$("${OTOOL:-otool}" -l "$s" 2>"$t/err")" || reader_died "${OTOOL:-otool} -l"
+  printf '%s\n' "$lc" | awk -v a="$a" -v ft="$ft" '
     function flush() { if (inv) { print a, ft, (mn == "" ? "?" : mn), (sd == "" ? "?" : sd); seen = 1 } inv = 0 }
     $1 == "cmd" { flush(); if ($2 == "LC_VERSION_MIN_MACOSX" || $2 == "LC_BUILD_VERSION") { inv = 1; kind = $2; mn = ""; sd = "" } next }
     inv && kind == "LC_VERSION_MIN_MACOSX" && $1 == "version" { mn = $2; next }

@@ -46,6 +46,9 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/deviation-reason.sh"
 
 mav_die() { echo "compat guard CANNOT MEASURE (fail-closed): $*" >&2; exit 4; }
+# spec: a reader's stderr goes to $work/reader.err, quiet on success (nm warns about every empty archive
+#       member) and replayed here when the reader fails, so the failure shows the reader's own error.
+mav_reader_die() { echo "compat guard CANNOT MEASURE (fail-closed): $*" >&2; cat "$work/reader.err" >&2; exit 4; }
 
 POST_10_9='_clock_gettime|_clock_gettime_nsec_np|_os_unfair_lock_.*|_os_log.*'
 if [ -n "${MAVERICKS_POST_10_9_SYMBOLS:-}" ]; then
@@ -87,7 +90,7 @@ printf '%s\n' "$_devs" | mav_deviation_facts > "$work/devs"
 #           up)", left $NF = "up)" for a dynamic_lookup undefined, and the hard import slipped past
 #           the guard.
 mav_undefs() {
-  _nm_out="$("${NM:-nm}" -m "$1")" || return 1
+  _nm_out="$("${NM:-nm}" -m "$1" 2>"$work/reader.err")" || return 1
   printf '%s\n' "$_nm_out" | grep -F '(undefined)' | sed -E 's/ \([^)]*\)$//' \
     | awk '{ w = (/ weak /) ? "W" : "H"; print w, $NF }'
 }
@@ -99,7 +102,9 @@ for b in "$@"; do
   if mav_sdk_exempt_sha256 "$(shasum -a 256 "$b" | awk '{print $1}')"; then
     echo "compat guard: $b is a pinned third-party binary (exempt by content)"; continue
   fi
-  slices="$(sh "$SELF/macho-slices.sh" "$b")" || { echo "compat guard: $b is not a readable Mach-O" >&2; fail=1; continue; }
+  rc=0; slices="$(sh "$SELF/macho-slices.sh" "$b")" || rc=$?
+  [ "$rc" -ne 4 ] || mav_die "a Mach-O reader (${LIPO:-lipo} or ${OTOOL:-otool}) failed on $b (macho-slices.sh said which, above)"
+  [ "$rc" -eq 0 ] || { echo "compat guard: $b is not a readable Mach-O" >&2; fail=1; continue; }
 
   archs="$(printf '%s\n' "$slices" | awk '{print $1}' | sort -u | xargs)"
   [ "$archs" = "$ALLOW_ARCHS" ] || { echo "compat guard: $b arches '$archs' != '$ALLOW_ARCHS'" >&2; fail=1; }
@@ -125,11 +130,11 @@ EOF
   x="$b"
   if [ "$archs" != x86_64 ]; then
     x="$work/x86_64.$checked"
-    "${LIPO:-lipo}" -thin x86_64 "$b" -output "$x" 2>/dev/null \
-      || { echo "compat guard: cannot thin the x86_64 slice of $b" >&2; fail=1; continue; }
+    "${LIPO:-lipo}" -thin x86_64 "$b" -output "$x" 2>"$work/reader.err" \
+      || mav_reader_die "${LIPO:-lipo} -thin could not read the x86_64 slice of $b"
   fi
 
-  U=$(mav_undefs "$x") || mav_die "${NM:-nm} -m could not read $b's symbols"
+  U=$(mav_undefs "$x") || mav_reader_die "${NM:-nm} -m could not read $b's symbols"
   hard_leak=$(printf '%s\n' "$U" | awk '$1=="H"{print $2}' | grep -xE "($POST_10_9)" || true)
   weak_leak=$(printf '%s\n' "$U" | awk '$1=="W"{print $2}' | grep -xE "($POST_10_9)" || true)
   if [ -n "$ALLOW_WEAK" ]; then
@@ -138,7 +143,7 @@ EOF
   leak=$(printf '%s\n%s\n' "$hard_leak" "$weak_leak" | grep -v '^$' || true)
   [ -z "$leak" ] || { echo "compat guard: post-10.9 undefined import(s) in $b:" >&2; printf '%s\n' "$leak" | sed 's/^/  /' >&2; fail=1; }
 
-  _strings_out="$("${STRINGS:-strings}" -a "$x")" || mav_die "${STRINGS:-strings} -a could not read $b"
+  _strings_out="$("${STRINGS:-strings}" -a "$x" 2>"$work/reader.err")" || mav_reader_die "${STRINGS:-strings} -a could not read $b"
   sel_leak=$(printf '%s\n' "$_strings_out" | grep -xE "($POST_10_9_SEL)" | sort -u || true)
   if [ -n "$ALLOW_SEL" ]; then
     sel_leak=$(printf '%s\n' "$sel_leak" | grep -vxE "($ALLOW_SEL)" || true)
@@ -149,7 +154,7 @@ EOF
   if [ -n "$REQUIRE_DEFINED" ]; then
     # platform: nm marks an undefined symbol's line with a leading 'U'/'u'; everything else counts
     #           as defined.
-    _nm_all="$("${NM:-nm}" "$x")" || mav_die "${NM:-nm} could not read $b's symbols"
+    _nm_all="$("${NM:-nm}" "$x" 2>"$work/reader.err")" || mav_reader_die "${NM:-nm} could not read $b's symbols"
     defined=$(printf '%s\n' "$_nm_all" | grep -vE '^[[:space:]]*[Uu] ' | awk '{print $NF}')
     for _req in $(printf '%s\n' "$REQUIRE_DEFINED" | tr '|' ' '); do
       printf '%s\n' "$defined" | grep -xq "$_req" \

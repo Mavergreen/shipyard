@@ -232,3 +232,63 @@ mk_readers() {
   [ "$status" -eq 4 ]
   [[ "$output" == *"CANNOT MEASURE"*"could not read"* ]] || false
 }
+
+# A reader that runs the host's own tool, except where it is told to fail or to warn.
+mk_fat() {
+  mk_stamped "$WORK/p109" x86_64 10.9 10.9
+  mk_stamped "$WORK/a113" arm64 11.0 11.3
+  lipo -create "$WORK/p109" "$WORK/a113" -output "$WORK/fatok"
+}
+
+@test "LIPO is the reader that thins a fat binary's x86_64 slice" {
+  mk_fat
+  mk_readers
+  run env LIPO="$WORK/readers/lipo" MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^lipo$' "$WORK/readers.log")" -ge 2 ]
+  # macho-slices.sh thins each of the 2 slices first; only the guard's own thin, the 3rd, fails.
+  printf '#!/bin/sh\ncase "$1" in -thin) echo x >> "%s/thins"; [ "$(wc -l < "%s/thins")" -lt 3 ] || { echo "lipo: thin broke" >&2; exit 1; } ;; esac\nexec "%s" "$@"\n' "$WORK" "$WORK" "$(command -v lipo)" > "$WORK/readers/lipo-nothin"
+  chmod +x "$WORK/readers/lipo-nothin"
+  run env LIPO="$WORK/readers/lipo-nothin" MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"CANNOT MEASURE"*"-thin could not read the x86_64 slice"* ]] || false
+  [[ "$output" == *"lipo: thin broke"* ]] || false
+}
+
+@test "a plain nm that cannot read the binary fails closed under MAVERICKS_REQUIRE_DEFINED_SYMBOLS" {
+  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
+  printf '#!/bin/sh\ncase "$1" in -m) exec "%s" "$@" ;; esac\necho "plain nm broke" >&2\nexit 1\n' "$(command -v nm)" > "$WORK/nm-plain-broken"
+  chmod +x "$WORK/nm-plain-broken"
+  run env NM="$WORK/nm-plain-broken" MAVERICKS_REQUIRE_DEFINED_SYMBOLS=_main sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"CANNOT MEASURE"*"could not read"* ]] || false
+  [[ "$output" == *"plain nm broke"* ]] || false
+}
+
+@test "a reader's warnings stay quiet on success; its error is replayed on failure" {
+  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
+  printf '#!/bin/sh\necho "nm: noisy warning" >&2\nexec "%s" "$@"\n' "$(command -v nm)" > "$WORK/nm-noisy"
+  printf '#!/bin/sh\necho "strings: its own error" >&2\nexit 1\n' > "$WORK/strings-broken"
+  chmod +x "$WORK/nm-noisy" "$WORK/strings-broken"
+  run env NM="$WORK/nm-noisy" sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"noisy warning"* ]] || false
+  run env STRINGS="$WORK/strings-broken" sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"strings: its own error"* ]] || false
+}
+
+@test "a LIPO or OTOOL that fails fails closed; a file that is not Mach-O is still just unreadable" {
+  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
+  run env LIPO=/nonexistent/lipo sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"CANNOT MEASURE"* ]] || false
+  [[ "$output" == *"/nonexistent/lipo"* ]] || false
+  run env OTOOL=/nonexistent/otool sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"/nonexistent/otool"* ]] || false
+  printf 'hello\n' > "$WORK/text"
+  run sh "$GUARD" "$WORK/text"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"is not a readable Mach-O"* ]] || false
+}

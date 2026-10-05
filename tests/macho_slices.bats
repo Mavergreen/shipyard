@@ -60,3 +60,24 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
   grep -qx 'otool -hv' "$WORK/readers.log"
   grep -qx 'otool -l' "$WORK/readers.log"
 }
+
+@test "an OTOOL that fails only for -l fails closed (exit 4), not as a slice with no version" {
+  printf '#!/bin/sh\ncase "$1" in -l) echo "otool: -l broke" >&2; exit 1 ;; esac\nexec "%s" "$@"\n' "$(command -v otool)" > "$WORK/otool-nol"
+  chmod +x "$WORK/otool-nol"
+  run env OTOOL="$WORK/otool-nol" sh "$S" "$WORK/x109"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"-l could not read"* ]] || false
+  [[ "$output" == *"otool: -l broke"* ]] || false
+}
+
+@test "a LIPO or OTOOL that cannot run is exit 4 naming it; a non-Mach-O file stays exit 1" {
+  run env LIPO=/nonexistent/lipo sh "$S" "$WORK/x109"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"/nonexistent/lipo"* ]] || false
+  run env OTOOL=/nonexistent/otool sh "$S" "$WORK/x109"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"/nonexistent/otool"* ]] || false
+  printf 'hello\n' > "$WORK/t"
+  run sh "$S" "$WORK/t"
+  [ "$status" -eq 1 ]
+}
