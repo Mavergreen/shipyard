@@ -7,6 +7,7 @@
     "'uses: Mavergreen/shipyard/...@v1' and Renovate's native github-actions manager tracks it",
     "-- no custom manager needed for it. This preset does add a manager for mavericks-legacysupport",
     "releases (tag the pinned version with a '# mavericks-legacysupport' comment).",
+    "This preset also tracks Recaulk releases for every consumer's components/recaulk/version (github-releases on Mavergreen/recaulk); consumers add no manager of their own.",
     "AUTOMERGE POLICY: if it builds and passes, it ships -- patch, minor AND major alike. ignoreTests",
     "is false, so a green build is the gate, and a consumer must produce a CI status check on Renovate",
     "PRs (a pull_request-triggered build, or push: branches ['**']). A repo with NO build to gate sets",
@@ -36,6 +37,19 @@
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^v?(?<version>.+)$",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^components/recaulk/version$/"
+      ],
+      "matchStrings": [
+        "^(?<currentValue>\\S+)\\s*$"
+      ],
+      "depNameTemplate": "recaulk",
+      "packageNameTemplate": "Mavergreen/recaulk",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$"
     }
   ]
 }

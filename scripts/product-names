@@ -7,6 +7,7 @@ go127 dev.mavergreen.golang.go127 golang-127
 go127-cross dev.mavergreen.golang.go127-cross golang-127
 clang22 dev.mavergreen.clang.clang22 clang-22
 clang22-cross dev.mavergreen.clang.clang22-cross clang-22
+libcxx22 dev.mavergreen.clang.libcxx22 clang-22
 openssh dev.mavergreen.openssh openssh
 tailscale dev.mavergreen.tailscale tailscale
 ed25519 dev.mavergreen.ed25519 ed25519
@@ -18,7 +19,7 @@ swift-runtime dev.mavergreen.swift-runtime swift
 swift-toolchain dev.mavergreen.swift-toolchain swift
 swift-toolchain-cross dev.mavergreen.swift-toolchain-cross swift
 trackpad2 dev.mavergreen.voodooinputmavericks magic-trackpad2
-legacysupport dev.mavergreen.macports-legacy-support macports-legacy-support
+recaulk dev.mavergreen.recaulk recaulk
 node24 dev.mavergreen.nodejs.node24 nodejs-24
 rust dev.mavergreen.rust.rust rust
 rust-cross dev.mavergreen.rust.rust-cross rust
@@ -26,3 +27,4 @@ ca-certs dev.mavergreen.ca-certs ca-certs
 avxemu dev.mavergreen.avxemu avxemu
 drydock dev.mavergreen.drydock drydock
 claude-code dev.mavergreen.claude-code claude-code
+icu dev.mavergreen.icu icu

@@ -34,7 +34,6 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 | Copy from | For | Notes |
 |---|---|---|
 | **mavericks-golang** | the whole modern shape: `UPSTREAM_VERSION` + `build/version.sh`, green-gated `release.yml`, `.github/renovate.json` | most complete reference |
-| **mavericks-legacysupport** | the `version.sh`/`lib.sh`/`release-notes-file.sh` scripts verbatim | origin of the auto-cut pattern |
 | macho-tools, container-tools | the **deliberate-publish** release model (see below) | when you don't auto-cut on main |
 
 ## shipyard: consume its facilities, never hand-roll them
@@ -264,33 +263,40 @@ shipyard's facilities rather than trusting the runner:
 ## Where family-authored 10.9 back-fills live (headers + polyfill symbols)
 
 When a build needs a 10.9-missing symbol or header that neither the 10.9 SDK **nor**
-`macports-legacy-support` provides, someone has to hand-author the back-fill. **It does NOT go into
-`mavericks-legacysupport`.** That repo is a *clean port* of `macports/macports-legacy-support` — its
-`UPSTREAM_VERSION` tracks the MacPorts tag and Renovate bumps it self-contained; adding our own code to
-its shim forks the port and breaks that clean bump (the next upstream bump silently drops our addition).
+`macports-legacy-support` provides, someone has to hand-author the back-fill. MacPorts is an unmodified,
+commit-pinned ingredient of Recaulk, and that is what keeps its bumps clean: our code lives beside it,
+never inside it.
 
-**The golang `REQUIRE_DEFINED='_clock_gettime'` pattern is NOT a precedent for putting our code there.**
-`clock_gettime` is defined by the **real upstream** macports-legacy-support, which genuinely carries it —
-golang just *links the port*. Our *own* back-fill is a different thing (upstream doesn't have it) and
-needs a different home. Three tiers, in order:
+**The golang `REQUIRE_DEFINED='_clock_gettime'` pattern is NOT a precedent for putting our code in
+MacPorts.** `clock_gettime` is defined by the **real upstream** macports-legacy-support, which genuinely
+carries it -- golang just *links* it (now through Recaulk). Our *own* back-fill is a different thing
+(upstream doesn't have it) and needs a different home. Three tiers, in order:
 
-1. **Offer it to the real upstream** — `github.com/macports/macports-legacy-support` (the MacPorts
+1. **Offer it to the real upstream** -- `github.com/macports/macports-legacy-support` (the MacPorts
    project). This is the only true "upstreaming"; if accepted it reaches the whole family through the
-   normal `mavericks-legacysupport` port bump, zero family maintenance. Best for a genuinely-general C
+   normal Recaulk ingredient bump, zero family maintenance. Best for a genuinely-general C
    symbol back-fill.
-2. **`mavericks-compat`** — the family's home for its **own** 10.9 back-fills (header shims + a compiled
-   `libMavericksCompat.a` of polyfill symbols); a **self-upstream** product (`YYYYMMDD.N`, no
-   `-mavericks`). The **default** home for anything ours that isn't yet, or won't be, upstream. Consumers
-   fetch its `.pkg` and link the `.a` / `-isystem` the headers, like any pinned ingredient. **Boundary:
-   it carries ONLY what upstream does not** — when the port gains a symbol we carry, drop ours (a
-   duplicate-symbol link error is the signal the boundary was violated). It builds its `.a` with the
-   runner's stock clang + the pinned 10.9 SDK, **not** clang-22 (clang-22 consumes its headers, so
-   depending on it would be a build cycle).
-3. **Per-repo** — only a genuinely repo-specific quirk (a header one product's build alone needs),
-   recorded in that repo's `INGREDIENTS.md` as a baked-in input. Not for anything another repo would want.
+2. **Recaulk** (`Mavergreen/recaulk`, `src/backfills/` or `src/overrides/`) -- the family's home for its
+   **own** 10.9 back-fills, replacing `mavericks-compat`; a **self-upstream** product (`YYYYMMDD.N`, no
+   `-mavericks`). The **default** home for anything ours that isn't yet, or won't be, upstream.
+   Back-fills go into `librecaulk.a`, which every family product links plainly; overrides go only into
+   `libRecaulkSystem.dylib`. Two rules, each enforced by a Recaulk test:
+   - **Rule 1:** `librecaulk.a` defines no symbol the pinned 10.9 SDK's libraries already export; such code
+     belongs in `src/overrides/`.
+   - **Rule 2:** MacPorts and our code never define the same symbol (the link fails). When MacPorts gains
+     a symbol we carry, ours is deleted.
+
+   Every back-fill defers to the system's implementation when the running macOS has one, through a
+   generated forwarding layer, so a back-fill source holds only the 10.9 implementation; header-inline
+   functions and data symbols are not forwarded. A back-fill matches the real API's documented behaviour;
+   a deviation is a bug. Recaulk builds with the runner's clang and the pinned SDK, never clang22's
+   compiler, to avoid a cycle.
+3. **Per-repo** -- a last resort, only for a genuinely repo-specific quirk (a header one product's build
+   alone needs), recorded in that repo's `INGREDIENTS.md` as a baked-in input. Delete it when Recaulk
+   gains the symbol.
 
 **Do NOT** hand-carry a generically-useful back-fill as a private `.c`/header per repo, and **do NOT**
-put a linked runtime symbol in `shipyard` (it holds build facilities — CMake fns + scripts — not
+put a linked runtime symbol in `shipyard` (it holds build facilities -- CMake fns + scripts -- not
 runtime back-fills).
 
 ## Renovate & automerge
@@ -662,7 +668,7 @@ as clang's did):
 
 | auto-cut on a push to `main` | publishes only from a dispatch (or a legacy tag trigger) |
 |---|---|
-| golang, openssh, 1password, signal-desktop, swift, ed25519, legacysupport, clang | macho-tools, container-tools, tailscale, porthole, magic-trackpad2 |
+| golang, openssh, 1password, signal-desktop, swift, ed25519, clang | macho-tools, container-tools, tailscale, porthole, magic-trackpad2, recaulk |
 
 tailscale's `release.yml` has no `push: branches:[main]` trigger at all — only tags and
 `workflow_dispatch` — but a push to its `main` that moves `components/**` is still a release:
@@ -962,7 +968,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   | container-tools | `Container Tools` (bare — no "for Mavericks") | its version is `<date>-mavericks.N`, which the generator's title logic reads as the PORT shape (it has a `-mavericks.` axis), and that template already appends " for Mavericks" itself — passing the longer descriptor would double it |
   | clang | `Clang` | |
   | golang | `Go` | |
-  | macports-legacy-support | `MacPorts legacy-support` | |
+  | recaulk | `Recaulk` | self-upstream |
   | ed25519 | `ed25519` (lowercase) | upstream's own spelling |
   | tailscale | `Tailscale` | |
   | swift | `Swift` | |
@@ -1163,7 +1169,8 @@ not the `-mavericks.N` tag).
 A repo built WITH another MM product (e.g. the go126 toolchain) pins it in a **file** (not workflow env),
 e.g. `components/golang/version`, tracked by a Renovate customManager (`github-releases` on
 `Mavergreen/golang`). Renovate bumps the pin; the green-gated build rebuilds the product with the new
-toolchain and automerges. Two things to wire deliberately:
+toolchain and automerges. A pin on `components/recaulk/version` is tracked by the shared preset; add no
+repo-local manager. Two things to wire deliberately:
 
 - **Download the toolchain asset prefix-tolerantly.** golang's cross `.pkg` was renamed `go126-` →
   `golang-` at 1.26.5-mavericks.1. Read the pinned release's `SHA256SUMS` and accept EITHER prefix (try
@@ -2302,7 +2309,7 @@ in the same commit.
    file in place and check 15 already green.
 3. `UPSTREAM_VERSION` (bare); `/VERSION` in `.gitignore`, and `.superpowers/` and `.idea/` there too (check 27;
    see "Where superpowers working files go").
-4. `build/lib.sh` (`upstream_version()`), `build/version.sh` — copy from legacysupport/golang; call
+4. `build/lib.sh` (`upstream_version()`), `build/version.sh` — copy from golang; call
    `$SHIPYARD_SCRIPTS/release-notes.sh` directly from `release.yml` (see Release notes, above) — do not
    copy `build/release-notes-file.sh`, which is legacy with zero product callers.
 5. `release.yml`: pick a release model; three triggers; `ver` step with the non-main guard; `gh release

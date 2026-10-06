@@ -28,6 +28,21 @@ sh "$S" shorts golang >/dev/null 2>&1 && fail "a repo the registry does not name
   || fail "a feed is <short name>.xml on its repo's latest release"
 [ "$(sh "$S" feed trackpad2)" = https://github.com/Mavergreen/magic-trackpad2/releases/latest/download/trackpad2.xml ] \
   || fail "a feed is named for the short name, and served from the registered repo"
+[ "$(sh "$S" feed recaulk)" = https://github.com/Mavergreen/recaulk/releases/latest/download/recaulk.xml ] \
+  || fail "recaulk is registered, and its feed is recaulk.xml on its repo's latest release"
+sh "$S" identifier legacysupport >/dev/null 2>&1 \
+  && fail "legacysupport is retired: Recaulk replaced it in the registry"
+[ "$(sh "$S" shorts clang-22 | tr '\n' ' ')" = 'clang22 clang22-cross libcxx22 ' ] \
+  || fail "clang-22 ships the toolchain, its cross variant and the C++ runtime"
+[ "$(sh "$S" feed libcxx22)" = https://github.com/Mavergreen/clang-22/releases/latest/download/libcxx22.xml ] \
+  || fail "libcxx22's feed is libcxx22.xml on clang-22's latest release"
+[ "$(sh "$S" identifier libcxx22)" = dev.mavergreen.clang.libcxx22 ] \
+  || fail "libcxx22 is identified dev.mavergreen.clang.libcxx22"
+[ "$(sh "$S" agent-label libcxx22)" = dev.mavergreen.clang.libcxx22-updatecheck ] \
+  || fail "libcxx22's update-check label is its identifier plus -updatecheck"
+[ "$(sh "$S" identifier icu)" = dev.mavergreen.icu ] || fail "icu is identified dev.mavergreen.icu"
+[ "$(sh "$S" feed icu)" = https://github.com/Mavergreen/icu/releases/latest/download/icu.xml ] \
+  || fail "icu's feed is icu.xml on its repo's latest release"
 for q in repo updater-bundle-id agent-label updater-app feed; do
   sh "$S" "$q" no-such-product >/dev/null 2>&1 && fail "$q of an unregistered name must exit non-zero"
 done
