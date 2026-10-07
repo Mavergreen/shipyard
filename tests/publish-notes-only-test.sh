@@ -22,12 +22,10 @@ if step.get("env", {}).get("ASSETS") != "${{ inputs.assets }}":
 open(sys.argv[2], "w").write(step["run"])
 PY
 
-# The step's run: block, against a stand-in shipyard checkout and dist, as the runner would run it.
+# spec: BACKLOG.md #32 -- the step's run: block, against a stand-in shipyard checkout and dist,
+#       as the runner would run it
 mkdir -p "$w/run/.shipyard"; cp -R "$root/scripts" "$w/run/.shipyard/scripts"
-notes='## thing 1.0.0
-
-### What changed
-- a change'
+notes="$(printf '%s\n\n%s\n%s' '## thing 1.0.0' '### What changed' '- a change')"
 step() {  # $1 = ASSETS, $2.. = files to put in dist besides the notes
   a="$1"; shift
   rm -rf "$w/run/dist"; mkdir -p "$w/run/dist"; printf '%s\n' "$notes" > "$w/run/dist/RELEASE_NOTES.md"
