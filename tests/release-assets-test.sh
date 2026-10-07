@@ -48,4 +48,20 @@ mkd realsigned; printf 'sparkle:edSignature="RealBase64SignatureNotAStandIn==" l
 out="$(sh "$S" "$w/realsigned")"
 printf '%s\n' "$out" | grep -q 'x.xml' || { echo "FAIL: a real signed feed must still be published: $out"; exit 1; }
 
+# --notes-only: a product with nothing to attach (a GitHub Action, consumed by its tag) publishes
+# its notes alone -- every notes check still applies, and an asset present is a mistake either way
+mkdir -p "$w/notesonly"; printf 'notes\n' > "$w/notesonly/RELEASE_NOTES.md"
+out="$(sh "$S" --notes-only "$w/notesonly")" || { echo "FAIL: --notes-only with notes and no assets must pass"; exit 1; }
+[ -z "$out" ] || { echo "FAIL: --notes-only must name no assets: $out"; exit 1; }
+mkdir -p "$w/notesonlysums"; printf 'notes\n' > "$w/notesonlysums/RELEASE_NOTES.md"; printf 'old\n' > "$w/notesonlysums/SHA256SUMS"
+out="$(sh "$S" --notes-only "$w/notesonlysums")" || { echo "FAIL: a stale SHA256SUMS is not an asset under --notes-only either"; exit 1; }
+[ -z "$out" ] || { echo "FAIL: --notes-only must not attach a stale SHA256SUMS: $out"; exit 1; }
+mkd notesonlyassets
+if err="$(sh "$S" --notes-only "$w/notesonlyassets" 2>&1)"; then echo "FAIL: --notes-only with assets present must fail, not drop them silently"; exit 1; fi
+printf '%s\n' "$err" | grep -q 'x.pkg\|x.xml' || { echo "FAIL: the refusal should name an asset: $err"; exit 1; }
+mkdir -p "$w/notesonlyempty"; : > "$w/notesonlyempty/RELEASE_NOTES.md"
+if sh "$S" --notes-only "$w/notesonlyempty" >/dev/null 2>&1; then echo "FAIL: --notes-only must still refuse an empty notes body"; exit 1; fi
+mkdir -p "$w/notesonlycustom"; printf 'n\n' > "$w/notesonlycustom/NOTES.md"
+sh "$S" --notes-only "$w/notesonlycustom" NOTES.md > /dev/null || { echo "FAIL: --notes-only must honour a custom notes name"; exit 1; }
+
 echo "PASS: release-assets"

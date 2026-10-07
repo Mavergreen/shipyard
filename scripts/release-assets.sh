@@ -1,17 +1,22 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: release-assets.sh <dir> [notes-name]
+#   usage: release-assets.sh [--notes-only] <dir> [notes-name]
 #          Prints the release assets in a downloaded artifact directory, one per line: everything
 #          except the notes file and any pre-existing SHA256SUMS (the publish workflow regenerates
 #          that). Refuses, exit 1, a missing directory, a missing or empty notes file, notes carrying
 #          stand-in-feeds.sh's stand-in heading, an asset named appcast*.xml (a retired feed name), an
 #          asset carrying stand-in-feeds.sh's unsigned signature, and a directory with no assets.
+#          --notes-only is a release of notes alone, for a product with nothing to attach (a GitHub
+#          Action, which its consumers fetch by tag): every notes check stands, it prints nothing,
+#          and any asset in the directory is refused rather than silently left behind.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Publishing a
 #       release" -- an empty Release body is not a degraded release, it is the defect this refuses to
 #       publish: tailscale shipped one on every release, swift-runtime set no body at all.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/stand-in-marker.sh"
+notes_only=0
+if [ "${1:-}" = --notes-only ]; then notes_only=1; shift; fi
 dir="${1:?release-assets: directory required}"
 notes="${2:-RELEASE_NOTES.md}"
 
@@ -29,9 +34,12 @@ for f in "$dir"/*; do
     "$notes"|SHA256SUMS) continue ;;
     appcast*.xml) echo "release-assets: $b is a retired feed name -- a product's feed is <short name>.xml (sign_and_appcast.sh --product), the file its updater polls" >&2; exit 1 ;;
   esac
+  [ "$notes_only" -eq 0 ] \
+    || { echo "release-assets: --notes-only, but $dir holds $b -- a notes-only release attaches nothing" >&2; exit 1; }
   grep -qF "edSignature=\"$STAND_IN_SIGNATURE\"" "$f" \
     && { echo "release-assets: $b carries stand-in-feeds.sh's unsigned signature -- this dist was never really signed" >&2; exit 1; }
   printf '%s\n' "$f"
   found=1
 done
+[ "$notes_only" -eq 1 ] && exit 0
 [ "$found" -eq 1 ] || { echo "release-assets: no assets in $dir (only $notes) -- nothing to publish" >&2; exit 1; }

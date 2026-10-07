@@ -895,6 +895,12 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   missing or empty**. An empty body is not a degraded release, it is the defect this removes: tailscale
   shipped one on every release — including hand-tagged ones that had a committed notes file — and
   swift-runtime set no body at all, because that wiring was per-repo.
+- **A product with nothing to attach publishes its notes alone: `assets: none`.** A GitHub Action
+  (mavericks-vm) is consumed by its tag, so a tarball of its tree only duplicates GitHub's own source
+  downloads. `with: { ..., assets: none }` keeps every notes check, makes no `SHA256SUMS`, and refuses
+  an artifact that holds anything besides the notes. The default, `required`, is unchanged: an
+  artifact with no assets still fails, because for every other product that is a broken build. Say
+  so as a deviation in INGREDIENTS.md (`release-assets: none`, with its reason).
 - It publishes with `action-gh-release` (`tag_name` + `target_commitish`), which mints the tag inline.
   The dispatch-cut repos need that: a `GITHUB_TOKEN`-pushed tag triggers nothing.
 - **A failed upload must not strand a draft.** `action-gh-release` creates the release as a *draft*,

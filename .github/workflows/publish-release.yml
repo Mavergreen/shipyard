@@ -23,6 +23,11 @@ on:
         type: string
         required: false
         default: ""
+      assets:
+        description: "required (the default): the artifact must hold assets. none: a release of the notes alone, for a product with nothing to attach, such as a GitHub Action consumed by its tag; any asset present is refused, and no SHA256SUMS is made."
+        type: string
+        required: false
+        default: required
       checksums:
         description: "Generate SHA256SUMS over the assets."
         type: boolean
@@ -72,11 +77,17 @@ jobs:
           NOTES: ${{ inputs.notes-file }}
           CHECKSUMS: ${{ inputs.checksums }}
           VERSION: ${{ inputs.version }}
+          ASSETS: ${{ inputs.assets }}
         run: |
           set -eu
-          files="$(sh .shipyard/scripts/release-assets.sh dist "$NOTES")"
+          case "$ASSETS" in
+            required) only= ;;
+            none) only=--notes-only ;;
+            *) echo "::error::assets: want required or none (got '$ASSETS')"; exit 1 ;;
+          esac
+          files="$(sh .shipyard/scripts/release-assets.sh $only dist "$NOTES")"
           sh .shipyard/scripts/check-release-notes.sh "dist/$NOTES" "$VERSION"
-          if [ "$CHECKSUMS" = true ]; then
+          if [ "$CHECKSUMS" = true ] && [ -n "$files" ]; then
             ( cd dist && printf '%s\n' "$files" | sed 's|^dist/||' | xargs shasum -a 256 > SHA256SUMS )
             ( cd dist && shasum -a 256 -c SHA256SUMS ) \
               || { echo "::error::SHA256SUMS does not verify against the files it names -- a truncated or partial write looks exactly like a valid file until someone downloads it, so this re-reads and verifies what was just written rather than trusting it unread"; exit 1; }
