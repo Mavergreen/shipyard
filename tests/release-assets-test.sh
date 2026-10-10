@@ -48,7 +48,7 @@ mkd realsigned; printf 'sparkle:edSignature="RealBase64SignatureNotAStandIn==" l
 out="$(sh "$S" "$w/realsigned")"
 printf '%s\n' "$out" | grep -q 'x.xml' || { echo "FAIL: a real signed feed must still be published: $out"; exit 1; }
 
-# spec: BACKLOG.md #32 -- --notes-only: a product with nothing to attach (a GitHub Action, consumed
+# spec: SKILL.md "Publishing a release" -- --notes-only: a product with nothing to attach (a GitHub Action, consumed
 #       by its tag) publishes its notes alone; every notes check still applies, and an asset
 #       present is a mistake either way
 mkdir -p "$w/notesonly"; printf 'notes\n' > "$w/notesonly/RELEASE_NOTES.md"
