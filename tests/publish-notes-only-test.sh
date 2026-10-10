@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-# spec: BACKLOG.md #32 -- publish-release.yml's `assets` input: `required` (the default, unchanged
+# spec: SKILL.md "Publishing a release" -- publish-release.yml's `assets` input: `required` (the default, unchanged
 #       for every product that has assets) or `none`, a release of notes alone for a product with
 #       nothing to attach, such as a GitHub Action consumed by its tag. The assets step's own
 #       script, run as the runner would run it, decides each case.
@@ -22,7 +22,7 @@ if step.get("env", {}).get("ASSETS") != "${{ inputs.assets }}":
 open(sys.argv[2], "w").write(step["run"])
 PY
 
-# spec: BACKLOG.md #32 -- the step's run: block, against a stand-in shipyard checkout and dist,
+# spec: SKILL.md "Publishing a release" -- the step's run: block, against a stand-in shipyard checkout and dist,
 #       as the runner would run it
 mkdir -p "$w/run/.shipyard"; cp -R "$root/scripts" "$w/run/.shipyard/scripts"
 notes="$(printf '%s\n\n%s\n%s' '## thing 1.0.0' '### What changed' '- a change')"
