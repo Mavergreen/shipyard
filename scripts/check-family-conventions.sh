@@ -558,18 +558,31 @@ PYEOF
     sed "s|^|$f$TAB|" "$f"
   done
 } > "$cmdlist"
+# platform: one process per line made this check 71% of the gate's run time on shipyard (about
+#           20,000 process starts); one awk pass filters every line instead. `[[:space:]]` and
+#           `sub(/^[^\t]*\t/,...)` are verified on BSD awk 20070501. The hits go to a file, not a
+#           pipe, so the loop stays in this shell and `fail` still counts.
+# spec: SKILL.md "Check 18" -- command position is line start, a separator (; & | or a backtick),
+#       "$(", or then/do/exec. A bare "(" is deliberately NOT command position: a whole-org survey
+#       found three compliant repos whose only hit was `... || { echo "not built (cmake --build
+#       <dir>)"; }`. A `(cd x && cmake ...)` still matches, on the "&".
+cmdhits="$(mktemp "${TMPDIR:-/tmp}/conventions-hits.XXXXXX")"
+# platform: a failed awk must fail the gate, not pass it as "no hits" -- `set -e` alone would end the
+#           run with no word about which check died.
+awk -F"$TAB" '{
+  l = $0; sub(/^[^\t]*\t/, "", l)
+  t = l; sub(/^[[:space:]]+/, "", t)
+  if (t == "" || substr(t, 1, 1) == "#") next
+  if (l ~ /(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^then|^do|^exec)[[:space:]]*(cmake|ctest|cpack)([[:space:]]|$)/) print
+}' "$cmdlist" > "$cmdhits" \
+  || fail "check 18 could not scan shell lines (awk failed)" \
+          "run \`command -v awk\` ($(command -v awk || echo none)) and make sure it is a working awk"
 while IFS="$TAB" read -r f line; do
-  case "$(printf '%s' "$line" | sed 's/^[[:space:]]*//')" in '#'*|'') continue;; esac
-  # spec: SKILL.md "Check 18" -- command position is line start, a separator (; & | or a backtick),
-  #       "$(", or then/do/exec. A bare "(" is deliberately NOT command position: a whole-org survey
-  #       found three compliant repos whose only hit was `... || { echo "not built (cmake --build
-  #       <dir>)"; }`. A `(cd x && cmake ...)` still matches, on the "&".
-  printf '%s\n' "$line" | grep -Eq '(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^then|^do|^exec)[[:space:]]*(cmake|ctest|cpack)([[:space:]]|$)' || continue
   deviated shipyard-cmake-only "$f" && continue
   fail "$f runs plain cmake/ctest/cpack: $(printf '%s' "$line" | sed 's/^[[:space:]]*//' | cut -c1-70)" \
        "use shipyard-cmake / shipyard-ctest / shipyard-cpack -- MavericksShipyardConfig.cmake refuses any other cmake"
-done < "$cmdlist"
-rm -f "$cmdlist"
+done < "$cmdhits"
+rm -f "$cmdlist" "$cmdhits"
 
 # spec: SKILL.md "Family conventions" check 19 -- a repo whose CI builds must CALL the
 #       out-of-tree assertion. The assertion asks what the source tree looks like after a
