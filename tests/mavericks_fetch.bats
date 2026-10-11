@@ -1,7 +1,6 @@
 #!/usr/bin/env bats
 # platform: host-agnostic
-# Tests for mav_fetch_pinned (scripts/mavericks_fetch.sh). No network: a local
-# fixture tarball is served via a file:// URL.
+# platform: tests for scripts/mavericks_fetch.sh run with no network -- a local fixture tarball is served via a file:// URL.
 
 setup() {
   . "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
@@ -84,4 +83,66 @@ teardown() { rm -rf "$WORK"; }
   [ "$status" -ne 0 ]
   [[ "$output" == *"is sha256 $SHA, not the pinned $BAD"* ]] || false
   [ ! -e "$CACHE/fixture.tar" ]
+}
+
+dir_fixture() {
+  mkdir -p "$WORK/dstage/d"
+  echo hello > "$WORK/dstage/d/f"
+  ( cd "$WORK/dstage" && tar cf "$WORK/fixture.tar" d )
+  SHA="$(shasum -a 256 "$WORK/fixture.tar" | awk '{print $1}')"
+}
+
+@test "publish keeps an entry that appeared first" {
+  dir_fixture
+  mkdir -p "$CACHE/d"
+  : > "$CACHE/d/marker"
+  x="$(mav_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar d)"
+  [ -d "$x" ]
+  mav_fetch_publish "$CACHE" "$x"
+  [ -f "$CACHE/d/marker" ]
+  [ ! -e "$CACHE/d/d" ]
+  [ ! -e "$x" ]
+  [ -z "$(find "$CACHE" -name '.mav-extract.*')" ]
+}
+
+@test "publish with an empty extract dir returns non-zero and moves nothing" {
+  mkdir -p "$CACHE"
+  : > "$CACHE/keep"
+  run mav_fetch_publish "$CACHE" ""
+  [ "$status" -ne 0 ]
+  [ "$(ls -A "$CACHE")" = "keep" ]
+}
+
+@test "two concurrent mav_fetch_pinned calls into an empty cache" {
+  dir_fixture
+  ( mav_fetch_pinned "$URL" "$SHA" "$CACHE" fixture.tar d ) & p1=$!
+  ( mav_fetch_pinned "$URL" "$SHA" "$CACHE" fixture.tar d ) & p2=$!
+  s1=0; s2=0
+  wait "$p1" || s1=$?
+  wait "$p2" || s2=$?
+  [ "$s1" -eq 0 ]
+  [ "$s2" -eq 0 ]
+  [ -f "$CACHE/d/f" ]
+  [ ! -e "$CACHE/d/d" ]
+  [ -z "$(find "$CACHE" -mindepth 1 -name '.*')" ]
+}
+
+@test "a held lock times out naming the lock" {
+  dir_fixture
+  x="$(mav_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar d)"
+  mkdir "$CACHE/.mav-publish.lock"
+  MAV_FETCH_LOCK_TRIES=2 run mav_fetch_publish "$CACHE" "$x"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *".mav-publish.lock held"* ]] || false
+}
+
+@test "a failing mv under set -e still releases the publish lock" {
+  # platform: callers run under `set -e`; a bare failing mv would kill them while they hold the lock,
+  #           and every later fetch into that cache would wait out the lock and fail.
+  dir_fixture
+  x="$(mav_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar d)"
+  run sh -ec '. "$1/scripts/mavericks_fetch.sh"; mv() { return 1; }; mav_fetch_publish "$2" "$3"' \
+    sh "$BATS_TEST_DIRNAME/.." "$CACHE" "$x"
+  [ "$status" -ne 0 ]
+  [ ! -e "$CACHE/.mav-publish.lock" ]
 }

@@ -59,4 +59,35 @@ FAKE_OS=15.6 PATH="$w/bin:$PATH" MAVERICKS_SDK_CACHE="$w/c5" MAVERICKS_SDK_URL="
   sh "$S" > /dev/null || { echo "FAIL: a first fetch on 15.6 must succeed"; exit 1; }
 [ "$(cat "$w/xcrun.log")" = "xcrun --find tapi" ] || { echo "FAIL: a first fetch on 15.6 must ask xcrun for tapi, asked: $(cat "$w/xcrun.log")"; exit 1; }
 
+# platform: concurrent fetches into one cache (six test files share it once they run in parallel) must
+#           each print the SDK, with no half-written tarball or half-moved tree left behind.
+leftovers() { find "$1" -mindepth 1 -name '.*'; }
+MAVERICKS_SDK_CACHE="$w/c6" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" sh "$S" > "$w/o1" & p1=$!
+MAVERICKS_SDK_CACHE="$w/c6" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" sh "$S" > "$w/o2" & p2=$!
+r1=0; r2=0; wait "$p1" || r1=$?; wait "$p2" || r2=$?
+[ "$r1" -eq 0 ] && [ "$r2" -eq 0 ] || { echo "FAIL: concurrent cold fetches must both exit 0, got $r1 and $r2"; exit 1; }
+[ "$(cat "$w/o1")" = "$w/c6/MacOSX10.9.sdk" ] && [ "$(cat "$w/o2")" = "$w/c6/MacOSX10.9.sdk" ] \
+  || { echo "FAIL: concurrent cold fetches must both print the SDK dir, got: $(cat "$w/o1") and $(cat "$w/o2")"; exit 1; }
+[ -f "$w/c6/MacOSX10.9.sdk/usr/lib/libSystem.tbd" ] || { echo "FAIL: concurrent cold fetch lost the SDK contents"; exit 1; }
+[ -z "$(leftovers "$w/c6")" ] || { echo "FAIL: concurrent cold fetch left temp entries: $(leftovers "$w/c6")"; exit 1; }
+
+# platform: the .tbd conversion runs on the private extract dir BEFORE the SDK is published, so a second
+#           process that finds the SDK never sees a half-converted one. Fake sw_vers, xcrun, otool and
+#           tapi on PATH so this runs on the 10.9 box (no tapi) and on Linux alike.
+mkdir -p "$w/src/MacOSX10.9.sdk/usr/lib" "$w/src/MacOSX10.9.sdk/System/Library/Frameworks" "$w/bin2"
+: > "$w/src/MacOSX10.9.sdk/usr/lib/libfoo.dylib"
+( cd "$w/src" && tar -czf "$w/conv.tar" MacOSX10.9.sdk )
+sconv="$(shasum -a 256 "$w/conv.tar" | awk '{print $1}')"
+printf '#!/bin/sh\necho 13.0\n' > "$w/bin2/sw_vers"
+printf '#!/bin/sh\necho "%s/bin2/tapi"\n' "$w" > "$w/bin2/xcrun"
+printf '#!/bin/sh\nprintf "a\\nb\\nc\\n0 0 0 0 9\\n"\n' > "$w/bin2/otool"
+printf '#!/bin/sh\nfor a; do last=$a; done\necho "$last" >> "%s/tapi.log"\n' "$w" > "$w/bin2/tapi"
+chmod +x "$w/bin2/sw_vers" "$w/bin2/xcrun" "$w/bin2/otool" "$w/bin2/tapi"
+: > "$w/tapi.log"
+PATH="$w/bin2:$PATH" MAVERICKS_SDK_CACHE="$w/c7" MAVERICKS_SDK_URL="file://$w/conv.tar" MAVERICKS_SDK_SHA256="$sconv" \
+  sh "$S" > /dev/null || { echo "FAIL: a fetch that converts stubs must succeed"; exit 1; }
+[ -s "$w/tapi.log" ] || { echo "FAIL: the stub conversion never ran tapi"; exit 1; }
+[ -z "$(grep -v '/\.mav-extract\.' "$w/tapi.log")" ] \
+  || { echo "FAIL: tapi must convert only inside the private extract dir, before publishing; it touched: $(grep -v '/\.mav-extract\.' "$w/tapi.log")"; exit 1; }
+
 echo "PASS: fetch-sdk"
