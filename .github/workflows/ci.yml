@@ -43,7 +43,7 @@ jobs:
       #       pip is not PEP 668 externally-managed.
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.14'
+          python-version: '3.15'
       - name: Provision PyYAML (the workflow-parse gate's only dependency)
         run: python3 -m pip install --quiet pyyaml && python3 -c 'import yaml; print("PyYAML", yaml.__version__)'
 
