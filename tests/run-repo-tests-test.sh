@@ -88,4 +88,112 @@ if onlinux --strict-host >/dev/null 2>&1; then echo "FAIL strict: a failing host
 rc=0; sh "$S" --strict-host some-preset >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] || { echo "FAIL: --strict-host with a ctest preset is a usage error (exit 2), got $rc"; exit 1; }
 
+# spec: SKILL.md "Running a repo's tests" -- the runner starts up to MAVERICKS_TEST_JOBS files at
+#       once and still prints their results in file order. Each case gets a fresh tests/ directory.
+host='#!/bin/sh\n# platform: host-agnostic\n'
+
+fresh; printf "${host}sleep 2\nexit 0\n" > tests/a.sh; printf "${host}exit 0\n" > tests/b.sh
+out="$(MAVERICKS_TEST_JOBS=2 sh "$S" 2>&1)" || { echo "FAIL parallel: both files pass, the run must exit 0: $out"; exit 1; }
+[ "$(printf '%s\n' "$out" | grep '^PASS')" = "PASS tests/a.sh
+PASS tests/b.sh" ] || { echo "FAIL parallel: results must print in file order even when a later file finishes first: $out"; exit 1; }
+
+# spec: scripts/run-repo-tests.sh header (MAVERICKS_TEST_JOBS) -- a free slot is refilled the moment any
+#       file finishes, not when the oldest does. With 2 jobs, a.sh holds one slot for 4 s, b.sh frees
+#       the other at once, and c.sh must start in it while a.sh still runs: a.sh exits 1 unless c.sh
+#       has already started. Results still print in file order.
+fresh; rm -f "$work/c.started"
+printf "${host}sleep 4\n[ -e \"$work/c.started\" ]\n" > tests/a.sh
+printf "${host}exit 0\n" > tests/b.sh
+printf "${host}touch \"$work/c.started\"\n" > tests/c.sh
+out="$(MAVERICKS_TEST_JOBS=2 sh "$S" 2>&1)" || { echo "FAIL refill: c.sh must start while the oldest file a.sh still runs, in the slot b.sh freed: $out"; exit 1; }
+[ "$(printf '%s\n' "$out" | grep '^PASS')" = "PASS tests/a.sh
+PASS tests/b.sh
+PASS tests/c.sh" ] || { echo "FAIL refill: results must still print in file order: $out"; exit 1; }
+
+# spec: scripts/run-repo-tests.sh header (MAVERICKS_TEST_JOBS) -- each file holds a lock directory for 2 s,
+#       so two files running at once make the second to take it fail, and one at a time never do.
+lockfile='#!/bin/sh\n# platform: host-agnostic\nmkdir "$LOCK" || exit 1\nsleep 2\nrmdir "$LOCK"\n'
+fresh; printf "$lockfile" > tests/a.sh; printf "$lockfile" > tests/b.sh
+LOCK="$work/lock"; export LOCK
+if MAVERICKS_TEST_JOBS=2 sh "$S" >/dev/null 2>&1; then echo "FAIL parallel: with 2 jobs the two files must overlap, so the second to take the lock fails"; exit 1; fi
+MAVERICKS_TEST_JOBS=1 sh "$S" >/dev/null 2>&1 || { echo "FAIL serial: with 1 job the files run one after another, so neither finds the lock taken"; exit 1; }
+
+fresh; printf "${host}echo boom\nexit 1\n" > tests/x.sh
+rc=0; out="$(MAVERICKS_TEST_JOBS=3 sh "$S" 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] || { echo "FAIL parallel: a failing file must fail the run with exit 1, got $rc: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q '^FAIL tests/x.sh (exit 1)$' || { echo "FAIL parallel: the failing file must be named: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q '^    | boom$' || { echo "FAIL parallel: the failing file's log must print: $out"; exit 1; }
+
+fresh; printf "${host}sleep 2\nexit 0\n" > tests/a.sh; printf '#!/bin/sh\nexit 0\n' > tests/b.sh; printf "${host}exit 0\n" > tests/c.sh
+rc=0; out="$(MAVERICKS_TEST_JOBS=2 onlinux --strict-host 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] || { echo "FAIL strict parallel: an undeclared file must fail the run, got $rc: $out"; exit 1; }
+[ "$(printf '%s\n' "$out" | grep -E '^(PASS|FAIL) ' | sed 's/ (.*//')" = "PASS tests/a.sh
+FAIL tests/b.sh
+PASS tests/c.sh" ] || { echo "FAIL strict parallel: a file decided before launch must keep its place in file order: $out"; exit 1; }
+
+fresh; printf '#!/bin/sh\nif read -r x; then exit 1; fi\nexit 0\n' > tests/in.sh
+yes | sh "$S" >/dev/null 2>&1 || { echo "FAIL: a test file must read /dev/null, not the runner's stdin, or parallel files would fight over it"; exit 1; }
+
+fresh; printf "${host}exit 0\n" > tests/a.sh
+for bad in 0 x -1 ""; do
+  rc=0; err="$(MAVERICKS_TEST_JOBS="$bad" sh "$S" 2>&1 >/dev/null)" || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: MAVERICKS_TEST_JOBS='$bad' is a usage error (exit 2), got $rc"; exit 1; }
+  printf '%s\n' "$err" | grep -q 'MAVERICKS_TEST_JOBS' || { echo "FAIL: the usage error for '$bad' must name MAVERICKS_TEST_JOBS: $err"; exit 1; }
+done
+
+out="$(MAVERICKS_TEST_JOBS=64 sh "$S" 2>&1)" || { echo "FAIL: more jobs than files must still pass: $out"; exit 1; }
+[ "$(printf '%s\n' "$out" | grep -c '^PASS')" -eq 1 ] || { echo "FAIL: one file, one PASS line: $out"; exit 1; }
+
+# spec: scripts/run-repo-tests.sh "# platform:" comment on have_perl -- with no perl the runner runs
+#       files one at a time in the foreground, as it did before parallelism. The PATH holds only
+#       what the runner and the lock-taking files call, so it cannot find perl on any host.
+noperl="$work/noperl"; mkdir -p "$noperl"
+for c in sh dirname uname mktemp awk sed grep rm sleep mkdir rmdir; do ln -s "$(command -v "$c")" "$noperl/$c"; done
+fresh; printf "$lockfile" > tests/a.sh; printf "$lockfile" > tests/b.sh
+PATH="$noperl" command -v perl >/dev/null 2>&1 && { echo "FAIL: the no-perl PATH still finds perl"; exit 1; }
+PATH="$noperl" MAVERICKS_TEST_JOBS=2 sh "$S" >/dev/null 2>&1 \
+  || { echo "FAIL no perl: with no perl the files must run one at a time, so neither finds the lock taken"; exit 1; }
+rc=0; PATH="$noperl" MAVERICKS_TEST_JOBS=x sh "$S" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL no perl: a bad MAVERICKS_TEST_JOBS is still a usage error (exit 2), got $rc"; exit 1; }
+
+if ! command -v perl >/dev/null 2>&1; then
+  echo "no perl -- skipping the signal and interrupt cases, which need it to start the runner" >&2
+  echo "PASS: run-repo-tests"
+  exit 0
+fi
+
+# platform: a process started in the background by a non-interactive shell has SIGINT ignored, and a
+#           signal ignored at entry cannot be trapped. The runner's files must still get a live
+#           SIGINT, or a test that traps INT (fetch_pinned_source.bats) loses its trap on a CI host
+#           whose runner step started that way. perl starts the runner here with SIGINT ignored.
+fresh
+printf "${host}trap 'echo trapped > \"$work/trapped\"; exit 0' INT\nkill -INT \$\$\nsleep 1\nexit 1\n" > tests/t.sh
+out="$(MAVERICKS_TEST_JOBS=2 perl -e '$SIG{INT} = "IGNORE"; exec @ARGV' sh "$S" 2>&1)" \
+  || { echo "FAIL: a file that traps SIGINT must be able to, even when the runner started with it ignored: $out"; exit 1; }
+[ -e "$work/trapped" ] || { echo "FAIL: the file's INT trap never fired"; exit 1; }
+
+# platform: a background job in a non-interactive shell starts with SIGINT ignored, and a signal
+#           ignored on entry cannot be trapped -- the same holds for this test file when its own
+#           runner started it in the background. perl resets SIGINT before exec (tests/mavergreen-
+#           helper-test.sh's process-group case uses perl for setpgrp), so the runner here can trap
+#           the interrupt. Each file starts a grandchild that writes `survived`, so the case fails
+#           unless the runner stops the whole process group, not just each file's own shell.
+fresh; mkdir -p tmp
+for n in a b; do
+  printf "${host}touch \"$work/started.\$\$\"\nsh -c 'sleep 3; touch \"$work/survived\"' &\nwait\n" > "tests/$n.sh"
+done
+MAVERICKS_TEST_JOBS=2 TMPDIR="$work/tmp/" perl -e '$SIG{INT} = "DEFAULT"; exec @ARGV' sh "$S" >/dev/null 2>&1 &
+runner=$!
+waited=0
+while [ "$(ls "$work" | grep -c '^started\.')" -lt 2 ]; do
+  waited=$((waited + 1)); [ "$waited" -lt 100 ] || { echo "FAIL: the two test files never started"; kill "$runner" 2>/dev/null || :; exit 1; }
+  sleep 0.1 2>/dev/null || sleep 1
+done
+kill -INT "$runner"
+rc=0; wait "$runner" || rc=$?
+sleep 4
+[ "$rc" -ne 0 ] || { echo "FAIL: an interrupted run must exit non-zero"; exit 1; }
+[ ! -e "$work/survived" ] || { echo "FAIL: an interrupt must stop every running test file and what it started, but a grandchild ran to its end"; exit 1; }
+[ -z "$(ls "$work/tmp" | grep '^run-repo-tests\.')" ] || { echo "FAIL: an interrupted run must remove its results directory"; exit 1; }
+
 echo "PASS: run-repo-tests"
