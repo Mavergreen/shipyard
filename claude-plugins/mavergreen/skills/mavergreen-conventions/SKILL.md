@@ -2277,6 +2277,11 @@ in the same commit.
   top-level `tests/*.sh` and `tests/*.bats` — or `ctest` where that is the driver — so a newly added
   test file runs the day it lands. Subdirectories are fixtures and sub-suites with their own entry
   points, not tests to run.
+- **The runner runs test files in parallel, one per CPU, and prints results in file order.** A test
+  file gets stdin from `/dev/null` and runs in its own process group. Parallelism needs `perl` (every
+  macOS and Ubuntu runner has it); without it the runner runs files one at a time, as it used to.
+  `MAVERICKS_TEST_JOBS=1` restores serial runs, for a repo whose tests share a fixed path. Any other
+  value that is not a positive integer is a usage error (exit 2).
 - **A test that cannot run yet exits 77 to SKIP**, the same idiom as ctest's `SKIP_RETURN_CODE 77`.
   Guard on the artifact you need (`[ -d "$OUT" ] || { echo "not built — skipping"; exit 77; }`) rather
   than failing a CI run that was never going to have it. **"Cannot run" is a fact about the host, never
