@@ -29,10 +29,16 @@ URL="${MAVERICKS_SDK_URL:-$1}"
 SHA="${MAVERICKS_SDK_SHA256:-$2}"
 SDK="$CACHE/$4"
 if [ ! -d "$SDK" ]; then
-  mav_fetch_pinned "$URL" "$SHA" "$CACHE" "$3"
+  # platform: an interrupt during the conversion below must not leave this run's .mav-extract.* in the cache;
+  #           a successful publish has already removed $x, so the trap is then a no-op.
+  x=""
+  trap 'rm -rf "${x:-}"' EXIT
+  x="$(mav_fetch_extract "$URL" "$SHA" "$CACHE" "$3")"
+  ROOT="$x/$4"
   # platform: modern ld (Xcode 15+) warns for every ancient MH_DYLIB_STUB it reads. Where tapi
   #           exists (a modern host; never the 10.9 box), convert those stubs to .tbd once at
-  #           extract time: same exported symbols, no warnings. Pinned to tbd-v4 (YAML): the default
+  #           extract time, in the private extract dir and before publishing, so a concurrent fetch never
+  #           sees a half-converted SDK: same exported symbols, no warnings. Pinned to tbd-v4 (YAML): the default
   #           v5 is JSON, which some downstream tools can't parse.
   # platform: OS X 10.9 has no tapi (the Command Line Tools for Xcode 6.2 carry none) and, without them, no
   #           xcrun to ask: there it is never asked, so a first fetch on 10.9 runs no Command Line Tools name.
@@ -45,7 +51,7 @@ if [ ! -d "$SDK" ]; then
     *) TAPI="$(xcrun --find tapi 2>/dev/null || :)" ;;
   esac
   if [ -n "$TAPI" ]; then
-    LIBDIRS="$SDK/usr/lib $SDK/System/Library/Frameworks"
+    LIBDIRS="$ROOT/usr/lib $ROOT/System/Library/Frameworks"
     find $LIBDIRS -type f \( -name '*.dylib' -o ! -name '*.*' \) | while IFS= read -r f; do
       # platform: guarded macOS-only call -- inside the `if [ -n "$TAPI" ]` above, so only where xcrun found tapi
       [ "$(otool -h "$f" 2>/dev/null | awk 'NR==4 {print $5}')" = 9 ] || continue
@@ -61,7 +67,7 @@ if [ ! -d "$SDK" ]; then
         t=$(readlink "$l")
         case "$l" in *.dylib) new_l="${l%.dylib}.tbd" ;; *) new_l="$l.tbd" ;; esac
         case "$t" in *.dylib) new_t="${t%.dylib}.tbd" ;; *) new_t="$t.tbd" ;; esac
-        case "$new_t" in /*) tgt="$SDK$new_t" ;; *) tgt="$(dirname "$l")/$new_t" ;; esac
+        case "$new_t" in /*) tgt="$ROOT$new_t" ;; *) tgt="$(dirname "$l")/$new_t" ;; esac
         [ -e "$tgt" ] || continue
         ln -sf "$new_t" "$new_l"
         rm "$l"
@@ -69,6 +75,7 @@ if [ ! -d "$SDK" ]; then
       done
     done
   fi
+  mav_fetch_publish "$CACHE" "$x"
 fi
 [ -d "$SDK/usr/lib" ] || { echo "SDK missing usr/lib: $SDK" >&2; exit 1; }
 echo "$SDK"
