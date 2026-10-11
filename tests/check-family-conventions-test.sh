@@ -1023,6 +1023,20 @@ for shape in 'v="$(cmake --version | head -1)"' '(cd sub && cmake -S . -B /tmp/b
   rm -rf "$work/p18bad"
 done
 
+# spec: SKILL.md "Check 18" -- indentation is not command position: a tab-indented call is still a
+#       call, and a tab-indented comment is still a comment. Pinned so the single-pass line filter
+#       cannot drift from reading `^[[:space:]]*` the way the shell-per-line filter did.
+mkrepo "$work/p18tab"
+printf '#!/bin/sh\nif true; then\n\tcmake -S . -B b\nfi\n' > "$work/p18tab/build/x.sh"
+(cd "$work/p18tab" && git add -A) >/dev/null 2>&1
+if (cd "$work/p18tab" && sh "$S" >/dev/null 2>&1); then echo "FAIL 18: a tab-indented call should fail"; exit 1; fi
+(cd "$work/p18tab" && sh "$S" 2>&1 | grep -q 'build/x.sh runs plain cmake') \
+  || { echo "FAIL 18: a tab-indented call should be named as build/x.sh"; exit 1; }
+mkrepo "$work/p18tabc"
+printf '#!/bin/sh\n\t# cmake -S . -B b\nexit 0\n' > "$work/p18tabc/build/x.sh"
+(cd "$work/p18tabc" && git add -A) >/dev/null 2>&1
+(cd "$work/p18tabc" && sh "$S" >/dev/null) || { echo "FAIL 18: a tab-indented comment should pass"; exit 1; }
+
 # spec: SKILL.md "Check 18" -- the LIMIT of "prose is not a call". A quoted message or a heredoc
 #       whose text carries `;`, `&&` or a backtick immediately before the command still matches;
 #       separating those from a real call needs a shell parser. Asserted here so the limitation is a
@@ -1126,6 +1140,23 @@ printf 'name: CI\njobs:\n  build:\n    runs-on: ${{ matrix.os }}\n    steps:\n  
   > "$work/p18expr/.github/workflows/ci.yml"
 (cd "$work/p18expr" && git add -A) >/dev/null 2>&1
 lim18 "$work/p18expr" "an unresolvable runs-on expression (checked, not skipped)"
+
+# platform: check 18 reads its candidate lines through awk, and a failing awk must fail the gate
+#           and say so -- an empty hit list would read as "no plain cmake anywhere". The stub awk
+#           goes first on PATH and fails only the -F call check 18 makes (the gate's other awk
+#           calls must still work, or it would die earlier, in a different check); any other call
+#           runs the real awk, found by absolute path before PATH is changed.
+mkdir -p "$work/badawk"
+printf '#!/bin/sh\ncase "${1:-}" in -F*) exit 1 ;; esac\nexec %s "$@"\n' "$(command -v awk)" > "$work/badawk/awk"
+chmod +x "$work/badawk/awk"
+mkrepo "$work/p18awk"
+(cd "$work/p18awk" && git add -A) >/dev/null 2>&1
+if out="$(cd "$work/p18awk" && PATH="$work/badawk:$PATH" sh "$S" 2>&1)"; then
+  echo "FAIL 18: an awk that fails must fail the gate, not pass as 'no hits'"; exit 1; fi
+printf '%s\n' "$out" | grep -q 'check 18 could not scan shell lines (awk failed)' \
+  || { echo "FAIL 18: a failing awk must be named as check 18's: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'command -v awk' \
+  || { echo "FAIL 18: a failing awk must come with a fix line naming command -v awk: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh check 19 -- the baseline above now CALLS the
 #       assertion, so this case is built by stripping the two calls out again. That direction
