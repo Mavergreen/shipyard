@@ -145,7 +145,7 @@ fi
 
 # spec: SKILL.md "Family conventions" check 7d -- every build output dir the repo writes must be
 #       git-ignored; mirrors check 7c. tailscale's untracked, unignored build/updater is the incident
-#       that motivated it. tests/check-family-conventions-test.sh covers the detection edge cases.
+#       that motivated it. tests/check-family-conventions-*-test.sh covers the detection edge cases.
 if git rev-parse --git-dir >/dev/null 2>&1; then
   # platform: BSD sed aborts on binary content ("RE error: illegal byte sequence"), which a find(1)
   #           sweep would hit via NFS AppleDouble ._*.sh files -- git ls-files reads only tracked
@@ -357,7 +357,7 @@ fi
 # spec: SKILL.md "Family conventions" check 14 -- the release body must come from the shared
 #       generator (release-notes.sh), never hand-written, never GitHub's --generate-notes; the appcast
 #       and the Release page must read the same file. Check 5 above is the weak form this supersedes
-#       for wiring. tests/check-family-conventions-test.sh covers the detection edge cases (quoting,
+#       for wiring. tests/check-family-conventions-*-test.sh covers the detection edge cases (quoting,
 #       line continuations, variable-routed paths).
 if [ -n "$CI_FILES" ]; then
   ci_mentions '[/ ]release-notes\.sh' \
@@ -511,7 +511,7 @@ fi
 #       shipyard-ctest / shipyard-cpack. It reads lines, not shell syntax; SKILL.md's "Check 18" notes
 #       state the deliberate blind spot (a bare "(" before the command), the shapes that still count
 #       as a call inside quotes and heredocs, and the known false negatives. Every one of them is
-#       pinned by tests/check-family-conventions-test.sh, so the list cannot quietly go stale.
+#       pinned by tests/check-family-conventions-*-test.sh, so the list cannot quietly go stale.
 cmdlist="$(mktemp "${TMPDIR:-/tmp}/conventions-cmds.XXXXXX")"
 TAB="$(printf '\t')"
 {
