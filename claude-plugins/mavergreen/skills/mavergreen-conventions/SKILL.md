@@ -809,9 +809,12 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   double-publishing only when its own `release.yml` re-checks before it cuts a tag — gates its
   publish decision on `release-needed.sh` (or an equivalent digest check) rather than on version.sh
   alone. A `workflow_dispatch` mode that always cuts `N+1` (a `local_release=true` path whose
-  version.sh runs in `local` mode unconditionally, the way ca-certs' and ed25519's do today) has no
-  such gate: it gets a new release on every dispatch, race or not, and "recomputes the same digest
-  and stops" does not hold for it.
+  version.sh runs in `local` mode unconditionally, the way ed25519's does today) has no such gate:
+  it gets a new release on every dispatch, race or not, and "recomputes the same digest and stops"
+  does not hold for it. ca-certs shows the gated shape. Its `reconcile.yml` caller dispatches with
+  `dispatch-field: reconcile=true`, and `release.yml`'s `reconcile` input selects `local` mode and
+  then publishes only if `release-needed.sh` still says `PUBLISH`. A human's `local_release=true`
+  stays ungated, because choosing it by hand is the decision to publish.
 - **A version match is NEVER a state match, and `release-needed.sh` does not look at the version.**
   `version.sh auto` returns the *existing* tag's `N` whenever the upstream already has one, so it maps
   every declared state of a given upstream to **one** version. An earlier cut inferred
@@ -1718,8 +1721,12 @@ repo, and, in a line repo (`<product>-<digits>`), an identifier other than
 where a hand-edited registry lists it. **A registered tree path can be a contract.** `ca-certs` is
 registered ahead of its repo, and its tree path
 `/usr/local/mavergreen/ca-certs/etc/openssl/certs/ca-certificates.crt` is a contract, which nothing
-in code enforces: when ca-certs ships, it must install its bundle exactly there, and the golang lines
-then adopt it as the first place they search. No golang line searches it yet.
+in code enforces: ca-certs installs its bundle exactly there, root-owned, and leaves out any root the
+running Mac's admin trust settings deny for TLS. golang-127 already adds that file to the roots it
+trusts, and golang-126 does from golang-port v1.0.0. That's a union with the keychain, in which a
+keychain deny vetoes a root found anywhere, not a search order. The family's rule for trust on a Mac
+is that every consumer reaches the keychain's verdict: a consumer that can read the keychain takes
+its verdict, and the bundle serves those that can't.
 **Adding a product means adding its line there and pushing shipyard**:
 `render-manifest.sh` reads the registry beside it and refuses an unregistered name, so the product
 cannot package until it builds with a shipyard release that carries its line. A variant packaged separately is a product of its own (`go126-cross`).
