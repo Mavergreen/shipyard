@@ -1622,6 +1622,23 @@ Scoping is the point: swift-toolchain republishing swift.org's `.pkg` must not l
 build-support tarball it *does* build to drift. An unscoped deviation quietly covers artifacts nobody
 meant to excuse.
 
+**A few checks scope to what they judge rather than to a file.** `install-path` scopes to the
+installed path, and System Replace's two rules scope to a system path: `system-replace:<glob>`
+excuses an Apple path that a product neither replaces nor adopts, and
+`system-replace-self-contained:<glob>` excuses a replaced program, matched by its system path (see
+"System replacement (10.9 only)", below). The coverage rule's own name,
+`system-replace-coverage:<glob>`, scopes to the pkg filename like any other rule's and excuses the
+whole rule for that pkg; `system-replace:<pkg>` would excuse nothing:
+
+```markdown
+- system-replace:/usr/share/zsh/*: zsh completions; the family ships none
+- system-replace-self-contained:/usr/bin/ssh: <why this copy may load from outside /usr/lib>
+```
+
+A glob is a shell `case` pattern, so `*` spans `/` and spaces, and it cannot hold a space or a colon.
+A literal path is a glob that matches itself. A `system-replace:` glob matches the canonical path,
+with `/private/etc`, `/private/var` and `/private/tmp` read as `/etc`, `/var` and `/tmp`.
+
 **The same block, and the same parser (`deviations.sh`), covers seven of the family-conventions
 checks, under six names** — name the check and scope it to the file: `registry-read:<path>` (check
 16), `msc-template:<path>` (check 17), `shipyard-cmake-only:<path>` (check 18), `rosetta:<path>`
@@ -1657,9 +1674,10 @@ quiet without going red is not a check.
 ## Install layout and identity
 
 **Every product owns exactly one directory, `/usr/local/mavergreen/<product>/`.** What installed a
-file is readable from its path; an upgrade replaces the directory wholesale, so a file the newer
-payload stopped carrying is gone rather than left behind (Installer itself never removes one); and
-uninstall is complete. Commands and manpages are still found without the user doing anything.
+file is readable from its path; an upgrade lays the new payload over the directory and then prunes
+what the new payload no longer lists, so a file the newer payload stopped carrying is gone rather
+than left behind (Installer itself never removes one) and the directory is never missing mid-upgrade;
+and uninstall is complete. Commands and manpages are still found without the user doing anything.
 
 ```
 /usr/local/bin/mavergreen                  the helper; the only family file in /usr/local/bin
@@ -1668,12 +1686,13 @@ uninstall is complete. Commands and manpages are still found without the user do
 
 /usr/local/mavergreen/
   bin/  sbin/  share/man/man*/             link farm; written only by the helper
-  <product>/                               owned by one pkg; its preinstall removes it on every upgrade
+  <product>/                               owned by one pkg; upgrades lay the payload over it, then prune
     mavergreen.plist                       the manifest
+    .mavergreen-payload                    the payload list, which the prune keeps
     bin/ sbin/ lib/ libexec/ share/ etc/   the product's own layout
   var/<product>/                           state that survives an upgrade; uninstall removes it
   var/mavergreen/selections/<group>        which member owns the group's bare names
-  var/system-replace/<product>/            system files saved by system-replace, and its marker
+  var/system-replace/<product>/            System Replace's record, saved originals and marker
   .base/<version>/                         the staged helper, removed by the base postinstall
   .base/installed-version                  the helper version last installed
 ```
@@ -1712,7 +1731,7 @@ and it exits 0 when it has nothing to do.
 directory and is what people type (`mavergreen select go go126`), and the registry is the only place
 uniqueness can be checked: `product-name.sh check` refuses a duplicate name, a duplicate identifier,
 a name outside `[a-z0-9-]` (it becomes a path in a preinstall's `rm -rf`), a name the layout reserves
-(`var`, `bin`, `sbin`, `share`, `mavergreen`, `system-replace`, `base`), an identifier outside
+(`var`, `bin`, `sbin`, `share`, `mavergreen`, `system-replace`, `base`, `kept`), an identifier outside
 `dev.mavergreen.*`, and `dev.mavergreen.base`, which is the helper's component. The helper refuses the
 reserved names too, so a hand-made manifest cannot reach them. Many short names may
 share a repo (`golang-126` ships `go126` and `go126-cross`). `check` also refuses a row without a
@@ -1749,6 +1768,7 @@ has nothing left to prune.
 | `appcast` | the registry | the product's feed (`product-name.sh feed <product>`) when it stages an updater, else empty; `--appcast` is refused |
 | `exports-exclude` | `--exclude`, repeatable | tree-relative paths kept out of the farm |
 | `replaces` | `--replaces /abs/path=tree/path`, repeatable | system-replace, below |
+| `adopts` | `--adopts /abs/path=var/path:kind`, repeatable | a dict, system path → `{path, kind}`; system-replace, below |
 | `outside` | **the stage itself** | every file or link staged outside the tree, collapsed to its enclosing `.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle` or `.framework` |
 | `generated` | `--generated REL`, repeatable | files the product creates at install time outside its tree, which no payload carries (a preset's materialized viewer app); same shape rules as `outside`, never required to exist |
 
@@ -1794,7 +1814,7 @@ pass Installer's target volume rather than assuming `/`; with any other root it 
 | `unlink <product>` | removes every farm link into it; never changes a selection |
 | `select <group> [<product>]` | prints the selection, or moves it: the group's bare links swap to that member |
 | `list` | one line per installed product: short name, group, line (`-` for none), version, `selected` |
-| `check` | dangling farm links, links into a directory with no manifest, a manifest whose `product` is not its directory, missing links, system-replace drift — each on stderr, non-zero on any. shipyard's own install smoke runs it |
+| `check` | dangling farm links, links into a directory with no manifest, a manifest whose `product` is not its directory, missing links, System Replace drift and ownership (below) — each on stderr, non-zero on any. shipyard's own install smoke runs it |
 | `uninstall <product>` | below |
 | `system-replace <product>` / `system-restore <product>` | below |
 | `version` | the helper's version |
@@ -1807,7 +1827,9 @@ path and its exit status (a status above 128 -- including one from a real Ctrl-C
 prompt, which the helper survives on purpose -- is reported as cancelled, not failed). Then it runs
 `system-restore` if the product
 has replaced system files, and **stops there if that fails**, removing nothing: the manifest
-survives, so a retry can finish the restore. Then it unlinks; removes each `outside` and `generated` entry (a `generated` entry that does not exist is not an error) — a file or link, or a whole bundle directory (`.app`,
+survives, so a retry can finish the restore. A product that was replaced then keeps each `config`
+file the admin changed beside its restored original, as `<path>.mavergreen-save` (see "System
+replacement", below). Then it unlinks; removes each `outside` and `generated` entry (a `generated` entry that does not exist is not an error) — a file or link, or a whole bundle directory (`.app`,
 `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`), unloading a launchd job first when the
 root is `/`; never a
 plain directory, and never an entry that is empty, absolute, ends in `/`, has an empty, `.` or `..` segment or lies under
@@ -1819,24 +1841,470 @@ the first error.
 
 ### System replacement (10.9 only)
 
-A product that makes a sensible drop-in for a system tool declares it: `--replaces
-/usr/bin/ssh=bin/ssh` (openssh is the first). The product's own pkg never touches system files. A
-separate, payload-free **System Replace** pkg (`package-system-replace.sh`, identifier
-`<product identifier>.system-replace`) does, by running `mavergreen system-replace <product>`, and
-fails unless the product is installed.
+A product that makes a sensible drop-in for a 10.9 system tool can make a Mavergreen build *be* the
+system's copy of it (openssh first, then sudo, which is built on this from the start). The product's
+own pkg never touches system files. A separate, payload-free **System Replace** pkg
+(`package-system-replace.sh`, identifier `<product identifier>.system-replace`) does, by running
+`mavergreen system-replace <product>`, and fails unless the product is installed. The product
+declares what it takes over with two repeatable `stage_product.sh` options, which land in its
+manifest:
 
-- **10.9 only.** On modern macOS `/usr/bin` is on the sealed system volume, so the helper reads the
-  target volume's version and refuses, saying why. That is the OS forbidding it, not a parity
-  failure. Reconsider when a modern-macOS use appears that does not need to write the system volume.
-- **Files and symlinks only**: a real directory on either side — the system path or the tree path
-  — is refused.
-- **Everything is validated before anything changes** — each entry's shape (the key absolute, the
-  value tree-relative, no `.` or `..`), that the target exists in the tree, and that no path saved
-  once has since changed (that one says to run `system-restore` first). Then each original is saved
-  under `var/system-replace/<product>/` and replaced by a link into the tree.
-- **`system-restore` puts back what was saved**, and never clobbers: a path that is no longer our link
-  is reported and its saved original kept. The saved state is cleared only when everything came
-  back. `check` reports any replacement that has drifted.
+- `--replaces /usr/bin/sudo=bin/sudo`: a system path, and the tree path that replaces it. A tree path
+  under `share/man/` makes a man-page **link**; any other makes a program **copy**. The kind is derived
+  from the path, not declared.
+- `--adopts /etc/sudoers=sudoers:config`: a system path, the path under `var/<product>/` that the
+  product reads, and a kind, `config` or `identity` (below).
+
+**The convention.** Eleven rules; the mechanics that carry each one follow.
+
+1. **The basic install stays hermetic.** The product pkg writes only its tree and `var/<product>`, and
+   its binaries read their config from `var/<product>`.
+2. **System Replace is a separate opt-in pkg, and 10.9 only.** On modern macOS `/usr/bin` and `/etc`
+   are on the sealed system volume, so the helper reads the target volume's version and refuses,
+   saying why. That is the OS forbidding it, not a parity failure. Reconsider when a modern-macOS use
+   appears that does not need to write the system volume.
+3. **Three kinds of replaced path.** A **program** becomes a *real copy* of the tree's file, with the
+   tree file's owner and mode (setuid included), refreshed atomically on every upgrade. A **man page**
+   becomes a link into the tree: nothing sandboxed reads it, and the link documents itself. **Config
+   and state** move: the real file lives at the system path and `var/<product>/<path>` becomes a link
+   to it, so whatever an admin or an editor does at the system path, saving by rename included, just
+   works.
+4. **Adoption never silently discards intent.** A system file that has been customized wins over a
+   product default; when both sides are customized and differ, replace refuses and names both; and
+   the adopted result must pass the new binary's own config check, or nothing changes.
+5. **Restore is the exact inverse.** Apple's originals go back byte for byte, where the old binary can
+   read them, and the modern state goes back to `var`. Restore says which of the admin's settings the
+   restored config does not have.
+6. **Uninstall keeps the admin's work.** A modern config file the admin changed is left beside the
+   restored original as `<path>.mavergreen-save` (the `.rpmsave` idiom), since uninstall removes `var`.
+7. **Updates check the live config with the new binary before changing anything.** If the new version
+   cannot read the admin's config, the update refuses and the old version keeps running. CI checks a
+   corpus of real configs, so an upstream change that breaks old configs blocks its own automerge.
+8. **Everything an admin would look at is covered.** The product inventories what Apple installed for
+   the tool and replaces or adopts each path, or declares why not; Apple's launchd jobs and prefpanes
+   keep working, proved on the 10.9 guest; and anything a system job runs logs failures to syslog, not
+   stderr.
+9. **System paths never dangle during an upgrade.** A program's copy does not depend on the tree, and
+   upgrades lay the payload over the tree rather than remove it (see `stage_product.sh`, below), so a
+   man-page link resolves to the old file or the new one throughout. One exception: when a new
+   version stops both shipping and declaring a man page, that page's link dangles between the
+   postinstall's prune and its re-replace, which restores Apple's original moments later. Programs
+   are copies and never dangle.
+10. **The product's own tools write adopted files through the link.** A tool that saves by temp file
+    and rename resolves the link first and renames beside the real file, so the link survives. Each
+    consumer proves it with a test.
+11. **Only root can change anything a replaced path resolves through.** Root runs these binaries
+    (`/usr/bin/sudo`; `sshd-keygen-wrapper` from launchd), so a directory on the way that a non-root
+    user can write is a root compromise, links or no links. `check` reports one that appears later.
+
+**Why programs are copies: 10.9's sandbox judges the resolved path** (verified 2026-10-11 on the
+10.9.5 box). Under `sandbox-exec`, with a profile importing `system.sb` and allowing one directory, a
+read and an exec through a link in that directory to a file outside it were both denied, and the
+kernel log named the *target*; a real file in the directory worked. Profiles that grant `/usr/bin`
+include App Sandbox's `application.sb` (every Mac App Store app), `quicklook-satellite`, `racoon` and
+`icbaccountsd`, so a link from `/usr/bin` into `/usr/local/mavergreen` breaks them. The same fact is
+why a copied program must be **self-contained**, loading nothing from the tree, and why adopted config
+is already safe: it is a real file at the system path.
+
+**What the manifest may say** (`render-manifest.sh` refuses anything else at package time). Both keys
+are absolute and both values relative, with no `.` or `..` component. An `adopts` key is not under
+`/usr/local/mavergreen` and is not also in `replaces`; its path holds no colon, and its kind is
+`config` or `identity`. **No system path is declared twice**, in one list or across both, comparing
+`/private/etc`, `/private/var` and `/private/tmp` as `/etc`, `/var` and `/tmp` (one file either
+way); and no two `adopts` entries share a `var` path, compared case-insensitively, as HFS+ compares
+names. No system path starts with a name the save area keeps for its own files (`staging`,
+`applied.plist`, `adopted.sha256`, `restored.sha256`, their `.tmp` files, or `.replaced`, in any
+case), since its original would be saved over them. `system-replace` refuses all of these too. A
+`replaces` tree path is staged as a regular file: one that is missing, a directory or a link is
+refused, and so is one inside a bundle. So no upgrade removes what a replaced
+path depends on, and no upgrade's re-replace finds it gone after the payload has landed. **A replaced
+man page keeps its name**: a product that ships `ssh.1.gz` cannot link Apple's
+`/usr/share/man/man1/ssh.1` to it, which 10.9's `man` would print as gzip bytes, so a product that
+compresses its man pages ships uncompressed copies of the replaced ones. Entries are an explicit
+list, with no globs (openssh lists every host key type it knows, `ssh_host_ed25519_key` included).
+Files and symlinks only: `system-replace` itself also refuses a real directory at the system path or
+the tree path.
+
+**`adopts` kinds** (the two the consumers need; a third needs a new decision):
+
+| kind | meaning | on replace | on restore | on uninstall |
+|---|---|---|---|---|
+| `config` | admin-edited policy (`sshd_config`, `sudoers`) | the customization rule below | original back; report what it lacks | `.mavergreen-save` if changed |
+| `identity` | state whose system copy *is* the identity (`ssh_host_*_key`) | the system file wins whenever it exists; otherwise the product's file moves in | original back; a file with no original is removed | no save |
+
+**"Customized" means "changed since its baseline"**, and a file that still matches its baseline
+carries no intent to keep. The **system** side's baseline is what the last restore put back, if the
+save area records one; otherwise Apple's stock file. A file is *stock* when its `cksum` CRC and size
+match its entry (`lsbom -p fcs`) in an Apple receipt BOM on the target volume,
+`var/db/receipts/com.apple.pkg.*.bom`, under either spelling (`./etc/…` or `./private/etc/…`). That
+needs no per-product data and stays right after Apple's combo and security updates, which carry their
+own receipts; a receipt that cannot be read counts as no entry. The **product** side's baseline is what
+the last restore returned to `var`, if recorded; otherwise the seed record (`--seed`, below). A product
+file with neither record counts as customized. A missing file is absent, not customized, and **an
+entry absent on both sides is skipped**: no file, no link, nothing to restore. (A file the product
+creates there later, such as a host key generated after replace, is an ordinary `var` file.)
+
+| system file | product file | result |
+|---|---|---|
+| absent | absent | entry skipped |
+| absent | present | product file moves in |
+| at baseline | default or absent | product file moves in if present, else the system file stays (Apple's stock file has no intent to keep) |
+| at baseline | customized | product file moves in |
+| customized | default or absent | system file stays and becomes live; the product's default is set aside in `var/system-replace/<product>/staging/` |
+| customized | customized, identical | system file stays |
+| customized | customized, different | **refuse**, naming both paths and the way out: make one match the other, then retry |
+
+The restore baselines are what make restore → replace round-trip. After a restore the system file is
+Apple's original and the `var` file is the last live config, both matching their records, so a
+re-replace takes the `var` file (the most recent intent) without refusing; only an edit on both sides
+since the restore refuses. A system path that is a symlink this product did not make (the maintainer's
+box once had `/etc/sshd_config -> /usr/local/etc/sshd_config`) refuses, naming it.
+
+**The ownership precondition (rule 11).** Before any change, replace walks from every replaced and
+adopted system path, every tree file and every adopted `var` file up to the volume root, and through
+each link's target as well (refusing a chain of more than 16 links). Every directory on the way, and
+the tree file and the adopted files themselves, must be owned by root, must carry no ACL `allow`
+entry, and must not be group- or world-writable, unless the group's only member is root. A group
+counts as root-only when its members, member UUIDs and nested groups name nobody but root and no
+other user has it as primary group, all read from the target volume's local directory node (a group
+not found there is not root-only). `wheel` qualifies on stock 10.9, which makes `/usr/local`'s
+`drwxrwxr-x root:wheel` acceptable. The refusal names the first offending path with its owner and
+mode.
+
+**Replace, in order.** Every refusal comes before any change.
+
+1. Validate every `replaces` and `adopts` entry: its shape, its tree file, the ownership precondition,
+   and, for each adoption, the customization rule, which stages what will go live in
+   `var/system-replace/<product>/staging/<var path>`.
+2. Run the product's `pre-system-replace` hook on the staged files (hooks, below). Non-zero refuses,
+   with nothing changed.
+3. Record **the declaration that was applied**, in `var/system-replace/<product>/applied.plist`: every
+   entry, with a fingerprint of each original and of each copy that will go live. Restore, uninstall
+   and later upgrades act on this record, never on the current manifest, which an upgrade rewrites. It
+   is written before the first change, so an interrupted replace or restore finishes when run again.
+4. Swap, **programs before config**: every `replaces` entry first, then every `adopts` entry, on a
+   first run and on an upgrade's rerun alike. A stop between the two then leaves the new program
+   reading the old config, which the preflight (rule 7) promises works, and never Apple's old program
+   reading the new config, which for sudo can lock the admin out. Each copy and each man-page link is
+   staged as `.<name>.mavergreen-tmp` beside the system path and renamed over it, so the path is never
+   absent. Each adopted file then moves to its system path (owner and mode from the original when
+   there was one, else from the product's file), and its `var` path becomes a link to it. A rerun
+   finishes an adoption that stopped before its swap, including one whose system path had no
+   original. Restore keeps the reverse order: adopted config first, then programs. Every original is
+   first **moved, never copied**, to
+   `var/system-replace/<product>/<system path>`, by hard link and then rename, so hardlink groups,
+   setuid bits and ownership come back exactly. The save area therefore stays on the system volume,
+   and replace refuses a system path on another volume. **The save area is root-only**, because it
+   holds setuid originals (Apple's vulnerable `sudo` among them): every run makes
+   `var/system-replace/<product>` mode `0700`, owned by root, before anything is saved there; the
+   ownership precondition judges every directory above it; and `check` reports a save area that
+   another user can reach.
+5. Mark `.replaced`, then run `post-system-replace` (best-effort, such as restarting a daemon: a failure
+   is reported, not fatal).
+
+**Upgrades re-apply it.** The generated postinstall of every product runs `mavergreen system-replace
+<product>` again, after `link` and the seeds, when `.replaced` is present and the target volume is
+still 10.9. On any other version it says the System Replace was not re-applied and goes on; otherwise
+every upgrade after an OS upgrade would fail. The rerun is incremental against `applied.plist`:
+
+- entries new in this version are applied with the full validation and the hooks;
+- entries this version no longer declares are restored one by one. That runs `post-system-replace`,
+  not `post-system-restore`, which is for restoring the whole product;
+- every program copy whose tree file changed, in its bytes or in its owner or mode, is refreshed the
+  same atomic way;
+- every other entry is left alone.
+
+An entry that moves between `replaces` and `adopts`, or an adoption whose `var` path changes, refuses
+up front, saying to run `mavergreen system-restore <product>`, then `mavergreen system-replace
+<product>`. Any refusal here fails the install after its payload has landed, so the preflight (below)
+is the only place an upgrade stops with nothing changed.
+
+**Restore (`system-restore`), in order,** over the entries in `applied.plist`. It is **all or
+nothing**: before its first change it works out what it would do with every entry, and if it would
+refuse any, or if the save area holds a saved file `applied.plist` does not name, it names each one
+and exits non-zero having changed nothing, so Apple's old program never goes back while the modern
+config stays, or the reverse. Its first change is to remove `.replaced`,
+so a restore that stops partway (a failing `mv`, a kill) is reported by `check` as unfinished, and the
+product's next upgrade does not re-apply what the admin asked to undo; a rerun finishes it.
+
+1. For each adopted `config` entry whose live file differs from what was adopted, print on **stdout**
+   `mavergreen: settings in <path> that the restored original does not have:`, then a `diff -u` of the
+   original being restored against the live file. This is generic; the product's hook may say more.
+2. Move the live system file back to `var/<product>/<path>`, replacing the link, and put the saved
+   original back, or leave the system path absent if there was none. Record both as the restore
+   baselines the customization rule uses next time; that record outlives the restore.
+3. Restore `replaces`. A copy or man-page link that is still what mavergreen installed gives way to its
+   saved original, or is removed when there was none. Anything else is reported and left, with its
+   saved original kept for a retry, and restore exits non-zero: the helper never clobbers. **Apple may
+   put its own original back** (a Time Machine restore, a combo update, Migration Assistant). A file
+   that is Apple-stock by receipt and byte-identical to the saved original counts as restored, and a
+   rerun of `system-replace` likewise takes it for the original again, instead of refusing with
+   "already saved once and has since changed". `check` reports the put-back, as a copy that is no
+   longer the product's.
+4. **A path Apple owns again is left as it is.** When an entry's system file is no longer the
+   product's (its copy, or the config it adopted) and is Apple-stock by receipt, or when the volume is
+   readably a version other than 10.9 (an OS upgrade rewrote it), restore leaves the file, drops the
+   entry, and says so on **stdout**. It discards the saved original only when an Apple receipt lists
+   that original too; otherwise the original is the admin's (an adopted config they customized, say),
+   so restore keeps it: it clears every setuid and setgid bit on the save while it is still inside the
+   root-only save area (on a copy, when the save is hard-linked to another name, so no other link loses
+   its bits), then renames it to `/usr/local/mavergreen/kept/<product>/<path>` (the first
+   free `<path>.1`, `<path>.2`, … if one is already there; never overwriting, never refusing), and
+   names it. `kept/` and `kept/<product>` are root-only (mode `0700`, owner root), uninstall never
+   removes them, and `check` ignores them: the admin deletes a kept original when done with it. That
+   includes an `identity` entry's old private key, kept root-only. The line saying where an original
+   was kept is printed only once it is there. A
+   volume version it cannot read refuses the restore, as it does replace. The messages read
+   `mavergreen: <path> is Apple's own file again …` or `… is Apple's again (this volume is no longer
+   Mac OS X 10.9) …`. An adopted entry's `var` link to it becomes a real copy of what the
+   product read through it; a `var` file a tool already split off stays as the admin's, so uninstall
+   keeps it as `.mavergreen-save`. Off 10.9, restore never writes a system path itself: an entry still
+   holding the product's copy is left too, named on stdout (`… still holds <product>'s copy …`). So
+   uninstall works after an OS upgrade past 10.9, even where the system directories cannot be
+   written. `system-replace` still refuses such a path, saying to run `system-restore` first, which
+   now resolves it.
+5. Run `post-system-restore` (openssh runs Apple's own `sshd -t` on the restored config and logs the
+   result). Non-zero is reported and makes restore exit non-zero, but the files stay restored: the
+   originals are byte-identical to what the old binary last read.
+
+The save area is cleared only when every entry came back. Copying the admin's modern settings into the
+restored config is a non-goal: the old binary may not parse them (OpenSSH 6.2 rejects `Include` and
+will not start), so restore reports them and uninstall keeps a copy.
+
+**Uninstall** first works out the whole restore, as `system-restore` does, and refuses with nothing
+changed, before even its `pre-uninstall` hook, if the restore would refuse any entry. Then it runs the
+hook, then the full restore. Then it copies each `config` entry's `var` file (now real again) that
+differs from its seed record, or has none, to `<system path>.mavergreen-save`, overwriting an older
+save, and says so on **stdout**: `mavergreen: <path>.mavergreen-save keeps the settings <product>
+used in <path>`. The entries it considers are those `applied.plist` still records (whatever
+`.replaced` says, since a restore removes it first), together with each `config` entry the current
+manifest adopts that `restored.sha256` records as put back in `var`. That covers a restore that
+stopped partway after some config was back, and a product restored by hand with `system-restore`
+while installed: the admin made those edits at the system path, and the restore moved them into
+`var`, which uninstall removes. Nothing is written beside a path the product never replaced. Only
+then does uninstall remove anything. `identity` entries are never saved. It decides what to save
+before changing anything, and a directory in the way of a save, or a save whose directory is
+missing, refuses then. A failing `post-system-restore` is reported and the uninstall still finishes,
+exiting non-zero, since the hook lives in the tree being removed. Uninstalling a product that was
+never replaced writes nothing outside its tree and `var`, so the basic install stays hermetic on
+every platform.
+
+**`mavergreen check`** reports, for a replaced product:
+
+- a program copy that is no longer the product's, or is stale against its tree file;
+- a man-page link that is no longer the product's;
+- an adopted system path that is missing or no longer a real file;
+- a `var` path that is no longer the product's link to it, which is the signature of a tool that
+  saved through the link by rename;
+- any path that now fails the ownership precondition, and a save area another user can reach;
+- a replace or a restore that did not finish (`applied.plist` without `.replaced`).
+
+**Hooks** live at fixed paths in the tree, under the same contract as `pre-uninstall`: never a symlink,
+run by their own shebang, `MAVERGREEN_ROOT` and `MAVERGREEN_PRODUCT` set, stdin, stdout and stderr
+inherited, host-declared, and exiting 0 when there is nothing to do. Root runs them, so each System
+Replace hook (`pre-system-replace`, `post-system-replace`, `post-system-restore`) must pass the
+ownership precondition itself, with every directory above it, or the helper refuses to run it;
+restore and uninstall judge `post-system-restore` before their first change.
+`pre-uninstall` keeps only its own checks, so a product still uninstalls on a Mac whose `/usr/local`
+is not root-only (Homebrew's, say). The variables are exported to the hook directly, never passed
+through `env`, so a volume path holding `=` cannot turn the hook into an assignment.
+
+- `<product>/libexec/mavergreen/pre-system-replace` also gets `MAVERGREEN_STAGING`, the staging
+  directory. It holds each file about to be adopted, with the owner and mode it will go live with. The
+  hook may edit them (openssh prepends its `Include` lines to an admin's file that stays) and runs the
+  new binary's config check on them (`sshd -t -f`, `visudo -c -f`). On an upgrade, entries already
+  adopted have no staged file, so the hook checks `$MAVERGREEN_STAGING/<path>` only when it exists;
+  the preflight checks the rest. Non-zero refuses replace before any change. What goes live is the
+  staged file as the hook left it, which must still be a regular file, with its owner and mode set
+  again.
+- `<product>/libexec/mavergreen/post-system-replace` is best-effort. Its shape is checked before any
+  change.
+- `<product>/libexec/mavergreen/post-system-restore` is reported, as above.
+
+An upgrade's re-replace runs the new version's hooks.
+
+**Seeding config (`--seed`).** `stage_product.sh --seed <var path>=<tree path>` (repeatable) makes the
+generated postinstall copy the tree file to `var/<product>/<var path>` only when nothing is there, not
+even a link, so a replaced system is never re-seeded. It records the copy's sha256 in
+`var/<product>/.mavergreen-seeded`. That record is the product side's "default" for the customization
+rule and uninstall's "changed", and it replaces hand-written seeding loops. A `--seed` whose var path is
+`.mavergreen-seeded` itself is refused (exit 2), since its own record would overwrite it, and no
+`--seed`, `--replaces` or `--adopts` value is ever expanded as a glob.
+
+**The preflight (rule 7).** `stage_product.sh --preflight <hook>` (at most once) puts the hook's text
+into the generated preinstall, where it runs **first**, before `--requires`, `unlink` or anything else,
+in a subshell with `ROOT` (empty for the boot volume) and `PREFLIGHT_DIR` set. Each `--preflight-file
+<path>` (repeatable) is copied with its mode into `preflight/`, beside the preinstall in the pkg's
+Scripts, and `PREFLIGHT_DIR` names that directory, so the new binary ships there. The hook checks the
+live config, `$ROOT/usr/local/mavergreen/var/<product>/…`, with the *new* binary, and exits 0 when
+there is no config yet (a fresh install). **Once replaced, that `var` path is a link with an absolute
+target** (`/etc/sudoers`), so the hook resolves it under `$ROOT` and never follows it as it stands:
+installing onto any volume other than the boot volume would otherwise check the boot volume's file.
+
+```sh
+conf="$ROOT/usr/local/mavergreen/var/<product>/<path>"
+if [ -L "$conf" ]; then
+  case "$(readlink "$conf")" in /*) conf="$ROOT$(readlink "$conf")" ;; esac
+fi
+```
+
+- **Non-zero stops the install with nothing changed.** The preinstall prints `<product>: the new
+  version cannot use this Mac's configuration; nothing was changed`, then the hook's stderr, and exits
+  1. The old version keeps running. This holds whoever starts the install: Installer, Sparkle, or the
+  engine of the 2026-10-08 manager spec.
+- **Its status is its verdict.** The hook inherits the preinstall's errexit, which is off as Installer
+  runs it, so it checks each status or runs `set -e` itself. Its stdout passes through.
+- **It is the only check of entries already adopted**, since an upgrade's `pre-system-replace` hook
+  sees only new ones.
+- **The binary must run from the Scripts directory.** The product builds it so (openssh's `sshd -t`
+  and sudo's `visudo -c` need no sibling files; each consumer verifies its own).
+
+`stage_product.sh` refuses a hook that is not a file or that `sh -n` rejects, a second `--preflight`,
+a `--preflight-file` without `--preflight`, one that is not a file or whose path holds a
+newline, and two with the same basename. It owns `<scripts-out>/preflight/` and removes it on every
+run.
+
+**CI side.** Each consumer keeps a corpus of real configs under `tests/fixtures/config-corpus/`
+(10.9's stock file, every default the product has ever seeded, a hardened example) and a test that
+checks every one with the newly built binary. A Renovate bump whose upstream rejects an old config then
+fails the build and blocks its own automerge: the "builds fine and is wrong" case, caught.
+
+**Product-owned settings travel with the binary** (a pattern, not a facility). Settings the product
+itself needs (openssh: `UsePAM yes`, the `+ssh-rsa` interop lines) live in a file **in the tree**,
+replaced by every update together with the binary that parses it, and the admin's config includes it.
+They are never appended into the admin's file. Where the tool supports includes, the admin's own
+drop-in directory comes first, so the admin wins, then the product's file (modern macOS's own
+`/etc/ssh/sshd_config.d/100-macos.conf` is the precedent). Where a setting is non-negotiable for the
+platform to work, prefer making it the compiled-in default on Darwin. Each consumer's spec decides the
+contents.
+
+**The product's own writers go through the link (rule 10).** Once replaced, every adopted
+`var/<product>` path is a link. A tool that writes one by creating a temp file and renaming it over the
+path replaces the link with a real file and silently splits the config. sudo's `visudo` does exactly
+this: `install_sudoers()` renames `<path>.tmp` over the configured path with no `realpath()`. So each
+consumer audits its own writers of adopted files, and patches any that renames to write through the
+link:
+
+1. Resolve the configured path once.
+2. Open the resolved target's directory, and verify it and the target with the tool's own secure-path
+   checks where it has them (sudo: `sudo_secure_dir`/`sudo_secure_file`), refusing otherwise.
+3. Create the temp file in that directory, exclusively and without following links.
+4. Write and `fsync` it, then rename it into place relative to the opened directory. 10.9 has no
+   `openat`/`renameat`, so `fchdir` to the directory and rename by bare names (sudo's compat layer
+   already emulates the `*at` family this way; `visudo` is single-threaded).
+5. Check that the link still resolves to the target, and report if not.
+
+Beyond what stock `visudo` already does, the only new step is the resolve, and the ownership
+precondition means no unprivileged user can move anything between the resolve and the rename. Each
+such patch is offered upstream. Each consumer adds a test that runs its own editing tool in replaced
+mode (on a fake root where the tool takes a path argument, on the 10.9 guest otherwise) and asserts
+that the `var` link survives and the system file holds the edit.
+
+**Logging from system jobs.** Anything Apple's launchd jobs run through a replaced path (openssh's
+`sshd-keygen-wrapper`) checks the config first and reports a failure with `logger -p auth.err -t
+<product>`. Those jobs often discard stderr: Apple's `ssh.plist` sends it to `/dev/null`, so without
+this a config the new `sshd` rejects makes every Remote Login connection fail without a trace.
+
+**Coverage (rule 8): the `system-replace-coverage` conformance rule.** `check-artifact-conformance.sh`
+reads every built pkg's manifest, so it judges the `replaces` and `adopts` the product actually
+packaged, however its build assembles them. For a pkg whose manifest declares either, every path in the
+repo's `tests/fixtures/apple-files.txt` must be replaced or adopted, or carry a reasoned deviation,
+`- system-replace:<glob>: <reason>` (zsh completions, vim syntax files). A missing or empty fixture
+fails. The fixture lists every file and link Apple's receipts install for the tool. **Capture it once,
+on the 10.9 guest**, with `lsbom -s -f -l` over each receipt BOM that carries the tool, and **record
+the command in the file's header**:
+
+```
+# captured on the 10.9.5 guest with:
+#   for b in /var/db/receipts/com.apple.pkg.*.bom; do lsbom -s -f -l "$b"; done | grep sudo
+./private/etc/sudoers
+./usr/bin/sudo
+./usr/sbin/visudo
+...
+```
+
+`-s -f -l` prints only the paths of files and links, since System Replace takes nothing else. The
+reader accepts lsbom's output as captured: `#` lines and blank lines are skipped, and a leading `./`
+reads as `/`. Paths compare in canonical form, so lsbom's `./private/etc/sudoers` is covered by
+`--adopts /etc/sudoers`. A `/private/etc/`, `/private/var/` or `/private/tmp/` prefix reads as
+`/etc/`, `/var/` or `/tmp/`, in the fixture, in the manifest and in a deviation's subject alike, and
+a deviation's glob is written against the canonical form (`system-replace:/etc/…`). A failure names
+the canonical path, and the fixture's spelling when that differs.
+
+The inventory is wider than Apple's files (the 2026-10-11 survey of everything Apple installs on
+10.9.5). Each consumer's fixture and spec also account for:
+
+- every absolute-path caller of the tool;
+- every launchd invocation form the replacement must accept (`-i`, `-e 60`, wrappers);
+- every hardlink and argv[0] personality (gzip ×4, less/more);
+- Apple's self-hardening of the tool (a `sandbox_init` call, entitlements);
+- the tool's identity in firewall exceptions and Keychain ACLs.
+
+Each one is preserved, or declared as a `system-replace:` deviation with its reason.
+
+**Copied programs are self-contained: the `system-replace-self-contained` conformance rule.** For
+every `replaces` entry whose tree path is not under `share/man/`, every arch slice of the payload's
+file at that tree path loads dylibs only from `/usr/lib/` and `/System/`, through any load, weak,
+re-export, lazy or upward load command. So `@rpath`, `@loader_path`, `@executable_path`, anything under
+`/usr/local/` and any `/../` are out, because a sandboxed caller can read neither the tree nor anything
+it points at. A file that is not Mach-O (a script) passes. A tree path the payload does not install
+fails, since nothing was checked, and so does a Mach-O slice from which no load command was read:
+every program loads at least `libSystem`, so an empty list means the parser read nothing. A reasoned
+`- system-replace-self-contained:<glob>: <reason>` excuses a program, the glob matching its
+**system** path (`/usr/bin/ssh`). The shared library copies extension (below) is what would relax
+this rule.
+
+**Never replace a wrapper or a stub** (`/bin/sh`, the perl and python versioners, the xcrun stubs).
+This is a rule here, not a check.
+
+**Named extensions**, each needing its own spec when its first consumer arrives (none is built):
+
+- **Shared library copies** (first consumer: openssh linking openssl-35 dynamically). A product links
+  a sibling's dylibs through `@rpath` with two entries: first `/usr/lib/mavergreen/<sibling>/lib`, then
+  `/usr/local/mavergreen/<sibling>/lib`. Installed hermetically, only the tree copy exists and dyld
+  falls through to it. Replaced, the sibling's dylibs also exist as real copies under
+  `/usr/lib/mavergreen/<sibling>/` (`/usr/lib` is readable under `system.sb` and App Sandbox), and dyld
+  takes those first, sandboxed or not. **Verified 2026-10-11 on the 10.9.5 box** with a two-rpath test
+  program: unsandboxed, it loads whichever exists, in rpath order; sandboxed, it loads the readable
+  copy; with only the tree copy, sandboxed, it fails "Library not loaded", as predicted. Open for that
+  spec: who places and refreshes the copies (the sibling's upgrades), and removing them only when no
+  replaced product still needs them.
+- **Libraries.** The mechanics above fit, plus:
+  - install names kept identical, with a compatibility version at least what Apple's clients recorded;
+  - only the real file in Apple's symlink chain replaced;
+  - `update_dyld_shared_cache -force` and a reboot on replace and on restore;
+  - real files where sandboxed clients can read them;
+  - an ABI check of every Apple client's imports against the new library's exports, as the survey did
+    with `nm`.
+
+  Stable-ABI candidates come first (expat, libcurl, bz2). OpenSSL 0.9.8 is a distant-horizon project of
+  its own.
+- **Directory-shaped config** (`/etc/postfix`, `/etc/apache2`). Adoption makes this tractable: the real
+  directory stays at the system path and `var/<product>/<dir>` links to it, so tools that add files go
+  through to the system. But the customization rule for a directory needs its own design. First
+  consumer: postfix.
+
+**Not yet proved on real hardware or CI.** These are requirements, not verified facts. The first
+consumer's real pkg build, its install on the 10.9 guest, and a CI run prove them:
+
+- **pkgbuild ships the new files.** `pkgbuild --scripts` must ship `preflight/`, with its modes, and the
+  dotfile `.mavergreen-payload` beside the preinstall, and `pkgbuild --root` must ship
+  `<product>/.mavergreen-payload`.
+- **Installer runs the scripts with `$0` in the expanded Scripts directory.** Both scripts find the
+  list and `preflight/` beside `$0`. If they are not there, every preinstall refuses at the missing
+  list, and every postinstall skips its prune.
+- **The upgrade never dangles.** During a real Installer upgrade of a replaced product, a replaced
+  system path is never missing. Probe it in a loop while `installer` runs.
+- **Apple's jobs keep working (rule 8).** Remote Login on and off, and "only these users", go through
+  openssh on the guest.
+- **llvm-otool parses the same.** `system-replace-self-contained` reads load commands with `otool
+  -arch <arch> -l`, which has been checked only against 10.9's cctools `otool`. One passing CI run on
+  the macOS 26 runners, where `otool` is llvm-otool, proves its output parses the same.
+
+**No migrations.** A product replaced by the helper before this convention (`.replaced` with no
+`applied.plist`) makes `system-replace` refuse: run `system-restore` (which still restores it the old
+way), then `system-replace` (see "No upgrade migrations", below). Anything on modern macOS stays out of
+scope: the helper keeps refusing there.
 
 ### The base component, `dev.mavergreen.base`
 
@@ -1862,25 +2330,59 @@ product archives.
 Stage the product's files under `<stage>/usr/local/mavergreen/<product>/` (and anything the OS
 dictates elsewhere), then call `sh "$SHIPYARD_SCRIPTS/stage_product.sh"`. It refuses a stage with
 nothing in it; a product whose every file lives where the OS dictates still gets a tree, holding just
-its manifest. It writes the manifest and both
-scripts:
+its manifest. It writes the manifest, the payload list and both scripts. Its System Replace options,
+`--replaces`, `--adopts`, `--seed`, `--preflight` and `--preflight-file`, are described under "System
+replacement (10.9 only)", above.
 
-- **preinstall**: first, for every `--requires <short>` (repeatable), refuses to proceed — before
-  `mavergreen unlink`, before anything else — if `usr/local/mavergreen/<short>/mavergreen.plist` is
-  missing on the target volume, naming this product's display name, `<short>`, and its releases URL
-  (from the registry) on stderr, and exits 1 having changed nothing; then `mavergreen unlink
-  <product>` if a helper exists; then the product's
-  `--preinstall-hook`, which still sees the outgoing version's tree and bundles; then removes each
-  bundle directory (`.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`) that the
-  installed manifest lists in `outside`, so a file the new version drops (from Sparkle, say) cannot
-  linger inside a bundle and break its code-signature seal; then removes
-  `/usr/local/mavergreen/<product>` (never `var/`). Listed files are left for the payload to
-  overwrite, and an entry the helper's uninstall would refuse (absolute, `.`/`..`, in the tree, a
-  symlink, or under a parent that resolves off the volume) is left alone. With no readable manifest,
-  no bundle is removed. A bundle or tree it cannot remove is reported, never failing the install:
-  files the new version dropped may linger.
-- **postinstall**: `mavergreen link <product>`, failing the install if it fails; then the updater's
-  agent load (`--updater-app`, whose place and label come from the registry); then the `--postinstall-hook`.
+- **The payload list**, as `<product>/.mavergreen-payload` in the tree and as `.mavergreen-payload`
+  beside the scripts: one `KIND<tab>PATH` line for each path staged under the tree, with `PATH`
+  relative to the tree and sorted, and `KIND` one of `f` (file), `l` (link), `d` (directory) or `b`
+  (a bundle directory, whose contents are listed too). A staged name holding a tab or a newline is
+  refused (exit 2), since the list cannot carry it.
+- **preinstall**, in order:
+  1. the `--preflight` hook, before anything else;
+  2. for every `--requires <short>` (repeatable), a refusal to proceed if
+     `usr/local/mavergreen/<short>/mavergreen.plist` is missing on the target volume, naming this
+     product's display name, `<short>`, and its releases URL (from the registry) on stderr, and
+     exiting 1 having changed nothing;
+  3. a refusal, with exit 1 and nothing changed, when the payload list is missing beside the
+     preinstall, or when any removal in step 7 would not stay inside the tree;
+  4. `mavergreen unlink <product>`, if a helper exists;
+  5. the product's `--preinstall-hook`, which still sees the outgoing version's tree and bundles;
+  6. removing each bundle directory (`.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`,
+     `.framework`) that the installed manifest lists in `outside`, so a file the new version drops
+     (from Sparkle, say) cannot linger inside a bundle and break its code-signature seal. Listed files
+     are left for the payload to overwrite, and an entry the helper's uninstall would refuse
+     (absolute, `.`/`..`, in the tree, a symlink, or under a parent that resolves off the volume) is
+     left alone. With no readable manifest, no bundle is removed. A bundle it cannot remove is
+     reported, never failing the install: files the new version dropped may linger;
+  7. removing from the installed tree only what the payload cannot safely be laid over: each path
+     whose kind the incoming list changes (file, directory or link, which Installer may fail on or
+     write through), and every bundle directory in the tree, for the same code-signature reason. If
+     one cannot be removed, the preinstall links the installed version again and exits 1, so the
+     payload never lands over it.
+- **postinstall**, in order:
+  1. the prune: every file or link in the tree that the list does not name is removed (never
+     `mavergreen.plist` or the list itself), then the unnamed directories left empty, deepest first. It
+     runs only when the tree's list is non-empty and identical to the package's own copy; otherwise it
+     says nothing was pruned, so a truncated list can never delete the tree. A removal that fails is
+     reported and the install goes on, since a leftover file is harmless once the payload has landed;
+  2. `mavergreen link <product>`, failing the install if it fails;
+  3. each `--seed`;
+  4. for a product whose System Replace is applied, `mavergreen system-replace <product>` again, on a
+     10.9 volume only, failing the install if it fails;
+  5. the updater's agent load (`--updater-app`, whose place and label come from the registry);
+  6. the `--postinstall-hook`.
+
+**Upgrades never remove the tree.** Installer lays the new payload over the installed tree, so a path
+in it resolves to the old file or the new one throughout, never to nothing, and the prune keeps the
+guarantee a wholesale removal used to give: a file the new payload stopped carrying is gone afterwards,
+enforced after the payload instead of before. `render-manifest.sh` refuses a `replaces` target that is
+missing from the stage, is not a regular file (a directory or a link) or lies inside a bundle, so
+neither preinstall removal can touch one. Neither script removes
+anything through a link inside the tree: a removal's directory must resolve to the tree's own physical
+path, which may itself lie through links above it (a `/usr/local` linked to another volume). This is
+every product's upgrade, not only one that declares `replaces`: one upgrade behaviour, not two.
 
 `--requires` replaces a hand-written "is product X installed?" check in a preinstall hook: 1password
 once checked for Porthole and Container Tools, signal-desktop only for Porthole, and Porthole for
@@ -1891,28 +2393,30 @@ reaches `render-manifest.sh` or the manifest.
 
 Both anchor on Installer's target volume and never on `/`: with none, the preinstall removes nothing
 and the postinstall fails. **A product's own steps go in the hooks**, appended to the generated
-scripts, never in a hand-written script: that is what keeps unlink-remove-link the same in every
-product, and check 23 enforces the call. Hooks see the volume as `$ROOT` (empty for the boot
+scripts, never in a hand-written script: that is what keeps unlink, lay over, prune and link the same
+in every product, and check 23 enforces the call. Hooks see the volume as `$ROOT` (empty for the boot
 volume), and **a hook touches the running system (`launchctl`, `kextload`, `open`, …) only inside
 `if [ -z "$ROOT" ]; then … fi`**: an install to another volume must not load that volume's jobs or
 kexts into the system doing the installing. The updater's agent load follows the same rule. **Each
-hook runs in a subshell, and its last command's status is its verdict.** `stage_product.sh` refuses
-to stage a hook that `sh -n` rejects. A failing preinstall hook stops the install before the tree is
-removed, which is how a preset refuses a missing dependency. When a helper is installed, the
+hook runs in a subshell, and its exit status is its verdict.** The subshell inherits the script's
+errexit, which is off as Installer runs it, so a hook's status is its last command's unless the hook
+runs `set -e` itself, which works: the subshell is a command of its own, never the left side of `||`,
+where bash 3.2 would silently ignore it. `stage_product.sh` refuses to stage a hook that `sh -n`
+rejects. A failing preinstall hook stops the install before anything in the tree is removed, which is
+how a preset refuses a missing dependency. When a helper is installed, the
 outgoing version is relinked; if that relink fails, the preinstall says so and names
 `mavergreen link <product>` as the remedy. A failing postinstall hook fails the install, but
 Installer does not roll back: the product stays installed and linked, and whatever the hook did
 before it failed stays done. So a best-effort step ends `|| true`, and an essential one records its
 failure: the hook starts `_rc=0`, the step ends `|| _rc=1`, and the hook ends `[ "$_rc" -eq 0 ]`. A
 guard is written as `if [ -z "$ROOT" ]; then …; fi`, never as `[ -z "$ROOT" ] && …` on the last line
-(that line is false on another volume). A hook contains no `exit` and no `set -e`: the subshell sits
-left of `||`, so `set -e` inside it is silently ignored, not enforced.
+(that line is false on another volume).
 
 ### Where a product may install
 
 **Everything a pkg installs says it is ours, and lands where the family puts things.** Read from the
 payload itself (`artifact-facts.sh` expands each pkg; a filename or a recipe is a claim, the payload
-is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
+is the fact), twelve checks, each excusable only by a scoped, reasoned deviation:
 
 | Check | Default rule | Deviation scoped to |
 |---|---|---|
@@ -1926,6 +2430,8 @@ is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
 | `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
 | `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | with `$GITHUB_REPOSITORY` set, every product a release ships is registered to that repo (by name; the owner is not compared) | the pkg filename |
+| `system-replace-coverage` | a pkg whose manifest declares `replaces` or `adopts` replaces or adopts every path the repo's `tests/fixtures/apple-files.txt` lists, and that fixture exists (see "System replacement (10.9 only)") | the Apple path, as `system-replace:<glob>`; or, for the whole rule, the pkg filename, as `system-replace-coverage:<glob>` |
+| `system-replace-self-contained` | every program a manifest `replaces` (a tree path not under `share/man/`) is in the payload, and each of its slices loads dylibs only from `/usr/lib/` and `/System/` | the replaced system path |
 
 Paths are relative to `/`, after each component's `install-location`; a manifest is read only from a
 component installed at `/`, since a product tree always is.
@@ -2133,7 +2639,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **17.** A repo's **committed** `build/msc.sh` (or `./msc.sh`) equals `$SHIPYARD_SCRIPTS/templates/msc.sh` **byte for byte** | It is the one piece each product carries in order to find shipyard. Eleven hand-kept copies had drifted into three variants, so "the incantation" meant three different things depending on which repo you opened. Tracked copies only — an untracked scratch copy in your worktree is not what the repo ships, and the failure shows the first differing line |
 | **18.** No plain `cmake` / `ctest` / `cpack` at command position — in workflow `run:` bodies or in committed `*.sh` outside `tests/` | `MavericksShipyardConfig.cmake` refuses any other cmake at configure time; this finds the call in the PR instead of in the release. `tests/` is excluded because fixtures quote the command on purpose |
 | **22.** Every tracked script declares its host in its header — `# platform: host-agnostic` or `# platform: macOS-only -- <why>` — and a host-agnostic one runs no macOS-only tool at command position (`check-host-tools.sh`); **opt-in**, in a repo where at least one script declares | Nothing stopped a script that a Linux job depends on from growing an `otool` or `sw_vers`: it passed every gate and broke on the runner. `check-shell-portability.sh` cannot see it — flawless POSIX sh can still call `lipo`. An undeclared script **fails** rather than defaulting to host-agnostic, because a default makes the gate silently incomplete. Opt-in, like 15, so `@v1` reaching fourteen consumers reddens none of them |
-| **23.** A repo that builds a `.pkg` (the same test as 21) calls `stage_product.sh`, on a non-comment line of a tracked, non-test `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt`, at command position — line start, after `;` `&` `\|` or a backtick, after `$(`, `then`, `do` or `exec`, after a YAML `run:` or a CMake `COMMAND`, any of these optionally followed by `if`, `elif`, `while`, `until` or `!` — spelled `sh` or `/bin/sh` (with any option flags, `sh -e`) and a word ending `stage_product.sh`, or a word ending `/stage_product.sh` (`"$SHIPYARD_SCRIPTS"/stage_product.sh`, `./stage_product.sh`); or declares `- product-layout: <reason>` | Conformance enforces the install layout, and `stage_product.sh` is what produces it: the manifest, and the unlink–remove–link install scripts that make an upgrade replace the tree while keeping the selection. A hand-rolled pkg fails `manifest` only at package time; this finds it on the PR. A mention is not a call — `echo "sh stage_product.sh"` does not count, and neither does an assignment (`SP="$S/stage_product.sh"`: a word holding `=`). **Known false negatives:** a bare `stage_product.sh` found on `PATH`; `bash` or `.` instead of `sh`; a call behind a prefix command (`sudo`, `env`, `time`, `command`) or opening a `{ … }` group or a `( … )` subshell; a path with a space or `=` in it (`"$(dirname "$0")"/stage_product.sh`); and a call followed directly by `;` or `)` (`then sh "$S/stage_product.sh"; fi`, `$(sh …/stage_product.sh)`) — give the call its own line, or at least a space before the separator |
+| **23.** A repo that builds a `.pkg` (the same test as 21) calls `stage_product.sh`, on a non-comment line of a tracked, non-test `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt`, at command position — line start, after `;` `&` `\|` or a backtick, after `$(`, `then`, `do` or `exec`, after a YAML `run:` or a CMake `COMMAND`, any of these optionally followed by `if`, `elif`, `while`, `until` or `!` — spelled `sh` or `/bin/sh` (with any option flags, `sh -e`) and a word ending `stage_product.sh`, or a word ending `/stage_product.sh` (`"$SHIPYARD_SCRIPTS"/stage_product.sh`, `./stage_product.sh`); or declares `- product-layout: <reason>` | Conformance enforces the install layout, and `stage_product.sh` is what produces it: the manifest, and the unlink, lay-over, prune and link install scripts that make an upgrade replace the tree's contents while keeping the selection. A hand-rolled pkg fails `manifest` only at package time; this finds it on the PR. A mention is not a call — `echo "sh stage_product.sh"` does not count, and neither does an assignment (`SP="$S/stage_product.sh"`: a word holding `=`). **Known false negatives:** a bare `stage_product.sh` found on `PATH`; `bash` or `.` instead of `sh`; a call behind a prefix command (`sudo`, `env`, `time`, `command`) or opening a `{ … }` group or a `( … )` subshell; a path with a space or `=` in it (`"$(dirname "$0")"/stage_product.sh`); and a call followed directly by `;` or `)` (`then sh "$S/stage_product.sh"; fi`, `$(sh …/stage_product.sh)`) — give the call its own line, or at least a space before the separator |
 | **24.** A repo that builds a `.pkg` (the same test as 21), where `$GITHUB_REPOSITORY` is set, is the repo of at least one short name in shipyard's `scripts/product-names` (by name, not owner); a `product-layout` deviation exempts it | Every feed URL and updater identity is derived from the registry's repo, so a repo the registry does not name publishes feeds no installed updater polls. The short names themselves are known only at package time, where conformance's `repository` check holds each to its registered repo; this finds an unregistered or renamed repo on the PR |
 | **25.** A tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt` or `*.bats` file, `tests/` included, whose content — outside a whole comment line or a trailing ` #…` remark — contains `arch -x86_64`, `arch -arch x86_64`, `/usr/bin/arch -x86_64` or `softwareupdate --install-rosetta`, carries a matching `rosetta:<path>` deviation | The family is retiring Rosetta (see "Rosetta", above) — an undeclared use is invisible until someone has to sweep every repo by hand the day macOS 28 ships. There is no exemption for `tests/`: a test that runs the shipped x86_64 product under Rosetta, which CI runs rather than skips, still runs translated, so it still needs a declaration. This is a text match, not a command-position check like 23's: a quoted MENTION on an otherwise-unrelated line (`echo "… arch -x86_64 …"`) still counts, because excluding quotes reliably is not practical in BWK awk/sed. **Known limits:** `arch -e VAR=… -x86_64` (something between `arch` and its flag) and `arch "-x86_64"` (the flag itself quoted) are both invisible, since the match needs the literal flag text directly after `arch`; so is a build that runs an x86_64 binary it built earlier some other way (a cross build whose `make` just executes x86_64 host tools it compiled). Both still need a declaration and rely on it alone, not on being caught |
 | **26.** No tracked Renovate config other than `.github/renovate.json` (`renovate.json`, `renovate.json5`, `.renovaterc`, `.renovaterc.json`, `.renovaterc.json5`, `.github/renovate.json5`, `.gitlab/renovate.json`, `.gitlab/renovate.json5`), alone **or** beside it; a path is excused by `- renovate-path:<path>: <reason>` | Checks 4, 4b and 13 read only `.github/renovate.json`, and shipyard's configure step scaffolds it when absent, so a config kept elsewhere exempts its repo from them without anyone deciding it should, and beside the scaffold is dead config (Renovate takes one by precedence). Fix: `git mv <path> .github/renovate.json` |
