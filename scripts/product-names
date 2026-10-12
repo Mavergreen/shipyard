@@ -28,3 +28,5 @@ avxemu dev.mavergreen.avxemu avxemu
 drydock dev.mavergreen.drydock drydock
 claude-code dev.mavergreen.claude-code claude-code
 icu dev.mavergreen.icu icu
+longboat dev.mavergreen.longboat longboat
+sdk109 dev.mavergreen.longboat.sdk109 longboat
