@@ -668,7 +668,7 @@ as clang's did):
 
 | auto-cut on a push to `main` | publishes only from a dispatch (or a legacy tag trigger) |
 |---|---|
-| golang, openssh, 1password, signal-desktop, swift, ed25519, clang | macho-tools, container-tools, tailscale, porthole, magic-trackpad2, recaulk |
+| golang, openssh, 1password, signal-desktop, swift, ed25519, clang, ca-certs | macho-tools, container-tools, tailscale, porthole, magic-trackpad2, recaulk |
 
 tailscale's `release.yml` has no `push: branches:[main]` trigger at all — only tags and
 `workflow_dispatch` — but a push to its `main` that moves `components/**` is still a release:
@@ -982,6 +982,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   | tailscale | `Tailscale` | |
   | swift | `Swift` | |
   | magic-trackpad2 | `Mavericks Trackpad 2` | genuinely self-upstream (`vX.Y.Z`, no `-mavericks.N`) |
+  | ca-certs | `CA Certificates` | the version is NSS's (`3.130.0`); the roots are Mozilla's data, not a product of ours |
 
   (shipyard itself, a caller but not a "product", passes `Shipyard`.)
 - **`--line` takes the prefix the TAGS carry, not the repo's own product id or any other per-repo
@@ -1004,7 +1005,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 
   | `--min-os` passed | Repos |
   |---|---|
-    | `10.9.5` | 1password, signal-desktop, porthole (bare `10.9` until the 2026-09-22 flag day, which found it was drift), openssh, container-tools, clang, golang, macports-legacy-support, ed25519, tailscale, swift, magic-trackpad2, shipyard |
+    | `10.9.5` | 1password, signal-desktop, porthole (bare `10.9` until the 2026-09-22 flag day, which found it was drift), openssh, container-tools, clang, golang, macports-legacy-support, ed25519, tailscale, swift, magic-trackpad2, ca-certs, shipyard |
 
   **Dual-variant repos (clang, golang): the notes' floor line describes the NATIVE `.pkg`, while each
   appcast enforces its own artifact's real minimum — this split is deliberate, do not "fix" it.** Both
