@@ -2301,6 +2301,14 @@ consumer's real pkg build, its install on the 10.9 guest, and a CI run prove the
   -arch <arch> -l`, which has been checked only against 10.9's cctools `otool`. One passing CI run on
   the macOS 26 runners, where `otool` is llvm-otool, proves its output parses the same.
 
+Two tests are built to prove the first three once they pass. `tests/system-replace-mavericks.sh`, run on
+the 10.9 guest by `system-replace-mavericks.yml`, takes a fake product through 10.9's own `pkgbuild` and
+Installer, as root on `/`: install, replace, upgrade, a refused upgrade, Apple's put-back, restore,
+uninstall and an OS past 10.9. It skips (77) anywhere else. `tests/system-replace-flow-test.sh` runs
+the same flow in every suite on a fake volume, so `ci.yml` checks the `pkgbuild` of the `macos-26`
+runners, with Installer emulated. A pkg built on `macos-26` going through 10.9's Installer is still
+the first consumer's to prove.
+
 **No migrations.** A product replaced by the helper before this convention (`.replaced` with no
 `applied.plist`) makes `system-replace` refuse: run `system-restore` (which still restores it the old
 way), then `system-replace` (see "No upgrade migrations", below). Anything on modern macOS stays out of

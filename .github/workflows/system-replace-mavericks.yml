@@ -1,0 +1,71 @@
+name: system-replace-mavericks
+
+# spec: tests/system-replace-mavericks.sh -- the System Replace life cycle, end to end, as root on a
+#       real Mac OS X 10.9.5 guest (Mavergreen/mavericks-vm), which is thrown away afterwards. Only
+#       this workflow sets MAVERGREEN_E2E_GUEST, so the test skips (77) everywhere else. It runs one
+#       test, never the suite: ci.yml stays the only suite runner (tests/shipyard-workflow-coupling-test.sh),
+#       and it never runs on main, since the pull request into main already ran it.
+
+on:
+  push:
+    branches-ignore: [main]
+    paths:
+      - scripts/mavergreen.sh
+      - scripts/stage_product.sh
+      - scripts/render-manifest.sh
+      - scripts/product-name.sh
+      - scripts/registry-lookup.sh
+      - scripts/build_component_pkg.sh
+      - scripts/build-base-component.sh
+      - scripts/templates/base-postinstall.sh
+      - tests/system-replace-mavericks.sh
+      - tests/lib/system_replace_flow.sh
+      - tests/lib/system_replace_guest_gate.sh
+      - .github/workflows/system-replace-mavericks.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/mavergreen.sh
+      - scripts/stage_product.sh
+      - scripts/render-manifest.sh
+      - scripts/product-name.sh
+      - scripts/registry-lookup.sh
+      - scripts/build_component_pkg.sh
+      - scripts/build-base-component.sh
+      - scripts/templates/base-postinstall.sh
+      - tests/system-replace-mavericks.sh
+      - tests/lib/system_replace_flow.sh
+      - tests/lib/system_replace_guest_gate.sh
+      - .github/workflows/system-replace-mavericks.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # spec: Mavergreen/mavericks-vm README.md -- the org secret MAVERICKS_VM_KEY decrypts the shared
+  #       cached guest, which needs packages: write; a fork's pull request gets no secrets, so it
+  #       cannot boot the guest and skips this job.
+  on-mavericks:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # spec: Mavergreen/mavericks-vm docs/measured.md -- a cold cache builds the base and layer
+    #       images in about 54 minutes before the guest even boots.
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      # spec: tests/system-replace-mavericks.sh -- sudo resets the environment, so the opt-in goes
+      #       through env; a skip (77) fails here, since this job exists so that the test runs.
+      - uses: Mavergreen/mavericks-vm@v1
+        with:
+          image-key: ${{ secrets.MAVERICKS_VM_KEY }}
+          copyback: false
+          debug-on-error: true
+          run: |
+            status=0
+            sudo env MAVERGREEN_E2E_GUEST=I-am-a-throwaway-vm sh tests/system-replace-mavericks.sh || status=$?
+            [ "$status" -eq 0 ] || { echo "tests/system-replace-mavericks.sh exited $status (77 is a skip, a failure here)"; exit 1; }
