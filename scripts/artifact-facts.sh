@@ -5,7 +5,8 @@
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
-#          payload and shipped tarball.
+#          payload and shipped tarball, a `macho-load` per dylib that slice loads, and an
+#          `apple-file` per path in <repo-root>/tests/fixtures/apple-files.txt.
 # platform: runs at PACKAGE TIME, on macOS, where pkgutil exists and the artifacts do.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
@@ -73,8 +74,38 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
     printf '%s\n' "$_sl" | while read -r _a _ft _mn _sd; do
       printf 'macho %s %s %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_ft" "$_mn" "$_sd" "$_sha"
     done
+    # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "System replacement (10.9
+    #       only)" -- one macho-load per dylib each slice names in a load, weak, re-export, lazy or
+    #       upward load command, for system-replace-self-contained.
+    # platform: `otool -arch A` on a file with no slice A prints nothing and exits 0, so empty output
+    #           aborts rather than reading as "loads nothing".
+    for _a in $(printf '%s\n' "$_sl" | awk '{ print $1 }' | sort -u); do
+      _lc="$("${OTOOL:-otool}" -arch "$_a" -l "$2/$_mf" 2>/dev/null)" && [ -n "$_lc" ] \
+        || { echo "artifact-facts: cannot read the load commands of $1:$_mf ($_a)" >&2; rm -f "$_ml"; return 1; }
+      printf '%s\n' "$_lc" | awk '
+        $1 == "cmd" { want = ($2 == "LC_LOAD_DYLIB" || $2 == "LC_LOAD_WEAK_DYLIB" || $2 == "LC_REEXPORT_DYLIB" \
+                              || $2 == "LC_LAZY_LOAD_DYLIB" || $2 == "LC_LOAD_UPWARD_DYLIB"); next }
+        want && $1 == "name" { sub(/^[ \t]*name /, ""); sub(/ \(offset [0-9]+\)$/, ""); if (!seen[$0]++) print; want = 0 }' \
+        | enc | while IFS= read -r _dl; do printf 'macho-load %s %s %s %s\n' "$1" "$_p" "$_a" "$_dl"; done
+    done
   done < "$_ml"
   rm -f "$_ml"
+}
+dict_entries() {  # stdin: one dict as `PlistBuddy -x` prints it. stdout: "<key> <string>" or "<key> <path> <kind>" per entry, %20-encoded.
+  awk '
+    function e(s) {
+      gsub(/[\t\n]/, " ", s); gsub(/&lt;/, "<", s); gsub(/&gt;/, ">", s); gsub(/&quot;/, "\"", s); gsub(/&apos;/, "\047", s)
+      gsub(/&amp;/, "\\&", s); gsub(/%/, "%25", s); gsub(/ /, "%20", s); return s
+    }
+    BEGIN { RS = "<"; d = 0 }
+    {
+      i = index($0, ">"); if (i == 0) next
+      t = substr($0, 1, i - 1); x = substr($0, i + 1)
+      if (t == "dict") { d++; if (d == 2) { p = ""; kd = "" }; next }
+      if (t == "/dict") { if (d == 2) print k, p, kd; d--; next }
+      if (t == "key") { if (d == 1) k = e(x); else nk = x; next }
+      if (t == "string") { if (d == 1) print k, e(x); else if (nk == "path") p = e(x); else if (nk == "kind") kd = e(x) }
+    }'
 }
 payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read, or the registry cannot answer (why in _pf_why).
   _pf_why=""
@@ -156,6 +187,18 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       while _g="$(/usr/libexec/PlistBuddy -c "Print :generated:$_k" "$_mf" 2>/dev/null)"; do
         printf 'manifest-generated %s %s\n' "$1" "$(printf '%s' "$_g" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
       done
+      # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "System replacement
+      #       (10.9 only)" -- replaces maps a system path to a tree path and adopts a system path to
+      #       {path, kind}, as render-manifest.sh writes them; read as XML because a key may hold a
+      #       ":" that PlistBuddy's own key paths cannot address.
+      _x="$(/usr/libexec/PlistBuddy -x -c 'Print :replaces' "$_mf" 2>/dev/null)" || _x=""
+      printf '%s\n' "$_x" | dict_entries | while read -r _ka _kr; do
+        printf 'manifest-replaces %s %s %s\n' "$1" "$_ka" "$_kr"
+      done
+      _x="$(/usr/libexec/PlistBuddy -x -c 'Print :adopts' "$_mf" 2>/dev/null)" || _x=""
+      printf '%s\n' "$_x" | dict_entries | while read -r _ka _kr _kk; do
+        printf 'manifest-adopts %s %s %s %s\n' "$1" "$_ka" "$_kr" "$_kk"
+      done
     done
   done
   return 0
@@ -173,6 +216,15 @@ if [ -f "$root/INGREDIENTS.md" ]; then
   #           "there are no deviations".
   _devs="$(sh "$SELF/deviations.sh" "$root")" || exit 1
   printf '%s\n' "$_devs" | mav_deviation_facts
+fi
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "System replacement (10.9
+#       only)" -- every path Apple's receipts install for the tool a product replaces, captured with
+#       lsbom and committed in the product's repo as lsbom printed it: "#" lines, blank lines and
+#       lsbom's "." for the root are not paths, and its "./usr/bin/x" is "/usr/bin/x".
+if [ -f "$root/tests/fixtures/apple-files.txt" ]; then
+  sed -e '/^#/d' -e '/^[[:space:]]*$/d' -e '/^\.$/d' -e 's|^\./|/|' "$root/tests/fixtures/apple-files.txt" \
+    | enc | sed 's/^/apple-file /'
 fi
 
 for f in "$dist"/*; do

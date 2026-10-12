@@ -11,6 +11,9 @@
 #            manifest      <file> <product> <identifier> <dir>    one per usr/local/mavergreen/<dir>/mavergreen.plist
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
+#            manifest-replaces <file> <abs> <rel>                 one per entry of that manifest's replaces (%20-encoded)
+#            manifest-adopts <file> <abs> <rel> <kind>            one per entry of that manifest's adopts (%20-encoded)
+#            apple-file    <abs>                                  one per path in the repo's tests/fixtures/apple-files.txt (%20-encoded)
 #            registered    <product> <identifier|none> <repo|none>     what scripts/product-names registers the product to
 #            derived       <product> <bundle-id> <label> <app> <feed>  the updater identity product-name.sh derives for it
 #            manifest-line <file> <line|none>                     that manifest's line
@@ -20,6 +23,7 @@
 #            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
 #            asset         <file> <bytes>                         one per file that will be published
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
+#            macho-load    <artifact> <path> <arch> <dylib>       one per dylib a slice loads, re-exports or weak-, lazy- or upward-loads (%20-encoded)
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
 #            appcast-notes <appcast-file> [<sha256>]               digest of the appcast's <description> CDATA
 #            deviation     <check> <reason...>                    a declared, reasoned departure
@@ -417,6 +421,90 @@ while read -r kind file path arch ft mn sd sha; do
   why="$(mav_sdk_rule "$arch" "$ft" "$mn" "$sd")" \
     || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")"
 done < "$facts"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "System replacement (10.9
+#       only)" -- a pkg whose manifest declares replaces or adopts accounts for every path the repo's
+#       tests/fixtures/apple-files.txt lists: it replaces or adopts the path, or a reasoned
+#       system-replace:<glob> deviation names it. No fixture is a failure, not a pass. Paths
+#       compare canonically (ruling R57): lsbom spells /etc as /private/etc, so a /private/etc,
+#       /private/var or /private/tmp prefix on either side, and in a deviation's subject, reads as
+#       /etc, /var or /tmp.
+sr_pkgs="$(awk '$1 == "manifest-replaces" || $1 == "manifest-adopts" { print $2 }' "$facts" | sort -u)"
+awk '$1 == "apple-file" { print $2 }' "$facts" > "$tmp/apple-files"
+if [ -z "$sr_pkgs" ]; then
+  echo "conformance: system-replace-coverage: no manifest declares replaces or adopts (nothing to compare)"
+else
+  napple="$(wc -l < "$tmp/apple-files" | tr -d ' ')"
+  for pk in $sr_pkgs; do
+    if [ "$napple" -eq 0 ]; then
+      fail system-replace-coverage "$pk's manifest declares replaces or adopts, but the repo has no tests/fixtures/apple-files.txt listing what Apple's receipts install for the tool -- capture it with lsbom on the 10.9 guest" "$pk"
+      continue
+    fi
+    awk -v p="$pk" '
+      function canon(s) { if (s ~ /^\/private\/(etc|var|tmp)(\/|$)/) s = substr(s, 9); return s }
+      NR == FNR { if (($1 == "manifest-replaces" || $1 == "manifest-adopts") && $2 == p) k[canon($3)] = 1; next }
+      { c = canon($1) }
+      !(c in k) && !(c in seen) { seen[c] = 1; print c, $1 }' "$facts" "$tmp/apple-files" > "$tmp/uncovered-$pk"
+    while read -r ap orig; do
+      a="$(dec "$ap")"
+      listed=""
+      [ "$orig" = "$ap" ] || listed=" (listed as $(dec "$orig"))"
+      r="$(deviation_reason system-replace "$a")"
+      if [ -n "$r" ]; then
+        echo "conformance: system-replace-coverage: DECLARED DEVIATION ($a) -- $r"
+      else
+        fail system-replace-coverage "$pk neither replaces nor adopts $a$listed, which tests/fixtures/apple-files.txt says Apple installs -- add it to replaces or adopts, or declare \"- system-replace:$a: <reason>\" in INGREDIENTS.md" "$pk"
+      fi
+    done < "$tmp/uncovered-$pk"
+  done
+  echo "conformance: system-replace-coverage: compared $napple Apple files against $(printf '%s\n' "$sr_pkgs" | wc -l | tr -d ' ') manifest(s)"
+fi
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "System replacement (10.9
+#       only)" -- a sandboxed caller can read neither the tree nor anything it points at, so every
+#       slice of the file at a replaces entry's tree path (man pages aside: they are links) loads
+#       dylibs only from /usr/lib/ and /System/. A tree path the payload does not install fails,
+#       since nothing was checked; an installed file with no macho fact is not Mach-O and loads
+#       nothing; and a slice with no macho-load fails, since every program loads libSystem, so the
+#       parser read nothing.
+nsc=0
+while read -r kind pk sabs srel; do
+  [ "$kind" = manifest-replaces ] || continue
+  case "$srel" in share/man/*) continue ;; esac
+  nsc=$((nsc + 1))
+  a="$(dec "$sabs")"
+  sdir="$(awk -v f="$pk" '$1 == f { print $2; exit }' "$tmp/prod-of")"
+  if [ -z "$sdir" ]; then
+    fail system-replace-self-contained "$pk's manifest replaces $a, but the pkg carries no single product manifest to find its tree by" "$a"
+    continue
+  fi
+  tp="usr/local/mavergreen/$sdir/$srel"
+  if ! awk -v p="$pk" -v t="$tp" '$1 == "installs" && $2 == p && $3 == t { f = 1 } END { exit !f }' "$facts"; then
+    fail system-replace-self-contained "$pk's manifest replaces $a with $(dec "$tp"), which its payload does not install -- nothing to copy, and nothing checked" "$a"
+    continue
+  fi
+  awk -v p="$pk" -v t="$tp" '
+    $1 == "macho-load" && $2 == p && $3 == t {
+      ok = ($5 ~ /^\/usr\/lib\// || $5 ~ /^\/System\//) && !index($5 "/", "/../")
+      if (!ok) bad[$5] = bad[$5] (bad[$5] == "" ? "" : " ") $4
+    }
+    END { for (d in bad) print d, bad[d] }' "$facts" | sort > "$tmp/bad-loads"
+  while read -r dl archs; do
+    fail system-replace-self-contained "$pk copies $(dec "$tp") to $a, and it loads $(dec "$dl") ($archs) -- a sandboxed caller reads only /usr/lib/ and /System/, so a copied program loads nothing else (no @rpath, @loader_path, @executable_path or /usr/local/)" "$a"
+  done < "$tmp/bad-loads"
+  awk -v p="$pk" -v t="$tp" '
+    $1 == "macho" && $2 == p && $3 == t { sl[$4] = 1 }
+    $1 == "macho-load" && $2 == p && $3 == t { ld[$4] = 1 }
+    END { for (s in sl) if (!(s in ld)) print s }' "$facts" | sort > "$tmp/no-loads"
+  while read -r arch; do
+    fail system-replace-self-contained "$pk copies $(dec "$tp") to $a, but no load command was read from its $arch slice -- every program loads at least libSystem, so the parser read nothing and nothing was checked" "$a"
+  done < "$tmp/no-loads"
+done < "$facts"
+if [ "$nsc" -gt 0 ]; then
+  echo "conformance: system-replace-self-contained: checked $nsc replaced program(s)"
+else
+  echo "conformance: system-replace-self-contained: no replaced programs (nothing to check)"
+fi
 
 [ "$status" -eq 0 ] && echo "conformance: ok — $expected"
 exit "$status"

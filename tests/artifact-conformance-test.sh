@@ -654,6 +654,7 @@ else
 fi
 rm -rf "$_fc4"
 
+
 # spec: scripts/artifact-facts.sh "macho_facts" -- a file named *.tgz that is not actually a
 #       tarball must abort extraction, not be silently skipped as though it carried no Mach-O.
 _fc2="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-b.XXXXXX")"
@@ -1088,6 +1089,164 @@ ok "repository: the owner is not compared -- a fork runs the same check" "$GO
 manifest-line go.pkg 126
 repository someone/golang-126"
 
+# spec: scripts/check-artifact-conformance.sh "system-replace-coverage" and
+#       "system-replace-self-contained" -- a replaced product accounts for every file Apple's
+#       receipts install for the tool, and each program it copies onto the system loads only
+#       from /usr/lib/ and /System/.
+SR="$REL
+$LAYOUT
+installs p.pkg usr/local/mavergreen/x/bin/x
+installs p.pkg usr/local/mavergreen/x/share/man/man1/x.1
+manifest-replaces p.pkg /usr/bin/x bin/x
+manifest-replaces p.pkg /usr/share/man/man1/x.1 share/man/man1/x.1
+manifest-adopts p.pkg /etc/x%20conf x/x.conf config
+macho p.pkg usr/local/mavergreen/x/bin/x x86_64 EXECUTE 10.9 10.9 aa
+macho-load p.pkg usr/local/mavergreen/x/bin/x x86_64 /usr/lib/libSystem.B.dylib
+macho-load p.pkg usr/local/mavergreen/x/bin/x x86_64 /System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"
+APPLE='apple-file /usr/bin/x
+apple-file /usr/share/man/man1/x.1
+apple-file /etc/x%20conf'
+
+ok "system-replace: covered, and the copy loads only from /usr/lib and /System" "$SR
+$APPLE"
+_out="$(printf '%s\n%s\nend-of-facts\n' "$SR" "$APPLE" | sh "$S" 2>&1)"
+printf '%s\n' "$_out" | grep -q 'system-replace-coverage: compared 3 ' \
+  || { echo "FAIL system-replace-coverage should say how many Apple files it compared; got: $_out"; exit 1; }
+printf '%s\n' "$_out" | grep -q 'system-replace-self-contained: checked 1 ' \
+  || { echo "FAIL system-replace-self-contained should say how many copied programs it checked; got: $_out"; exit 1; }
+_out="$(printf '%s\n%s\nend-of-facts\n' "$REL" "$LAYOUT" | sh "$S" 2>&1)" \
+  || { echo "FAIL a product with no replaces or adopts needs no fixture; got: $_out"; exit 1; }
+printf '%s\n' "$_out" | grep -q 'system-replace-coverage: no manifest declares replaces or adopts' \
+  || { echo "FAIL system-replace-coverage should say when there was nothing to compare; got: $_out"; exit 1; }
+printf '%s\n' "$_out" | grep -q 'system-replace-self-contained: no replaced programs' \
+  || { echo "FAIL system-replace-self-contained should say when there was nothing to check; got: $_out"; exit 1; }
+ok "system-replace: a product with no replaces or adopts ignores a fixture" "$REL
+$LAYOUT
+$APPLE
+apple-file /usr/bin/unrelated"
+
+no "system-replace-coverage: a replaced product with no fixture" "tests/fixtures/apple-files.txt" "$SR"
+alone "system-replace-coverage: a replaced product with no fixture" "system-replace-coverage" "$SR"
+alone "system-replace-coverage: an adopts-only product with no fixture" "system-replace-coverage" "$REL
+$LAYOUT
+manifest-adopts p.pkg /etc/x%20conf x/x.conf config"
+no "system-replace-coverage: an uncovered Apple file fails, naming it" "/usr/bin/x-helper" "$SR
+$APPLE
+apple-file /usr/bin/x-helper"
+alone "system-replace-coverage: an uncovered Apple file fails" "system-replace-coverage" "$SR
+$APPLE
+apple-file /usr/bin/x-helper"
+no "system-replace-coverage: an uncovered Apple path with a space is named decoded" "/Library/Some Place/x" "$SR
+$APPLE
+apple-file /Library/Some%20Place/x"
+ok "system-replace-coverage: a declared deviation excuses the paths its glob names, and the glob spans spaces" "$SR
+$APPLE
+deviation system-replace:/usr/share/zsh/* zsh completion files; the family ships none
+deviation system-replace:/usr/bin/x-helper Apple's wrapper, which the product does not build
+deviation system-replace:/Library/Some*Place/* where Apple keeps it
+apple-file /usr/share/zsh/site-functions/_x
+apple-file /usr/bin/x-helper
+apple-file /Library/Some%20Place/x"
+alone "system-replace-coverage: a deviation for a different path excuses nothing" "system-replace-coverage" "$SR
+$APPLE
+deviation system-replace:/usr/share/zsh/* zsh completion files; the family ships none
+apple-file /usr/bin/x-helper"
+alone "system-replace-coverage: a deviation with no reason excuses nothing" "system-replace-coverage" "$SR
+$APPLE
+deviation system-replace:/usr/bin/x-helper
+apple-file /usr/bin/x-helper"
+# spec: scripts/check-artifact-conformance.sh "system-replace-coverage" -- ruling R57: lsbom spells
+#       /etc as ./private/etc, so /private/etc, /private/var and /private/tmp compare as /etc, /var
+#       and /tmp on both sides.
+ok "system-replace-coverage: a fixture's /private/etc and /private/var spelling is covered by a manifest's /etc and /var (R57)" "$SR
+manifest-adopts p.pkg /var/db/x.db x/x.db identity
+apple-file /usr/bin/x
+apple-file /usr/share/man/man1/x.1
+apple-file /private/etc/x%20conf
+apple-file /private/var/db/x.db"
+ok "system-replace-coverage: a manifest's /private/etc and /private/tmp spelling covers a fixture's /etc and /tmp (R57)" "$REL
+$LAYOUT
+installs p.pkg usr/local/mavergreen/x/bin/x
+manifest-replaces p.pkg /usr/bin/x bin/x
+manifest-adopts p.pkg /private/etc/x%20conf x/x.conf config
+manifest-adopts p.pkg /private/tmp/x.sock x/x.sock identity
+apple-file /usr/bin/x
+apple-file /etc/x%20conf
+apple-file /tmp/x.sock"
+no "system-replace-coverage: an uncovered /private/etc path fails, naming its canonical path (R57)" "neither replaces nor adopts /etc/zz (listed as /private/etc/zz)" "$SR
+$APPLE
+apple-file /private/etc/zz"
+alone "system-replace-coverage: an uncovered /private/etc path fails (R57)" "system-replace-coverage" "$SR
+$APPLE
+apple-file /private/etc/zz"
+_out="$(printf '%s\n%s\napple-file /etc/zz\napple-file /private/etc/zz\nend-of-facts\n' "$SR" "$APPLE" | sh "$S" 2>&1)" \
+  && { echo "FAIL system-replace-coverage: an uncovered path listed under both spellings must fail (R57)"; exit 1; }
+[ "$(printf '%s\n' "$_out" | grep -c 'neither replaces nor adopts /etc/zz')" -eq 1 ] \
+  || { echo "FAIL system-replace-coverage: a path the fixture lists under both spellings is one Apple file, reported once (R57); got: $_out"; exit 1; }
+ok "system-replace-coverage: a deviation's glob matches the canonical path of a /private/etc fixture line (R57)" "$SR
+$APPLE
+deviation system-replace:/etc/zz Apple's own, which the product does not ship
+apple-file /private/etc/zz"
+ok "system-replace-coverage: a bare /private/etc, with nothing after it, is canonical too (R57)" "$SR
+$APPLE
+manifest-adopts p.pkg /etc x/etc config
+apple-file /private/etc"
+no "system-replace-coverage: only a whole /private/etc component is canonical, so /private/etcetera stays itself (R57)" "neither replaces nor adopts /private/etcetera/x," "$SR
+$APPLE
+manifest-adopts p.pkg /etcetera/x x/y config
+apple-file /private/etcetera/x"
+
+for _bad in @rpath/libssl.3.dylib @loader_path/../lib/libssl.3.dylib @executable_path/libssl.3.dylib \
+    /usr/local/mavergreen/openssl-35/lib/libssl.3.dylib /usr/local/lib/libssl.3.dylib /usr/lib/../local/lib/libssl.3.dylib; do
+  no "system-replace-self-contained: a copied program loading $_bad fails, naming it" "$_bad" "$SR
+$APPLE
+macho-load p.pkg usr/local/mavergreen/x/bin/x x86_64 $_bad"
+  alone "system-replace-self-contained: a copied program loading $_bad" "system-replace-self-contained" "$SR
+$APPLE
+macho-load p.pkg usr/local/mavergreen/x/bin/x x86_64 $_bad"
+done
+no "system-replace-self-contained: every slice is checked" "arm64" "$SR
+$APPLE
+macho p.pkg usr/local/mavergreen/x/bin/x arm64 EXECUTE 11.0 11.3 aa
+macho-load p.pkg usr/local/mavergreen/x/bin/x arm64 @rpath/libssl.3.dylib"
+no "system-replace-self-contained: a slice with no load command read fails, since every program loads libSystem (M2)" "no load command was read from its arm64 slice" "$SR
+$APPLE
+macho p.pkg usr/local/mavergreen/x/bin/x arm64 EXECUTE 11.0 11.3 aa"
+alone "system-replace-self-contained: a slice with no load command read (M2)" "system-replace-self-contained" "$SR
+$APPLE
+macho p.pkg usr/local/mavergreen/x/bin/x arm64 EXECUTE 11.0 11.3 aa"
+ok "system-replace-self-contained: a man-page entry is not checked" "$SR
+$APPLE
+macho-load p.pkg usr/local/mavergreen/x/share/man/man1/x.1 x86_64 @rpath/libssl.3.dylib
+manifest-replaces p.pkg /usr/share/man/man8/x-gone.8 share/man/man8/x-gone.8
+apple-file /usr/share/man/man8/x-gone.8"
+ok "system-replace-self-contained: a script is not Mach-O, so it loads nothing" "$SR
+$APPLE
+installs p.pkg usr/local/mavergreen/x/bin/x-script
+manifest-replaces p.pkg /usr/bin/x-script bin/x-script
+apple-file /usr/bin/x-script"
+no "system-replace-self-contained: a replaced program the payload does not install fails, naming it" "usr/local/mavergreen/x/bin/x-gone" "$SR
+$APPLE
+manifest-replaces p.pkg /usr/bin/x-gone bin/x-gone
+apple-file /usr/bin/x-gone"
+alone "system-replace-self-contained: a replaced program the payload does not install" "system-replace-self-contained" "$SR
+$APPLE
+manifest-replaces p.pkg /usr/bin/x-gone bin/x-gone
+apple-file /usr/bin/x-gone"
+ok "system-replace-self-contained: a declared deviation excuses the system paths its glob names" "$SR
+$APPLE
+deviation system-replace-self-contained:/usr/bin/x links a sibling's dylib until the shared-library copies exist
+macho-load p.pkg usr/local/mavergreen/x/bin/x x86_64 @rpath/libssl.3.dylib"
+alone "system-replace-self-contained: a deviation for a different path excuses nothing" "system-replace-self-contained" "$SR
+$APPLE
+deviation system-replace-self-contained:/usr/bin/y links a sibling's dylib until the shared-library copies exist
+macho-load p.pkg usr/local/mavergreen/x/bin/x x86_64 @rpath/libssl.3.dylib"
+no "system-replace-self-contained: a replaces entry in a pkg with no single product manifest fails" "no single product manifest" "$REL
+component p.pkg dev.mavergreen.base
+component p.pkg dev.mavergreen.x
+apple-file /usr/bin/x
+manifest-replaces p.pkg /usr/bin/x bin/x"
+
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
 #       top-level bundle, a symlink, and a path with a space are each a way to report the wrong thing.
@@ -1102,16 +1261,56 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
   echo x > "$_st/usr/local/mavergreen/x/bin/x"; ln -s bin/x "$_st/usr/local/mavergreen/x/link"
   printf 'int main(void){return 0;}\n' > "$_pk/h.c"
   # platform: the runner's SDK would make this fixture fail the sdk-pin rule the archive assertion below now enforces; clang honours SDKROOT
-  SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/usr/local/mavergreen/x/bin/hello"
+  # spec: scripts/artifact-facts.sh "macho_facts" -- -weak-lz adds an LC_LOAD_WEAK_DYLIB, which macho-load reports like LC_LOAD_DYLIB
+  SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -weak-lz -o "$_st/usr/local/mavergreen/x/bin/hello"
   ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
   # platform: guarded macOS-only call -- the enclosing `if command -v pkgbuild` skips this block without it
-  /usr/libexec/PlistBuddy -c "Add :product string x" -c "Add :identifier string dev.mavergreen.x" \
-    -c "Add :outside array" -c "Add :outside:0 string Library/Application Support/Mavergreen/x-updater.app" \
-    -c "Add :outside:1 string Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist" \
-    -c "Add :generated array" -c "Add :generated:0 string Applications/Linux X.app" \
-    -c "Add :appcast string https://github.com/Mavergreen/x/releases/latest/download/x.xml" \
-    "$_st/usr/local/mavergreen/x/mavergreen.plist" >/dev/null
+  # platform: written as XML, as render-manifest.sh writes it -- macOS 26's PlistBuddy aborts on the quoted key with a space
+  cat > "$_st/usr/local/mavergreen/x/mavergreen.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>product</key>
+  <string>x</string>
+  <key>identifier</key>
+  <string>dev.mavergreen.x</string>
+  <key>outside</key>
+  <array>
+    <string>Library/Application Support/Mavergreen/x-updater.app</string>
+    <string>Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist</string>
+  </array>
+  <key>generated</key>
+  <array>
+    <string>Applications/Linux X.app</string>
+  </array>
+  <key>appcast</key>
+  <string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string>
+  <key>replaces</key>
+  <dict>
+    <key>/usr/bin/hello</key>
+    <string>bin/hello</string>
+    <key>/usr/bin/x</key>
+    <string>bin/x</string>
+  </dict>
+  <key>adopts</key>
+  <dict>
+    <key>/etc/x conf</key>
+    <dict>
+      <key>path</key>
+      <string>x/x.conf</string>
+      <key>kind</key>
+      <string>config</string>
+    </dict>
+  </dict>
+</dict>
+</plist>
+PLIST
+  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
+  plutil -lint "$_st/usr/local/mavergreen/x/mavergreen.plist" >/dev/null || { echo "FAIL: the fixture manifest must be a valid plist"; exit 1; }
   printf 'x dev.mavergreen.x x\n' > "$_pk/product-names"
+  mkdir -p "$_pk/tests/fixtures"
+  printf '# lsbom -s -f -l /var/db/receipts/com.example.x.bom\n\n.\n./usr/bin/hello\n/usr/bin/x\n./private/etc/x conf\n' > "$_pk/tests/fixtures/apple-files.txt"
   # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
   pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
     "$_pk/dist/x-1.0.0-mavericks.1.pkg"
@@ -1126,6 +1325,15 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
     --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavericks.1.pkg" >/dev/null 2>&1 \
     || { echo "FAIL: set_install_floor.sh could not build the archive this fixture reads"; exit 1; }
   _f="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
+  # spec: scripts/artifact-facts.sh "macho_facts" -- `otool -arch A -l` prints nothing and exits 0 for
+  #       a slice the file does not have, so a reader that answers with nothing must abort the
+  #       stream, not read as a program that loads no dylibs.
+  mkdir -p "$_pk/thin" "$_pk/bin"; cp "$_pk/dist/x-tools.tar.gz" "$_pk/thin/"
+  printf '#!/bin/sh\ncase "$1" in -arch) exit 0 ;; esac\nexec otool "$@"\n' > "$_pk/bin/otool"; chmod +x "$_pk/bin/otool"
+  _ft="$(OTOOL="$_pk/bin/otool" sh "$AF" "$_pk/thin" 1.0.0-mavericks.1 "$_pk" 2>/dev/null)" \
+    && { echo "FAIL: a reader that prints no load commands must abort, not read as loading nothing; got: $_ft"; exit 1; }
+  printf '%s\n' "$_ft" | grep -q '^abort cannot read a Mach-O in x-tools.tar.gz' \
+    || { echo "FAIL: expected an 'abort cannot read a Mach-O' record for a silent load-command reader; got: $_ft"; exit 1; }
   printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"
   _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavericks.1.pkg" | tr -d ' ')"
   sh "$GA" X 1.0.0-mavericks.1 https://github.com/Mavergreen/x/releases/download/1.0.0-mavericks.1/x-1.0.0-mavericks.1.pkg \
@@ -1164,7 +1372,15 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
     'sparkle x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
     'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
     'manifest-line x-1.0.0-mavericks.1.pkg none' \
-    'manifest-appcast x-1.0.0-mavericks.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml'
+    'manifest-appcast x-1.0.0-mavericks.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
+    'manifest-replaces x-1.0.0-mavericks.1.pkg /usr/bin/hello bin/hello' \
+    'manifest-replaces x-1.0.0-mavericks.1.pkg /usr/bin/x bin/x' \
+    'manifest-adopts x-1.0.0-mavericks.1.pkg /etc/x%20conf x/x.conf config' \
+    'apple-file /usr/bin/hello' \
+    'apple-file /private/etc/x%20conf' \
+    'macho-load x-1.0.0-mavericks.1.pkg usr/local/mavergreen/x/bin/hello x86_64 /usr/lib/libSystem.B.dylib' \
+    'macho-load x-1.0.0-mavericks.1.pkg usr/local/mavergreen/x/bin/hello x86_64 /usr/lib/libz.1.dylib' \
+    'macho-load x-tools.tar.gz bin/hello x86_64 /usr/lib/libSystem.B.dylib'
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
@@ -1174,6 +1390,12 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
     || { echo "FAIL: a Mach-O in a shipped tarball must yield a macho fact -- got: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q '^macho .* usr/local/mavergreen/x/bin/x ' \
     && { echo "FAIL: a non-Mach-O file must not yield a macho fact: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -q '^macho-load .* usr/local/mavergreen/x/bin/x ' \
+    && { echo "FAIL: a non-Mach-O file must not yield a macho-load fact: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -qE '^apple-file (#|$)' \
+    && { echo "FAIL: the fixture's comment and blank lines are not Apple files: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -qE '^apple-file \.' \
+    && { echo "FAIL: lsbom's root line (.) is skipped and its ./ prefix read as /: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q 'org.sparkle-project' \
     && { echo "FAIL: a framework nested inside the updater is not a top-level bundle; its identifier is not the product's: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q '^installs y-1.0.0-mavericks.1.pkg bin/' \
