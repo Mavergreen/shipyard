@@ -22,7 +22,7 @@ usage() {
 }
 safe_name() {
   case "$1" in
-    ''|-*|*[!a-z0-9-]*|var|bin|sbin|share|mavergreen|system-replace|base) return 1 ;;
+    ''|-*|*[!a-z0-9-]*|var|bin|sbin|share|mavergreen|system-replace|base|kept) return 1 ;;
   esac
 }
 row_field() {
@@ -53,7 +53,7 @@ case "${1:-}" in
   shorts)
     [ $# -eq 2 ] || usage
     case "$2" in ''|-*|*[!a-z0-9-]*) exit 1 ;; esac
-    _s="$(entries | awk -v r="$2" '$3 == r && $2 != "dev.mavergreen.base" && $1 ~ /^[a-z0-9][a-z0-9-]*$/ && $1 !~ /^(var|bin|sbin|share|mavergreen|system-replace|base)$/ { print $1 }')"
+    _s="$(entries | awk -v r="$2" '$3 == r && $2 != "dev.mavergreen.base" && $1 ~ /^[a-z0-9][a-z0-9-]*$/ && $1 !~ /^(var|bin|sbin|share|mavergreen|system-replace|base|kept)$/ { print $1 }')"
     [ -n "$_s" ] || exit 1
     printf '%s\n' "$_s" ;;
   check)
@@ -62,7 +62,7 @@ case "${1:-}" in
       $1 !~ /^[a-z0-9][a-z0-9-]*$/ { print "product-names: bad short name: " $1 > "/dev/stderr"; bad = 1 }
       $2 !~ /^dev\.mavergreen\./ { print "product-names: identifier outside dev.mavergreen.*: " $2 > "/dev/stderr"; bad = 1 }
       $3 !~ /^[a-z0-9][a-z0-9-]*$/ { print "product-names: bad repo name: " $3 > "/dev/stderr"; bad = 1 }
-      $1 ~ /^(var|bin|sbin|share|mavergreen|system-replace|base)$/ { print "product-names: short name reserved by the install layout: " $1 > "/dev/stderr"; bad = 1 }
+      $1 ~ /^(var|bin|sbin|share|mavergreen|system-replace|base|kept)$/ { print "product-names: short name reserved by the install layout: " $1 > "/dev/stderr"; bad = 1 }
       $2 == "dev.mavergreen.base" { print "product-names: dev.mavergreen.base is the helper component, not a product: " $1 > "/dev/stderr"; bad = 1 }
       $3 ~ /-[0-9]+$/ {
         p = $3; sub(/-[0-9]+$/, "", p)
