@@ -32,7 +32,8 @@ if [ ! -d "$SDK" ]; then
   # platform: an interrupt during the conversion below must not leave this run's .mav-extract.* in the cache;
   #           a successful publish has already removed $x, so the trap is then a no-op.
   x=""
-  trap 'rm -rf "${x:-}"' EXIT
+  lst=""
+  trap 'rm -rf "${x:-}" "${lst:-}"' EXIT
   x="$(mav_fetch_extract "$URL" "$SHA" "$CACHE" "$3")"
   ROOT="$x/$4"
   # platform: modern ld (Xcode 15+) warns for every ancient MH_DYLIB_STUB it reads. Where tapi
@@ -52,11 +53,23 @@ if [ ! -d "$SDK" ]; then
   esac
   if [ -n "$TAPI" ]; then
     LIBDIRS="$ROOT/usr/lib $ROOT/System/Library/Frameworks"
-    find $LIBDIRS -type f \( -name '*.dylib' -o ! -name '*.*' \) | while IFS= read -r f; do
+    # platform: the find output is listed once into a temp file in the cache (not in the SDK being converted), so
+    #           MAVERGREEN_PROGRESS=1 can say how many files there are to check; the EXIT trap above removes it.
+    lst="$(mktemp "$CACHE/.mav-list.XXXXXX")"
+    find $LIBDIRS -type f \( -name '*.dylib' -o ! -name '*.*' \) > "$lst" || :
+    total=$(wc -l < "$lst" | tr -d ' ')
+    k=0; converted=0
+    [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || echo "fetch_sdk: converting stubs to .tbd ($total files to check)" >&2
+    if [ -t 2 ]; then tty=1; else tty=0; fi
+    while IFS= read -r f; do
+      k=$((k + 1))
+      [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || [ "$tty" != 1 ] || printf '\rfetch_sdk: checked %s of %s' "$k" "$total" >&2
       # platform: guarded macOS-only call -- inside the `if [ -n "$TAPI" ]` above, so only where xcrun found tapi
       [ "$(otool -h "$f" 2>/dev/null | awk 'NR==4 {print $5}')" = 9 ] || continue
-      "$TAPI" stubify --filetype=tbd-v4 --delete-input-file "$f" 2>/dev/null || :  # unconvertible: keep stub
-    done
+      if "$TAPI" stubify --filetype=tbd-v4 --delete-input-file "$f" 2>/dev/null; then converted=$((converted + 1)); fi  # unconvertible: keep stub
+    done < "$lst"
+    [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || [ "$tty" != 1 ] || echo >&2
+    [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || echo "fetch_sdk: converted $converted stubs" >&2
     # platform: re-point symlinks whose target was converted. Loop to fixpoint: chains like
     #           libc.dylib -> libSystem.dylib -> libSystem.B.dylib need multiple passes.
     changed=1
