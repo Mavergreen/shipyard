@@ -183,5 +183,6 @@ dir_fixture() {
   BAD=0000000000000000000000000000000000000000000000000000000000000000
   MAVERGREEN_PROGRESS=1 mav_fetch_verified "$URL" "$BAD" "$CACHE" fixture.tar 2>"$WORK/err" || true
   grep -q "is sha256 $SHA, not the pinned $BAD" "$WORK/err"
-  run grep -q verified "$WORK/err"n  [ "$status" -ne 0 ]
+  run grep -q verified "$WORK/err"
+  [ "$status" -eq 1 ]
 }
