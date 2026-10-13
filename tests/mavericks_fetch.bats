@@ -236,3 +236,31 @@ BAD0=0000000000000000000000000000000000000000000000000000000000000000
   run grep -c 'OK$\|verified' "$WORK/p/err"
   [ "$output" = 0 ]
 }
+
+@test "progress, not a terminal: a failed download says why, and the default stays silent" {
+  S="$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
+  NOPE="file://$WORK/no-such-file.tar"
+  rc=0
+  sh -c '. "$1"; mav_fetch_verified "$2" "$3" "$4" fixture.tar' x "$S" "$NOPE" "$SHA" "$CACHE" 2>"$WORK/derr" || rc=$?
+  [ "$rc" -ne 0 ]
+  [ ! -s "$WORK/derr" ]
+  rc=0
+  MAVERGREEN_PROGRESS=1 sh -c '. "$1"; mav_fetch_verified "$2" "$3" "$4" fixture.tar' x "$S" "$NOPE" "$SHA" "$CACHE" \
+    2>"$WORK/err" || rc=$?
+  [ "$rc" -ne 0 ]
+  [ "$(head -n 1 "$WORK/err")" = "mav_fetch: downloading fixture.tar" ]
+  grep -q '^curl: ([0-9]*) ' "$WORK/err"
+  run grep -c 'downloaded' "$WORK/err"
+  [ "$output" = 0 ]
+}
+
+@test "progress: a failed check's message keeps a backslash in the cache path" {
+  S="$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
+  C="$WORK/back\\cslash"
+  rc=0
+  MAVERGREEN_PROGRESS=1 sh -c '. "$1"; mav_fetch_verified "$2" "$3" "$4" fixture.tar' x "$S" "$URL" "$BAD0" "$C" \
+    2>"$WORK/err" || rc=$?
+  [ "$rc" -ne 0 ]
+  grep -qF 'back\cslash/.fixture.tar.' "$WORK/err"
+  grep -q 'FAILED' "$WORK/err"
+}

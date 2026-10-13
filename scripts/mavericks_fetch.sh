@@ -40,12 +40,12 @@ mav_fetch_verified() {
       curl -L --fail --progress-bar -o "$_chk" "$_url" || { rm -f "$_chk"; return 1; }
     else
       echo "mav_fetch: downloading $_tarball" >&2
-      curl -sL --fail -o "$_chk" "$_url" || { rm -f "$_chk"; return 1; }
+      curl -sSL --fail -o "$_chk" "$_url" || { rm -f "$_chk"; return 1; }
       echo "mav_fetch: downloaded $_tarball" >&2
     fi
   fi
   if [ "${MAVERGREEN_PROGRESS:-}" = 1 ]; then
-    _vout="$(echo "$_sha  $_chk" | shasum -a 256 -c - 2>&1)" && _vok=1 || { _vok=0; echo "$_vout" >&2; }
+    _vout="$(printf '%s  %s\n' "$_sha" "$_chk" | shasum -a 256 -c - 2>&1)" && _vok=1 || { _vok=0; printf '%s\n' "$_vout" >&2; }
   else
     echo "$_sha  $_chk" | shasum -a 256 -c - >&2 && _vok=1 || _vok=0
   fi
