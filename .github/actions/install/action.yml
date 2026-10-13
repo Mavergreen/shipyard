@@ -40,6 +40,24 @@ runs:
         elif command -v apt-get >/dev/null 2>&1; then sudo apt-get update -qq && sudo apt-get install -y -qq bats && echo "bats: installed via apt"
         else echo "::warning::no bats and no package manager to install it; *.bats tests will be skipped"; fi
 
+    # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Cannot-verify is a
+    #       FAILURE, never a pass" -- check-family-conventions.sh needs PyYAML to parse workflows, and
+    #       product repos run that gate from their own suites in their release jobs. GitHub's macOS
+    #       runner python3 has none, so each repo had worked around it: two skipped the gate, two
+    #       provisioned their own. It goes into the python3 already on PATH, never a replacement
+    #       interpreter, since a consumer's build may depend on that one.
+    - id: mav-pyyaml
+      shell: bash
+      run: |
+        set -eu
+        if python3 -c 'import yaml' >/dev/null 2>&1; then echo "PyYAML: already importable"
+        else
+          # platform: the runner's python3 is PEP 668 externally-managed; --user keeps the install out
+          #           of its own site-packages, and --break-system-packages is what pip demands for that
+          python3 -m pip install --quiet --user --break-system-packages pyyaml
+          python3 -c 'import yaml; print("PyYAML", yaml.__version__)'
+        fi
+
     - if: inputs.source == 'build' && runner.os != 'macOS'
       shell: bash
       run: |
