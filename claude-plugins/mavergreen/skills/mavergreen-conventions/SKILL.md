@@ -638,7 +638,8 @@ a new line repo is warranted.
 3. Set the Renovate cap to the next line.
 4. Set the bootstrap cap, where the product has one.
 5. Enable `allow_auto_merge`, and branch protection requiring the real PR check context.
-6. Set `SPARKLE_PRIVATE_KEY`.
+6. Nothing to set for `SPARKLE_PRIVATE_KEY`: it is an org secret every repo already sees (see Sparkle
+   updater).
 7. Get a README a human has read (`publish-release.yml` refuses a first release without one).
 8. Pass `--line <tag prefix>` to `release-notes.sh` (`--line 1.27`, the prefix the tags carry).
 9. Consumers move by hand, repo and short name, when one of their own bumps needs the line.
@@ -1330,6 +1331,10 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
 
 - Every product ships a Sparkle updater `.app` that **must not link the product it updates** (self-update
   circularity — assert with `otool -L`). EdDSA-signed; private key is the `SPARKLE_PRIVATE_KEY` secret.
+- **`SPARKLE_PRIVATE_KEY` is an ORGANIZATION secret, visible to every Mavergreen repo: a new repo sets
+  nothing.** It keeps being listed as a per-repo setup step; it is not one. Confirm a repo sees it with
+  `gh api repos/Mavergreen/<repo>/actions/organization-secrets --jq '[.secrets[].name]'`. Never add a
+  repo-level secret of the same name: it shadows the org one, so a key rotation would miss that repo.
 - **An updater's identity is derived, never chosen.** From the product's registry line (`<short>
   <pkg identifier> <repo>`), `product-name.sh` derives the bundle id `<pkg identifier>.updater`, the app
   `Library/Application Support/Mavergreen/<short>-updater.app` (installed under `/`), the
@@ -2344,7 +2349,8 @@ in the same commit.
    `cancel-in-progress` naming `pull_request`. (Not `cancel-in-progress: false`: it protects the
    RUNNING run, not the QUEUED one, and the gate rejects it.)
 6. `release-notes/README.md`; `build/upstream-release-notes-url.sh` (a port: where upstream's notes
-   for a version live — see Release notes); Sparkle updater target; `SPARKLE_PRIVATE_KEY` secret.
+   for a version live — see Release notes); Sparkle updater target. (`SPARKLE_PRIVATE_KEY` is an org secret the
+   new repo already sees -- set nothing; see Sparkle updater.)
 7. Choose the upstream-verification method; note it if it deviates from a sibling.
 8. If the repo bakes in build ingredients (anything it's built WITH, not the upstream it ports): make
    each pin a **file**, give each a Renovate customManager, add the `repackage-on-ingredient-bump`
