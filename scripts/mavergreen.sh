@@ -15,7 +15,10 @@
 #                                         system paths with var linking to them, recording it all in applied.plist (10.9 only);
 #                                         the tree's libexec/mavergreen/pre-system-replace hook may edit or veto the staged config;
 #                                         run again (as an upgrade's postinstall does), it applies new entries, refreshes copies whose
-#                                         tree file changed and restores entries the manifest no longer declares
+#                                         tree file changed and restores entries the manifest no longer declares;
+#                                         a product an older mavergreen replaced (.replaced, no applied.plist) has its
+#                                         save area made root-only first, then is replaced again in place, its links
+#                                         counted as its own and its saved originals kept as the originals, saying so on stderr
 #            system-restore <product>     put back what applied.plist records (or, with none, what the manifest lists),
 #                                         printing the settings each restored config lacks, then run post-system-restore;
 #                                         all or nothing: an entry it would refuse, or a saved file applied.plist does
@@ -42,8 +45,11 @@ MG="$R/usr/local/mavergreen"
 SEL="$MG/var/mavergreen/selections"
 
 die() { echo "mavergreen: $1" >&2; exit "${2:-1}"; }
-_stock_idx=""; _undo_staging=""; _undo_save=""; _undo_files=""; _sr_keep=""; _rd_dry=""; _ra_owns=""; _ra_newer=""; _ra_vbad=""
+_stock_idx=""; _undo_staging=""; _undo_save=""; _undo_files=""; _sr_keep=""; _rd_dry=""; _ra_owns=""; _ra_newer=""; _ra_vbad=""; _mig=""
 on_exit() {
+  if [ -n "$_mig" ]; then
+    echo "mavergreen: $_mig stays as the older mavergreen replaced it, with its save area now root-only; once what is named above is fixed by hand, mavergreen system-replace $_mig migrates it" >&2
+  fi
   if [ -n "$_stock_idx" ]; then rm -f "$_stock_idx"; fi
   if [ -n "$_undo_staging" ]; then rm -rf "$_undo_staging"; fi
   if [ -n "$_undo_files" ]; then
@@ -783,10 +789,12 @@ do_system_replace() {
     *) die "system-replace is 10.9-only; this volume is macOS ${_pv:-unknown}, where /usr/bin belongs to the sealed system volume" ;;
   esac
   _b="$MG/var/system-replace/$1"
-  if [ -f "$_b/.replaced" ] && [ ! -f "$_b/applied.plist" ]; then
-    die "$1 was replaced by an older mavergreen that kept no applied.plist; run mavergreen system-restore $1 first, then system-replace $1 again"
-  fi
   _o="$(root_only_chain "$_b")" || die "refusing to keep $1's saved originals in $_b: $(offender_text "$_o")"
+  if [ -f "$_b/.replaced" ] && [ ! -f "$_b/applied.plist" ]; then
+    save_area_root_only || die "could not make $_b, which holds $1's saved originals, root-only; nothing was changed"
+    echo "mavergreen: $1 was replaced by an older mavergreen; replacing it again in place, keeping the originals it saved (a one-time migration, not an error)" >&2
+    _mig="$1"
+  fi
   _entries="$(replaces "$1")"; _adopts="$(adopts "$1")"
   _dup="$(printf '%s\n%s\n' "$_entries" "$_adopts" \
     | awk -F '\t' 'NF { k = $1; if (k ~ /^\/private\/(etc|var|tmp)(\/|$)/) k = substr(k, 9); if (k in s) { print k; exit } s[k] = 1 }')"
@@ -796,6 +804,8 @@ do_system_replace() {
     _old="$(plist_dict "$_b/applied.plist" replaces)"; _olda="$(plist_dict "$_b/applied.plist" adopts)"
     _orig="$(plist_dict "$_b/applied.plist" originals)"; _copies="$(plist_dict "$_b/applied.plist" copies)"
     _refr="$(plist_dict "$_b/applied.plist" refreshing)"
+  elif [ -n "$_mig" ]; then
+    legacy_record "$1"
   fi
   _copies0="$_copies"; _orig0="$_orig"
   _stock_all="$(printf '%s\n%s\n%s\n' "$_entries" "$_adopts" "$_old" | cut -f 1)"
@@ -844,6 +854,8 @@ $_abs	$_now"
       if same_file "$_save" "$_cur"; then :
       elif same_as_save "$_cur" "$_save" && { [ -n "$_stock_idx" ] || stock_index "$_stock_all"; } \
         && original_again "$_abs" "$_save"; then _act=again
+      elif [ -n "$_mig" ]; then
+        die "$_abs is no longer the link the older mavergreen put there, and the original it saved is $_save; move what is at $_abs aside and put that original back there by hand, then retry; nothing was replaced"
       else die "$_abs was already saved once and has since changed; run system-restore $1 first"
       fi
     elif [ "$_now" != "$_was" ]; then
@@ -902,7 +914,7 @@ EOF
   hook_ok "$1" post-system-replace || die "$_rh_msg; nothing was replaced"
   if ! present "$_b/staging"; then _undo_staging="$_b/staging"; fi
   if ! present "$_b"; then _undo_save="$_b"; fi
-  { { [ -d "$_b" ] || mkdir -p -m 700 "$_b"; } && chmod 700 "$_b"; } || die "could not make $_b, which holds $1's saved originals, root-only; nothing was replaced"
+  save_area_root_only || die "could not make $_b, which holds $1's saved originals, root-only; nothing was replaced"
   mkdir -p "$_b/staging"
   adopt_stage "$1" || die "could not stage $1's adopted files in $_b/staging; nothing was replaced"
   run_hook "$1" pre-system-replace "MAVERGREEN_STAGING=$_b/staging" || die "$_rh_msg; nothing was replaced" "$_rh_rc"
@@ -939,7 +951,7 @@ $_abs	$_rel	$_kind"
 $_olda
 EOF
   applied_write "$1" "$_decl" "$_orig" "$_copies" "$_adecl" "$_refr" || die "could not write $_b/applied.plist; nothing was replaced"
-  _undo_staging=""; _undo_save=""; _undo_files=""
+  _undo_staging=""; _undo_save=""; _undo_files=""; _mig=""
   while IFS="	" read -r _act _abs _rel; do
     [ -n "$_abs" ] || continue
     _ok=0; _sv=""
@@ -987,6 +999,47 @@ $_drop
 EOF
   : > "$_b/.replaced"
   run_hook "$1" post-system-replace || echo "mavergreen: $_rh_msg; $1 stays replaced" >&2
+}
+save_area_root_only() { { [ -d "$_b" ] || mkdir -p -m 700 "$_b"; } && chmod 700 "$_b"; }
+legacy_record() {
+  _lr_pre="/usr/local/mavergreen/$1/"
+  _lr_saved="$(cd "$_b" && find . -mindepth 1 -path ./staging -prune -o \( -type f -o -type l \) -print)" \
+    || die "could not list $_b, which holds the originals the older mavergreen saved for $1; nothing was replaced"
+  _lr_saved="$(printf '%s\n' "$_lr_saved" | sed 's|^\./||' | grep -vxE '\.replaced|applied\.plist(\.tmp)?|(adopted|restored)\.sha256(\.tmp)?' || true)"
+  while IFS="	" read -r _lr_abs _lr_rel; do
+    [ -n "$_lr_abs" ] || continue
+    _lr_c="$R$_lr_abs"; _lr_t="link:$_lr_pre$_lr_rel"
+    if owns_replace_link "$_lr_c" "$_lr_pre"; then _lr_t="link:$(readlink "$_lr_c")"
+    elif ! present "$_b$_lr_abs"; then continue
+    fi
+    legacy_entry "$1" "$_lr_abs" "$_lr_rel" "$_lr_t"
+  done <<EOF
+$_entries
+EOF
+  while IFS= read -r _lr_p; do
+    [ -n "$_lr_p" ] || continue
+    _lr_abs="/$_lr_p"; _lr_c="$R$_lr_abs"
+    if tab_has "$_entries" "$_lr_abs"; then continue; fi
+    owns_replace_link "$_lr_c" "$_lr_pre" \
+      || die "$_b$_lr_abs holds the original the older mavergreen saved for $_lr_abs, which this version of $1 no longer declares, and $_lr_abs is no longer $1's link; move anything at $_lr_abs aside and put that original back there by hand, then retry; nothing was replaced"
+    _lr_t="$(readlink "$_lr_c")"
+    legacy_entry "$1" "$_lr_abs" "${_lr_t#"$_lr_pre"}" "link:$_lr_t"
+  done <<EOF
+$_lr_saved
+EOF
+}
+legacy_entry() {
+  _le_o=-
+  if present "$_b$2"; then
+    _le_o="$(fingerprint "$_b$2")"
+    [ -n "$_le_o" ] || die "could not checksum the original the older mavergreen saved for $2; nothing was replaced"
+  fi
+  _old="$_old
+$2	$3"
+  _orig="$_orig
+$2	$_le_o"
+  _copies="$_copies
+$2	$4"
 }
 resolves_to_dir() {
   [ -d "$1" ] && return 0

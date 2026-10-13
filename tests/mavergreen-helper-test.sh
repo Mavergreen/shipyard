@@ -980,30 +980,137 @@ grep -q usr/bin/other "$w/err" || fail "system-restore must name the saved file 
 rm "$T/var/system-replace/stray/usr/bin/other"
 mg system-restore stray || fail "setup: system-restore stray must succeed once the stray save is gone"
 
-mkproduct legacy legacy "" bin/lg bin/lg2
-"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/lg string bin/lg" \
-      -c "Add :replaces:/usr/bin/lg2 string bin/lg2" "$T/legacy/mavergreen.plist"
-legacy() {
-  LB="$T/var/system-replace/legacy"; mkdir -p "$LB/usr/bin"
-  echo apple-lg > "$LB/usr/bin/lg"; : > "$LB/.replaced"
-  rm -f "$V/usr/bin/lg" "$V/usr/bin/lg2"
-  ln -s /usr/local/mavergreen/legacy/bin/lg "$V/usr/bin/lg"; ln -s /usr/local/mavergreen/legacy/bin/lg2 "$V/usr/bin/lg2"
-}
-legacy
-mg check 2>"$w/err" || true
-if grep -q 'usr/bin/lg' "$w/err"; then fail "check must judge a product replaced before applied.plist by its links: $(cat "$w/err")"; fi
-mg system-replace legacy 2>"$w/err" && fail "system-replace must refuse a product the older helper replaced, which kept no applied.plist"
-grep -qF "mavergreen system-restore legacy" "$w/err" || fail "the refusal must tell the admin to run system-restore first: $(cat "$w/err")"
-[ "$(readlink "$V/usr/bin/lg")" = /usr/local/mavergreen/legacy/bin/lg ] && [ "$(cat "$LB/usr/bin/lg")" = apple-lg ] \
-  && [ ! -e "$LB/applied.plist" ] || fail "a refused legacy replace must change nothing"
-mg system-restore legacy || fail "system-restore must restore a product replaced before applied.plist existed"
-[ "$(cat "$V/usr/bin/lg")" = apple-lg ] && [ ! -L "$V/usr/bin/lg" ] || fail "a legacy restore puts the original back"
-[ ! -e "$V/usr/bin/lg2" ] && [ ! -L "$V/usr/bin/lg2" ] || fail "a legacy restore removes a link that had no original"
-
 mkdir -p "$V/etc" "$V/var/db/receipts"
 SR="$T/var/system-replace"
 gone() { [ ! -e "$1" ] && [ ! -L "$1" ]; }
 holds() { [ -f "$1" ] && [ ! -L "$1" ] && [ "$(cat "$1")" = "$2" ]; }
+
+OLDMG="$here/fixtures/mavergreen-pre-convention.sh"
+mkproduct legacy legacy "" bin/lg bin/lg2 sbin/lg3 share/man/man1/lg.1
+chmod 4755 "$T/legacy/bin/lg"
+LB="$SR/legacy"; LGM=/usr/share/man/man1/lg.1
+lg_decl() {  # $@ legacy's replaces entries, each /abs=rel
+  "$PB" -c "Delete :replaces" "$T/legacy/mavergreen.plist" 2>/dev/null || true
+  "$PB" -c "Add :replaces dict" "$T/legacy/mavergreen.plist"
+  for _e in "$@"; do "$PB" -c "Add :replaces:${_e%%=*} string ${_e#*=}" "$T/legacy/mavergreen.plist"; done
+}
+LGD="/usr/bin/lg=bin/lg /usr/bin/lg2=bin/lg2 $LGM=share/man/man1/lg.1"
+legacy() {  # the pre-convention helper replaces legacy (and /usr/sbin/lg3, which this version no longer declares) over Apple's files, leaving its save area 0755, as in the field
+  if [ -d "$LB" ]; then chmod -R u+w "$LB"; rm -rf "$LB"; fi
+  rm -f "$V/usr/bin/lg" "$V/usr/bin/lg2" "$V/usr/sbin/lg3" "$V$LGM"
+  mkdir -p "$V/usr/sbin" "$V/usr/share/man/man1"
+  echo apple-lg > "$V/usr/bin/lg"; chmod 4711 "$V/usr/bin/lg"; echo apple-lg3 > "$V/usr/sbin/lg3"; echo apple-lg-man > "$V$LGM"
+  lg_ino="$(stat -f %i "$V/usr/bin/lg")"; lg3_ino="$(stat -f %i "$V/usr/sbin/lg3")"; lgm_ino="$(stat -f %i "$V$LGM")"
+  lg_decl $LGD /usr/sbin/lg3=sbin/lg3
+  sh "$OLDMG" --root "$V" system-replace legacy || fail "setup: the pre-convention helper must replace legacy"
+  chmod 755 "$LB"
+  lg_decl $LGD
+  untouched_legacy 755 || fail "setup: the pre-convention helper links each system path into the tree, moves Apple's files into its save area and marks .replaced, with no applied.plist"
+}
+untouched_legacy() {  # $1 the save area's mode; the older helper's links, saves and marker are as it left them
+  [ "$(stat -f %Lp "$LB")" = "$1" ] \
+    && [ "$(readlink "$V/usr/bin/lg")" = /usr/local/mavergreen/legacy/bin/lg ] \
+    && [ "$(readlink "$V/usr/bin/lg2")" = /usr/local/mavergreen/legacy/bin/lg2 ] \
+    && [ "$(readlink "$V/usr/sbin/lg3")" = /usr/local/mavergreen/legacy/sbin/lg3 ] \
+    && [ "$(readlink "$V$LGM")" = /usr/local/mavergreen/legacy/share/man/man1/lg.1 ] \
+    && holds "$LB/usr/bin/lg" apple-lg && [ "$(stat -f '%i %Mp%Lp %l' "$LB/usr/bin/lg")" = "$lg_ino 4711 1" ] \
+    && holds "$LB/usr/sbin/lg3" apple-lg3 && [ "$(stat -f %i "$LB/usr/sbin/lg3")" = "$lg3_ino" ] \
+    && holds "$LB$LGM" apple-lg-man && [ "$(stat -f %i "$LB$LGM")" = "$lgm_ino" ] \
+    && gone "$LB/usr/bin/lg2" && [ -f "$LB/.replaced" ] && gone "$LB/applied.plist" && gone "$LB/staging"
+}
+legacy_advice() {  # $1 the refusal; in the legacy state system-restore refuses the same path, and the save is Apple's only copy (R90)
+  if grep -qF system-restore "$w/err"; then fail "refusing $1 during a migration never points to system-restore, which refuses the same path: $(cat "$w/err")"; fi
+  if grep -qi remove "$w/err"; then fail "refusing $1 during a migration never says to remove anything, least of all the saved original: $(cat "$w/err")"; fi
+  grep -qF "legacy stays as the older mavergreen replaced it" "$w/err" || fail "refusing $1 during a migration says what is left: $(cat "$w/err")"
+}
+apple_lg() { holds "$V/usr/bin/lg" apple-lg && [ "$(stat -f '%i %Mp%Lp' "$V/usr/bin/lg")" = "$lg_ino 4711" ]; }
+legacy
+mg check 2>"$w/err" || true
+grep -qF "$LB holds legacy's saved originals, but its mode is 755" "$w/err" \
+  || fail "check reports the save area of a product the older helper replaced, which other users can reach (R62): $(cat "$w/err")"
+if grep -q 'usr/bin/lg' "$w/err"; then fail "check must judge a product replaced before applied.plist by its links: $(cat "$w/err")"; fi
+
+chmod 777 "$SR"
+rc=0; mg system-replace legacy 2>"$w/err" || rc=$?
+chmod 755 "$SR"
+[ "$rc" -ne 0 ] && grep -qF "$SR is not root-only" "$w/err" \
+  || fail "a migration refuses while a directory above the save area is not root-only, naming it (R87): $(cat "$w/err")"
+untouched_legacy 755 || fail "that refusal comes before any change, the save area's mode included (R87)"
+
+chmod 777 "$T/legacy/bin"
+rc=0; mg system-replace legacy 2>"$w/err" || rc=$?
+chmod 755 "$T/legacy/bin"
+[ "$rc" -ne 0 ] && grep -qF "$T/legacy/bin is not root-only" "$w/err" \
+  || fail "a migration runs the ownership precondition on every entry (R89): $(cat "$w/err")"
+untouched_legacy 700 \
+  || fail "an ownership refusal during a migration leaves the older helper's links and saves as they were, the save area root-only (R89)"
+grep -qF "legacy stays as the older mavergreen replaced it" "$w/err" || fail "a migration that refuses says what is left: $(cat "$w/err")"
+
+legacy
+mkdir -p "$T/legacy/libexec/mavergreen"
+printf '#!/bin/sh\necho "pre-system-replace: legacy refuses" >&2\nexit 3\n' > "$T/legacy/libexec/mavergreen/pre-system-replace"
+chmod 755 "$T/legacy/libexec/mavergreen/pre-system-replace"
+rc=0; (umask 022; mg system-replace legacy >"$w/out" 2>"$w/err") || rc=$?
+rm "$T/legacy/libexec/mavergreen/pre-system-replace"
+[ "$rc" -eq 3 ] && grep -qF "pre-system-replace: legacy refuses" "$w/err" \
+  || fail "the pre-system-replace hook can refuse a migration, with its own status: got $rc: $(cat "$w/err")"
+untouched_legacy 700 \
+  || fail "a migration the hook refuses leaves the older helper's links and saves as they were, the save area root-only (R89)"
+
+legacy
+rm "$V/usr/bin/lg"; echo admin-lg > "$V/usr/bin/lg"
+rc=0; (umask 022; mg system-replace legacy >"$w/out" 2>"$w/err") || rc=$?
+[ "$rc" -ne 0 ] && grep -qF "/usr/bin/lg is no longer the link the older mavergreen put there, and the original it saved is $LB/usr/bin/lg" "$w/err" \
+  && grep -qF "move what is at /usr/bin/lg aside and put that original back there by hand" "$w/err" \
+  || fail "a migration refuses a declared path that is no longer the older helper's link while its original is saved, saying how to fix it by hand: $(cat "$w/err")"
+legacy_advice "a declared path that is no longer the older helper's link"
+holds "$V/usr/bin/lg" admin-lg && rm "$V/usr/bin/lg" && ln -s /usr/local/mavergreen/legacy/bin/lg "$V/usr/bin/lg" && untouched_legacy 700 \
+  || fail "that refusal changes nothing but the save area's mode, and keeps Apple's lg saved (R89)"
+
+rm "$V/usr/sbin/lg3"; echo admin-lg3 > "$V/usr/sbin/lg3"
+rc=0; (umask 022; mg system-replace legacy >"$w/out" 2>"$w/err") || rc=$?
+[ "$rc" -ne 0 ] && grep -qF "$LB/usr/sbin/lg3 holds the original the older mavergreen saved for /usr/sbin/lg3" "$w/err" \
+  && grep -qF "move anything at /usr/sbin/lg3 aside and put that original back there by hand" "$w/err" \
+  || fail "a migration refuses an original saved for a path this version no longer declares once that path is not its link, saying how to fix it by hand: $(cat "$w/err")"
+legacy_advice "an undeclared path that is no longer the older helper's link"
+holds "$V/usr/sbin/lg3" admin-lg3 && rm "$V/usr/sbin/lg3" && ln -s /usr/local/mavergreen/legacy/sbin/lg3 "$V/usr/sbin/lg3" && untouched_legacy 700 \
+  || fail "that refusal changes nothing but the save area's mode, and keeps Apple's lg3 saved (R89)"
+
+chmod 555 "$LB/usr/bin" "$LB/usr/share/man/man1"
+rc=0; (umask 022; mg system-replace legacy >"$w/out" 2>"$w/err") || rc=$?
+chmod 755 "$LB/usr/bin" "$LB/usr/share/man/man1"
+[ "$rc" -eq 0 ] || fail "system-replace migrates a product the older helper replaced in place, never moving a saved original of a path it keeps replacing (R87, R89): $(cat "$w/err")"
+[ "$(grep -c 'older mavergreen' "$w/err")" = 1 ] \
+  && grep -qF "mavergreen: legacy was replaced by an older mavergreen; replacing it again in place" "$w/err" \
+  && grep -qF "not an error" "$w/err" \
+  || fail "a migration says once, on stderr, what it does, naming the product and saying it is not an error: $(cat "$w/err")"
+[ "$(stat -f %Lp "$LB")" = 700 ] \
+  || fail "after a migration the save area is root-only, so no other user can reach the setuid original in it (R62): $(stat -f %Lp "$LB")"
+gone "$T/kept/legacy" || fail "a migration keeps nothing in kept/"
+[ -f "$LB/applied.plist" ] && [ -f "$LB/.replaced" ] || fail "a migration ends as a finished replace: applied.plist and .replaced"
+is_copy "$V/usr/bin/lg" "$T/legacy/bin/lg" && is_copy "$V/usr/bin/lg2" "$T/legacy/bin/lg2" \
+  || fail "after a migration each program's system path is this helper's copy, not the older helper's link"
+[ "$(readlink "$V$LGM")" = /usr/local/mavergreen/legacy/share/man/man1/lg.1 ] || fail "a migrated man page stays a link into the tree"
+holds "$LB/usr/bin/lg" apple-lg && [ "$(stat -f '%i %Mp%Lp %l' "$LB/usr/bin/lg")" = "$lg_ino 4711 1" ] \
+  && holds "$LB$LGM" apple-lg-man && [ "$(stat -f %i "$LB$LGM")" = "$lgm_ino" ] \
+  || fail "after a migration Apple's originals are saved where this helper saves them, the same inodes, setuid intact, linked nowhere else"
+[ "$("$PB" -c 'Print :originals:/usr/bin/lg' "$LB/applied.plist" 2>/dev/null)" = "$(sha "$LB/usr/bin/lg")" ] \
+  && [ "$("$PB" -c 'Print :originals:/usr/bin/lg2' "$LB/applied.plist" 2>/dev/null)" = - ] \
+  || fail "applied.plist records the older helper's saves as the originals, and - where it saved none"
+holds "$V/usr/sbin/lg3" apple-lg3 && [ "$(stat -f %i "$V/usr/sbin/lg3")" = "$lg3_ino" ] && gone "$LB/usr/sbin/lg3" \
+  || fail "a migration puts back the original of a path the older helper replaced and this version no longer declares"
+if "$PB" -c 'Print :replaces:/usr/sbin/lg3' "$LB/applied.plist" >/dev/null 2>&1; then fail "applied.plist drops the path this version no longer declares"; fi
+mg check 2>"$w/err" || true
+if grep -qF "$LB" "$w/err" || grep -q 'usr/s*bin/lg\|man1/lg' "$w/err"; then fail "check reports nothing of a migrated product: $(cat "$w/err")"; fi
+mg system-restore legacy 2>"$w/err" || fail "system-restore of a migrated product must succeed: $(cat "$w/err")"
+apple_lg && gone "$V/usr/bin/lg2" && holds "$V$LGM" apple-lg-man && [ "$(stat -f %i "$V$LGM")" = "$lgm_ino" ] && gone "$LB" \
+  || fail "system-restore after a migration puts Apple's files back exactly, inode and setuid mode included, and removes lg2"
+
+legacy
+mg system-restore legacy || fail "system-restore must restore a product replaced before applied.plist existed"
+apple_lg && holds "$V/usr/sbin/lg3" apple-lg3 || fail "a legacy restore puts the originals back"
+gone "$V/usr/bin/lg2" || fail "a legacy restore removes a link that had no original"
+gone "$LB" || fail "a legacy restore clears the save area"
 links() { [ "$(readlink "$T/var/$1/$2")" = "$3" ]; }
 mkadopt() {  # $1 product  $2.. abs=var-rel:kind entries for its manifest's adopts
   _ap="$1"; shift
@@ -1031,6 +1138,52 @@ receipt() {  # $1 volume  $2 package  $3 path as the BOM spells it  $4 file whos
   mkdir -p "$1/var/db/receipts"; mkbom -i "$_rl" "$1/var/db/receipts/com.apple.pkg.$2.bom" 2>/dev/null || true
   lsbom -p f "$1/var/db/receipts/com.apple.pkg.$2.bom" | grep -qxF "$3" || fail "setup: mkbom must record $3 in the $2 receipt"
 }
+
+legacy
+rm "$V/usr/bin/lg"; echo admin-lg > "$V/usr/bin/lg"
+mg system-replace legacy 2>"$w/err" && fail "setup: a migration must refuse a declared path that is no longer the older helper's link"
+mv "$V/usr/bin/lg" "$w/lg.aside" && mv "$LB/usr/bin/lg" "$V/usr/bin/lg" || fail "setup: following the refusal's advice by hand must be possible"
+rc=0; (umask 022; mg system-replace legacy >"$w/out" 2>"$w/err") || rc=$?
+[ "$rc" -eq 0 ] && is_copy "$V/usr/bin/lg" "$T/legacy/bin/lg" && holds "$LB/usr/bin/lg" apple-lg \
+  && [ "$(stat -f '%i %Mp%Lp %l' "$LB/usr/bin/lg")" = "$lg_ino 4711 1" ] \
+  || fail "once the admin follows the refusal's advice, the migration finishes and saves Apple's lg again, the same inode (R90): $(cat "$w/err")"
+mg system-restore legacy 2>"$w/err" && apple_lg || fail "setup: system-restore legacy must put Apple's lg back: $(cat "$w/err")"
+
+legacy
+chmod 555 "$V/usr/bin"
+rc=0; (umask 022; mg system-replace legacy >"$w/out" 2>"$w/err") || rc=$?
+chmod 755 "$V/usr/bin"
+[ "$rc" -ne 0 ] && grep -qF "system-replace legacy stopped at /usr/bin/lg" "$w/err" \
+  || fail "setup: a migration whose swap fails after the write-ahead must stop at that path: $(cat "$w/err")"
+[ "$(stat -f %Lp "$LB")" = 700 ] && [ -f "$LB/applied.plist" ] && [ -f "$LB/.replaced" ] \
+  && [ "$("$PB" -c 'Print :refreshing:/usr/bin/lg' "$LB/applied.plist" 2>/dev/null)" = link:/usr/local/mavergreen/legacy/bin/lg ] \
+  && [ "$("$PB" -c 'Print :refreshing:/usr/bin/lg2' "$LB/applied.plist" 2>/dev/null)" = link:/usr/local/mavergreen/legacy/bin/lg2 ] \
+  || fail "a migration that stops after its write-ahead has recorded the older helper's links as what it is refreshing (R90)"
+[ "$(readlink "$V/usr/bin/lg")" = /usr/local/mavergreen/legacy/bin/lg ] && holds "$LB/usr/bin/lg" apple-lg \
+  && [ "$(stat -f '%i %Mp%Lp %l' "$LB/usr/bin/lg")" = "$lg_ino 4711 1" ] \
+  || fail "a migration that stops at a path leaves its link and its saved original"
+rc=0; (umask 022; mg system-replace legacy >"$w/out" 2>"$w/err") || rc=$?
+[ "$rc" -eq 0 ] || fail "a rerun finishes a migration that stopped after its write-ahead (R90): $(cat "$w/err")"
+is_copy "$V/usr/bin/lg" "$T/legacy/bin/lg" && is_copy "$V/usr/bin/lg2" "$T/legacy/bin/lg2" \
+  && holds "$LB/usr/bin/lg" apple-lg && [ "$(stat -f %i "$LB/usr/bin/lg")" = "$lg_ino" ] \
+  && holds "$V/usr/sbin/lg3" apple-lg3 && [ "$(stat -f %i "$V/usr/sbin/lg3")" = "$lg3_ino" ] \
+  || fail "the finished migration has the copies in place, Apple's lg saved and the undeclared lg3 back"
+if "$PB" -c 'Print :refreshing:/usr/bin/lg' "$LB/applied.plist" >/dev/null 2>&1; then fail "a finished migration is refreshing nothing"; fi
+mg check 2>"$w/err" || true
+if grep -qF "$LB" "$w/err" || grep -q 'usr/s*bin/lg\|man1/lg' "$w/err"; then fail "check reports nothing of a migration finished by a rerun: $(cat "$w/err")"; fi
+mg system-restore legacy 2>"$w/err" && apple_lg && gone "$V/usr/bin/lg2" && gone "$LB" \
+  || fail "system-restore after a resumed migration puts Apple's lg back exactly: $(cat "$w/err")"
+
+legacy
+receipt "$V" legacy ./usr/bin/lg "$LB/usr/bin/lg"
+rm "$V/usr/bin/lg"; cp "$LB/usr/bin/lg" "$V/usr/bin/lg"; chmod 4711 "$V/usr/bin/lg"
+rc=0; (umask 022; mg system-replace legacy >"$w/out" 2>"$w/err") || rc=$?
+rm "$V/var/db/receipts/com.apple.pkg.legacy.bom"
+[ "$rc" -eq 0 ] || fail "a migration takes Apple's byte-identical file over the older helper's link for the original again (K.4, R90): $(cat "$w/err")"
+is_copy "$V/usr/bin/lg" "$T/legacy/bin/lg" && holds "$LB/usr/bin/lg" apple-lg \
+  && [ "$(stat -f '%i %Mp%Lp %l' "$LB/usr/bin/lg")" = "$lg_ino 4711 1" ] \
+  || fail "after K.4 in a migration lg is the copy and the original the older helper saved stays saved, the same inode"
+mg system-restore legacy 2>"$w/err" && apple_lg || fail "setup: system-restore legacy must put Apple's lg back: $(cat "$w/err")"
 
 mkadopt ab /etc/ab_config=ab_config:config
 mg system-replace ab 2>"$w/err" || fail "system-replace must succeed when an adopted entry is absent on both sides: $(cat "$w/err")"

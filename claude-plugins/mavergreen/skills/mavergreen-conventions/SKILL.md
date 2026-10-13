@@ -2019,6 +2019,13 @@ up front, saying to run `mavergreen system-restore <product>`, then `mavergreen 
 <product>`. Any refusal here fails the install after its payload has landed, so the preflight (below)
 is the only place an upgrade stops with nothing changed.
 
+**A product the pre-convention helper replaced is migrated in place.** That helper linked each system
+path into the tree and left Apple's originals, setuid ones included, in a save area other users could
+reach (mode `0755`), marked `.replaced` with no `applied.plist`. Finding that, `system-replace` first
+makes the save area root-only, then takes the links as its own and the saved files as the originals
+and replaces as on any rerun, so a refusal leaves the old replacement as it was, now root-only, and
+Apple's originals never come back in between. It says so on stderr: a one-time migration, not an error.
+
 **Restore (`system-restore`), in order,** over the entries in `applied.plist`. It is **all or
 nothing**: before its first change it works out what it would do with every entry, and if it would
 refuse any, or if the save area holds a saved file `applied.plist` does not name, it names each one

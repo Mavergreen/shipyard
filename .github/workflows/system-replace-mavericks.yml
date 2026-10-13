@@ -21,6 +21,7 @@ on:
       - tests/system-replace-mavericks.sh
       - tests/lib/system_replace_flow.sh
       - tests/lib/system_replace_guest_gate.sh
+      - tests/fixtures/mavergreen-pre-convention.sh
       - .github/workflows/system-replace-mavericks.yml
   pull_request:
     branches: [main]
@@ -36,6 +37,7 @@ on:
       - tests/system-replace-mavericks.sh
       - tests/lib/system_replace_flow.sh
       - tests/lib/system_replace_guest_gate.sh
+      - tests/fixtures/mavergreen-pre-convention.sh
       - .github/workflows/system-replace-mavericks.yml
   workflow_dispatch:
 

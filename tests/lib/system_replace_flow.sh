@@ -7,8 +7,9 @@
 #            RUID      the uid that owns what Installer installs: 0, or the fake run's own uid
 #            here      the tests directory
 #          Builds a fake product with stage_product.sh, installs it, and runs its System Replace
-#          through replace, upgrade, a refused upgrade, Apple's put-back, restore, uninstall and a
-#          volume that is no longer 10.9. Exits 0 when every step holds, else prints FAIL and exits 1.
+#          through replace, upgrade, a refused upgrade, Apple's put-back, restore, uninstall, a
+#          migration from the pre-convention helper, and a volume that is no longer 10.9. Exits 0
+#          when every step holds, else prints FAIL and exits 1.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "System replacement (10.9 only)"
 S="$here/../scripts"
 PB=/usr/libexec/PlistBuddy
@@ -457,7 +458,81 @@ if [ "$E2E_MODE" = guest ] && pkgutil --pkg-info "dev.mavergreen.$P" >/dev/null 
 fi
 checked "uninstall"
 
-step "9. a volume that is no longer 10.9: uninstall leaves Apple's paths and keeps non-Apple originals (R65, R78, R81)"
+step "9. a product the older helper replaced: installing this version migrates it in place (R87, R89)"
+OLDMG="$here/fixtures/mavergreen-pre-convention.sh"
+rc=0; install_pkg "$W/$P-1.pkg" || rc=$?
+[ "$rc" -eq 0 ] || { install_log; fail "reinstalling v1 failed (exit $rc)"; }
+[ ! -e "$SA/.replaced" ] || fail "reinstalling v1 replaced something by itself"
+rc=0; sh "$OLDMG" --root "${R:-/}" system-replace "$P" > "$W/out" 2>"$W/err" || rc=$?
+[ "$rc" -eq 0 ] || fail "the pre-convention helper could not replace $P (exit $rc): $(cat "$W/err")"
+chmod 755 "$SA" || fail "could not loosen $SA to 0755, as the field has it"
+[ "$(readlink "$R$PROG")" = "/usr/local/mavergreen/$P/bin/at" ] && [ "$(readlink "$R$MAN")" = "/usr/local/mavergreen/$P/share/man/man1/at.1" ] \
+  || fail "the pre-convention helper did not link $PROG and $MAN into the tree"
+[ "$(stat -f %i "$SA$PROG")" = "$apple_at_inode" ] && [ "$(stat -f %i "$SA$MAN")" = "$(awk -v p="$MAN" '$1 == p { print $7 }' "$W/snap.1")" ] \
+  || fail "the pre-convention helper did not move Apple's $PROG and $MAN into $SA"
+[ -f "$SA/.replaced" ] && [ ! -e "$SA/applied.plist" ] && [ "$(mode_owner "$SA")" = "755 $RUID" ] \
+  || fail "the legacy state is not .replaced without applied.plist, in a 0755 save area: $(ls -la "$SA")"
+if [ "$E2E_MODE" = guest ]; then
+  sudo -u nobody test -x "$SA$PROG" || fail "control: nobody cannot reach the legacy save area's setuid $PROG, so the 0700 check after the migration proves nothing"
+fi
+rc=0; mgr check 2>"$W/err" || rc=$?
+[ "$rc" -ne 0 ] && grep -qF "$SA holds $P's saved originals, but its mode is 755" "$W/err" \
+  || fail "check does not report the legacy save area other users can reach: $(cat "$W/err")"
+cat > "$W/probe9.sh" <<'PROBE'
+n=0
+while [ ! -e "$1/stop" ]; do
+  n=$((n + 1))
+  if [ -L "$2" ]; then :
+  elif [ ! -e "$2" ]; then echo absent >> "$1/seen"
+  elif [ "$(stat -f %i "$2" 2>/dev/null)" = "$3" ]; then echo apple >> "$1/seen"
+  fi
+done
+echo "$n" > "$1/count"
+PROBE
+mkdir "$W/probe9"
+sh "$W/probe9.sh" "$W/probe9" "$R$PROG" "$apple_at_inode" &
+probe_pid=$!
+rc=0; install_pkg "$W/$P-2.pkg" || rc=$?
+: > "$W/probe9/stop"
+prc=0; wait "$probe_pid" || prc=$?
+probe_pid=""
+[ "$rc" -eq 0 ] || { install_log; fail "installing v2 over the legacy replacement failed (exit $rc): its re-replace did not migrate it"; }
+[ "$prc" -eq 0 ] || fail "the migration probe exited $prc"
+[ "$(cat "$W/probe9/count")" -ge 50 ] || fail "the migration probe looked only $(cat "$W/probe9/count") times, too few to say anything"
+[ ! -s "$W/probe9/seen" ] || fail "during the migration $PROG was absent or Apple's original again: $(sort "$W/probe9/seen" | uniq -c)"
+echo "probe: $PROG neither absent nor Apple's in all $(cat "$W/probe9/count") looks during the migration"
+if [ "$E2E_MODE" = fake ]; then
+  grep -qF "mavergreen: $P was replaced by an older mavergreen; replacing it again in place" "$W/installer.out" \
+    || fail "the postinstall's re-replace did not say it migrated $P: $(cat "$W/installer.out")"
+else
+  echo "Installer's log of the migration:"; install_log
+fi
+[ "$(mode_owner "$SA")" = "700 $RUID" ] || fail "the migrated save area is not drwx------ owned by $RUID: $(ls -ld "$SA")"
+if [ "$E2E_MODE" = guest ]; then
+  if sudo -u nobody test -x "$SA$PROG"; then fail "nobody can still reach the saved setuid original $SA$PROG after the migration"; fi
+fi
+[ -f "$SA/applied.plist" ] && [ -f "$SA/.replaced" ] || fail "the migration did not end as a finished replace: applied.plist and .replaced"
+is_copy "$R$PROG" "$TREE/bin/at" && is_copy "$TREE/bin/at" /usr/bin/false && [ "$(stat -f '%Mp%Lp %u' "$R$PROG")" = "4555 $RUID" ] \
+  || fail "$PROG is not v2's setuid copy after the migration: $(ls -l "$R$PROG")"
+[ "$(stat -f %i "$SA$PROG")" = "$apple_at_inode" ] || fail "the migration disturbed the saved original of $PROG"
+for s in $SIBS; do
+  [ "$(stat -f '%i %l' "$R$s")" = "$apple_at_inode 4" ] && setid "$R$s" \
+    || fail "$s is no longer Apple's setuid inode with four links after the migration: $(ls -li "$R$s")"
+done
+[ "$(snap1 "$MAN")" = "$(grep "^$MAN " "$W/snap.1")" ] && [ ! -e "$SA$MAN" ] \
+  || fail "the man page v2 no longer declares is not Apple's again after the migration: $(snap1 "$MAN")"
+[ "$(readlink "$VAR/ftpusers")" = "$CONF" ] && [ "$(readlink "$VAR/csh.logout")" = "$CONF2" ] && [ "$(readlink "$VAR/identity")" = "$IDENT" ] \
+  || fail "the migration did not adopt v2's config and identity"
+checked "the migration"
+rc=0; mgr uninstall "$P" > "$W/out" 2>"$W/err" || rc=$?
+[ "$rc" -eq 0 ] || fail "uninstalling the migrated product failed (exit $rc): $(cat "$W/err")"
+same_snap "$W/snap.1" "uninstalling the migrated product"
+for x in "$SA" "$VAR" "$TREE" "$MG/kept/$P"; do
+  [ ! -e "$x" ] && [ ! -L "$x" ] || fail "uninstalling the migrated product left $x"
+done
+checked "uninstalling the migrated product"
+
+step "10. a volume that is no longer 10.9: uninstall leaves Apple's paths and keeps non-Apple originals (R65, R78, R81)"
 rm -f "$R$CONF.mavergreen-save"
 chmod u+w "$R$PROG" && printf '# sr-e2e: no longer Apple-stock\n' >> "$R$PROG" && chmod 4555 "$R$PROG" \
   || fail "could not make $PROG's inode non-stock"
