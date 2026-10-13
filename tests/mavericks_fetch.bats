@@ -179,10 +179,60 @@ dir_fixture() {
   [ -f "$x/payload/file.txt" ]
 }
 
-@test "progress: a mismatch message is unchanged" {
-  BAD=0000000000000000000000000000000000000000000000000000000000000000
-  MAVERGREEN_PROGRESS=1 mav_fetch_verified "$URL" "$BAD" "$CACHE" fixture.tar 2>"$WORK/err" || true
-  grep -q "is sha256 $SHA, not the pinned $BAD" "$WORK/err"
-  run grep -q verified "$WORK/err"
-  [ "$status" -eq 1 ]
+
+# platform: runs one fetch under the given script and prints "status", stdout and stderr to files in
+#           $WORK/$1, with the cache path and mktemp suffixes normalised so two runs compare byte for byte.
+fetch_capture() {   # fetch_capture NAME SCRIPT FUNC SHA [ENV=VAL...]
+  _n=$1; _s=$2; _f=$3; _h=$4; shift 4
+  mkdir -p "$WORK/$_n"
+  _rc=0
+  env "$@" sh -c '. "$1"; "$2" "$3" "$4" "$5" fixture.tar payload' x "$_s" "$_f" "$URL" "$_h" "$WORK/$_n/cache" \
+    >"$WORK/$_n/out" 2>"$WORK/$_n/err" || _rc=$?
+  echo $_rc > "$WORK/$_n/status"
+  sed -e "s|$WORK/$_n/cache|CACHE|g" -e 's|\.mav-extract\.[A-Za-z0-9]*|.mav-extract.X|g' \
+      -e 's|\(\.fixture\.tar\)\.[A-Za-z0-9]\{6\}|\1.X|g' "$WORK/$_n/out" > "$WORK/$_n/out.n"
+  sed -e "s|$WORK/$_n/cache|CACHE|g" -e 's|\.mav-extract\.[A-Za-z0-9]*|.mav-extract.X|g' \
+      -e 's|\(\.fixture\.tar\)\.[A-Za-z0-9]\{6\}|\1.X|g' "$WORK/$_n/err" > "$WORK/$_n/err.n"
+}
+
+BAD0=0000000000000000000000000000000000000000000000000000000000000000
+
+@test "default mismatch output is byte-identical to the original script's" {
+  git -C "$BATS_TEST_DIRNAME/.." show a5c3e3d:scripts/mavericks_fetch.sh > "$WORK/orig.sh"
+  fetch_capture old "$WORK/orig.sh" mav_fetch_extract "$BAD0" -u MAVERGREEN_PROGRESS
+  fetch_capture new "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" mav_fetch_extract "$BAD0" -u MAVERGREEN_PROGRESS
+  [ "$(cat "$WORK/new/status")" -ne 0 ]
+  [ "$(cat "$WORK/old/status")" = "$(cat "$WORK/new/status")" ]
+  [ -s "$WORK/new/err.n" ]
+  cmp "$WORK/old/err.n" "$WORK/new/err.n"
+  cmp "$WORK/old/out.n" "$WORK/new/out.n"
+  [ ! -s "$WORK/new/out" ]
+}
+
+@test "a value other than 1 leaves output unchanged, on success and on mismatch" {
+  S="$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
+  fetch_capture u "$S" mav_fetch_extract "$SHA" -u MAVERGREEN_PROGRESS
+  fetch_capture um "$S" mav_fetch_extract "$BAD0" -u MAVERGREEN_PROGRESS
+  for v in 0 yes "" 11; do
+    fetch_capture v "$S" mav_fetch_extract "$SHA" MAVERGREEN_PROGRESS="$v"
+    cmp "$WORK/u/err.n" "$WORK/v/err.n"; cmp "$WORK/u/out.n" "$WORK/v/out.n"
+    [ "$(cat "$WORK/v/status")" -eq 0 ]
+    rm -rf "$WORK/v"
+    fetch_capture vm "$S" mav_fetch_extract "$BAD0" MAVERGREEN_PROGRESS="$v"
+    cmp "$WORK/um/err.n" "$WORK/vm/err.n"; cmp "$WORK/um/out.n" "$WORK/vm/out.n"
+    [ "$(cat "$WORK/vm/status")" -ne 0 ]
+    rm -rf "$WORK/vm"
+  done
+}
+
+@test "progress: a mismatch fails and its message is the default one after the download lines" {
+  S="$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
+  fetch_capture d "$S" mav_fetch_extract "$BAD0" -u MAVERGREEN_PROGRESS
+  fetch_capture p "$S" mav_fetch_extract "$BAD0" MAVERGREEN_PROGRESS=1
+  [ "$(cat "$WORK/p/status")" -ne 0 ]
+  { printf "mav_fetch: downloading fixture.tar\nmav_fetch: downloaded fixture.tar\n"; cat "$WORK/d/err.n"; } > "$WORK/p/want"
+  cmp "$WORK/p/want" "$WORK/p/err.n"
+  cmp "$WORK/d/out.n" "$WORK/p/out.n"
+  run grep -c 'OK$\|verified' "$WORK/p/err"
+  [ "$output" = 0 ]
 }
