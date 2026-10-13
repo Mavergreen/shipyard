@@ -138,6 +138,13 @@ updaters, signing, or compat checks:**
 | `mavericks_fetch` · `MavericksFetch` · `mavericks_fetch.sh` | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
 | `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
 
+**`MAVERGREEN_PROGRESS=1` makes the fetch scripts report progress.** Set it and `mavericks_fetch.sh`
+(and so `fetch_sdk.sh`, `fetch_pinned_source.sh`, `fetch_sparkle_framework.sh`) say what they are
+doing on stderr: downloading, verifying, unpacking. At a terminal the download shows curl's progress
+bar; anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
+exactly what it was, so CI logs and every existing consumer see no change. Stdout is untouched. A
+product that drives a fetch for a person at a terminal (Longboat) sets it; a build script does not.
+
 ## The build must also run natively ON 10.9
 
 CI and day-to-day development happen on modern macOS, but a Mavergreen product's build must

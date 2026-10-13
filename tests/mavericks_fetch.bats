@@ -146,3 +146,42 @@ dir_fixture() {
   [ "$status" -ne 0 ]
   [ ! -e "$CACHE/.mav-publish.lock" ]
 }
+
+# platform: MAVERGREEN_PROGRESS=1 adds stderr progress; bats has no terminal, so these cover the
+#           non-terminal path (whole lines, no \r) and the unset default.
+@test "default output is byte-identical" {
+  unset MAVERGREEN_PROGRESS
+  x="$(mav_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar payload 2>"$WORK/err")"
+  [ "$x" = "$(printf '%s' "$x" | head -n 1)" ]
+  [[ "$x" == "$CACHE"/.mav-extract.* ]] || false
+  [[ "$(cat "$WORK/err")" == "$CACHE/.fixture.tar."??????": OK" ]] || false
+  [ "$(wc -l < "$WORK/err" | tr -d ' ')" -eq 1 ]
+  x="$(mav_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar payload 2>"$WORK/err")"
+  [ "$(cat "$WORK/err")" = "$CACHE/fixture.tar: OK" ]
+}
+
+@test "progress, not a terminal: one line per stage" {
+  MAVERGREEN_PROGRESS=1 mav_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar payload 2>"$WORK/err" >/dev/null
+  printf 'mav_fetch: downloading fixture.tar\nmav_fetch: downloaded fixture.tar\nmav_fetch: verified fixture.tar\nmav_fetch: unpacking fixture.tar\n' > "$WORK/want"
+  cmp "$WORK/want" "$WORK/err"
+}
+
+@test "progress, cached tarball: no download lines" {
+  mav_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar payload >/dev/null 2>&1
+  MAVERGREEN_PROGRESS=1 mav_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar payload 2>"$WORK/err" >/dev/null
+  printf 'mav_fetch: verified fixture.tar\nmav_fetch: unpacking fixture.tar\n' > "$WORK/want"
+  cmp "$WORK/want" "$WORK/err"
+}
+
+@test "progress does not change stdout" {
+  x="$(MAVERGREEN_PROGRESS=1 mav_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar payload 2>/dev/null)"
+  [[ "$x" == "$CACHE"/.mav-extract.?????? ]] || false
+  [ -f "$x/payload/file.txt" ]
+}
+
+@test "progress: a mismatch message is unchanged" {
+  BAD=0000000000000000000000000000000000000000000000000000000000000000
+  MAVERGREEN_PROGRESS=1 mav_fetch_verified "$URL" "$BAD" "$CACHE" fixture.tar 2>"$WORK/err" || true
+  grep -q "is sha256 $SHA, not the pinned $BAD" "$WORK/err"
+  run grep -q verified "$WORK/err"n  [ "$status" -ne 0 ]
+}

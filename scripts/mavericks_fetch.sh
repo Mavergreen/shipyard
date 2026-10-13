@@ -34,11 +34,25 @@ mav_fetch_verified() {
     # platform: mktemp gives every call its own file, so concurrent downloads (even subshells of one
     #           shell, which share $$) never interleave into one file
     _chk="$(mktemp "$_cache/.$_tarball.XXXXXX")" || return 1
-    curl -sL --fail -o "$_chk" "$_url" || { rm -f "$_chk"; return 1; }
+    if [ "${MAVERGREEN_PROGRESS:-}" != 1 ]; then
+      curl -sL --fail -o "$_chk" "$_url" || { rm -f "$_chk"; return 1; }
+    elif [ -t 2 ]; then
+      curl -L --fail --progress-bar -o "$_chk" "$_url" || { rm -f "$_chk"; return 1; }
+    else
+      echo "mav_fetch: downloading $_tarball" >&2
+      curl -sL --fail -o "$_chk" "$_url" || { rm -f "$_chk"; return 1; }
+      echo "mav_fetch: downloaded $_tarball" >&2
+    fi
   fi
-  echo "$_sha  $_chk" | shasum -a 256 -c - >&2 || {
+  if [ "${MAVERGREEN_PROGRESS:-}" = 1 ]; then
+    _vout="$(echo "$_sha  $_chk" | shasum -a 256 -c - 2>&1)" && _vok=1 || { _vok=0; echo "$_vout" >&2; }
+  else
+    echo "$_sha  $_chk" | shasum -a 256 -c - >&2 && _vok=1 || _vok=0
+  fi
+  [ "$_vok" -eq 1 ] || {
     echo "mav_fetch: $_tb ($_url) is sha256 $(shasum -a 256 < "$_chk" | cut -c1-64), not the pinned $_sha" >&2
     rm -f "$_chk"; return 1; }
+  [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || echo "mav_fetch: verified $_tarball" >&2
   [ "$_chk" = "$_tb" ] || mv -f "$_chk" "$_tb" || { rm -f "$_chk"; return 1; }
 }
 
@@ -46,6 +60,7 @@ mav_fetch_extract() {
   _url=$1; _sha=$2; _cache=$3; _tarball=$4; shift 4   # remaining args: tar members
   mav_fetch_verified "$_url" "$_sha" "$_cache" "$_tarball" || return 1
   _x="$(mktemp -d "$_cache/.mav-extract.XXXXXX")" || return 1
+  [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || echo "mav_fetch: unpacking $_tarball" >&2
   tar xf "$_cache/$_tarball" -C "$_x" "$@" || { rm -rf "$_x"; return 1; }
   echo "$_x"
 }
