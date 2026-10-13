@@ -140,8 +140,9 @@ updaters, signing, or compat checks:**
 
 **`MAVERGREEN_PROGRESS=1` makes the fetch scripts report progress.** Set it and `mavericks_fetch.sh`
 (and so `fetch_sdk.sh`, `fetch_pinned_source.sh`, `fetch_sparkle_framework.sh`) say what they are
-doing on stderr: downloading, verifying, unpacking. At a terminal the download shows curl's progress
-bar; anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
+doing on stderr: downloading, verifying, unpacking, and (`fetch_sdk.sh`) converting stubs to `.tbd`.
+At a terminal the download shows curl's progress bar and the conversion a count redrawn with `\r`;
+anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
 exactly what it was, so CI logs and every existing consumer see no change. Stdout is untouched. A
 product that drives a fetch for a person at a terminal (Longboat) sets it; a build script does not.
 
