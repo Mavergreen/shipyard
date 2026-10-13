@@ -15,6 +15,14 @@ that copying one repo can't teach.
 say so in a comment or PR describing why.** A silent deviation reads as a mistake; a documented one reads
 as a decision.
 
+**Each product leaves Mavericks easier to target than it found it.** Mavergreen is not only making
+things for Mavericks; it is making it systematically, incrementally and persistently easier to make
+things for Mavericks. A fix a product needed goes *up* into a shared home — shipyard, Recaulk, the
+toolchains, or upstream itself — never *sideways* into the next repo. A per-repo workaround is debt:
+declare it as a deviation whose reason names the shared fix that would retire it. When work hits
+something hard, record it where the family will act on it (shipyard's queue, or a spec), not only in
+the product's own notes.
+
 **On-target/off-target parity: developing UNDER Mavericks and developing under modern macOS are
 equally first-class, and a design that degrades either side is rejected on those grounds.** This is a
 standing constraint on designs, not a preference to trade away when one side is cheaper — and the
@@ -26,6 +34,15 @@ artifact, ship one artifact that decides *for* the developer rather than two tha
 own `.pkg` is the worked example — it carries both updater slices and a postinstall that picks by
 hardware, because an x86_64-only updater would be cheaper and match every other family product while
 prompting for Rosetta on Apple Silicon.
+
+**x86_64 by default; arm64 only with a reason.** A product exists for Mavericks, so it ships x86_64
+only. An arm64 slice is a deviation, declared in `INGREDIENTS.md` as `- arm64:<glob>: <reason>`, and
+it is warranted only when the thing is used in CI or by developers to produce, test or investigate
+Mavericks artifacts: a cross toolchain, cmake, shipyard's own updater, the static half of a
+reverse-engineering tool. The reason names that use. A library gets an arm64 slice only for a real
+arm64 consumer, never speculatively. Parity is about *developers'* tools, not about shipping Mavericks
+products for Apple Silicon. A product spec that plans a universal build without such a reason is
+following a retired direction (universal-by-default never landed); correct the spec.
 
 ## Canonical templates (copy these, not the others)
 
@@ -663,6 +680,10 @@ cut and publish a release. Pushing is therefore a decision, not a reflex.
   answer you actually came for.
 - **Before pushing to `main` in an auto-cut repo, know whether this push releases.** If `UPSTREAM_VERSION`
   has no release yet, it does.
+- **Push straight to `main` by default.** A PR needs a specific reason (CI's verdict before a change
+  can publish in an auto-cut repo, or a change someone else should see first); state it and ask the
+  maintainer before opening one. Otherwise PRs come from Renovate, bots pushing to its branches, and
+  outside contributors.
 - This is also why an empty "probe" commit is a real cost. Use one when you genuinely need to see CI
   behave; delete the branch after.
 
