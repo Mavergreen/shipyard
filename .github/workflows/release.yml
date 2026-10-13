@@ -47,12 +47,6 @@ jobs:
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
 
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.15'
-      - name: Provision PyYAML (the workflow-parse gate's only dependency)
-        run: python3 -m pip install --quiet pyyaml
-
       - name: Resolve the version
         id: ver
         run: |

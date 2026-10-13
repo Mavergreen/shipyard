@@ -46,6 +46,12 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   `scripts/`, and `MavericksShipyard_DIR` points `find_package` at that checkout. Consume the CMake
   side with `find_package` — **no `CMAKE_PREFIX_PATH`, no vendored copy, no hand-run `--install`.**
 
+  On every runner it also makes **PyYAML** importable for the job's own `python3` (`pip --user`,
+  only when missing; it never swaps in another interpreter). The conventions gate needs it to parse
+  workflows, and a product repo's suite runs that gate in its release job. So a repo neither
+  provisions PyYAML itself nor skips the gate for want of it: both were tried (drydock and pi
+  provisioned their own, fd and rg skipped), and a skipped gate checks nothing.
+
   **Installing shipyard: the pkg.** Download it from the latest release
   (`gh release download -R Mavergreen/shipyard --pattern '*.pkg'`) and install it. It is a family
   product like any other (see "Install layout and identity"): one whole prefix at
