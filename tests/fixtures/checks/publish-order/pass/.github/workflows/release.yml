@@ -1,0 +1,32 @@
+name: release
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  build:
+    steps:
+      - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
+      - run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh"
+      - run: |
+          sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "$TAG" --version "$FULL" \
+            --product Widget --min-os 10.9.5 --out dist/RELEASE_NOTES.md
+      - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
+      - run: sh "$SHIPYARD_SCRIPTS/release-state-record.sh" --out dist/state
+      - run: |
+          sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg
+      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"
+      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr
+  scan:
+    needs: [build]
+    if: always()
+    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1
+  publish:
+    needs: [build, scan]
+    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1

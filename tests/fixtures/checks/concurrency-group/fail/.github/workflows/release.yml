@@ -1,7 +1,11 @@
 name: release
 on:
   push:
-    tags: ['*-mavericks.*']
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false

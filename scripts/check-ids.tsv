@@ -77,3 +77,11 @@ publish-order	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 renovate-extends-preset	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 no-hardcoded-version	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 installed-shipyard	only	scripts/assert-installed-shipyard.sh	assert-installed-shipyard.sh	P1
+linux	dist	scripts/check-artifact-conformance.sh	deviation key (longboat)	P5
+no-tags-trigger	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+no-pull-request-target	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+checkout-drops-credentials	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+permissions-contents-read	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+upstream-version-bare	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+version-ignored	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+renovate-json-valid	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1

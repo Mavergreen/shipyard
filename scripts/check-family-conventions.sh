@@ -39,6 +39,26 @@ SRC_BATS_RX='\.(sh|yml|yaml|cmake|bats)$|^CMakeLists\.txt$'
 chk_ran python3
 PY_OK=0
 if chk_python3 >/dev/null; then PY_OK=1; fi
+# spec: SKILL.md "Renovate" -- one parse of .github/renovate.json, before the checks that read it:
+#       an unparseable config is renovate-json-valid's failure alone, and those checks skip it.
+RJ=.github/renovate.json
+RJ_OK=0; RJ_RC=0
+: > "$tmp/rjson"
+if [ -f "$RJ" ] && [ "$PY_OK" -eq 1 ]; then
+  chk_py /dev/stdin "$RJ" > "$tmp/rjson" <<'PY' || RJ_RC=$?
+import json, sys
+try:
+    c = json.load(open(sys.argv[1]))
+except ValueError as e:
+    print('invalid: %s' % e)
+    sys.exit(0)
+ext = c.get('extends') if isinstance(c, dict) else None
+pre = 'github>Mavergreen/shipyard'
+if not (isinstance(ext, list) and any(isinstance(x, str) and x.split(':')[0].split('#')[0] == pre for x in ext)):
+    print('noext')
+PY
+  if [ "$RJ_RC" -eq 0 ] && ! grep -q '^invalid: ' "$tmp/rjson"; then RJ_OK=1; fi
+fi
 py_crashed() {
   chk_fail "$1" "its python3 step did not run to the end" \
     "python3 exited non-zero and its own error is printed above" \
@@ -106,7 +126,7 @@ fi
 #       saying why a green build isn't enough (BUILD FINE AND BE WRONG); unexplained, it reads as
 #       drift, not a decision.
 chk_ran automerge-described
-if [ -f .github/renovate.json ] && [ "$PY_OK" -eq 1 ]; then
+if [ -f .github/renovate.json ] && [ "$RJ_OK" -eq 1 ]; then
   rc=0
   chk_py /dev/stdin .github/renovate.json > "$tmp/automerge" <<'PY' || rc=$?
 import json, sys
@@ -373,7 +393,7 @@ fi
 #       -mavericks.N needs regex versioning that compares N; default versioning coerces it away and
 #       every repackage compares equal (swift-runtime missed three releases this way).
 chk_ran renovate-suffix-versioning
-if [ -f .github/renovate.json ] && [ "$HAVE_TRACKED" -eq 1 ] && [ "$PY_OK" -eq 1 ]; then
+if [ -f .github/renovate.json ] && [ "$HAVE_TRACKED" -eq 1 ] && [ "$RJ_OK" -eq 1 ]; then
   rc=0
   chk_py /dev/stdin .github/renovate.json "$TF" > "$tmp/suffix" <<'PY' || rc=$?
 import fnmatch, json, re, sys
@@ -786,6 +806,174 @@ if [ "$HAVE_TRACKED" -eq 1 ]; then
     fi
   done
 fi
+
+# spec: SKILL.md "The `ignoreTests` policy" -- Renovate's automerge waits on a CI status check, so
+#       release.yml must build pull requests to main (or every push); a repo with no build to gate
+#       sets ignoreTests: true instead. Comments and "on:" blocks are read as text so this needs no python3.
+on_block() {  # $1 = a workflow; its top-level on: block, comment lines dropped
+  grep -v '^[[:space:]]*#' "$1" | awk '/^(on|"on"):/ { f = 1; print; next } /^[^[:space:]]/ { f = 0 } f'
+}
+on_has() {  # stdin = an on: block; $1 = a trigger, as a key, in a list or inline
+  grep -Eq "^(on|\"on\"):.*[^a-z_]$1([^a-z_]|\$)|^[[:space:]]+-[[:space:]]*$1[[:space:]]*\$|^  $1:"
+}
+trigger_lines() {  # stdin = an on: block; $1 = a trigger; prints that trigger's own block
+  awk -v t="$1" '$0 ~ "^  " t ":" { f = 1; print; next } /^  [^[:space:]]/ { f = 0 } /^[^[:space:]]/ { f = 0 } f'
+}
+chk_ran pr-trigger
+on_block "$REL" > "$tmp/on-release"
+if ! grep -q '"ignoreTests"[[:space:]]*:[[:space:]]*true' .github/renovate.json 2>/dev/null \
+   && ! deviated pr-trigger "$REL"; then
+  _pr=0
+  if on_has pull_request < "$tmp/on-release"; then
+    trigger_lines pull_request < "$tmp/on-release" > "$tmp/pr-lines"
+    if ! grep -q 'branches:' "$tmp/pr-lines" \
+       || grep -Eq "(\[|,|-)[[:space:]]*['\"]?(main|\*\*)['\"]?[[:space:]]*(\]|,|\$)" "$tmp/pr-lines"; then _pr=1; fi
+  fi
+  if [ "$_pr" -eq 0 ] && on_has push < "$tmp/on-release" \
+     && trigger_lines push < "$tmp/on-release" | grep -Eq "(\[|,|-)[[:space:]]*['\"]?\*\*['\"]?[[:space:]]*(\]|,|\$)"; then
+    _pr=1
+  fi
+  [ "$_pr" -eq 1 ] || chk_fail pr-trigger "$REL does not build pull requests to main" \
+    "Renovate's automerge waits on a CI check, and without one on the bump PR it stalls forever" \
+    "add pull_request: with branches: [main] under on:, or set \"ignoreTests\": true in .github/renovate.json if the repo has no build to gate"
+fi
+
+# spec: SKILL.md "Release workflow" -- the notes are generated first, then the state is recorded, then the
+#       appcast is signed, then the release is published: the appcast and the Release must carry the
+#       same notes. Order is by first non-comment mention in release.yml; a step a repo does not have
+#       takes no part (release-notes-generated and signing-scans-for-key say whether it must exist).
+chk_ran publish-order
+if ! deviated publish-order "$REL"; then
+  _prev=0; _prevname=""
+  for _step in 'release-notes\.sh' 'release-state-record\.sh' 'sign_and_appcast\.sh' 'publish-release\.yml'; do
+    _ln="$(awk -v re="(^|[^A-Za-z0-9_-])$_step" '/^[[:space:]]*#/ { next } $0 ~ re { print NR; exit }' "$REL")"
+    [ -n "$_ln" ] || continue
+    _name="$(printf '%s' "$_step" | sed 's/\\//g')"
+    if [ "$_ln" -lt "$_prev" ]; then
+      chk_fail publish-order "$REL mentions $_name (line $_ln) before $_prevname (line $_prev)" \
+        "the appcast and the Release must carry the same notes, which only holds if notes come first, then the state, then signing, then publishing" \
+        "reorder the steps: release-notes.sh, release-state-record.sh, sign_and_appcast.sh, then publish-release.yml"
+      break
+    fi
+    _prev="$_ln"; _prevname="$_name"
+  done
+fi
+
+# spec: SKILL.md "Renovate" -- .github/renovate.json extends github>Mavergreen/shipyard, and the
+#       preset's defaults (automerge, ignoreTests) only reach a repo that does. Parsing is python3's
+#       (like 4b); a missing python3 is reported once, as `python3`.
+chk_ran renovate-json-valid
+chk_ran renovate-extends-preset
+if [ ! -f "$RJ" ]; then
+  deviated renovate-extends-preset "$RJ" \
+    || chk_fail renovate-extends-preset "there is no $RJ" \
+         "without it the repo gets none of the preset's defaults" \
+         "add .github/renovate.json with {\"extends\": [\"github>Mavergreen/shipyard\"]}"
+elif [ "$PY_OK" -eq 1 ]; then
+  if [ "$RJ_RC" -ne 0 ]; then
+    py_crashed renovate-json-valid
+  elif grep -q '^invalid: ' "$tmp/rjson"; then
+    chk_fail renovate-json-valid "$RJ is not valid JSON ($(sed 's/^invalid: //' "$tmp/rjson"))" \
+      "Renovate ignores a config it cannot parse, so the repo silently stops getting updates" \
+      "fix the syntax; python3 -m json.tool $RJ shows where"
+  elif grep -q '^noext$' "$tmp/rjson" && ! deviated renovate-extends-preset "$RJ"; then
+    chk_fail renovate-extends-preset "$RJ does not extend github>Mavergreen/shipyard" \
+      "the preset carries the family's automerge and ignoreTests defaults" \
+      "add \"github>Mavergreen/shipyard\" to its \"extends\" list"
+  fi
+fi
+
+# spec: SKILL.md "Versioning" -- a hardcoded upstream version in the build machinery fails its own
+#       CI on the next Renovate bump and blocks the automerge, so build/, packaging/, the workflows
+#       and CMakeLists.txt read UPSTREAM_VERSION. The match is the whole dotted version: 12.3 is not
+#       found inside 112.34, ABC12.3 or 12.3.1, and v12.3 is. tests/ may name it; a test that does so reads the file.
+chk_ran no-hardcoded-version
+if [ "$HAVE_TRACKED" -eq 1 ] && [ -f UPSTREAM_VERSION ]; then
+  _uv="$(sed -n '1{s/[[:space:]]//g;p;}' UPSTREAM_VERSION)"
+  case "$_uv" in
+    ''|*[!0-9A-Za-z._-]*) ;;
+    *.*|?????*)
+      _rx="(^|[^0-9A-Za-z.]|[vV])$(printf '%s' "$_uv" | sed 's/[.]/\\./g')([^0-9.]|\\.([^0-9]|\$)|\$)"
+      for f in $(grep -E '^(build/|packaging/|\.github/workflows/)|^CMakeLists\.txt$' "$TF" || true); do
+        [ -f "$f" ] || continue
+        _hit="$(grep -nE "$_rx" "$f" 2>/dev/null | head -1 | cut -c1-70 || true)"
+        [ -n "$_hit" ] || continue
+        deviated no-hardcoded-version "$f" && continue
+        chk_fail no-hardcoded-version "$f names the upstream version $_uv ($_hit)" \
+          "a Renovate bump changes UPSTREAM_VERSION and this file keeps the old one, failing the bump's own CI" \
+          "read UPSTREAM_VERSION instead of spelling the version out"
+      done ;;
+  esac
+fi
+
+# spec: SKILL.md "Release workflow", "Shared shape" -- a new repo adds no tags: trigger; tags are retired
+#       as a release input and a workflow_dispatch covers every case a tag used to. Only a tags: key
+#       under push: is a trigger; a dispatch input named tags is not.
+chk_ran no-tags-trigger
+for f in $CI_FILES; do
+  on_block "$f" | trigger_lines push | grep -Eq '^[[:space:]]+tags(-ignore)?:' || continue
+  deviated no-tags-trigger "$f" && continue
+  chk_fail no-tags-trigger "$f has a tags: trigger" \
+    "tags are retired as a release input, and a workflow_dispatch covers every case a tag used to" \
+    "delete the tags: key under push:; to release from a tag's commit, run: gh workflow run release.yml --ref <ref>"
+done
+
+# spec: SKILL.md "Release workflow" -- pull_request_target runs with the base repo's secrets on a
+#       fork PR's code, and no family workflow needs it.
+chk_ran no-pull-request-target
+for f in $CI_FILES; do
+  grep -v '^[[:space:]]*#' "$f" | grep -q 'pull_request_target' || continue
+  deviated no-pull-request-target "$f" && continue
+  chk_fail no-pull-request-target "$f uses pull_request_target" \
+    "it would hand a fork PR this repo's secrets" \
+    "use pull_request, which gets no secrets from a fork"
+done
+
+# spec: SKILL.md "Release workflow" -- the build jobs run hours of third-party build code, so a
+#       checkout leaves no token on disk (persist-credentials: false) and the workflow's default
+#       token reads contents only; the publishing job declares its own write.
+chk_ran checkout-drops-credentials
+if ! deviated checkout-drops-credentials "$REL"; then
+  _nco="$(grep -v '^[[:space:]]*#' "$REL" | grep -c 'uses: actions/checkout@' || true)"
+  _npc="$(grep -v '^[[:space:]]*#' "$REL" | grep -c 'persist-credentials: false' || true)"
+  [ "$_nco" -le "$_npc" ] || chk_fail checkout-drops-credentials "$REL has $_nco checkouts but only $_npc with persist-credentials: false" \
+    "a checkout that keeps its token leaves it readable by every later step, including third-party build code" \
+    "add persist-credentials: false under with: on every actions/checkout step"
+fi
+
+chk_ran permissions-contents-read
+if ! deviated permissions-contents-read "$REL"; then
+  _perm="$(grep -v '^[[:space:]]*#' "$REL" | awk '/^permissions:/ { print; p = 1; next } p && /^[^[:space:]]/ { p = 0 } p')"
+  printf '%s\n' "$_perm" | grep -Eq '^  contents: read[[:space:]]*$|^permissions:[[:space:]]*(read-all|\{\})[[:space:]]*$' \
+    || chk_fail permissions-contents-read "$REL has no top-level permissions: with contents: read" \
+         "without it every job holds the repository default token, which can write" \
+         "add a top-level permissions: block with contents: read, and give only the publishing job contents: write"
+fi
+
+# spec: SKILL.md "Versioning" -- UPSTREAM_VERSION is one bare version on one line: no leading v, no
+#       spaces, no second line. What the version looks like (x.y.z, a date) is the product's.
+chk_ran upstream-version-bare
+if [ -f UPSTREAM_VERSION ] && ! deviated upstream-version-bare UPSTREAM_VERSION; then
+  _uvn="$(grep -c '[^[:space:]]' UPSTREAM_VERSION || true)"
+  _uv1="$(head -1 UPSTREAM_VERSION | tr -d '\r')"
+  _bad=""
+  [ "$_uvn" -eq 1 ] || _bad="it holds $_uvn non-blank lines"
+  case "$_uv1" in
+    v[0-9]*|V[0-9]*) _bad="${_bad:-it starts with a v}" ;;
+    *[[:space:]]*) _bad="${_bad:-it has whitespace around or inside the version}" ;;
+  esac
+  [ -z "$_bad" ] || chk_fail upstream-version-bare "UPSTREAM_VERSION is not a bare version: $_bad" \
+    "version.sh and the release tag build on it, and a v or a stray space ends up in the tag" \
+    "make the file one line holding just the version, with no v and no spaces"
+fi
+
+# spec: SKILL.md "Versioning" -- /VERSION is a build product, so it is ignored as well as untracked
+#       (no-tracked-version only catches it once it has been committed).
+chk_ran version-ignored
+grep -qxE '/?VERSION' .gitignore 2>/dev/null \
+  || chk_fail version-ignored ".gitignore has no line ignoring /VERSION" \
+       "VERSION is written by every build, and the first git add -A commits it" \
+       "add a line '/VERSION' to .gitignore"
 
 [ "$chk_status" -eq 0 ] && echo "check-family-conventions: ok"
 

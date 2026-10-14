@@ -64,5 +64,8 @@ one line):
 - version-scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
+- pr-trigger: shipyard's pull requests are built by ci.yml, its required check; release.yml cuts a release on every push to main and must not run on a PR. Revisit if release.yml gains a dry-run mode for PRs.
+- permissions-contents-read: release.yml has held `contents: write` at the top since before this check; its build job was never audited for needing less, and the publish and major-tag jobs already declare their own. Revisit once a release run proves the build job needs only `contents: read`.
+- checkout-drops-credentials: the major-tag job pushes with its checkout's token, and the build job's checkout was never audited for dropping it. Revisit with permissions-contents-read.
 
 Not a deviation, because no check reads one: scripts/vendor/yaml/** is vendored on purpose. python-315's phase 1 has no `ssl`, so pip can't fetch PyYAML on 10.9, and the checks keep their Python; revisit when python-315 ships `ssl` and pip works (its phase 2), then delete scripts/vendor and let the checks import a pip-installed PyYAML (`/opt/mavergreen/bin/python3 -m pip install --user pyyaml`).

@@ -28,7 +28,11 @@ mkrepo() {  # $1 = dir
 name: release
 on:
   push:
-    tags: ['*-mavericks.*']
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
 concurrency:
   group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
