@@ -4,6 +4,7 @@
 #          Scans the WHOLE tracked tree, tests/ included: every *.sh, *.bats, *.bash and *.py,
 #          every file git tracks as executable but a compiled one (no "#!", and a NUL byte), and
 #          every file whose first line is "#!".
+#          scripts/vendor/yaml/ is skipped -- it is third-party code we do not get to edit.
 #          scripts/templates/ is skipped -- msc.sh there is compared byte for byte by check 17,
 #          and base-postinstall.sh is a template build-base-component.sh renders, never run as itself --
 #          and so is any tracked script that is byte-identical to
@@ -37,7 +38,7 @@ fail() { echo "check-host-tools: $1" >&2; echo "    fix: $2" >&2; status=1; }
 TAB="$(printf '\t')"
 nscripts=0; nagnostic=0; nmacos=0
 while IFS="$TAB" read -r meta p; do
-  case "$p" in scripts/templates/*) continue ;; esac
+  case "$p" in scripts/templates/*|scripts/vendor/yaml/*) continue ;; esac
   # platform: a file deleted in the worktree but not yet from the index is still listed
   [ -f "$p" ] || continue
   # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22 -- a
