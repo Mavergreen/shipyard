@@ -30,6 +30,18 @@ jobs:
       - name: LLVM's Mach-O readers
         run: sh scripts/install-macho-readers.sh
 
+      # spec: scripts/lib/macho-tools.sh -- records what the runner's Xcode provides and whether brew was needed.
+      - name: What the Mach-O readers resolved to
+        run: |
+          . scripts/lib/macho-tools.sh
+          for v in OTOOL LIPO NM STRINGS; do
+            mach_tool "$v" || continue
+            eval "p=\$$v"
+            echo "$v=$p"; "$p" --version 2>&1 | head -n 1
+          done
+          for t in llvm-otool llvm-lipo llvm-nm llvm-strings; do echo "xcrun -f $t: $(xcrun -f $t 2>&1)"; done
+          command -v brew >/dev/null 2>&1 && { brew list llvm >/dev/null 2>&1 && echo "brew llvm: present" || echo "brew llvm: absent"; } || echo "no brew"
+
       - id: cm
         uses: ./.github/actions/shipyard-cmake
       - name: Install mavericks-shipyard (self, source-build) -- and bats, so the *.bats suites below can run

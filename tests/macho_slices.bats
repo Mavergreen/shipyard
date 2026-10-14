@@ -117,3 +117,9 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
   [ "$status" -eq 0 ]
   [[ "$output" == "x86_64 OBJECT 10.9 "* ]] || false
 }
+
+@test "an OTOOL that dies on a static archive fails closed (exit 4), never as not-Mach-O" {
+  run env OTOOL=false sh "$S" "$WORK/libm.a"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"-hv could not read"* ]] || false
+}

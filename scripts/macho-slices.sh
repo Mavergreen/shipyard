@@ -35,7 +35,8 @@ command -v "$OTOOL" >/dev/null 2>&1 || reader_died "$OTOOL (not found)"
 #           is not Mach-O.
 if [ "$(head -c 7 "$f")" = '!<arch>' ]; then
   info=archive
-  archs="$("$OTOOL" -hv "$f" 2>"$t/err" | awk '$1 ~ /^MH_MAGIC/ { print tolower($2) }' | sort -u | xargs)" || exit 1
+  "$OTOOL" -hv "$f" >"$t/ahv" 2>"$t/err" || reader_died "$OTOOL -hv"
+  archs="$(awk '$1 ~ /^MH_MAGIC/ { print tolower($2) }' "$t/ahv" | sort -u | xargs)"
   [ -n "$archs" ] || exit 1
   case "$archs" in *" "*) echo "macho-slices: $f mixes the arches $archs, so its members' versions cannot be told apart" >&2; exit 4 ;; esac
 else

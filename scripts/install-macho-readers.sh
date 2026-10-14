@@ -1,33 +1,36 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: install-macho-readers.sh
-#          Makes LLVM's Mach-O readers (llvm-otool, llvm-lipo, llvm-nm, llvm-strings) available to the
-#          compat guard and artifact-facts on a CI runner that has no family clang. When
-#          lib/macho-tools.sh already finds all four, it changes nothing. Otherwise it installs
-#          Homebrew's llvm and names the four tools in $GITHUB_ENV as OTOOL, LIPO, NM and STRINGS, and
-#          not on PATH: Homebrew's llvm also carries a clang, and the build must keep the one it
-#          chose. Exit 1, saying which reader is missing, when there is nothing to install it with.
-# spec: scripts/lib/macho-tools.sh -- Apple's otool and lipo are never a fallback, so a macOS runner
-#       (Xcode's tools only) needs LLVM's readers put there.
+#          Resolves LLVM's Mach-O readers (llvm-otool, llvm-lipo, llvm-nm, llvm-strings) through
+#          lib/macho-tools.sh -- next to clang-22, the family directories, Xcode's own via xcrun,
+#          version-suffixed or bare on PATH -- and names each in $GITHUB_ENV as OTOOL, LIPO, NM and
+#          STRINGS (never on PATH: Homebrew's llvm also carries a clang, and the build keeps its own).
+#          Only a reader still missing with brew present installs Homebrew's llvm. A reader missing
+#          after that prints a ::warning:: naming it and the variable to set, and the script still exits
+#          0: it must never fail install@v1. The failure comes where a reader is used (the compat
+#          guard, shipyard-check --dist), naming the variable.
+# spec: scripts/lib/macho-tools.sh -- Apple's cctools otool and lipo are never a fallback.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib/macho-tools.sh"
 
-missing=0
-for v in OTOOL LIPO NM STRINGS; do mach_tool "$v" 2>/dev/null || missing=1; done
-if [ "$missing" -eq 1 ]; then
-  command -v brew >/dev/null 2>&1 \
-    || { echo "install-macho-readers: LLVM's readers are not installed and there is no brew to install them -- put llvm-otool, llvm-lipo, llvm-nm and llvm-strings on PATH, or set OTOOL, LIPO, NM and STRINGS" >&2; exit 1; }
-  brew list llvm >/dev/null 2>&1 || brew install llvm
-  d="$(brew --prefix llvm)/bin"
-  for pair in OTOOL:otool LIPO:lipo NM:nm STRINGS:strings; do
-    [ -x "$d/llvm-${pair#*:}" ] || { echo "install-macho-readers: $d has no llvm-${pair#*:}" >&2; exit 1; }
-    eval "${pair%%:*}=$d/llvm-${pair#*:}"
-    export "${pair%%:*}"
+missing=""
+for v in OTOOL LIPO NM STRINGS; do mach_tool "$v" 2>/dev/null || missing="$missing $v"; done
+if [ -n "$missing" ] && command -v brew >/dev/null 2>&1; then
+  brew list llvm >/dev/null 2>&1 || brew install llvm || :
+  d="$(brew --prefix llvm 2>/dev/null)/bin"
+  for v in $missing; do
+    case "$v" in OTOOL) t=otool ;; LIPO) t=lipo ;; NM) t=nm ;; STRINGS) t=strings ;; esac
+    if [ -x "$d/llvm-$t" ]; then eval "$v=$d/llvm-$t"; export "$v"; fi
   done
 fi
 for v in OTOOL LIPO NM STRINGS; do
-  eval "val=\$$v"
-  echo "install-macho-readers: $v=$val"
-  [ -z "${GITHUB_ENV:-}" ] || echo "$v=$val" >> "$GITHUB_ENV"
+  eval "val=\${$v:-}"
+  if [ -n "$val" ]; then
+    echo "install-macho-readers: $v=$val"
+    [ -z "${GITHUB_ENV:-}" ] || echo "$v=$val" >> "$GITHUB_ENV"
+  else
+    echo "::warning::install-macho-readers: no llvm reader for $v was found, so the compat guard and shipyard-check --dist will fail -- install LLVM's tools or set $v to its path"
+  fi
 done
+exit 0
