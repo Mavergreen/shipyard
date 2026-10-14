@@ -93,3 +93,4 @@ apt	checkout	scripts/check-family-conventions.sh	new (outside package managers)	
 vendored	checkout	scripts/check-family-conventions.sh	new (R11)	P1
 bash32-parse	only	scripts/check-bash32-parse.sh	new (QUEUE #59)	P1
 host	only	scripts/check-bash32-parse.sh	deviation key (QUEUE #59)	P1
+docs-no-sudo	checkout	scripts/check-family-conventions.sh	new (QUEUE #63)	P1

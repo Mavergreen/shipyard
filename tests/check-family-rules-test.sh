@@ -21,7 +21,7 @@ run() {  # $1 = a fixture tree holding FILES; the gate runs in a git-init copy o
 
 IDS="pr-trigger publish-order renovate-extends-preset renovate-json-valid no-hardcoded-version
      no-tags-trigger no-pull-request-target checkout-drops-credentials permissions-contents-read
-     upstream-version-bare version-ignored bare-curl brew macports pkgsrc apt vendored"
+     upstream-version-bare version-ignored bare-curl brew macports pkgsrc apt vendored docs-no-sudo"
 
 failing() {  # the ids the last run reported failing, one per line
   sed -n 's/^  more: shipyard-check --explain //p' "$w/out" | sort -u

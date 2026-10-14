@@ -1154,6 +1154,58 @@ if [ "$HAVE_TRACKED" -eq 1 ]; then
   done < "$tmp/vendored"
 fi
 
+# spec: SKILL.md, the `docs-no-sudo` row of the checks table -- family tools elevate themselves
+#       (QUEUE #63), so no user-facing doc or message tells anyone to run sudo. Doc files: README*,
+#       *.md except release-notes/** and SKILL.md, man/** and *.[1-9], pkg resources. Messages: echo or
+#       printf text, and heredoc text, in tracked shell scripts outside tests/. An executed sudo is code,
+#       not a doc, so it is not matched.
+chk_ran docs-no-sudo
+: > "$tmp/sudohits"
+if [ "$HAVE_TRACKED" -eq 1 ]; then
+  grep -Ev '^(tests|\.superpowers)/|^release-notes/|(^|/)SKILL\.md$' "$TF" | while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    case "$f" in
+      README*|*/README*|*.md|man/*|*.[1-9]|scripts/resources/*|*/resources/*.html|*/resources/*.rtf) ;;
+      *) continue ;;
+    esac
+    grep -E '(^|[^A-Za-z0-9_-])sudo([^A-Za-z0-9_-]|$)' "$f" | head -n 1 | awk -v f="$f" '{ print f "\t" $0 }'
+  done >> "$tmp/sudohits" || :
+  chk_shell_scripts < "$TF" | grep -Ev '^(tests|\.superpowers)/' | while IFS= read -r f; do
+    awk -v f="$f" '
+      function hit(l) { if (!done++) print f "\t" l }
+      hd != "" { t = $0; sub(/^[[:space:]]+/, "", t); sub(/[[:space:]]+$/, "", t)
+                 if (t == hd) hd = ""; else if ($0 ~ /(^|[^A-Za-z0-9_-])sudo([^A-Za-z0-9_-]|$)/) hit($0)
+                 next }
+      q != "" { if ($0 ~ /(^|[^A-Za-z0-9_-])sudo([^A-Za-z0-9_-]|$)/) hit($0)
+                if (index($0, q)) q = ""
+                next }
+      { t = $0; sub(/^[[:space:]]+/, "", t); if (substr(t, 1, 1) == "#") next
+        if ($0 !~ /<<</ && match($0, /<<-?[[:space:]]*["\047]?[A-Za-z_][A-Za-z0-9_]*/)) {
+          w = substr($0, RSTART, RLENGTH); sub(/^<<-?[[:space:]]*["\047]?/, "", w); hd = w }
+        if (match($0, /(^|[;&|{(]|[[:space:]](then|do|else))[[:space:]]*(echo|printf)[[:space:]]/)) {
+          rest = substr($0, RSTART + RLENGTH)
+          qq = ""
+          for (i = 1; i <= length(rest); i++) {
+            c = substr(rest, i, 1)
+            if (qq == "") { if (c == "\\") i++; else if (c == "\"" || c == "\047") qq = c; else if (c ~ /[;&|)]/) break }
+            else if (c == qq) qq = ""
+            else if (c == "\\" && qq == "\"") i++
+          }
+          if (substr(rest, 1, i) ~ /(^|[^A-Za-z0-9_-])sudo([^A-Za-z0-9_-]|$)/) hit($0)
+          q = qq
+        } }
+    ' "$f"
+  done >> "$tmp/sudohits" || :
+fi
+while IFS="$TAB" read -r f line; do
+  [ -n "$f" ] || continue
+  deviated docs-no-sudo "$f" && continue
+  _l="$(printf '%s' "$line" | sed 's/^[[:space:]]*//' | cut -c1-70)"
+  chk_fail docs-no-sudo "$f tells the reader to run sudo: $_l" \
+    "family tools elevate themselves, and a doc that prescribes sudo teaches a step the tool does for you" \
+    "family tools elevate themselves; write the plain command (for a pkg: \`mavergreen install <file.pkg>\`, or double-click). Docs write the bare \`mavergreen\`, never its path. Or declare '- docs-no-sudo:$f: <reason>. Revisit when <exit>.' under ## Conformance deviations"
+done < "$tmp/sudohits"
+
 [ "$chk_status" -eq 0 ] && echo "check-family-conventions: ok"
 
 exit "$chk_status"

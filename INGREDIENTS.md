@@ -86,3 +86,4 @@ one line):
 - vendored:scripts/vendor/pyyaml.pin: the pin that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
 - vendored:scripts/vendor/yaml.sha256: the checksum that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
 - vendored:scripts/vendor/sync-pyyaml.sh: the sync script that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
+- docs-no-sudo:README.md: its install, uninstall and Linux dev-dependency steps are written as root commands; the Engine does not exist yet, so no family command does the first two. Revisit when the Engine's `mavergreen install` and `mavergreen uninstall` ship in the flag day; the dev-dependency line goes with `apt:.github/actions/install/action.yml`.
