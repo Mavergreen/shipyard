@@ -29,7 +29,7 @@ conf() {
 }
 ok() { sh "$S" "$W/demo.conf" >/dev/null 2>&1 || { echo "FAIL $1: expected pass"; sh "$S" "$W/demo.conf"; exit 1; }; }
 no() {
-  out=$(sh "$S" "$W/demo.conf" 2>&1) && { echo "FAIL $1: expected failure"; exit 1; }
+  out=$(sh "$S" "$W/demo.conf" 2>&1 >/dev/null) && { echo "FAIL $1: expected failure"; exit 1; }
   printf '%s\n' "$out" | grep -q "$2" || { echo "FAIL $1: should mention $2, got: $out"; exit 1; }
   [ "$(printf '%s\n' "$out" | sed -n 1p | cut -d: -f1)" = preset-icon ] || { echo "FAIL $1: should open with its id, preset-icon: $out"; exit 1; }
 }
