@@ -164,4 +164,33 @@ if bad:
 print("ok: ci.yml rehearses the packaging path release.yml only ever runs while publishing, and both "
       "hand install@v1 the CMake tree rather than letting it nest a local action")
 PY
+# A push to flag-day runs ci.yml and never release.yml.
+python3 - "$wf" <<'PY'
+import fnmatch, os, sys, yaml
+wf = sys.argv[1]
+branch = "flag-day"
+
+def runs_on_push(name, branch):
+    d = yaml.safe_load(open(os.path.join(wf, name)))
+    push = ((d.get("on") or d.get(True) or {})).get("push")
+    if not isinstance(push, dict):
+        return False
+    if "branches-ignore" in push:
+        return not any(fnmatch.fnmatchcase(branch, g) for g in push["branches-ignore"])
+    if "branches" in push:
+        return any(fnmatch.fnmatchcase(branch, g) for g in push["branches"])
+    return True
+
+bad = []
+if not runs_on_push("ci.yml", branch):
+    bad.append("ci.yml does not run on a push to %s" % branch)
+if runs_on_push("release.yml", branch):
+    bad.append("release.yml runs on a push to %s; only main may publish" % branch)
+if bad:
+    for b in bad:
+        print("FAIL:", b)
+    sys.exit(1)
+print("ok: a push to flag-day runs ci.yml and not release.yml")
+PY
+
 echo "PASS: shipyard-workflow-coupling"
