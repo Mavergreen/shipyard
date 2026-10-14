@@ -50,6 +50,17 @@
       "packageNameTemplate": "Mavergreen/recaulk",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^scripts/vendor/pyyaml\\.pin$/"
+      ],
+      "matchStrings": [
+        "^PYYAML_VERSION=(?<currentValue>\\S+)\\s*$"
+      ],
+      "depNameTemplate": "PyYAML",
+      "datasourceTemplate": "pypi"
     }
   ]
 }

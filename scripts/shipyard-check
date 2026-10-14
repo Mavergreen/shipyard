@@ -72,7 +72,6 @@ export SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG
 
 scripts="$(printf '%s\n' "$selected" | cut -d' ' -f2 | awk '!seen[$0]++')"
 for script in $scripts; do
-  [ "$script" != scripts/shipyard-check ] || continue
   ids="$(printf '%s\n' "$selected" | awk -v s="$script" '$2 == s { print $1 }')"
   before="$(wc -l < "$SHIPYARD_CHECK_FAILLOG")"
   rc=0

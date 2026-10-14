@@ -18,6 +18,7 @@ all of them within minutes — which is why the version is derived from the comm
 | `bats` (shell test driver) | installed by `.github/actions/install` from the platform package manager | ✅ tracked by the package manager, not pinned here | a new bats reaches CI on its next run; the suites are version-agnostic |
 | CMake 4.4.3 (shipped as shipyard-cmake) | `cmake.pin` (version only) | ✅ Renovate customManager (github-releases Kitware/CMake) | `build-cmake.sh` verifies Kitware's published SHA-256; CI rebuilds the universal tree on a cache miss; the next push releases it |
 | mavericks-clang 22.1.1-mavericks.1 (compiles shipyard-cmake's x86_64/10.9 half) | `mavericks-clang.pin` | ✅ Renovate customManager (github-releases Mavergreen/clang, `-mavericks.N` compared) | CI installs the pinned cross pkg (SHA256SUMS-verified); a bump rebuilds shipyard-cmake on green |
+| PyYAML 6.0.3 (vendored: the checks' YAML reader; role shipped) | `scripts/vendor/pyyaml.pin` (`PYYAML_VERSION` + `PYYAML_SHA256` of the sdist) | ✅ Renovate customManager (pypi PyYAML) | the bump fails CI until `sh scripts/vendor/sync-pyyaml.sh` re-vendors `scripts/vendor/yaml` from the new sdist and rewrites `yaml.sha256` |
 | shipyard's own version | `UPSTREAM_VERSION` (the **line**) + `git rev-list --count` | n/a — first-party | every push to `main` cuts `<line>.<count>`; `@v1` moves to it |
 
 No upstream release notes: shipyard is its own upstream -- it ports nothing, so there are no
@@ -63,3 +64,4 @@ one line):
 - scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
+- vendored:scripts/vendor/yaml/**: python-315's phase 1 has no `ssl`, so pip can't fetch PyYAML on 10.9, and the checks keep their Python; revisit when python-315 ships `ssl` and pip works (its phase 2), then delete scripts/vendor and let the checks import a pip-installed PyYAML (`/opt/mavergreen/bin/python3 -m pip install --user pyyaml`).

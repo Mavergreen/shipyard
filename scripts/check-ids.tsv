@@ -71,7 +71,7 @@ tag-publishable	publish	scripts/assert_tag_publishable.sh	assert_tag_publishable
 update-trusted	publish	scripts/assert_update_trusted.sh	assert_update_trusted.sh	P1
 deviation-known-check	checkout	scripts/deviations.sh	new (K5)	P1
 deviation-scope-matches	checkout	scripts/deviations.sh	new (K5)	P1
-python3	checkout	scripts/shipyard-check	new	P1
+python3	checkout	scripts/check-python3.sh	new	P1
 pr-trigger	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 publish-order	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 renovate-extends-preset	checkout	scripts/check-family-conventions.sh	new (K6)	P1
