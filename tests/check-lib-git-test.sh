@@ -29,6 +29,12 @@ if command -v git >/dev/null 2>&1; then
   [ "$got" = "$(printf 'stra\303\237e.sh')" ] || fail "M2: a non-ASCII tracked path is listed as itself, got: $got"
 fi
 
+mkdir "$t/curl"; printf '#!/bin/sh\ncurl -o x https://example.com/x\n' > "$t/curl/get.sh"
+rc=0; (cd "$t/curl" && SHIPYARD_CHECK_FILES="$t/no-such-list" sh "$sc" --only bare-curl) > "$t/out" 2>&1 || rc=$?
+[ "$rc" -ne 0 ] && grep -q '^tracked-files: ' "$t/out" || fail "--only bare-curl reports the unreadable tracked-file list it checked nothing against, got $rc: $(cat "$t/out")"
+rc=0; (SHIPYARD_CHECK_SELECTED="bare-curl" SHIPYARD_PYTHON3="$t/no-such-python" sh -c '. "$1"; . "$2"; chk_python3' sh "$lib" "$here/scripts/lib/py.sh") > "$t/out" 2>&1 || rc=$?
+[ "$rc" -ne 0 ] && grep -q '^python3: ' "$t/out" || fail "a missing python3 is reported when it isn't selected: $(cat "$t/out")"
+
 mkdir "$t/nogit"; printf '#!/bin/sh\necho "git: hidden" >&2\nexit 127\n' > "$t/nogit/git"; chmod +x "$t/nogit/git"
 for id in version-sh-tracked build-dirs-ignored user-presets-ignored; do
   for kind in pass fail; do

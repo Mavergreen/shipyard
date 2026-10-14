@@ -8,6 +8,9 @@ set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
 S="$here/scripts/push-tag-with-token.sh"
 command -v git >/dev/null 2>&1 || { echo "SKIP: no git"; exit 77; }
+gv="$(git --version | sed -n 's/^git version \([0-9]*\)\.\([0-9]*\).*/\1 \2/p')"
+set -- $gv
+[ "${1:-0}" -gt 2 ] || { [ "${1:-0}" -eq 2 ] && [ "${2:-0}" -ge 31 ]; } || { echo "SKIP: git $1.$2 has no GIT_CONFIG_COUNT (2.31)"; exit 77; }
 t="$(mktemp -d "${TMPDIR:-/tmp}/push-tag-test.XXXXXX")"; trap 'rm -rf "$t"' EXIT
 GIT_CEILING_DIRECTORIES="$t"; export GIT_CEILING_DIRECTORIES
 bad=0

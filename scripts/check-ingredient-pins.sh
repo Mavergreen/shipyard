@@ -4,8 +4,8 @@
 #          Guards the ingredient pin declaration. The notes and the repackage trigger read ONE list
 #          (ingredient-pins.sh), so they cannot disagree -- but a list can still be wrong on its own:
 #          a typo'd glob that matches nothing, or a caller whose every watched path is own-upstream,
-#          both yield silently thinner release notes and a repackage that never fires. A repo with no
-#          caller workflow has no ingredients and passes trivially.
+#          both yield silently thinner release notes and a repackage that never fires. In a repo with
+#          no caller workflow, ingredient-pins is not run.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"

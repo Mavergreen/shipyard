@@ -122,7 +122,8 @@ runs:
     # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md, the `bash32-parse` row --
     #       bash 3.2 is the /bin/sh of 10.9 and macOS, and this macOS step is one every pkg-building
     #       product already runs, so no repo wires the check by hand.
-    - if: runner.os == 'macOS'
+    - name: shipyard-check --only bash32-parse
+      if: runner.os == 'macOS'
       shell: bash
       run: |
         set -eu

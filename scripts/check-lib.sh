@@ -20,7 +20,10 @@ chk_fail() {
     echo "check-lib: '$_cf_id' is not in check-ids.tsv -- register it before failing it" >&2
     exit 2
   fi
-  chk_selected "$_cf_id" || return 0
+  case "$_cf_id" in
+    tracked-files|python3) ;;
+    *) chk_selected "$_cf_id" || return 0 ;;
+  esac
   printf '%s: %s. %s.\n  fix: %s\n  more: shipyard-check --explain %s\n' \
     "$_cf_id" "$_cf_rule" "$_cf_why" "$_cf_fix" "$_cf_id" >&2
   [ -z "${SHIPYARD_CHECK_FAILLOG:-}" ] || echo "$_cf_id" >> "$SHIPYARD_CHECK_FAILLOG"

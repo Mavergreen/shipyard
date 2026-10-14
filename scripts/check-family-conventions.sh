@@ -728,7 +728,7 @@ fi
 # spec: SKILL.md "Family conventions" check 22 -- every tracked script declares its host, and a
 #       host-agnostic one runs no macOS-only tool. Delegated to check-host-tools.sh, like 10 and 15,
 #       so the family's rule and shipyard's own Linux job cannot drift apart. Opt-in falls out of
-#       check-host-tools.sh itself: a repo where no script declares a host passes, saying so.
+#       check-host-tools.sh itself: in a repo where no script declares a host, host-tools is not run.
 delegate host-tools check-host-tools.sh \
   "a tracked script breaks the host-declaration rule" \
   "a host-agnostic script has to run on Linux too, and once one script declares a host every script must" \

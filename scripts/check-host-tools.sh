@@ -12,8 +12,8 @@
 #          too. Each script must declare its host in its header (host-of.sh), and
 #          a host-agnostic one may not run a macOS-only tool (host-tools.awk) unless the comment
 #          line directly above the call says "# platform: guarded macOS-only call -- <the guard>".
-#          A repo where no script declares a host has not adopted the split and passes, saying
-#          so; --required makes that a failure. Exit 0 clean, 1 on a violation, 2 on a usage
+#          A repo where no script declares a host has not adopted the split, and host-tools is not
+#          run; --required makes that a failure. Exit 0 clean, 1 on a violation, 2 on a usage
 #          error or when git cannot list the tree.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22
 set -eu
