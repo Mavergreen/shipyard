@@ -84,10 +84,19 @@ deviation_reason() { mav_deviation_reason "$tmp/devs" "$@"; }  # $1 = check, $2 
 
 # spec: scripts/check-ids.tsv -- every id this script evaluates; a deviation declared under the name
 #       a check had before it had an id (scheme, ingredients) still excuses it.
-for _id in version-scheme version floor identifier bundle-id launchd-label manifest base line install-path \
-           feed updater repository enclosure length enclosure-url notes variant-build-info sdk-pin; do
-  chk_ran "$_id"
-done
+has() { grep -q "^$1 " "$facts"; }
+kind_ran() {  # $1 = the fact kind the ids read, $2 = what it is called, then the ids
+  _kr_kind="$1"; _kr_what="$2"; shift 2
+  for _id in "$@"; do
+    if has "$_kr_kind"; then chk_ran "$_id"; else chk_notrun "$_id" "no $_kr_what in this release"; fi
+  done
+}
+chk_ran version-scheme
+if has pkg || has appcast; then chk_ran version; else chk_notrun version "no .pkg or appcast in this release"; fi
+kind_ran pkg .pkg floor identifier bundle-id launchd-label manifest base line install-path feed updater repository
+kind_ran appcast appcast enclosure length enclosure-url notes
+kind_ran build-info "build record" variant-build-info
+kind_ran macho Mach-O sdk-pin
 
 rule_of() {
   case "$1" in
@@ -402,11 +411,11 @@ sort "$tmp/ip-dev" | uniq -c | while read -r n r; do
 done
 nfail="$(wc -l < "$tmp/ip-fail" | tr -d ' ')"
 if [ "$nfail" -gt 0 ]; then
-  head -20 "$tmp/ip-fail" | while IFS= read -r l; do
+  head -20 "$tmp/ip-fail" > "$tmp/ip-fail20"
+  while IFS= read -r l; do
     chk_fail install-path "$(rule_of install-path)" "$l -- outside usr/local/mavergreen/<its product>, usr/local/mavergreen/.base (with the base component), Applications, Library/Application Support/Mavergreen and dev.mavergreen.* launchd jobs" "$(fix_of install-path)"
-  done
+  done < "$tmp/ip-fail20"
   [ "$nfail" -le 20 ] || echo "conformance: install-path: ... and $((nfail - 20)) more" >&2
-  chk_status=1
 fi
 echo "conformance: install-path: checked $installs_seen installed files"
 

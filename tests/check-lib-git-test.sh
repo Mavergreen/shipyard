@@ -36,13 +36,13 @@ for id in version-sh-tracked build-dirs-ignored user-presets-ignored; do
     rc=0; (cd "$c" && PATH="$t/nogit:$PATH" SHIPYARD_CHECK_FILES="$c/FILES" sh "$sc" --only "$id") > "$t/out" 2>&1 || rc=$?
     [ "$rc" = 0 ] || fail "I3: $id/$kind without git is not a false failure, got $rc: $(cat "$t/out")"
     grep -q "^$id: not run: git cannot say" "$t/out" || fail "I3: $id/$kind without git says it did not run: $(cat "$t/out")"
-    tail -n 1 "$t/out" | grep -q ' 0 failed, 1 not run$' || fail "I3: $id/$kind without git is not counted as a pass: $(tail -n 1 "$t/out")"
+    [ "$(tail -n 1 "$t/out")" = "shipyard-check: 0 checks, 0 failed, 1 not run" ] || fail "I3: $id/$kind without git is not counted as a pass: $(tail -n 1 "$t/out")"
   done
 done
 
 c="$t/tree"; mkdir "$c"
-(cd "$c" && PATH="$t/nogit:$PATH" sh "$sc" --only tree-clean) > "$t/out" 2>&1 || :
-grep -q '^tree-clean: not run: git is missing' "$t/out" || fail "I3: tree-clean under shipyard-check without git is not run: $(cat "$t/out")"
+rc=0; (cd "$c" && PATH="$t/nogit:$PATH" sh "$sc" --only tree-clean) > "$t/out" 2>&1 || rc=$?
+[ "$rc" = 0 ] && grep -q '^tree-clean: not run: git is missing' "$t/out" || fail "I3: tree-clean under shipyard-check without git is not run: $(cat "$t/out")"
 
 [ "$bad" -eq 0 ] || exit 1
 echo "PASS check-lib-git"

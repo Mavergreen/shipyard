@@ -94,7 +94,7 @@ fi
 
 REQUIRE_DEFINED="${MAVERICKS_REQUIRE_DEFINED_SYMBOLS:-}"
 ALLOW_WEAK="${MAVERICKS_ALLOW_GUARDED_WEAK:-}"
-[ -z "$REQUIRE_DEFINED" ] || chk_ran compat-required-defined
+if [ -n "$REQUIRE_DEFINED" ]; then chk_ran compat-required-defined; elif [ -n "${SHIPYARD_CHECK_RUNLOG:-}" ]; then chk_notrun compat-required-defined "MAVERICKS_REQUIRE_DEFINED_SYMBOLS names no symbol"; fi
 
 # platform: post-10.9 Objective-C SELECTORS dispatch through objc_msgSend, so they are NOT undefined
 #           symbols -- the import check above (nm) cannot see them. A 10.9 binary that SENDS one
@@ -240,7 +240,12 @@ elif [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
   while IFS="$tab" read -r file subject kind; do
     check_one "$file" "$subject" "$kind"
   done < "$work/list"
-  [ "$checked" -gt 0 ] || { echo "compat guard: no Mach-O in ${SHIPYARD_CHECK_DIST} (nothing to guard)"; exit "$chk_status"; }
+  if [ "$checked" -eq 0 ]; then
+    for _id in compat-imports compat-selectors compat-archs compat-required-defined; do
+      chk_notrun "$_id" "no Mach-O in $SHIPYARD_CHECK_DIST"
+    done
+    exit "$chk_status"
+  fi
 else
   cannot_measure compat-archs "no binaries checked (usage: assert_binary_compatible.sh <binary>...)"
 fi

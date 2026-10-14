@@ -16,8 +16,8 @@
 #            FILES  the tracked-file list: SHIPYARD_CHECK_FILES, or git's index when NEEDS says git
 #            NEEDS  what the fixture cannot run without, one per line: a tool (git also makes the copy a git
 #                   repo), or bash32, a bash 3.2 /bin/sh and /bin/bash
-#            ALSO   other ids the fixture legitimately fails too, one per line (* for any: an unparseable
-#                   workflow trips every rule that reads workflows)
+#            ALSO   other ids the fixture legitimately fails too, one per line, which the run selects
+#                   beside <id> (* for any: an unparseable workflow trips every rule that reads workflows)
 #            ARGS   the arguments of the id's own script, which then runs directly rather than through
 #                   shipyard-check ($REMOTE is the copy, as a git remote)
 #            TAGS   tags to create, one per line, in the copy's git repo (implies git)
@@ -53,7 +53,7 @@ if [ -z "$jobs" ]; then
 fi
 case "$jobs" in ''|*[!0-9]*|0) echo "check-fixtures-run: --jobs wants a positive integer" >&2; exit 2 ;; esac
 
-unset GITHUB_REPOSITORY SHIPYARD_CHECK_FILES SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG SHIPYARD_CHECK_NOTRUNLOG \
+unset GITHUB_REPOSITORY SHIPYARD_CHECK_FILES SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG SHIPYARD_CHECK_NOTRUNLOG SHIPYARD_CHECK_SELECTED \
   SHIPYARD_CHECK_DIST SHIPYARD_CHECK_REPO SHIPYARD_CHECK_VERSION SHIPYARD_CHECK_ROOT SHIPYARD_CHECK_REGISTRY
 w="$(mktemp -d "${TMPDIR:-/tmp}/check-fixtures-run.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 GIT_CEILING_DIRECTORIES="$w"; export GIT_CEILING_DIRECTORIES
@@ -112,6 +112,8 @@ run_fixture() {  # $1 = id, $2 = mode, $3 = fixture dir, $4 = scratch dir; sets 
   [ ! -f "$d/TAGS" ] && [ ! -f "$d/RUN" ] || usegit=1
   if [ -f "$d/NEEDS" ] && grep -qx git "$d/NEEDS"; then usegit=1; fi
   if [ "$usegit" -eq 1 ]; then make_repo "$d" "$c"; fi
+  sel="$_id"
+  if [ -f "$d/ALSO" ]; then sel="$sel $(grep -vx '\*' "$d/ALSO" | tr '\n' ' ')"; fi
   rc=0
   (
     cd "$c"
@@ -120,23 +122,23 @@ run_fixture() {  # $1 = id, $2 = mode, $3 = fixture dir, $4 = scratch dir; sets 
     if [ -f "$d/FILES" ] && [ "$usegit" -eq 0 ]; then SHIPYARD_CHECK_FILES="$d/FILES"; export SHIPYARD_CHECK_FILES; fi
     if [ -d "$d/dist" ]; then
       SHIPYARD_CHECK_REPO="$c"; export SHIPYARD_CHECK_REPO
-      exec sh "$root/scripts/shipyard-check" --dist "$c/dist" --only "$_id"
+      exec sh "$root/scripts/shipyard-check" --dist "$c/dist" --only $sel
     fi
     if [ -f "$d/RUN" ]; then
       sh "$root/scripts/assert-tree-clean.sh" --record > /dev/null
       if [ -d "$d/AFTER" ]; then (cd "$d/AFTER" && tar cf - .) | tar xf -; fi
-      exec sh "$root/scripts/shipyard-check" --only "$_id"
+      exec sh "$root/scripts/shipyard-check" --only $sel
     fi
     if [ "$_mode" = repo-state ]; then
       GH_STUB="$c"; PATH="$w/bin:$PATH"; export GH_STUB PATH
-      exec sh "$root/scripts/shipyard-check" --only "$_id"
+      exec sh "$root/scripts/shipyard-check" --only $sel
     fi
     if [ -f "$d/ARGS" ]; then
       REMOTE="$c"; export REMOTE
       eval "set -- $(cat "$d/ARGS")"
       exec sh "$root/$(script_of "$_id")" "$@"
     fi
-    exec sh "$root/scripts/shipyard-check" --only "$_id"
+    exec sh "$root/scripts/shipyard-check" --only $sel
   ) > "$s/out" 2>&1 < /dev/null || rc=$?
 }
 

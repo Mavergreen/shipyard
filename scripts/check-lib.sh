@@ -8,12 +8,19 @@ chk_registered() {
   cut -f1 "$SHIPYARD_CHECK_REGISTRY" | grep -qx "$1"
 }
 
+chk_selected() {
+  [ -n "${SHIPYARD_CHECK_SELECTED+x}" ] || return 0
+  case " $SHIPYARD_CHECK_SELECTED " in *" $1 "*) return 0 ;; esac
+  return 1
+}
+
 chk_fail() {
   _cf_id="$1"; _cf_rule="${2%.}"; _cf_why="${3%.}"; _cf_fix="$4"
   if ! chk_registered "$_cf_id"; then
     echo "check-lib: '$_cf_id' is not in check-ids.tsv -- register it before failing it" >&2
     exit 2
   fi
+  chk_selected "$_cf_id" || return 0
   printf '%s: %s. %s.\n  fix: %s\n  more: shipyard-check --explain %s\n' \
     "$_cf_id" "$_cf_rule" "$_cf_why" "$_cf_fix" "$_cf_id" >&2
   [ -z "${SHIPYARD_CHECK_FAILLOG:-}" ] || echo "$_cf_id" >> "$SHIPYARD_CHECK_FAILLOG"
@@ -21,10 +28,12 @@ chk_fail() {
 }
 
 chk_ran() {
+  chk_selected "$1" || return 0
   [ -z "${SHIPYARD_CHECK_RUNLOG:-}" ] || echo "$1" >> "$SHIPYARD_CHECK_RUNLOG"
 }
 
 chk_notrun() {
+  chk_selected "$1" || return 0
   printf '%s: not run: %s\n' "$1" "$2"
   [ -z "${SHIPYARD_CHECK_NOTRUNLOG:-}" ] || echo "$1" >> "$SHIPYARD_CHECK_NOTRUNLOG"
 }

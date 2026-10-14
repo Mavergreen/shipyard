@@ -69,7 +69,7 @@ if [ "$#" -eq 0 ] && [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
       done
     done
   done
-  [ "$seen" -gt 0 ] || echo "assert_gui_relaunch_safe: no postinstall in $SHIPYARD_CHECK_DIST (nothing to guard)"
+  [ "$seen" -gt 0 ] || [ "$chk_status" -ne 0 ] || chk_notrun gui-relaunch-safe "no postinstall in $SHIPYARD_CHECK_DIST"
   exit "$chk_status"
 fi
 

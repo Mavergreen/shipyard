@@ -31,14 +31,14 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
 . "$SELF/lib/pkg-read.sh"
-chk_ran pkg-in-place
 if [ "$#" -eq 0 ] && [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
   for _p in "$SHIPYARD_CHECK_DIST"/*.pkg; do
     [ -f "$_p" ] || continue
     set -- "$@" "$_p"
   done
-  [ "$#" -gt 0 ] || { echo "assert_pkg_installs_in_place: no .pkg in $SHIPYARD_CHECK_DIST (nothing to check)"; exit 0; }
+  [ "$#" -gt 0 ] || { chk_notrun pkg-in-place "no .pkg in $SHIPYARD_CHECK_DIST"; exit 0; }
 fi
+chk_ran pkg-in-place
 [ "$#" -ge 1 ] || { echo "assert_pkg_installs_in_place: need at least one .pkg" >&2; exit 2; }
 
 rule="a pkg's bundles install where it says and always overwrite"

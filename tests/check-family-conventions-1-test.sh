@@ -6,7 +6,12 @@ here="$(cd "$(dirname "$0")" && pwd)"
 
 (cd "$work/ok" && sh "$S" >/dev/null) || { echo "FAIL compliant repo should pass"; exit 1; }
 
-mkdir -p "$work/norel"; (cd "$work/norel" && sh "$S" >/dev/null) || { echo "FAIL: no release.yml at all (shipyard itself) should pass"; exit 1; }
+mkdir -p "$work/norel/.github"; printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$work/norel/.github/renovate.json"
+printf '.superpowers/\n.idea/\n' > "$work/norel/.gitignore"
+(cd "$work/norel" && git init -q && git add -A) >/dev/null 2>&1
+(cd "$work/norel" && sh "$S" > "$work/norel.out" 2>&1) || { echo "FAIL: a repo with no release.yml that keeps the repo-wide rules should pass: $(cat "$work/norel.out")"; exit 1; }
+grep -q '^release-concurrency: not run: no .github/workflows/release.yml' "$work/norel.out" \
+  || { echo "FAIL: with no release.yml the release rules say they did not run: $(cat "$work/norel.out")"; exit 1; }
 
 mkrepo "$work/c"; grep -v -e '^concurrency:' -e '^  group:' -e '^  cancel-in-progress:' \
   "$work/ok/.github/workflows/release.yml" > "$work/c/.github/workflows/release.yml"

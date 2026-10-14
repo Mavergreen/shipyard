@@ -64,7 +64,7 @@ grep -q 'accepts the construct' "$w/out" && fail "a missing shell is not a canar
 mkdir -p "$w/dev"; cp "$fx/pass/FILES" "$w/dev/FILES"; mkdir -p "$w/dev/build"; cp "$fx/pass/build/good.sh" "$w/dev/build/"
 printf '# x\n\n## Conformance deviations\n\n- host:%s: no bash 3.2 here. Revisit when the Apple shells ship.\n' "$host" > "$w/dev/INGREDIENTS.md"
 run "$w/dev" "$w/dashlike" || fail "a host deviation excuses a host that cannot measure: $(cat "$w/out")"
-grep -q "^bash32-parse: skipped by deviation (host:$host)" "$w/out" || fail "the skip is printed: $(cat "$w/out")"
+grep -q "^bash32-parse: not run: skipped by deviation (host:$host)" "$w/out" || fail "the skip is printed: $(cat "$w/out")"
 printf '# x\n\n## Conformance deviations\n\n- host:no-such-os: nowhere\n' > "$w/dev/INGREDIENTS.md"
 if run "$w/dev" "$w/dashlike"; then fail "a deviation for another host excuses nothing"; fi
 printf '# x\n\n## Conformance deviations\n\n- host:%s: no bash 3.2 here. Revisit when the Apple shells ship.\n' "$host" > "$w/dev/INGREDIENTS.md"

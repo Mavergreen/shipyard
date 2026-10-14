@@ -16,7 +16,7 @@ dups="$(printf '%s\n' "$ids" | sort | uniq -d)"
 
 while IFS="$(printf '\t')" read -r id mode script old fate; do
   [ -n "$fate" ] || fail "$id has five columns"
-  case "$mode" in checkout|dist|repo-state|publish|only|build) ;; *) fail "$id has a valid mode, got $mode" ;; esac
+  case "$mode" in checkout|dist|repo-state|publish|only|build|key) ;; *) fail "$id has a valid mode, got $mode" ;; esac
   [ -f "$here/$script" ] || fail "$id: script $script exists"
   [ -f "$here/explain/$id.md" ] || fail "$id has explain/$id.md"
 done < "$reg"
@@ -33,11 +33,14 @@ for s in "$here"/scripts/check-*.sh "$here"/scripts/assert*.sh; do
   cut -f3 "$reg" | grep -qx "$rel" || fail "$rel is the script of at least one id"
 done
 infeasible="update-trusted|tests/assert_update_trusted.bats|it verifies a signed pkg against the updater's embedded key, so its failing case is a built, signed pkg that a fixture tree cannot hold
-installed-shipyard|tests/assert-installed-shipyard-test.sh|it inspects an installed prefix, which its test assembles in a scratch root
-host|tests/check-bash32-parse-test.sh|it is a deviation key, not a check: it excuses bash32-parse on a host, and that test declares and withdraws it"
+installed-shipyard|tests/assert-installed-shipyard-test.sh|it inspects an installed prefix, which its test assembles in a scratch root"
 fx="$here/tests/fixtures/checks"
 while IFS="$(printf '\t')" read -r id mode script old fate; do
   [ "$fate" = P1 ] || continue
+  if [ "$mode" = key ]; then
+    [ ! -d "$fx/$id" ] || fail "$id is a deviation key, which no check runs, so it has no fixtures"
+    continue
+  fi
   set -- "$fx/$id"/fail*
   if [ -d "$1" ]; then
     printf '%s\n' "$infeasible" | cut -d'|' -f1 | grep -qx "$id" && fail "$id has a fail fixture, so it is not infeasible: drop it from the list"

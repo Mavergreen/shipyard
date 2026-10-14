@@ -13,8 +13,9 @@ concurrency-group, which is the check that catches its shape.
 
 ## Limits
 It looks for the key on a non-comment line of .github/workflows/release.yml. It does not read the block's
-meaning, so a block that exists but is wrong passes here and fails concurrency-group instead. A repo with
-no release.yml is not a product repo and is not checked.
+meaning, so a block that exists but is wrong passes here and fails concurrency-group instead. In a repo
+with no release.yml it reports itself not run, as every rule that reads release.yml does; the repo-wide
+rules still run there.
 
 ## Deviating
 No deviation is read for this id; a "- release-concurrency:" line in INGREDIENTS.md excuses nothing.

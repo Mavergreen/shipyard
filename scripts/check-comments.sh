@@ -17,7 +17,7 @@ REASONS="$ROOT/comment-reasons"
 # spec: SKILL.md "Comments cite a reason" -- opt-in via comment-reasons keeps
 #       14 consumer repos green until each has swept; the path is the REPO's, never shipyard's
 #       installed prefix, since consumers run this script from there.
-[ -f "$REASONS" ] || exit 0
+[ -f "$REASONS" ] || { chk_notrun comments "no comment-reasons file, so this repo has not opted in"; exit 0; }
 alt="$(tr '\n' '|' < "$REASONS" | sed 's/|$//')"
 
 # spec: scripts/check-family-conventions.sh check 15 -- a swept repo that still wants ONE declared

@@ -84,7 +84,7 @@ if [ "$((nagnostic + nmacos))" -eq 0 ]; then
          "declare each one in its header: # platform: host-agnostic, or # platform: macOS-only -- <why>"
     exit 1
   fi
-  echo "check-host-tools: no tracked script declares a host -- this repo has not adopted the host split; nothing enforced ($nscripts scripts found)"
+  chk_notrun host-tools "no tracked script declares a host, so this repo has not adopted the host split ($nscripts scripts found)"
   exit 0
 fi
 

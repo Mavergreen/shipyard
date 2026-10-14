@@ -77,7 +77,7 @@ publish-order	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 renovate-extends-preset	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 no-hardcoded-version	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 installed-shipyard	only	scripts/assert-installed-shipyard.sh	assert-installed-shipyard.sh	P1
-linux	dist	scripts/check-artifact-conformance.sh	deviation key (longboat)	P5
+linux	key	scripts/check-artifact-conformance.sh	deviation key (longboat)	P5
 no-tags-trigger	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 no-pull-request-target	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 checkout-drops-credentials	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
@@ -92,5 +92,5 @@ pkgsrc	checkout	scripts/check-family-conventions.sh	new (outside package manager
 apt	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1
 vendored	checkout	scripts/check-family-conventions.sh	new (R11)	P1
 bash32-parse	only	scripts/check-bash32-parse.sh	new (QUEUE #59)	P1
-host	only	scripts/check-bash32-parse.sh	deviation key (QUEUE #59)	P1
+host	key	scripts/check-bash32-parse.sh	deviation key (QUEUE #59)	P1
 docs-no-sudo	checkout	scripts/check-family-conventions.sh	new (QUEUE #63)	P1

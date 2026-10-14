@@ -51,11 +51,25 @@ if [ -n "$dist" ] && [ -z "${SHIPYARD_CHECK_VERSION:-}" ]; then
   echo "shipyard-check: --dist needs SHIPYARD_CHECK_VERSION, the release's version (and SHIPYARD_CHECK_REPO, the repo whose INGREDIENTS.md declares deviations)" >&2
   exit 2
 fi
+if [ -n "$dist" ]; then
+  _artifacts=0
+  if [ -d "$dist" ]; then
+    for _f in "$dist"/*.pkg "$dist"/*.tar.gz "$dist"/*.tgz "$dist"/*.tar.xz "$dist"/*.tar.bz2 "$dist"/*.xml; do
+      [ ! -f "$_f" ] || { _artifacts=1; break; }
+    done
+  fi
+  if [ "$_artifacts" -eq 0 ]; then
+    echo "shipyard-check: --dist $dist holds no .pkg, release tarball or appcast (.xml), so there is nothing to check -- name the directory the release's artifacts were written to" >&2
+    exit 2
+  fi
+fi
 
 needs_admin=0
 [ "$repo_state" -eq 0 ] || [ -n "$only" ] || needs_admin=1
 for id in $only; do
   chk_registered "$id" || { echo "shipyard-check: '$id' is not a registered check id" >&2; exit 2; }
+  [ "$(awk -F'\t' -v i="$id" '$1 == i { print $2 }' "$reg")" != key ] \
+    || { echo "shipyard-check: '$id' is a deviation key, not a check: it excuses checks, and nothing runs under it" >&2; exit 2; }
   [ "$(awk -F'\t' -v i="$id" '$1 == i { print $2 }' "$reg")" != repo-state ] || needs_admin=1
 done
 [ "$needs_admin" -eq 0 ] || chk_gh_admin Mavergreen || exit 2
@@ -65,6 +79,7 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-check.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 id=; mode=; script=
 while IFS="$tab" read -r id mode script _old _fate; do
+  [ "$mode" != key ] || continue
   if [ -n "$only" ]; then
     case " $only " in *" $id "*) echo "$id $script" ;; esac
     continue
@@ -83,27 +98,42 @@ fi
 
 SHIPYARD_CHECK_RUNLOG="$tmp/ran"; SHIPYARD_CHECK_FAILLOG="$tmp/failed"; SHIPYARD_CHECK_NOTRUNLOG="$tmp/notrun"
 : > "$SHIPYARD_CHECK_RUNLOG"; : > "$SHIPYARD_CHECK_FAILLOG"; : > "$SHIPYARD_CHECK_NOTRUNLOG"
-export SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG SHIPYARD_CHECK_NOTRUNLOG
+SHIPYARD_CHECK_SELECTED="$(printf '%s\n' "$selected" | cut -d' ' -f1 | tr '\n' ' ')"
+export SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG SHIPYARD_CHECK_NOTRUNLOG SHIPYARD_CHECK_SELECTED
 [ -z "$dist" ] || SHIPYARD_CHECK_DIST="$dist"; export SHIPYARD_CHECK_DIST
 
+reported() { cat "$SHIPYARD_CHECK_RUNLOG" "$SHIPYARD_CHECK_NOTRUNLOG" "$SHIPYARD_CHECK_FAILLOG" | grep -qxF -- "$1"; }
 scripts="$(printf '%s\n' "$selected" | cut -d' ' -f2 | awk '!seen[$0]++')"
 for script in $scripts; do
   ids="$(printf '%s\n' "$selected" | awk -v s="$script" '$2 == s { print $1 }')"
   before="$(wc -l < "$SHIPYARD_CHECK_FAILLOG")"
   rc=0
   (cd "$target" && sh "$root/$script" < /dev/null) || rc=$?
-  for id in $ids; do chk_ran "$id"; done
   after="$(wc -l < "$SHIPYARD_CHECK_FAILLOG")"
   if [ "$rc" -ne 0 ] && [ "$before" -eq "$after" ]; then
-    echo "$ids" | head -1 >> "$SHIPYARD_CHECK_FAILLOG"
+    blamed=""
+    for id in $ids; do reported "$id" || { blamed="$id"; break; }; done
+    chk_fail "${blamed:-$(printf '%s\n' "$ids" | head -n 1)}" "its script failed without naming a failed check" \
+      "$script exited $rc and reported no failure among the selected checks; its own output is above" \
+      "run it directly (sh $root/$script), which reports every check it owns, and fix what it names"
   fi
+  for id in $ids; do
+    reported "$id" && continue
+    if [ "$rc" -eq 0 ]; then
+      chk_fail "$id" "did not report" \
+        "$script exited 0 without recording that this check ran, or why it did not, so a pass would vouch for nothing" \
+        "report it from $script with chk_ran, or chk_notrun and the reason"
+    else
+      chk_notrun "$id" "$script exited $rc before reporting it"
+    fi
+  done
 done
 
 sort -u "$SHIPYARD_CHECK_NOTRUNLOG" > "$tmp/notrun.u"
-sort -u "$SHIPYARD_CHECK_RUNLOG" | awk -v nf="$tmp/notrun.u" 'BEGIN { while ((getline l < nf) > 0) skip[l] = 1 } !skip[$0]' > "$tmp/ran.u"
+sort -u "$SHIPYARD_CHECK_RUNLOG" "$SHIPYARD_CHECK_FAILLOG" | awk -v nf="$tmp/notrun.u" 'BEGIN { while ((getline l < nf) > 0) skip[l] = 1 } !skip[$0]' > "$tmp/ran.u"
 n="$(wc -l < "$tmp/ran.u" | tr -d ' ')"
 m="$(sort -u "$SHIPYARD_CHECK_FAILLOG" | wc -l | tr -d ' ')"
 k="$(wc -l < "$tmp/notrun.u" | tr -d ' ')"
 if [ "$k" -gt 0 ]; then echo "shipyard-check: $n checks, $m failed, $k not run"; else echo "shipyard-check: $n checks, $m failed"; fi
-[ "$n" -gt 0 ] || exit 2
+[ $((n + k + m)) -gt 0 ] || exit 2
 [ "$m" -eq 0 ]

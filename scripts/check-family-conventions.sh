@@ -11,7 +11,11 @@ SHIPYARD_SCRIPTS="$SELF"
 . "$SELF/lib/py.sh"
 . "$SELF/deviation-reason.sh"
 REL=".github/workflows/release.yml"
-[ -f "$REL" ] || { echo "check-family-conventions: no $REL — not a product repo, nothing to check"; exit 0; }
+rel_ran() {
+  if [ -f "$REL" ]; then chk_ran "$1"; return 0; fi
+  chk_notrun "$1" "no $REL, so this is not a product repo and the rule has nothing to hold to"
+  return 1
+}
 
 CI_FILES="$(ls .github/workflows/*.yml 2>/dev/null || true)"
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md, "Family
@@ -67,30 +71,32 @@ py_crashed() {
 
 # spec: SKILL.md "Family conventions" check 1 -- release.yml must declare concurrency:; two publishes
 #       racing the same tag is a corrupt release, not a flaky build.
-chk_ran release-concurrency
-grep -q '^concurrency:' "$REL" \
-  || chk_fail release-concurrency "$REL declares no concurrency:" \
-       "two publishes can race the same tag" \
-       "add a concurrency: block -- group keyed on github.run_id, cancel-in-progress naming pull_request"
+if rel_ran release-concurrency; then
+  grep -q '^concurrency:' "$REL" \
+    || chk_fail release-concurrency "$REL declares no concurrency:" \
+         "two publishes can race the same tag" \
+         "add a concurrency: block -- group keyed on github.run_id, cancel-in-progress naming pull_request"
+fi
 
 # spec: SKILL.md "Family conventions" check 1b -- a run that CAN PUBLISH must be alone in its
 #       concurrency group and cancellable by nothing. cancel-in-progress: false protects only the
 #       EXECUTING run, not a QUEUED one; the old shared-group shape discarded a mavericks-golang
 #       release silently, 13 seconds after the run that evicted it (2026-09-09).
-chk_ran concurrency-group
-CONC="$(awk '/^concurrency:/{f=1;next} /^[^[:space:]#]/{f=0} f' "$REL")"
-GROUP="$(printf '%s\n' "$CONC" | awk '/^[[:space:]]*group:/{f=1;print;next} /^[[:space:]]*cancel-in-progress:/{f=0} f')"
-CANCEL="$(printf '%s\n' "$CONC" | awk '/^[[:space:]]*cancel-in-progress:/{f=1;print;next} /^[[:space:]]*group:/{f=0} f')"
+if rel_ran concurrency-group; then
+  CONC="$(awk '/^concurrency:/{f=1;next} /^[^[:space:]#]/{f=0} f' "$REL")"
+  GROUP="$(printf '%s\n' "$CONC" | awk '/^[[:space:]]*group:/{f=1;print;next} /^[[:space:]]*cancel-in-progress:/{f=0} f')"
+  CANCEL="$(printf '%s\n' "$CONC" | awk '/^[[:space:]]*cancel-in-progress:/{f=1;print;next} /^[[:space:]]*group:/{f=0} f')"
 
-printf '%s\n' "$GROUP" | grep -q 'github\.run_id' \
-  || chk_fail concurrency-group "$REL concurrency group is shared between runs that can publish" \
-       "a queued one is evicted by the next arrival and its release silently never happens" \
-       "key the group per run: group: release-\${{ github.event_name == 'pull_request' && github.ref || github.run_id }}"
+  printf '%s\n' "$GROUP" | grep -q 'github\.run_id' \
+    || chk_fail concurrency-group "$REL concurrency group is shared between runs that can publish" \
+         "a queued one is evicted by the next arrival and its release silently never happens" \
+         "key the group per run: group: release-\${{ github.event_name == 'pull_request' && github.ref || github.run_id }}"
 
-printf '%s\n' "$CANCEL" | grep -q 'pull_request' \
-  || chk_fail concurrency-group "$REL can cancel a run that publishes" \
-       "cancel-in-progress must name pull_request, the only event that may supersede" \
-       "cancel-in-progress: \${{ github.event_name == 'pull_request' }}"
+  printf '%s\n' "$CANCEL" | grep -q 'pull_request' \
+    || chk_fail concurrency-group "$REL can cancel a run that publishes" \
+         "cancel-in-progress must name pull_request, the only event that may supersede" \
+         "cancel-in-progress: \${{ github.event_name == 'pull_request' }}"
+fi
 
 # spec: SKILL.md "Family conventions" check 2 -- test files that exist must be run by something; hand
 #       enumeration is how a suite quietly stops running.
@@ -103,11 +109,12 @@ if [ -d tests ] && [ -n "$(ls tests/*.sh tests/*.bats 2>/dev/null || true)" ]; t
 fi
 
 # spec: SKILL.md "Family conventions" check 3 -- INGREDIENTS.md must exist.
-chk_ran ingredients-md
-[ -f INGREDIENTS.md ] \
-  || chk_fail ingredients-md "no INGREDIENTS.md" \
-       "the repo's build inputs are undocumented" \
-       "list each input, where it is pinned, its Renovate status, and what a bump does"
+if rel_ran ingredients-md; then
+  [ -f INGREDIENTS.md ] \
+    || chk_fail ingredients-md "no INGREDIENTS.md" \
+         "the repo's build inputs are undocumented" \
+         "list each input, where it is pinned, its Renovate status, and what a bump does"
+fi
 
 # spec: SKILL.md "Family conventions" check 4 -- no Renovate key may restate a value the shared
 #       preset already sets; the SAME key with a DIFFERENT value stays a legal override.
@@ -156,8 +163,7 @@ if [ "$HAVE_TRACKED" -eq 1 ] && tracked VERSION; then
     "git rm --cached VERSION; add /VERSION to .gitignore; commit UPSTREAM_VERSION instead"
 fi
 
-chk_ran upstream-version
-if [ ! -f UPSTREAM_VERSION ] \
+if rel_ran upstream-version && [ ! -f UPSTREAM_VERSION ] \
    && [ -z "$(ls build/derive-upstream-version.sh scripts/derive-upstream-version.sh 2>/dev/null || true)" ]; then
   chk_fail upstream-version "no UPSTREAM_VERSION and nothing to derive one" \
     "the version cannot be computed" \
@@ -336,13 +342,12 @@ delegate shell-portability check-shell-portability.sh \
 # spec: SKILL.md "Family conventions" check 11 -- a release shipping a new upstream must link
 #       upstream's own notes: a committed build/ or scripts/upstream-release-notes-url.sh, or
 #       INGREDIENTS.md saying why there is nothing to link.
-chk_ran upstream-notes
 hook_tracked=no; hook_present=no
 for d in build scripts; do
   if tracked "$d/upstream-release-notes-url.sh"; then hook_tracked=yes; fi
   if [ -f "$d/upstream-release-notes-url.sh" ]; then hook_present=yes; fi
 done
-if [ "$hook_tracked" = no ] && ! grep -q 'No upstream release notes: *[^ ]' INGREDIENTS.md 2>/dev/null; then
+if rel_ran upstream-notes && [ "$hook_tracked" = no ] && ! grep -q 'No upstream release notes: *[^ ]' INGREDIENTS.md 2>/dev/null; then
   if [ "$hook_present" = yes ]; then
     chk_fail upstream-notes "upstream-release-notes-url.sh exists but is not committed" \
       "a .gitignore'd build/ drops it silently, and CI's fresh checkout never sees it" \
@@ -449,8 +454,7 @@ fi
 #       generator (release-notes.sh), never hand-written, never GitHub's --generate-notes; the appcast
 #       and the Release page must read the same file. tests/check-family-conventions-*-test.sh covers
 #       the detection edge cases (quoting, line continuations, variable-routed paths).
-chk_ran release-notes-generated
-if [ -n "$CI_FILES" ]; then
+if rel_ran release-notes-generated && [ -n "$CI_FILES" ]; then
   ci_mentions '[/ ]release-notes\.sh' \
     || chk_fail release-notes-generated "no workflow builds the release body with the shared generator (release-notes.sh)" \
          "the release body comes from one generator, so every consumer reads the same file" \
@@ -678,8 +682,7 @@ done < "$cmdhits"
 #       from a mention -- a step name or a trailing comment carries no leading "/" and no
 #       argument. The "*" allows the closing quote in `sh "$SHIPYARD_SCRIPTS/...sh" --record`;
 #       both that spelling and shipyard's own unquoted `sh scripts/...sh` are in use family-wide.
-chk_ran tree-clean-wired
-if [ -n "$CI_FILES" ]; then
+if rel_ran tree-clean-wired && [ -n "$CI_FILES" ]; then
   ci_mentions '/assert-tree-clean\.sh"*[[:space:]]*--record' \
     || chk_fail tree-clean-wired "no workflow records the source tree before the build -- assert-tree-clean.sh --record is never called" \
          "the bare call has nothing to compare against without it" \
@@ -835,8 +838,7 @@ builds_prs() {  # $1 = a workflow; succeeds when it builds pull requests to main
   on_has push < "$tmp/on-wf" \
     && trigger_lines push < "$tmp/on-wf" | grep -Eq "(\[|,|-)[[:space:]]*['\"]?\*\*['\"]?[[:space:]]*(\]|,|\$)"
 }
-chk_ran pr-trigger
-if ! grep -q '"ignoreTests"[[:space:]]*:[[:space:]]*true' .github/renovate.json 2>/dev/null \
+if rel_ran pr-trigger && ! grep -q '"ignoreTests"[[:space:]]*:[[:space:]]*true' .github/renovate.json 2>/dev/null \
    && ! deviated pr-trigger "$REL"; then
   builds_prs "$REL" || { [ -f .github/workflows/ci.yml ] && builds_prs .github/workflows/ci.yml; } \
     || chk_fail pr-trigger "$REL does not build pull requests to main, and no ci.yml does" \
@@ -848,8 +850,7 @@ fi
 #       appcast is signed, then the release is published: the appcast and the Release must carry the
 #       same notes. Order is by first non-comment mention in release.yml; a step a repo does not have
 #       takes no part (release-notes-generated and signing-scans-for-key say whether it must exist).
-chk_ran publish-order
-if ! deviated publish-order "$REL"; then
+if rel_ran publish-order && ! deviated publish-order "$REL"; then
   _prev=0; _prevname=""
   for _step in 'release-notes\.sh' 'release-state-record\.sh' 'sign_and_appcast\.sh' 'publish-release\.yml'; do
     _ln="$(awk -v re="(^|[^A-Za-z0-9_-])$_step" '/^[[:space:]]*#/ { next } $0 ~ re { print NR; exit }' "$REL")"
@@ -966,8 +967,7 @@ done
 # spec: SKILL.md "Release workflow" -- the build jobs run hours of third-party build code, so a
 #       checkout leaves no token on disk (persist-credentials: false) and the workflow's default
 #       token reads contents only; the publishing job declares its own write.
-chk_ran checkout-drops-credentials
-if ! deviated checkout-drops-credentials "$REL" && [ "$PY_OK" -eq 1 ]; then
+if rel_ran checkout-drops-credentials && ! deviated checkout-drops-credentials "$REL" && [ "$PY_OK" -eq 1 ]; then
   rc=0
   chk_py /dev/stdin "$REL" > "$tmp/barecheckouts" <<'PYEOF' || rc=$?
 import sys, yaml
@@ -1004,8 +1004,7 @@ PYEOF
   fi
 fi
 
-chk_ran permissions-contents-read
-if ! deviated permissions-contents-read "$REL"; then
+if rel_ran permissions-contents-read && ! deviated permissions-contents-read "$REL"; then
   _perm="$(grep -v '^[[:space:]]*#' "$REL" | awk '/^permissions:/ { print; p = 1; next } p && /^[^[:space:]]/ { p = 0 } p')"
   printf '%s\n' "$_perm" | grep -Eq '^  contents: read[[:space:]]*(#.*)?$|^permissions:[[:space:]]*(read-all|\{\})[[:space:]]*(#.*)?$' \
     || chk_fail permissions-contents-read "$REL has no top-level permissions: with contents: read" \
@@ -1032,11 +1031,12 @@ fi
 
 # spec: SKILL.md "Versioning" -- /VERSION is a build product, so it is ignored as well as untracked
 #       (no-tracked-version only catches it once it has been committed).
-chk_ran version-ignored
-grep -qxE '/?VERSION' .gitignore 2>/dev/null \
-  || chk_fail version-ignored ".gitignore has no line ignoring /VERSION" \
-       "VERSION is written by every build, and the first git add -A commits it" \
-       "add a line '/VERSION' to .gitignore"
+if rel_ran version-ignored; then
+  grep -qxE '/?VERSION' .gitignore 2>/dev/null \
+    || chk_fail version-ignored ".gitignore has no line ignoring /VERSION" \
+         "VERSION is written by every build, and the first git add -A commits it" \
+         "add a line '/VERSION' to .gitignore"
+fi
 
 # spec: SKILL.md, the `bare-curl` and `brew`, `macports`, `pkgsrc`, `apt` rows of the checks table --
 #       one id per package manager, plus bare-curl. Commands are matched at command position (check 18's rule, with "{", "!" and the shell's keywords added), in

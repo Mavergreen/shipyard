@@ -13,7 +13,6 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 : "${SHIPYARD_CHECK_DIR:=$SELF}"
 . "$SELF/check-lib.sh"
 . "$SELF/deviation-reason.sh"
-chk_ran bash32-parse
 
 sh_="${SHIPYARD_BASH32_SH:-/bin/sh}"
 bash_="${SHIPYARD_BASH32_BASH:-/bin/bash}"
@@ -25,7 +24,7 @@ cant_measure() {
   _host="$(uname -s | tr 'A-Z' 'a-z')"
   _why="$(mav_deviation_reason "$w/devfacts" host "$_host")"
   if [ -n "$_why" ]; then
-    echo "bash32-parse: skipped by deviation (host:$_host): $_why"
+    chk_notrun bash32-parse "skipped by deviation (host:$_host): $_why"
     exit 0
   fi
   chk_fail bash32-parse "can't measure here: $1" \
@@ -45,6 +44,7 @@ for _s in "$sh_" "$bash_"; do
     cant_measure "$_s (bash $ver) accepts the construct bash 3.2 refuses"
   fi
 done
+chk_ran bash32-parse
 
 chk_tracked_files | grep -v '^tests/fixtures/checks/' | chk_shell_scripts > "$w/scripts" || :
 n=0; excused=0
