@@ -529,7 +529,8 @@ deviated() { chk_deviated "$1" "$2" >/dev/null; }
 #       path either, or the gate matches itself -- a first draft reported shipyard as the family's
 #       worst offender that way.
 chk_ran registry-read
-for f in $(grep -E "$SRC_BATS_RX" "$TF" | grep -v '^tests/' || true); do
+grep -E "$SRC_BATS_RX" "$TF" | grep -v '^tests/' > "$tmp/l532" || :
+while IFS= read -r f; do
   # platform: the pattern must not be a literal occurrence of itself, or this gate is its own first
   #           offender. "package[s]" is the `ps | grep [f]oo` idiom; the bracket changes nothing about
   #           what it matches.
@@ -538,7 +539,7 @@ for f in $(grep -E "$SRC_BATS_RX" "$TF" | grep -v '^tests/' || true); do
   chk_fail registry-read "$f reads the CMake user package registry (the ~/.cmake export(PACKAGE) tree)" \
     "nothing writes it any more" \
     "source msc.sh (it asks shipyard-cmake and exports SHIPYARD_SCRIPTS), or use \$SHIPYARD_SCRIPTS in CI"
-done
+done < "$tmp/l532"
 
 # spec: SKILL.md "Family conventions" check 26 -- a family repo's Renovate config is
 #       .github/renovate.json and no other path: checks 4, 4b and 13 read only that file, and
@@ -631,9 +632,10 @@ for p in sys.argv[1:]:
 PYEOF
   [ "$rc" -eq 0 ] || py_crashed shipyard-cmake-only
 fi
-for f in $(grep '\.sh$' "$TF" | grep -v '^tests/' || true); do
+grep '\.sh$' "$TF" | grep -v '^tests/' > "$tmp/l634" || :
+while IFS= read -r f; do
   sed "s|^|$f$TAB|" "$f"
-done >> "$cmdlist"
+done < "$tmp/l634" >> "$cmdlist"
 # platform: one process per line made this check 71% of the gate's run time on shipyard (about
 #           20,000 process starts); one awk pass filters every line instead. `[[:space:]]` and
 #           `sub(/^[^\t]*\t/,...)` are verified on BSD awk 20070501. The hits go to a file, not a
@@ -738,11 +740,12 @@ delegate host-tools check-host-tools.sh \
 chk_ran stage-product
 if [ -n "$builds_pkg" ] && ! deviated stage-product "$REL"; then
   staged=""
-  for f in $(grep -E "$SRC_RX" "$TF" | grep -v '^tests/' || true); do
+  grep -E "$SRC_RX" "$TF" | grep -v '^tests/' > "$tmp/l741" || :
+  while IFS= read -r f; do
     grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
       | grep -Eq '(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|[[:space:]]exec|^then|^do|^exec|^[[:space:]]*-?[[:space:]]*run:|[[:space:](]COMMAND)[[:space:]]*((if|elif|while|until|!)[[:space:]]+)*((/bin/)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]+[^[:space:]=]*stage_product\.sh|[^[:space:]=]*/stage_product\.sh)"*([[:space:]]|$)' \
       && { staged="$f"; break; }
-  done
+  done < "$tmp/l741"
   [ -n "$staged" ] || chk_fail stage-product "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh" \
                          "its install scripts and manifest are hand-rolled" \
                          "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare '- stage-product: <reason>' under INGREDIENTS.md's ## Conformance deviations"
@@ -772,7 +775,8 @@ fi
 #       is scanned too: a best-effort test that SKIPs (77) without Rosetta still runs translated
 #       when it doesn't skip, so it still needs a declaration -- see "Rosetta", above.
 chk_ran rosetta
-for f in $(grep -E "$SRC_BATS_RX" "$TF" | grep -v '^tests/fixtures/checks/' || true); do
+grep -E "$SRC_BATS_RX" "$TF" | grep -v '^tests/fixtures/checks/' > "$tmp/l775" || :
+while IFS= read -r f; do
   # spec: SKILL.md "Family conventions" check 25 -- a trailing " #..." remark is stripped (a "#"
   #       preceded by whitespace) before matching, so it cannot force a bogus declaration.
   hit="$(grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
@@ -784,7 +788,7 @@ for f in $(grep -E "$SRC_BATS_RX" "$TF" | grep -v '^tests/fixtures/checks/' || t
   chk_fail rosetta "$f depends on Rosetta translation, with no declared rosetta:<path> deviation covering it: $hit" \
     "the family is retiring Rosetta, so an undeclared use is swept before macOS 28 removes it" \
     "declare what runs translated, why it can't be native yet, and when to reconsider under INGREDIENTS.md's ## Conformance deviations as '- rosetta:$f: <reason>' (see the conventions skill, 'Rosetta')"
-done
+done < "$tmp/l775"
 
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
 #       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
@@ -894,7 +898,8 @@ if [ "$HAVE_TRACKED" -eq 1 ] && [ -f UPSTREAM_VERSION ]; then
     ''|*[!0-9A-Za-z._-]*) ;;
     *.*|?????*)
       _rx="(^|[^0-9A-Za-z.]|[vV])$(printf '%s' "$_uv" | sed 's/[.]/\\./g')([^0-9.]|\\.([^0-9]|\$)|\$)"
-      for f in $(grep -E '^(build/|packaging/|\.github/workflows/)|^CMakeLists\.txt$' "$TF" || true); do
+      grep -E '^(build/|packaging/|\.github/workflows/)|^CMakeLists\.txt$' "$TF" > "$tmp/hcfiles" || :
+      while IFS= read -r f; do
         [ -f "$f" ] || continue
         _hit="$(grep -nE "$_rx" "$f" 2>/dev/null | head -1 | cut -c1-70 || true)"
         [ -n "$_hit" ] || continue
@@ -902,7 +907,7 @@ if [ "$HAVE_TRACKED" -eq 1 ] && [ -f UPSTREAM_VERSION ]; then
         chk_fail no-hardcoded-version "$f names the upstream version $_uv ($_hit)" \
           "a Renovate bump changes UPSTREAM_VERSION and this file keeps the old one, failing the bump's own CI" \
           "read UPSTREAM_VERSION instead of spelling the version out"
-      done ;;
+      done < "$tmp/hcfiles" ;;
   esac
 fi
 
@@ -910,13 +915,32 @@ fi
 #       as a release input and a workflow_dispatch covers every case a tag used to. Only a tags: key
 #       under push: is a trigger; a dispatch input named tags is not.
 chk_ran no-tags-trigger
-for f in $CI_FILES; do
-  on_block "$f" | trigger_lines push | grep -Eq '^[[:space:]]+tags(-ignore)?:' || continue
-  deviated no-tags-trigger "$f" && continue
-  chk_fail no-tags-trigger "$f has a tags: trigger" \
-    "tags are retired as a release input, and a workflow_dispatch covers every case a tag used to" \
-    "delete the tags: key under push:; to release from a tag's commit, run: gh workflow run release.yml --ref <ref>"
-done
+if [ -n "$CI_FILES" ] && [ "$PY_OK" -eq 1 ]; then
+  rc=0
+  # shellcheck disable=SC2086  # deliberate word-split list of paths
+  chk_py /dev/stdin $CI_FILES > "$tmp/tagfiles" <<'PYEOF' || rc=$?
+import sys, yaml
+for p in sys.argv[1:]:
+    try:
+        wf = yaml.safe_load(open(p))
+    except Exception:
+        continue
+    on = wf.get('on', wf.get(True)) if isinstance(wf, dict) else None
+    push = on.get('push') if isinstance(on, dict) else None
+    if isinstance(push, dict) and ('tags' in push or 'tags-ignore' in push):
+        print(p)
+PYEOF
+  if [ "$rc" -ne 0 ]; then
+    py_crashed no-tags-trigger
+  else
+    while IFS= read -r f; do
+      deviated no-tags-trigger "$f" && continue
+      chk_fail no-tags-trigger "$f has a tags: trigger" \
+        "tags are retired as a release input, and a workflow_dispatch covers every case a tag used to" \
+        "delete the tags: key under push:; to release from a tag's commit, run: gh workflow run release.yml --ref <ref>"
+    done < "$tmp/tagfiles"
+  fi
+fi
 
 # spec: SKILL.md "Release workflow" -- pull_request_target runs with the base repo's secrets on a
 #       fork PR's code, and no family workflow needs it.
@@ -933,18 +957,40 @@ done
 #       checkout leaves no token on disk (persist-credentials: false) and the workflow's default
 #       token reads contents only; the publishing job declares its own write.
 chk_ran checkout-drops-credentials
-if ! deviated checkout-drops-credentials "$REL"; then
-  _nco="$(grep -v '^[[:space:]]*#' "$REL" | grep -c 'uses: actions/checkout@' || true)"
-  _npc="$(grep -v '^[[:space:]]*#' "$REL" | grep -c 'persist-credentials: false' || true)"
-  [ "$_nco" -le "$_npc" ] || chk_fail checkout-drops-credentials "$REL has $_nco checkouts but only $_npc with persist-credentials: false" \
-    "a checkout that keeps its token leaves it readable by every later step, including third-party build code" \
-    "add persist-credentials: false under with: on every actions/checkout step"
+if ! deviated checkout-drops-credentials "$REL" && [ "$PY_OK" -eq 1 ]; then
+  rc=0
+  chk_py /dev/stdin "$REL" > "$tmp/barecheckouts" <<'PYEOF' || rc=$?
+import sys, yaml
+try:
+    wf = yaml.safe_load(open(sys.argv[1])) or {}
+except Exception:
+    sys.exit(0)
+jobs = wf.get('jobs') if isinstance(wf, dict) else None
+for name, job in (jobs.items() if isinstance(jobs, dict) else []):
+    steps = job.get('steps') if isinstance(job, dict) else None
+    for i, st in enumerate(steps if isinstance(steps, list) else [], 1):
+        use = st.get('uses') if isinstance(st, dict) else None
+        if not (isinstance(use, str) and use.startswith('actions/checkout@')):
+            continue
+        w = st.get('with')
+        if str(w.get('persist-credentials') if isinstance(w, dict) else None).lower() != 'false':
+            print('%s\t%d' % (name, i))
+PYEOF
+  if [ "$rc" -ne 0 ]; then
+    py_crashed checkout-drops-credentials
+  else
+    while IFS="$TAB" read -r _job _step; do
+      chk_fail checkout-drops-credentials "$REL job $_job, step $_step is an actions/checkout without persist-credentials: false" \
+        "a checkout that keeps its token leaves it readable by every later step, including third-party build code" \
+        "add persist-credentials: false under with: on that actions/checkout step"
+    done < "$tmp/barecheckouts"
+  fi
 fi
 
 chk_ran permissions-contents-read
 if ! deviated permissions-contents-read "$REL"; then
   _perm="$(grep -v '^[[:space:]]*#' "$REL" | awk '/^permissions:/ { print; p = 1; next } p && /^[^[:space:]]/ { p = 0 } p')"
-  printf '%s\n' "$_perm" | grep -Eq '^  contents: read[[:space:]]*$|^permissions:[[:space:]]*(read-all|\{\})[[:space:]]*$' \
+  printf '%s\n' "$_perm" | grep -Eq '^  contents: read[[:space:]]*(#.*)?$|^permissions:[[:space:]]*(read-all|\{\})[[:space:]]*(#.*)?$' \
     || chk_fail permissions-contents-read "$REL has no top-level permissions: with contents: read" \
          "without it every job holds the repository default token, which can write" \
          "add a top-level permissions: block with contents: read, and give only the publishing job contents: write"
@@ -974,6 +1020,118 @@ grep -qxE '/?VERSION' .gitignore 2>/dev/null \
   || chk_fail version-ignored ".gitignore has no line ignoring /VERSION" \
        "VERSION is written by every build, and the first git add -A commits it" \
        "add a line '/VERSION' to .gitignore"
+
+# spec: SKILL.md, the `bare-curl` and `brew`, `macports`, `pkgsrc`, `apt` rows of the checks table --
+#       one id per package manager, plus bare-curl. Commands are matched at command position (check 18's rule, with "{", "!" and the shell's keywords added), in
+#       tracked shell scripts outside tests/ and in every workflow and composite-action run: block,
+#       Linux jobs included; prefixes are matched anywhere on a non-comment line of the same text. A
+#       script that sources the fetch library is a fetcher and may call curl.
+chk_ran bare-curl
+chk_ran brew
+chk_ran macports
+chk_ran pkgsrc
+chk_ran apt
+: > "$tmp/shfiles"
+if [ "$HAVE_TRACKED" -eq 1 ]; then
+  chk_shell_scripts < "$TF" | grep -v '^tests/' > "$tmp/shfiles" || :
+fi
+: > "$tmp/pmlines"
+while IFS= read -r f; do
+  awk -v f="$f" '{ print f "\t" $0 }' "$f"
+done < "$tmp/shfiles" >> "$tmp/pmlines"
+: > "$tmp/fetchers"
+printf 'scripts/mavericks_fetch.sh\nscripts/mavergreen_fetch.sh\n' >> "$tmp/fetchers"
+while IFS= read -r f; do
+  grep -Eq '^[[:space:]]*(\.|source)[[:space:]]+[^#]*(mavericks|mavergreen)_fetch\.sh' "$f" && printf '%s\n' "$f" >> "$tmp/fetchers" || :
+done < "$tmp/shfiles"
+if [ "$PY_OK" -eq 1 ]; then
+  _acts="$(grep -E '^\.github/actions/[^/]+/action\.ya?ml$' "$TF" || :)"
+  rc=0
+  # shellcheck disable=SC2086  # deliberate word-split list of paths
+  chk_py /dev/stdin $CI_FILES $_acts >> "$tmp/pmlines" <<'PYEOF' || rc=$?
+import sys, yaml
+for p in sys.argv[1:]:
+    try:
+        doc = yaml.safe_load(open(p)) or {}
+    except Exception:
+        continue
+    if not isinstance(doc, dict):
+        continue
+    groups = []
+    jobs = doc.get("jobs")
+    if isinstance(jobs, dict):
+        groups += [j.get("steps") for j in jobs.values() if isinstance(j, dict)]
+    runs = doc.get("runs")
+    if isinstance(runs, dict):
+        groups.append(runs.get("steps"))
+    for steps in groups:
+        for st in (steps if isinstance(steps, list) else []):
+            run = st.get("run") if isinstance(st, dict) else None
+            if isinstance(run, str):
+                for line in run.splitlines():
+                    print("%s\t%s" % (p, line))
+PYEOF
+  [ "$rc" -eq 0 ] || py_crashed bare-curl
+fi
+pmhits="$tmp/pmhits"
+awk -F"$TAB" '
+  NR == FNR { fetcher[$0] = 1; next }
+  {
+    p = $1; l = $0; sub(/^[^\t]*\t/, "", l)
+    t = l; sub(/^[[:space:]]+/, "", t)
+    if (t == "" || substr(t, 1, 1) == "#") next
+    cp = "(^|[;&|`{!]|[$][(]|[[:space:]](then|do|exec|if|elif|while|until|else))[[:space:]]*(sudo[[:space:]]+)?"
+    if (!(p in fetcher) && l ~ (cp "curl([[:space:]]|$)")) hit("bare-curl")
+    if (l ~ (cp "brew([[:space:]]|$)") || l ~ /(\/opt\/homebrew|\/usr\/local\/Homebrew|\/home\/linuxbrew)([^A-Za-z0-9_]|$)/) hit("brew")
+    if (l ~ (cp "port([[:space:]]|$)") || l ~ /\/opt\/local([^A-Za-z0-9_-]|$)/) hit("macports")
+    if (l ~ (cp "(pkgin|pkg_add|bmake)([[:space:]]|$)") || l ~ /(\/opt\/pkg|\/usr\/pkg)([^A-Za-z0-9_-]|$)/) hit("pkgsrc")
+    if (l ~ (cp "(apt-get|apt|dpkg[[:space:]]+-i)([[:space:]]|$)")) hit("apt")
+  }
+  function hit(id) { if (!seen[id SUBSEP p]++) print id "\t" p "\t" l }
+' "$tmp/fetchers" "$tmp/pmlines" > "$pmhits" \
+  || chk_fail bare-curl "the package-manager scan could not read shell lines (awk failed)" \
+       "an empty hit list would read as no outside package manager anywhere" \
+       "run \`command -v awk\` ($(command -v awk || echo none)) and make sure it is a working awk"
+while IFS="$TAB" read -r _id f line; do
+  deviated "$_id" "$f" && continue
+  _l="$(printf '%s' "$line" | sed 's/^[[:space:]]*//' | cut -c1-70)"
+  case "$_id" in
+    bare-curl)
+      chk_fail bare-curl "$f runs curl directly: $_l" \
+        "a bare curl does not retry a transient failure, and one connection reset cost a two-hour rerun" \
+        "use mav_curl (QUEUE #58), or declare '- bare-curl:$f: <reason>. Revisit when <exit>.' under ## Conformance deviations" ;;
+    *)
+      case "$_id" in
+        brew) _mgr="Homebrew, Linuxbrew or Tigerbrew" ;;
+        macports) _mgr="MacPorts" ;;
+        pkgsrc) _mgr="pkgsrc" ;;
+        apt) _mgr="apt" ;;
+      esac
+      chk_fail "$_id" "$f uses $_mgr: $_l" \
+        "the family works toward no outside package manager, and each use is counted as a declared deviation" \
+        "replace it with the family product or facility that supplies the tool, or declare '- $_id:$f: <reason>. Revisit when <exit>.' under ## Conformance deviations" ;;
+  esac
+done < "$pmhits"
+
+# spec: SKILL.md, the `vendored` row of the checks table -- a vendored copy is
+#       counted: any tracked path under a directory named vendor/ or third_party/ needs a `vendored`
+#       deviation covering it, one failure per vendored entry. shipyard's own fixtures are excluded
+#       like every other check's.
+chk_ran vendored
+if [ "$HAVE_TRACKED" -eq 1 ]; then
+  grep -E '(^|/)(vendor|third_party)/' "$TF" | grep -v '^tests/fixtures/checks/' > "$tmp/vendored" || :
+  : > "$tmp/vendored-seen"
+  while IFS= read -r f; do
+    deviated vendored "$f" && continue
+    _g="$(printf '%s\n' "$f" | sed -E 's#^(.*(^|/)(vendor|third_party)/[^/]+).*$#\1#')"
+    grep -qxF -- "$_g" "$tmp/vendored-seen" && continue
+    printf '%s\n' "$_g" >> "$tmp/vendored-seen"
+    _scope="$_g/**"; [ "$_g" != "$f" ] || _scope="$f"
+    chk_fail vendored "$f is tracked under a vendor/ or third_party/ directory with no vendored deviation" \
+      "a vendored copy is code the family does not build, and each one is counted until it is deleted" \
+      "declare '- vendored:$_scope: <reason>. Revisit when <exit>.' under ## Conformance deviations, naming the condition that deletes the copy"
+  done < "$tmp/vendored"
+fi
 
 [ "$chk_status" -eq 0 ] && echo "check-family-conventions: ok"
 

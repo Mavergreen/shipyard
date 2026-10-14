@@ -1,0 +1,9 @@
+.github/renovate.json
+.github/workflows/release.yml
+.gitignore
+INGREDIENTS.md
+UPSTREAM_VERSION
+build/upstream-release-notes-url.sh
+tests/a-test.sh
+vendor/zlib/zlib.c
+third_party/foo/foo.c

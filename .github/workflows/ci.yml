@@ -50,6 +50,9 @@ jobs:
           source: build
           cmake-tree: ${{ steps.cm.outputs.tree }}
 
+      - name: Every shell script parses under bash 3.2
+        run: sh scripts/shipyard-check --only bash32-parse
+
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
 

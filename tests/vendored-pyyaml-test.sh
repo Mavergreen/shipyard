@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: vendored-pyyaml-test.sh
 #          scripts/vendor/yaml is PyYAML's lib/yaml at the version pyyaml.pin names, chk_py prefers
-#          it to any yaml on PYTHONPATH, and INGREDIENTS.md declares the vendoring with its exit.
+#          it to any yaml on PYTHONPATH, and INGREDIENTS.md declares the vendoring as a `vendored` deviation carrying its exit.
 #          Without a network the comparison with the sdist is left out and the offline checks run.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,8 +38,8 @@ got="$(cd "$t" && PYTHONPATH="$t/shadow" SHIPYARD_CHECK_DIR="$here/scripts" SHIP
   sh -c '. "$SHIPYARD_CHECK_DIR/lib/py.sh"; chk_py "$1"' sh "$t/where.py")" || fail "chk_py imports yaml past a broken one on PYTHONPATH"
 [ "$got" = "$here/scripts/vendor/yaml" ] || fail "chk_py loads the vendored yaml, got $got"
 
-dev="$(grep 'scripts/vendor/yaml/\*\* is vendored on purpose' "$here/INGREDIENTS.md")" || fail "INGREDIENTS.md says scripts/vendor/yaml/** is vendored on purpose"
-printf '%s\n' "$dev" | grep -q 'ssl' || fail "the note names its reason"
-printf '%s\n' "$dev" | grep -q 'revisit' || fail "the note names its exit"
+dev="$(sh "$here/scripts/deviations.sh" "$here" | grep '^vendored scripts/vendor/yaml/\*\* ')" || fail "INGREDIENTS.md declares a vendored:scripts/vendor/yaml/** deviation"
+printf '%s\n' "$dev" | grep -q 'ssl' || fail "the deviation names its reason"
+printf '%s\n' "$dev" | grep -q 'Revisit when python-315 ships ssl and pip works (its phase 2); then delete the vendored copy and the checks import a pip-installed PyYAML' || fail "the deviation names its exit"
 grep -q '^| PyYAML ' "$here/INGREDIENTS.md" || fail "INGREDIENTS.md has a PyYAML row"
 echo "PASS vendored-pyyaml"

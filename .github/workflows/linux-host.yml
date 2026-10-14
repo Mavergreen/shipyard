@@ -43,5 +43,8 @@ jobs:
       - name: Our own conventions gate, where consumers run it
         run: sh scripts/check-family-conventions.sh
 
+      - name: bash32-parse, which a host declaration excuses here
+        run: sh scripts/shipyard-check --only bash32-parse
+
       - name: The suites must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh

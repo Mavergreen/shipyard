@@ -45,3 +45,14 @@ chk_deviated() {
   [ -n "$_cd_reason" ] || return 1
   printf '%s\n' "$_cd_reason"
 }
+
+chk_shell_scripts() {
+  while IFS= read -r _ss_f; do
+    [ -f "$_ss_f" ] || continue
+    case "${_ss_f##*/}" in
+      *.sh) printf '%s\n' "$_ss_f" ;;
+      *.*) ;;
+      *) head -n 1 "$_ss_f" 2>/dev/null | grep -Eq '^#!(/bin/sh|/bin/bash|/usr/bin/env (ba)?sh)([[:space:]]|$)' && printf '%s\n' "$_ss_f" || : ;;
+    esac
+  done
+}

@@ -85,3 +85,11 @@ permissions-contents-read	checkout	scripts/check-family-conventions.sh	new (hand
 upstream-version-bare	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 version-ignored	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 renovate-json-valid	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+bare-curl	checkout	scripts/check-family-conventions.sh	new (QUEUE #58)	P1
+brew	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1
+macports	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1
+pkgsrc	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1
+apt	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1
+vendored	checkout	scripts/check-family-conventions.sh	new (R11)	P1
+bash32-parse	only	scripts/check-bash32-parse.sh	new (QUEUE #59)	P1
+host	only	scripts/check-bash32-parse.sh	deviation key (QUEUE #59)	P1

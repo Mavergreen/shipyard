@@ -67,5 +67,18 @@ one line):
 - pr-trigger: shipyard's pull requests are built by ci.yml, its required check; release.yml cuts a release on every push to main and must not run on a PR. Revisit if release.yml gains a dry-run mode for PRs.
 - permissions-contents-read: release.yml has held `contents: write` at the top since before this check; its build job was never audited for needing less, and the publish and major-tag jobs already declare their own. Revisit once a release run proves the build job needs only `contents: read`.
 - checkout-drops-credentials: the major-tag job pushes with its checkout's token, and the build job's checkout was never audited for dropping it. Revisit with permissions-contents-read.
-
-Not a deviation, because no check reads one: scripts/vendor/yaml/** is vendored on purpose. python-315's phase 1 has no `ssl`, so pip can't fetch PyYAML on 10.9, and the checks keep their Python; revisit when python-315 ships `ssl` and pip works (its phase 2), then delete scripts/vendor and let the checks import a pip-installed PyYAML (`/opt/mavergreen/bin/python3 -m pip install --user pyyaml`).
+- bare-curl:scripts/assert_update_trusted.sh: it curls the live feed and pkg on its own to see the HTTP status; it does not source the fetch library. Revisit when QUEUE #58's mav_curl lands.
+- bare-curl:scripts/build-cmake.sh: it curls Kitware's tarball and checksum file before the fetch library can be sourced. Revisit when QUEUE #58's mav_curl lands.
+- bare-curl:scripts/check-preset-icons.sh: it curls a vendor's icon and apt index on its own. Revisit when QUEUE #58's mav_curl lands.
+- bare-curl:scripts/vendor/sync-pyyaml.sh: it curls the PyYAML sdist on its own. Revisit when QUEUE #58's mav_curl lands.
+- brew:scripts/install-macho-readers.sh: the fallback for llvm-lipo and llvm-strings, which Xcode does not ship. Revisit when every job that runs the compat guard has clang22 installed (vision area 14).
+- brew:.github/workflows/ci.yml: the step that records what the Mach-O readers resolved to asks brew whether llvm is present. Revisit with brew:scripts/install-macho-readers.sh, whose fallback it reports on.
+- brew:.github/actions/install/action.yml: bats-core, where no family bats exists. Revisit when a family product or the runner image supplies bats.
+- brew:scripts/build-cmake.sh: it names /opt/homebrew only in CMAKE_IGNORE_PREFIX_PATH, to keep that prefix out of CMake's search; it uses nothing from it. Revisit if the exclusion list moves into a shared CMake module.
+- macports:scripts/build-cmake.sh: it names /opt/local only in CMAKE_IGNORE_PREFIX_PATH, to keep that prefix out of CMake's search; it uses nothing from it. Revisit if the exclusion list moves into a shared CMake module.
+- pkgsrc:scripts/build-cmake.sh: it names /opt/pkg only in CMAKE_IGNORE_PREFIX_PATH, to keep that prefix out of CMake's search; it uses nothing from it. Revisit if the exclusion list moves into a shared CMake module.
+- apt:.github/workflows/linux-host.yml: the Linux CI job installs llvm and libarchive-tools. Revisit when area 14's pinned LLVM tarball supplies the readers and bsdtar comes from a family Linux tarball or the job's image.
+- apt:.github/actions/install/action.yml: bats-core on a Linux runner, where no family bats exists. Revisit when a family product or the runner image supplies bats.
+- host:linux: bash32-parse needs a bash 3.2 /bin/sh and Linux has none. Revisit when QUEUE #60's Apple-shells collection ships its Linux tarball.
+- vendored:scripts/vendor/yaml/**: PyYAML is vendored because python-315's phase 1 has no ssl, so pip cannot fetch it on 10.9, and the checks keep their Python. Revisit when python-315 ships ssl and pip works (its phase 2); then delete the vendored copy and the checks import a pip-installed PyYAML (/opt/mavergreen/bin/python3 -m pip install --user pyyaml).
+- vendored:scripts/vendor/*: the pin, the checksum and the sync script that maintain scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; they go when the copy does.

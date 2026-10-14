@@ -21,16 +21,26 @@ run() {  # $1 = a fixture tree holding FILES; the gate runs in a git-init copy o
 
 IDS="pr-trigger publish-order renovate-extends-preset renovate-json-valid no-hardcoded-version
      no-tags-trigger no-pull-request-target checkout-drops-credentials permissions-contents-read
-     upstream-version-bare version-ignored"
+     upstream-version-bare version-ignored bare-curl brew macports pkgsrc apt vendored"
+
+failing() {  # the ids the last run reported failing, one per line
+  sed -n 's/^  more: shipyard-check --explain //p' "$w/out" | sort -u
+}
+only_fails() {  # $1 = what ran, $2 = the one id that may fail
+  [ "$(failing)" = "$2" ] || fail "$1 should fail only $2, got: $(failing | tr '\n' ' ')"
+}
 
 for id in $IDS; do
   [ -d "$fx/$id/pass" ] || fail "$id has a pass fixture"
-  run "$fx/$id/pass" || fail "$id/pass should be clean: $(cat "$w/out")"
+  for d in "$fx/$id"/pass*; do
+    run "$d" || fail "$id/$(basename "$d") should be clean: $(cat "$w/out")"
+  done
   set -- "$fx/$id"/fail*
   [ -d "$1" ] || fail "$id has a fail fixture"
   for d in "$@"; do
     if run "$d"; then fail "$id/$(basename "$d") should fail"; fi
     grep -q "^$id: " "$w/out" || fail "$id/$(basename "$d") should fail $id: $(cat "$w/out")"
+    only_fails "$id/$(basename "$d")" "$id"
     grep -q '^  fix: ' "$w/out" || fail "$id/$(basename "$d") names a fix"
   done
 done
@@ -50,6 +60,7 @@ ok() {  # $1 = name; the edited copy must be clean
 refused() {  # $1 = name, $2 = id
   if run "$w/$1"; then fail "$1 should fail $2"; fi
   grep -q "^$2: " "$w/out" || fail "$1 should fail $2: $(cat "$w/out")"
+  only_fails "$1" "$2"
 }
 
 fresh ignoretests
@@ -165,5 +176,45 @@ refused vfile upstream-version-bare
 fresh vignore
 printf 'VERSION\n.superpowers/\n.idea/\n' > "$w/vignore/.gitignore"
 ok vignore
+
+fresh flowtags
+seton flowtags "on: {push: {branches: [main], tags: ['v*']}, pull_request: {branches: [main]}}"
+refused flowtags no-tags-trigger
+
+fresh flowclean
+seton flowclean "on: {push: {branches: [main]}, pull_request: {branches: [main]}}"
+ok flowclean
+
+fresh spacename
+printf '12.3\n' > "$w/spacename/UPSTREAM_VERSION"
+printf '#!/bin/sh\necho "get v12.3 now"\n' > "$w/spacename/build/my fetch.sh"
+printf 'build/my fetch.sh\n' >> "$w/spacename/FILES"
+refused spacename no-hardcoded-version
+
+fresh sourcescurl
+printf '#!/bin/sh\n. "$SHIPYARD_SCRIPTS/mavergreen_fetch.sh"\ncurl -fsSL "$1"\n' > "$w/sourcescurl/build/f.sh"
+printf 'build/f.sh\n' >> "$w/sourcescurl/FILES"
+ok sourcescurl
+
+fresh keywordcurl
+printf '#!/bin/sh\nif ! curl -fsS "$1"; then exit 1; fi\nwhile curl -s "$2"; do :; done\n{ curl -s "$3"; }\n' > "$w/keywordcurl/build/f.sh"
+printf 'build/f.sh\n' >> "$w/keywordcurl/FILES"
+refused keywordcurl bare-curl
+
+fresh prosecurl
+printf '#!/bin/sh\n# curl and brew and apt-get\necho "use curl, not wget, brew or port or apt"\ncommand -v curl >/dev/null\nmy_curl_wrapper x\nxcurl y\n' > "$w/prosecurl/build/f.sh"
+printf 'build/f.sh\n' >> "$w/prosecurl/FILES"
+ok prosecurl
+
+fresh compositeapt
+mkdir -p "$w/compositeapt/.github/actions/i"
+printf "name: i\nruns:\n  using: composite\n  steps:\n    - shell: sh\n      run: sudo apt-get install -y bats\n" > "$w/compositeapt/.github/actions/i/action.yml"
+printf '.github/actions/i/action.yml\n' >> "$w/compositeapt/FILES"
+refused compositeapt apt
+
+fresh testsmayname
+printf '#!/bin/sh\nbrew install x\ncurl y\n' > "$w/testsmayname/tests/b-test.sh"
+printf 'tests/b-test.sh\n' >> "$w/testsmayname/FILES"
+ok testsmayname
 
 echo "PASS check-family-rules"
