@@ -8,7 +8,7 @@ mkrepo "$work/r2"
 printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| Swift | `build.sh` | ❌ untracked | manual |\n' \
   > "$work/r2/INGREDIENTS.md"
 if out="$(cd "$work/r2" && sh "$S" 2>&1)"; then echo "FAIL untracked ingredient should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -qi 'customManager\|renovate' || { echo "FAIL should name the fix: $out"; exit 1; }
+first_is "$out" ingredient-tracked || { echo "FAIL should be an ingredient-tracked failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- but a genuinely UNTRACKABLE input (no datasource exists -- golang's CA bundle) is allowed
 #       when it says so. The rule is "wire it or explain why you cannot", not "never write ❌".
@@ -21,8 +21,7 @@ printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|--
 #       says where, or says in INGREDIENTS.md why there is nothing to link.
 mkrepo "$work/u1"; (cd "$work/u1" && git rm -q --cached build/upstream-release-notes-url.sh && rm -r build)
 if out="$(cd "$work/u1" && sh "$S" 2>&1)"; then echo "FAIL no hook and no reason should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'upstream-release-notes-url.sh' || { echo "FAIL should name the hook: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'No upstream release notes:' || { echo "FAIL should name the declaration: $out"; exit 1; }
+first_is "$out" upstream-notes || { echo "FAIL should be an upstream-notes failure: $out"; exit 1; }
 printf '# Build ingredients\n\nNo upstream release notes: this repo is its own upstream.\n' > "$work/u1/INGREDIENTS.md"
 (cd "$work/u1" && sh "$S" >/dev/null) || { echo "FAIL: the declaration, with a reason (a self-upstream repo; a bundle), is the other way to comply -- should pass"; exit 1; }
 printf '# Build ingredients\n\nNo upstream release notes:\n' > "$work/u1/INGREDIENTS.md"
@@ -36,7 +35,7 @@ mkrepo "$work/u2"; (cd "$work/u2" && mkdir scripts && git mv build/upstream-rele
 #       checkout never sees it.
 mkrepo "$work/u3"; (cd "$work/u3" && git rm -q --cached build/upstream-release-notes-url.sh && printf 'build/\n' >> .gitignore)
 if out="$(cd "$work/u3" && sh "$S" 2>&1)"; then echo "FAIL an uncommitted hook should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -qi 'not committed' || { echo "FAIL should say it is not committed: $out"; exit 1; }
+first_is "$out" upstream-notes || { echo "FAIL should be an upstream-notes failure: $out"; exit 1; }
 
 # spec: a workflow that signs must call scan-for-key.yml -- publish-release.yml refuses a signed
 #       release without its record, and a missing job should fail a PR here, not a release there.
@@ -47,7 +46,7 @@ printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --fe
   >> "$work/k/.github/workflows/release.yml"
 (cd "$work/k" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/k" && sh "$S" 2>&1)"; then echo "FAIL a signing workflow with no scan job should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'scan-for-key.yml' || { echo "FAIL should name scan-for-key.yml: $out"; exit 1; }
+first_is "$out" signing-scans-for-key || { echo "FAIL should be a signing-scans-for-key failure: $out"; exit 1; }
 cat >> "$work/k/.github/workflows/release.yml" <<'YML'
   scan:
     needs: [build]
@@ -90,11 +89,10 @@ printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"cus
   > "$work/mv/.github/renovate.json"
 (cd "$work/mv" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/mv" && sh "$S" 2>&1)"; then echo "FAIL a -mavericks.N pin with default versioning should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'Mavergreen/swift-toolchain' || { echo "FAIL should name the dep: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'mavericks' || { echo "FAIL should name the -mavericks.N versioning: $out"; exit 1; }
+first_is "$out" renovate-suffix-versioning || { echo "FAIL should be a renovate-suffix-versioning failure: $out"; exit 1; }
 # spec: with the family's versioning regex (container-tools/tailscale tracking golang), it must
 #       pass.
-python3 - "$work/mv/.github/renovate.json" "$MMVER" <<'PY'
+chk_py /dev/stdin "$work/mv/.github/renovate.json" "$MMVER" <<'PY'
 import json, sys
 p = sys.argv[1]; c = json.load(open(p))
 c["customManagers"][0]["versioningTemplate"] = sys.argv[2]
@@ -109,7 +107,8 @@ printf '6.3.3-mavericks.1\n' > "$work/mv2/components-version"
 printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^components-version$/"],"matchStrings":["^(?<currentValue>.+?)\\s*$"],"depNameTemplate":"x","datasourceTemplate":"github-releases","versioningTemplate":"regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)"}]}' \
   > "$work/mv2/.github/renovate.json"
 (cd "$work/mv2" && git add -A) >/dev/null 2>&1
-if (cd "$work/mv2" && sh "$S" >/dev/null 2>&1); then echo "FAIL versioning that ignores N should fail"; exit 1; fi
+if out="$(cd "$work/mv2" && sh "$S" 2>&1)"; then echo "FAIL versioning that ignores N should fail"; exit 1; fi
+first_is "$out" renovate-suffix-versioning || { echo "FAIL should be a renovate-suffix-versioning failure: $out"; exit 1; }
 # spec: scripts/check-family-conventions.sh -- and a pin that is NOT a -mavericks.N release needs nothing (openssh's own upstream, tag
 #       form).
 mkrepo "$work/mv3"
@@ -132,7 +131,7 @@ printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"cus
 mkrepo "$work/g1"
 grep -v 'release-notes\.sh' "$work/ok/.github/workflows/release.yml" > "$work/g1/.github/workflows/release.yml"
 if out="$(cd "$work/g1" && sh "$S" 2>&1)"; then echo "FAIL a repo with no generator call should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'release-notes.sh' || { echo "FAIL should name the generator: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: check-release-notes.sh is the PUBLISHER's shape gate, a different script. A substring
 #       match on "release-notes.sh" would let a repo that only runs the shape gate pass while
@@ -141,7 +140,7 @@ mkrepo "$work/g1b"
 sed -e 's|sh "$SHIPYARD_SCRIPTS/release-notes\.sh" .*|sh "$SHIPYARD_SCRIPTS/check-release-notes.sh" dist/RELEASE_NOTES.md|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g1b/.github/workflows/release.yml"
 if out="$(cd "$work/g1b" && sh "$S" 2>&1)"; then echo "FAIL check-release-notes.sh must not count as the generator"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'no workflow builds the release body' || { echo "FAIL should fail for the missing generator, not something else: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- a hand-written body is the exact regression this check exists for, in the printf-redirect
 #       shape.
@@ -149,7 +148,7 @@ mkrepo "$work/g2"
 sed -e 's|sh "$SHIPYARD_SCRIPTS/release-notes\.sh" .*|printf "## %s\\n\\nAutomated release.\\n" "$FULL" > dist/RELEASE_NOTES.md|' \
   -e '/--product Widget --min-os/d' "$work/ok/.github/workflows/release.yml" > "$work/g2/.github/workflows/release.yml"
 if out="$(cd "$work/g2" && sh "$S" 2>&1)"; then echo "FAIL a hand-written body should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'hand-writes the release body' || { echo "FAIL should say it is hand-written: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: and in the copy-a-committed-file shape (porthole shipped its README.md as the body of
 #       every release). The generator call stays, so this is caught by the redirect/cp clause and
@@ -159,7 +158,7 @@ cat >> "$work/g3/.github/workflows/release.yml" <<'YML'
       - run: cp release-notes/README.md dist/RELEASE_NOTES.md
 YML
 if out="$(cd "$work/g3" && sh "$S" 2>&1)"; then echo "FAIL copying a committed file in as the body should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'hand-writes the release body' || { echo "FAIL should say it is hand-written: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: and in the directory that is NOT dist/. magic-trackpad2 stages its body at
 #       build/RELEASE_NOTES.md, so a hand-write check anchored on dist/ passes every test above
@@ -171,7 +170,7 @@ cat >> "$work/g3b/.github/workflows/release.yml" <<'YML'
       - run: printf '## %s\n\nAutomated release.\n' "$FULL" > build/RELEASE_NOTES.md
 YML
 if out="$(cd "$work/g3b" && sh "$S" 2>&1)"; then echo "FAIL a hand-written body outside dist/ should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'hand-writes the release body' || { echo "FAIL should say it is hand-written: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- but COPYING the generated body somewhere else is reading it, not writing it. A repo
 #       staging the file into an artifact does exactly this, and flagging it would fail a correct
@@ -189,7 +188,7 @@ cat >> "$work/g4/.github/workflows/release.yml" <<'YML'
       - run: gh release create "$TAG" --generate-notes
 YML
 if out="$(cd "$work/g4" && sh "$S" 2>&1)"; then echo "FAIL --generate-notes should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -qi 'autogenerated' || { echo "FAIL should name the autogenerated body: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- the appcast must read the file the generator wrote, or the Release page and the update
 #       dialog tell two different stories.
@@ -197,8 +196,7 @@ mkrepo "$work/g5"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file release-notes/README.md|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g5/.github/workflows/release.yml"
 if out="$(cd "$work/g5" && sh "$S" 2>&1)"; then echo "FAIL a notes file the generator never wrote should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'the generator does not write' || { echo "FAIL should say the generator does not write it: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'release-notes/README.md' || { echo "FAIL should name the offending path: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- now the four shapes the REAL repos use, each of which a plausible check gets wrong.
 #       magic-trackpad2 stages its body at build/RELEASE_NOTES.md and QUOTES the value. A check
@@ -219,7 +217,7 @@ mkrepo "$work/g6b"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file "release-notes/README.md"|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g6b/.github/workflows/release.yml"
 if out="$(cd "$work/g6b" && sh "$S" 2>&1)"; then echo "FAIL a quoted notes path the generator never wrote should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'release-notes/README.md' || { echo "FAIL should name the unquoted path: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: --out is not release-notes.sh's flag alone -- container-tools and tailscale pass --out
 #       "$PKG" to cmake/package_pkg.sh. That must not make "$PKG" an acceptable --notes-file.
@@ -237,7 +235,7 @@ cat >> "$work/g7b/.github/workflows/release.yml" <<'YML'
       - run: sh "$SHIPYARD_SCRIPTS/gen_appcast.sh" --notes-file dist/tool.pkg
 YML
 if out="$(cd "$work/g7b" && sh "$S" 2>&1)"; then echo "FAIL a packaging --out must not vouch for a non-.md notes file"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'dist/tool.pkg' || { echo "FAIL should name the non-.md notes file: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- the comparison is between WHOLE values. A --notes-file that is a strict SUFFIX of a real
 #       --out value is a genuinely different file, and a substring match would wave it through.
@@ -245,7 +243,7 @@ mkrepo "$work/g5c"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file NOTES.md|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g5c/.github/workflows/release.yml"
 if out="$(cd "$work/g5c" && sh "$S" 2>&1)"; then echo "FAIL a notes file that is only a SUFFIX of the --out path should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'notes-file NOTES.md' || { echo "FAIL should name the suffix path: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- a repo that routes ONE path through a variable is more self-consistent than one spelling
 #       it twice, and the two sides simply cannot be compared as text. Failing it would tell a
@@ -270,7 +268,7 @@ mkrepo "$work/g12c"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file "$NOTES" --notes-file release-notes/README.md|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g12c/.github/workflows/release.yml"
 if out="$(cd "$work/g12c" && sh "$S" 2>&1)"; then echo "FAIL a literal mismatch alongside a variable one should still fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'release-notes/README.md' || { echo "FAIL should name the literal mismatch: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- a flag and its value need not share a line. Reproduced against openssh's real main by
 #       changing nothing but whitespace: the captured --out value became the backslash, the .md
@@ -317,7 +315,7 @@ cat >> "$work/g17c/.github/workflows/release.yml" <<'YML'
             release-notes/README.md
 YML
 if out="$(cd "$work/g17c" && sh "$S" 2>&1)"; then echo "FAIL a wrapped notes path the generator never wrote should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'release-notes/README.md' || { echo "FAIL should name the wrapped mismatch: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- 1password, ed25519, signal-desktop and swift-toolchain pass no --notes-file at all: they
 #       stage no appcast from the notes. The subset loop is then empty, which is correct and not
@@ -376,7 +374,7 @@ mkrepo "$work/g14"
 sed 's|sh "$SHIPYARD_SCRIPTS/release-notes\.sh" .*|# TODO: rewire sh "$SHIPYARD_SCRIPTS/release-notes.sh" here|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g14/.github/workflows/release.yml"
 if out="$(cd "$work/g14" && sh "$S" 2>&1)"; then echo "FAIL a generator mentioned only in a comment is not wired up"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'no workflow builds the release body' || { echo "FAIL should say the generator is not called: $out"; exit 1; }
+first_is "$out" release-notes-generated || { echo "FAIL should be a release-notes-generated failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- and the residual the filter deliberately accepts, which is load-bearing rather than a
 #       tolerated wart: container-tools writes
@@ -394,7 +392,7 @@ mkrepo "$work/g16"
 sed 's|- run: sh "$SHIPYARD_SCRIPTS/run-repo-tests\.sh"|# we should run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh"|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g16/.github/workflows/release.yml"
 if out="$(cd "$work/g16" && sh "$S" 2>&1)"; then echo "FAIL a test runner mentioned only in a comment should fail check 2"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'no workflow runs them' || { echo "FAIL should say the tests are not run: $out"; exit 1; }
+first_is "$out" tests-run-in-ci || { echo "FAIL should be a tests-run-in-ci failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- a check-14 failure must ACCUMULATE like every other, not abort the run: this gate reports
 #       all its failures at once, and a check 14 that killed the script under set -eu would take
@@ -404,8 +402,8 @@ mkrepo "$work/g11"; rm -f "$work/g11/INGREDIENTS.md"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file release-notes/README.md|' \
   "$work/ok/.github/workflows/release.yml" > "$work/g11/.github/workflows/release.yml"
 out="$(cd "$work/g11" && sh "$S" 2>&1 || true)"
-printf '%s\n' "$out" | grep -q 'INGREDIENTS.md' || { echo "FAIL check 3 should still be reported: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'the generator does not write' || { echo "FAIL check 14 should still be reported: $out"; exit 1; }
+has_id "$out" ingredients-md || { echo "FAIL check 3 should still be reported: $out"; exit 1; }
+has_id "$out" release-notes-generated || { echo "FAIL check 14 should still be reported: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- a failing run must NOT also print "ok". The success line used to sit mid-script, so
 #       checks appended after it (7, 8, 9) printed "check-family-conventions: ok" and THEN failed
@@ -427,7 +425,7 @@ printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm1/scripts/x.sh"
 printf 'platform\nspec\n' > "$work/cm1/comment-reasons"
 (cd "$work/cm1" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/cm1" && sh "$S" 2>&1)"; then echo "FAIL: an untagged comment, with comment-reasons present, should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -qi 'cite a reason' || { echo "FAIL should name what to cite: $out"; exit 1; }
+first_is "$out" comments || { echo "FAIL should be a comments failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- the same fixture, tagged, must pass: the check is
 #       satisfied by a reason, not by removing the comment.

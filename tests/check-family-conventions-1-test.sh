@@ -11,7 +11,7 @@ mkdir -p "$work/norel"; (cd "$work/norel" && sh "$S" >/dev/null) || { echo "FAIL
 mkrepo "$work/c"; grep -v -e '^concurrency:' -e '^  group:' -e '^  cancel-in-progress:' \
   "$work/ok/.github/workflows/release.yml" > "$work/c/.github/workflows/release.yml"
 if (cd "$work/c" && sh "$S" >/dev/null 2>&1); then echo "FAIL missing concurrency should fail"; exit 1; fi
-(cd "$work/c" && sh "$S" 2>&1 | grep -qi concurrency) || { echo "FAIL should name concurrency"; exit 1; }
+out="$(cd "$work/c" && sh "$S" 2>&1 || true)"; first_is "$out" release-concurrency || { echo "FAIL should name release-concurrency: $out"; exit 1; }
 
 # spec: a release.yml whose concurrency group is IDENTICAL for every event cannot keep a
 #       publishing run out of a shared group. cancel-in-progress:false protects the RUNNING job
@@ -19,7 +19,7 @@ if (cd "$work/c" && sh "$S" >/dev/null 2>&1); then echo "FAIL missing concurrenc
 #       queued dispatch is evicted by the next arrival and its release silently never happens.
 #       This must fail.
 mkrepo "$work/cr"
-python3 - "$work/cr/.github/workflows/release.yml" <<'PY'
+chk_py /dev/stdin "$work/cr/.github/workflows/release.yml" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace("  group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}",
@@ -29,14 +29,14 @@ s=s.replace("  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
 open(p,'w').write(s)
 PY
 if (cd "$work/cr" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a single-group concurrency block should fail"; exit 1; fi
-(cd "$work/cr" && sh "$S" 2>&1 | grep -qiE 'queued|pending|supersede') || { echo "FAIL: should explain the queued-run eviction"; exit 1; }
+out="$(cd "$work/cr" && sh "$S" 2>&1 || true)"; first_is "$out" concurrency-group || { echo "FAIL: should be a concurrency-group failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- and the block the family actually ships must pass. Only pull_request supersedes (keyed
 #       per ref, so a force-push replaces its own predecessor); a branch push, a tag and a
 #       dispatch are each keyed per RUN and alone in their group. Folded across lines, because
 #       that is how it is written in the repos.
 mkrepo "$work/cok"
-python3 - "$work/cok/.github/workflows/release.yml" <<'PY'
+chk_py /dev/stdin "$work/cok/.github/workflows/release.yml" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace("  group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}",
@@ -53,7 +53,7 @@ PY
 #       the group distinguish events?" waves it straight through -- yet it is the exact
 #       arrangement that evicted a queued run in mavericks-golang.
 mkrepo "$work/cold"
-python3 - "$work/cold/.github/workflows/release.yml" <<'PY'
+chk_py /dev/stdin "$work/cold/.github/workflows/release.yml" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace("  group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}",
@@ -63,11 +63,11 @@ s=s.replace("  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
 open(p,'w').write(s)
 PY
 if (cd "$work/cold" && sh "$S" >/dev/null 2>&1); then echo "FAIL: the old shared-dispatch-group shape should fail"; exit 1; fi
-(cd "$work/cold" && sh "$S" 2>&1 | grep -qiE 'run_id|per run|alone') || { echo "FAIL: should say publishing runs must be keyed per run"; exit 1; }
+out="$(cd "$work/cold" && sh "$S" 2>&1 || true)"; first_is "$out" concurrency-group || { echo "FAIL: should be a concurrency-group failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- a group that IS per-run but still lets a publish be cancelled is only half the rule.
 mkrepo "$work/chalf"
-python3 - "$work/chalf/.github/workflows/release.yml" <<'PY'
+chk_py /dev/stdin "$work/chalf/.github/workflows/release.yml" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace("  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
@@ -75,22 +75,24 @@ s=s.replace("  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
 open(p,'w').write(s)
 PY
 if (cd "$work/chalf" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a cancellable publish should fail"; exit 1; fi
-(cd "$work/chalf" && sh "$S" 2>&1 | grep -qi 'pull_request') || { echo "FAIL: should say only a pull_request may be cancelled"; exit 1; }
+out="$(cd "$work/chalf" && sh "$S" 2>&1 || true)"; first_is "$out" concurrency-group || { echo "FAIL: should be a concurrency-group failure: $out"; exit 1; }
 
 mkrepo "$work/t"; grep -v 'run-repo-tests' "$work/ok/.github/workflows/release.yml" > "$work/t/.github/workflows/release.yml"
-if (cd "$work/t" && sh "$S" >/dev/null 2>&1); then echo "FAIL: tests exist but CI never runs them should fail"; exit 1; fi
+if out="$(cd "$work/t" && sh "$S" 2>&1)"; then echo "FAIL: tests exist but CI never runs them should fail"; exit 1; fi
+first_is "$out" tests-run-in-ci || { echo "FAIL: should be a tests-run-in-ci failure: $out"; exit 1; }
 
 mkrepo "$work/te"; rm -f "$work/te/tests/a-test.sh"
 grep -v 'run-repo-tests' "$work/ok/.github/workflows/release.yml" > "$work/te/.github/workflows/release.yml"
 (cd "$work/te" && sh "$S" >/dev/null) || { echo "FAIL: a repo with an EMPTY tests dir is fine, should pass"; exit 1; }
 
 mkrepo "$work/i"; rm -f "$work/i/INGREDIENTS.md"
-if (cd "$work/i" && sh "$S" >/dev/null 2>&1); then echo "FAIL missing INGREDIENTS.md should fail"; exit 1; fi
+if out="$(cd "$work/i" && sh "$S" 2>&1)"; then echo "FAIL missing INGREDIENTS.md should fail"; exit 1; fi
+first_is "$out" ingredients-md || { echo "FAIL: should be an ingredients-md failure: $out"; exit 1; }
 
 mkrepo "$work/r"
 printf '{"extends":["github>Mavergreen/shipyard"],"ignoreTests":false}\n' > "$work/r/.github/renovate.json"
-if (cd "$work/r" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a Renovate key restating the preset's own value is redundant and should fail"; exit 1; fi
-(cd "$work/r" && sh "$S" 2>&1 | grep -qi ignoreTests) || { echo "FAIL should name the key"; exit 1; }
+if out="$(cd "$work/r" && sh "$S" 2>&1)"; then echo "FAIL: a Renovate key restating the preset's own value is redundant and should fail"; exit 1; fi
+first_is "$out" renovate-no-restated-defaults || { echo "FAIL should be a renovate-no-restated-defaults failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- but the SAME key with a DIFFERENT value is a deliberate override, not drift. A repo with
 #       no build to gate legitimately opts back into blind automerge with ignoreTests:true; the
@@ -99,9 +101,6 @@ mkrepo "$work/r2"
 printf '{"extends":["github>Mavergreen/shipyard"],"ignoreTests":true}\n' > "$work/r2/.github/renovate.json"
 (cd "$work/r2" && sh "$S" >/dev/null) || { echo "FAIL deliberate ignoreTests:true override should pass"; exit 1; }
 
-mkrepo "$work/n"; grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/n/.github/workflows/release.yml"
-if (cd "$work/n" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a release that publishes no notes should fail"; exit 1; fi
-
 # spec: scripts/check-family-conventions.sh -- an automerge exception must say WHY. The family default is ship-if-green (patch, minor
 #       and major alike); a repo restricts automerge only where a bad bump would build fine and
 #       be wrong -- the case a green build cannot catch. Unexplained, that is indistinguishable
@@ -109,8 +108,8 @@ if (cd "$work/n" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a release that pu
 mkrepo "$work/am"
 printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"packageRules":[{"matchDepNames":["x"],"matchUpdateTypes":["minor"],"automerge":false}]}' \
   > "$work/am/.github/renovate.json"
-if (cd "$work/am" && sh "$S" >/dev/null 2>&1); then echo "FAIL undescribed automerge exception should fail"; exit 1; fi
-(cd "$work/am" && sh "$S" 2>&1 | grep -qi 'automerge') || { echo "FAIL should name the automerge rule"; exit 1; }
+if out="$(cd "$work/am" && sh "$S" 2>&1)"; then echo "FAIL undescribed automerge exception should fail"; exit 1; fi
+first_is "$out" automerge-described || { echo "FAIL should be an automerge-described failure: $out"; exit 1; }
 
 mkrepo "$work/am2"
 printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"packageRules":[{"description":"A minor bump needs LLVM_BRANCH to follow, which no regex can infer: it would build fine and be wrong.","matchDepNames":["x"],"matchUpdateTypes":["minor"],"automerge":false}]}' \
@@ -126,7 +125,7 @@ printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"packageRules":[{"match
 #       no --notes-file or body_path of its own, because publish-release.yml owns the body (and
 #       fails on an empty one, which is stronger than what this check can see).
 mkrepo "$work/p"
-python3 - "$work/p/.github/workflows/release.yml" <<'PY'
+chk_py /dev/stdin "$work/p/.github/workflows/release.yml" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace('      - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md\n',
@@ -155,7 +154,7 @@ mkrepo "$work/v2"
 printf '1.0.0-mavericks.3\n' > "$work/v2/VERSION"
 (cd "$work/v2" && git add -f VERSION) >/dev/null 2>&1
 if out="$(cd "$work/v2" && sh "$S" 2>&1)"; then echo "FAIL tracked VERSION should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'VERSION' || { echo "FAIL should name VERSION: $out"; exit 1; }
+first_is "$out" no-tracked-version || { echo "FAIL should be a no-tracked-version failure: $out"; exit 1; }
 
 mkrepo "$work/v3"
 printf '1.0.0-mavericks.3\n' > "$work/v3/VERSION"
@@ -163,7 +162,7 @@ printf '1.0.0-mavericks.3\n' > "$work/v3/VERSION"
 
 mkrepo "$work/v4"; rm "$work/v4/UPSTREAM_VERSION"
 if out="$(cd "$work/v4" && sh "$S" 2>&1)"; then echo "FAIL: no upstream input at all means nothing can derive a version, so it should say so rather than let CI discover it -- should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'UPSTREAM_VERSION' || { echo "FAIL should name UPSTREAM_VERSION: $out"; exit 1; }
+first_is "$out" upstream-version || { echo "FAIL should be an upstream-version failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- a repo whose upstream is DERIVED from its pin (ed25519: the pinned commit's date;
 #       tailscale: the upstream's own VERSION.txt) has no committed UPSTREAM_VERSION and must
@@ -182,7 +181,7 @@ mkrepo "$work/v6"
 mkdir -p "$work/v6/lines/126"; printf '1.26.5\n' > "$work/v6/lines/126/UPSTREAM_VERSION"
 (cd "$work/v6" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/v6" && sh "$S" 2>&1)"; then echo "FAIL: a reappearing tracked lines/ dir should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'lines/' || { echo "FAIL should name lines/: $out"; exit 1; }
+first_is "$out" no-lines-dir || { echo "FAIL should be a no-lines-dir failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- and a repo with no lines/ dir at all (the family's
 #       current shape, everywhere) must pass. "$work/ok" (built in tests/lib/conventions_fixture.sh) already proves this implicitly; this
@@ -228,8 +227,8 @@ mkrepo "$work/bo"
 cat >> "$work/bo/.github/workflows/release.yml" <<'YML'
       - run: shipyard-cmake -S updater -B build/updater
 YML
-if (cd "$work/bo" && sh "$S" >/dev/null 2>&1); then echo "FAIL: an unignored build output dir should fail"; exit 1; fi
-(cd "$work/bo" && sh "$S" 2>&1 | grep -q 'build/updater') || { echo "FAIL: should name the unignored path"; exit 1; }
+if out="$(cd "$work/bo" && sh "$S" 2>&1)"; then echo "FAIL: an unignored build output dir should fail"; exit 1; fi
+first_is "$out" build-dirs-ignored || { echo "FAIL: should be a build-dirs-ignored failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- ignored, it must pass -- any spelling that actually covers the path is fine.
 mkrepo "$work/bok"
@@ -260,8 +259,8 @@ YML
 mkrepo "$work/bpre"
 printf '{"version":6,"configurePresets":[{"name":"n","binaryDir":"${sourceDir}/build-native"}]}\n' \
   > "$work/bpre/CMakePresets.json"
-if (cd "$work/bpre" && git add -A >/dev/null 2>&1; sh "$S" >/dev/null 2>&1); then echo "FAIL: an unignored preset binaryDir should fail"; exit 1; fi
-(cd "$work/bpre" && sh "$S" 2>&1 | grep -q 'build-native') || { echo "FAIL: should name the preset binaryDir"; exit 1; }
+if out="$(cd "$work/bpre" && git add -A >/dev/null 2>&1; sh "$S" 2>&1)"; then echo "FAIL: an unignored preset binaryDir should fail"; exit 1; fi
+first_is "$out" build-dirs-ignored || { echo "FAIL: should be a build-dirs-ignored failure: $out"; exit 1; }
 
 # spec: check 7d, the way it actually runs -- family-conventions.yml checks shipyard out to
 #       .shipyard/ INSIDE the consumer's workspace and runs the gate from there. A sweep of "*.sh"
@@ -302,8 +301,8 @@ printf 'binary-\000-junk\n' > "$work/buntracked/._decoy.sh"
 
 # spec: scripts/check-family-conventions.sh -- but once committed, the very same file counts.
 (cd "$work/buntracked" && git add stray.sh >/dev/null 2>&1)
-if (cd "$work/buntracked" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a COMMITTED build script's dir must be required to be ignored"; exit 1; fi
-(cd "$work/buntracked" && sh "$S" 2>&1 | grep -q 'never-committed-build') || { echo "FAIL: should name the tracked script's build dir"; exit 1; }
+if out="$(cd "$work/buntracked" && sh "$S" 2>&1)"; then echo "FAIL: a COMMITTED build script's dir must be required to be ignored"; exit 1; fi
+first_is "$out" build-dirs-ignored || { echo "FAIL: should be a build-dirs-ignored failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- workflow YAML must parse with DUPLICATE KEYS REJECTED. A second `with:` on one step is
 #       valid YAML (last key wins) and ordinary parsers accept it, but GitHub refuses to run the
@@ -313,31 +312,25 @@ mkrepo "$work/y1"
 awk '{print} /^    steps:$/ && !d {print "      - uses: actions/checkout@v7"; print "        with:"; print "          fetch-depth: 0"; print "        with:"; print "          fetch-depth: 1"; d=1}' \
   "$work/ok/.github/workflows/release.yml" > "$work/y1/.github/workflows/release.yml"
 if out="$(cd "$work/y1" && sh "$S" 2>&1)"; then echo "FAIL duplicate key should fail"; exit 1; fi
-printf '%s\n' "$out" | grep -qi 'duplicate' || { echo "FAIL should say duplicate: $out"; exit 1; }
+first_is "$out" workflow-yaml || { echo "FAIL should be a workflow-yaml failure: $out"; exit 1; }
 
 mkrepo "$work/y2"
 printf 'name: x\non: [push]\njobs:\n  a:\n   steps:\n  - bad indent\n' > "$work/y2/.github/workflows/broken.yml"
 if out="$(cd "$work/y2" && sh "$S" 2>&1)"; then echo "FAIL: malformed YAML should fail too, naming the file"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'broken.yml' || { echo "FAIL should name the file: $out"; exit 1; }
+first_is "$out" workflow-yaml || { echo "FAIL should be a workflow-yaml failure: $out"; exit 1; }
 
-# spec: scripts/check-family-conventions.sh -- when PyYAML itself is missing, the gate must NAME the absent dependency rather than dump
-#       a ModuleNotFoundError traceback at a repo that is fully compliant. GitHub's macOS runner
-#       python3 ships without PyYAML, so this reported a bare "FAIL compliant repo should pass" on
-#       every CI run for a month, pointing at the repo instead of at the one `pip install` that
-#       fixes it.
+# spec: scripts/vendor/yaml -- the gate parses workflows with the PyYAML it ships, so a host python3 with
+#       no PyYAML, or a broken one earlier on PYTHONPATH, changes nothing: this fixture put a yaml
+#       module that cannot import ahead of everything and the gate still passes.
 mkrepo "$work/y3"
 noyaml="$work/noyaml"; mkdir -p "$noyaml"
 printf 'raise ImportError("No module named yaml")\n' > "$noyaml/yaml.py"
-if out="$(cd "$work/y3" && PYTHONPATH="$noyaml" sh "$S" 2>&1)"; then
-  echo "FAIL missing PyYAML should fail (cannot-verify is not a pass)"; exit 1
-fi
-printf '%s\n' "$out" | grep -qi 'PyYAML' || { echo "FAIL should name PyYAML: $out"; exit 1; }
-if printf '%s\n' "$out" | grep -qi 'Traceback'; then
-  echo "FAIL should not dump a traceback: $out"; exit 1
-fi
+(cd "$work/y3" && PYTHONPATH="$noyaml" sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL a host python3 with no usable PyYAML must not matter: $(cd "$work/y3" && PYTHONPATH="$noyaml" sh "$S" 2>&1)"; exit 1; }
 
 # spec: 2026-10-03 -- with no python3 at all, the parse check was skipped and the gate passed.
-#       A PATH holding every command but python3 stands in for a 10.9 box without pkgsrc's.
+#       A PATH holding every command but python3 stands in for a 10.9 box without python-315, and
+#       the one thing it must report is the python3 check, once.
 nopy="$work/nopy"; mkdir -p "$nopy"
 for d in $(printf '%s' "$PATH" | tr ':' ' '); do
   for f in "$d"/*; do
@@ -349,7 +342,8 @@ PATH="$nopy" sh -c 'command -v python3' >/dev/null 2>&1 && { echo "FAIL the no-p
 if out="$(cd "$work/y3" && PATH="$nopy" sh "$S" 2>&1)"; then
   echo "FAIL missing python3 should fail (cannot-verify is not a pass)"; exit 1
 fi
-printf '%s\n' "$out" | grep -q 'no python3' || { echo "FAIL should name python3: $out"; exit 1; }
+first_is "$out" python3 || { echo "FAIL should be the python3 failure: $out"; exit 1; }
+[ "$(printf '%s\n' "$out" | grep -c '^  more: shipyard-check --explain ')" -eq 1 ] || { echo "FAIL no python3 is one failure, python3, and no other: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- the 10.9-portability lint runs as part of this gate, so every consumer gets it from the
 #       @v1 they already pin. Asserted HERE and not only in shell-portability-test.sh because the
@@ -359,6 +353,7 @@ mkrepo "$work/p1"
 printf '#!/bin/sh\nd="$(mktemp -d)"\n' > "$work/p1/tool.sh"  # portability-ok: fixture must contain the violation
 (cd "$work/p1" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/p1" && sh "$S" 2>&1)"; then echo "FAIL a 10.9-unportable script should fail the gate"; exit 1; fi
+first_is "$out" shell-portability || { echo "FAIL should be a shell-portability failure: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'tool.sh:2' || { echo "FAIL should name file:line: $out"; exit 1; }
 
 # spec: SKILL.md "Renovate & automerge" -- every build ingredient must be able to auto-update. An

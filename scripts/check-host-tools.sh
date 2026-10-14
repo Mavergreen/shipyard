@@ -38,7 +38,7 @@ fail() { echo "check-host-tools: $1" >&2; echo "    fix: $2" >&2; status=1; }
 TAB="$(printf '\t')"
 nscripts=0; nagnostic=0; nmacos=0
 while IFS="$TAB" read -r meta p; do
-  case "$p" in scripts/templates/*|scripts/vendor/yaml/*) continue ;; esac
+  case "$p" in scripts/templates/*|scripts/vendor/yaml/*|tests/fixtures/checks/*) continue ;; esac
   # platform: a file deleted in the worktree but not yet from the index is still listed
   [ -f "$p" ] || continue
   # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22 -- a

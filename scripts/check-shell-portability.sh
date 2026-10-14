@@ -45,7 +45,7 @@ done < "$rulesfile"
 if [ "$#" -gt 0 ]; then
   files="$*"
 elif git rev-parse --git-dir >/dev/null 2>&1; then
-  files="$(git ls-files '*.sh' '*.bats' 2>/dev/null || true)"
+  files="$(git ls-files '*.sh' '*.bats' ':(exclude)tests/fixtures/checks/*' 2>/dev/null || true)"
 else
   echo "check-shell-portability: not a git checkout and no files named -- nothing scanned" >&2
   echo "    fix: run it in the repo, or pass the files to scan" >&2

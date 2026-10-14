@@ -25,7 +25,7 @@ printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n
 printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkassign/.github/workflows/release.yml"
 out="$(cd "$work/pkassign" && git add -A && sh "$S" 2>&1)" \
   && { echo "FAIL: an assignment of stage_product.sh's path, or an echo'd string spelling a call, must not satisfy check 23"; exit 1; }
-printf '%s\n' "$out" | grep -q 'never calls stage_product.sh' \
+first_is "$out" stage-product \
   || { echo "FAIL: check 23 must be what fails when stage_product.sh's path is only assigned or echoed: $out"; exit 1; }
 
 mkrepo "$work/pkc"; printf '#!/bin/sh\npkgbuild --root stage out.pkg\n' > "$work/pkc/build/package.sh"
@@ -34,7 +34,8 @@ printf '      # - run: sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >
 printf '\n## Conformance deviations\n\n- artifact-conformance: ships a disk image, not a Mavergreen pkg\n- product-layout: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: declared artifact-conformance and product-layout deviations should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
 mkrepo "$work/pks"; printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$work/pks/.github/workflows/release.yml"
-(cd "$work/pks" && git add -A && sh "$S" 2>&1) | grep -q 'check-artifact-conformance.sh' || { echo "FAIL: a repo that signs an appcast builds a pkg, and must run conformance"; exit 1; }
+out="$(cd "$work/pks" && git add -A && sh "$S" 2>&1 || true)"
+has_id "$out" artifact-checks-wired || { echo "FAIL: a repo that signs an appcast builds a pkg, and must run conformance: $out"; exit 1; }
 mkrepo "$work/pkt"; printf '#!/bin/sh\npkgbuild --root x t.pkg\n' > "$work/pkt/tests/fixture.sh"
 (cd "$work/pkt" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkgbuild in tests/ is a fixture, not a product: $(cd "$work/pkt" && sh "$S" 2>&1)"; exit 1; }
 
@@ -46,7 +47,7 @@ mkrepo "$work/host"; printf '#!/bin/sh\n# platform: host-agnostic\notool -L x\n'
 printf '#!/bin/sh\n# platform: host-agnostic\nprintf "https://example.com/v%%s\\n" "$1"\n' > "$work/host/build/upstream-release-notes-url.sh"
 (cd "$work/host" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/host" && sh "$S" 2>&1)" && { echo "FAIL: a host-agnostic script running otool should fail check 22"; exit 1; }
-printf '%s\n' "$out" | grep -q 'check-host-tools' || { echo "FAIL: check 22 should report through check-host-tools: $out"; exit 1; }
+first_is "$out" host-tools || { echo "FAIL: check 22 should be a host-tools failure: $out"; exit 1; }
 printf '#!/bin/sh\n# platform: host-agnostic\nexit 0\n' > "$work/host/tests/a-test.sh"
 (cd "$work/host" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a clean, declared repo should pass check 22: $(cd "$work/host" && sh "$S" 2>&1)"; exit 1; }
 
@@ -62,7 +63,7 @@ printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh 
 #       assigns products to, compared by name (a fork runs the same gate).
 out="$(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" 2>&1)" \
   && { echo "FAIL: check 24: a pkg repo the registry does not name must fail"; exit 1; }
-printf '%s\n' "$out" | grep -q 'scripts/product-names' || { echo "FAIL: check 24 should name the registry: $out"; exit 1; }
+first_is "$out" registered || { echo "FAIL should be a registered failure: $out"; exit 1; }
 (cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 24: a registered repo passes: $(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$S" 2>&1)"; exit 1; }
 (cd "$work/pk" && GITHUB_REPOSITORY=someone/golang-126 sh "$S" >/dev/null 2>&1) \
@@ -71,8 +72,7 @@ printf '%s\n' "$out" | grep -q 'scripts/product-names' || { echo "FAIL: check 24
   || { echo "FAIL: check 24: a repo that builds no pkg ships no short name, and is not asked"; exit 1; }
 out="$(cd "$work/pk" && MAVERGREEN_PRODUCT_NAMES="$work/absent-registry" GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$S" 2>&1)" \
   && { echo "FAIL: check 24: a registry that cannot be read must fail the gate"; exit 1; }
-printf '%s\n' "$out" | grep -q "cannot look up golang-126 in shipyard's registry" \
-  || { echo "FAIL: check 24 must say the registry cannot be read, not that the repo is unregistered: $out"; exit 1; }
+first_is "$out" registered || { echo "FAIL should be a registered failure: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'absent-registry' \
   || { echo "FAIL: check 24 must pass on product-name.sh's own reason: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'assigns no product' \
@@ -91,8 +91,7 @@ mkrepo "$work/rosetta"
 printf '#!/bin/sh\narch -x86_64 ./host-tool\n' > "$work/rosetta/build/cross.sh"
 (cd "$work/rosetta" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/rosetta" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call must fail"; exit 1; }
-printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'Rosetta' || { echo "FAIL: check 25 should point at the SKILL \"Rosetta\" section: $out"; exit 1; }
+first_is "$out" rosetta || { echo "FAIL should be a rosetta failure: $out"; exit 1; }
 printf '\n## Conformance deviations\n\n- rosetta:build/cross.sh: the cross build runs a host tool under Rosetta; reconsider when an arm64 host tool exists, and at the latest before macOS 28\n' >> "$work/rosetta/INGREDIENTS.md"
 (cd "$work/rosetta" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse it: $(cd "$work/rosetta" && sh "$S" 2>&1)"; exit 1; }
@@ -145,7 +144,7 @@ mkrepo "$work/rosettayml"
 printf 'jobs:\n  build:\n    steps:\n      - run: |\n          %s %s ./cross-tool\n' "$_arch" "$_x64" > "$work/rosettayml/.github/workflows/x.yml"
 (cd "$work/rosettayml" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/rosettayml" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call inside a workflow run: block must fail"; exit 1; }
-printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta for a workflow-file hit: $out"; exit 1; }
+first_is "$out" rosetta || { echo "FAIL should be a rosetta failure: $out"; exit 1; }
 printf '\n## Conformance deviations\n\n- rosetta:.github/workflows/x.yml: the release job cross-builds a host tool under Rosetta\n' >> "$work/rosettayml/INGREDIENTS.md"
 (cd "$work/rosettayml" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:.github/workflows/x.yml deviation should excuse the workflow hit: $(cd "$work/rosettayml" && sh "$S" 2>&1)"; exit 1; }
@@ -156,7 +155,7 @@ mkrepo "$work/rosettainstall"
 printf '#!/bin/sh\nsoftwareupdate --install-rosetta --agree-to-license\n' > "$work/rosettainstall/build/prep.sh"
 (cd "$work/rosettainstall" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/rosettainstall" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared softwareupdate Rosetta-install call must fail"; exit 1; }
-printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta for a softwareupdate Rosetta-install hit: $out"; exit 1; }
+first_is "$out" rosetta || { echo "FAIL should be a rosetta failure: $out"; exit 1; }
 printf '\n## Conformance deviations\n\n- rosetta:build/prep.sh: installs Rosetta so a later step can run x86_64 tools\n' >> "$work/rosettainstall/INGREDIENTS.md"
 (cd "$work/rosettainstall" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse softwareupdate --install-rosetta: $(cd "$work/rosettainstall" && sh "$S" 2>&1)"; exit 1; }
@@ -174,8 +173,7 @@ for loc in renovate.json renovate.json5 .renovaterc .renovaterc.json .renovaterc
   mkdir -p "$d/$(dirname "$loc")"; printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$d/$loc"
   (cd "$d" && git add -A) >/dev/null 2>&1
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 26: tracked $loc beside .github/renovate.json must fail"; exit 1; }
-  printf '%s\n' "$out" | grep -q "$loc is a tracked Renovate config" || { echo "FAIL: check 26 should name $loc: $out"; exit 1; }
-  printf '%s\n' "$out" | grep -q 'git mv .* .github/renovate.json' || { echo "FAIL: check 26 should say to git mv to .github/renovate.json: $out"; exit 1; }
+  first_is "$out" renovate-path || { echo "FAIL: check 26 should be a renovate-path failure for $loc: $out"; exit 1; }
 done
 
 # spec: SKILL.md "Family conventions" check 26 -- the OTHER way round: the alternate path alone (no
@@ -183,7 +181,7 @@ done
 mkrepo "$work/rp-only"
 git -C "$work/rp-only" mv .github/renovate.json renovate.json
 out="$(cd "$work/rp-only" && sh "$S" 2>&1)" && { echo "FAIL: check 26: a root renovate.json alone must fail"; exit 1; }
-printf '%s\n' "$out" | grep -q 'renovate.json is a tracked Renovate config' || { echo "FAIL: check 26 should name the root renovate.json: $out"; exit 1; }
+first_is "$out" renovate-path || { echo "FAIL should be a renovate-path failure: $out"; exit 1; }
 
 mkrepo "$work/rp-untracked"; printf '{}\n' > "$work/rp-untracked/renovate.json"
 (cd "$work/rp-untracked" && sh "$S" >/dev/null 2>&1) \
@@ -210,15 +208,15 @@ done
 
 mkrepo "$work/sp1"; printf '/VERSION\n.idea/\n' > "$work/sp1/.gitignore"
 out="$(cd "$work/sp1" && sh "$S" 2>&1)" && { echo "FAIL: check 27: no .superpowers/ ignore line must fail"; exit 1; }
-printf '%s\n' "$out" | grep -q "add a line '.superpowers/' to .gitignore" || { echo "FAIL: check 27 should say to add .superpowers/: $out"; exit 1; }
+first_is "$out" superpowers-ignored || { echo "FAIL should be a superpowers-ignored failure: $out"; exit 1; }
 
 mkrepo "$work/sp-dot"; printf '/VERSION\nxsuperpowers/\nxidea/\n' > "$work/sp-dot/.gitignore"
 out="$(cd "$work/sp-dot" && sh "$S" 2>&1)" && { echo "FAIL: check 27: xsuperpowers/ and xidea/ must not count as ignoring the dotted dirs"; exit 1; }
-printf '%s\n' "$out" | grep -q "add a line '.superpowers/'" && printf '%s\n' "$out" | grep -q "add a line '.idea/'" || { echo "FAIL: check 27 should fail both for the undotted lines: $out"; exit 1; }
+[ "$(printf '%s\n' "$out" | grep -c '^superpowers-ignored: ')" -eq 2 ] || { echo "FAIL: check 27 should fail both for the undotted lines: $out"; exit 1; }
 
 mkrepo "$work/sp2"; printf '/VERSION\n.superpowers/\n' > "$work/sp2/.gitignore"
 out="$(cd "$work/sp2" && sh "$S" 2>&1)" && { echo "FAIL: check 27: no .idea/ ignore line must fail"; exit 1; }
-printf '%s\n' "$out" | grep -q "add a line '.idea/' to .gitignore" || { echo "FAIL: check 27 should say to add .idea/: $out"; exit 1; }
+first_is "$out" superpowers-ignored || { echo "FAIL should be a superpowers-ignored failure: $out"; exit 1; }
 
 for dir in .superpowers docs/superpowers .idea; do
   tracked="$dir/sub/f.txt"
@@ -226,7 +224,7 @@ for dir in .superpowers docs/superpowers .idea; do
   mkdir -p "$d/$dir/sub"; printf 'x\n' > "$d/$tracked"
   (cd "$d" && git add -f "$tracked") >/dev/null 2>&1
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a file tracked under $dir must fail"; exit 1; }
-  printf '%s\n' "$out" | grep -q "git rm -r --cached $dir " || { echo "FAIL: check 27 should say git rm -r --cached $dir: $out"; exit 1; }
+  first_is "$out" superpowers-ignored || { echo "FAIL: check 27 should be a superpowers-ignored failure for $dir: $out"; exit 1; }
 done
 
 mkrepo "$work/sp-untracked"; mkdir -p "$work/sp-untracked/.idea"; printf 'x\n' > "$work/sp-untracked/.idea/misc.xml"
@@ -234,6 +232,6 @@ mkrepo "$work/sp-untracked"; mkdir -p "$work/sp-untracked/.idea"; printf 'x\n' >
 
 mkrepo "$work/sp-nogit"; rm -rf "$work/sp-nogit/.git"
 out="$(cd "$work/sp-nogit" && sh "$S" 2>&1)" && { echo "FAIL: check 27: outside a git checkout must fail (cannot verify)"; exit 1; }
-printf '%s\n' "$out" | grep -q 'cannot check .superpowers/' || { echo "FAIL: check 27 should say it cannot verify: $out"; exit 1; }
+first_is "$out" tracked-files || { echo "FAIL should be a tracked-files failure: $out"; exit 1; }
 
 echo "PASS: check-family-conventions-4"

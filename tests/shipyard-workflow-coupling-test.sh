@@ -3,8 +3,10 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 wf="$here/../.github/workflows"
+SHIPYARD_CHECK_DIR="$here/../scripts"
+. "$SHIPYARD_CHECK_DIR/lib/py.sh"
 
-python3 - "$wf" <<'PY'
+chk_py /dev/stdin "$wf" <<'PY'
 import sys, os, yaml
 wf = sys.argv[1]
 bad = []
@@ -58,7 +60,7 @@ if bad:
 print("ok: full-depth checkouts, and one suite-runner on main")
 PY
 
-python3 - "$wf" <<'PY'
+chk_py /dev/stdin "$wf" <<'PY'
 import os, re, sys, yaml
 wf = sys.argv[1]
 bad = []
@@ -164,7 +166,7 @@ if bad:
 print("ok: ci.yml rehearses the packaging path release.yml only ever runs while publishing, and both "
       "hand install@v1 the CMake tree rather than letting it nest a local action")
 PY
-python3 - "$wf" <<'PY'
+chk_py /dev/stdin "$wf" <<'PY'
 import fnmatch, os, sys, yaml
 wf = sys.argv[1]
 branch = "flag-day"

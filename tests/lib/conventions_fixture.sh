@@ -5,6 +5,15 @@
 #       baseline $work/ok plus the helpers that more than one place needs.
 unset GITHUB_REPOSITORY
 S="$here/../scripts/check-family-conventions.sh"
+SHIPYARD_CHECK_DIR="$here/../scripts"
+. "$SHIPYARD_CHECK_DIR/lib/py.sh"
+first_is() {
+  case "$(printf '%s\n' "$1" | awk 'prev != "" && /^  fix: / { print prev; exit } { prev = $0 }')" in "$2: "*) return 0 ;; esac
+  return 1
+}
+has_id() {
+  printf '%s\n' "$1" | grep -q "^$2: "
+}
 work="$(mktemp -d "${TMPDIR:-/tmp}/family-conventions.XXXXXX")"; trap 'rm -rf "$work"' EXIT  # template: 10.9 BSD mktemp requires one
 
 # spec: scripts/check-family-conventions.sh -- the baseline is a repo that satisfies EVERY
@@ -63,7 +72,7 @@ signs() {  # $1 = dir, $2 = the lines of one run: | block
 }
 sa_refused() {  # $1 = dir, $2 = what the case is
   out="$(cd "$1" && sh "$S" 2>&1)" && { echo "FAIL: check 12: $2 must fail"; exit 1; }
-  printf '%s\n' "$out" | grep -q 'sign_and_appcast.sh must pass --product' \
+  first_is "$out" sign-call-shape \
     || { echo "FAIL: check 12: $2 must be refused for its shape: $out"; exit 1; }
 }
 

@@ -42,7 +42,7 @@ else
   # platform: a bare "( ... )" subshell's exit status does not survive a pipe under set -e,
   #           and & and \ are metacharacters in a sed replacement -- either one can turn a
   #           failed or mangled listing into an empty one, exit 0.
-  if ! git -C "$ROOT" ls-files '*.sh' '*.yml' > "$rawfile"; then
+  if ! git -C "$ROOT" ls-files '*.sh' '*.yml' ':(exclude)tests/fixtures/checks/*' > "$rawfile"; then
     echo "check-comments: git ls-files failed in $ROOT -- refusing to report clean having examined nothing" >&2
     exit 2
   fi

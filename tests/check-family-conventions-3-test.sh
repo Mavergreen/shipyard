@@ -24,10 +24,7 @@ printf '# Build ingredients\n\n## Conformance deviations\n\n- comments:vendor/* 
   > "$work/cm5/INGREDIENTS.md"
 (cd "$work/cm5" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/cm5" && sh "$S" 2>&1)"; then echo "FAIL: a scoped comments deviation was honoured -- the glob was swallowed as part of the reason and comment checking went off REPO-WIDE, which is exactly the drift nobody would ever notice: $out"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'repo-wide' \
-  || { echo "FAIL: the rejection must say check 15's deviation is repo-wide, or the author just retries the same glob: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q -- '- comments: <reason>' \
-  || { echo "FAIL: the rejection must name what to write instead: $out"; exit 1; }
+first_is "$out" comments || { echo "FAIL should be a comments failure: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'DECLARED DEVIATION' \
   && { echo "FAIL: a scoped deviation must not also be announced as accepted: $out"; exit 1; }
 
@@ -39,16 +36,15 @@ printf '# Build ingredients\n\n## Conformance deviations\n\n- comments :vendor/*
   > "$work/cm6/INGREDIENTS.md"
 (cd "$work/cm6" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/cm6" && sh "$S" 2>&1)"; then echo "FAIL: a scoped comments deviation with a space before the colon was honoured -- the parser that accepts the deviation line tolerates that space, and the rejection must too: $out"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'repo-wide' \
-  || { echo "FAIL: the rejection must say check 15's deviation is repo-wide, or the author just retries the same glob: $out"; exit 1; }
+first_is "$out" comments || { echo "FAIL should be a comments failure: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'DECLARED DEVIATION' \
   && { echo "FAIL: a scoped deviation must not also be announced as accepted: $out"; exit 1; }
 # spec: SKILL.md "Family conventions" check 16 -- nothing tracked reads the CMake user package
 #       registry, because nothing writes it any more.
 mkrepo "$work/r16"; printf '#!/bin/sh\ncat "$HOME/.cmake/packages/MavericksShipyard/"*\n' > "$work/r16/build/x.sh"
 (cd "$work/r16" && git add -A) >/dev/null 2>&1
-if (cd "$work/r16" && sh "$S" >/dev/null 2>&1); then echo "FAIL 16: a registry read should fail"; exit 1; fi
-(cd "$work/r16" && sh "$S" 2>&1 | grep -q 'user package registry') || { echo "FAIL 16: should name the registry"; exit 1; }
+if out="$(cd "$work/r16" && sh "$S" 2>&1)"; then echo "FAIL 16: a registry read should fail"; exit 1; fi
+first_is "$out" registry-read || { echo "FAIL should be a registry-read failure: $out"; exit 1; }
 printf '\n## Conformance deviations\n- registry-read:build/x.sh: a shim that leaves with the flag day\n' >> "$work/r16/INGREDIENTS.md"
 (cd "$work/r16" && sh "$S" >/dev/null) || { echo "FAIL 16: a declared registry-read deviation should pass"; exit 1; }
 
@@ -68,9 +64,8 @@ mkrepo "$work/m17"; cp "$here/../scripts/templates/msc.sh" "$work/m17/build/msc.
 (cd "$work/m17" && git add -A) >/dev/null 2>&1
 (cd "$work/m17" && sh "$S" >/dev/null) || { echo "FAIL 17: the canonical msc.sh should pass"; exit 1; }
 echo '# a local tweak' >> "$work/m17/build/msc.sh"
-if (cd "$work/m17" && sh "$S" >/dev/null 2>&1); then echo "FAIL 17: a drifted msc.sh should fail"; exit 1; fi
-(cd "$work/m17" && sh "$S" 2>&1 | grep -q 'canonical msc.sh') || { echo "FAIL 17: should name the canonical msc.sh"; exit 1; }
-(cd "$work/m17" && sh "$S" 2>&1 | grep -q 'a local tweak') || { echo "FAIL 17: should show the first difference"; exit 1; }
+if out="$(cd "$work/m17" && sh "$S" 2>&1)"; then echo "FAIL 17: a drifted msc.sh should fail"; exit 1; fi
+first_is "$out" msc-template || { echo "FAIL should be a msc-template failure: $out"; exit 1; }
 printf '\n## Conformance deviations\n- msc-template:build/msc.sh: exercising the deviation path\n' >> "$work/m17/INGREDIENTS.md"
 (cd "$work/m17" && sh "$S" >/dev/null) || { echo "FAIL 17: a declared msc-template deviation should pass"; exit 1; }
 
@@ -89,11 +84,11 @@ if (cd "$work/m17u" && sh "$S" >/dev/null 2>&1); then echo "FAIL 17: ...but once
 mkrepo "$work/m17t"; cp "$here/../scripts/templates/msc.sh" "$work/m17t/build/msc.sh"
 (cd "$work/m17t" && git add -A) >/dev/null 2>&1
 fake="$work/fakeshipyard"; mkdir -p "$fake"
-for g in "$here"/../scripts/*.sh; do cp "$g" "$fake/"; done
+for g in "$here"/../scripts/*.sh "$here"/../scripts/check-ids.tsv; do cp "$g" "$fake/"; done
+cp -R "$here/../scripts/lib" "$here/../scripts/vendor" "$fake/"
 mkdir -p "$fake/templates"   # ...but no msc.sh in it
 out="$(cd "$work/m17t" && sh "$fake/check-family-conventions.sh" 2>&1 || true)"
-printf '%s\n' "$out" | grep -q 'canonical msc.sh at' \
-  || { echo "FAIL 17: a missing template must name the template, not the repo: $out"; exit 1; }
+first_is "$out" msc-template || { echo "FAIL should be a msc-template failure: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'is not shipyard' \
   && { echo "FAIL 17: a missing template must NOT be reported as the repo's msc.sh being wrong"; exit 1; }
 
@@ -101,8 +96,8 @@ printf '%s\n' "$out" | grep -q 'is not shipyard' \
 #       shipyard-cmake/ctest/cpack, in workflows and in committed build scripts.
 mkrepo "$work/p18"; printf '      - run: cmake -S . -B "$RUNNER_TEMP/b"\n' >> "$work/p18/.github/workflows/release.yml"
 (cd "$work/p18" && git add -A) >/dev/null 2>&1
-if (cd "$work/p18" && sh "$S" >/dev/null 2>&1); then echo "FAIL 18: plain cmake in a workflow should fail"; exit 1; fi
-(cd "$work/p18" && sh "$S" 2>&1 | grep -q 'shipyard-cmake') || { echo "FAIL 18: should say shipyard-cmake"; exit 1; }
+if out="$(cd "$work/p18" && sh "$S" 2>&1)"; then echo "FAIL 18: plain cmake in a workflow should fail"; exit 1; fi
+first_is "$out" shipyard-cmake-only || { echo "FAIL should be a shipyard-cmake-only failure: $out"; exit 1; }
 mkrepo "$work/p18b"; printf '#!/bin/sh\ncd x && ctest --test-dir b\n' > "$work/p18b/build/t.sh"
 (cd "$work/p18b" && git add -A) >/dev/null 2>&1
 if (cd "$work/p18b" && sh "$S" >/dev/null 2>&1); then echo "FAIL 18: plain ctest in a build script should fail"; exit 1; fi
@@ -135,7 +130,7 @@ test -x /usr/local/bin/shipyard-ctest || echo "no ctest here"
 SH
 (cd "$work/p18ok2" && git add -A) >/dev/null 2>&1
 (cd "$work/p18ok2" && sh "$S" >/dev/null) || {
-  echo "FAIL 18: non-invocation shapes should pass:"; (cd "$work/p18ok2" && sh "$S" 2>&1 | grep 'plain cmake'); exit 1; }
+  echo "FAIL 18: non-invocation shapes should pass:"; (cd "$work/p18ok2" && sh "$S" 2>&1 | grep '^shipyard-cmake-only'); exit 1; }
 
 # spec: SKILL.md "Check 18" -- the tightening must not go so far that a real call hides behind a
 #       paren: a command substitution IS a call, and a subshell announces itself with the `&&` after
@@ -157,9 +152,8 @@ done
 mkrepo "$work/p18tab"
 printf '#!/bin/sh\nif true; then\n\tcmake -S . -B b\nfi\n' > "$work/p18tab/build/x.sh"
 (cd "$work/p18tab" && git add -A) >/dev/null 2>&1
-if (cd "$work/p18tab" && sh "$S" >/dev/null 2>&1); then echo "FAIL 18: a tab-indented call should fail"; exit 1; fi
-(cd "$work/p18tab" && sh "$S" 2>&1 | grep -q 'build/x.sh runs plain cmake') \
-  || { echo "FAIL 18: a tab-indented call should be named as build/x.sh"; exit 1; }
+if out="$(cd "$work/p18tab" && sh "$S" 2>&1)"; then echo "FAIL 18: a tab-indented call should fail"; exit 1; fi
+has_id "$out" shipyard-cmake-only || { echo "FAIL 18: a tab-indented call should be a shipyard-cmake-only failure: $out"; exit 1; }
 mkrepo "$work/p18tabc"
 printf '#!/bin/sh\n\t# cmake -S . -B b\nexit 0\n' > "$work/p18tabc/build/x.sh"
 (cd "$work/p18tabc" && git add -A) >/dev/null 2>&1
@@ -175,7 +169,8 @@ printf '#!/bin/sh\n\t# cmake -S . -B b\nexit 0\n' > "$work/p18tabc/build/x.sh"
 lim18() {
   if (cd "$1" && sh "$S" >/dev/null 2>&1); then
     echo "FAIL 18: $2 is (knowingly) still flagged -- assert it"; exit 1; fi
-  (cd "$1" && sh "$S" 2>&1 | grep -q 'runs plain cmake/ctest/cpack') \
+  out="$(cd "$1" && sh "$S" 2>&1 || true)"
+  has_id "$out" shipyard-cmake-only \
     || { echo "FAIL 18: $2 failed, but not on check 18 -- the assertion is not testing what it says"; exit 1; }
 }
 
@@ -233,7 +228,7 @@ SH
 (cd "$work/p18fn" && sh "$S" >/dev/null) || {
   echo "FAIL 18: the documented false negatives must stay documented -- if one now FAILS, the comment"
   echo "         above check 18 (and the SKILL.md row) is out of date:"
-  (cd "$work/p18fn" && sh "$S" 2>&1 | grep 'plain cmake'); exit 1; }
+  (cd "$work/p18fn" && sh "$S" 2>&1 | grep '^shipyard-cmake-only'); exit 1; }
 
 # platform: a step's `run:` is not necessarily a STRING -- YAML reads an unquoted `run: true` as a
 #           bool, and `(st.get("run") or "").splitlines()` then dies on it, taking the whole gate
@@ -280,10 +275,8 @@ mkrepo "$work/p18awk"
 (cd "$work/p18awk" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/p18awk" && PATH="$work/badawk:$PATH" sh "$S" 2>&1)"; then
   echo "FAIL 18: an awk that fails must fail the gate, not pass as 'no hits'"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'check 18 could not scan shell lines (awk failed)' \
+has_id "$out" shipyard-cmake-only \
   || { echo "FAIL 18: a failing awk must be named as check 18's: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'command -v awk' \
-  || { echo "FAIL 18: a failing awk must come with a fix line naming command -v awk: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh check 19 -- the baseline (tests/lib/conventions_fixture.sh) now CALLS the
 #       assertion, so this case is built by stripping the two calls out again. That direction
@@ -293,10 +286,9 @@ mkrepo "$work/noassert"
 grep -v 'assert-tree-clean' "$work/ok/.github/workflows/release.yml" \
   > "$work/noassert/.github/workflows/release.yml"
 (cd "$work/noassert" && git add -A) >/dev/null 2>&1
-if (cd "$work/noassert" && sh "$S" >/dev/null 2>&1); then
+if out="$(cd "$work/noassert" && sh "$S" 2>&1)"; then
   echo "FAIL: a repo whose CI builds but never asserts the tree should fail"; exit 1; fi
-(cd "$work/noassert" && sh "$S" 2>&1 | grep -q 'assert-tree-clean') \
-  || { echo "FAIL: check 19 should name assert-tree-clean.sh"; exit 1; }
+first_is "$out" tree-clean-wired || { echo "FAIL: check 19 should be a tree-clean-wired failure: $out"; exit 1; }
 
 # spec: check 19 greps with comment lines stripped (ci_mentions), so a commented-out call is
 #       not a call. Without this case the check would accept a repo that had disabled the
@@ -316,10 +308,9 @@ mkrepo "$work/recordonly"
 grep -v 'assert-tree-clean\.sh"$' "$work/ok/.github/workflows/release.yml" \
   > "$work/recordonly/.github/workflows/release.yml"
 (cd "$work/recordonly" && git add -A) >/dev/null 2>&1
-if (cd "$work/recordonly" && sh "$S" >/dev/null 2>&1); then
+if out="$(cd "$work/recordonly" && sh "$S" 2>&1)"; then
   echo "FAIL: a repo that calls only --record should not satisfy check 19"; exit 1; fi
-(cd "$work/recordonly" && sh "$S" 2>&1 | grep -q 'assert-tree-clean') \
-  || { echo "FAIL: the --record-only case should name assert-tree-clean.sh"; exit 1; }
+first_is "$out" tree-clean-wired || { echo "FAIL: the --record-only case should be a tree-clean-wired failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh check 19 -- the other half. With no recording the bare
 #       call falls back to "every untracked or ignored path counts", which is a different and
@@ -368,10 +359,9 @@ sed 's|sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"|sh scripts/assert-tree-clean.
 mkrepo "$work/nouser"
 printf '{ "version": 6 }\n' > "$work/nouser/CMakePresets.json"
 (cd "$work/nouser" && git add -A) >/dev/null 2>&1
-if (cd "$work/nouser" && sh "$S" >/dev/null 2>&1); then
+if out="$(cd "$work/nouser" && sh "$S" 2>&1)"; then
   echo "FAIL: a preset repo not ignoring CMakeUserPresets.json should fail"; exit 1; fi
-(cd "$work/nouser" && sh "$S" 2>&1 | grep -q 'CMakeUserPresets') \
-  || { echo "FAIL: check 20 should name CMakeUserPresets.json"; exit 1; }
+first_is "$out" user-presets-ignored || { echo "FAIL: check 20 should be a user-presets-ignored failure: $out"; exit 1; }
 
 mkrepo "$work/withuser"
 printf '{ "version": 6 }\n' > "$work/withuser/CMakePresets.json"
@@ -393,7 +383,7 @@ printf '{ "version": 6 }\n' > "$work/untrackedpresets/CMakePresets.json"
 mkrepo "$work/pk"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pk/build/package.sh"
 (cd "$work/pk" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/pk" && sh "$S" 2>&1)" && { echo "FAIL: a repo that runs pkgbuild without artifact conformance should fail"; exit 1; }
-printf '%s\n' "$out" | grep -q 'check-artifact-conformance.sh' || { echo "FAIL should name check-artifact-conformance.sh: $out"; exit 1; }
+first_is "$out" artifact-checks-wired || { echo "FAIL should be a artifact-checks-wired failure: $out"; exit 1; }
 printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pk/.github/workflows/release.yml"
 (cd "$work/pk" && git add -A) >/dev/null 2>&1
 
@@ -401,8 +391,8 @@ printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh 
 #       manifest from stage_product.sh, or the layout conformance enforces has no one generating it.
 #       Running conformance satisfies check 21 but not check 23, which needs the call itself.
 out="$(cd "$work/pk" && sh "$S" 2>&1)" && { echo "FAIL: a pkg repo that never calls stage_product.sh should fail check 23"; exit 1; }
-printf '%s\n' "$out" | grep -q 'check-artifact-conformance.sh' && { echo "FAIL: a pkg repo that runs artifact conformance should no longer fail check 21: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 23 should name stage_product.sh: $out"; exit 1; }
+has_id "$out" artifact-checks-wired && { echo "FAIL: a pkg repo that runs artifact conformance should no longer fail check 21: $out"; exit 1; }
+first_is "$out" stage-product || { echo "FAIL: check 23 should be a stage-product failure: $out"; exit 1; }
 printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
 (cd "$work/pk" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkg repo that calls stage_product.sh should pass: $(cd "$work/pk" && sh "$S" 2>&1)"; exit 1; }
 
@@ -419,7 +409,7 @@ printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg  
 printf '      - name: stage_product.sh already ran earlier\n        run: echo done\n' >> "$work/pkm/.github/workflows/release.yml"
 printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkm/.github/workflows/release.yml"
 out="$(cd "$work/pkm" && git add -A && sh "$S" 2>&1)" && { echo "FAIL: a step name, an echo'd mention, or a trailing comment naming stage_product.sh must not satisfy check 23: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'stage_product.sh' || { echo "FAIL: check 23 should still name stage_product.sh when only mentioned: $out"; exit 1; }
+first_is "$out" stage-product || { echo "FAIL should be a stage-product failure: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh check 23 -- a call inside a YAML "run: |" block scalar
 #       is still a call: its continuation lines are their own physical lines, indented but
