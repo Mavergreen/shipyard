@@ -119,6 +119,21 @@ runs:
         echo "SHIPYARD_SCRIPTS=$scripts" >> "$GITHUB_ENV"
         echo "shipyard $ver installed; SHIPYARD_SCRIPTS=$scripts"
 
+    # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md, the `bash32-parse` row --
+    #       bash 3.2 is the /bin/sh of 10.9 and macOS, and this macOS step is one every pkg-building
+    #       product already runs, so no repo wires the check by hand.
+    - if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -eu
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        if ! git -C "$GITHUB_WORKSPACE" rev-parse --git-dir >/dev/null 2>&1; then
+          echo "::notice::bash32-parse: not run -- $GITHUB_WORKSPACE is not a git checkout yet; check the repo out before this action and it runs here"
+          exit 0
+        fi
+        cd "$GITHUB_WORKSPACE"
+        sh "$root/scripts/shipyard-check" --only bash32-parse
+
     # spec: R-P1-18 -- there is no Linux pkg, and the jobs that land here do not want one: they run
     #       shipyard's SHELL half on ubuntu-latest, where the point is that the job is cheap. Refusing
     #       them would have broken every consumer of repackage-on-ingredient-bump.yml on the day this

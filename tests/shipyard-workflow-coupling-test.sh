@@ -245,6 +245,16 @@ body = open(install).read()
 if body.count("shipyard-check") < 2:
     bad.append("install@v1 no longer exports shipyard-check on Linux and in source-build mode")
 
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md, the `bash32-parse` row -- the
+#       reusable macOS path every pkg-building product runs carries the check, so no repo wires it.
+act = yaml.safe_load(open(install))
+mac32 = [st for st in (act.get("runs") or {}).get("steps") or []
+         if "runner.os == 'macOS'" in str(st.get("if", "")) and re.search(r'shipyard-check"?\s+--only\s+bash32-parse', str(st.get("run", "")))]
+if not mac32:
+    bad.append("install@v1 has no macOS step running shipyard-check --only bash32-parse")
+elif any("inputs.source" in str(st.get("if", "")) for st in mac32):
+    bad.append("install@v1 runs bash32-parse for one source only; every macOS job needs it")
+
 def jobs_calling(name, script):
     d = yaml.safe_load(open(os.path.join(wf, name)))
     return [j for j, spec in (d.get("jobs") or {}).items()

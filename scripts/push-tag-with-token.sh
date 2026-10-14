@@ -11,7 +11,8 @@ set -eu
 url="https://x-access-token@github.com/$GITHUB_REPOSITORY"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/push-tag.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT
 printf '#!/bin/sh\necho "$GH_TOKEN"\n' > "$tmp/askpass"; chmod +x "$tmp/askpass"
-push() { GIT_ASKPASS="$tmp/askpass" GIT_TERMINAL_PROMPT=0 git push "$@"; }
+authed() { GIT_ASKPASS="$tmp/askpass" GIT_TERMINAL_PROMPT=0 git "$@"; }
+push() { authed push "$@"; }
 
 if [ "${1:-}" = "--delete" ]; then
   [ $# -eq 2 ] || { echo "usage: push-tag-with-token.sh --delete <tag>" >&2; exit 2; }
@@ -29,7 +30,17 @@ sha=HEAD; msg="$tag"
 #           whichever job finished LAST won -- on 2026-09-16 that moved v1 BACKWARDS onto an
 #           older commit and served every consumer a stale action for 40 minutes. Moving the
 #           tag only forward is monotonic whatever order the jobs finish in.
-git fetch --force origin "refs/tags/$tag:refs/tags/$tag" 2>/dev/null || true
+rc=0; remote="$(authed ls-remote "$url" "refs/tags/$tag")" || rc=$?
+if [ "$rc" -ne 0 ]; then
+  echo "push-tag-with-token: cannot read $tag from $GITHUB_REPOSITORY (git ls-remote exit $rc), so it cannot tell whether moving it would go backwards; nothing was pushed" >&2
+  exit 1
+fi
+if [ -n "$remote" ]; then
+  authed fetch --force "$url" "refs/tags/$tag:refs/tags/$tag" \
+    || { echo "push-tag-with-token: $GITHUB_REPOSITORY has $tag, but fetching it failed; nothing was pushed" >&2; exit 1; }
+else
+  git tag -d "$tag" >/dev/null 2>&1 || :
+fi
 if git rev-parse -q --verify "$tag^{commit}" >/dev/null 2>&1 \
    && git merge-base --is-ancestor "$sha" "$tag^{commit}"; then
   echo "$tag is already at or ahead of $(git rev-parse --short "$sha"); leaving it alone"

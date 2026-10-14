@@ -72,18 +72,17 @@ run "$w/dev" "$w/fake32" "$w/fakebash32" || fail "a host that can measure still 
 grep -q 'skipped by deviation' "$w/out" && fail "a host that can measure is not excused"
 
 mkdir -p "$w/none"; : > "$w/none/FILES"
-if run "$w/none" "$w/fake32" "$w/fakebash32"; then fail "no shell script found is not a pass"; fi
-grep -q 'nothing was checked' "$w/out" || fail "an empty list says so: $(cat "$w/out")"
+run "$w/none" "$w/fake32" "$w/fakebash32" || fail "a repo with no shell script is not a failure: $(cat "$w/out")"
+grep -q '^bash32-parse: not run: this repo tracks no shell script' "$w/out" || fail "no shell script is not a pass, and says so: $(cat "$w/out")"
+grep -q 'bash32-parse: ok' "$w/out" && fail "no shell script is never reported ok"
+if (cd "$w/none" && SHIPYARD_BASH32_SH="$w/fake32" SHIPYARD_BASH32_BASH="$w/fakebash32" SHIPYARD_CHECK_FILES="$w/none/no-such-list" sh "$S") > "$w/out" 2>&1; then
+  fail "an unreadable tracked-file list is not a pass"
+fi
+grep -q "^bash32-parse: the tracked-file list couldn't be read" "$w/out" || fail "an unreadable list fails bash32-parse itself: $(cat "$w/out")"
 
 mkdir -p "$w/exc/build"; cp "$fx/fail/build/bad.sh" "$w/exc/build/"; printf 'build/bad.sh\n' > "$w/exc/FILES"
 printf '# x\n\n## Conformance deviations\n\n- bash32-parse:build/bad.sh: it is a polyglot. Revisit when it is split.\n' > "$w/exc/INGREDIENTS.md"
 run "$w/exc" "$w/fake32" "$w/fakebash32" || fail "a path deviation excuses a script: $(cat "$w/out")"
 grep -q '1 excused by deviation' "$w/out" || fail "the excused count is printed: $(cat "$w/out")"
 
-python3 - "$here/.github/workflows/ci.yml" <<'PY' || fail "ci.yml's macOS test job runs shipyard-check --only bash32-parse"
-import sys, yaml
-job = yaml.safe_load(open(sys.argv[1]))["jobs"]["test"]
-assert "macos" in job["runs-on"], job["runs-on"]
-assert any(isinstance(s.get("run"), str) and "shipyard-check --only bash32-parse" in s["run"] for s in job["steps"])
-PY
 echo "PASS check-bash32-parse"

@@ -46,7 +46,13 @@ for _s in "$sh_" "$bash_"; do
 done
 chk_ran bash32-parse
 
-chk_tracked_files | grep -v '^tests/fixtures/checks/' | chk_shell_scripts > "$w/scripts" || :
+if ! chk_tracked_files > "$w/tracked" 2> "$w/err"; then
+  chk_fail bash32-parse "the tracked-file list couldn't be read, so nothing was checked" \
+    "an empty list would read as every script parsing" \
+    "run it from the root of a git checkout, or set SHIPYARD_CHECK_FILES"
+  exit 1
+fi
+grep -v '^tests/fixtures/checks/' "$w/tracked" | chk_shell_scripts > "$w/scripts" || :
 n=0; excused=0
 while IFS= read -r f; do
   if [ -n "$(mav_deviation_reason "$w/devfacts" bash32-parse "$f")" ]; then excused=$((excused + 1)); continue; fi
@@ -59,9 +65,8 @@ while IFS= read -r f; do
     "rewrite the construct the parser names; a ' inside \${VAR:?word} in double quotes is the usual one"
 done < "$w/scripts"
 if [ "$((n + excused))" -eq 0 ]; then
-  chk_fail bash32-parse "no tracked shell script was found, so nothing was checked" \
-    "an empty list would read as every script parsing" \
-    "run it from the root of a git checkout, or set SHIPYARD_CHECK_FILES"
+  chk_notrun bash32-parse "this repo tracks no shell script"
+  exit 0
 fi
 [ "$chk_status" -eq 0 ] && echo "bash32-parse: ok -- $n tracked shell scripts parse under bash $ver ($excused excused by deviation)"
 exit "$chk_status"

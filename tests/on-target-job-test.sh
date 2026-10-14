@@ -18,7 +18,9 @@ printf '%s\n' "$job" | grep -q 'uses: Mavergreen/mavericks-vm@v1' || fail "on-ta
 printf '%s\n' "$job" | grep -q 'sh tests/check-fixtures-run.sh' || fail "on-target runs the fixture runner"
 printf '%s\n' "$job" | grep -q 'continue-on-error' && fail "on-target must not pass silently by continue-on-error"
 
-grep -q 'sh tests/check-fixtures-run.sh' "$ci" || fail "ci.yml's macOS job runs the fixture runner"
+test="$(awk '/^  test:/ { on = 1; print; next } on && /^  [a-z]/ { exit } on' "$ci")"
+printf '%s\n' "$test" | grep -q 'run: sh scripts/run-repo-tests.sh' || fail "ci.yml's macOS job runs the suite, whose tests/*.sh glob holds the fixture runner"
+printf '%s\n' "$test" | grep -q 'tests/check-fixtures-run.sh' && fail "ci.yml's macOS job runs the fixture runner once, through run-repo-tests.sh, not again as its own step"
 grep -q 'sh tests/check-fixtures-run.sh --strict' "$here/.github/workflows/linux-host.yml" || fail "linux-host.yml runs the fixture runner strictly"
 grep -q 'sh tests/check-fixtures-run.sh --no-git' "$here/.github/workflows/linux-host.yml" || fail "linux-host.yml runs the fixture runner with git hidden"
 echo "PASS on-target-job"

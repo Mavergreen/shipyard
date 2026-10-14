@@ -6,8 +6,9 @@ newer bashes accept. Shell portability's pattern lint cannot see it. The check r
 tracked shell script (a .sh file, or a shebang naming sh), and /bin/bash -n on those whose shebang names bash,
 after a canary that proves the shell refuses an apostrophe inside ${VAR:?word} in double quotes. A host whose
 /bin/sh is not bash 3.2, or where the canary passes, cannot measure, and the check fails "can't measure
-here" instead of passing silently. Run it with shipyard-check --only bash32-parse in the macOS jobs; on-target
-runs it on 10.9. SHIPYARD_BASH32_SH and SHIPYARD_BASH32_BASH name other bash 3.2 shells.
+here" instead of passing silently. The install action runs shipyard-check --only bash32-parse in every macOS
+job that installs shipyard, once the repo is checked out, so a repo wires nothing; on-target runs it on 10.9.
+A repo that tracks no shell script reports it not run. SHIPYARD_BASH32_SH and SHIPYARD_BASH32_BASH name other bash 3.2 shells.
 
 ## Incident
 2026-10-14 (filed from snow-leopard-vm): longboat's first release run failed on macOS, run 38569568867.
