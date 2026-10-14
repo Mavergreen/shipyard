@@ -1,0 +1,91 @@
+#!/bin/sh
+# platform: host-agnostic
+set -eu
+SHIPYARD_CHECK_DIR="$(cd "$(dirname "$0")" && pwd)"
+export SHIPYARD_CHECK_DIR SHIPYARD_CHECK_REGISTRY
+. "$SHIPYARD_CHECK_DIR/check-lib.sh"
+root="${SHIPYARD_CHECK_ROOT:-$(cd "$SHIPYARD_CHECK_DIR/.." && pwd)}"
+reg="$SHIPYARD_CHECK_REGISTRY"
+
+usage() {
+  echo "usage: shipyard-check [--dist <dir>] [--repo-state] [--only <id>...] [--explain <id>] [--list]" >&2
+  exit 2
+}
+
+dist=""; repo_state=0; only=""; explain=""; list=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dist) [ $# -ge 2 ] || usage; dist="$2"; shift 2 ;;
+    --repo-state) repo_state=1; shift ;;
+    --explain) [ $# -ge 2 ] || usage; explain="$2"; shift 2 ;;
+    --list) list=1; shift ;;
+    --only)
+      shift
+      [ $# -gt 0 ] || usage
+      while [ $# -gt 0 ]; do
+        case "$1" in -*) break ;; esac
+        only="$only $1"; shift
+      done ;;
+    *) usage ;;
+  esac
+done
+
+if [ -n "$explain" ]; then
+  chk_registered "$explain" || { echo "shipyard-check: '$explain' is not a registered check id" >&2; exit 2; }
+  cat "$root/explain/$explain.md"
+  exit 0
+fi
+if [ "$list" -eq 1 ]; then
+  cat "$reg"
+  exit 0
+fi
+
+for id in $only; do
+  chk_registered "$id" || { echo "shipyard-check: '$id' is not a registered check id" >&2; exit 2; }
+done
+
+tab="$(printf '\t')"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-check.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+id=; mode=; script=
+while IFS="$tab" read -r id mode script _old _fate; do
+  if [ -n "$only" ]; then
+    case " $only " in *" $id "*) echo "$id $script" ;; esac
+    continue
+  fi
+  case "$mode" in
+    checkout) echo "$id $script" ;;
+    dist) [ -z "$dist" ] || echo "$id $script" ;;
+    repo-state) [ "$repo_state" -eq 0 ] || echo "$id $script" ;;
+  esac
+done < "$reg" > "$tmp/selected"
+selected="$(cat "$tmp/selected")"
+if [ -z "$selected" ]; then
+  echo "shipyard-check: no checks selected" >&2
+  exit 2
+fi
+
+SHIPYARD_CHECK_RUNLOG="$tmp/ran"; SHIPYARD_CHECK_FAILLOG="$tmp/failed"
+: > "$SHIPYARD_CHECK_RUNLOG"; : > "$SHIPYARD_CHECK_FAILLOG"
+export SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG
+[ -z "$dist" ] || SHIPYARD_CHECK_DIST="$dist"; export SHIPYARD_CHECK_DIST
+
+scripts="$(printf '%s\n' "$selected" | cut -d' ' -f2 | awk '!seen[$0]++')"
+for script in $scripts; do
+  [ "$script" != scripts/shipyard-check ] || continue
+  ids="$(printf '%s\n' "$selected" | awk -v s="$script" '$2 == s { print $1 }')"
+  before="$(wc -l < "$SHIPYARD_CHECK_FAILLOG")"
+  rc=0
+  (cd "$root" && sh "$script" < /dev/null) || rc=$?
+  for id in $ids; do chk_ran "$id"; done
+  after="$(wc -l < "$SHIPYARD_CHECK_FAILLOG")"
+  if [ "$rc" -ne 0 ] && [ "$before" -eq "$after" ]; then
+    echo "$ids" | head -1 >> "$SHIPYARD_CHECK_FAILLOG"
+  fi
+done
+
+n="$(sort -u "$SHIPYARD_CHECK_RUNLOG" | wc -l | tr -d ' ')"
+m="$(sort -u "$SHIPYARD_CHECK_FAILLOG" | wc -l | tr -d ' ')"
+echo "shipyard-check: $n checks, $m failed"
+[ "$n" -gt 0 ] || exit 2
+[ "$m" -eq 0 ]

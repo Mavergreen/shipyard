@@ -1,0 +1,79 @@
+release-concurrency	checkout	scripts/check-family-conventions.sh	gate 1	P1
+concurrency-group	checkout	scripts/check-family-conventions.sh	gate 1b	P1
+tests-run-in-ci	checkout	scripts/check-family-conventions.sh	gate 2	P1
+ingredients-md	checkout	scripts/check-family-conventions.sh	gate 3	P2
+renovate-no-restated-defaults	checkout	scripts/check-family-conventions.sh	gate 4	P1
+automerge-described	checkout	scripts/check-family-conventions.sh	gate 4b	P1
+no-tracked-version	checkout	scripts/check-family-conventions.sh	gate 7 (VERSION)	P1
+upstream-version	checkout	scripts/check-family-conventions.sh	gate 7 (UPSTREAM_VERSION)	P2
+tracked-files	checkout	scripts/check-family-conventions.sh	gate 7, 27	P1
+no-lines-dir	checkout	scripts/check-family-conventions.sh	gate 7b	P1
+version-sh-tracked	checkout	scripts/check-family-conventions.sh	gate 7c	P1
+build-dirs-ignored	checkout	scripts/check-family-conventions.sh	gate 7d	P1
+workflow-yaml	checkout	scripts/check-family-conventions.sh	gate 8	P1
+ingredient-tracked	checkout	scripts/check-family-conventions.sh	gate 9	P2
+shell-portability	checkout	scripts/check-shell-portability.sh	gate 10	P1
+upstream-notes	checkout	scripts/check-family-conventions.sh	gate 11	P2
+signing-scans-for-key	checkout	scripts/check-family-conventions.sh	gate 12a	P1
+sign-call-shape	checkout	scripts/check-family-conventions.sh	gate 12b	P1
+renovate-suffix-versioning	checkout	scripts/check-family-conventions.sh	gate 13	P1
+release-notes-generated	checkout	scripts/check-family-conventions.sh	gate 14	P1
+comments	checkout	scripts/check-comments.sh	gate 15	P1
+registry-read	checkout	scripts/check-family-conventions.sh	gate 16	P1
+renovate-path	checkout	scripts/check-family-conventions.sh	gate 26	P1
+msc-template	checkout	scripts/check-family-conventions.sh	gate 17	P2
+shipyard-cmake-only	checkout	scripts/check-family-conventions.sh	gate 18	P1
+tree-clean-wired	checkout	scripts/check-family-conventions.sh	gate 19	P1
+artifact-checks-wired	checkout	scripts/check-family-conventions.sh	gate 21	P1
+user-presets-ignored	checkout	scripts/check-family-conventions.sh	gate 20	P1
+host-tools	checkout	scripts/check-host-tools.sh	gate 22	P1
+stage-product	checkout	scripts/check-family-conventions.sh	gate 23	P1
+registered	checkout	scripts/check-family-conventions.sh	gate 24	P8
+rosetta	checkout	scripts/check-family-conventions.sh	gate 25	P1
+superpowers-ignored	checkout	scripts/check-family-conventions.sh	gate 27	P1
+deviation-complete	checkout	scripts/deviations.sh	deviations.sh refusal	P1
+artifact-facts	dist	scripts/check-artifact-conformance.sh	conformance abort	P1
+version-scheme	dist	scripts/check-artifact-conformance.sh	conformance scheme	P1
+version	dist	scripts/check-artifact-conformance.sh	conformance version	P1
+floor	dist	scripts/check-artifact-conformance.sh	conformance floor	P1
+identifier	dist	scripts/check-artifact-conformance.sh	conformance identifier	P1
+bundle-id	dist	scripts/check-artifact-conformance.sh	conformance bundle-id	P1
+launchd-label	dist	scripts/check-artifact-conformance.sh	conformance launchd-label	P1
+manifest	dist	scripts/check-artifact-conformance.sh	conformance manifest	P1
+feed	dist	scripts/check-artifact-conformance.sh	conformance feed	P1
+line	dist	scripts/check-artifact-conformance.sh	conformance line	P1
+install-path	dist	scripts/check-artifact-conformance.sh	conformance install-path	P1
+enclosure	dist	scripts/check-artifact-conformance.sh	conformance enclosure	P1
+length	dist	scripts/check-artifact-conformance.sh	conformance length	P1
+enclosure-url	dist	scripts/check-artifact-conformance.sh	conformance enclosure-url	P1
+notes	dist	scripts/check-artifact-conformance.sh	conformance notes	P1
+sdk-pin	dist	scripts/check-artifact-conformance.sh	conformance sdk-pin	P1
+base	dist	scripts/check-artifact-conformance.sh	conformance base	P1
+updater	dist	scripts/check-artifact-conformance.sh	conformance updater	P6
+repository	dist	scripts/check-artifact-conformance.sh	conformance repository	P8
+variant-build-info	dist	scripts/check-artifact-conformance.sh	conformance ingredients	P1
+tree-clean	checkout	scripts/assert-tree-clean.sh	assert-tree-clean.sh	P1
+compat-imports	dist	scripts/assert_binary_compatible.sh	compat guard imports	P1
+compat-selectors	dist	scripts/assert_binary_compatible.sh	compat guard selectors	P1
+compat-archs	dist	scripts/assert_binary_compatible.sh	compat guard arch set	P1
+compat-required-defined	dist	scripts/assert_binary_compatible.sh	compat guard required-defined	P1
+notes-shape	publish	scripts/check-release-notes.sh	check-release-notes.sh	P1
+readme-reviewed	publish	scripts/check-readme-reviewed.sh	check-readme-reviewed.sh	P1
+ingredient-pins	checkout	scripts/check-ingredient-pins.sh	check-ingredient-pins.sh	P2
+repo-auto-merge	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh	P1
+repo-required-context	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh	P1
+preset-icon	only	scripts/check-preset-icons.sh	check-preset-icons.sh	P1
+feed-upgradeable	publish	scripts/assert_appcast_upgradeable.sh	assert_appcast_upgradeable.sh	P1
+pkg-in-place	dist	scripts/assert_pkg_installs_in_place.sh	assert_pkg_installs_in_place.sh	P1
+gui-relaunch-safe	dist	scripts/assert_gui_relaunch_safe.sh	assert_gui_relaunch_safe.sh	P1
+sparkle-pristine	build	scripts/assert_sparkle_pristine.sh	assert_sparkle_pristine.sh	P6
+tag-publishable	publish	scripts/assert_tag_publishable.sh	assert_tag_publishable.sh	P1
+update-trusted	publish	scripts/assert_update_trusted.sh	assert_update_trusted.sh	P1
+deviation-known-check	checkout	scripts/deviations.sh	new (K5)	P1
+deviation-scope-matches	checkout	scripts/deviations.sh	new (K5)	P1
+python3	checkout	scripts/shipyard-check	new	P1
+pr-trigger	checkout	scripts/check-family-conventions.sh	new (K6)	P1
+publish-order	checkout	scripts/check-family-conventions.sh	new (K6)	P1
+renovate-extends-preset	checkout	scripts/check-family-conventions.sh	new (K6)	P1
+no-hardcoded-version	checkout	scripts/check-family-conventions.sh	new (K6)	P1
+installed-shipyard	only	scripts/assert-installed-shipyard.sh	assert-installed-shipyard.sh	P1
