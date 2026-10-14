@@ -13,7 +13,7 @@ printf '#!/bin/sh\ncase "$1" in list) exit 1 ;; install) echo "$2" > "%s/install
 chmod +x "$w/bin/brew"
 
 : > "$w/env"
-env PATH="$w/bin" SHIPYARD_MACHO_DIRS="" GITHUB_ENV="$w/env" /bin/sh "$S" > "$w/out" 2>&1 || { echo "FAIL it should install and name the readers: $(cat "$w/out")"; exit 1; }
+env -u OTOOL -u LIPO -u NM -u STRINGS PATH="$w/bin" SHIPYARD_MACHO_DIRS="" GITHUB_ENV="$w/env" /bin/sh "$S" > "$w/out" 2>&1 || { echo "FAIL it should install and name the readers: $(cat "$w/out")"; exit 1; }
 [ "$(cat "$w/installed")" = llvm ] || { echo "FAIL it should brew install llvm"; exit 1; }
 for t in OTOOL:otool LIPO:lipo NM:nm STRINGS:strings; do
   grep -qx "${t%%:*}=$w/llvm/bin/llvm-${t#*:}" "$w/env" || { echo "FAIL \$GITHUB_ENV should name ${t%%:*}: $(cat "$w/env")"; exit 1; }
@@ -26,7 +26,7 @@ rc=0; env PATH="$w/bin" OTOOL="$w/llvm/bin/llvm-otool" LIPO="$w/llvm/bin/llvm-li
 [ "$rc" -eq 0 ] && [ ! -e "$w/installed" ] || { echo "FAIL readers already named must not be reinstalled: $(cat "$w/out")"; exit 1; }
 
 rm "$w/bin/brew"
-rc=0; env PATH="$w/bin" SHIPYARD_MACHO_DIRS="" /bin/sh "$S" > "$w/out" 2>&1 || rc=$?
+rc=0; env -u OTOOL -u LIPO -u NM -u STRINGS PATH="$w/bin" SHIPYARD_MACHO_DIRS="" /bin/sh "$S" > "$w/out" 2>&1 || rc=$?
 [ "$rc" -eq 1 ] || { echo "FAIL with no readers and no brew it should exit 1, got $rc"; exit 1; }
 grep -q 'OTOOL, LIPO, NM and STRINGS' "$w/out" || { echo "FAIL it should name the variables to set: $(cat "$w/out")"; exit 1; }
 

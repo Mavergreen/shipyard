@@ -37,9 +37,6 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 
 @test "a static archive: members report OBJECT" {
   run sh "$S" "$WORK/libm.a"
-  echo "# status=$status output=$output" >&3
-  echo "# lipo: $("$LIPO" -info "$WORK/libm.a" 2>&1)" >&3
-  echo "# otool: $("$OTOOL" -hv "$WORK/libm.a" 2>&1 | head -8)" >&3
   [ "$status" -eq 0 ]
   [[ "$output" == "x86_64 OBJECT 10.9 "* ]] || false
 }
@@ -102,4 +99,21 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
   printf 'hello\n' > "$WORK/t"
   run sh "$S" "$WORK/t"
   [ "$status" -eq 1 ]
+}
+
+@test "a LIPO that crashes is a reader that died (exit 4), not a file that is not Mach-O" {
+  printf '#!/bin/sh\necho "lipo: crashed" >&2\nexit 139\n' > "$WORK/lipo-crash"
+  chmod +x "$WORK/lipo-crash"
+  run env LIPO="$WORK/lipo-crash" sh "$S" "$WORK/clean"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"lipo-crash -info (exit 139)"* ]] || false
+  [[ "$output" == *"lipo: crashed"* ]] || false
+}
+
+@test "a static archive is read without lipo, which crashes on one in LLVM 18" {
+  printf '#!/bin/sh\necho "lipo: must not be asked" >&2\nexit 139\n' > "$WORK/lipo-crash"
+  chmod +x "$WORK/lipo-crash"
+  run env LIPO="$WORK/lipo-crash" sh "$S" "$WORK/libm.a"
+  [ "$status" -eq 0 ]
+  [[ "$output" == "x86_64 OBJECT 10.9 "* ]] || false
 }

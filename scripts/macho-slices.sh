@@ -29,9 +29,21 @@ command -v "$LIPO" >/dev/null 2>&1 || reader_died "$LIPO (not found)"
 command -v "$OTOOL" >/dev/null 2>&1 || reader_died "$OTOOL (not found)"
 # platform: llvm-lipo -info prints, as Apple's lipo does, either "Architectures in the fat file: F are: a b"
 #           or "Non-fat file: F is architecture: a" -- with a trailing space, which xargs drops.
-info="$("$LIPO" -info "$f" 2>/dev/null)" || exit 1
-archs="$(printf '%s\n' "$info" | sed -n 's/.*: //p' | xargs)"
-[ -n "$archs" ] || exit 1
+# platform: llvm-lipo 18 (Ubuntu's) segfaults on -info of a static archive, in IRObjectFile::getTargetTriple;
+#           an archive's arch is read from its members' own headers instead, which is what lipo -info
+#           reports for one anyway. Any other lipo exit above 1 is a reader that died, not a file that
+#           is not Mach-O.
+if [ "$(head -c 7 "$f")" = '!<arch>' ]; then
+  info=archive
+  archs="$("$OTOOL" -hv "$f" 2>"$t/err" | awk '$1 ~ /^MH_MAGIC/ { print tolower($2) }' | sort -u | xargs)" || exit 1
+  [ -n "$archs" ] || exit 1
+  case "$archs" in *" "*) echo "macho-slices: $f mixes the arches $archs, so its members' versions cannot be told apart" >&2; exit 4 ;; esac
+else
+  lrc=0; info="$("$LIPO" -info "$f" 2>"$t/err")" || lrc=$?
+  [ "$lrc" -eq 0 ] || { [ "$lrc" -eq 1 ] || reader_died "$LIPO -info (exit $lrc)"; exit 1; }
+  archs="$(printf '%s\n' "$info" | sed -n 's/.*: //p' | xargs)"
+  [ -n "$archs" ] || exit 1
+fi
 for a in $archs; do
   s="$f"
   case "$info" in Architectures*) "$LIPO" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>"$t/err" || reader_died "$LIPO -thin $a"; s="$t/$a" ;; esac
