@@ -245,6 +245,30 @@ body = open(install).read()
 if body.count("shipyard-check") < 2:
     bad.append("install@v1 no longer exports shipyard-check on Linux and in source-build mode")
 
+def jobs_calling(name, script):
+    d = yaml.safe_load(open(os.path.join(wf, name)))
+    return [j for j, spec in (d.get("jobs") or {}).items()
+            if any(script in runs(st) for st in (spec.get("steps") or []))]
+
+script = "scripts/push-tag-with-token.sh"
+if not jobs_calling("release.yml", script):
+    bad.append("release.yml's major-tag job no longer moves the tag through %s" % script)
+if not jobs_calling("ci.yml", script):
+    bad.append("ci.yml has no job rehearsing %s, so the major-tag push would first run on main" % script)
+ci = yaml.safe_load(open(os.path.join(wf, "ci.yml")))
+for j in jobs_calling("ci.yml", script):
+    spec = ci["jobs"][j]
+    if "flag-day" not in str(spec.get("if", "")):
+        bad.append("ci.yml job %s pushes a tag but is not limited to flag-day" % j)
+    if (spec.get("permissions") or {}).get("contents") != "write":
+        bad.append("ci.yml job %s needs job-level permissions: contents: write" % j)
+    for st in spec.get("steps") or []:
+        if "actions/checkout" in str(st.get("uses", "")) and str((st.get("with") or {}).get("persist-credentials")).lower() != "false":
+            bad.append("ci.yml job %s checks out with credentials, so it would not rehearse the askpass push" % j)
+    dels = [st for st in spec.get("steps") or [] if "--delete" in runs(st)]
+    if not dels or any(st.get("if") != "always()" for st in dels):
+        bad.append("ci.yml job %s must delete its rehearsal tag under if: always()" % j)
+
 if bad:
     for b in bad:
         print("FAIL:", b)

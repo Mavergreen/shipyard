@@ -214,3 +214,36 @@ jobs:
 
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
+
+  # spec: scripts/push-tag-with-token.sh -- release.yml's major-tag job runs only on a push to main, so
+  #       its first real execution would be the flag-day push; this runs the same script against a
+  #       throwaway tag, with a checkout that keeps no credentials, on flag-day pushes only.
+  tag-push-rehearsal:
+    if: github.ref == 'refs/heads/flag-day'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REHEARSAL_TAG: rehearsal-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Push a throwaway tag and see it on the remote
+        run: |
+          set -eu
+          sh scripts/push-tag-with-token.sh "$REHEARSAL_TAG" HEAD -m "rehearsal"
+          want="$(git rev-parse HEAD)"
+          got="$(git ls-remote --tags origin "refs/tags/$REHEARSAL_TAG^{}" | cut -f1)"
+          [ "$got" = "$want" ] || { echo "::error::$REHEARSAL_TAG is at '$got' on the remote, not $want"; exit 1; }
+          echo "rehearsal tag $REHEARSAL_TAG exists at $want"
+      - name: Delete it
+        if: always()
+        run: |
+          set -eu
+          sh scripts/push-tag-with-token.sh --delete "$REHEARSAL_TAG"
+          [ -z "$(git ls-remote --tags origin "refs/tags/$REHEARSAL_TAG")" ] \
+            || { echo "::error::$REHEARSAL_TAG is still on the remote"; exit 1; }
+          echo "rehearsal tag $REHEARSAL_TAG is gone"

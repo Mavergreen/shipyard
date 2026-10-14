@@ -63,4 +63,8 @@ rc=0; PATH="$t/nogh:$PATH" sh "$sc" --repo-state >"$t/out" 2>"$t/err" || rc=$?
 rc=0; env -u SHIPYARD_CHECK_VERSION sh "$sc" --dist "$t" >"$t/out" 2>"$t/err" || rc=$?
 [ "$rc" = 2 ] || fail "--dist without SHIPYARD_CHECK_VERSION exits 2, got $rc"
 grep -q 'SHIPYARD_CHECK_VERSION' "$t/err" || fail "the --dist usage error names SHIPYARD_CHECK_VERSION: $(cat "$t/err")"
+mkdir "$t/inv"; printf 'chk_here\tcheckout\tscripts/pwd.sh\t1\tP1\n' > "$t/reg-pwd"
+printf 'pwd > "%s/pwd.out"\n' "$t" > "$t/scripts/pwd.sh"
+(cd "$t/inv" && SHIPYARD_CHECK_REGISTRY="$t/reg-pwd" SHIPYARD_CHECK_ROOT="$t" sh "$sc" >/dev/null) || fail "the pwd stub check passes"
+[ "$(cat "$t/pwd.out")" = "$(cd "$t/inv" && pwd)" ] || fail "checks run in the directory shipyard-check was invoked from, got: $(cat "$t/pwd.out")"
 echo "PASS shipyard-check"

@@ -27,6 +27,14 @@ YML
 sh "$S" >/dev/null || { echo "FAIL: the reusable workflow itself (shipyard's own repackage-on-ingredient-bump.yml) is a definition, not a caller, and has no ingredients"; exit 1; }
 
 cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
+on: [workflow_call, push]
+jobs:
+  repackage:
+    runs-on: ubuntu-latest
+YML
+if sh "$S" >/dev/null 2>&1; then echo "FAIL: a workflow that is also triggered by push is a caller, and a caller watching nothing must still be checked"; exit 1; fi
+
+cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
 on:
   push:
     paths: ['components/**']

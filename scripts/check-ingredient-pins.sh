@@ -15,7 +15,8 @@ if [ ! -f "$caller" ]; then
   exit 0
 fi
 
-if grep -Eq '^[[:space:]]+workflow_call:' "$caller"; then
+if grep -Eq '^[[:space:]]+workflow_call:' "$caller" \
+   && ! grep -Eq '^[[:space:]]+(push|pull_request|workflow_dispatch|schedule|release):|^(on|"on"):.*(push|pull_request|workflow_dispatch|schedule|release)' "$caller"; then
   echo "check-ingredient-pins: $caller is a reusable workflow, not a caller — nothing to check"
   exit 0
 fi
