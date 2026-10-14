@@ -9,6 +9,9 @@
 #          stderr. Exit 0 clean, 1 if any violation was found, 2 on a usage
 #          error.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
+chk_ran comments
 ROOT="$(pwd)"
 REASONS="$ROOT/comment-reasons"
 # spec: SKILL.md "Comments cite a reason" -- opt-in via comment-reasons keeps
@@ -17,11 +20,34 @@ REASONS="$ROOT/comment-reasons"
 [ -f "$REASONS" ] || exit 0
 alt="$(tr '\n' '|' < "$REASONS" | sed 's/|$//')"
 
+# spec: scripts/check-family-conventions.sh check 15 -- a swept repo that still wants ONE declared
+#       exception states it under INGREDIENTS.md "## Conformance deviations" as
+#       "- comments: <reason>", which switches the check off REPO-WIDE; the "<check>:<glob>" scoping
+#       that check-artifact-conformance.sh honours is rejected here, not swallowed into the reason.
+if [ "$#" -eq 0 ] && [ -f INGREDIENTS.md ]; then
+  devscope="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
+    | sed -n 's/^- *comments *:\([^ :][^ :]*\).*$/\1/p' | head -1)"
+  deviation="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
+    | sed -n 's/^- *comments *: *\(..*\)$/\1/p' | head -1)"
+  if [ -n "$devscope" ]; then
+    chk_fail comments "INGREDIENTS.md scopes the comments deviation to \"$devscope\"" \
+      "check 15's deviation is repo-wide and a glob is not honoured here" \
+      "write \"- comments: <reason>\" (a space after the colon) and accept that it switches comment checking off for the whole repo, or drop the deviation and tag the comments"
+    exit 1
+  fi
+  if [ -n "$deviation" ]; then
+    echo "check-comments: DECLARED DEVIATION -- $deviation"
+    exit 0
+  fi
+fi
+
 _tmp="${TMPDIR:-/tmp}"
 countfile="$(mktemp "${_tmp%/}/check-comments-count.XXXXXX")"
 listfile="$(mktemp "${_tmp%/}/check-comments-list.XXXXXX")"
 rawfile="$(mktemp "${_tmp%/}/check-comments-raw.XXXXXX")"
-trap 'rm -f "$countfile" "$listfile" "$rawfile"' EXIT
+selfile="$(mktemp "${_tmp%/}/check-comments-sel.XXXXXX")"
+hitfile="$(mktemp "${_tmp%/}/check-comments-hits.XXXXXX")"
+trap 'rm -f "$countfile" "$listfile" "$rawfile" "$selfile" "$hitfile"' EXIT
 
 if [ "$#" -gt 0 ]; then
   # spec: SKILL.md "Comments cite a reason" -- a path NAMED on the command
@@ -39,17 +65,14 @@ if [ "$#" -gt 0 ]; then
     printf '%s\n' "$f" >> "$listfile"
   done
 else
-  # platform: a bare "( ... )" subshell's exit status does not survive a pipe under set -e,
-  #           and & and \ are metacharacters in a sed replacement -- either one can turn a
-  #           failed or mangled listing into an empty one, exit 0.
-  if ! git -C "$ROOT" ls-files '*.sh' '*.yml' ':(exclude)tests/fixtures/checks/*' > "$rawfile"; then
-    echo "check-comments: git ls-files failed in $ROOT -- refusing to report clean having examined nothing" >&2
+  if ! chk_tracked_files > "$rawfile"; then
     exit 2
   fi
   : > "$listfile"
+  grep -E '\.(sh|yml)$' "$rawfile" | grep -v '^tests/fixtures/checks/' > "$selfile" || :
   while IFS= read -r rel; do
     printf '%s/%s\n' "${ROOT%/}" "$rel" >> "$listfile"
-  done < "$rawfile"
+  done < "$selfile"
 fi
 
 rc=0
@@ -180,11 +203,17 @@ while IFS= read -r f; do
         exit 1
       }
     }
-  ' "$f" || rc=1
+  ' "$f" >> "$hitfile" || rc=1
 done < "$listfile"
 
 n=0
 [ -s "$countfile" ] && n="$(awk '{s += $1} END { print s + 0 }' "$countfile")"
+if [ "$rc" -ne 0 ]; then
+  chk_fail comments "a comment cites no reason" \
+    "every comment says why it is there, and the lines below are the ones that do not" \
+    "cite one: # platform: <a fact about the platform or a tool>, or # spec: <a locatable pointer>"
+  cat "$hitfile" >&2
+fi
 [ "$n" -gt 0 ] && echo "$n comments cite no reason" >&2
 
 exit "$rc"

@@ -80,6 +80,7 @@ live_release() {  # KEY
   run --separate-stderr trusted "$T/new.pkg" "signed-by:$KOLD"
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"--pubkey"* ]] || false
+  printf "%s\n" "$stderr" | grep -q "^update-trusted: "
   run --separate-stderr trusted "$T/new.pkg" "signed-by:$KOLD" --pubkey "$KOLD"
   [ "$status" -eq 0 ]
   run --separate-stderr trusted "$T/new.pkg" "signed-by:$KOTHER" --pubkey "$KOLD"

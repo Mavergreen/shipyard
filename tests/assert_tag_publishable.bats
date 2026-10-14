@@ -35,6 +35,7 @@ guard() { sh "$ROOT/scripts/assert_tag_publishable.sh" "$@"; }
   [ "$status" -eq 1 ]
   [[ "$output$stderr" == *"already exists"* ]] || false
   [[ "$output$stderr" == *"e-dispatch"* ]] || false
+  [ "${stderr%%:*}" = tag-publishable ]
 }
 
 @test "the tag that TRIGGERED this run publishes: it points at the commit being published" {

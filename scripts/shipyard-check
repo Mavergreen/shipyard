@@ -4,6 +4,7 @@ set -eu
 SHIPYARD_CHECK_DIR="$(cd "$(dirname "$0")" && pwd)"
 export SHIPYARD_CHECK_DIR SHIPYARD_CHECK_REGISTRY
 . "$SHIPYARD_CHECK_DIR/check-lib.sh"
+. "$SHIPYARD_CHECK_DIR/lib/gh-admin.sh"
 root="${SHIPYARD_CHECK_ROOT:-$(cd "$SHIPYARD_CHECK_DIR/.." && pwd)}"
 reg="$SHIPYARD_CHECK_REGISTRY"
 
@@ -38,6 +39,10 @@ fi
 if [ "$list" -eq 1 ]; then
   cat "$reg"
   exit 0
+fi
+
+if [ "$repo_state" -eq 1 ] && [ -z "$only" ]; then
+  chk_gh_admin Mavergreen || exit 2
 fi
 
 for id in $only; do

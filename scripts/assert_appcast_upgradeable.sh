@@ -30,6 +30,10 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # numeric(), ver_cmp()
+. "$SELF/check-lib.sh"
+chk_ran feed-upgradeable
+rule="the appcast is seen as an upgrade by a client on the previous release"
+fix="give the release a <sparkle:version> that is dotted-numeric and greater than the previous release's (a -mavericks.N repackage bumps N)"
 
 APPCAST=""; VER=""; GLOB=""; TAG_GLOB=""
 while [ $# -gt 0 ]; do
@@ -44,19 +48,19 @@ done
 [ -n "$APPCAST" ] && [ -n "$VER" ] || { echo "assert_appcast_upgradeable: need --appcast --version" >&2; exit 2; }
 [ -z "$GLOB" ] || [ -z "$TAG_GLOB" ] \
   || { echo "assert_appcast_upgradeable: --upstream-glob or --tag-glob, not both" >&2; exit 2; }
-[ -f "$APPCAST" ] || { echo "assert_appcast_upgradeable: no appcast: $APPCAST" >&2; exit 1; }
+[ -f "$APPCAST" ] || { chk_fail feed-upgradeable "$rule" "there is no appcast at $APPCAST" "generate the appcast before this check"; exit 1; }
 
 NEW="$(sed -n 's|.*<sparkle:version>\([^<]*\)</sparkle:version>.*|\1|p' "$APPCAST" | head -1)"
-[ -n "$NEW" ] || { echo "assert_appcast_upgradeable: no <sparkle:version> in $APPCAST" >&2; exit 1; }
+[ -n "$NEW" ] || { chk_fail feed-upgradeable "$rule" "$APPCAST has no <sparkle:version>" "$fix"; exit 1; }
 if ! numeric "$NEW"; then
-  echo "assert_appcast_upgradeable: <sparkle:version> '$NEW' is not purely dotted-numeric -- outside SUStandardVersionComparator's orderable domain" >&2
+  chk_fail feed-upgradeable "$rule" "<sparkle:version> '$NEW' is not purely dotted-numeric -- outside SUStandardVersionComparator's orderable domain" "$fix"
   exit 1
 fi
 
 pattern="*-mavericks.*"; [ -z "$GLOB" ] || pattern="${GLOB}-mavericks.*"
 [ -z "$TAG_GLOB" ] || pattern="$TAG_GLOB"
 if ! tags="$(git tag --list "$pattern" 2>/dev/null)"; then
-  echo "assert_appcast_upgradeable: cannot list git tags (not a checkout?) -- run where the release tags live; refusing to skip silently" >&2
+  chk_fail feed-upgradeable "$rule" "cannot list git tags (not a checkout?), and refusing to skip silently" "run where the release tags live: the release job's checkout"
   exit 1
 fi
 
@@ -79,6 +83,6 @@ fi
 
 case "$(ver_cmp "$NEW" "$PREV")" in
   1) echo "assert_appcast_upgradeable: ok — sparkle:version $NEW > previous $PREV (tag $PREV_TAG); a client on the previous release will see an update" ;;
-  *) echo "assert_appcast_upgradeable: sparkle:version $NEW does NOT order after previous $PREV (from tag $PREV_TAG) -- a client on $PREV_TAG would NOT see this as an upgrade" >&2
+  *) chk_fail feed-upgradeable "$rule" "sparkle:version $NEW does NOT order after previous $PREV (from tag $PREV_TAG), so a client on $PREV_TAG would NOT see this as an upgrade" "$fix"
      exit 1 ;;
 esac

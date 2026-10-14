@@ -29,6 +29,8 @@ passes() {  # $1 = fixture, $2 = why
 }
 fails() {  # $1 = fixture, $2 = why
   if (cd "$work/$1" && sh "$S" >/dev/null 2>&1); then echo "FAIL: $2 -- should fail"; exit 1; fi
+  [ "$(cd "$work/$1" && sh "$S" 2>&1 >/dev/null | sed -n 1p | cut -d: -f1)" = host-tools ] \
+    || { echo "FAIL: $2 -- the failure should open with its id, host-tools"; exit 1; }
 }
 
 mk ok; passes ok "an adopted repo whose one script is clean"

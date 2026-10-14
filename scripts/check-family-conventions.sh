@@ -276,12 +276,13 @@ if [ -f INGREDIENTS.md ]; then
 fi
 
 # spec: scripts/check-family-conventions.sh -- the delegating checks (10, 15, 22) run a sibling
-#       script and report its failure under their own id, with the sibling's output indented
-#       after it; a pass shows what the sibling printed, except where $6 is "quiet". The
-#       sibling's own rule stays in ONE place, so the family's rule and shipyard's own scanner
-#       cannot drift.
+#       script that reports its own failure under its own id; a pass shows what the sibling
+#       printed, except where $6 is "quiet". Under shipyard-check (SHIPYARD_CHECK_RUNLOG set) they
+#       do not run here at all: the dispatcher runs each sibling once, by its own registry row.
+#       Run directly, the gate still delegates, so a consumer that calls it sees all three.
 delegate() {  # $1 = id, $2 = the sibling script, $3 = rule, $4 = why, $5 = fix, $6 = quiet or empty
   _dg_id="$1"; _dg_script="$2"; _dg_quiet="${6:-}"
+  [ -z "${SHIPYARD_CHECK_RUNLOG:-}" ] || return 0
   chk_ran "$_dg_id"
   if [ ! -f "$SELF/$_dg_script" ]; then
     chk_fail "$_dg_id" "cannot find $_dg_script next to this gate" \
@@ -289,11 +290,16 @@ delegate() {  # $1 = id, $2 = the sibling script, $3 = rule, $4 = why, $5 = fix,
       "check out the whole repo (family-conventions.yml does), not just this one script"
     return 0
   fi
-  if _dg_out="$(sh "$SELF/$_dg_script" 2>&1)"; then
+  if _dg_out="$(sh "$SELF/$_dg_script" 2>"$tmp/dg.err")"; then
     [ -n "$_dg_quiet" ] || [ -z "$_dg_out" ] || printf '%s\n' "$_dg_out"
+    [ ! -s "$tmp/dg.err" ] || cat "$tmp/dg.err" >&2
+  elif [ "$(sed -n 1p "$tmp/dg.err" | cut -d: -f1)" = "$_dg_id" ]; then
+    cat "$tmp/dg.err" >&2
+    chk_status=1
   else
     chk_fail "$_dg_id" "$3" "$4" "$5"
     [ -z "$_dg_out" ] || printf '%s\n' "$_dg_out" | sed 's/^/  /' >&2
+    sed 's/^/  /' "$tmp/dg.err" >&2
   fi
 }
 
@@ -483,27 +489,10 @@ fi
 #       "- comments: <reason>", and that switches the check off REPO-WIDE. The "<check>:<glob>"
 #       scoping that check-artifact-conformance.sh honours is NOT honoured here and is rejected
 #       rather than swallowed as part of the reason.
-deviation=""; devscope=""
-if [ -f INGREDIENTS.md ]; then
-  devscope="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
-    | sed -n 's/^- *comments *:\([^ :][^ :]*\).*$/\1/p' | head -1)"
-  deviation="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
-    | sed -n 's/^- *comments *: *\(..*\)$/\1/p' | head -1)"
-fi
-if [ -f "$SELF/check-comments.sh" ] && [ -n "$devscope" ]; then
-  chk_ran comments
-  chk_fail comments "INGREDIENTS.md scopes the comments deviation to \"$devscope\"" \
-    "check 15's deviation is repo-wide and a glob is not honoured here" \
-    "write \"- comments: <reason>\" (a space after the colon) and accept that it switches comment checking off for the whole repo, or drop the deviation and tag the comments"
-elif [ -f "$SELF/check-comments.sh" ] && [ -n "$deviation" ]; then
-  chk_ran comments
-  echo "check-family-conventions: comments: DECLARED DEVIATION -- $deviation"
-else
-  delegate comments check-comments.sh \
-    "a comment cites no reason" \
-    "every comment says why it is there, and the lines below are the ones that do not" \
-    "cite one: # platform: <a fact about the platform or a tool>, or # spec: <a locatable pointer>"
-fi
+delegate comments check-comments.sh \
+  "a comment cites no reason" \
+  "every comment says why it is there, and the lines below are the ones that do not" \
+  "cite one: # platform: <a fact about the platform or a tool>, or # spec: <a locatable pointer>"
 
 # spec: scripts/deviations.sh -- ONE parser for the "## Conformance deviations" grammar, shared with
 #       check-artifact-conformance.sh, so a declared exception cannot mean two things.

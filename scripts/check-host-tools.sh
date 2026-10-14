@@ -18,6 +18,8 @@
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
+chk_ran host-tools
 required=0
 case "$#:${1:-}" in
   0:) ;;
@@ -29,12 +31,14 @@ _tmp="${TMPDIR:-/tmp}"
 list="$(mktemp "${_tmp%/}/host-tools-list.XXXXXX")"
 hits="$(mktemp "${_tmp%/}/host-tools-hits.XXXXXX")"
 undeclared="$(mktemp "${_tmp%/}/host-tools-undeclared.XXXXXX")"
-trap 'rm -f "$list" "$hits" "$undeclared"' EXIT
-git ls-files -s > "$list" 2>/dev/null \
-  || { echo "check-host-tools: git ls-files failed in $(pwd) -- refusing to report clean having examined nothing" >&2; exit 2; }
+paths="$(mktemp "${_tmp%/}/host-tools-paths.XXXXXX")"
+modes="$(mktemp "${_tmp%/}/host-tools-modes.XXXXXX")"
+trap 'rm -f "$list" "$hits" "$undeclared" "$paths" "$modes"' EXIT
+chk_tracked_files > "$paths" || exit 2
+git ls-files -s > "$modes" 2>/dev/null || :
+awk -F'\t' 'NR == FNR { m[$2] = substr($1, 1, 6); next } { printf "%s x 0\t%s\n", ($0 in m) ? m[$0] : "100644", $0 }' "$modes" "$paths" > "$list"
 
-status=0
-fail() { echo "check-host-tools: $1" >&2; echo "    fix: $2" >&2; status=1; }
+fail() { chk_fail host-tools "a tracked script breaks the host-declaration rule" "$1" "$2"; }
 TAB="$(printf '\t')"
 nscripts=0; nagnostic=0; nmacos=0
 while IFS="$TAB" read -r meta p; do
@@ -94,6 +98,6 @@ while IFS= read -r p; do
   fi
 done < "$undeclared"
 
-[ "$status" -eq 0 ] \
+[ "$chk_status" -eq 0 ] \
   && echo "check-host-tools: ok -- $nscripts tracked scripts across the whole tree ($nagnostic host-agnostic, $nmacos macOS-only); *.cmake and workflow run: blocks are not scripts and are not scanned"
-exit "$status"
+exit "$chk_status"

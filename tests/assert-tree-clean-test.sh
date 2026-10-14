@@ -27,6 +27,15 @@ if (cd "$work/dirty" && sh "$S" >/dev/null 2>&1); then
   say "an undeclared in-tree write should fail"; fi
 (cd "$work/dirty" && sh "$S" 2>&1 | grep -q 'build-native') \
   || say "the failure should name build-native"
+[ "$(cd "$work/dirty" && sh "$S" 2>&1 >/dev/null | sed -n 1p | cut -d: -f1)" = tree-clean ] \
+  || say "the failure should open with its id, tree-clean"
+if (cd "$work/dirty" && SHIPYARD_CHECK_RUNLOG="$work/runlog" sh "$S" >/dev/null 2>&1); then
+  say "a recorded manifest must still catch a write when run under shipyard-check"; fi
+grep -qx tree-clean "$work/runlog" || say "it should record that tree-clean ran"
+mkrepo "$work/nomanifest-dispatch"
+mkdir -p "$work/nomanifest-dispatch/build-native"; : > "$work/nomanifest-dispatch/build-native/x"
+(cd "$work/nomanifest-dispatch" && SHIPYARD_CHECK_RUNLOG="$work/runlog2" sh "$S" >/dev/null 2>&1) \
+  || say "under shipyard-check with no manifest there is nothing to compare, and it must not fail every checkout with a build dir"
 
 mkrepo "$work/declared"
 printf 'VERSION  # the build stamps the resolved version\n' > "$work/declared/.mavericks-intree"
@@ -92,14 +101,14 @@ mkdir -p "$work/notarepo/build-native"
 : > "$work/notarepo/build-native/CMakeCache.txt"
 if (cd "$work/notarepo" && sh "$S" >/dev/null 2>&1); then
   say "a directory that is not a git checkout should not be certified clean"; fi
-(cd "$work/notarepo" && sh "$S" 2>&1 | grep -q 'assert-tree-clean:.*refus') \
+(cd "$work/notarepo" && sh "$S" 2>&1 | grep -q 'tree-clean:.*refus') \
   || say "the non-checkout run should say it is refusing"
 
 mkrepo "$work/brokenindex"
 printf 'not an index\n' > "$work/brokenindex/.git/index"
 if (cd "$work/brokenindex" && sh "$S" >/dev/null 2>&1); then
   say "a git status failure should not be certified clean"; fi
-(cd "$work/brokenindex" && sh "$S" 2>&1 | grep -q 'assert-tree-clean:.*refus') \
+(cd "$work/brokenindex" && sh "$S" 2>&1 | grep -q 'tree-clean:.*refus') \
   || say "the git-failure run should say it is refusing"
 
 mkrepo "$work/leftover"

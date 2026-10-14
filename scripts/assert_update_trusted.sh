@@ -20,6 +20,8 @@
 #       bridge release -- trusted, with a notice that the NEXT release must be signed by the new key.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
+chk_ran update-trusted
 
 PKG=""; SIG=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no
 while [ $# -gt 0 ]; do
@@ -37,6 +39,11 @@ done
 
 T="$(mktemp -d "${TMPDIR:-/tmp}/assert_update_trusted.XXXXXX")"; trap 'rm -rf "$T"' EXIT
 say() { echo "assert_update_trusted: $*" >&2; }
+bad() {  # $1 = what is wrong, $2 = the fix
+  chk_fail update-trusted "the signature verifies against the key installed clients already trust" "$1" "$2"
+  exit 1
+}
+sign_fix="sign with the private key whose public half the live release's updater ships; to move clients to a new key, ship it in a release signed by the old one (a bridge), and to abandon them pass --allow-key-change"
 field() { sed -n "s/^$1=//p" "$2"; }
 # spec: tests/assert_update_trusted.bats -- status 0 when SIG over PKG verifies against KEY, 1 when
 #       it does not. An ed25519-verify that cannot check at all (exit 2: a malformed key or
@@ -46,21 +53,20 @@ verifies() {
   case "$rc" in
     0) return 0 ;;
     1) return 1 ;;
-    *) say "could not check the signature (ed25519-verify exit $rc): $(cat "$T/verify.err")"; exit 1 ;;
+    *) bad "could not check the signature (ed25519-verify exit $rc): $(cat "$T/verify.err")" "pass a well-formed key and signature" ;;
   esac
 }
 
 if [ -n "$PUBKEY" ]; then
   verifies "$PUBKEY" && { say "ok -- signed by $PUBKEY, the key named by --pubkey"; exit 0; }
-  say "the signature does not verify against $PUBKEY, the key named by --pubkey"
-  exit 1
+  bad "the signature does not verify against $PUBKEY, the key named by --pubkey" "$sign_fix"
 fi
 
 sh "$SELF/updater_pubkey.sh" "$PKG" > "$T/new" \
-  || { say "$PKG has no readable Sparkle updater -- pass --pubkey <the key installed clients trust>"; exit 1; }
+  || bad "$PKG has no readable Sparkle updater" "pass --pubkey <the key installed clients trust>"
 NEW_KEY="$(field SUPublicEDKey "$T/new")"
 FEED="$(field SUFeedURL "$T/new")"
-[ -n "$FEED" ] || { say "the updater in $PKG names no SUFeedURL, so there is no live release to ask"; exit 1; }
+[ -n "$FEED" ] || bad "the updater in $PKG names no SUFeedURL, so there is no live release to ask" "give the updater a SUFeedURL"
 
 # platform: not -f: a 404 is an answer ("no feed yet"), not a failure. curl reports HTTP 000 for
 #           file://.
@@ -72,22 +78,20 @@ if { [ "$rc" -eq 0 ] && [ "$code" = 404 ]; } || [ "$rc" -eq 37 ]; then
     say "ok -- first release (no live feed at $FEED): signed by $NEW_KEY, the key this pkg's updater ships"
     exit 0
   }
-  say "first release, and the signature does not verify against $NEW_KEY -- the key this pkg's updater ships."
-  say "SPARKLE_PRIVATE_KEY is not its private half, so every install would reject every update signed with it."
-  exit 1
+  bad "first release, and the signature does not verify against $NEW_KEY, the key this pkg's updater ships: SPARKLE_PRIVATE_KEY is not its private half, so every install would reject every update signed with it" \
+    "set SPARKLE_PRIVATE_KEY to the private half of $NEW_KEY"
 fi
 if [ "$rc" -ne 0 ] || { [ "$code" != 200 ] && [ "$code" != 000 ]; }; then
-  say "cannot read the live feed $FEED (curl exit $rc, HTTP $code): $(cat "$T/curl.err")"
-  say "refusing to guess which key installed clients trust"
-  exit 1
+  bad "cannot read the live feed $FEED (curl exit $rc, HTTP $code): $(cat "$T/curl.err"), and refusing to guess which key installed clients trust" \
+    "check the feed URL and the network, then re-run"
 fi
 
 URL="$(sed -n 's/.*<enclosure[^>]* url="\([^"]*\)".*/\1/p' "$T/feed.xml" | head -1)"
-[ -n "$URL" ] || { say "the live feed $FEED offers no enclosure -- cannot tell which key installed clients trust"; exit 1; }
+[ -n "$URL" ] || bad "the live feed $FEED offers no enclosure, so there is no telling which key installed clients trust" "repair the live feed, or pass --pubkey <the key installed clients trust>"
 curl -fsSL -o "$T/live.pkg" "$URL" 2>"$T/curl.err" \
-  || { say "cannot download the live release's pkg $URL: $(cat "$T/curl.err")"; exit 1; }
+  || bad "cannot download the live release's pkg $URL: $(cat "$T/curl.err")" "check the network, then re-run"
 sh "$SELF/updater_pubkey.sh" "$T/live.pkg" > "$T/live" \
-  || { say "the live release's pkg ($URL) has no readable Sparkle updater"; exit 1; }
+  || bad "the live release's pkg ($URL) has no readable Sparkle updater" "pass --pubkey <the key installed clients trust>"
 LIVE_KEY="$(field SUPublicEDKey "$T/live")"
 
 if verifies "$LIVE_KEY"; then
@@ -101,12 +105,9 @@ if verifies "$LIVE_KEY"; then
 fi
 if [ "$ALLOW_CHANGE" = yes ]; then
   verifies "$NEW_KEY" \
-    || { say "--allow-key-change, but the signature does not verify against $NEW_KEY (this pkg's key) either"; exit 1; }
+    || bad "--allow-key-change, but the signature does not verify against $NEW_KEY (this pkg's key) either" "sign with the private half of $NEW_KEY"
   say "WARNING (--allow-key-change): signed by $NEW_KEY; clients on the live release trust $LIVE_KEY"
   say "and will not accept this update"
   exit 0
 fi
-say "installed updaters trust $LIVE_KEY (from the live release's pkg, $URL), and this signature does not"
-say "verify against it: they would reject this update. Sign with that key; to move them to a new key,"
-say "ship the new key in a release signed by the old one (a bridge); to abandon them, --allow-key-change."
-exit 1
+bad "installed updaters trust $LIVE_KEY (from the live release's pkg, $URL), and this signature does not verify against it, so they would reject this update" "$sign_fix"

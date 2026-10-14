@@ -39,6 +39,7 @@ appcast() {
   run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.7)' --version 1.102.0-mavericks.7x"
   [ "$status" -ne 0 ]
   echo "$output" | grep -q 'does NOT order after previous'
+  [ "$(echo "$output" | sed -n 1p | cut -d: -f1)" = feed-upgradeable ]
 }
 
 @test "lower than the highest prior tag: rejected" {

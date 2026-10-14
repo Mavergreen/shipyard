@@ -11,10 +11,17 @@
 #       (Mavericks)." as their entire notes, for every release including Renovate-driven repackages
 #       whose only reason to exist was an ingredient bump; that body passes no check here.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
+chk_ran notes-shape
 f="${1:?check-release-notes: notes file required}"
 ver="${2:?check-release-notes: version required}"
 
-fail() { echo "check-release-notes: $1" >&2; exit 1; }
+fail() {
+  chk_fail notes-shape "the release body is not the family shape" "$1" \
+    "generate the body with release-notes.sh and publish exactly that file"
+  exit 1
+}
 
 [ -f "$f" ] || fail "no such file: $f"
 [ -s "$f" ] || fail "$f is empty; a release body must say something"

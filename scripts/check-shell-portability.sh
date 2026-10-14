@@ -17,9 +17,14 @@
 #           too: the first cut of this lint checked only *.sh and reported ed25519 clean while
 #           tests/version.bats died on exactly this bare `mktemp -d`.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
+chk_ran shell-portability
 
 rulesfile="$(mktemp "${TMPDIR:-/tmp}/shell-portability.XXXXXX")"
-trap 'rm -f "$rulesfile"' EXIT
+hitsfile="$(mktemp "${TMPDIR:-/tmp}/shell-portability-hits.XXXXXX")"
+listfile="$(mktemp "${TMPDIR:-/tmp}/shell-portability-list.XXXXXX")"
+trap 'rm -f "$rulesfile" "$hitsfile" "$listfile"' EXIT
 cat > "$rulesfile" <<'RULES'
 sort[[:space:]]+(-[A-Za-z]*V\b|--version-sort)	git tag --list | sort -V | tail -1	sort -V	compare numerically instead (shipyard's lib.sh ver_cmp; see previous-release-tag.sh) -- 10.9's BSD sort has no -V and exits 2 having printed NOTHING, so a caller that swallows stderr gets a silently empty result
 \$\(mktemp([[:space:]]+-[A-Za-z]+)*[[:space:]]*\)	work="$(mktemp -d)"	mktemp with no template	give it one: mktemp -d "${TMPDIR:-/tmp}/<name>.XXXXXX" -- 10.9 BSD mktemp rejects a bare -d with a usage error
@@ -29,27 +34,21 @@ lipo[^|;&]*[[:space:]]-archs\b	for a in $(lipo -archs "$b"); do	lipo -archs	use 
 RULES
 
 TAB="$(printf '\t')"
-status=0
 
 # spec: tests/shell-portability-test.sh -- every rule must still match its own sample, or the lint
 #       is dead rather than clean: a pattern that quietly stopped matching would stay green forever.
 while IFS="$TAB" read -r pat sample what instead; do
   [ -n "$pat" ] || continue
-  printf '%s\n' "$sample" | grep -qE "$pat" || {
-    echo "check-shell-portability: the rule for '$what' no longer matches its own sample -- the lint is dead, not clean" >&2
-    echo "    fix: repair the pattern, or drop the rule deliberately" >&2
-    status=1
-  }
+  printf '%s\n' "$sample" | grep -qE "$pat" || \
+    chk_fail shell-portability "the rule for '$what' no longer matches its own sample" \
+      "the lint is dead, not clean" "repair the pattern, or drop the rule deliberately"
 done < "$rulesfile"
 
 if [ "$#" -gt 0 ]; then
   files="$*"
-elif git rev-parse --git-dir >/dev/null 2>&1; then
-  files="$(git ls-files '*.sh' '*.bats' ':(exclude)tests/fixtures/checks/*' 2>/dev/null || true)"
 else
-  echo "check-shell-portability: not a git checkout and no files named -- nothing scanned" >&2
-  echo "    fix: run it in the repo, or pass the files to scan" >&2
-  exit 1
+  chk_tracked_files > "$listfile" || exit 1
+  files="$(grep -E '\.(sh|bats)$' "$listfile" | grep -v '^tests/fixtures/checks/' || true)"
 fi
 
 # spec: tests/shell-portability-test.sh -- full-line comments are stripped first, so the prose
@@ -63,15 +62,12 @@ while IFS="$TAB" read -r pat sample what instead; do
   for f in $files; do
     [ -f "$f" ] || continue
     [ "$(basename "$f")" = "$(basename "$0")" ] && continue
-    hits="$(sed -e 's/^[[:space:]]*#.*//' -e '/portability-ok:[[:space:]]*[^[:space:]]/s/.*//' "$f" | grep -nE "$pat" || true)"
-    [ -n "$hits" ] || continue
-    printf '%s\n' "$hits" | while IFS= read -r h; do
-      echo "check-shell-portability: $f:${h%%:*} uses $what -- a hazard on 10.9" >&2
-    done
-    echo "    fix: $instead" >&2
-    status=1
+    sed -e 's/^[[:space:]]*#.*//' -e '/portability-ok:[[:space:]]*[^[:space:]]/s/.*//' "$f" | grep -nE "$pat" > "$hitsfile" || :
+    while IFS= read -r h; do
+      chk_fail shell-portability "$f:${h%%:*} uses $what" "a hazard on 10.9" "$instead"
+    done < "$hitsfile"
   done
 done < "$rulesfile"
 
-[ "$status" -eq 0 ] || exit 1
+[ "$chk_status" -eq 0 ] || exit 1
 echo "check-shell-portability: ok — no 10.9-unavailable constructs"

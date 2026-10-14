@@ -253,6 +253,10 @@ sh "$S" "$f" > "$w/loc.out" 2>&1 || true
 grep -q "loc.sh:3:" "$w/loc.out" \
   || { echo "FAIL location: the message must name the file and line number, or a sweep cannot be driven by it: got $(cat "$w/loc.out")"; exit 1; }
 
+sh "$S" "$f" 2> "$w/loc.err" > /dev/null || true
+[ "$(sed -n 1p "$w/loc.err" | cut -d: -f1)" = comments ] \
+  || { echo "FAIL id: the failure must open with its id, comments: $(cat "$w/loc.err")"; exit 1; }
+
 missing="$w/does-not-exist.sh"
 rc=0
 sh "$S" "$missing" > "$w/missing.out" 2>&1 || rc=$?
@@ -293,6 +297,22 @@ rc=0
 ( cd "$nongit" && sh "$S" ) > "$w/nongit.out" 2>&1 || rc=$?
 [ "$rc" -ne 0 ] \
   || { echo "FAIL nongit: a working directory that is not a git repo must not report clean having examined nothing -- git ls-files fails there, and the default listing must not swallow that behind a pipeline: expected nonzero exit, got 0: $(cat "$w/nongit.out")"; exit 1; }
+
+[ "$(cd "$nongit" && sh "$S" 2>&1 | sed -n 1p | cut -d: -f1)" = tracked-files ] \
+  || { echo "FAIL nongit: the unreadable listing must be reported as tracked-files: $(cat "$w/nongit.out")"; exit 1; }
+
+dev="$w/dev"; mkdir -p "$dev/scripts"
+printf 'platform\nspec\n' > "$dev/comment-reasons"
+printf '#!/bin/sh\n# untagged\nexit 0\n' > "$dev/scripts/x.sh"
+printf '## Conformance deviations\n\n- comments: vendored verbatim from upstream\n' > "$dev/INGREDIENTS.md"
+( cd "$dev" && git init -q . && git add -A ) >/dev/null 2>&1
+( cd "$dev" && sh "$S" > "$w/dev.out" 2>&1 ) \
+  || { echo "FAIL deviation: a repo-wide comments deviation must switch the check off: $(cat "$w/dev.out")"; exit 1; }
+printf '## Conformance deviations\n\n- comments:vendor/* vendored\n' > "$dev/INGREDIENTS.md"
+( cd "$dev" && git add -A && sh "$S" 2> "$w/dev.err" > /dev/null ) \
+  && { echo "FAIL deviation: a scoped comments deviation must be rejected"; exit 1; }
+[ "$(sed -n 1p "$w/dev.err" | cut -d: -f1)" = comments ] \
+  || { echo "FAIL deviation: the rejection must open with its id: $(cat "$w/dev.err")"; exit 1; }
 
 amprepo="$w/repo & co"
 mkdir -p "$amprepo/scripts"

@@ -11,20 +11,24 @@
 #          between releases.
 # spec: tests/check-preset-icons-test.sh
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
 CONF="${1:?usage: check-preset-icons.sh CONF}"
 for t in curl dpkg-deb dpkg; do
   command -v "$t" >/dev/null 2>&1 || { echo "SKIP: check-preset-icons needs $t"; exit 77; }
 done
+chk_ran preset-icon
 ICON_URL= ICON_GLOB= APT_REPO= APT_KEY_URL= APT_PKGS=
 case "$CONF" in */*) . "$CONF" ;; *) . "./$CONF" ;; esac
 W=$(mktemp -d "${TMPDIR:-/tmp}/check-preset-icons.XXXXXX"); trap 'rm -rf "$W"' EXIT
-fail=0
 
 if [ -n "$ICON_URL" ]; then
   if ! curl -fsSL --max-time 30 -o "$W/icon" "$ICON_URL"; then
-    echo "ICON_URL: fetch failed: $ICON_URL"; fail=1
+    chk_fail preset-icon "ICON_URL no longer serves the icon" "fetching $ICON_URL failed" \
+      "point ICON_URL in $CONF at the vendor's current PNG"
   elif [ "$(head -c 8 "$W/icon" | od -An -tx1 | tr -d ' \n')" != 89504e470d0a1a0a ]; then
-    echo "ICON_URL: not a PNG: $ICON_URL"; fail=1
+    chk_fail preset-icon "ICON_URL no longer serves a PNG" "$ICON_URL is not a PNG" \
+      "point ICON_URL in $CONF at the vendor's current PNG"
   else
     echo "ICON_URL ok: $ICON_URL ($(wc -c < "$W/icon" | tr -d ' ') bytes)"
   fi
@@ -44,7 +48,8 @@ if [ -n "$ICON_GLOB" ] && [ -n "$APT_REPO" ] && [ -n "$APT_KEY_URL" ]; then
     if [ -z "$bestv" ] || dpkg --compare-versions "$v" gt "$bestv"; then bestv=$v; best=$f; fi
   done < "$W/candidates"
   if [ -z "$best" ]; then
-    echo "ICON_GLOB: $pkg not found in $base $suite $comp"; fail=1
+    chk_fail preset-icon "ICON_GLOB cannot be checked" "$pkg is not in $base $suite $comp" \
+      "name the vendor's package first in APT_PKGS in $CONF"
   else
     curl -fsSL -o "$W/pkg.deb" "$base/$best"
     dpkg-deb -c "$W/pkg.deb" | awk '{ print substr($6, 2) }' > "$W/files"
@@ -58,8 +63,9 @@ if [ -n "$ICON_GLOB" ] && [ -n "$APT_REPO" ] && [ -n "$APT_KEY_URL" ]; then
     if [ -n "$found" ]; then
       echo "ICON_GLOB ok in $pkg $bestv: $found"
     else
-      echo "ICON_GLOB: nothing in $pkg $bestv matches $ICON_GLOB"; fail=1
+      chk_fail preset-icon "ICON_GLOB matches nothing" "nothing in $pkg $bestv matches $ICON_GLOB" \
+        "set ICON_GLOB in $CONF to the icon's new path inside the package"
     fi
   fi
 fi
-exit $fail
+exit "$chk_status"

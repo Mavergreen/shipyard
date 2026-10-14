@@ -16,6 +16,7 @@ no() {  # $1 = version, $2 = label, $3 = expected substring of the complaint; co
   cat > "$work/n.md"
   if out="$(sh "$S" "$work/n.md" "$1" 2>&1)"; then echo "FAIL should fail: $2"; exit 1; fi
   printf '%s\n' "$out" | grep -q "$3" || { echo "FAIL $2: complaint lacked '$3': $out"; exit 1; }
+  [ "$(printf '%s\n' "$out" | sed -n 1p | cut -d: -f1)" = notes-shape ] || { echo "FAIL $2: the complaint should open with its id, notes-shape: $out"; exit 1; }
 }
 
 ok 9.9p2-mavericks.6 "the family shape" <<'EOF'

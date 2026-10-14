@@ -12,10 +12,14 @@
 #       Not a CI gate: reading branch protection requires ADMIN, which a workflow's default
 #       GITHUB_TOKEN does not have, so this runs with a human's `gh` credentials instead.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
+. "$SELF/lib/gh-admin.sh"
 org="${1:-Mavergreen}"
-command -v gh >/dev/null 2>&1 || { echo "audit-repo-settings: needs the gh CLI" >&2; exit 1; }
+[ -n "${SHIPYARD_CHECK_RUNLOG:-}" ] || chk_gh_admin "$org" || exit 2
+chk_ran repo-auto-merge
+chk_ran repo-required-context
 
-bad=0
 printf '%-28s %-10s %s\n' REPO AUTO-MERGE 'REQUIRED CHECKS ON main'
 for repo in $(gh repo list "$org" --limit 100 --json name --jq '.[].name' | sort); do
   am="$(gh api "repos/$org/$repo" --jq '.allow_auto_merge' 2>/dev/null || echo '?')"
@@ -37,18 +41,18 @@ for repo in $(gh repo list "$org" --limit 100 --json name --jq '.[].name' | sort
   fi
 
   printf '%-28s %-10s %s\n' "$repo" "$am" "$ctx"
-  [ "$am" = true ] || { bad=$((bad + 1)); }
-  case "$ctx" in NONE*) bad=$((bad + 1)) ;; esac
+  [ "$am" = true ] || chk_fail repo-auto-merge "$org/$repo allows auto-merge" \
+    "its Allow auto-merge setting is $am, so a green Renovate bump never merges" \
+    "gh api -X PATCH repos/$org/$repo -F allow_auto_merge=true"
+  case "$ctx" in
+    NONE*) chk_fail repo-required-context "$org/$repo requires a status check on main" \
+      "main has no required check ($ctx), so a green Renovate bump never merges" \
+      "read the build JOB NAME from gh api repos/$org/$repo/commits/main/check-runs --jq '[.check_runs[].name]|unique', then require it: printf '{\"required_status_checks\":{\"strict\":false,\"contexts\":[\"<job>\"]},\"enforce_admins\":false,\"required_pull_request_reviews\":null,\"restrictions\":null}' | gh api -X PUT repos/$org/$repo/branches/main/protection --input -" ;;
+  esac
 done
 
 echo
-if [ "$bad" -eq 0 ]; then
+if [ "$chk_status" -eq 0 ]; then
   echo "audit-repo-settings: ok — every product repo can automerge a green bump"
-  exit 0
 fi
-echo "audit-repo-settings: $bad setting(s) would stop a green Renovate bump from merging" >&2
-echo "    fix: gh api -X PATCH repos/$org/<repo> -F allow_auto_merge=true" >&2
-echo "    fix: printf '{\"required_status_checks\":{\"strict\":false,\"contexts\":[\"<job>\"]},\"enforce_admins\":false,\"required_pull_request_reviews\":null,\"restrictions\":null}' | gh api -X PUT repos/$org/<repo>/branches/main/protection --input -" >&2
-echo "    the context is the build JOB NAME; read it from a real run first:" >&2
-echo "    gh api repos/$org/<repo>/commits/main/check-runs --jq '[.check_runs[].name]|unique'" >&2
-exit 1
+exit "$chk_status"

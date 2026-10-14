@@ -10,6 +10,9 @@
 #       checkout has no history to inspect anyway. Only the FIRST release is gated -- a repo that has
 #       published before has a README somebody already shipped.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
+chk_ran readme-reviewed
 readme="${1:-README.md}"
 
 # spec: SKILL.md "A repo's FIRST EVER release needs a README a human has read" -- deliberately
@@ -18,17 +21,15 @@ readme="${1:-README.md}"
 MARKER='not been read or edited by a human'
 
 if [ ! -f "$readme" ]; then
-  echo "check-readme-reviewed: no $readme to check" >&2
-  echo "    fix: add one. A repo publishing its first release with no README at all is worse than" >&2
-  echo "         one publishing a generated README." >&2
+  chk_fail readme-reviewed "a first release needs a README" "there is no $readme to check" \
+    "add one: a repo publishing its first release with no README at all is worse than one publishing a generated README"
   exit 1
 fi
 
 if grep -qF "$MARKER" "$readme"; then
-  echo "check-readme-reviewed: $readme still carries the unreviewed marker, so no human has edited it" >&2
-  echo "    fix: read $readme, make it say what this project is and how to use it, and delete the" >&2
-  echo "         marker line. That line is visible on the repo's front page; shipping it is the" >&2
-  echo "         thing this gate exists to prevent." >&2
+  chk_fail readme-reviewed "a first release needs a README a human has read" \
+    "$readme still carries the unreviewed marker, so no human has edited it" \
+    "read $readme, make it say what this project is and how to use it, and delete the marker line, which is visible on the repo's front page"
   exit 1
 fi
 

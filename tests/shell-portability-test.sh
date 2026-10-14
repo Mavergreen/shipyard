@@ -20,6 +20,7 @@ printf '#!/bin/sh\ngit tag --list | sort -V | tail -1\n' > "$work/v/a.sh"  # por
 (cd "$work/v" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/v" && sh "$S" 2>&1)"; then echo "FAIL sort -V should fail"; exit 1; fi  # portability-ok: names the construct under test
 printf '%s\n' "$out" | grep -q 'a.sh:2' || { echo "FAIL should name file:line: $out"; exit 1; }
+[ "$(printf '%s\n' "$out" | sed -n 1p | cut -d: -f1)" = shell-portability ] || { echo "FAIL the failure should open with its id: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qi 'ver_cmp' || { echo "FAIL should say what to use instead: $out"; exit 1; }
 
 mkrepo "$work/v2"
@@ -79,9 +80,14 @@ printf '@test "t" {\n  [[ "$output" == *y* ]] || false\n  if [[ -n "$x" ]]; then
 (cd "$work/a3" && git add -A) >/dev/null 2>&1
 (cd "$work/a3" && sh "$S" >/dev/null) || { echo "FAIL: the forms that DO fail a test (|| false, a condition, ! ... || fail, run !) must pass the lint"; exit 1; }
 
+cp "$here/../scripts/check-lib.sh" "$here/../scripts/check-ids.tsv" "$work/"
 sed 's/^sort\[\[:space:\]\]/sortXX[[:space:]]/' "$S" > "$work/dead.sh"
 if out="$(cd "$work/ok" && sh "$work/dead.sh" 2>&1)"; then echo "FAIL: a rule that no longer matches its own sample is DEAD and must say so rather than pass"; exit 1; fi
 printf '%s\n' "$out" | grep -qi 'lint is dead' || { echo "FAIL should say the lint is dead: $out"; exit 1; }
+
+mkdir "$work/nogit"
+out="$(cd "$work/nogit" && GIT_CEILING_DIRECTORIES="$work" sh "$S" 2>&1)" && { echo "FAIL a directory with no tracked-file list must not read as clean"; exit 1; }
+[ "$(printf '%s\n' "$out" | sed -n 1p | cut -d: -f1)" = tracked-files ] || { echo "FAIL an unreadable listing is a tracked-files failure: $out"; exit 1; }
 
 (cd "$here/.." && sh "$S" >/dev/null) || { echo "FAIL shipyard's own scripts must be clean"; exit 1; }
 

@@ -7,9 +7,14 @@
 #       this asks only what the source tree looks like, never how the build
 #       ran, so it holds for CMake, make, a shell script, or anything else
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
+chk_ran tree-clean
 
 if ! root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-  echo "assert-tree-clean: $PWD is not a git checkout, or git is unavailable -- refusing to certify a tree nothing could read" >&2
+  chk_fail tree-clean "refusing to certify a tree nothing could read" \
+    "$PWD is not a git checkout, or git is unavailable" \
+    "run it inside the git checkout the build ran in"
   exit 1
 fi
 
@@ -42,7 +47,9 @@ CTRL="$(printf '\001')"
 #           bill of health. Land the raw status in a file and check that command's status.
 snapshot() {  # $1 = destination file
   git status --porcelain --ignored=traditional -uall -z > "$scratch/raw" || {
-    echo "assert-tree-clean: git status failed in $root -- refusing to certify a tree it could not read" >&2
+    chk_fail tree-clean "refusing to certify a tree it could not read" \
+      "git status failed in $root" \
+      "repair the checkout (git status must run) and run it again"
     exit 1
   }
   tr '\n' "$CTRL" < "$scratch/raw" | tr '\0' '\n' \
@@ -93,6 +100,9 @@ snapshot "$scratch/now"
 if [ -f "$MANIFEST" ]; then
   added="$(LC_ALL=C comm -23 "$scratch/now" "$MANIFEST")"
   mode="against the pre-build manifest"
+elif [ -n "${SHIPYARD_CHECK_RUNLOG:-}" ]; then
+  echo "assert-tree-clean: no manifest recorded (--record has not run), so there is nothing to compare under shipyard-check"
+  exit 0
 else
   added="$(cat "$scratch/now")"
   mode="with NO manifest (no --record was run), so EVERY untracked or ignored path counts"
@@ -111,12 +121,12 @@ fi
 bs='\'
 report() {  # $1 = path, as the snapshot recorded it
   case "$1" in
-    *"$bs"*) printf '%s\n' "assert-tree-clean: the build wrote into the source tree: $1" >&2; return ;;
+    *"$bs"*) printf '%s\n' "  assert-tree-clean: the build wrote into the source tree: $1" >&2; return ;;
   esac
   if [ -e "$1" ] || [ -L "$1" ]; then
-    printf '%s\n' "assert-tree-clean: the build wrote into the source tree: $1" >&2
+    printf '%s\n' "  assert-tree-clean: the build wrote into the source tree: $1" >&2
   else
-    printf '%s\n' "assert-tree-clean: the build deleted or moved a tracked path, which dirties the tree too: $1" >&2
+    printf '%s\n' "  assert-tree-clean: the build deleted or moved a tracked path, which dirties the tree too: $1" >&2
   fi
 }
 
@@ -128,11 +138,12 @@ printf '%s\n' "$added" | while IFS= read -r p; do
   printf '%s\n' "$p" >> "$offenders"
 done
 if [ -s "$offenders" ]; then
+  chk_fail tree-clean "the build changed the source tree" \
+    "$(wc -l < "$offenders" | tr -d ' ') path(s) appeared or went missing that nothing declares, checked $mode" \
+    "build outside the tree (\$MAVERICKS_BUILD_ROOT), or declare the path in .mavericks-intree with a reason"
   while IFS= read -r p; do
     report "$p"
   done < "$offenders"
-  echo "assert-tree-clean: checked $mode" >&2
-  echo "    fix: build outside the tree (\$MAVERICKS_BUILD_ROOT), or declare the path in .mavericks-intree with a reason" >&2
   exit 1
 fi
 
