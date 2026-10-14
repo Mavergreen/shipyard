@@ -1,6 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic -- needs curl, dpkg and dpkg-deb; exits 77 without them
 #   usage: check-preset-icons.sh CONF
+#          shipyard-check --only preset-icon          (CONF from SHIPYARD_CHECK_PRESET_CONF)
 #          A Porthole preset names where its app icon comes from: ICON_URL, a vendor-hosted PNG that
 #          Porthole fetches on the user's Mac at install, and ICON_GLOB, the icon's path inside the
 #          vendor's package, which Porthole extracts from the app's container. Either can move. This
@@ -13,7 +14,8 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
-CONF="${1:?usage: check-preset-icons.sh CONF}"
+CONF="${1:-${SHIPYARD_CHECK_PRESET_CONF:-}}"
+[ -n "$CONF" ] || { echo "usage: check-preset-icons.sh CONF (or SHIPYARD_CHECK_PRESET_CONF under shipyard-check --only preset-icon)" >&2; exit 2; }
 for t in curl dpkg-deb dpkg; do
   command -v "$t" >/dev/null 2>&1 || { echo "SKIP: check-preset-icons needs $t"; exit 77; }
 done

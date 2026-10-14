@@ -42,7 +42,7 @@ first_is "$out" upstream-notes || { echo "FAIL should be an upstream-notes failu
 mkrepo "$work/k"
 # spec: scripts/check-family-conventions.sh check 23 -- a signing workflow builds a pkg too
 #       (check 21's fallback), so it needs stage_product.sh the same as a direct pkgbuild caller.
-printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
+printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg\n      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
   >> "$work/k/.github/workflows/release.yml"
 (cd "$work/k" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/k" && sh "$S" 2>&1)"; then echo "FAIL a signing workflow with no scan job should fail"; exit 1; fi

@@ -41,7 +41,7 @@ jobs:
         run: sh scripts/run-repo-tests.sh --strict-host
 
       - name: Our own conventions gate, where consumers run it
-        run: sh scripts/check-family-conventions.sh
+        run: sh scripts/shipyard-check
 
       - name: bash32-parse, which a host declaration excuses here
         run: sh scripts/shipyard-check --only bash32-parse

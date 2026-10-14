@@ -64,6 +64,9 @@ jobs:
       - name: Standalone test suites
         run: sh scripts/run-repo-tests.sh
 
+      - name: Our own conventions gate
+        run: sh scripts/shipyard-check
+
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
 
@@ -172,6 +175,16 @@ jobs:
             || { cat "$RUNNER_TEMP/sdk-audit.txt"; exit 1; }
           cat "$RUNNER_TEMP/sdk-audit.txt"
           grep -q 'Mach-O slices)' "$RUNNER_TEMP/sdk-audit.txt"
+
+      - name: Artifact checks (the rehearsed pkg)
+        env:
+          SHIPYARD_CHECK_REPO: .
+          MAVERICKS_ALLOW_ARCHS: x86_64 arm64
+        run: |
+          set -eu
+          SHIPYARD_CHECK_VERSION="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"
+          export SHIPYARD_CHECK_VERSION
+          sh scripts/shipyard-check --dist "$RUNNER_TEMP/dist"
 
       - name: Install smoke (the rehearsed pkg)
         timeout-minutes: 10

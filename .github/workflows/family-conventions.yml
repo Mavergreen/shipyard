@@ -25,4 +25,4 @@ jobs:
           path: .shipyard
 
       - name: Family conventions gate
-        run: sh .shipyard/scripts/check-family-conventions.sh
+        run: sh .shipyard/scripts/shipyard-check

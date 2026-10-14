@@ -16,6 +16,18 @@ sh "$S" >/dev/null || { echo "FAIL: no caller (legacysupport has no ingredients)
 
 cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
 on:
+  workflow_call:
+    inputs:
+      own-upstream-paths:
+        type: string
+jobs:
+  repackage:
+    runs-on: ubuntu-latest
+YML
+sh "$S" >/dev/null || { echo "FAIL: the reusable workflow itself (shipyard's own repackage-on-ingredient-bump.yml) is a definition, not a caller, and has no ingredients"; exit 1; }
+
+cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
+on:
   push:
     paths: ['components/**']
 jobs:

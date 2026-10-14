@@ -20,6 +20,10 @@ for c in cmake ctest cpack; do
   code | grep -q -- "--exclude bin/$c" \
     || { echo "FAIL: bin/$c must be in exports-exclude -- a bare $c in the link farm would shadow whatever cmake the user already has on the path"; exit 1; }
 done
+code | grep -q 'ln -s ../share/cmake/MavericksShipyard/scripts/shipyard-check "\$STAGE\$PREFIX_DIR/bin/shipyard-check"' \
+  || { echo "FAIL: shipyard-check must be a RELATIVE link into shipyard's own scripts inside shipyard's bin, so the farm exports the one command CI and developers share"; exit 1; }
+code | grep -q -- '--exclude bin/shipyard-check' \
+  && { echo "FAIL: bin/shipyard-check must be exported through the link farm, not excluded"; exit 1; }
 code | grep -q 'PREFIX_DIR="/usr/local/mavergreen/shipyard"' \
   || { echo "FAIL: shipyard installs into /usr/local/mavergreen/shipyard, the one directory its short name owns"; exit 1; }
 code | grep -q 'usr/local/bin' && { echo "FAIL: shipyard installs nothing into /usr/local/bin -- only the base component's helper lives there"; exit 1; }

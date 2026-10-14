@@ -21,7 +21,7 @@ jobs:
             --product Widget --min-os 10.9.5 --out dist/RELEASE_NOTES.md
       - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
       - run: sh "$SHIPYARD_SCRIPTS/release-state-record.sh" --out dist/state
-      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"
+      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist
       - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr
   scan:
     needs: [build]

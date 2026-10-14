@@ -139,6 +139,9 @@ runs:
         #       rejected -- container-tools' two ubuntu-latest jobs need exactly that.
         [ -f "$root/MavericksShipyardConfig.cmake" ] || {
           echo "::error::$root holds no MavericksShipyardConfig.cmake -- find_package(MavericksShipyard) would not resolve on this runner"; exit 1; }
+        b="$RUNNER_TEMP/shipyard-bin"; mkdir -p "$b"
+        ln -sf "$scripts/shipyard-check" "$b/shipyard-check"
+        echo "$b" >> "$GITHUB_PATH"
         {
           echo "SHIPYARD_SCRIPTS=$scripts"
           echo "MavericksShipyard_DIR=$root"
@@ -163,6 +166,7 @@ runs:
         "$p/bin/cmake" --install "$RUNNER_TEMP/shipyard-self-build" --prefix "$p" >/dev/null
         b="$RUNNER_TEMP/shipyard-bin"; mkdir -p "$b"
         for c in cmake ctest cpack; do ln -sf "$p/bin/$c" "$b/shipyard-$c"; done
+        ln -sf "$p/share/cmake/MavericksShipyard/scripts/shipyard-check" "$b/shipyard-check"
         echo "$b" >> "$GITHUB_PATH"
         # spec: scripts/package-pkg.sh -- --cmake-tree refuses a tree holding anything outside
         #       bin/doc/man/share, so SHIPYARD_CMAKE_TREE must be the UNTOUCHED tree: "$p" has

@@ -19,4 +19,4 @@ jobs:
             --product Widget --min-os 10.9.5 --out dist/RELEASE_NOTES.md
       - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
       - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
-      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"
+      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist

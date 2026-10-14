@@ -64,9 +64,6 @@ one line):
 - version-scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
-- pr-trigger: shipyard's pull requests are built by ci.yml, its required check; release.yml cuts a release on every push to main and must not run on a PR. Revisit if release.yml gains a dry-run mode for PRs.
-- permissions-contents-read: release.yml has held `contents: write` at the top since before this check; its build job was never audited for needing less, and the publish and major-tag jobs already declare their own. Revisit once a release run proves the build job needs only `contents: read`.
-- checkout-drops-credentials: the major-tag job pushes with its checkout's token, and the build job's checkout was never audited for dropping it. Revisit with permissions-contents-read.
 - bare-curl:scripts/assert_update_trusted.sh: it curls the live feed and pkg on its own to see the HTTP status; it does not source the fetch library. Revisit when QUEUE #58's mav_curl lands.
 - bare-curl:scripts/fetch_product_pkg.sh: it fetches the release's SHA256SUMS with a curl of its own, beside the library's verified fetch. Revisit when QUEUE #58's mav_curl lands.
 - bare-curl:.github/workflows/publish-release.yml: its first-release readme step fetches the template with a curl of its own. Revisit when QUEUE #58's mav_curl lands.

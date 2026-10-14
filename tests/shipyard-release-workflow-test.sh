@@ -113,8 +113,8 @@ need(r"^sh scripts/package-pkg\.sh .*--cmake-tree \S+ .*--shipyard-prefix \S+ .*
 # previous version, and whether the artifacts agree with each other.
 need(r"^sh scripts/assert_pkg_installs_in_place\.sh \S*\.pkg\"?$",
      "release.yml never runs scripts/assert_pkg_installs_in_place.sh on the pkg")
-need(r"^sh scripts/artifact-facts\.sh dist \S+ \| sh scripts/check-artifact-conformance\.sh$",
-     "release.yml never pipes artifact-facts.sh into scripts/check-artifact-conformance.sh")
+need(r"^sh scripts/shipyard-check --dist dist$",
+     "release.yml never runs scripts/shipyard-check --dist dist")
 
 need(r"^sh scripts/sign_and_appcast\.sh --product shipyard --feed-dir dist .*--pkg \S+\.pkg\"?$",
      "release.yml never runs scripts/sign_and_appcast.sh --product shipyard --feed-dir dist")

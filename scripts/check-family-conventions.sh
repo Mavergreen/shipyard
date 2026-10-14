@@ -700,10 +700,10 @@ for f in $(grep -E "$SRC_RX" "$TF" | grep -v '^tests/' || true); do
   grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' && { builds_pkg="$f"; break; }
 done
 [ -n "$builds_pkg" ] || ! ci_mentions 'sign_and_appcast' || builds_pkg="a signing workflow"
-if [ -n "$builds_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! deviated artifact-checks-wired "$REL"; then
-  chk_fail artifact-checks-wired "this repo builds a .pkg ($builds_pkg) but no workflow runs check-artifact-conformance.sh" \
+if [ -n "$builds_pkg" ] && ! ci_mentions 'shipyard-check[^#]*--dist' && ! deviated artifact-checks-wired "$REL"; then
+  chk_fail artifact-checks-wired "this repo builds a .pkg ($builds_pkg) but no workflow runs shipyard-check --dist" \
     "nothing checks what it installs or under which identity" \
-    "pipe artifact-facts.sh into check-artifact-conformance.sh at package time (see the conventions skill, 'Artifact conformance'), or declare '- artifact-checks-wired: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+    "run shipyard-check --dist <dir> at package time, with SHIPYARD_CHECK_VERSION set (see the conventions skill, 'Artifact conformance'), or declare '- artifact-checks-wired: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
@@ -823,23 +823,23 @@ on_has() {  # stdin = an on: block; $1 = a trigger, as a key, in a list or inlin
 trigger_lines() {  # stdin = an on: block; $1 = a trigger; prints that trigger's own block
   awk -v t="$1" '$0 ~ "^  " t ":" { f = 1; print; next } /^  [^[:space:]]/ { f = 0 } /^[^[:space:]]/ { f = 0 } f'
 }
+builds_prs() {  # $1 = a workflow; succeeds when it builds pull requests to main (or every push)
+  on_block "$1" > "$tmp/on-wf"
+  if on_has pull_request < "$tmp/on-wf"; then
+    trigger_lines pull_request < "$tmp/on-wf" > "$tmp/pr-lines"
+    if ! grep -q 'branches:' "$tmp/pr-lines" \
+       || grep -Eq "(\[|,|-)[[:space:]]*['\"]?(main|\*\*)['\"]?[[:space:]]*(\]|,|\$)" "$tmp/pr-lines"; then return 0; fi
+  fi
+  on_has push < "$tmp/on-wf" \
+    && trigger_lines push < "$tmp/on-wf" | grep -Eq "(\[|,|-)[[:space:]]*['\"]?\*\*['\"]?[[:space:]]*(\]|,|\$)"
+}
 chk_ran pr-trigger
-on_block "$REL" > "$tmp/on-release"
 if ! grep -q '"ignoreTests"[[:space:]]*:[[:space:]]*true' .github/renovate.json 2>/dev/null \
    && ! deviated pr-trigger "$REL"; then
-  _pr=0
-  if on_has pull_request < "$tmp/on-release"; then
-    trigger_lines pull_request < "$tmp/on-release" > "$tmp/pr-lines"
-    if ! grep -q 'branches:' "$tmp/pr-lines" \
-       || grep -Eq "(\[|,|-)[[:space:]]*['\"]?(main|\*\*)['\"]?[[:space:]]*(\]|,|\$)" "$tmp/pr-lines"; then _pr=1; fi
-  fi
-  if [ "$_pr" -eq 0 ] && on_has push < "$tmp/on-release" \
-     && trigger_lines push < "$tmp/on-release" | grep -Eq "(\[|,|-)[[:space:]]*['\"]?\*\*['\"]?[[:space:]]*(\]|,|\$)"; then
-    _pr=1
-  fi
-  [ "$_pr" -eq 1 ] || chk_fail pr-trigger "$REL does not build pull requests to main" \
+  builds_prs "$REL" || { [ -f .github/workflows/ci.yml ] && builds_prs .github/workflows/ci.yml; } \
+    || chk_fail pr-trigger "$REL does not build pull requests to main, and no ci.yml does" \
     "Renovate's automerge waits on a CI check, and without one on the bump PR it stalls forever" \
-    "add pull_request: with branches: [main] under on:, or set \"ignoreTests\": true in .github/renovate.json if the repo has no build to gate"
+    "add pull_request: with branches: [main] under on: in $REL or in a ci.yml, or set \"ignoreTests\": true in .github/renovate.json if the repo has no build to gate"
 fi
 
 # spec: SKILL.md "Release workflow" -- the notes are generated first, then the state is recorded, then the
@@ -1156,13 +1156,14 @@ fi
 
 # spec: SKILL.md, the `docs-no-sudo` row of the checks table -- family tools elevate themselves
 #       (QUEUE #63), so no user-facing doc or message tells anyone to run sudo. Doc files: README*,
-#       *.md except release-notes/** and SKILL.md, man/** and *.[1-9], pkg resources. Messages: echo or
+#       *.md except release-notes/**, SKILL.md and design, decision and plan
+#       records (docs/decisions/**, docs/adr/**, docs/plans/**, docs/superpowers/**), man/** and *.[1-9], pkg resources. Messages: echo or
 #       printf text, and heredoc text, in tracked shell scripts outside tests/. An executed sudo is code,
 #       not a doc, so it is not matched.
 chk_ran docs-no-sudo
 : > "$tmp/sudohits"
 if [ "$HAVE_TRACKED" -eq 1 ]; then
-  grep -Ev '^(tests|\.superpowers)/|^release-notes/|(^|/)SKILL\.md$' "$TF" | while IFS= read -r f; do
+  grep -Ev '^(tests|\.superpowers)/|^release-notes/|^docs/(decisions|adr|plans|superpowers)/|(^|/)SKILL\.md$' "$TF" | while IFS= read -r f; do
     [ -f "$f" ] || continue
     case "$f" in
       README*|*/README*|*.md|man/*|*.[1-9]|scripts/resources/*|*/resources/*.html|*/resources/*.rtf) ;;

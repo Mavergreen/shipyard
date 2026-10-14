@@ -45,8 +45,8 @@ for name, job in jobs.items():
         bad.append("linux-host.yml job %s never puts /usr/lib/llvm-*/bin on PATH, where Ubuntu keeps llvm-otool and llvm-lipo" % name)
     if "sh scripts/run-repo-tests.sh --strict-host" not in c:
         bad.append("linux-host.yml job %s never runs sh scripts/run-repo-tests.sh --strict-host" % name)
-    if "sh scripts/check-family-conventions.sh" not in c:
-        bad.append("linux-host.yml job %s never runs the conventions gate on Linux, where consumers run it" % name)
+    if "sh scripts/shipyard-check" not in c:
+        bad.append("linux-host.yml job %s never runs shipyard-check (the conventions) on Linux, where consumers run it" % name)
 
 def callers(n):
     return [j for j, spec in (load(n).get("jobs") or {}).items()

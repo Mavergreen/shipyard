@@ -68,7 +68,7 @@ mkrepo "$work/ok"
 signs() {  # $1 = dir, $2 = the lines of one run: | block
   mkrepo "$1"
   { printf '      - run: |\n'; printf '%s\n' "$2" | sed 's/^/          /'
-    printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n'
+    printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n'
     printf '      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n'
     printf '  scan:\n    needs: [build]\n    if: always()\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n'
   } >> "$1/.github/workflows/release.yml"
@@ -85,7 +85,7 @@ sa_refused() {  # $1 = dir, $2 = what the case is
 #       quoted variable may end mid-path: each of these spellings is a call.
 pkcall() {  # $1 dir  $2 the build script's body after its pkgbuild line
   mkrepo "$1"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n%s\n' "$2" > "$1/build/package.sh"
-  printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$1/.github/workflows/release.yml"
+  printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n' >> "$1/.github/workflows/release.yml"
   (cd "$1" && git add -A && sh "$S" >/dev/null 2>&1) \
     || { echo "FAIL: this spelling is a stage_product.sh call and should satisfy check 23: [$2]: $(cd "$1" && sh "$S" 2>&1)"; exit 1; }
 }

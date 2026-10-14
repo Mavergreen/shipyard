@@ -3,7 +3,7 @@
 #   usage: assert-installed-shipyard.sh --cmake-version V [--root DIR]
 #          Asserts that an INSTALLED mavericks-shipyard is what we meant to ship: shipyard-cmake runs
 #          and is the CMake in cmake.pin; it is OURS (universal, with shipyard-ctest and
-#          shipyard-cpack beside it on the default PATH); a probe under a stripped environment
+#          shipyard-cpack and shipyard-check beside it on the default PATH); a probe under a stripped environment
 #          resolves shipyard inside shipyard-cmake's own prefix; the installed updater is universal;
 #          nothing is left in /usr/local/bin from the old layout; an installed mavergreen helper
 #          passes its own check; and any other cmake is refused, by name. --root defaults to "/" (a
@@ -58,10 +58,14 @@ else
   fail "no executable shipyard-cmake at $CM"
 fi
 
-for c in shipyard-cmake shipyard-ctest shipyard-cpack; do
+for c in shipyard-cmake shipyard-ctest shipyard-cpack shipyard-check; do
   [ -x "$FARM/$c" ] \
-    || fail "no executable $FARM/$c -- the pkg exports all three through the link farm on the default PATH"
+    || fail "no executable $FARM/$c -- the pkg exports all four through the link farm on the default PATH"
 done
+if [ -x "$FARM/shipyard-check" ]; then
+  "$FARM/shipyard-check" --explain tests-run-in-ci >/dev/null 2>"$W/check.log" \
+    || fail "shipyard-check does not run from the link farm: $(cat "$W/check.log")"
+fi
 # platform: -L as well as -e -- a leftover link whose old prefix was removed by hand dangles, and -e
 #           alone reads a dangling link as absent.
 if [ -e "$R/usr/local/bin/shipyard-cmake" ] || [ -L "$R/usr/local/bin/shipyard-cmake" ]; then

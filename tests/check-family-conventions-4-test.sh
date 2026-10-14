@@ -22,14 +22,14 @@ pkcall "$work/pkmidqpath" "\"\$SHIPYARD_SCRIPTS\"/stage_product.sh $A"
 #       path is not a call, and neither is a keyword spelled inside an echo'd string.
 mkrepo "$work/pkassign"
 printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\nSP="$SHIPYARD_SCRIPTS/stage_product.sh"\necho "if sh stage_product.sh"\necho "/bin/sh -e $SHIPYARD_SCRIPTS/stage_product.sh"\n' > "$work/pkassign/build/package.sh"
-printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkassign/.github/workflows/release.yml"
+printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n' >> "$work/pkassign/.github/workflows/release.yml"
 out="$(cd "$work/pkassign" && git add -A && sh "$S" 2>&1)" \
   && { echo "FAIL: an assignment of stage_product.sh's path, or an echo'd string spelling a call, must not satisfy check 23"; exit 1; }
 first_is "$out" stage-product \
   || { echo "FAIL: check 23 must be what fails when stage_product.sh's path is only assigned or echoed: $out"; exit 1; }
 
 mkrepo "$work/pkc"; printf '#!/bin/sh\npkgbuild --root stage out.pkg\n' > "$work/pkc/build/package.sh"
-printf '      # - run: sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkc/.github/workflows/release.yml"
+printf '      # - run: shipyard-check --dist dist\n' >> "$work/pkc/.github/workflows/release.yml"
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) && { echo "FAIL: a commented-out conformance call must not count as wired"; exit 1; }
 printf '\n## Conformance deviations\n\n- artifact-checks-wired: ships a disk image, not a Mavergreen pkg\n- stage-product: ships a disk image, not a Mavergreen pkg\n- registered: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: declared artifact-checks-wired, stage-product and registered deviations should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
@@ -56,7 +56,7 @@ printf '#!/bin/sh\n# platform: host-agnostic\nexit 0\n' > "$work/host/tests/a-te
 #       from the check 21/23 cases, rebuilt here because those cases live in another file.
 mkrepo "$work/pk"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pk/build/package.sh"
 printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
-printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pk/.github/workflows/release.yml"
+printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n' >> "$work/pk/.github/workflows/release.yml"
 (cd "$work/pk" && git add -A) >/dev/null 2>&1
 
 # spec: SKILL.md "Family conventions" check 24 -- a pkg-building repo is one scripts/product-names

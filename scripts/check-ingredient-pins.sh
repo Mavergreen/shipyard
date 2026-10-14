@@ -15,6 +15,11 @@ if [ ! -f "$caller" ]; then
   exit 0
 fi
 
+if grep -Eq '^[[:space:]]+workflow_call:' "$caller"; then
+  echo "check-ingredient-pins: $caller is a reusable workflow, not a caller — nothing to check"
+  exit 0
+fi
+
 pins="$(sh "$SELF/ingredient-pins.sh" "$caller")"
 if [ -z "$pins" ]; then
   echo "check-ingredient-pins: $caller watches paths, but none expand to a tracked ingredient pin." >&2

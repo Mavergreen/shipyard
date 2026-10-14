@@ -29,4 +29,6 @@ jobs:
           path: .shipyard
 
       - name: The preset's icon sources still work
-        run: sh .shipyard/scripts/check-preset-icons.sh "${{ inputs.conf }}"
+        env:
+          SHIPYARD_CHECK_PRESET_CONF: ${{ inputs.conf }}
+        run: sh .shipyard/scripts/shipyard-check --only preset-icon

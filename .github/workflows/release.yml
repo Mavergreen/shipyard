@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: >-
@@ -23,6 +23,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0        # shipyard-version.sh counts commits
+          persist-credentials: false
 
       # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
       - uses: actions/cache@v6
@@ -71,7 +72,7 @@ jobs:
         run: sh scripts/run-repo-tests.sh
 
       - name: Our own conventions gate
-        run: sh scripts/check-family-conventions.sh
+        run: sh scripts/shipyard-check
 
       # spec: scripts/lipo-merge-tree.sh -- a deployment floor is per-configure and arm64 has no
       #       10.9, so the updater is built once per arch and merged. Both builds embed Sparkle's fat
@@ -159,11 +160,14 @@ jobs:
           #       too, via --tag-glob" -- this is the worked example the rule book names.
           sh scripts/assert_appcast_upgradeable.sh --appcast dist/shipyard.xml --version "v$v" --tag-glob 'v*.*.*'
 
-      - name: Artifact conformance
+      - name: Artifact checks
+        env:
+          SHIPYARD_CHECK_VERSION: ${{ steps.ver.outputs.version }}
+          SHIPYARD_CHECK_REPO: .
+          MAVERICKS_ALLOW_ARCHS: x86_64 arm64
         run: |
           set -eu
-          v='${{ steps.ver.outputs.version }}'
-          sh scripts/artifact-facts.sh dist "$v" | sh scripts/check-artifact-conformance.sh
+          sh scripts/shipyard-check --dist dist
           ls -l dist
 
       # spec: R-P1-17 -- what must hold of the installed result is stated ONCE, in
@@ -235,7 +239,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Move the major tag
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
           major="v${{ needs.build.outputs.version }}"; major="${major%%.*}"
@@ -252,5 +259,7 @@ jobs:
             exit 0
           fi
           git tag -f -a "$major" -m "$major -> v${{ needs.build.outputs.version }}"
-          git push -f origin "$major"
+          askpass="$RUNNER_TEMP/askpass.sh"
+          printf '#!/bin/sh\necho "$GH_TOKEN"\n' > "$askpass"; chmod +x "$askpass"
+          GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 git push -f "https://x-access-token@github.com/$GITHUB_REPOSITORY" "$major"
           echo "moved $major -> $(git rev-parse --short HEAD)"

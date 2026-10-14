@@ -1,11 +1,17 @@
 #!/bin/sh
 # platform: host-agnostic
 set -eu
-SHIPYARD_CHECK_DIR="$(cd "$(dirname "$0")" && pwd)"
+self="$0"
+while [ -L "$self" ]; do
+  link="$(readlink "$self")"
+  case "$link" in /*) self="$link" ;; *) self="$(dirname "$self")/$link" ;; esac
+done
+SHIPYARD_CHECK_DIR="$(cd "$(dirname "$self")" && pwd)"
 export SHIPYARD_CHECK_DIR SHIPYARD_CHECK_REGISTRY
 . "$SHIPYARD_CHECK_DIR/check-lib.sh"
 . "$SHIPYARD_CHECK_DIR/lib/gh-admin.sh"
 root="${SHIPYARD_CHECK_ROOT:-$(cd "$SHIPYARD_CHECK_DIR/.." && pwd)}"
+target="$(pwd)"
 reg="$SHIPYARD_CHECK_REGISTRY"
 
 usage() {
@@ -41,13 +47,18 @@ if [ "$list" -eq 1 ]; then
   exit 0
 fi
 
-if [ "$repo_state" -eq 1 ] && [ -z "$only" ]; then
-  chk_gh_admin Mavergreen || exit 2
+if [ -n "$dist" ] && [ -z "${SHIPYARD_CHECK_VERSION:-}" ]; then
+  echo "shipyard-check: --dist needs SHIPYARD_CHECK_VERSION, the release's version (and SHIPYARD_CHECK_REPO, the repo whose INGREDIENTS.md declares deviations)" >&2
+  exit 2
 fi
 
+needs_admin=0
+[ "$repo_state" -eq 0 ] || [ -n "$only" ] || needs_admin=1
 for id in $only; do
   chk_registered "$id" || { echo "shipyard-check: '$id' is not a registered check id" >&2; exit 2; }
+  [ "$(awk -F'\t' -v i="$id" '$1 == i { print $2 }' "$reg")" != repo-state ] || needs_admin=1
 done
+[ "$needs_admin" -eq 0 ] || chk_gh_admin Mavergreen || exit 2
 
 tab="$(printf '\t')"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-check.XXXXXX")"
@@ -80,7 +91,7 @@ for script in $scripts; do
   ids="$(printf '%s\n' "$selected" | awk -v s="$script" '$2 == s { print $1 }')"
   before="$(wc -l < "$SHIPYARD_CHECK_FAILLOG")"
   rc=0
-  (cd "$root" && sh "$script" < /dev/null) || rc=$?
+  (cd "$target" && sh "$root/$script" < /dev/null) || rc=$?
   for id in $ids; do chk_ran "$id"; done
   after="$(wc -l < "$SHIPYARD_CHECK_FAILLOG")"
   if [ "$rc" -ne 0 ] && [ "$before" -eq "$after" ]; then

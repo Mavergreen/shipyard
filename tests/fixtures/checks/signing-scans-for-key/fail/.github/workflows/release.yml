@@ -21,5 +21,5 @@ jobs:
       - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
       - run: |
           sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg
-      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"
+      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist
       - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr

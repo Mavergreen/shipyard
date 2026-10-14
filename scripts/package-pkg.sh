@@ -112,6 +112,7 @@ COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
 ln -s cmake "$STAGE$PREFIX_DIR/bin/shipyard-cmake"
 ln -s ctest "$STAGE$PREFIX_DIR/bin/shipyard-ctest"
 ln -s cpack "$STAGE$PREFIX_DIR/bin/shipyard-cpack"
+ln -s ../share/cmake/MavericksShipyard/scripts/shipyard-check "$STAGE$PREFIX_DIR/bin/shipyard-check"
 
 # platform: an NFS or otherwise shared stage sprays AppleDouble "._*" sidecars, which would ship as
 #           payload -- and, left in place while the manifest is rendered, be listed in its `outside`.

@@ -194,4 +194,62 @@ if bad:
 print("ok: a push to flag-day runs ci.yml and not release.yml")
 PY
 
+chk_py /dev/stdin "$wf" "$here/../.github/actions/install/action.yml" <<'PY'
+import os, re, sys, yaml
+wf, install = sys.argv[1], sys.argv[2]
+bad = []
+
+def steps(name):
+    d = yaml.safe_load(open(os.path.join(wf, name)))
+    return [(job, st) for job, spec in (d.get("jobs") or {}).items() for st in (spec.get("steps") or [])]
+
+def runs(st):
+    return "\n".join(l for l in (st.get("run") or "").splitlines() if not l.lstrip().startswith("#"))
+
+def shipyard_check_calls(name):
+    return [st for _, st in steps(name) if re.search(r"shipyard-check\b", runs(st))]
+
+# family-conventions.yml runs shipyard-check and nothing else: the gate script is reached only through it.
+fc = [runs(st) for _, st in steps("family-conventions.yml") if st.get("run")]
+if not any(re.search(r"shipyard-check\s*$", r, re.M) for r in fc):
+    bad.append("family-conventions.yml no longer runs shipyard-check")
+if any("check-family-conventions" in r or "check-artifact-conformance" in r for r in fc):
+    bad.append("family-conventions.yml runs a check script directly; it runs shipyard-check and nothing else")
+pi = [st for _, st in steps("preset-icons.yml") if re.search(r"shipyard-check\s+--only\s+preset-icon", runs(st))]
+if not pi:
+    bad.append("preset-icons.yml no longer runs shipyard-check --only preset-icon")
+if any("check-preset-icons" in runs(st) for _, st in steps("preset-icons.yml")):
+    bad.append("preset-icons.yml runs check-preset-icons.sh directly")
+
+# Each workflow that hands shipyard-check a dist gives it the version, the repo and the arch set it reads.
+for name in ("ci.yml", "release.yml"):
+    calls = [st for st in shipyard_check_calls(name) if re.search(r"shipyard-check\s+--dist\b", runs(st))]
+    if not calls:
+        bad.append("%s never runs shipyard-check --dist" % name)
+    for st in calls:
+        for var in ("SHIPYARD_CHECK_VERSION", "SHIPYARD_CHECK_REPO", "MAVERICKS_ALLOW_ARCHS"):
+            if var not in (st.get("env") or {}) and var not in runs(st):
+                bad.append("%s runs shipyard-check --dist without %s" % (name, var))
+    if any("check-artifact-conformance" in runs(st) for _, st in steps(name)):
+        bad.append("%s calls check-artifact-conformance.sh directly instead of through shipyard-check --dist" % name)
+
+# Shipyard's own conventions run through the same command in every workflow that gates on them.
+for name in ("ci.yml", "release.yml", "linux-host.yml"):
+    if not any(re.search(r"shipyard-check\s*$", runs(st), re.M) for _, st in steps(name)):
+        bad.append("%s no longer runs shipyard-check (the checkout checks) on shipyard itself" % name)
+    if any("check-family-conventions.sh" in runs(st) for _, st in steps(name)):
+        bad.append("%s runs the gate script directly; CI and developers run shipyard-check" % name)
+
+# install@v1 puts shipyard-check on PATH wherever it installs scripts without the pkg.
+body = open(install).read()
+if body.count("shipyard-check") < 2:
+    bad.append("install@v1 no longer exports shipyard-check on Linux and in source-build mode")
+
+if bad:
+    for b in bad:
+        print("FAIL:", b)
+    sys.exit(1)
+print("ok: CI and developers run the same shipyard-check")
+PY
+
 echo "PASS: shipyard-workflow-coupling"

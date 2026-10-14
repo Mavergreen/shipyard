@@ -51,4 +51,16 @@ last="$(SHIPYARD_CHECK_REGISTRY="$t/reg" SHIPYARD_CHECK_ROOT="$t" sh "$sc" --onl
 [ "$last" = "shipyard-check: 1 checks, 0 failed" ] || fail "--only count, got: $last"
 last="$(SHIPYARD_CHECK_REGISTRY="$t/reg" SHIPYARD_CHECK_ROOT="$t" sh "$sc" --only ok-a --only dst)" || fail "--only runs any mode"
 [ "$last" = "shipyard-check: 2 checks, 0 failed" ] || fail "--only both, got: $last"
+mkdir "$t/nogh"; printf '#!/bin/sh\nexit 1\n' > "$t/nogh/gh"; chmod +x "$t/nogh/gh"
+for id in repo-auto-merge repo-required-context; do
+  rc=0; PATH="$t/nogh:$PATH" sh "$sc" --only "$id" >"$t/out" 2>"$t/err" || rc=$?
+  [ "$rc" = 2 ] || fail "--only $id without an admin token exits 2, got $rc"
+  grep -q 'needs an admin token' "$t/err" || fail "--only $id names the admin token: $(cat "$t/err")"
+done
+rc=0; PATH="$t/nogh:$PATH" sh "$sc" --repo-state >"$t/out" 2>"$t/err" || rc=$?
+[ "$rc" = 2 ] || fail "--repo-state without an admin token exits 2, got $rc"
+
+rc=0; env -u SHIPYARD_CHECK_VERSION sh "$sc" --dist "$t" >"$t/out" 2>"$t/err" || rc=$?
+[ "$rc" = 2 ] || fail "--dist without SHIPYARD_CHECK_VERSION exits 2, got $rc"
+grep -q 'SHIPYARD_CHECK_VERSION' "$t/err" || fail "the --dist usage error names SHIPYARD_CHECK_VERSION: $(cat "$t/err")"
 echo "PASS shipyard-check"

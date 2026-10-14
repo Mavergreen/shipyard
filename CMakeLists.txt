@@ -116,6 +116,7 @@ install(CODE "${_msc_presets_code}")
 # Scripts keep their executable bit (they are run via `sh` but stay +x for direct use).
 # scripts/ carries the Sparkle fetch scripts + native signer/keygen sources too.
 install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
+install(DIRECTORY explain DESTINATION "${_dest}")
 # Sparkle updater templates (configure_file'd per product by MavericksSparkle.cmake).
 install(DIRECTORY updater DESTINATION "${_dest}")
 
