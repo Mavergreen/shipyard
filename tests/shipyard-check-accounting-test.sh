@@ -36,6 +36,9 @@ done
 [ "$(sed -n 's/^  more: shipyard-check --explain //p' "$t/out" | sort -u | tr '\n' ' ')" = "apt bare-curl brew docs-no-sudo " ] \
   || fail "C1: exactly the four repo-wide rules fail: $(sed -n 's/^  more: shipyard-check --explain //p' "$t/out" | tr '\n' ' ')"
 grep -q '^shipyard-check: [0-9]* checks, 4 failed, [0-9]* not run$' "$t/out" || fail "C1: the count names the four failures and the rules not run: $(tail -n 1 "$t/out")"
+for id in comments host-tools ingredient-pins; do
+  grep -q "^$id: not run: " "$t/out" || fail "M3: $id, with nothing to check, says it did not run"
+done
 
 c="$t/clean"; mkdir "$c"; cp -R "$fx/release-concurrency/pass-no-release/." "$c/"
 rc=0; (cd "$c" && SHIPYARD_CHECK_FILES="$c/FILES" sh "$sc" --only release-concurrency bare-curl brew vendored) > "$t/out" 2>&1 || rc=$?
@@ -48,6 +51,15 @@ for d in "$t/no-such-dist" "$t/empty-dist"; do
   [ "$rc" = 2 ] || fail "C2: --dist $(basename "$d") exits 2, got $rc: $(tail -n 1 "$t/out")"
   grep -qF -- "$d" "$t/out" || fail "C2: the refusal names $(basename "$d")"
 done
+
+rc=0; SHIPYARD_CHECK_VERSION=1.0.0-mavericks.1 sh "$sc" --dist "$fx/compat-archs/pass/dist" --only pkg-in-place gui-relaunch-safe > "$t/out" 2>&1 || rc=$?
+[ "$rc" = 0 ] && [ "$(tail -n 1 "$t/out")" = "shipyard-check: 0 checks, 0 failed, 2 not run" ] \
+  || fail "M3: a dist with no .pkg reports the pkg checks not run, got $rc: $(tail -n 1 "$t/out")"
+if sh -c '. "$1"; mach_tool OTOOL && mach_tool LIPO' sh "$here/scripts/lib/macho-tools.sh" >/dev/null 2>&1; then
+  rc=0; (cd "$t" && SHIPYARD_CHECK_VERSION=1.0.0-mavericks.1 SHIPYARD_CHECK_REPO="$t" sh "$sc" --dist "$fx/bundle-id/pass/dist" --only enclosure notes floor) > "$t/out" 2>&1 || rc=$?
+  [ "$rc" = 0 ] && [ "$(tail -n 1 "$t/out")" = "shipyard-check: 1 checks, 0 failed, 2 not run" ] \
+    || fail "M3: a dist with no appcast reports the appcast checks not run, got $rc: $(tail -n 1 "$t/out")"
+fi
 
 v="$t/vi"; mkdir "$v"; cp -R "$fx/version-ignored/fail/." "$v/"
 rc=0; (cd "$v" && SHIPYARD_CHECK_FILES="$v/FILES" sh "$sc" --only release-concurrency) > "$t/out" 2>&1 || rc=$?
