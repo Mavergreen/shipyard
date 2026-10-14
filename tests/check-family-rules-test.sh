@@ -1,9 +1,9 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: check-family-rules-test.sh
-#          Runs the gate (scripts/check-family-conventions.sh) over tests/fixtures/checks/<id>/ for the
-#          family rules that product repos used to hand-roll: a pass fixture is clean, a fail* fixture
-#          fails with its own id, and inline cases cover the exceptions and edge shapes.
+#          Runs the gate (scripts/check-family-conventions.sh) over edits of the pr-trigger pass
+#          fixture for the family rules that product repos used to hand-roll: inline cases cover the
+#          exceptions and edge shapes. The fixtures themselves run in check-fixtures-run.sh.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
 S="$here/scripts/check-family-conventions.sh"
@@ -19,34 +19,12 @@ run() {  # $1 = a fixture tree holding FILES; the gate runs in a git-init copy o
   (cd "$w/copy" && sh "$S") > "$w/out" 2>&1
 }
 
-IDS="pr-trigger publish-order renovate-extends-preset renovate-json-valid no-hardcoded-version
-     no-tags-trigger no-pull-request-target checkout-drops-credentials permissions-contents-read
-     upstream-version-bare version-ignored bare-curl brew macports pkgsrc apt vendored docs-no-sudo"
-
 failing() {  # the ids the last run reported failing, one per line
   sed -n 's/^  more: shipyard-check --explain //p' "$w/out" | sort -u
 }
 only_fails() {  # $1 = what ran, $2 = the one id that may fail
   [ "$(failing)" = "$2" ] || fail "$1 should fail only $2, got: $(failing | tr '\n' ' ')"
 }
-
-for id in $IDS; do
-  [ -d "$fx/$id/pass" ] || fail "$id has a pass fixture"
-  for d in "$fx/$id"/pass*; do
-    run "$d" || fail "$id/$(basename "$d") should be clean: $(cat "$w/out")"
-  done
-  set -- "$fx/$id"/fail*
-  [ -d "$1" ] || fail "$id has a fail fixture"
-  for d in "$@"; do
-    if run "$d"; then fail "$id/$(basename "$d") should fail"; fi
-    grep -q "^$id: " "$w/out" || fail "$id/$(basename "$d") should fail $id: $(cat "$w/out")"
-    case "$d" in
-      */fail-unparseable) ;;
-      *) only_fails "$id/$(basename "$d")" "$id" ;;
-    esac
-    grep -q '^  fix: ' "$w/out" || fail "$id/$(basename "$d") names a fix"
-  done
-done
 
 fresh() {  # $1 = name; a copy of the baseline pass tree to edit in place
   rm -rf "$w/$1"; mkdir "$w/$1"

@@ -67,11 +67,44 @@ jobs:
       - name: Our own conventions gate
         run: sh scripts/shipyard-check
 
+      - name: Every check's fixtures (the count is the same on every host)
+        run: sh tests/check-fixtures-run.sh
+
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
 
   linux:
     uses: ./.github/workflows/linux-host.yml
+
+  # spec: tests/on-target-job-test.sh -- the flag-day P1 ruling R5: this job runs every check on Mac OS X
+  #       10.9, but the guest has no python3 and the checks fail the python3 check without one, so it
+  #       stays skipped until python-315 phase 1 ships its first release. Delete `if: false` then.
+  on-target:
+    name: on-target (SKIPPED until python-315 phase 1 ships, ruling R5)
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
+          persist-credentials: false
+      - name: python-315's latest release, fetched on the runner
+        run: gh release download -R Mavergreen/python-315 --pattern '*.pkg' --dir python-315-pkg
+      - name: Fixtures on Mac OS X 10.9
+        uses: Mavergreen/mavericks-vm@v1
+        with:
+          image-key: ${{ secrets.MAVERICKS_VM_KEY }}
+          copyback: false
+          debug-on-error: true
+          run: |
+            set -eu
+            sudo -n installer -pkg python-315-pkg/*.pkg -target /
+            sh tests/check-fixtures-run.sh --jobs 2
 
   # spec: R-P1-17 -- this job builds (or restores) the universal shipyard-cmake and publishes it as a
   #       run artifact so it can be run on a real 10.9 box, the only proof the x86_64 slice works

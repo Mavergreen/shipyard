@@ -32,4 +32,24 @@ for s in "$here"/scripts/check-*.sh "$here"/scripts/assert*.sh; do
   rel="scripts/$(basename "$s")"
   cut -f3 "$reg" | grep -qx "$rel" || fail "$rel is the script of at least one id"
 done
+infeasible="update-trusted|tests/assert_update_trusted.bats|it verifies a signed pkg against the updater's embedded key, so its failing case is a built, signed pkg that a fixture tree cannot hold
+installed-shipyard|tests/assert-installed-shipyard-test.sh|it inspects an installed prefix, which its test assembles in a scratch root
+host|tests/check-bash32-parse-test.sh|it is a deviation key, not a check: it excuses bash32-parse on a host, and that test declares and withdraws it"
+fx="$here/tests/fixtures/checks"
+while IFS="$(printf '\t')" read -r id mode script old fate; do
+  [ "$fate" = P1 ] || continue
+  set -- "$fx/$id"/fail*
+  if [ -d "$1" ]; then
+    printf '%s\n' "$infeasible" | cut -d'|' -f1 | grep -qx "$id" && fail "$id has a fail fixture, so it is not infeasible: drop it from the list"
+    continue
+  fi
+  row="$(printf '%s\n' "$infeasible" | grep "^$id|" || true)"
+  [ -n "$row" ] || fail "$id (fate P1) has no tests/fixtures/checks/$id/fail* fixture, and is not listed as infeasible with a reason"
+  t="$(printf '%s\n' "$row" | cut -d'|' -f2)"
+  [ -f "$here/$t" ] || fail "$id is listed as infeasible and covered by $t, which does not exist"
+  grep -q "$id" "$here/$t" || fail "$id is listed as infeasible and covered by $t, which never names $id"
+done < "$reg"
+for row in $(printf '%s\n' "$infeasible" | cut -d'|' -f1); do
+  cut -f1 "$reg" | grep -qx "$row" || fail "the infeasible list names $row, which is not a registered id"
+done
 echo "PASS check-registry"

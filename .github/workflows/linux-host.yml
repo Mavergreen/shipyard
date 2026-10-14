@@ -40,6 +40,13 @@ jobs:
       - name: Host-agnostic suites, strictly
         run: sh scripts/run-repo-tests.sh --strict-host
 
+      # spec: tests/check-fixtures-run.sh -- strictly: no fixture may skip on Linux; then again with git
+      #       hidden, which is how the 10.9 guest runs them, so every fixture not marked NEEDS git proves it needs none.
+      - name: Every check's fixtures
+        run: sh tests/check-fixtures-run.sh --strict
+      - name: The same fixtures with git hidden
+        run: sh tests/check-fixtures-run.sh --no-git
+
       - name: Our own conventions gate, where consumers run it
         run: sh scripts/shipyard-check
 
