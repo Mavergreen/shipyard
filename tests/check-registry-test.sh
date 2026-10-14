@@ -44,6 +44,8 @@ while IFS="$(printf '\t')" read -r id mode script old fate; do
   set -- "$fx/$id"/fail*
   if [ -d "$1" ]; then
     printf '%s\n' "$infeasible" | cut -d'|' -f1 | grep -qx "$id" && fail "$id has a fail fixture, so it is not infeasible: drop it from the list"
+    set -- "$fx/$id"/pass*
+    [ -d "$1" ] || fail "$id (fate P1) has a fail fixture but no tests/fixtures/checks/$id/pass* fixture"
     continue
   fi
   row="$(printf '%s\n' "$infeasible" | grep "^$id|" || true)"
