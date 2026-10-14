@@ -164,7 +164,6 @@ if bad:
 print("ok: ci.yml rehearses the packaging path release.yml only ever runs while publishing, and both "
       "hand install@v1 the CMake tree rather than letting it nest a local action")
 PY
-# A push to flag-day runs ci.yml and never release.yml.
 python3 - "$wf" <<'PY'
 import fnmatch, os, sys, yaml
 wf = sys.argv[1]
