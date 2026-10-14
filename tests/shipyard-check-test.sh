@@ -51,6 +51,10 @@ last="$(SHIPYARD_CHECK_REGISTRY="$t/reg" SHIPYARD_CHECK_ROOT="$t" sh "$sc" --onl
 [ "$last" = "shipyard-check: 1 checks, 0 failed" ] || fail "--only count, got: $last"
 last="$(SHIPYARD_CHECK_REGISTRY="$t/reg" SHIPYARD_CHECK_ROOT="$t" sh "$sc" --only ok-a --only dst)" || fail "--only runs any mode"
 [ "$last" = "shipyard-check: 2 checks, 0 failed" ] || fail "--only both, got: $last"
+printf 'nr\tcheckout\tscripts/nr.sh\t5\tP1\n' >> "$t/reg"
+printf '. "$SHIPYARD_CHECK_DIR/check-lib.sh"\nchk_notrun nr "no input"\nexit 0\n' > "$t/scripts/nr.sh"
+last="$(SHIPYARD_CHECK_REGISTRY="$t/reg" SHIPYARD_CHECK_ROOT="$t" sh "$sc" --only ok-a --only nr | tail -n 2 | tr '\n' '|')"
+[ "$last" = "nr: not run: no input|shipyard-check: 1 checks, 0 failed, 1 not run|" ] || fail "a check that did not run is said so and not counted, got: $last"
 mkdir "$t/nogh"; printf '#!/bin/sh\nexit 1\n' > "$t/nogh/gh"; chmod +x "$t/nogh/gh"
 for id in repo-auto-merge repo-required-context; do
   rc=0; PATH="$t/nogh:$PATH" sh "$sc" --only "$id" >"$t/out" 2>"$t/err" || rc=$?

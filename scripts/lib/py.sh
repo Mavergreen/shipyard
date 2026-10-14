@@ -16,8 +16,14 @@ _py_install_hint() {
 }
 
 chk_python3() {
-  for _py_c in "${SHIPYARD_PYTHON3:-}" "${SHIPYARD_OPT_PREFIX:-/opt/mavergreen}/bin/python3" python3-315 python3; do
-    [ -n "$_py_c" ] || continue
+  if [ -n "${SHIPYARD_PYTHON3:-}" ]; then
+    set -- "$SHIPYARD_PYTHON3"
+    _py_tried="\$SHIPYARD_PYTHON3, which names the interpreter to use"
+  else
+    set -- "${SHIPYARD_OPT_PREFIX:-/opt/mavergreen}/bin/python3" python3-315 python3
+    _py_tried="/opt/mavergreen/bin/python3, python3-315 and python3 on PATH"
+  fi
+  for _py_c in "$@"; do
     _py_p="$(command -v "$_py_c" 2>/dev/null)" || continue
     if _py_ok "$_py_p"; then
       printf '%s\n' "$_py_p"
@@ -25,7 +31,7 @@ chk_python3() {
     fi
   done
   chk_fail python3 "no python3 >= 3.9 was found" \
-    "the checks that read YAML run in python3, tried \$SHIPYARD_PYTHON3, /opt/mavergreen/bin/python3, python3-315 and python3 on PATH" \
+    "the checks that read YAML run in python3, tried $_py_tried" \
     "$(_py_install_hint)"
   return 1
 }

@@ -25,6 +25,7 @@ for s in check-comments check-shell-portability check-host-tools; do
 done
 
 rm -f "$w/count"/*
+unset SHIPYARD_CHECK_RUNLOG
 (cd "$root" && sh scripts/check-family-conventions.sh >/dev/null 2>&1) || :
 for s in check-comments check-shell-portability check-host-tools; do
   [ "$(runs "$s")" = 1 ] || fail "$s should run once when the gate is run directly, ran $(runs "$s") times"

@@ -34,8 +34,11 @@ if (cd "$work/dirty" && SHIPYARD_CHECK_RUNLOG="$work/runlog" sh "$S" >/dev/null 
 grep -qx tree-clean "$work/runlog" || say "it should record that tree-clean ran"
 mkrepo "$work/nomanifest-dispatch"
 mkdir -p "$work/nomanifest-dispatch/build-native"; : > "$work/nomanifest-dispatch/build-native/x"
-(cd "$work/nomanifest-dispatch" && SHIPYARD_CHECK_RUNLOG="$work/runlog2" sh "$S" >/dev/null 2>&1) \
+(cd "$work/nomanifest-dispatch" && SHIPYARD_CHECK_RUNLOG="$work/runlog2" SHIPYARD_CHECK_NOTRUNLOG="$work/notrun2" sh "$S" > "$work/out2" 2>&1) \
   || say "under shipyard-check with no manifest there is nothing to compare, and it must not fail every checkout with a build dir"
+grep -qx 'tree-clean: not run: no --record manifest' "$work/out2" || say "with no manifest it should say so: $(cat "$work/out2")"
+if grep -qx tree-clean "$work/runlog2" 2>/dev/null; then say "with no manifest it must not count as run"; fi
+grep -qx tree-clean "$work/notrun2" || say "with no manifest it should record that it did not run"
 
 mkrepo "$work/declared"
 printf 'VERSION  # the build stamps the resolved version\n' > "$work/declared/.mavericks-intree"

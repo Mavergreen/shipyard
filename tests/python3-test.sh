@@ -27,6 +27,11 @@ rc=0; run SHIPYARD_PYTHON3="$t/py38" > "$t/out" 2> "$t/err" || rc=$?
 head -1 "$t/err" | grep -q '^python3: ' || fail "the refusal is the python3 check's K2 shape"
 grep -q 'fix: ' "$t/err" || fail "the refusal names a fix"
 
+mkdir "$t/bin39"; cp "$t/bin"/* "$t/bin39/"; cp "$t/py39" "$t/bin39/python3"
+rc=0; env -i PATH="$t/bin39" SHIPYARD_CHECK_DIR="$here/scripts" SHIPYARD_OPT_PREFIX="$t/none" SHIPYARD_PYTHON3="$t/py38" \
+  "$t/bin/sh" -c '. "$SHIPYARD_CHECK_DIR/lib/py.sh"; chk_python3' > "$t/out" 2> "$t/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "SHIPYARD_PYTHON3 names the interpreter: a 3.8 there is refused even with a 3.9 python3 on PATH"
+
 rc=0; run > "$t/out" 2> "$t/err" || rc=$?
 [ "$rc" -ne 0 ] || fail "no python3 at all is refused"
 case "$(uname -s)" in

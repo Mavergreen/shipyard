@@ -9,7 +9,6 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
-chk_ran tree-clean
 
 if ! root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
   chk_fail tree-clean "refusing to certify a tree nothing could read" \
@@ -101,12 +100,13 @@ if [ -f "$MANIFEST" ]; then
   added="$(LC_ALL=C comm -23 "$scratch/now" "$MANIFEST")"
   mode="against the pre-build manifest"
 elif [ -n "${SHIPYARD_CHECK_RUNLOG:-}" ]; then
-  echo "assert-tree-clean: no manifest recorded (--record has not run), so there is nothing to compare under shipyard-check"
+  chk_notrun tree-clean "no --record manifest"
   exit 0
 else
   added="$(cat "$scratch/now")"
   mode="with NO manifest (no --record was run), so EVERY untracked or ignored path counts"
 fi
+chk_ran tree-clean
 
 # platform: a `for p in $added` here would word-split a path containing a
 #           space, and a `while read` in a pipeline cannot set a variable

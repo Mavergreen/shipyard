@@ -24,6 +24,11 @@ chk_ran() {
   [ -z "${SHIPYARD_CHECK_RUNLOG:-}" ] || echo "$1" >> "$SHIPYARD_CHECK_RUNLOG"
 }
 
+chk_notrun() {
+  printf '%s: not run: %s\n' "$1" "$2"
+  [ -z "${SHIPYARD_CHECK_NOTRUNLOG:-}" ] || echo "$1" >> "$SHIPYARD_CHECK_NOTRUNLOG"
+}
+
 chk_tracked_files() {
   if [ -n "${SHIPYARD_CHECK_FILES:-}" ]; then
     cat "$SHIPYARD_CHECK_FILES"
