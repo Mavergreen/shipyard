@@ -37,6 +37,9 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 
 @test "a static archive: members report OBJECT" {
   run sh "$S" "$WORK/libm.a"
+  echo "# status=$status output=$output" >&3
+  echo "# lipo: $("$LIPO" -info "$WORK/libm.a" 2>&1)" >&3
+  echo "# otool: $("$OTOOL" -hv "$WORK/libm.a" 2>&1 | head -8)" >&3
   [ "$status" -eq 0 ]
   [[ "$output" == "x86_64 OBJECT 10.9 "* ]] || false
 }

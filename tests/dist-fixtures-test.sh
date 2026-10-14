@@ -13,6 +13,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 fx="$here/fixtures/checks"
 . "$root/scripts/lib/macho-tools.sh"
+unset GITHUB_REPOSITORY
 w="$(mktemp -d "${TMPDIR:-/tmp}/dist-fixtures.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 have_llvm=1
 mach_tool OTOOL 2>/dev/null && mach_tool LIPO 2>/dev/null && mach_tool NM 2>/dev/null && mach_tool STRINGS 2>/dev/null || have_llvm=0

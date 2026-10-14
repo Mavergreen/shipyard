@@ -25,6 +25,11 @@ jobs:
           path: ~/Library/Caches/mavericks-sdk
           key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
+      # spec: scripts/install-macho-readers.sh -- the compat guard reads Mach-O with LLVM's readers and
+      #       never Apple's, and a macOS runner has only Apple's; this must run before the first build.
+      - name: LLVM's Mach-O readers
+        run: sh scripts/install-macho-readers.sh
+
       - id: cm
         uses: ./.github/actions/shipyard-cmake
       - name: Install mavericks-shipyard (self, source-build) -- and bats, so the *.bats suites below can run
@@ -68,6 +73,11 @@ jobs:
         with:
           path: ~/Library/Caches/mavericks-sdk
           key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
+
+      # spec: scripts/install-macho-readers.sh -- the compat guard reads Mach-O with LLVM's readers and
+      #       never Apple's, and a macOS runner has only Apple's; this must run before the first build.
+      - name: LLVM's Mach-O readers
+        run: sh scripts/install-macho-readers.sh
 
       - id: cm
         uses: ./.github/actions/shipyard-cmake

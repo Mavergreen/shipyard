@@ -82,6 +82,7 @@ sudo -u bob launchctl load -w /Library/LaunchAgents/x.plist')"
   echo "$output" | grep -q 'relaunches a GUI app and also stops an old instance'
   run env SHIPYARD_CHECK_DIST="$fx/fail/dist" sh "$GATE"
   [ "$status" -ne 0 ]
-  case "$output" in "gui-relaunch-safe: "*) ;; *) echo "first line: $output"; false ;; esac
+  echo "$output" | grep -q '^gui-relaunch-safe: '
+  echo "$output" | grep -q '^  fix: call mav_stop_gui_instance' 
 }
 

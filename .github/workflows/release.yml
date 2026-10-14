@@ -36,6 +36,11 @@ jobs:
       #       resolves against the consumer's workspace and is prepared before step `if:` conditions
       #       run, so nesting it there would break every consumer in a way this repo's CI could never
       #       reproduce.
+      # spec: scripts/install-macho-readers.sh -- the compat guard reads Mach-O with LLVM's readers and
+      #       never Apple's, and a macOS runner has only Apple's; this must run before the first build.
+      - name: LLVM's Mach-O readers
+        run: sh scripts/install-macho-readers.sh
+
       - id: cm
         uses: ./.github/actions/shipyard-cmake
       - name: Install mavericks-shipyard (self, source-build)

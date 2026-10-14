@@ -82,6 +82,16 @@ runs:
         path: ~/Library/Caches/mavericks-sdk
         key: ${{ steps.mav-sdk-key.outputs.key }}
 
+    # spec: scripts/install-macho-readers.sh -- the compat guard every shipyard-cmake build runs reads
+    #       Mach-O with LLVM's readers and never Apple's; a macOS runner has only Apple's, so they are
+    #       named in the job's environment here, ahead of the first build.
+    - if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -eu
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        sh "$root/scripts/install-macho-readers.sh"
+
     - if: inputs.source == 'release' && runner.os == 'macOS'
       shell: bash
       env:
