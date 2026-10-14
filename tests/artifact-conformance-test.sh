@@ -16,9 +16,16 @@ S="$here/../scripts/check-artifact-conformance.sh"
 ok() {  # facts on stdin must pass
   printf '%s\nend-of-facts\n' "$2" | sh "$S" >/dev/null 2>&1 || { echo "FAIL $1: expected pass"; exit 1; }
 }
-no() {  # facts on stdin must fail, and name the check
-  out="$(printf '%s\nend-of-facts\n' "$3" | sh "$S" 2>&1)" && { echo "FAIL $1: expected failure"; exit 1; }
-  printf '%s\n' "$out" | grep -qi "$2" || { echo "FAIL $1: should mention '$2', got: $out"; exit 1; }
+no() {  # facts must fail, the first line of the failure must start with the check's id; "id|text" also wants text in the output
+  out="$(printf '%s\nend-of-facts\n' "$3" | sh "$S" 2>&1 >/dev/null)" && { echo "FAIL $1: expected failure"; exit 1; }
+  _no_id="${2%%|*}"
+  case "$out" in "$_no_id: "*) ;; *) echo "FAIL $1: the first line should start with '$_no_id: ', got: $out"; exit 1 ;; esac
+  case "$2" in *'|'*) printf '%s\n' "$out" | grep -qiF "${2#*|}" || { echo "FAIL $1: should mention '${2#*|}', got: $out"; exit 1; } ;; esac
+}
+
+has() {  # facts must fail, and some failure must start with the check's id (others may trip too)
+  out="$(printf '%s\nend-of-facts\n' "$3" | sh "$S" 2>&1 >/dev/null)" && { echo "FAIL $1: expected failure"; exit 1; }
+  printf '%s\n' "$out" | grep -q "^$2: " || { echo "FAIL $1: a failure should start with '$2: ', got: $out"; exit 1; }
 }
 
 GOOD='expected 1.26.5-mavericks.5
@@ -85,7 +92,7 @@ no "an identifier outside the family scheme" "identifier" 'expected 1.0.0-maveri
 pkg p.pkg 1.0.0-mavericks.1 10.9.5 com.example.thing
 asset p.pkg 10'
 
-no "a version outside the family scheme" "scheme" 'expected 1.0.0
+no "a version outside the family scheme" "version-scheme" 'expected 1.0.0
 pkg p.pkg 1.0.0 10.9.5 dev.mavergreen.x
 asset p.pkg 10'
 
@@ -126,7 +133,7 @@ deviation floor the cross toolchain runs on modern macOS and targets 10.9; it is
 pkg p.pkg 1.0.0-mavericks.1 11.0 dev.mavergreen.x
 asset p.pkg 10'
 
-no "a deviation with no reason is not a deviation" "reason" 'expected 1.0.0-mavericks.1
+no "a deviation with no reason is not a deviation" "floor|reason" 'expected 1.0.0-mavericks.1
 deviation floor
 pkg p.pkg 1.0.0-mavericks.1 11.0 dev.mavergreen.x
 asset p.pkg 10'
@@ -200,13 +207,13 @@ build-info build-info-cross.txt ca_sha256 3ff344e30b9b
 pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
-no "variants built from DIFFERENT shim pins" "mls_version" 'expected 1.26.5-mavericks.5
+no "variants built from DIFFERENT shim pins" "variant-build-info|mls_version" 'expected 1.26.5-mavericks.5
 build-info build-info-native.txt mls_version 1.5.2-mavericks.2
 build-info build-info-cross.txt mls_version 1.5.2-mavericks.1
 pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
-no "variants built from different CA bundles" "ca_sha256" 'expected 1.26.5-mavericks.5
+no "variants built from different CA bundles" "variant-build-info|ca_sha256" 'expected 1.26.5-mavericks.5
 build-info build-info-native.txt ca_sha256 3ff344e30b9b
 build-info build-info-cross.txt ca_sha256 9a1c72b4aa0f
 pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
@@ -254,6 +261,7 @@ printf '%s\n' "$out" | grep -qi 'no build records' \
   || { echo "FAIL should say when there was nothing to compare; got: $out"; exit 1; }
 
 AF="$here/../scripts/artifact-facts.sh"
+. "$here/../scripts/lib/macho-tools.sh"
 
 # spec: both the appcast <description> and the Release body are built from dist/RELEASE_NOTES.md
 #       today, which is exactly why the assertion is cheap and why a future change that breaks
@@ -342,7 +350,7 @@ _nodesc_facts="$(sh "$AF" "$_nr/dist-nodesc" 9.9p2-mavericks.6 "$_nr")"
 _nodesc_line="$(printf '%s\n' "$_nodesc_facts" | grep '^appcast-notes ')"
 [ "$_nodesc_line" = "appcast-notes appcast.xml" ] \
   || { echo "FAIL: an emptied <description> should emit 'appcast-notes appcast.xml' with no digest field; got: $_nodesc_line"; exit 1; }
-no "notes: a real appcast with an emptied description fails" "notes" "$_nodesc_facts"
+has "notes: a real appcast with an emptied description fails" "notes" "$_nodesc_facts"
 
 # spec: scripts/artifact-facts.sh -- a REAL appcast built from genuinely DIFFERENT notes must be
 #       detected as a mismatch. Two real renders, not a hand-typed hash: this pins the digest
@@ -366,7 +374,7 @@ _a_digest="$(printf '%s\n' "$_mismatch_facts" | sed -n 's/^notes-render [^ ]* \(
 _b_digest="$(printf '%s\n' "$_mismatch_facts" | sed -n 's/^appcast-notes [^ ]* \(..*\)$/\1/p')"
 [ "$_a_digest" != "$_b_digest" ] \
   || { echo "FAIL: rendering two genuinely different notes files should not produce equal digests"; exit 1; }
-no "notes: a real appcast rendered from DIFFERENT notes is a mismatch" "notes" "$_mismatch_facts"
+has "notes: a real appcast rendered from DIFFERENT notes is a mismatch" "notes" "$_mismatch_facts"
 
 # spec: scripts/artifact-facts.sh -- the style line must be stripped by TAG, not by its literal
 #       CSS text. Change the injected
@@ -626,21 +634,15 @@ rm -rf "$_fc1"
 
 # spec: scripts/macho-slices.sh -- exit 1 is "not Mach-O", exit 4 a reader that failed. A fat binary (the
 #       ambiguous cafebabe magic) skipped on 1 must still abort on 4: a failing OTOOL must not make the file
-#       vanish from the stream. Needs a host that builds and lipo-merges two arches.
+#       vanish from the stream. The fat binary is a checked-in fixture (tests/fixtures/macho), so the
+#       fixture needs LLVM's readers and nothing else.
 _fc4="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-d.XXXXXX")"
 mkdir -p "$_fc4/src" "$_fc4/dist" "$_fc4/bin"
-printf 'int main(void){return 0;}\n' > "$_fc4/m.c"
-_fc4_ok=0
-# platform: guarded macOS-only call -- clang -arch must build both slices first, so Linux (no -arch) skips below
-if clang -arch x86_64 -mmacosx-version-min=10.9 "$_fc4/m.c" -o "$_fc4/x" 2>/dev/null \
-   && clang -arch arm64 "$_fc4/m.c" -o "$_fc4/a" 2>/dev/null; then
-  # platform: guarded macOS-only call -- reached only once both -arch builds above succeeded
-  lipo -create "$_fc4/x" "$_fc4/a" -output "$_fc4/src/fat" 2>/dev/null && _fc4_ok=1
-fi
-if [ "$_fc4_ok" = 1 ]; then
+cp "$here/fixtures/macho/fatok" "$_fc4/src/fat"
+if mach_tool OTOOL 2>/dev/null; then
   ( cd "$_fc4/src" && tar -czf "$_fc4/dist/fat.tar.gz" fat )
   for _fc4_sub in -l -hv; do
-    printf '#!/bin/sh\ncase "$1" in %s) echo "otool: %s broke" >&2; exit 1 ;; esac\nexec otool "$@"\n' "$_fc4_sub" "$_fc4_sub" > "$_fc4/bin/otool"
+    printf '#!/bin/sh\ncase "$1" in %s) echo "otool: %s broke" >&2; exit 1 ;; esac\nexec "%s" "$@"\n' "$_fc4_sub" "$_fc4_sub" "$OTOOL" > "$_fc4/bin/otool"
     chmod +x "$_fc4/bin/otool"
     _fc4_facts="$(OTOOL="$_fc4/bin/otool" sh "$AF" "$_fc4/dist" 1.0.0-mavericks.1 "$_fc4" 2>/dev/null)" \
       && { rm -rf "$_fc4"; echo "FAIL: a fat binary whose reader fails must abort, not vanish from the stream; got: $_fc4_facts"; exit 1; }
@@ -650,7 +652,8 @@ if [ "$_fc4_ok" = 1 ]; then
       && { rm -rf "$_fc4"; echo "FAIL: an aborted stream must not also carry end-of-facts"; exit 1; }
   done
 else
-  echo "artifact-conformance: skip: the fat-binary reader-failure fixture needs clang and lipo for two arches"
+  echo "artifact-conformance: skip: no llvm-otool found; the Mach-O fixtures need LLVM's readers" >&2
+  exit 77
 fi
 rm -rf "$_fc4"
 
@@ -734,7 +737,7 @@ installs p.pkg usr/local/mavergreen/x/mavergreen.plist'
 
 alone() {  # facts must fail, and every failure reported must be check $2's -- no other check trips
   _err="$(printf '%s\nend-of-facts\n' "$3" | sh "$S" 2>&1 >/dev/null)" && { echo "FAIL $1: expected failure"; exit 1; }
-  printf '%s\n' "$_err" | grep -v "^conformance: $2: " | grep -q . \
+  printf '%s\n' "$_err" | grep -v '^  ' | grep -v "^$2: " | grep -q . \
     && { echo "FAIL $1: only the $2 check should fail here, got: $_err"; exit 1; }
   return 0
 }
@@ -753,15 +756,15 @@ installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
 bundle p.pkg Library/Application%20Support/Mavergreen/XUpdater.app dev.mavergreen.XUpdater
 launchd p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck"
 
-no "install-path: loose files in /usr/local are no longer the family's" "install-path" "$REL
+has "install-path: loose files in /usr/local are no longer the family's" "install-path" "$REL
 $LAYOUT
 installs p.pkg usr/local/bin/x"
 
-no "install-path: another product's tree is not this pkg's" "install-path" "$REL
+has "install-path: another product's tree is not this pkg's" "install-path" "$REL
 $LAYOUT
 installs p.pkg usr/local/mavergreen/y/bin/y"
 
-no "install-path: .base is only for a pkg that carries the base component" "install-path" 'expected 1.0.0-mavericks.1
+has "install-path: .base is only for a pkg that carries the base component" "install-path" 'expected 1.0.0-mavericks.1
 pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
@@ -774,7 +777,7 @@ component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 installs p.pkg usr/local/mavergreen/x/bin/x"
 
-no "manifest: the product must be registered to this identifier" "registered" "$REL
+no "manifest: the product must be registered to this identifier" "manifest|registered" "$REL
 component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
@@ -788,7 +791,7 @@ manifest p.pkg y dev.mavergreen.x x
 registered y dev.mavergreen.x
 installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
 
-no "manifest: something installed outside the tree must be listed in outside" "outside" "$REL
+no "manifest: something installed outside the tree must be listed in outside" "manifest|outside" "$REL
 component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
@@ -796,7 +799,7 @@ registered x dev.mavergreen.x
 installs p.pkg usr/local/mavergreen/x/mavergreen.plist
 installs p.pkg Applications/X.app/Contents/MacOS/X"
 
-no "manifest: an outside entry must name something the pkg installs" "outside" "$REL
+no "manifest: an outside entry must name something the pkg installs" "manifest|outside" "$REL
 component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
@@ -804,7 +807,7 @@ registered x dev.mavergreen.x
 manifest-outside p.pkg Applications/Gone.app
 installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
 
-no "manifest: a whole unlisted directory is reported capped, not once per file" "5 more files outside its tree" "$REL
+no "manifest: a whole unlisted directory is reported capped, not once per file" "manifest|5 more files outside its tree" "$REL
 $LAYOUT
 $(awk 'BEGIN { for (i = 0; i < 25; i++) print "installs p.pkg usr/local/bin/f" i }')"
 
@@ -829,7 +832,7 @@ $LAYOUT
 manifest-outside p.pkg Applications/X.app
 manifest-outside p.pkg $_bad
 installs p.pkg Applications/X.app/Contents/MacOS/X"
-  no "manifest: outside entry '$_bad' has a shape the helper refuses to uninstall" "shape the helper refuses" "$_facts"
+  no "manifest: outside entry '$_bad' has a shape the helper refuses to uninstall" "manifest|shape the helper refuses" "$_facts"
   alone "manifest: outside entry '$_bad' has a shape the helper refuses to uninstall" "manifest" "$_facts"
 done
 
@@ -879,7 +882,7 @@ alone "identity: a launchd job outside the family" "launchd-label" "$REL
 $LAYOUT
 launchd p.pkg Library/LaunchDaemons/com.example.xd.plist com.example.xd"
 
-no "identity: a launchd plist not named for its Label" "named <Label>.plist" "$REL
+no "identity: a launchd plist not named for its Label" "launchd-label|named <Label>.plist" "$REL
 $LAYOUT
 launchd p.pkg Library/LaunchDaemons/dev.mavergreen.a.plist dev.mavergreen.b"
 alone "identity: a launchd plist not named for its Label" "launchd-label" "$REL
@@ -910,7 +913,7 @@ manifest-outside p.pkg Library/Some%20Place/y
 installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
 installs p.pkg Library/Some%20Place/y"
 
-no "install-path: a path deviation excuses only the paths it names" "Library/PreferencePanes" "$REL
+no "install-path: a path deviation excuses only the paths it names" "install-path|Library/PreferencePanes" "$REL
 $LAYOUT
 deviation install-path:Library/Extensions/* 10.9 loads kexts only from here
 manifest-outside p.pkg Library/Extensions/X.kext
@@ -1009,7 +1012,7 @@ alone "feed: a release with feeds but not this updater's" "feed" "$REL
 asset y.xml 700
 appcast y.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
 $UPD"
-no "feed: appcast.xml is not a feed any updater polls" "x.xml" "$REL
+no "feed: appcast.xml is not a feed any updater polls" "feed|x.xml" "$REL
 asset appcast.xml 700
 appcast appcast.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
 $UPD"
@@ -1091,40 +1094,41 @@ repository someone/golang-126"
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
 #       top-level bundle, a symlink, and a path with a space are each a way to report the wrong thing.
-if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&1 && [ -x /usr/libexec/PlistBuddy ]; then
+# spec: scripts/lib/plist-facts.py -- a plist that cannot be read (a truncated manifest here) aborts the
+#       stream, naming the file, and the checker fails artifact-facts: a fact read from half a plist
+#       is a fact about nothing.
+_tp="$(mktemp -d "${TMPDIR:-/tmp}/af-truncated-plist.XXXXXX")"
+mkdir -p "$_tp/dist"
+cp "$here/fixtures/checks/artifact-facts/fail/dist/ed25519-1.0.0-mavericks.1.pkg" "$_tp/dist/"
+_tp_facts="$(sh "$AF" "$_tp/dist" 1.0.0-mavericks.1 "$_tp" 2>/dev/null)" \
+  && { rm -rf "$_tp"; echo "FAIL: a pkg with a truncated manifest plist must abort, not succeed; got: $_tp_facts"; exit 1; }
+printf '%s\n' "$_tp_facts" | grep -q '^abort cannot read the plist .*mavergreen.plist' \
+  || { rm -rf "$_tp"; echo "FAIL: the abort should name the truncated mavergreen.plist; got: $_tp_facts"; exit 1; }
+printf '%s\n' "$_tp_facts" | grep -qx 'end-of-facts' \
+  && { rm -rf "$_tp"; echo "FAIL: an aborted stream must not also carry end-of-facts"; exit 1; }
+_tp_out="$(printf '%s\n' "$_tp_facts" | sh "$S" 2>&1 >/dev/null)" \
+  && { rm -rf "$_tp"; echo "FAIL: the checker must not pass an aborted stream"; exit 1; }
+case "$_tp_out" in "artifact-facts: "*) ;; *) rm -rf "$_tp"; echo "FAIL: the checker's first line should start with 'artifact-facts: ', got: $_tp_out"; exit 1 ;; esac
+rm -rf "$_tp"
+
+# spec: scripts/lib/pkg-read.sh -- a bsdtar that cannot run is named, not read as "every pkg is unreadable".
+_bt="$(mktemp -d "${TMPDIR:-/tmp}/af-bsdtar.XXXXXX")"
+mkdir -p "$_bt/dist"
+cp "$here/fixtures/checks/artifact-facts/pass/dist/ed25519-1.0.0-mavericks.1.pkg" "$_bt/dist/"
+_bt_facts="$(BSDTAR=/nonexistent/bsdtar sh "$AF" "$_bt/dist" 1.0.0-mavericks.1 "$_bt" 2>/dev/null)" \
+  && { rm -rf "$_bt"; echo "FAIL: with no usable bsdtar the stream must abort; got: $_bt_facts"; exit 1; }
+printf '%s\n' "$_bt_facts" | grep -q '^abort cannot read .*pkg: no bsdtar found' \
+  || { rm -rf "$_bt"; echo "FAIL: the abort should say no bsdtar was found; got: $_bt_facts"; exit 1; }
+rm -rf "$_bt"
+
+PK="$here/fixtures/pkgs"
+{
   _pk="$(mktemp -d "${TMPDIR:-/tmp}/conformance-pkg.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-  _st="$_pk/stage"; _ap="$_st/Library/Application Support/Mavergreen/x-updater.app/Contents"
-  mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/usr/local/mavergreen/x/bin" "$_pk/dist" "$_pk/comp" "$_pk/archive"
-  _plist() { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>%s</key><string>%s</string></dict></plist>\n' "$1" "$2" > "$3"; }
-  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.x.updater</string><key>SUFeedURL</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string></dict></plist>\n' > "$_ap/Info.plist"
-  _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
-  _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
-  echo x > "$_st/usr/local/mavergreen/x/bin/x"; ln -s bin/x "$_st/usr/local/mavergreen/x/link"
-  printf 'int main(void){return 0;}\n' > "$_pk/h.c"
-  # platform: the runner's SDK would make this fixture fail the sdk-pin rule the archive assertion below now enforces; clang honours SDKROOT
-  SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/usr/local/mavergreen/x/bin/hello"
-  ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
-  # platform: guarded macOS-only call -- the enclosing `if command -v pkgbuild` skips this block without it
-  /usr/libexec/PlistBuddy -c "Add :product string x" -c "Add :identifier string dev.mavergreen.x" \
-    -c "Add :outside array" -c "Add :outside:0 string Library/Application Support/Mavergreen/x-updater.app" \
-    -c "Add :outside:1 string Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist" \
-    -c "Add :generated array" -c "Add :generated:0 string Applications/Linux X.app" \
-    -c "Add :appcast string https://github.com/Mavergreen/x/releases/latest/download/x.xml" \
-    "$_st/usr/local/mavergreen/x/mavergreen.plist" >/dev/null
+  mkdir -p "$_pk/dist" "$_pk/archive"
+  for _n in x y z; do cp "$PK/$_n-component.pkg" "$_pk/dist/$_n-1.0.0-mavericks.1.pkg"; done
+  cp "$PK/x-tools.tar.gz" "$_pk/dist/x-tools.tar.gz"
+  cp "$PK/x-archive.pkg" "$_pk/archive/x-1.0.0-mavericks.1.pkg"
   printf 'x dev.mavergreen.x x\n' > "$_pk/product-names"
-  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
-  pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
-    "$_pk/dist/x-1.0.0-mavericks.1.pkg"
-  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
-  pkgbuild --quiet --root "$_st/usr/local/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
-    --install-location /usr/local/y "$_pk/dist/y-1.0.0-mavericks.1.pkg"
-  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
-  pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.z --version 1.0.0-mavericks.1 --install-location /opt/z \
-    "$_pk/dist/z-1.0.0-mavericks.1.pkg"
-  cp "$_pk/dist/x-1.0.0-mavericks.1.pkg" "$_pk/comp/x-component.pkg"
-  sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --base-version 1.0.9 \
-    --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavericks.1.pkg" >/dev/null 2>&1 \
-    || { echo "FAIL: set_install_floor.sh could not build the archive this fixture reads"; exit 1; }
   _f="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
   printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"
   _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavericks.1.pkg" | tr -d ' ')"
@@ -1193,8 +1197,6 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
     || { echo "FAIL: an archive set_install_floor.sh built from a laid-out stage must pass conformance: $_ca"; exit 1; }
   _cr="$(printf '%s\n' "$_fr" | sh "$S" 2>&1)" \
     || { echo "FAIL: a build that signs nothing passes conformance once stand-in-feeds.sh has staged its feed: $_cr"; exit 1; }
-else
-  echo "artifact-conformance: no pkgbuild/productbuild/PlistBuddy here -- the real-pkg payload fixture is skipped" >&2
-fi
+}
 
 echo "PASS: artifact-conformance"

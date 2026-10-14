@@ -1,7 +1,12 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: artifact-facts.sh dist "$VER" | check-artifact-conformance.sh
-#          Reads a fact stream on stdin (see artifact-facts.sh), one record per line:
+#   usage: check-artifact-conformance.sh                                (under shipyard-check --dist <dir>)
+#          artifact-facts.sh dist "$VER" | check-artifact-conformance.sh
+#          Under shipyard-check --dist, SHIPYARD_CHECK_DIST names the dist directory and
+#          SHIPYARD_CHECK_VERSION the release's version, and the facts are produced here
+#          (SHIPYARD_CHECK_REPO names the repo whose INGREDIENTS.md declares deviations; default the
+#          current directory). Piped, it reads a fact stream on stdin (see artifact-facts.sh), one
+#          record per line:
 #            expected      <version>                              the version this release claims to be
 #            pkg           <file> <version> <floor> <identifier>  one per shipped .pkg
 #            component     <file> <identifier>                    one per component, in Distribution order
@@ -32,11 +37,25 @@
 #       (itself / neighbours / siblings), lives there.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
 . "$SELF/sdk-pins.sh"
 . "$SELF/deviation-reason.sh"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/conformance.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT  # template: 10.9 BSD mktemp requires one
-facts="$tmp/facts"; cat > "$facts"
+facts="$tmp/facts"
+chk_ran artifact-facts
+if [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
+  if [ -z "${SHIPYARD_CHECK_VERSION:-}" ]; then
+    chk_fail artifact-facts "the release's version is unknown" \
+      "conformance compares every artifact with the version the release claims, and none was given" \
+      "export SHIPYARD_CHECK_VERSION=<the release version> before shipyard-check --dist"
+    exit 1
+  fi
+  sh "$SELF/artifact-facts.sh" "$SHIPYARD_CHECK_DIST" "$SHIPYARD_CHECK_VERSION" "${SHIPYARD_CHECK_REPO:-.}" > "$facts" 2>"$tmp/facts.err" || :
+  [ ! -s "$tmp/facts.err" ] || cat "$tmp/facts.err" >&2
+else
+  cat > "$facts"
+fi
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance", "A truncated fact stream fails" -- every check below is a "stay quiet with no
@@ -46,29 +65,96 @@ facts="$tmp/facts"; cat > "$facts"
 #       deviation, or the switch-off would excuse the very check that notices switch-offs.
 why="$(sed -n 's/^abort \(..*\)$/\1/p' "$facts" | head -1)"
 if [ -n "$why" ]; then
-  echo "conformance: artifact-facts.sh aborted: $why" >&2
-  echo "conformance: the fact stream cannot be trusted; nothing was checked" >&2
-  exit 2
+  chk_fail artifact-facts "the artifacts could not be read to the end" \
+    "artifact-facts.sh aborted: $why -- the fact stream cannot be trusted, so nothing was checked" \
+    "fix what the reason names and rebuild; no deviation can excuse this check"
+  exit 1
 fi
 
 if ! grep -q '^end-of-facts$' "$facts"; then
-  echo "conformance: the fact stream is incomplete -- artifact-facts.sh did not run to completion (no end-of-facts record); nothing was checked" >&2
-  exit 2
+  chk_fail artifact-facts "the artifacts could not be read to the end" \
+    "the fact stream is incomplete -- artifact-facts.sh did not run to completion (no end-of-facts record), so nothing was checked" \
+    "re-run artifact-facts.sh and read its stderr for the cause; no deviation can excuse this check"
+  exit 1
 fi
 
 grep '^deviation ' "$facts" > "$tmp/devs" || true
 # spec: scripts/deviation-reason.sh -- the ONE matcher, shared with assert_binary_compatible.sh.
 deviation_reason() { mav_deviation_reason "$tmp/devs" "$@"; }  # $1 = check, $2 = subject (optional)
 
-status=0
+# spec: scripts/check-ids.tsv -- every id this script evaluates; a deviation declared under the name
+#       a check had before it had an id (scheme, ingredients) still excuses it.
+for _id in version-scheme version floor identifier bundle-id launchd-label manifest base line install-path \
+           feed updater repository enclosure length enclosure-url notes variant-build-info sdk-pin; do
+  chk_ran "$_id"
+done
+
+rule_of() {
+  case "$1" in
+    version-scheme) echo "the release version is <upstream>-mavericks.N" ;;
+    version) echo "every artifact names the version the release claims" ;;
+    floor) echo "a product archive declares an install floor of 10.9.5, and a component package an appcast that declares its minimum" ;;
+    identifier) echo "a pkg identifier is inside dev.mavergreen.*" ;;
+    bundle-id) echo "an installed bundle's identifier is inside dev.mavergreen.*" ;;
+    launchd-label) echo "a launchd job's Label is inside dev.mavergreen.* and names its plist" ;;
+    manifest) echo "a pkg that installs a product carries exactly one valid manifest, and installs only what it lists" ;;
+    base) echo "a pkg that installs a product has dev.mavergreen.base as its first component" ;;
+    line) echo "a lined product's manifest, version and repo agree about the line" ;;
+    install-path) echo "a pkg installs only into its product's tree and the family's places" ;;
+    feed) echo "a product's updater, feed and manifest agree with the registry" ;;
+    updater) echo "a product's updater is the one the registry derives for it" ;;
+    repository) echo "a release is built in the repo the registry assigns its products" ;;
+    enclosure) echo "an appcast's enclosure names a published asset" ;;
+    length) echo "an appcast's enclosure length is the asset's real size" ;;
+    enclosure-url) echo "an appcast's enclosure URL names this release" ;;
+    notes) echo "an appcast's description is the release body" ;;
+    variant-build-info) echo "variants of one release agree about what they were built from" ;;
+    sdk-pin) echo "every shipped Mach-O slice records its arch's pinned minos and SDK" ;;
+  esac
+}
+fix_of() {
+  case "$1" in
+    version-scheme) echo "version the release <upstream>-mavericks.N, e.g. 1.2.3-mavericks.1" ;;
+    version) echo "rebuild the artifact with the release version, or remove the stale one from dist/" ;;
+    floor) echo "wrap the component with set_install_floor.sh (10.9.5), or have the appcast declare sparkle:minimumSystemVersion; or declare '- floor:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    identifier) echo "give the pkg an identifier beginning dev.mavergreen., or declare '- identifier:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    bundle-id) echo "give the bundle a CFBundleIdentifier beginning dev.mavergreen., or declare '- bundle-id:<its identifier>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    launchd-label) echo "name the job dev.mavergreen.<name> and its plist <Label>.plist, or declare '- launchd-label:<its Label>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    manifest) echo "install usr/local/mavergreen/<product>/mavergreen.plist (render-manifest.sh writes it), listing every file outside the product's tree under outside" ;;
+    base) echo "build the product archive with set_install_floor.sh, which lists dev.mavergreen.base first" ;;
+    line) echo "declare the product's line in its manifest and release it from the repo named for that line, or fix the version" ;;
+    install-path) echo "install under usr/local/mavergreen/<product> (list the exceptions in the manifest's outside), or declare '- install-path:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    feed) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>), name the feed <product>.xml, and point the manifest's appcast at it" ;;
+    updater) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>) and ship its LaunchAgent" ;;
+    repository) echo "release the product from the repo scripts/product-names assigns it" ;;
+    enclosure) echo "publish the pkg the appcast names, or regenerate the appcast with gen_appcast.sh" ;;
+    length) echo "regenerate the appcast after the pkg is final, so its length is the pkg's" ;;
+    enclosure-url) echo "regenerate the appcast with the release's own tag in the pkg URL" ;;
+    notes) echo "generate the appcast from the same RELEASE_NOTES.md the Release body is built from" ;;
+    variant-build-info) echo "build every variant from the same pins, or declare '- variant-build-info: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    sdk-pin) echo "link against the pinned SDK (scripts/fetch_sdk.sh), or declare '- sdk-pin:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+  esac
+}
+
 fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (optional)
   # spec: SKILL.md "Artifact conformance" -- a deviation excuses only its OWN check, only for the
   #       artifacts it names, and only with a reason (swift-toolchain's swift.org .pkg is the scoping
   #       example there).
   _c="$1"; _msg="$2"; _file="${3:-}"
-  reason="$(deviation_reason "$_c" "$_file")"
+  case "$_c" in
+    scheme) _id=version-scheme ;;
+    ingredients) _id=variant-build-info ;;
+    *) _id="$_c" ;;
+  esac
+  reason="$(deviation_reason "$_id" "$_file")"
+  if [ -z "$reason" ]; then
+    case "$_id" in
+      version-scheme) reason="$(deviation_reason scheme "$_file")" ;;
+      variant-build-info) reason="$(deviation_reason ingredients "$_file")" ;;
+    esac
+  fi
   if [ -n "$reason" ]; then
-    echo "conformance: ${_c}: DECLARED DEVIATION${_file:+ (${_file})} -- $reason"
+    echo "conformance: ${_id}: DECLARED DEVIATION${_file:+ (${_file})} -- $reason"
     return 0
   fi
   # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Conformance
@@ -76,16 +162,21 @@ fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (option
   #       fail here, the same way its sibling above (the completion sentinel) refuses to let any
   #       deviation excuse it -- a switch-off with no reason attached is indistinguishable from a
   #       check nobody wrote.
-  if grep -q "^deviation ${_c}\$" "$facts"; then
-    echo "conformance: ${_c}: deviation declared with no reason -- state why, or fix the artifact" >&2
-    status=1; return 0
+  if grep -q "^deviation ${_id}\$" "$facts" || grep -q "^deviation ${_c}\$" "$facts"; then
+    chk_fail "$_id" "$(rule_of "$_id")" "a '${_c}' deviation is declared with no reason, which excuses nothing" \
+      "state why in INGREDIENTS.md ('- ${_c}: <reason>'), or fix the artifact"
+    return 0
   fi
-  echo "conformance: ${_c}: ${_msg}" >&2
-  status=1
+  chk_fail "$_id" "$(rule_of "$_id")" "$_msg" "$(fix_of "$_id")"
 }
 
 expected="$(sed -n 's/^expected \(..*\)$/\1/p' "$facts" | head -1)"
-[ -n "$expected" ] || { echo "conformance: no expected version in the fact stream" >&2; exit 2; }
+[ -n "$expected" ] || {
+  chk_fail artifact-facts "the artifacts could not be read to the end" \
+    "the fact stream names no expected version, so nothing can be compared with it" \
+    "run artifact-facts.sh <dist> <version>, which writes it first"
+  exit 1
+}
 
 # spec: SKILL.md "Artifact conformance" axis table -- SIBLINGS: version scheme <upstream>-mavericks.N.
 case "$expected" in
@@ -312,10 +403,10 @@ done
 nfail="$(wc -l < "$tmp/ip-fail" | tr -d ' ')"
 if [ "$nfail" -gt 0 ]; then
   head -20 "$tmp/ip-fail" | while IFS= read -r l; do
-    echo "conformance: install-path: $l -- outside usr/local/mavergreen/<its product>, usr/local/mavergreen/.base (with the base component), Applications, Library/Application Support/Mavergreen and dev.mavergreen.* launchd jobs" >&2
+    chk_fail install-path "$(rule_of install-path)" "$l -- outside usr/local/mavergreen/<its product>, usr/local/mavergreen/.base (with the base component), Applications, Library/Application Support/Mavergreen and dev.mavergreen.* launchd jobs" "$(fix_of install-path)"
   done
   [ "$nfail" -le 20 ] || echo "conformance: install-path: ... and $((nfail - 20)) more" >&2
-  status=1
+  chk_status=1
 fi
 echo "conformance: install-path: checked $installs_seen installed files"
 
@@ -418,5 +509,5 @@ while read -r kind file path arch ft mn sd sha; do
     || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")"
 done < "$facts"
 
-[ "$status" -eq 0 ] && echo "conformance: ok — $expected"
-exit "$status"
+[ "$chk_status" -ne 0 ] || echo "conformance: ok — $expected"
+exit "$chk_status"

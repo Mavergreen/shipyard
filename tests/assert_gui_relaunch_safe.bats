@@ -66,3 +66,22 @@ sudo -u bob launchctl load -w /Library/LaunchAgents/x.plist')"
   run sh -c ". '$HELPER'; mav_stop_gui_instance Contents/MacOS/Nope 0 && command -v mav_stop_gui_instance"
   [ "$status" -eq 0 ]
 }
+
+@test "a rejection starts with the id, and says what to do" {
+  f="$(pi bad_id 'open -a "/Applications/Foo.app"')"
+  run sh "$GATE" "$f"
+  [ "$status" -ne 0 ]
+  case "$output" in "gui-relaunch-safe: "*) ;; *) echo "first line: $output"; false ;; esac
+  echo "$output" | grep -q 'fix: call mav_stop_gui_instance'
+}
+
+@test "under --dist it lints the postinstall of every component of every pkg in the dist" {
+  fx="$BATS_TEST_DIRNAME/fixtures/checks/gui-relaunch-safe"
+  run env SHIPYARD_CHECK_DIST="$fx/pass/dist" sh "$GATE"
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q 'relaunches a GUI app and also stops an old instance'
+  run env SHIPYARD_CHECK_DIST="$fx/fail/dist" sh "$GATE"
+  [ "$status" -ne 0 ]
+  case "$output" in "gui-relaunch-safe: "*) ;; *) echo "first line: $output"; false ;; esac
+}
+

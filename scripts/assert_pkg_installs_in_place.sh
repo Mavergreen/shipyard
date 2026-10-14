@@ -1,13 +1,16 @@
 #!/bin/sh
-# platform: macOS-only -- pkgutil expands the pkg
+# platform: host-agnostic
 #   usage: assert_pkg_installs_in_place.sh PKG [PKG...]
+#          assert_pkg_installs_in_place.sh        (under shipyard-check --dist: every .pkg in the dist)
 #          Gates a BUILT .pkg against the two install-time footguns build_component_pkg.sh disables,
 #          by reading what the .pkg ACTUALLY declares in its PackageInfo -- so a regression (a
 #          product that bypassed the helper, or a future pkgbuild default change) fails CI instead of
 #          shipping and being discovered live on a user's machine, weeks later, one product at a
 #          time. Every check in the family so far has verified that artifacts AGREE with each other;
 #          none exercised what the installer DOES on a machine that already has the previous version.
-#          This gate closes that gap for relocation + version-skip.
+#          This gate closes that gap for relocation + version-skip. PackageInfo is a plain XML file
+#          in the pkg, read with bsdtar on every host (lib/pkg-read.sh), so the gate needs neither
+#          pkgutil nor a Mac.
 # platform: for every component PackageInfo inside the .pkg, asserts (both verified empirically
 #           against real pkgbuild output, 2026-07-31 -- pkgbuild encodes these differently than one
 #           might guess):
@@ -25,7 +28,21 @@
 #           A relocatable / version-checked bundle appears as <bundle id="..."/> under those elements.
 #           A clean pkg leaves them empty (<relocate/> / <bundle-version/>) or absent.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/check-lib.sh"
+. "$SELF/lib/pkg-read.sh"
+chk_ran pkg-in-place
+if [ "$#" -eq 0 ] && [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
+  for _p in "$SHIPYARD_CHECK_DIST"/*.pkg; do
+    [ -f "$_p" ] || continue
+    set -- "$@" "$_p"
+  done
+  [ "$#" -gt 0 ] || { echo "assert_pkg_installs_in_place: no .pkg in $SHIPYARD_CHECK_DIST (nothing to check)"; exit 0; }
+fi
 [ "$#" -ge 1 ] || { echo "assert_pkg_installs_in_place: need at least one .pkg" >&2; exit 2; }
+
+rule="a pkg's bundles install where it says and always overwrite"
+fix="build the component via build_component_pkg.sh, which turns BundleIsRelocatable and BundleIsVersionChecked off"
 
 # platform: a PackageInfo's XML may be pretty-printed or written as one line, and its
 #           <bundle-version> element name shares the "bundle" prefix with the <bundle> children
@@ -38,32 +55,33 @@ count_bundles() {  # $1=PackageInfo  $2=element
     END { print c + 0 }'
 }
 
-status=0
 for pkg in "$@"; do
-  [ -f "$pkg" ] || { echo "assert_pkg_installs_in_place: no such pkg: $pkg" >&2; status=1; continue; }
+  [ -f "$pkg" ] || { chk_fail pkg-in-place "$rule" "$pkg does not exist" "pass the built .pkg's path"; continue; }
   x="$(mktemp -d "${TMPDIR:-/tmp}/pkg-inplace.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-  if ! pkgutil --expand "$pkg" "$x/e" >/dev/null 2>&1; then
-    echo "assert_pkg_installs_in_place: cannot expand $pkg" >&2; status=1; rm -rf "$x"; continue
+  rc=0; af_extract "$pkg" "$x" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    chk_fail pkg-in-place "$rule" "$pkg cannot be read, so its bundles cannot be checked$([ "$rc" -ne 2 ] || echo ' (no bsdtar found)')" \
+      "install libarchive-tools or set BSDTAR to bsdtar's path, and make sure the pkg is a readable xar"
+    af_rm "$x"; continue
   fi
   found=0
   # platform: a product archive nests one or more component.pkg dirs; a bare component pkg has
   #           PackageInfo at the top. find covers both.
-  for pi in $(find "$x/e" -name PackageInfo); do
+  for pi in $(find "$x" -name PackageInfo | sed 's/ /%20/g'); do
+    pi="$(printf '%s' "$pi" | sed 's/%20/ /g')"
     found=1
     r="$(count_bundles "$pi" relocate)"
     if [ "$r" -gt 0 ]; then
-      echo "assert_pkg_installs_in_place: $pkg: $r bundle(s) under <relocate> -- BundleIsRelocatable is ON; build via build_component_pkg.sh" >&2
-      status=1
+      chk_fail pkg-in-place "$rule" "$pkg: $r bundle(s) under <relocate> -- BundleIsRelocatable is ON" "$fix"
     fi
     u="$(count_bundles "$pi" bundle-version)"
     if [ "$u" -gt 0 ]; then
-      echo "assert_pkg_installs_in_place: $pkg: $u bundle(s) under <bundle-version> -- BundleIsVersionChecked is ON; build via build_component_pkg.sh" >&2
-      status=1
+      chk_fail pkg-in-place "$rule" "$pkg: $u bundle(s) under <bundle-version> -- BundleIsVersionChecked is ON" "$fix"
     fi
   done
-  [ "$found" -eq 1 ] || { echo "assert_pkg_installs_in_place: $pkg: no PackageInfo found" >&2; status=1; }
-  rm -rf "$x"
+  [ "$found" -eq 1 ] || chk_fail pkg-in-place "$rule" "$pkg: no PackageInfo found" "build the pkg with pkgbuild, which writes one"
+  af_rm "$x"
 done
 
-[ "$status" -eq 0 ] && echo "assert_pkg_installs_in_place: ok — every bundle installs in place"
-exit "$status"
+[ "$chk_status" -ne 0 ] || echo "assert_pkg_installs_in_place: ok — every bundle installs in place"
+exit "$chk_status"

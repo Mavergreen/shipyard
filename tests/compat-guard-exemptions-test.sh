@@ -9,9 +9,9 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/guard-exempt-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
-mkdir -p "$w/scripts" "$w/bin" "$w/repo" "$w/build/bin"
-for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh; do
-  cp "$here/../scripts/$s" "$w/scripts/"
+mkdir -p "$w/scripts/lib" "$w/bin" "$w/repo" "$w/build/bin"
+for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh check-lib.sh check-ids.tsv lib/macho-tools.sh lib/pkg-read.sh; do
+  cp "$here/../scripts/$s" "$w/scripts/$s"
 done
 cat > "$w/scripts/macho-slices.sh" <<'EOF'
 cat "$1"
@@ -24,6 +24,7 @@ printf '#!/bin/sh\nexit 0\n' > "$w/bin/nm"
 printf '#!/bin/sh\nexit 0\n' > "$w/bin/strings"
 chmod +x "$w/bin/shasum" "$w/bin/nm" "$w/bin/strings"
 PATH="$w/bin:$PATH"; export PATH
+NM="$w/bin/nm"; STRINGS="$w/bin/strings"; export NM STRINGS
 unset MAVERICKS_DEVIATIONS_ROOT MAVERICKS_ALLOW_ARCHS MAVERICKS_ALLOW_SELECTORS MAVERICKS_ALLOW_GUARDED_WEAK
 G="$w/scripts/assert_binary_compatible.sh"
 
