@@ -1,0 +1,10 @@
+.github/renovate.json
+.github/workflows/release.yml
+.gitignore
+INGREDIENTS.md
+UPSTREAM_VERSION
+build/upstream-release-notes-url.sh
+tests/a-test.sh
+scripts/vendor/yaml/__init__.py
+scripts/vendor/pyyaml.pin
+scripts/vendor/other/x.py

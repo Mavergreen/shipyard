@@ -924,6 +924,7 @@ for p in sys.argv[1:]:
     try:
         wf = yaml.safe_load(open(p))
     except Exception:
+        print('@@unparseable@@\t' + p)
         continue
     on = wf.get('on', wf.get(True)) if isinstance(wf, dict) else None
     push = on.get('push') if isinstance(on, dict) else None
@@ -934,6 +935,13 @@ PYEOF
     py_crashed no-tags-trigger
   else
     while IFS= read -r f; do
+      case "$f" in
+        "@@unparseable@@$TAB"*)
+          chk_fail no-tags-trigger "${f#*$TAB} doesn't parse as YAML, so its triggers can't be read" \
+            "a workflow that cannot be read would pass as having no tags: trigger" \
+            "fix ${f#*$TAB} so it parses (workflow-yaml names the place)"
+          continue ;;
+      esac
       deviated no-tags-trigger "$f" && continue
       chk_fail no-tags-trigger "$f has a tags: trigger" \
         "tags are retired as a release input, and a workflow_dispatch covers every case a tag used to" \
@@ -964,6 +972,7 @@ import sys, yaml
 try:
     wf = yaml.safe_load(open(sys.argv[1])) or {}
 except Exception:
+    print('@@unparseable@@\t0')
     sys.exit(0)
 jobs = wf.get('jobs') if isinstance(wf, dict) else None
 for name, job in (jobs.items() if isinstance(jobs, dict) else []):
@@ -980,6 +989,12 @@ PYEOF
     py_crashed checkout-drops-credentials
   else
     while IFS="$TAB" read -r _job _step; do
+      if [ "$_job" = "@@unparseable@@" ]; then
+        chk_fail checkout-drops-credentials "$REL doesn't parse as YAML, so its checkouts can't be read" \
+          "a workflow that cannot be read would pass as having no bare checkout" \
+          "fix $REL so it parses (workflow-yaml names the place)"
+        continue
+      fi
       chk_fail checkout-drops-credentials "$REL job $_job, step $_step is an actions/checkout without persist-credentials: false" \
         "a checkout that keeps its token leaves it readable by every later step, including third-party build code" \
         "add persist-credentials: false under with: on that actions/checkout step"
@@ -1024,8 +1039,8 @@ grep -qxE '/?VERSION' .gitignore 2>/dev/null \
 # spec: SKILL.md, the `bare-curl` and `brew`, `macports`, `pkgsrc`, `apt` rows of the checks table --
 #       one id per package manager, plus bare-curl. Commands are matched at command position (check 18's rule, with "{", "!" and the shell's keywords added), in
 #       tracked shell scripts outside tests/ and in every workflow and composite-action run: block,
-#       Linux jobs included; prefixes are matched anywhere on a non-comment line of the same text. A
-#       script that sources the fetch library is a fetcher and may call curl.
+#       Linux jobs included; prefixes are matched anywhere on a non-comment line of the same text. Only the fetch
+#       library itself may call curl.
 chk_ran bare-curl
 chk_ran brew
 chk_ran macports
@@ -1041,9 +1056,6 @@ while IFS= read -r f; do
 done < "$tmp/shfiles" >> "$tmp/pmlines"
 : > "$tmp/fetchers"
 printf 'scripts/mavericks_fetch.sh\nscripts/mavergreen_fetch.sh\n' >> "$tmp/fetchers"
-while IFS= read -r f; do
-  grep -Eq '^[[:space:]]*(\.|source)[[:space:]]+[^#]*(mavericks|mavergreen)_fetch\.sh' "$f" && printf '%s\n' "$f" >> "$tmp/fetchers" || :
-done < "$tmp/shfiles"
 if [ "$PY_OK" -eq 1 ]; then
   _acts="$(grep -E '^\.github/actions/[^/]+/action\.ya?ml$' "$TF" || :)"
   rc=0
@@ -1054,6 +1066,7 @@ for p in sys.argv[1:]:
     try:
         doc = yaml.safe_load(open(p)) or {}
     except Exception:
+        print("%s\t@@unparseable@@" % p)
         continue
     if not isinstance(doc, dict):
         continue
@@ -1074,13 +1087,21 @@ PYEOF
   [ "$rc" -eq 0 ] || py_crashed bare-curl
 fi
 pmhits="$tmp/pmhits"
+while IFS="$TAB" read -r f _; do
+  [ -n "$f" ] || continue
+  chk_fail bare-curl "$f doesn't parse as YAML, so its run: blocks can't be scanned" \
+    "an unreadable workflow would pass as using no curl and no outside package manager" \
+    "fix $f so it parses (workflow-yaml names the place)"
+done <<EOF2
+$(grep "$TAB@@unparseable@@\$" "$tmp/pmlines" || :)
+EOF2
 awk -F"$TAB" '
   NR == FNR { fetcher[$0] = 1; next }
   {
     p = $1; l = $0; sub(/^[^\t]*\t/, "", l)
     t = l; sub(/^[[:space:]]+/, "", t)
     if (t == "" || substr(t, 1, 1) == "#") next
-    cp = "(^|[;&|`{!]|[$][(]|[[:space:]](then|do|exec|if|elif|while|until|else))[[:space:]]*(sudo[[:space:]]+)?"
+    cp = "(^|[;&|`{!]|[$][(]|[[:space:]](then|do|exec|if|elif|while|until|else)|^(then|do|exec|if|elif|while|until|else))[[:space:]]*((sudo|env|command|time)[[:space:]]+)*"
     if (!(p in fetcher) && l ~ (cp "curl([[:space:]]|$)")) hit("bare-curl")
     if (l ~ (cp "brew([[:space:]]|$)") || l ~ /(\/opt\/homebrew|\/usr\/local\/Homebrew|\/home\/linuxbrew)([^A-Za-z0-9_]|$)/) hit("brew")
     if (l ~ (cp "port([[:space:]]|$)") || l ~ /\/opt\/local([^A-Za-z0-9_-]|$)/) hit("macports")

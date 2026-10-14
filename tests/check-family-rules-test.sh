@@ -40,7 +40,10 @@ for id in $IDS; do
   for d in "$@"; do
     if run "$d"; then fail "$id/$(basename "$d") should fail"; fi
     grep -q "^$id: " "$w/out" || fail "$id/$(basename "$d") should fail $id: $(cat "$w/out")"
-    only_fails "$id/$(basename "$d")" "$id"
+    case "$d" in
+      */fail-unparseable) ;;
+      *) only_fails "$id/$(basename "$d")" "$id" ;;
+    esac
     grep -q '^  fix: ' "$w/out" || fail "$id/$(basename "$d") names a fix"
   done
 done
@@ -194,7 +197,13 @@ refused spacename no-hardcoded-version
 fresh sourcescurl
 printf '#!/bin/sh\n. "$SHIPYARD_SCRIPTS/mavergreen_fetch.sh"\ncurl -fsSL "$1"\n' > "$w/sourcescurl/build/f.sh"
 printf 'build/f.sh\n' >> "$w/sourcescurl/FILES"
-ok sourcescurl
+refused sourcescurl bare-curl
+
+fresh librarycurl
+mkdir -p "$w/librarycurl/scripts"
+printf '#!/bin/sh\ncurl -fsSL "$1"\n' > "$w/librarycurl/scripts/mavericks_fetch.sh"
+printf 'scripts/mavericks_fetch.sh\n' >> "$w/librarycurl/FILES"
+ok librarycurl
 
 fresh keywordcurl
 printf '#!/bin/sh\nif ! curl -fsS "$1"; then exit 1; fi\nwhile curl -s "$2"; do :; done\n{ curl -s "$3"; }\n' > "$w/keywordcurl/build/f.sh"

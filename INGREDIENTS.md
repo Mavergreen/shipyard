@@ -68,17 +68,21 @@ one line):
 - permissions-contents-read: release.yml has held `contents: write` at the top since before this check; its build job was never audited for needing less, and the publish and major-tag jobs already declare their own. Revisit once a release run proves the build job needs only `contents: read`.
 - checkout-drops-credentials: the major-tag job pushes with its checkout's token, and the build job's checkout was never audited for dropping it. Revisit with permissions-contents-read.
 - bare-curl:scripts/assert_update_trusted.sh: it curls the live feed and pkg on its own to see the HTTP status; it does not source the fetch library. Revisit when QUEUE #58's mav_curl lands.
+- bare-curl:scripts/fetch_product_pkg.sh: it fetches the release's SHA256SUMS with a curl of its own, beside the library's verified fetch. Revisit when QUEUE #58's mav_curl lands.
+- bare-curl:.github/workflows/publish-release.yml: its first-release readme step fetches the template with a curl of its own. Revisit when QUEUE #58's mav_curl lands.
 - bare-curl:scripts/build-cmake.sh: it curls Kitware's tarball and checksum file before the fetch library can be sourced. Revisit when QUEUE #58's mav_curl lands.
 - bare-curl:scripts/check-preset-icons.sh: it curls a vendor's icon and apt index on its own. Revisit when QUEUE #58's mav_curl lands.
 - bare-curl:scripts/vendor/sync-pyyaml.sh: it curls the PyYAML sdist on its own. Revisit when QUEUE #58's mav_curl lands.
 - brew:scripts/install-macho-readers.sh: the fallback for llvm-lipo and llvm-strings, which Xcode does not ship. Revisit when every job that runs the compat guard has clang22 installed (vision area 14).
 - brew:.github/workflows/ci.yml: the step that records what the Mach-O readers resolved to asks brew whether llvm is present. Revisit with brew:scripts/install-macho-readers.sh, whose fallback it reports on.
 - brew:.github/actions/install/action.yml: bats-core, where no family bats exists. Revisit when a family product or the runner image supplies bats.
-- brew:scripts/build-cmake.sh: it names /opt/homebrew only in CMAKE_IGNORE_PREFIX_PATH, to keep that prefix out of CMake's search; it uses nothing from it. Revisit if the exclusion list moves into a shared CMake module.
-- macports:scripts/build-cmake.sh: it names /opt/local only in CMAKE_IGNORE_PREFIX_PATH, to keep that prefix out of CMake's search; it uses nothing from it. Revisit if the exclusion list moves into a shared CMake module.
-- pkgsrc:scripts/build-cmake.sh: it names /opt/pkg only in CMAKE_IGNORE_PREFIX_PATH, to keep that prefix out of CMake's search; it uses nothing from it. Revisit if the exclusion list moves into a shared CMake module.
+- brew:scripts/build-cmake.sh: it names the prefix only to exclude it (CMAKE_IGNORE_PREFIX_PATH): /opt/homebrew is kept out of CMake's search and nothing from it is used. Revisit if the exclusion list moves into a shared CMake module.
+- macports:scripts/build-cmake.sh: it names the prefix only to exclude it (CMAKE_IGNORE_PREFIX_PATH): /opt/local is kept out of CMake's search and nothing from it is used. Revisit if the exclusion list moves into a shared CMake module.
+- pkgsrc:scripts/build-cmake.sh: it names the prefix only to exclude it (CMAKE_IGNORE_PREFIX_PATH): /opt/pkg is kept out of CMake's search and nothing from it is used. Revisit if the exclusion list moves into a shared CMake module.
 - apt:.github/workflows/linux-host.yml: the Linux CI job installs llvm and libarchive-tools. Revisit when area 14's pinned LLVM tarball supplies the readers and bsdtar comes from a family Linux tarball or the job's image.
 - apt:.github/actions/install/action.yml: bats-core on a Linux runner, where no family bats exists. Revisit when a family product or the runner image supplies bats.
 - host:linux: bash32-parse needs a bash 3.2 /bin/sh and Linux has none. Revisit when QUEUE #60's Apple-shells collection ships its Linux tarball.
 - vendored:scripts/vendor/yaml/**: PyYAML is vendored because python-315's phase 1 has no ssl, so pip cannot fetch it on 10.9, and the checks keep their Python. Revisit when python-315 ships ssl and pip works (its phase 2); then delete the vendored copy and the checks import a pip-installed PyYAML (/opt/mavergreen/bin/python3 -m pip install --user pyyaml).
-- vendored:scripts/vendor/*: the pin, the checksum and the sync script that maintain scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; they go when the copy does.
+- vendored:scripts/vendor/pyyaml.pin: the pin that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
+- vendored:scripts/vendor/yaml.sha256: the checksum that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
+- vendored:scripts/vendor/sync-pyyaml.sh: the sync script that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
