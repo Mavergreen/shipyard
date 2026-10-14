@@ -8,9 +8,12 @@
 #          (4) every slice records its arch's pinned minos and SDK (sdk-pins.sh; sdk-pin), (5) the
 #          symbols a project's shims must define are defined (compat-required-defined). (1) and (2)
 #          read the x86_64 slice. A file whose bytes are a pinned third-party binary (Sparkle) is
-#          exempt by content. A declared "- sdk-pin:<glob>: <reason>" deviation whose glob matches
-#          the file's path AS GIVEN here excuses (4), and only (4). Under --dist the path is the
-#          file's path inside its pkg or tarball, as conformance sees it. Fail-closed if nothing
+#          exempt by content. A declared "- <id>:<glob>: <reason>" deviation whose glob matches the
+#          file's path AS GIVEN here excuses that id's failure for that file, and only that id's:
+#          compat-imports, compat-selectors, compat-archs, compat-required-defined or sdk-pin. Under
+#          --dist the path is the file's path inside its pkg or tarball, as conformance sees it, and a
+#          deviation is how one binary gets the allowance its CMake target passes in the knobs below,
+#          which --dist applies to every binary alike. Fail-closed if nothing
 #          measured, or if the deviations cannot be read. A reader that is missing or fails fails
 #          the check it serves, naming the variable to set.
 #          Knobs:
@@ -132,6 +135,14 @@ mav_undefs() {
 }
 
 checked=0; excused=0
+guard_fail() {  # $1 = id, $2 = the path deviations match, $3 = why; a deviation for $1 covering $2 excuses it
+  _gf="$(mav_deviation_reason "$work/devs" "$1" "$2")"
+  if [ -n "$_gf" ]; then
+    echo "compat guard: $2 is excused from $1: $_gf"; excused=$((excused+1))
+  else
+    chk_fail "$1" "$(rule_of "$1")" "$3" "$(fix_of "$1")"
+  fi
+}
 
 check_one() {  # $1 = the file, $2 = the path to report and match deviations against, $3 = strict|loose
   b="$2"
@@ -146,7 +157,7 @@ check_one() {  # $1 = the file, $2 = the path to report and match deviations aga
 
   archs="$(printf '%s\n' "$slices" | awk '{print $1}' | sort -u | xargs)"
   [ "$archs" = "$ALLOW_ARCHS" ] \
-    || chk_fail compat-archs "$(rule_of compat-archs)" "$b arches '$archs' != '$ALLOW_ARCHS'" "$(fix_of compat-archs)"
+    || guard_fail compat-archs "$b" "$b arches '$archs' != '$ALLOW_ARCHS'"
   sdk_bad=""
   while read -r _a _ft _mn _sd; do
     why="$(mav_sdk_rule "$_a" "$_ft" "$_mn" "$_sd")" || sdk_bad="${sdk_bad}$b: $why
@@ -154,14 +165,7 @@ check_one() {  # $1 = the file, $2 = the path to report and match deviations aga
   done <<EOF
 $slices
 EOF
-  if [ -n "$sdk_bad" ]; then
-    excuse="$(mav_deviation_reason "$work/devs" sdk-pin "$b")"
-    if [ -n "$excuse" ]; then
-      echo "compat guard: $b is excused from sdk-pin: $excuse"; excused=$((excused+1))
-    else
-      chk_fail sdk-pin "$(rule_of sdk-pin)" "$(printf '%s' "$sdk_bad" | tr '\n' ' ')" "$(fix_of sdk-pin)"
-    fi
-  fi
+  [ -z "$sdk_bad" ] || guard_fail sdk-pin "$b" "$(printf '%s' "$sdk_bad" | tr '\n' ' ')"
 
   # platform: the post-10.9 import and selector checks concern what runs ON 10.9, which is only ever the
   #           x86_64 slice; thinned first, because nm -m and strings read every slice of a fat file.
@@ -182,7 +186,7 @@ EOF
     weak_leak=$(printf '%s\n' "$weak_leak" | grep -vxE "($ALLOW_WEAK)" || true)
   fi
   leak=$(printf '%s\n%s\n' "$hard_leak" "$weak_leak" | grep -v '^$' || true)
-  [ -z "$leak" ] || chk_fail compat-imports "$(rule_of compat-imports)" "post-10.9 undefined import(s) in $b: $(printf '%s' "$leak" | tr '\n' ' ')" "$(fix_of compat-imports)"
+  [ -z "$leak" ] || guard_fail compat-imports "$b" "post-10.9 undefined import(s) in $b: $(printf '%s' "$leak" | tr '\n' ' ')"
 
   need_tool compat-selectors STRINGS
   _strings_out="$("$STRINGS" -a "$x" 2>"$work/reader.err")" || reader_die compat-selectors "$STRINGS -a could not read $b"
@@ -191,17 +195,18 @@ EOF
     sel_leak=$(printf '%s\n' "$sel_leak" | grep -vxE "($ALLOW_SEL)" || true)
   fi
   sel_leak=$(printf '%s\n' "$sel_leak" | grep -v '^$' || true)
-  [ -z "$sel_leak" ] || chk_fail compat-selectors "$(rule_of compat-selectors)" "post-10.9 ObjC selector(s) sent in $b: $(printf '%s' "$sel_leak" | tr '\n' ' ')" "$(fix_of compat-selectors)"
+  [ -z "$sel_leak" ] || guard_fail compat-selectors "$b" "post-10.9 ObjC selector(s) sent in $b: $(printf '%s' "$sel_leak" | tr '\n' ' ')"
 
   if [ -n "$REQUIRE_DEFINED" ]; then
     # platform: nm marks an undefined symbol's line with a leading 'U'/'u'; everything else counts
     #           as defined.
     _nm_all="$("$NM" "$x" 2>"$work/reader.err")" || reader_die compat-required-defined "$NM could not read $b's symbols"
     defined=$(printf '%s\n' "$_nm_all" | grep -vE '^[[:space:]]*[Uu] ' | awk '{print $NF}')
+    _missing=""
     for _req in $(printf '%s\n' "$REQUIRE_DEFINED" | tr '|' ' '); do
-      printf '%s\n' "$defined" | grep -xq "$_req" \
-        || chk_fail compat-required-defined "$(rule_of compat-required-defined)" "required symbol '$_req' not DEFINED in $b" "$(fix_of compat-required-defined)"
+      printf '%s\n' "$defined" | grep -xq "$_req" || _missing="$_missing $_req"
     done
+    [ -z "$_missing" ] || guard_fail compat-required-defined "$b" "required symbol(s)$_missing not DEFINED in $b"
   fi
 }
 
@@ -251,7 +256,7 @@ else
 fi
 if [ "$chk_status" -eq 0 ]; then
   pinned="pinned minos and SDK per arch"
-  [ "$excused" = 0 ] || pinned="$pinned, $excused excused from sdk-pin"
+  [ "$excused" = 0 ] || pinned="$pinned, $excused excused by deviation"
   echo "compat guard: $checked binaries clean ($ALLOW_ARCHS, $pinned, no post-10.9 imports)"
 fi
 exit "$chk_status"

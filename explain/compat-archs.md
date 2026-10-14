@@ -17,8 +17,11 @@ The spec lists "an arm64 slice needs an arm64 deviation" as a rule found uncheck
 A file that is not a readable Mach-O fails here.
 
 ## Deviating
-No deviation is read for this id today. State the set with MAVERICKS_ALLOW_ARCHS, and record the reason in
-INGREDIENTS.md as "- arm64:<glob>: <reason>", naming the use (a cross toolchain, say). That line is the
-convention's form; no check reads it yet.
+A "- compat-archs:<glob>: <reason>. Revisit when <exit>." line in
+INGREDIENTS.md excuses this id for the binaries whose path the glob matches: under shipyard-check --dist, the
+path inside the pkg or tarball (usr/local/mavergreen/<product>/...). That is how one binary in a dist keeps
+the allowance its CMake target passes in a knob, since --dist applies one environment to every binary. At build time, state
+the set with MAVERICKS_ALLOW_ARCHS; a universal updater beside an x86_64 product is the usual case for a
+scoped line. The "- arm64:<glob>: <reason>" form is P5's, and no check reads it yet.
 
 Formerly the compat guard's arch set rule

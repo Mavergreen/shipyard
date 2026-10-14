@@ -5,8 +5,11 @@
 #                                          or a tarball into the existing <dir>; non-zero when it cannot
 #          af_unpack_payload <Payload>     extracts it to <its directory>.root, and sets AF_ROOT to that
 #                                          tree and AF_LOC to its install-location ("" or "a/b/")
-#          af_macho_kind <file>            prints strict (a Mach-O magic), loose (a fat magic or an ar
-#                                          archive, Mach-O only if the readers say so) or nothing
+#          af_macho_kind <file>            prints strict (a Mach-O magic, or a fat one af_fat_macho
+#                                          accepts), loose (an ar archive, Mach-O only if the readers say
+#                                          so) or nothing (a Java class file shares the fat magic)
+#          af_fat_macho <file>             0 when the file is a fat Mach-O: the fat magic, then an arch
+#                                          count from 1 to 29, where a class file has its version (45+)
 #          af_enc                          stdin to stdout, with "%" as %25 and " " as %20
 #          af_rm <dir>                     removes a tree extraction left read-only
 #          Returns 2 and says so when no bsdtar is found.
@@ -38,10 +41,18 @@ af_unpack_payload() {
   af_extract "$1" "$AF_ROOT"
 }
 
+af_fat_macho() {
+  _afm="$(head -c 8 "$1" | od -An -tx1 | tr -d ' \n')"
+  case "$_afm" in cafebabe????????|cafebabf????????) ;; *) return 1 ;; esac
+  _afm=$((0x${_afm#cafebab?}))
+  [ "$_afm" -ge 1 ] && [ "$_afm" -le 29 ]
+}
+
 af_macho_kind() {
   case "$(head -c 4 "$1" | od -An -tx1 | tr -d ' \n')" in
     cffaedfe|cefaedfe|feedfacf|feedface) echo strict ;;
-    cafebabe|cafebabf|213c6172) echo loose ;;
+    cafebabe|cafebabf) if af_fat_macho "$1"; then echo strict; fi ;;
+    213c6172) echo loose ;;
   esac
 }
 

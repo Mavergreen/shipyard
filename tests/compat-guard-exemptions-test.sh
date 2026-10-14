@@ -96,4 +96,41 @@ printf '#!/bin/sh\nexit 0\n' > "$w/bin/strings"
 
 label="an excused file does not excuse its neighbour on the same command line"
 fails "$w/build/bin/tool" "$w/build/bin/armtool"; says 'armtool'
+
+# spec: assert_binary_compatible.sh's usage -- under --dist one environment covers every Mach-O, so the
+#       per-binary allowance a CMake target passes in the knobs is a path-scoped deviation instead.
+if command -v bsdtar >/dev/null 2>&1 || tar --version 2>/dev/null | grep -Eqi 'bsdtar|libarchive'; then
+  printf 'LC_ALL=C grep -aE "^(x86_64|arm64) " "$1"\n' > "$w/scripts/macho-slices.sh"
+  printf '#!/bin/sh\ncase "$1" in -m) LC_ALL=C sed -n "s/^NM //p" "$2" ;; *) LC_ALL=C sed -n "s/^DEF //p" "$1" ;; esac\n' > "$w/bin/nm"
+  printf '#!/bin/sh\nLC_ALL=C sed -n "s/^STR //p" "$2"\n' > "$w/bin/strings"
+  printf '#!/bin/sh\ncp "$3" "$5"\n' > "$w/bin/lipo"; chmod +x "$w/bin/nm" "$w/bin/strings" "$w/bin/lipo"
+  LIPO="$w/bin/lipo"; export LIPO
+  r="$w/tree/usr/local/mavergreen/demo"; mkdir -p "$r/bin" "$w/dist"
+  macho() { printf '\317\372\355\376\n'; printf '%s\n' "$@"; }
+  macho 'x86_64 EXECUTE 10.9 10.9' 'STR labelColor' 'DEF _shim' > "$r/bin/demo"
+  macho 'x86_64 EXECUTE 10.9 10.9' 'arm64 EXECUTE 11.0 11.3' 'DEF _shim' > "$r/bin/updater"
+  macho 'x86_64 EXECUTE 10.9 10.9' 'NM                  (undefined) weak external _os_log_create (from libSystem)' 'DEF _shim' > "$r/bin/weak"
+  macho 'x86_64 EXECUTE 10.9 10.9' > "$r/bin/noshim"
+  (cd "$w/tree" && tar czf "$w/dist/demo-1.0.0-mavericks.1.tar.gz" usr)
+  dist() { rc=0; out="$(cd "$w" && SHIPYARD_CHECK_DIST="$w/dist" MAVERICKS_DEVIATIONS_ROOT="$w/repo" MAVERICKS_REQUIRE_DEFINED_SYMBOLS=_shim sh "$G" 2>&1)" || rc=$?; }
+  label="--dist with no deviation: each binary's own allowance is missing"
+  ingredients ''
+  dist; [ "$rc" -ne 0 ] || { echo "FAIL ($label): should fail"; echo "$out"; exit 1; }
+  for id in compat-selectors compat-archs compat-imports compat-required-defined; do
+    says "more: shipyard-check --explain $id"
+  done
+  label="--dist honours a path-scoped deviation for each compat id"
+  ingredients '- compat-selectors:usr/local/mavergreen/demo/bin/demo: it sends labelColor only after respondsToSelector:. Revisit when 10.9 leaves.
+- compat-archs:usr/local/mavergreen/demo/bin/updater: the updater is universal. Revisit when P5 reads arm64.
+- compat-imports:usr/local/mavergreen/demo/bin/weak: weak, NULL-checked. Revisit when the shim lands.
+- compat-required-defined:usr/local/mavergreen/demo/bin/noshim: a helper with no shim. Revisit when it links one.'
+  dist; [ "$rc" -eq 0 ] || { echo "FAIL ($label): should pass, exit $rc:"; echo "$out"; exit 1; }
+  for id in compat-selectors compat-archs compat-imports compat-required-defined; do
+    says "is excused from $id:"
+  done
+  label="--dist: a deviation scoped to one binary excuses no other"
+  ingredients '- compat-archs:usr/local/mavergreen/demo/bin/demo: wrong file. Revisit never.'
+  dist; [ "$rc" -ne 0 ] || { echo "FAIL ($label): should fail"; echo "$out"; exit 1; }
+  says "usr/local/mavergreen/demo/bin/updater arches"
+fi
 echo "PASS: compat-guard-exemptions"
