@@ -684,6 +684,20 @@ cut and publish a release. Pushing is therefore a decision, not a reflex.
   can publish in an auto-cut repo, or a change someone else should see first); state it and ask the
   maintainer before opening one. Otherwise PRs come from Renovate, bots pushing to its branches, and
   outside contributors.
+- **Propose a branch when only GitHub CI can prove the change.** Examples:
+  - a `release.yml` or other workflow change;
+  - a new job;
+  - a job for the other kind of host (macOS-only work from a Linux box, or the reverse);
+  - anything whose first real run is a release.
+
+  Say so ("only CI can prove this; I propose branch `<name>`") and push there once the maintainer
+  agrees. `main` stays green while CI finds what local runs can't. Once the branch is green, rebase it
+  onto `main` and fast-forward; never a merge commit. Open a PR only when branch protection's
+  required checks run on PRs alone, and ask the maintainer each time. longboat's phase 3 went straight
+  to `main` and stayed red across three fix pushes, on a bash 3.2 parse error, gawk's `-v` escapes and
+  `fsck_hfs` needing a device. None of those showed locally. (Maintainer, 2026-10-14: "this was the
+  kind of work where I expected you to propose working on a branch so that testing the code in GitHub
+  could happen without touching main until we were confident in it.")
 - This is also why an empty "probe" commit is a real cost. Use one when you genuinely need to see CI
   behave; delete the branch after.
 
