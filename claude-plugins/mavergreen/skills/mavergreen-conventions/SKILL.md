@@ -163,9 +163,8 @@ updaters, signing, or compat checks:**
 
 **`MAVERGREEN_PROGRESS=1` makes the fetch scripts report progress.** Set it and `mavericks_fetch.sh`
 (and so `fetch_sdk.sh`, `fetch_pinned_source.sh`, `fetch_sparkle_framework.sh`) say what they are
-doing on stderr: downloading, verifying, unpacking, and (`fetch_sdk.sh`) converting stubs to `.tbd`.
-At a terminal the download shows curl's progress bar and the conversion a count redrawn with `\r`;
-anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
+doing on stderr: downloading, verifying and unpacking. At a terminal the download shows curl's progress
+bar; anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
 exactly what it was, so CI logs and every existing consumer see no change. Stdout is untouched. A
 product that drives a fetch for a person at a terminal (Longboat) sets it; a build script does not.
 
@@ -1508,6 +1507,16 @@ beside it; without `sdk-pins.sh` it exits 2 naming the missing file.
 `include(Mavericks)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
 Native mode (on the 10.9 box, x86_64 only) pins too, because Xcode 6.1+ defaults to the 10.10 SDK
 there: the toolchain file uses xcrun's own 10.9 SDK when it has one, and the fetched pin otherwise.
+
+**The SDK stays as Apple shipped it, on every host.** `fetch_sdk.sh` never converts the 10.9 SDK's
+`MH_DYLIB_STUB` libraries to `.tbd`. Stubs are the one form every family linker reads: lld reads both
+forms, but CLT 6.2's ld64-241.9 can't read `.tbd`. Stubs are also the one form that links to the same bytes
+everywhere: lld orders a `.tbd`'s exports by name and a stub's in export-trie order, so the two forms give
+different symbol tables. It used to convert wherever tapi existed, which meant only on a modern Mac, so
+that host alone linked C differently from 10.9 and Linux (measured 2026-10-13). The cost is that Apple's
+ld from Xcode 15 on warns once per stub it reads, but the family links with lld. A cache key for the
+fetched SDK covers `fetch_sdk.sh` as well as `sdk-pins.sh`, so a change to what the fetch produces never
+restores a stale SDK.
 
 **Where it is enforced:**
 - **At package time, on everything the release contains (the gate).** `artifact-facts.sh` emits a

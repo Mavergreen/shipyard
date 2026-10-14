@@ -67,15 +67,15 @@ runs:
 
     # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- every
     #       consumer build fetches a pinned SDK, so without a cache every job re-downloads it. The key
-    #       is the sha256 of the sdk-pins.sh this ref ships (hashFiles() cannot see the action's own
-    #       checkout), so a moved pin can never restore a stale SDK.
+    #       hashes the sdk-pins.sh and fetch_sdk.sh this ref ships (hashFiles() cannot see the action's
+    #       own checkout), so neither a moved pin nor a change to the fetch can restore a stale SDK.
     - id: mav-sdk-key
       if: runner.os == 'macOS'
       shell: bash
       run: |
         set -eu
         root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
-        echo "key=mavericks-sdk-$(shasum -a 256 "$root/scripts/sdk-pins.sh" | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        echo "key=mavericks-sdk-$(cat "$root/scripts/sdk-pins.sh" "$root/scripts/fetch_sdk.sh" | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
     - if: runner.os == 'macOS'
       uses: actions/cache@v6
       with:

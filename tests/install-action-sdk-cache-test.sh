@@ -2,7 +2,8 @@
 # platform: host-agnostic
 #   usage: install-action-sdk-cache-test.sh
 #          install@v1 restores and saves the pinned-SDK cache on macOS, keyed on the content of the
-#          sdk-pins.sh it ships, so a changed pin never reuses a stale SDK. Exit 0 clean, 1 on failure.
+#          sdk-pins.sh and fetch_sdk.sh it ships, so a changed pin, or a change to what the fetch makes of
+#          the pinned SDK, never reuses a stale SDK. Exit 0 clean, 1 on failure.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning"
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -18,8 +19,9 @@ if len(cache) != 1:
     bad.append("expected exactly one actions/cache step, got %d" % len(cache))
 if key and cache:
     k, c = key[0], cache[0]
-    if "sdk-pins.sh" not in (k.get("run") or ""):
-        bad.append("the key step must hash the action's own scripts/sdk-pins.sh")
+    for f in ("sdk-pins.sh", "fetch_sdk.sh"):
+        if f not in (k.get("run") or ""):
+            bad.append("the key step must hash the action's own scripts/" + f)
     for s, what in ((k, "key"), (c, "cache")):
         if "runner.os == 'macOS'" not in (s.get("if") or ""):
             bad.append("the %s step must run on macOS only (fetch_sdk.sh's cache lives in ~/Library)" % what)

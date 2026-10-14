@@ -29,66 +29,9 @@ URL="${MAVERICKS_SDK_URL:-$1}"
 SHA="${MAVERICKS_SDK_SHA256:-$2}"
 SDK="$CACHE/$4"
 if [ ! -d "$SDK" ]; then
-  # platform: an interrupt during the conversion below must not leave this run's .mav-extract.* in the cache;
-  #           a successful publish has already removed $x, so the trap is then a no-op.
-  x=""
-  lst=""
-  trap 'rm -rf "${x:-}" "${lst:-}"' EXIT
-  x="$(mav_fetch_extract "$URL" "$SHA" "$CACHE" "$3")"
-  ROOT="$x/$4"
-  # platform: modern ld (Xcode 15+) warns for every ancient MH_DYLIB_STUB it reads. Where tapi
-  #           exists (a modern host; never the 10.9 box), convert those stubs to .tbd once at
-  #           extract time, in the private extract dir and before publishing, so a concurrent fetch never
-  #           sees a half-converted SDK: same exported symbols, no warnings. Pinned to tbd-v4 (YAML): the default
-  #           v5 is JSON, which some downstream tools can't parse.
-  # platform: OS X 10.9 has no tapi (the Command Line Tools for Xcode 6.2 carry none) and, without them, no
-  #           xcrun to ask: there it is never asked, so a first fetch on 10.9 runs no Command Line Tools name.
-  # platform: guarded macOS-only call -- sw_vers is absent off macOS, where `|| :` leaves the version empty
-  OSV="$(sw_vers -productVersion 2>/dev/null || :)"
-  TAPI=""
-  case "$OSV" in
-    10.9.*) ;;
-    # platform: guarded macOS-only call -- xcrun is absent off macOS, where `|| :` leaves TAPI empty and the `if` skips the conversion
-    *) TAPI="$(xcrun --find tapi 2>/dev/null || :)" ;;
-  esac
-  if [ -n "$TAPI" ]; then
-    LIBDIRS="$ROOT/usr/lib $ROOT/System/Library/Frameworks"
-    # platform: the find output is listed once into a temp file in the cache (not in the SDK being converted), so
-    #           MAVERGREEN_PROGRESS=1 can say how many files there are to check; the EXIT trap above removes it.
-    lst="$(mktemp "$CACHE/.mav-list.XXXXXX")"
-    find $LIBDIRS -type f \( -name '*.dylib' -o ! -name '*.*' \) > "$lst" || :
-    total=$(wc -l < "$lst" | tr -d ' ')
-    k=0; converted=0
-    [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || echo "fetch_sdk: converting stubs to .tbd ($total files to check)" >&2
-    if [ -t 2 ]; then tty=1; else tty=0; fi
-    while IFS= read -r f; do
-      k=$((k + 1))
-      [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || [ "$tty" != 1 ] || printf '\rfetch_sdk: checked %s of %s' "$k" "$total" >&2
-      # platform: guarded macOS-only call -- inside the `if [ -n "$TAPI" ]` above, so only where xcrun found tapi
-      [ "$(otool -h "$f" 2>/dev/null | awk 'NR==4 {print $5}')" = 9 ] || continue
-      if "$TAPI" stubify --filetype=tbd-v4 --delete-input-file "$f" 2>/dev/null; then converted=$((converted + 1)); fi  # unconvertible: keep stub
-    done < "$lst"
-    [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || [ "$tty" != 1 ] || echo >&2
-    [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || echo "fetch_sdk: converted $converted stubs" >&2
-    # platform: re-point symlinks whose target was converted. Loop to fixpoint: chains like
-    #           libc.dylib -> libSystem.dylib -> libSystem.B.dylib need multiple passes.
-    changed=1
-    while [ "$changed" = 1 ]; do
-      changed=0
-      for l in $(find $LIBDIRS -type l); do
-        [ -e "$l" ] && continue
-        t=$(readlink "$l")
-        case "$l" in *.dylib) new_l="${l%.dylib}.tbd" ;; *) new_l="$l.tbd" ;; esac
-        case "$t" in *.dylib) new_t="${t%.dylib}.tbd" ;; *) new_t="$t.tbd" ;; esac
-        case "$new_t" in /*) tgt="$ROOT$new_t" ;; *) tgt="$(dirname "$l")/$new_t" ;; esac
-        [ -e "$tgt" ] || continue
-        ln -sf "$new_t" "$new_l"
-        rm "$l"
-        changed=1
-      done
-    done
-  fi
-  mav_fetch_publish "$CACHE" "$x"
+  # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the SDK is
+  #       published as shipped, stubs and all, on every host: never converted to .tbd.
+  mav_fetch_pinned "$URL" "$SHA" "$CACHE" "$3"
 fi
 [ -d "$SDK/usr/lib" ] || { echo "SDK missing usr/lib: $SDK" >&2; exit 1; }
 echo "$SDK"
