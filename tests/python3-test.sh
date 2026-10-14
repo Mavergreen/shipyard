@@ -30,8 +30,8 @@ grep -q 'fix: ' "$t/err" || fail "the refusal names a fix"
 rc=0; run > "$t/out" 2> "$t/err" || rc=$?
 [ "$rc" -ne 0 ] || fail "no python3 at all is refused"
 case "$(uname -s)" in
-  Darwin) grep -q 'python-315' "$t/err" || fail "on macOS the fix names python-315" ;;
-  *) grep -q 'apt-get install python3' "$t/err" || fail "on Linux the fix names the package install" ;;
+  Darwin) grep -qFx '  fix: /opt/mavergreen/bin/mavergreen install python315' "$t/err" || fail "on macOS the fix names python-315" ;;
+  *) grep -qFx '  fix: install python3 >= 3.9' "$t/err" || fail "on Linux the fix names the package install" ;;
 esac
 
 run SHIPYARD_PYTHON3="$t/py39" > "$t/out" 2> "$t/err" || fail "a python3 reporting 3.9 is accepted"

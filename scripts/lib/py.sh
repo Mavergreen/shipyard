@@ -10,8 +10,8 @@ _py_ok() {
 
 _py_install_hint() {
   case "$(uname -s)" in
-    Darwin) echo "install python-315: sudo installer -pkg <Mavergreen/python-315 release pkg> -target /  (it provides /opt/mavergreen/bin/python3)" ;;
-    *) echo "install it with your package manager: apt-get install python3, or dnf install python3" ;;
+    Darwin) echo "/opt/mavergreen/bin/mavergreen install python315" ;;
+    *) echo "install python3 >= 3.9" ;;
   esac
 }
 
