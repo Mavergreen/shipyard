@@ -1,0 +1,1 @@
+{"extends":["github>Mavergreen/shipyard"],"packageRules":[{"matchDepNames":["x"],"matchUpdateTypes":["minor"],"automerge":false}]}

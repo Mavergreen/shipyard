@@ -1,0 +1,18 @@
+name: release
+on:
+  push:
+    tags: ['*-mavericks.*']
+concurrency:
+  group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  build:
+    steps:
+      - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
+      - run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh"
+      - run: |
+          sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "$TAG" --version "$FULL" \
+            --product Widget --min-os 10.9.5 --out dist/RELEASE_NOTES.md
+      - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
+      - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
+      - run: shipyard-cmake -S . -B "$RUNNER_TEMP/b"
