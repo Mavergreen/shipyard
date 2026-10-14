@@ -52,7 +52,7 @@ base	dist	scripts/check-artifact-conformance.sh	conformance base	P1
 updater	dist	scripts/check-artifact-conformance.sh	conformance updater	P6
 repository	dist	scripts/check-artifact-conformance.sh	conformance repository	P8
 variant-build-info	dist	scripts/check-artifact-conformance.sh	conformance ingredients	P1
-tree-clean	checkout	scripts/assert-tree-clean.sh	assert-tree-clean.sh	P1
+tree-clean	only	scripts/assert-tree-clean.sh	assert-tree-clean.sh	P1
 compat-imports	dist	scripts/assert_binary_compatible.sh	compat guard imports	P1
 compat-selectors	dist	scripts/assert_binary_compatible.sh	compat guard selectors	P1
 compat-archs	dist	scripts/assert_binary_compatible.sh	compat guard arch set	P1

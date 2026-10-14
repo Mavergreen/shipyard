@@ -184,7 +184,7 @@ fi
 chk_ran version-sh-tracked
 if [ "$HAVE_TRACKED" -eq 1 ]; then
   if ci_mentions 'build/version.sh' || [ -e build/version.sh ]; then
-    if git check-ignore -q build/version.sh 2>/dev/null; then
+    if chk_ignored version-sh-tracked build/version.sh; then
       chk_fail version-sh-tracked "build/version.sh is git-ignored" \
         "a too-broad .gitignore pattern (e.g. build*/) drops the committed version wrappers; local passes, CI's fresh checkout fails 'no build/version.sh'" \
         "ignore only build OUTPUT dirs (/_build/, build-*/, build/work/) — never build/ itself"
@@ -227,7 +227,8 @@ if [ "$HAVE_TRACKED" -eq 1 ]; then
     #           Build output is exactly the thing that does not exist in a fresh checkout, so
     #           querying without the slash would have failed every correctly-ignored repo the
     #           moment this ran in CI.
-    git check-ignore -q "$d/" 2>/dev/null && continue
+    _ig=0; chk_ignored build-dirs-ignored "$d/" || _ig=$?
+    case "$_ig" in 0) continue ;; 2) break ;; esac
     chk_fail build-dirs-ignored "$d is a build output directory this repo writes, but .gitignore does not cover it" \
       "one \`git add -A\` commits the build tree, and a stale CMakeCache keeps resolving a package that has been renamed away" \
       "add $d/ to .gitignore (any pattern that covers it; the family does not share one spelling)"
@@ -714,7 +715,8 @@ fi
 #       repo with no presets has no override channel to protect.
 chk_ran user-presets-ignored
 if [ -f CMakePresets.json ] && tracked CMakePresets.json; then
-  git check-ignore -q CMakeUserPresets.json 2>/dev/null \
+  _ig=0; chk_ignored user-presets-ignored CMakeUserPresets.json || _ig=$?
+  [ "$_ig" -ne 1 ] \
     || chk_fail user-presets-ignored "CMakeUserPresets.json is not gitignored" \
          "it is the per-developer build-location override, and it pollutes git status or gets committed by accident" \
          "add CMakeUserPresets.json to .gitignore"

@@ -16,7 +16,10 @@ allowlist" and says so.
 None recorded.
 
 ## Limits
-It needs a git checkout, and fails with "refusing to certify a tree nothing could read" otherwise. It
+It needs a git checkout, and fails with "refusing to certify a tree nothing could read" otherwise; under
+shipyard-check it reports itself not run instead. Plain shipyard-check never selects it: it runs where the
+workflow calls it after the build, or under --only tree-clean, and under shipyard-check it never consumes the
+--record manifest, so a mid-pipeline check leaves it for the post-build call. It
 reports at the level of paths. It warns, with exit 0, when an allowlist entry names something nothing wrote
 ("prune it"); QUEUE #19 records that this warning is false on every run of shipyard's own ci.yml.
 

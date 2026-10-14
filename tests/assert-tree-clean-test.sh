@@ -40,6 +40,16 @@ grep -qx 'tree-clean: not run: no --record manifest' "$work/out2" || say "with n
 if grep -qx tree-clean "$work/runlog2" 2>/dev/null; then say "with no manifest it must not count as run"; fi
 grep -qx tree-clean "$work/notrun2" || say "with no manifest it should record that it did not run"
 
+mkrepo "$work/kept"
+(cd "$work/kept" && sh "$S" --record) >/dev/null 2>&1
+kept="$RUNNER_TEMP/mavericks-tree-manifest-$(cd "$work/kept" && git rev-parse --show-toplevel | tr -d '\n' | shasum -a 256 | cut -d' ' -f1)"
+[ -f "$kept" ] || say "--record writes the manifest this test looks for"
+(cd "$work/kept" && sh "$root/scripts/shipyard-check" >/dev/null 2>&1) || :
+(cd "$work/kept" && sh "$root/scripts/shipyard-check" --only tree-clean >/dev/null 2>&1) || :
+[ -f "$kept" ] || say "a mid-pipeline shipyard-check must leave the pre-build manifest for the post-build call"
+(cd "$work/kept" && sh "$S" >/dev/null 2>&1) || say "the post-build call still passes a clean tree"
+[ ! -f "$kept" ] || say "the post-build call, run directly, consumes the manifest"
+
 mkrepo "$work/declared"
 printf 'VERSION  # the build stamps the resolved version\n' > "$work/declared/.mavericks-intree"
 (cd "$work/declared" && git add .mavericks-intree \

@@ -31,8 +31,12 @@ chk_notrun() {
 
 chk_tracked_files() {
   if [ -n "${SHIPYARD_CHECK_FILES:-}" ]; then
-    cat "$SHIPYARD_CHECK_FILES"
-  elif git ls-files 2>/dev/null; then
+    [ -f "$SHIPYARD_CHECK_FILES" ] && [ -r "$SHIPYARD_CHECK_FILES" ] && cat "$SHIPYARD_CHECK_FILES" && return 0
+    chk_fail tracked-files "the tracked-file list couldn't be read" \
+      "SHIPYARD_CHECK_FILES names $SHIPYARD_CHECK_FILES, which is not a readable file" \
+      "point SHIPYARD_CHECK_FILES at a file listing the tracked paths, or unset it in a git checkout"
+    return 1
+  elif git -c core.quotepath=off ls-files 2>/dev/null; then
     :
   else
     chk_fail tracked-files "the tracked-file list couldn't be read" \
@@ -40,6 +44,16 @@ chk_tracked_files() {
       "run in a git checkout, or set SHIPYARD_CHECK_FILES to a file listing the tracked paths"
     return 1
   fi
+}
+
+chk_ignored() {  # $1 = the calling id, $2 = a path; 0 ignored, 1 not, 2 git cannot say (and $1 is not run)
+  _ci_rc=0
+  git check-ignore -q -- "$2" 2>/dev/null || _ci_rc=$?
+  case "$_ci_rc" in
+    0|1) return "$_ci_rc" ;;
+  esac
+  chk_notrun "$1" "git cannot say what .gitignore covers here (git is missing, or this is not a git checkout)"
+  return 2
 }
 
 chk_deviated() {

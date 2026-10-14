@@ -11,6 +11,10 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
 
 if ! root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  if [ -n "${SHIPYARD_CHECK_RUNLOG:-}" ] && [ "${1:-}" != --record ]; then
+    chk_notrun tree-clean "git is missing, or $PWD is not a git checkout, so the tree cannot be read"
+    exit 0
+  fi
   chk_fail tree-clean "refusing to certify a tree nothing could read" \
     "$PWD is not a git checkout, or git is unavailable" \
     "run it inside the git checkout the build ran in"
@@ -153,5 +157,5 @@ if [ -n "$allowlist" ]; then
     [ -e "$pat" ] || echo "assert-tree-clean: .mavericks-intree allows '$pat', which nothing wrote -- prune it" >&2
   done
 fi
-rm -f "$MANIFEST"
+[ -n "${SHIPYARD_CHECK_RUNLOG:-}" ] || rm -f "$MANIFEST"
 echo "assert-tree-clean: ok ($mode)"

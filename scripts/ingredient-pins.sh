@@ -79,7 +79,7 @@ own="$(awk '
 #       names it matches on disk instead of staying a pattern; noglob leaves `case` matching
 #       untouched, which is where globbing belongs here.
 set -f
-for f in $(git ls-files); do
+for f in $(git -c core.quotepath=off ls-files); do
   for p in $patterns; do
     pat="$(printf '%s' "$p" | sed 's/\*\*/*/g')"
     # shellcheck disable=SC2254  # $pat is intentionally a glob

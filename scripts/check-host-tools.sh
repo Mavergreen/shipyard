@@ -35,7 +35,7 @@ paths="$(mktemp "${_tmp%/}/host-tools-paths.XXXXXX")"
 modes="$(mktemp "${_tmp%/}/host-tools-modes.XXXXXX")"
 trap 'rm -f "$list" "$hits" "$undeclared" "$paths" "$modes"' EXIT
 chk_tracked_files > "$paths" || exit 2
-git ls-files -s > "$modes" 2>/dev/null || :
+git -c core.quotepath=off ls-files -s > "$modes" 2>/dev/null || :
 awk -F'\t' -v mf="$modes" 'BEGIN { while ((getline l < mf) > 0) { split(l, a, "\t"); m[a[2]] = substr(a[1], 1, 6) } } { printf "%s x 0\t%s\n", ($0 in m) ? m[$0] : "100644", $0 }' "$paths" > "$list"
 
 fail() { chk_fail host-tools "a tracked script breaks the host-declaration rule" "$1" "$2"; }
