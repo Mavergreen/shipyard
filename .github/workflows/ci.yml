@@ -176,7 +176,10 @@ jobs:
           cat "$RUNNER_TEMP/sdk-audit.txt"
           grep -q 'Mach-O slices)' "$RUNNER_TEMP/sdk-audit.txt"
 
-      - name: Artifact checks (the rehearsed pkg)
+      # spec: scripts/sign_and_appcast.sh -- the rehearsal holds no signing key, so it writes the feed
+      #       the way that script does (gen_appcast.sh over the notes and the pkg's length) with a
+      #       placeholder signature, and the feed and notes checks see a dist shaped like the release's.
+      - name: Artifact checks (the rehearsed pkg, with an unsigned feed)
         env:
           SHIPYARD_CHECK_REPO: .
           MAVERICKS_ALLOW_ARCHS: x86_64 arm64
@@ -184,7 +187,15 @@ jobs:
           set -eu
           SHIPYARD_CHECK_VERSION="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"
           export SHIPYARD_CHECK_VERSION
-          sh scripts/shipyard-check --dist "$RUNNER_TEMP/dist"
+          d="$RUNNER_TEMP/dist"
+          sh scripts/release-notes.sh --tag "v$SHIPYARD_CHECK_VERSION" --version "$SHIPYARD_CHECK_VERSION" \
+            --product Shipyard --min-os 10.9.5 --out "$d/RELEASE_NOTES.md"
+          pkg="$d/mavericks-shipyard-$SHIPYARD_CHECK_VERSION.pkg"
+          len="$(wc -c < "$pkg" | tr -d ' ')"
+          sh scripts/gen_appcast.sh "Mavericks Shipyard" "$SHIPYARD_CHECK_VERSION" \
+            "https://github.com/Mavergreen/shipyard/releases/download/v$SHIPYARD_CHECK_VERSION/mavericks-shipyard-$SHIPYARD_CHECK_VERSION.pkg" \
+            10.9.5 "$d/RELEASE_NOTES.md" "sparkle:edSignature=\"rehearsal\" length=\"$len\"" > "$d/shipyard.xml"
+          sh scripts/shipyard-check --dist "$d"
 
       - name: Install smoke (the rehearsed pkg)
         timeout-minutes: 10
