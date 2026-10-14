@@ -5,7 +5,7 @@ Family tools elevate themselves, so a doc that prescribes sudo teaches a step th
 the tool's per-user work as root. Write the plain command: mavergreen install <file.pkg> for a pkg, or
 double-click it. Docs write the bare mavergreen, never its path. Runtime messages are the opposite: they keep
 the absolute path, because they surface where paths.d is not read (the daily notification, Installer's log,
-IDEs, cron, ssh commands). The check covers README*, *.md (except release-notes/**, the conventions skill,
+IDEs, cron, ssh commands). The check covers README*, *.md (except release-notes/**, explain/**, the conventions skill,
 and design, decision and plan records under docs/decisions/**, docs/adr/**, docs/plans/** and
 docs/superpowers/**), man pages, pkg resources, and echo, printf or heredoc text in a tracked script outside
 tests/. An executed sudo in a script is code and passes.
