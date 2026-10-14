@@ -55,13 +55,13 @@ fails emptyglob deviation-complete 'empty glob'
 
 case_ nomatch "- rosetta:build/zzz.sh: because"
 fails nomatch deviation-scope-matches 'matches no tracked file'
-case_ spans "- rosetta:build/*.sh: because"
+case_ spans "- rosetta:build/*b.sh: because"
+printf 'build/sub/b.sh\n' > "$w/spans/FILES"
 run "$w/spans" || fail "* spans / as in deviation-reason.sh: $(cat "$w/out")"
 case_ repowide "- rosetta: because"
 run "$w/repowide" || fail "a repo-wide entry always matches: $(cat "$w/out")"
 case_ commentsglob "- comments:build/*.sh: because"
 fails commentsglob deviation-scope-matches 'drop the glob'
-rm -f "$w/commentsglob/comment-reasons"
 case_ commentsrepo "- comments: because"
 run "$w/commentsrepo" || fail "a repo-wide comments deviation passes: $(cat "$w/out")"
 case_ distscope "- enclosure-url:appcast.xml: the tag carries a v"
