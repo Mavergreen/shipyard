@@ -1,0 +1,2 @@
+#!/bin/sh
+: "${SHIPYARD_SCRIPTS:?it's scripts}"
