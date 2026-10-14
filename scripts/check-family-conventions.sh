@@ -1163,7 +1163,7 @@ fi
 chk_ran docs-no-sudo
 : > "$tmp/sudohits"
 if [ "$HAVE_TRACKED" -eq 1 ]; then
-  grep -Ev '^(tests|\.superpowers)/|^release-notes/|^docs/(decisions|adr|plans|superpowers)/|(^|/)SKILL\.md$' "$TF" | while IFS= read -r f; do
+  grep -Ev '^(tests|\.superpowers)/|^release-notes/|^explain/|^docs/(decisions|adr|plans|superpowers)/|(^|/)SKILL\.md$' "$TF" | while IFS= read -r f; do
     [ -f "$f" ] || continue
     case "$f" in
       README*|*/README*|*.md|man/*|*.[1-9]|scripts/resources/*|*/resources/*.html|*/resources/*.rtf) ;;
