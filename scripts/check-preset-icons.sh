@@ -23,7 +23,7 @@ case "$CONF" in */*) . "$CONF" ;; *) . "./$CONF" ;; esac
 W=$(mktemp -d "${TMPDIR:-/tmp}/check-preset-icons.XXXXXX"); trap 'rm -rf "$W"' EXIT
 
 if [ -n "$ICON_URL" ]; then
-  if ! curl -fsSL --max-time 30 -o "$W/icon" "$ICON_URL"; then
+  if ! curl -fsSL --max-time 30 -o "$W/icon" "$ICON_URL" 2>/dev/null; then
     chk_fail preset-icon "ICON_URL no longer serves the icon" "fetching $ICON_URL failed" \
       "point ICON_URL in $CONF at the vendor's current PNG"
   elif [ "$(head -c 8 "$W/icon" | od -An -tx1 | tr -d ' \n')" != 89504e470d0a1a0a ]; then
