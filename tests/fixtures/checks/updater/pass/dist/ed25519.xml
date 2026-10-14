@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>ed25519</title>
+    <item>
+      <title>Version 1.0.0-mavericks.1</title>
+      <pubDate>Wed, 14 Oct 2026 11:41:10 +0000</pubDate>
+      <sparkle:version>1.0.0.1</sparkle:version>
+      <sparkle:shortVersionString>1.0.0-mavericks.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>10.9.5</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<style>body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:13px;}</style>
+<h2>Notes</h2>
+<ul>
+<li>a fix</li>
+</ul>
+]]></description>
+      <enclosure url="https://github.com/Mavergreen/ed25519/releases/download/1.0.0-mavericks.1/ed25519-1.0.0-mavericks.1.pkg" type="application/octet-stream" sparkle:edSignature="x" length="10720" />
+    </item>
+  </channel>
+</rss>
