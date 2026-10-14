@@ -31,8 +31,8 @@ first_is "$out" stage-product \
 mkrepo "$work/pkc"; printf '#!/bin/sh\npkgbuild --root stage out.pkg\n' > "$work/pkc/build/package.sh"
 printf '      # - run: sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pkc/.github/workflows/release.yml"
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) && { echo "FAIL: a commented-out conformance call must not count as wired"; exit 1; }
-printf '\n## Conformance deviations\n\n- artifact-conformance: ships a disk image, not a Mavergreen pkg\n- product-layout: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
-(cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: declared artifact-conformance and product-layout deviations should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
+printf '\n## Conformance deviations\n\n- artifact-checks-wired: ships a disk image, not a Mavergreen pkg\n- stage-product: ships a disk image, not a Mavergreen pkg\n- registered: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
+(cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: declared artifact-checks-wired, stage-product and registered deviations should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
 mkrepo "$work/pks"; printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$work/pks/.github/workflows/release.yml"
 out="$(cd "$work/pks" && git add -A && sh "$S" 2>&1 || true)"
 has_id "$out" artifact-checks-wired || { echo "FAIL: a repo that signs an appcast builds a pkg, and must run conformance: $out"; exit 1; }

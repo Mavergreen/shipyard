@@ -31,7 +31,7 @@ stage-product	checkout	scripts/check-family-conventions.sh	gate 23	P1
 registered	checkout	scripts/check-family-conventions.sh	gate 24	P8
 rosetta	checkout	scripts/check-family-conventions.sh	gate 25	P1
 superpowers-ignored	checkout	scripts/check-family-conventions.sh	gate 27	P1
-deviation-complete	checkout	scripts/deviations.sh	deviations.sh refusal	P1
+deviation-complete	checkout	scripts/check-deviations.sh	deviations.sh refusal	P1
 artifact-facts	dist	scripts/check-artifact-conformance.sh	conformance abort	P1
 version-scheme	dist	scripts/check-artifact-conformance.sh	conformance scheme	P1
 version	dist	scripts/check-artifact-conformance.sh	conformance version	P1
@@ -69,8 +69,8 @@ gui-relaunch-safe	dist	scripts/assert_gui_relaunch_safe.sh	assert_gui_relaunch_s
 sparkle-pristine	build	scripts/assert_sparkle_pristine.sh	assert_sparkle_pristine.sh	P6
 tag-publishable	publish	scripts/assert_tag_publishable.sh	assert_tag_publishable.sh	P1
 update-trusted	publish	scripts/assert_update_trusted.sh	assert_update_trusted.sh	P1
-deviation-known-check	checkout	scripts/deviations.sh	new (K5)	P1
-deviation-scope-matches	checkout	scripts/deviations.sh	new (K5)	P1
+deviation-known-check	checkout	scripts/check-deviations.sh	new (K5)	P1
+deviation-scope-matches	checkout	scripts/check-deviations.sh	new (K5)	P1
 python3	checkout	scripts/check-python3.sh	new	P1
 pr-trigger	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 publish-order	checkout	scripts/check-family-conventions.sh	new (K6)	P1

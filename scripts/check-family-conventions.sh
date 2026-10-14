@@ -495,13 +495,8 @@ delegate comments check-comments.sh \
   "cite one: # platform: <a fact about the platform or a tool>, or # spec: <a locatable pointer>"
 
 # spec: scripts/deviations.sh -- ONE parser for the "## Conformance deviations" grammar, shared with
-#       check-artifact-conformance.sh, so a declared exception cannot mean two things.
-chk_ran deviation-complete
-if ! DEVS="$(sh "$SELF/deviations.sh" .)"; then
-  chk_fail deviation-complete "INGREDIENTS.md declares a conformance deviation with no reason" \
-    "an exception without one is indistinguishable from drift" \
-    "give every '- <check>[:<glob>]:' entry its reason on the same line"
-fi
+#       check-artifact-conformance.sh; an incomplete entry is reported once, by check-deviations.sh.
+DEVS="$(sh "$SELF/deviations.sh" . 2>/dev/null || true)"
 printf '%s\n' "$DEVS" | mav_deviation_facts > "$tmp/devfacts"
 SHIPYARD_CHECK_DEVIATION_FACTS="$tmp/devfacts"
 deviated() { chk_deviated "$1" "$2" >/dev/null; }
@@ -683,10 +678,10 @@ for f in $(grep -E "$SRC_RX" "$TF" | grep -v '^tests/' || true); do
   grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' && { builds_pkg="$f"; break; }
 done
 [ -n "$builds_pkg" ] || ! ci_mentions 'sign_and_appcast' || builds_pkg="a signing workflow"
-if [ -n "$builds_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! deviated artifact-conformance "$REL"; then
+if [ -n "$builds_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! deviated artifact-checks-wired "$REL"; then
   chk_fail artifact-checks-wired "this repo builds a .pkg ($builds_pkg) but no workflow runs check-artifact-conformance.sh" \
     "nothing checks what it installs or under which identity" \
-    "pipe artifact-facts.sh into check-artifact-conformance.sh at package time (see the conventions skill, 'Artifact conformance'), or declare '- artifact-conformance: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+    "pipe artifact-facts.sh into check-artifact-conformance.sh at package time (see the conventions skill, 'Artifact conformance'), or declare '- artifact-checks-wired: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
@@ -721,7 +716,7 @@ delegate host-tools check-host-tools.sh \
 #       option flags) and a word ending stage_product.sh, or a word ending /stage_product.sh; a word
 #       holding "=" is an assignment, not a call. SKILL.md's check 23 row lists what this misses.
 chk_ran stage-product
-if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
+if [ -n "$builds_pkg" ] && ! deviated stage-product "$REL"; then
   staged=""
   for f in $(grep -E "$SRC_RX" "$TF" | grep -v '^tests/' || true); do
     grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
@@ -730,13 +725,13 @@ if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
   done
   [ -n "$staged" ] || chk_fail stage-product "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh" \
                          "its install scripts and manifest are hand-rolled" \
-                         "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare '- product-layout: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+                         "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare '- stage-product: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
 # spec: SKILL.md "Family conventions" check 24 -- every feed URL and updater identity is derived from
 #       the registry's repo, so a pkg-building repo the registry does not name publishes feeds nothing polls.
 chk_ran registered
-if [ -n "$builds_pkg" ] && [ -n "${GITHUB_REPOSITORY:-}" ] && ! deviated product-layout "$REL"; then
+if [ -n "$builds_pkg" ] && [ -n "${GITHUB_REPOSITORY:-}" ] && ! deviated registered "$REL"; then
   _c24=0; registry_lookup shorts "${GITHUB_REPOSITORY#*/}" || _c24=$?
   case "$_c24" in
     0) ;;

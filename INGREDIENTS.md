@@ -57,11 +57,12 @@ two subsystems share one namespace under one header.
 ## Conformance deviations
 
 `check-artifact-conformance.sh` holds each release's artifacts to the family's schemes. One of them,
-`scheme`, assumes a version of the form `<upstream>-mavericks.N`; shipyard's is not, on purpose.
+`version-scheme`, assumes a version of the form `<upstream>-mavericks.N`; shipyard's is not, on purpose.
 Machine-read by `artifact-facts.sh` as `- <check>[:<glob>]: <reason>` (the reason is the rest of that
 one line):
 
-- scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
+- version-scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
-- vendored:scripts/vendor/yaml/**: python-315's phase 1 has no `ssl`, so pip can't fetch PyYAML on 10.9, and the checks keep their Python; revisit when python-315 ships `ssl` and pip works (its phase 2), then delete scripts/vendor and let the checks import a pip-installed PyYAML (`/opt/mavergreen/bin/python3 -m pip install --user pyyaml`).
+
+Not a deviation, because no check reads one: scripts/vendor/yaml/** is vendored on purpose. python-315's phase 1 has no `ssl`, so pip can't fetch PyYAML on 10.9, and the checks keep their Python; revisit when python-315 ships `ssl` and pip works (its phase 2), then delete scripts/vendor and let the checks import a pip-installed PyYAML (`/opt/mavergreen/bin/python3 -m pip install --user pyyaml`).

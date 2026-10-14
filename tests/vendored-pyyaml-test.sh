@@ -38,8 +38,8 @@ got="$(cd "$t" && PYTHONPATH="$t/shadow" SHIPYARD_CHECK_DIR="$here/scripts" SHIP
   sh -c '. "$SHIPYARD_CHECK_DIR/lib/py.sh"; chk_py "$1"' sh "$t/where.py")" || fail "chk_py imports yaml past a broken one on PYTHONPATH"
 [ "$got" = "$here/scripts/vendor/yaml" ] || fail "chk_py loads the vendored yaml, got $got"
 
-dev="$(sh "$here/scripts/deviations.sh" "$here" | grep '^vendored scripts/vendor/yaml/\*\* ')" || fail "INGREDIENTS.md declares vendored:scripts/vendor/yaml/**"
-printf '%s\n' "$dev" | grep -q 'ssl' || fail "the deviation names its reason"
-printf '%s\n' "$dev" | grep -q 'revisit' || fail "the deviation names its exit"
+dev="$(grep 'scripts/vendor/yaml/\*\* is vendored on purpose' "$here/INGREDIENTS.md")" || fail "INGREDIENTS.md says scripts/vendor/yaml/** is vendored on purpose"
+printf '%s\n' "$dev" | grep -q 'ssl' || fail "the note names its reason"
+printf '%s\n' "$dev" | grep -q 'revisit' || fail "the note names its exit"
 grep -q '^| PyYAML ' "$here/INGREDIENTS.md" || fail "INGREDIENTS.md has a PyYAML row"
 echo "PASS vendored-pyyaml"
