@@ -40,6 +40,12 @@ run
 [ "$rc" -eq 0 ] && [ ! -e "$w/installed" ] || { echo "FAIL xcrun providing the readers must mean no brew call: $(cat "$w/out")"; exit 1; }
 grep -qx "OTOOL=$w/llvm/bin/llvm-otool" "$w/env" || { echo "FAIL xcrun's reader should be exported: $(cat "$w/env")"; exit 1; }
 
+printf '#!/bin/sh\ncase "$1" in list) exit 1 ;; install) exit 0 ;; --prefix) exit 1 ;; esac\n' > "$w/bin/brew"
+rm -f "$w/bin/xcrun" "$w/installed"
+run
+[ "$rc" -eq 0 ] || { echo "FAIL a brew whose --prefix exits 1 must still leave the script exiting 0, got $rc: $(cat "$w/out")"; exit 1; }
+grep -q '^::warning::.*OTOOL' "$w/out" || { echo "FAIL it should warn naming the variable: $(cat "$w/out")"; exit 1; }
+
 rm -f "$w/bin/brew" "$w/bin/xcrun" "$w/installed"
 run
 [ "$rc" -eq 0 ] || { echo "FAIL with no readers and no brew it must still exit 0, got $rc"; exit 1; }

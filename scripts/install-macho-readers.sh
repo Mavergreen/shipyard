@@ -18,10 +18,11 @@ missing=""
 for v in OTOOL LIPO NM STRINGS; do mach_tool "$v" 2>/dev/null || missing="$missing $v"; done
 if [ -n "$missing" ] && command -v brew >/dev/null 2>&1; then
   brew list llvm >/dev/null 2>&1 || brew install llvm || :
-  d="$(brew --prefix llvm 2>/dev/null)/bin"
+  d="$(brew --prefix llvm 2>/dev/null || :)"
+  [ -z "$d" ] || d="$d/bin"
   for v in $missing; do
     case "$v" in OTOOL) t=otool ;; LIPO) t=lipo ;; NM) t=nm ;; STRINGS) t=strings ;; esac
-    if [ -x "$d/llvm-$t" ]; then eval "$v=$d/llvm-$t"; export "$v"; fi
+    if [ -n "$d" ] && [ -x "$d/llvm-$t" ]; then eval "$v=$d/llvm-$t"; export "$v"; fi
   done
 fi
 for v in OTOOL LIPO NM STRINGS; do
