@@ -10,10 +10,10 @@ here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/../scripts/deviation-reason.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/devreason-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 
-says() {  # $1 = expected reason ("" for none), then mav_deviation_reason's arguments
+says() {  # $1 = expected reason ("" for none), then shipyard_deviation_reason's arguments
   _want="$1"; shift
-  _got="$(mav_deviation_reason "$@")"
-  [ "$_got" = "$_want" ] || { echo "FAIL: mav_deviation_reason $* -- wanted '$_want', got '$_got'"; exit 1; }
+  _got="$(shipyard_deviation_reason "$@")"
+  [ "$_got" = "$_want" ] || { echo "FAIL: shipyard_deviation_reason $* -- wanted '$_want', got '$_got'"; exit 1; }
 }
 
 cat > "$w/devs" <<'EOF'
@@ -52,7 +52,7 @@ says '' "$d" floor x.pkg
 : > "$w/empty"
 says '' "$w/empty" sdk-pin a/b
 
-# spec: scripts/deviation-reason.sh -- mav_deviation_facts turns deviations.sh's "<check> <glob or *>
+# spec: scripts/deviation-reason.sh -- shipyard_deviation_facts turns deviations.sh's "<check> <glob or *>
 #       <reason>" into the fact lines the matcher reads; end to end from INGREDIENTS.md, the path
 #       check-artifact-conformance.sh (via artifact-facts.sh) and assert_binary_compatible.sh both take.
 cat > "$w/INGREDIENTS.md" <<'EOF'
@@ -60,11 +60,14 @@ cat > "$w/INGREDIENTS.md" <<'EOF'
 - sdk-pin:*/lib/libswiftCore.dylib: the Swift runtime ships prebuilt
 - scheme: shipyard ports nothing
 EOF
-sh "$here/../scripts/deviations.sh" "$w" | mav_deviation_facts > "$w/facts"
+sh "$here/../scripts/deviations.sh" "$w" | shipyard_deviation_facts > "$w/facts"
 grep -qx 'deviation sdk-pin:\*/lib/libswiftCore.dylib the Swift runtime ships prebuilt' "$w/facts" \
   || { echo "FAIL: a scoped entry's fact line; got:"; cat "$w/facts"; exit 1; }
 grep -qx 'deviation scheme shipyard ports nothing' "$w/facts" \
   || { echo "FAIL: an unscoped entry's fact line; got:"; cat "$w/facts"; exit 1; }
 says 'the Swift runtime ships prebuilt' "$w/facts" sdk-pin build/lib/libswiftCore.dylib
-[ -z "$(printf '\n' | mav_deviation_facts)" ] || { echo "FAIL: no deviations must yield no facts"; exit 1; }
+[ -z "$(printf '\n' | shipyard_deviation_facts)" ] || { echo "FAIL: no deviations must yield no facts"; exit 1; }
+[ "$(mav_deviation_reason "$w/facts" sdk-pin build/lib/libswiftCore.dylib)" = 'the Swift runtime ships prebuilt' ] \
+  || { echo "FAIL: mav_deviation_reason still answers"; exit 1; }
+[ "$(printf 'scheme * x\n' | mav_deviation_facts)" = 'deviation scheme x' ] || { echo "FAIL: mav_deviation_facts still answers"; exit 1; }
 echo "PASS: deviation-reason"

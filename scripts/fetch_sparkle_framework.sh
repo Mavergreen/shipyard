@@ -24,7 +24,7 @@ FAT="$CACHE/fat/Sparkle.framework"
 if [ ! -d "$FAT" ]; then
   # platform: the release archive spells its members "./Sparkle.framework/..."; GNU tar extracts a
   #           named member only as spelled, bsdtar either way, so the name carries the "./".
-  mav_fetch_pinned "$URL" "$SHA" "$CACHE/fat" "Sparkle-1.27.3.tar.xz" ./Sparkle.framework
+  shipyard_fetch_pinned "$URL" "$SHA" "$CACHE/fat" "Sparkle-1.27.3.tar.xz" ./Sparkle.framework
 fi
 [ -f "$FAT/Versions/A/Sparkle" ] || { echo "Sparkle fetch failed: $FAT" >&2; exit 1; }
 echo "$FAT"

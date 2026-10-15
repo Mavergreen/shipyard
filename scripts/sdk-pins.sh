@@ -1,13 +1,13 @@
 # platform: host-agnostic
 #   usage: . sdk-pins.sh     (sourced; defines the three functions below)
-#          mav_sdk_pin <arch>                            "<url> <sha256> <tarball> <sdk-dir>"; 1 if unknown
-#          mav_sdk_rule <arch> <filetype> <minos> <sdk>  0 if compliant, else prints why and returns 1
-#          mav_sdk_exempt_sha256 <sha256>                0 if the bytes are a pinned third-party file
+#          shipyard_sdk_pin <arch>                            "<url> <sha256> <tarball> <sdk-dir>"; 1 if unknown
+#          shipyard_sdk_rule <arch> <filetype> <minos> <sdk>  0 if compliant, else prints why and returns 1
+#          shipyard_sdk_exempt_sha256 <sha256>                0 if the bytes are a pinned third-party file
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the ONE place
 #       the pins and the per-arch rule live; fetch_sdk.sh, assert_binary_compatible.sh and
 #       check-artifact-conformance.sh all source it, so the three cannot disagree.
 
-mav_sdk_pin() {
+shipyard_sdk_pin() {
   case "$1" in
     x86_64) echo "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.9.sdk.tar.xz fcf88ce8ff0dd3248b97f4eb81c7909f2cc786725de277f4d05a2b935cc49de0 MacOSX10.9.sdk.tar.xz MacOSX10.9.sdk" ;;
     # platform: phracker publishes no checksum; this one was recorded on first download (2026-09-24)
@@ -18,7 +18,7 @@ mav_sdk_pin() {
   esac
 }
 
-mav_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk
+shipyard_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk
   if [ "$2" = KEXTBUNDLE ]; then
     [ "$1" = x86_64 ] && return 0
     echo "a kext must be x86_64, not $1"; return 1
@@ -45,7 +45,12 @@ mav_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk
 
 # platform: Sparkle 1.27.3 is prebuilt upstream against SDK 12.0 and embedded verbatim in every updater;
 #           exempted by CONTENT, so only these exact bytes pass -- a patched or different Sparkle does not.
-MAV_SDK_EXEMPT_SHA256='95ad6ce1558b1ffef550455bf9aa05ad6686d434279631d170ab92fb3747c93f
+SHIPYARD_SDK_EXEMPT_SHA256='95ad6ce1558b1ffef550455bf9aa05ad6686d434279631d170ab92fb3747c93f
 afc568f0d8d2a93eb9e59cda546cafab0a14cc60a4d78b4c611800d33ad5dced
 4ea4718635b69a7746078674aba2af31249d20e3155010bd06f1e9d5487c94b2'
-mav_sdk_exempt_sha256() { [ -n "$1" ] && printf '%s\n' "$MAV_SDK_EXEMPT_SHA256" | grep -qx "$1"; }
+shipyard_sdk_exempt_sha256() { [ -n "$1" ] && printf '%s\n' "$SHIPYARD_SDK_EXEMPT_SHA256" | grep -qx "$1"; }
+
+# spec: SKILL.md "shipyard: consume its facilities" -- the mav_* names answer until the family calls shipyard_*
+mav_sdk_pin() { shipyard_sdk_pin "$@"; }
+mav_sdk_rule() { shipyard_sdk_rule "$@"; }
+mav_sdk_exempt_sha256() { shipyard_sdk_exempt_sha256 "$@"; }

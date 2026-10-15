@@ -172,7 +172,7 @@ if [ -f "$root/INGREDIENTS.md" ]; then
   #           reports the `while`'s status instead, turning "this declaration is malformed" into
   #           "there are no deviations".
   _devs="$(sh "$SELF/deviations.sh" "$root")" || exit 1
-  printf '%s\n' "$_devs" | mav_deviation_facts
+  printf '%s\n' "$_devs" | shipyard_deviation_facts
 fi
 
 for f in "$dist"/*; do

@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # platform: host-agnostic
 # Tests for scripts/assert_gui_relaunch_safe.sh (the "two menu-bar icons after an update" gate) and
-# the mav_stop_gui_instance helper it points offenders at. Pure text/process fixtures; no pkg install.
+# the shipyard_stop_gui_instance helper it points offenders at. Pure text/process fixtures; no pkg install.
 
 setup() {
   GATE="$BATS_TEST_DIRNAME/../scripts/assert_gui_relaunch_safe.sh"
@@ -19,8 +19,8 @@ launchctl asuser 501 open -a "/Applications/Foo.app"')"
   [ "$status" -eq 0 ]
 }
 
-@test "asuser launchctl load with mav_stop_gui_instance: passes" {
-  f="$(pi ok_helper 'mav_stop_gui_instance Contents/MacOS/Foo 501
+@test "asuser launchctl load with shipyard_stop_gui_instance: passes" {
+  f="$(pi ok_helper 'shipyard_stop_gui_instance Contents/MacOS/Foo 501
 launchctl asuser 501 launchctl load -w /Library/LaunchAgents/foo.systray.plist')"
   run sh "$GATE" "$f"
   [ "$status" -eq 0 ]
@@ -62,7 +62,16 @@ sudo -u bob launchctl load -w /Library/LaunchAgents/x.plist')"
   [ "$status" -eq 0 ]
 }
 
-@test "helper: sourcing defines mav_stop_gui_instance; a no-uid call is a safe no-op" {
-  run sh -c ". '$HELPER'; mav_stop_gui_instance Contents/MacOS/Nope 0 && command -v mav_stop_gui_instance"
+@test "helper: sourcing defines shipyard_stop_gui_instance; a no-uid call is a safe no-op" {
+  run sh -c ". '$HELPER'; shipyard_stop_gui_instance Contents/MacOS/Nope 0 && command -v shipyard_stop_gui_instance"
+  [ "$status" -eq 0 ]
+}
+
+@test "the mav_stop_gui_instance name still answers, and the gate still accepts it" {
+  run sh -c ". '$HELPER'; mav_stop_gui_instance Contents/MacOS/Nope 0"
+  [ "$status" -eq 0 ]
+  f="$(pi old_helper 'mav_stop_gui_instance Contents/MacOS/Foo 501
+launchctl asuser 501 launchctl load -w /Library/LaunchAgents/foo.systray.plist')"
+  run sh "$GATE" "$f"
   [ "$status" -eq 0 ]
 }

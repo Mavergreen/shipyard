@@ -45,10 +45,10 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/sdk-pins.sh"
 . "$SELF/deviation-reason.sh"
 
-mav_die() { echo "compat guard CANNOT MEASURE (fail-closed): $*" >&2; exit 4; }
+shipyard_die() { echo "compat guard CANNOT MEASURE (fail-closed): $*" >&2; exit 4; }
 # spec: a reader's stderr goes to $work/reader.err, quiet on success (nm warns about every empty archive
 #       member) and replayed here when the reader fails, so the failure shows the reader's own error.
-mav_reader_die() { echo "compat guard CANNOT MEASURE (fail-closed): $*" >&2; cat "$work/reader.err" >&2; exit 4; }
+shipyard_reader_die() { echo "compat guard CANNOT MEASURE (fail-closed): $*" >&2; cat "$work/reader.err" >&2; exit 4; }
 
 POST_10_9='_clock_gettime|_clock_gettime_nsec_np|_os_unfair_lock_.*|_os_log.*'
 if [ -n "${MAVERICKS_POST_10_9_SYMBOLS:-}" ]; then
@@ -73,16 +73,16 @@ work="$(mktemp -d "${_tmp%/}/compat-guard.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the guard
 #       honours the same sdk-pin:<glob> exemptions as the package-time rule, parsed by the same
-#       deviations.sh and matched by the same mav_deviation_reason, so a file excused in the pkg is
+#       deviations.sh and matched by the same shipyard_deviation_reason, so a file excused in the pkg is
 #       excused at build time. Read before any binary: a malformed declaration fails every run, not
 #       only the one that needed it.
 devs_root="${MAVERICKS_DEVIATIONS_ROOT:-.}"
 # platform: not a pipeline -- deviations.sh exits 1 on a malformed entry, and a pipeline would report
-#           mav_deviation_facts' status instead, turning "this declaration is malformed" into "there
+#           shipyard_deviation_facts' status instead, turning "this declaration is malformed" into "there
 #           are no deviations".
 _devs="$(sh "$SELF/deviations.sh" "$devs_root")" \
-  || mav_die "$devs_root/INGREDIENTS.md declares a malformed conformance deviation (deviations.sh said why above)"
-printf '%s\n' "$_devs" | mav_deviation_facts > "$work/devs"
+  || shipyard_die "$devs_root/INGREDIENTS.md declares a malformed conformance deviation (deviations.sh said why above)"
+printf '%s\n' "$_devs" | shipyard_deviation_facts > "$work/devs"
 
 # platform: nm -m lines look like "<addr|spaces> (undefined) [weak] external _sym (from libX)"; nm
 #           -u loses the weak flag, so nm -m is parsed instead (the undefined NAME set is identical).
@@ -99,24 +99,24 @@ fail=0; checked=0; excused=0
 for b in "$@"; do
   [ -f "$b" ] || { echo "compat guard: MISSING $b" >&2; fail=1; continue; }
   checked=$((checked+1))
-  if mav_sdk_exempt_sha256 "$(shasum -a 256 "$b" | awk '{print $1}')"; then
+  if shipyard_sdk_exempt_sha256 "$(shasum -a 256 "$b" | awk '{print $1}')"; then
     echo "compat guard: $b is a pinned third-party binary (exempt by content)"; continue
   fi
   rc=0; slices="$(sh "$SELF/macho-slices.sh" "$b")" || rc=$?
-  [ "$rc" -ne 4 ] || mav_die "a Mach-O reader (${LIPO:-lipo} or ${OTOOL:-otool}) failed on $b (macho-slices.sh said which, above)"
+  [ "$rc" -ne 4 ] || shipyard_die "a Mach-O reader (${LIPO:-lipo} or ${OTOOL:-otool}) failed on $b (macho-slices.sh said which, above)"
   [ "$rc" -eq 0 ] || { echo "compat guard: $b is not a readable Mach-O" >&2; fail=1; continue; }
 
   archs="$(printf '%s\n' "$slices" | awk '{print $1}' | sort -u | xargs)"
   [ "$archs" = "$ALLOW_ARCHS" ] || { echo "compat guard: $b arches '$archs' != '$ALLOW_ARCHS'" >&2; fail=1; }
   sdk_bad=""
   while read -r _a _ft _mn _sd; do
-    why="$(mav_sdk_rule "$_a" "$_ft" "$_mn" "$_sd")" || sdk_bad="${sdk_bad}compat guard: $b: $why
+    why="$(shipyard_sdk_rule "$_a" "$_ft" "$_mn" "$_sd")" || sdk_bad="${sdk_bad}compat guard: $b: $why
 "
   done <<EOF
 $slices
 EOF
   if [ -n "$sdk_bad" ]; then
-    excuse="$(mav_deviation_reason "$work/devs" sdk-pin "$b")"
+    excuse="$(shipyard_deviation_reason "$work/devs" sdk-pin "$b")"
     if [ -n "$excuse" ]; then
       echo "compat guard: $b is excused from sdk-pin: $excuse"; excused=$((excused+1))
     else
@@ -131,10 +131,10 @@ EOF
   if [ "$archs" != x86_64 ]; then
     x="$work/x86_64.$checked"
     "${LIPO:-lipo}" -thin x86_64 "$b" -output "$x" 2>"$work/reader.err" \
-      || mav_reader_die "${LIPO:-lipo} -thin could not read the x86_64 slice of $b"
+      || shipyard_reader_die "${LIPO:-lipo} -thin could not read the x86_64 slice of $b"
   fi
 
-  U=$(mav_undefs "$x") || mav_reader_die "${NM:-nm} -m could not read $b's symbols"
+  U=$(mav_undefs "$x") || shipyard_reader_die "${NM:-nm} -m could not read $b's symbols"
   hard_leak=$(printf '%s\n' "$U" | awk '$1=="H"{print $2}' | grep -xE "($POST_10_9)" || true)
   weak_leak=$(printf '%s\n' "$U" | awk '$1=="W"{print $2}' | grep -xE "($POST_10_9)" || true)
   if [ -n "$ALLOW_WEAK" ]; then
@@ -143,7 +143,7 @@ EOF
   leak=$(printf '%s\n%s\n' "$hard_leak" "$weak_leak" | grep -v '^$' || true)
   [ -z "$leak" ] || { echo "compat guard: post-10.9 undefined import(s) in $b:" >&2; printf '%s\n' "$leak" | sed 's/^/  /' >&2; fail=1; }
 
-  _strings_out="$("${STRINGS:-strings}" -a "$x" 2>"$work/reader.err")" || mav_reader_die "${STRINGS:-strings} -a could not read $b"
+  _strings_out="$("${STRINGS:-strings}" -a "$x" 2>"$work/reader.err")" || shipyard_reader_die "${STRINGS:-strings} -a could not read $b"
   sel_leak=$(printf '%s\n' "$_strings_out" | grep -xE "($POST_10_9_SEL)" | sort -u || true)
   if [ -n "$ALLOW_SEL" ]; then
     sel_leak=$(printf '%s\n' "$sel_leak" | grep -vxE "($ALLOW_SEL)" || true)
@@ -154,7 +154,7 @@ EOF
   if [ -n "$REQUIRE_DEFINED" ]; then
     # platform: nm marks an undefined symbol's line with a leading 'U'/'u'; everything else counts
     #           as defined.
-    _nm_all="$("${NM:-nm}" "$x" 2>"$work/reader.err")" || mav_reader_die "${NM:-nm} could not read $b's symbols"
+    _nm_all="$("${NM:-nm}" "$x" 2>"$work/reader.err")" || shipyard_reader_die "${NM:-nm} could not read $b's symbols"
     defined=$(printf '%s\n' "$_nm_all" | grep -vE '^[[:space:]]*[Uu] ' | awk '{print $NF}')
     for _req in $(printf '%s\n' "$REQUIRE_DEFINED" | tr '|' ' '); do
       printf '%s\n' "$defined" | grep -xq "$_req" \
@@ -162,7 +162,7 @@ EOF
     done
   fi
 done
-[ "$checked" -gt 0 ] || mav_die "no binaries checked"
+[ "$checked" -gt 0 ] || shipyard_die "no binaries checked"
 if [ "$fail" = 0 ]; then
   pinned="pinned minos and SDK per arch"
   [ "$excused" = 0 ] || pinned="$pinned, $excused excused from sdk-pin"

@@ -8,7 +8,7 @@
 #          release tag. NAME is the release asset, default SHORT-VERSION.pkg; pass it where a product's
 #          pkg is named otherwise. The pkg is fetched once into
 #          ${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/REPO/VERSION and verified by
-#          mavericks_fetch.sh's mav_fetch_verified against the release's SHA256SUMS, which is fetched
+#          mavericks_fetch.sh's shipyard_fetch_verified against the release's SHA256SUMS, which is fetched
 #          afresh on every call; an asset SHA256SUMS does not list fails. The component is picked by its
 #          PackageInfo identifier, never by position (a product archive lists dev.mavergreen.base first).
 #          DEST is REPLACED by its usr/local/mavergreen/SHORT tree, extracted beside DEST and swapped in.
@@ -55,7 +55,7 @@ case "$SHA" in
   *[!0-9a-f]*|'') echo "fetch_product_pkg: $ASSET is not listed (once) in $BASE/SHA256SUMS" >&2; exit 1 ;;
 esac
 [ "${#SHA}" -eq 64 ] || { echo "fetch_product_pkg: $ASSET is not listed (once) in $BASE/SHA256SUMS" >&2; exit 1; }
-mav_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET" || {
+shipyard_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET" || {
   echo "fetch_product_pkg: could not fetch and verify $BASE/$ASSET" >&2; exit 1; }
 
 pkgutil --expand "$CACHE/$ASSET" "$tmp/expanded" >&2 || {
