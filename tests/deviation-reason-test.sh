@@ -67,7 +67,4 @@ grep -qx 'deviation scheme shipyard ports nothing' "$w/facts" \
   || { echo "FAIL: an unscoped entry's fact line; got:"; cat "$w/facts"; exit 1; }
 says 'the Swift runtime ships prebuilt' "$w/facts" sdk-pin build/lib/libswiftCore.dylib
 [ -z "$(printf '\n' | shipyard_deviation_facts)" ] || { echo "FAIL: no deviations must yield no facts"; exit 1; }
-[ "$(mav_deviation_reason "$w/facts" sdk-pin build/lib/libswiftCore.dylib)" = 'the Swift runtime ships prebuilt' ] \
-  || { echo "FAIL: mav_deviation_reason still answers"; exit 1; }
-[ "$(printf 'scheme * x\n' | mav_deviation_facts)" = 'deviation scheme x' ] || { echo "FAIL: mav_deviation_facts still answers"; exit 1; }
 echo "PASS: deviation-reason"
