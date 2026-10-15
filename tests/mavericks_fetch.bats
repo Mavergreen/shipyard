@@ -310,13 +310,24 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
   sc -- "$SURL" "$WORK/x.tar"
   [ "$rc" -eq 0 ]
   [ "$(cat "$WORK/x.tar")" = "the body" ]
-  [ ! -e "$WORK/x.tar.part" ]
+  [ -z "$(ls "$WORK" | grep '^x\.tar\.part')" ]
   [ ! -s "$WORK/out" ]
   printf 'shipyard_curl: %s: curl exit 56; retry 1 of 5 in 2s\nshipyard_curl: %s: curl exit 56; retry 2 of 5 in 4s\n' "$SURL" "$SURL" > "$WORK/want"
   cmp "$WORK/want" "$WORK/err"
   [ "$(calls)" -eq 3 ]
-  grep -q -- "-fL -sS --connect-timeout 20 --speed-limit 1024 --speed-time 60 -w %{http_code} -o $WORK/x.tar.part $SURL\$" "$WORK/stub/calls"
+  grep -qE -- "-fL -sS --connect-timeout 20 --speed-limit 1024 --speed-time 60 -w %\\{http_code\\} -o $WORK/x.tar.part.[A-Za-z0-9]+ $SURL\$" "$WORK/stub/calls"
   run grep -c -- '-C' "$WORK/stub/calls"
+  [ "$output" = 0 ]
+}
+
+@test "shipyard_curl: another fetch's OUT.part is never touched" {
+  stub_curl "56 000" "0 200"
+  printf 'theirs\n' > "$WORK/x.tar.part"
+  sc -- "$SURL" "$WORK/x.tar"
+  [ "$rc" -eq 0 ]
+  [ "$(cat "$WORK/x.tar")" = "the body" ]
+  [ "$(cat "$WORK/x.tar.part")" = "theirs" ]
+  run grep -c -- "-o $WORK/x.tar.part " "$WORK/stub/calls"
   [ "$output" = 0 ]
 }
 
@@ -328,7 +339,7 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
   run grep -c retry "$WORK/err"
   [ "$output" = 0 ]
   [ ! -e "$WORK/x.tar" ]
-  [ ! -e "$WORK/x.tar.part" ]
+  [ -z "$(ls "$WORK" | grep '^x\.tar\.part')" ]
 }
 
 @test "shipyard_curl: a reset five times fails after five tries, backing off 2, 4, 8, 16s" {
@@ -343,7 +354,7 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
   [ "$(tail -n 1 "$WORK/err")" = "shipyard_curl: $SURL: curl exit 56; giving up after 5 tries" ]
   [ "$(wc -l < "$WORK/err" | tr -d ' ')" -eq 5 ]
   [ ! -e "$WORK/x.tar" ]
-  [ ! -e "$WORK/x.tar.part" ]
+  [ -z "$(ls "$WORK" | grep '^x\.tar\.part')" ]
 }
 
 @test "shipyard_curl: SHIPYARD_FETCH_TRIES bounds the attempts" {
@@ -445,13 +456,3 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
   [ -z "$(find "$CACHE" -mindepth 1)" ]
 }
 
-@test "the mav_* names still answer, until the family has moved to shipyard_*" {
-  run sh -c '. "$1"; mav_fetch_verified "$2" "$3" "$4" fixture.tar' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$URL" "$SHA" "$CACHE"
-  [ "$status" -eq 0 ]
-  [ -f "$CACHE/fixture.tar" ]
-  mkdir "$CACHE/.mav-publish.lock"
-  x="$(shipyard_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar payload)"
-  MAV_FETCH_LOCK_TRIES=2 run shipyard_fetch_publish "$CACHE" "$x"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"held for 2s"* ]] || false
-}

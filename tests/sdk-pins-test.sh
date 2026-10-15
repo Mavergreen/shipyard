@@ -43,8 +43,4 @@ shipyard_sdk_exempt_sha256 4ea4718635b69a7746078674aba2af31249d20e3155010bd06f1e
 if shipyard_sdk_exempt_sha256 0000000000000000000000000000000000000000000000000000000000000000; then echo "FAIL: arbitrary bytes are not exempt"; exit 1; fi
 if shipyard_sdk_exempt_sha256 ''; then echo "FAIL: an empty digest is not exempt"; exit 1; fi
 
-[ "$(mav_sdk_pin x86_64)" = "$(shipyard_sdk_pin x86_64)" ] || { echo "FAIL: mav_sdk_pin still answers"; exit 1; }
-mav_sdk_rule x86_64 EXECUTE 10.9 10.9 >/dev/null || { echo "FAIL: mav_sdk_rule still answers"; exit 1; }
-mav_sdk_exempt_sha256 4ea4718635b69a7746078674aba2af31249d20e3155010bd06f1e9d5487c94b2 || { echo "FAIL: mav_sdk_exempt_sha256 still answers"; exit 1; }
-
 echo "PASS: sdk-pins"

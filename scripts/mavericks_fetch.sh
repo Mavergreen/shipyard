@@ -6,13 +6,14 @@
 #          shipyard_fetch_extract URL SHA256 CACHE_DIR TARBALL_NAME [tar-member...]
 #          shipyard_fetch_publish CACHE_DIR EXTRACT_DIR
 #          Sourced POSIX-sh helpers for the fetch scripts. SOURCE it, don't execute it.
-#          shipyard_curl downloads URL to OUT.part and renames it to OUT only when an attempt succeeds;
+#          shipyard_curl downloads URL to its own OUT.part.XXXXXX (mktemp, so concurrent fetches of one OUT
+#          never share a file) and renames it to OUT only when an attempt succeeds;
 #          with OUT "-" it prints the body on stdout, once, after the attempt that succeeded. It
 #          retries curl exits 6, 7, 18, 28, 35, 52, 55 and 56 and HTTP 429 and 5xx, from scratch,
 #          up to SHIPYARD_FETCH_TRIES attempts (default 5), waiting 2, 4, 8, then 16s between them,
 #          one stderr line per retry and one when it gives up. Any other failure, a 404 say, is not
 #          retried. On failure it returns non-zero (the last curl exit status when an attempt failed)
-#          and leaves no OUT.part. The last attempt's HTTP code (000 for file://) is in
+#          and leaves no OUT.part.XXXXXX. The last attempt's HTTP code (000 for file://) is in
 #          $shipyard_curl_http, which is empty when no attempt ran. Each attempt fails a transfer
 #          slower than 1KB/s for 60s. --quiet drops curl's own error line; --progress-bar shows
 #          curl's progress bar. SHIPYARD_FETCH_BACKOFF=0 skips the waits (test-only).
@@ -44,13 +45,14 @@ _shipyard_curl_to() {
   _sc_n=1; _sc_wait=2
   while :; do
     _sc_rc=0
+    _sc_part="$(mktemp "$2.part.XXXXXX")" || return 1
     shipyard_curl_http="$(curl -fL $_sc_show --connect-timeout 20 --speed-limit 1024 --speed-time 60 \
-      -w '%{http_code}' -o "$2.part" "$1")" || _sc_rc=$?
+      -w '%{http_code}' -o "$_sc_part" "$1")" || _sc_rc=$?
     if [ "$_sc_rc" -eq 0 ]; then
-      mv -f "$2.part" "$2" && return 0
-      rm -f "$2.part"; return 1
+      mv -f "$_sc_part" "$2" && return 0
+      rm -f "$_sc_part"; return 1
     fi
-    rm -f "$2.part"
+    rm -f "$_sc_part"
     case "$_sc_rc" in
       6|7|18|28|35|52|55|56) _sc_why="curl exit $_sc_rc" ;;
       22) case "$shipyard_curl_http" in
@@ -91,7 +93,7 @@ shipyard_curl() {
   _sc_out=0
   _shipyard_curl_to "$1" "$_sc_tmp" || _sc_out=$?
   [ "$_sc_out" -ne 0 ] || cat "$_sc_tmp" || _sc_out=1
-  rm -f "$_sc_tmp" "$_sc_tmp.part"
+  rm -f "$_sc_tmp"
   return "$_sc_out"
 }
 
@@ -144,8 +146,8 @@ shipyard_fetch_publish() {
     _d="$_cache/${_e##*/}"
     _try=1
     until mkdir "$_lock" 2>/dev/null; do
-      [ "$_try" -lt "${SHIPYARD_FETCH_LOCK_TRIES:-${MAV_FETCH_LOCK_TRIES:-120}}" ] || {
-        echo "shipyard_fetch: $_lock held for ${SHIPYARD_FETCH_LOCK_TRIES:-${MAV_FETCH_LOCK_TRIES:-120}}s -- remove it if no fetch is running" >&2
+      [ "$_try" -lt "${SHIPYARD_FETCH_LOCK_TRIES:-120}" ] || {
+        echo "shipyard_fetch: $_lock held for ${SHIPYARD_FETCH_LOCK_TRIES:-120}s -- remove it if no fetch is running" >&2
         rm -rf "$_x"; return 1; }
       _try=$((_try + 1))
       sleep 1
@@ -164,9 +166,3 @@ shipyard_fetch_publish() {
 shipyard_fetch_pinned() {
   _px="$(shipyard_fetch_extract "$@")" && shipyard_fetch_publish "$3" "$_px"
 }
-
-# spec: SKILL.md "shipyard: consume its facilities" -- the mav_* names answer until the family calls shipyard_*
-mav_fetch_verified() { shipyard_fetch_verified "$@"; }
-mav_fetch_extract() { shipyard_fetch_extract "$@"; }
-mav_fetch_publish() { shipyard_fetch_publish "$@"; }
-mav_fetch_pinned() { shipyard_fetch_pinned "$@"; }

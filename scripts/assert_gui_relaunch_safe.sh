@@ -34,7 +34,7 @@ lint() {  # $1 = the postinstall file, $2 = the name to report it by
     echo "assert_gui_relaunch_safe: ok — $2 does not relaunch a GUI app (nothing to guard)"
     return 0
   fi
-  if grep -Eq '(shipyard|mav)_stop_gui_instance|pkill|launchctl[[:space:]]+unload' "$1"; then
+  if grep -Eq 'shipyard_stop_gui_instance|pkill|launchctl[[:space:]]+unload' "$1"; then
     echo "assert_gui_relaunch_safe: ok — $2 relaunches a GUI app and also stops an old instance (presence, not order: nothing here checks the stop comes first)"
   else
     chk_fail gui-relaunch-safe "$rule" "$2 relaunches a GUI app but never stops the old instance -- an update will leave two menu-bar icons" "$fix"
