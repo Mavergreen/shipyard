@@ -164,8 +164,9 @@ updaters, signing, or compat checks:**
 | `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh; runs on 10.9 | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
 
 **Shipyard's shell helpers are named `shipyard_*`** (`shipyard_curl`, `shipyard_fetch_verified`,
-`shipyard_sdk_pin`, `shipyard_stop_gui_instance`, ...). The old `mav_*` names still answer, until
-every family repo calls the new ones; then they go.
+`shipyard_sdk_pin`, `shipyard_stop_gui_instance`, ...). The old `mav_*` names are gone (2026-10-15).
+A release tagged before its repo moved to them rebuilds only against a shipyard that still had them:
+rebuild a tag with the shipyard version it was built with (QUEUE #70), never the newest.
 
 **`MAVERGREEN_PROGRESS=1` makes the fetch scripts report progress.** Set it and `mavericks_fetch.sh`
 (and so `fetch_sdk.sh`, `fetch_pinned_source.sh`, `fetch_sparkle_framework.sh`) say what they are
