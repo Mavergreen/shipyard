@@ -159,11 +159,12 @@ updaters, signing, or compat checks:**
 | `set_install_floor.sh` | stamps the 10.9.5 install floor on the `.pkg` | editing the pkg Distribution |
 | `sign_and_appcast.sh` · `gen_appcast.sh` | EdDSA-signs + renders the appcast (fetches `ed25519-sign` via `gh`) | rolling your own signing |
 | `mavericks_fetch` · `MavericksFetch` · `mavericks_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
+| `shipyard_curl URL OUT\|-` · `mavericks_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
 | `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
 | `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh; runs on 10.9 | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
 
-**Shipyard's shell helpers are named `shipyard_*`** (`shipyard_fetch_verified`, `shipyard_sdk_pin`,
-`shipyard_stop_gui_instance`, ...). The old `mav_*` names still answer, until
+**Shipyard's shell helpers are named `shipyard_*`** (`shipyard_curl`, `shipyard_fetch_verified`,
+`shipyard_sdk_pin`, `shipyard_stop_gui_instance`, ...). The old `mav_*` names still answer, until
 every family repo calls the new ones; then they go.
 
 **`MAVERGREEN_PROGRESS=1` makes the fetch scripts report progress.** Set it and `mavericks_fetch.sh`
@@ -171,6 +172,7 @@ every family repo calls the new ones; then they go.
 doing on stderr: downloading, verifying and unpacking. At a terminal the download shows curl's progress
 bar; anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
 exactly what it was, so CI logs and every existing consumer see no change. Stdout is untouched. A
+retried download says so on stderr whatever the setting: one `shipyard_curl:` line per retry. A
 product that drives a fetch for a person at a terminal (Longboat) sets it; a build script does not.
 
 ## The build must also run natively ON 10.9

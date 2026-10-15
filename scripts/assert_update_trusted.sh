@@ -20,6 +20,7 @@
 #       bridge release -- trusted, with a notice that the NEXT release must be signed by the new key.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavericks_fetch.sh"
 
 PKG=""; SIG=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no
 while [ $# -gt 0 ]; do
@@ -62,12 +63,13 @@ NEW_KEY="$(field SUPublicEDKey "$T/new")"
 FEED="$(field SUFeedURL "$T/new")"
 [ -n "$FEED" ] || { say "the updater in $PKG names no SUFeedURL, so there is no live release to ask"; exit 1; }
 
-# platform: not -f: a 404 is an answer ("no feed yet"), not a failure. curl reports HTTP 000 for
-#           file://.
+# platform: a 404 is an answer ("no feed yet"), not a failure, and so is a missing file:// feed
+#           (curl exit 37). curl reports HTTP 000 for file://.
 set +e
-code="$(curl -sSL -o "$T/feed.xml" -w '%{http_code}' "$FEED" 2>"$T/curl.err")"; rc=$?
+shipyard_curl "$FEED" "$T/feed.xml" 2>"$T/curl.err"; rc=$?
 set -e
-if { [ "$rc" -eq 0 ] && [ "$code" = 404 ]; } || [ "$rc" -eq 37 ]; then
+code="$shipyard_curl_http"
+if [ "$code" = 404 ] || [ "$rc" -eq 37 ]; then
   verifies "$NEW_KEY" && {
     say "ok -- first release (no live feed at $FEED): signed by $NEW_KEY, the key this pkg's updater ships"
     exit 0
@@ -84,7 +86,7 @@ fi
 
 URL="$(sed -n 's/.*<enclosure[^>]* url="\([^"]*\)".*/\1/p' "$T/feed.xml" | head -1)"
 [ -n "$URL" ] || { say "the live feed $FEED offers no enclosure -- cannot tell which key installed clients trust"; exit 1; }
-curl -fsSL -o "$T/live.pkg" "$URL" 2>"$T/curl.err" \
+shipyard_curl "$URL" "$T/live.pkg" 2>"$T/curl.err" \
   || { say "cannot download the live release's pkg $URL: $(cat "$T/curl.err")"; exit 1; }
 sh "$SELF/updater_pubkey.sh" "$T/live.pkg" > "$T/live" \
   || { say "the live release's pkg ($URL) has no readable Sparkle updater"; exit 1; }

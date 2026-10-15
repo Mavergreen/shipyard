@@ -48,7 +48,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 tmp="$(mktemp -d "$DEST.tmp.XXXXXX")"
-curl -fsSL -o "$tmp/SHA256SUMS" "$BASE/SHA256SUMS" || {
+shipyard_curl "$BASE/SHA256SUMS" "$tmp/SHA256SUMS" || {
   echo "fetch_product_pkg: could not fetch $BASE/SHA256SUMS" >&2; exit 1; }
 SHA="$(awk -v f="$ASSET" '$2 == f || $2 == "*" f { print $1 }' "$tmp/SHA256SUMS")"
 case "$SHA" in

@@ -266,6 +266,172 @@ BAD0=0000000000000000000000000000000000000000000000000000000000000000
   grep -q 'FAILED' "$WORK/err"
 }
 
+# platform: shipyard_curl's tests put a stub curl first on PATH. Each line of $WORK/stub/plan is one
+#           attempt's "<curl exit> <http code>"; a failing attempt writes a partial body, a passing
+#           one writes $WORK/stub/body. Every call's arguments land in $WORK/stub/calls.
+stub_curl() {   # stub_curl "<exit> <http>"...
+  mkdir -p "$WORK/stub"
+  printf '%s\n' "$@" > "$WORK/stub/plan"
+  printf 'the body\n' > "$WORK/stub/body"
+  : > "$WORK/stub/calls"
+  cat > "$WORK/stub/curl" <<'STUB'
+#!/bin/sh
+n=$(( $(wc -l < "$STUB_DIR/calls") + 1 ))
+printf '%s\n' "$*" >> "$STUB_DIR/calls"
+out=
+while [ $# -gt 0 ]; do
+  case $1 in -o) out=$2; shift ;; esac
+  shift
+done
+line=$(sed -n "${n}p" "$STUB_DIR/plan")
+rc=${line%% *}; http=${line#* }
+if [ "$rc" = 0 ]; then cat "$STUB_DIR/body" > "$out"; else printf 'partial' > "$out"; fi
+printf '%s' "$http"
+exit "$rc"
+STUB
+  chmod +x "$WORK/stub/curl"
+}
+
+SURL=https://example.invalid/x.tar
+
+sc() {   # sc [ENV=VAL...] -- ARGS: shipyard_curl ARGS under sh; sets rc, $WORK/out and $WORK/err
+  _env=
+  while [ "$1" != -- ]; do _env="$_env $1"; shift; done; shift
+  rc=0
+  env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 $_env \
+    sh -c '. "$1"; shift; shipyard_curl "$@"' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$@" \
+    >"$WORK/out" 2>"$WORK/err" || rc=$?
+}
+
+calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
+
+@test "shipyard_curl: a reset twice, then success, passes with two retry lines" {
+  stub_curl "56 000" "56 000" "0 200"
+  sc -- "$SURL" "$WORK/x.tar"
+  [ "$rc" -eq 0 ]
+  [ "$(cat "$WORK/x.tar")" = "the body" ]
+  [ ! -e "$WORK/x.tar.part" ]
+  [ ! -s "$WORK/out" ]
+  printf 'shipyard_curl: %s: curl exit 56; retry 1 of 5 in 2s\nshipyard_curl: %s: curl exit 56; retry 2 of 5 in 4s\n' "$SURL" "$SURL" > "$WORK/want"
+  cmp "$WORK/want" "$WORK/err"
+  [ "$(calls)" -eq 3 ]
+  grep -q -- "-fL -sS --connect-timeout 20 --speed-limit 1024 --speed-time 60 -w %{http_code} -o $WORK/x.tar.part $SURL\$" "$WORK/stub/calls"
+  run grep -c -- '-C' "$WORK/stub/calls"
+  [ "$output" = 0 ]
+}
+
+@test "shipyard_curl: a 404 fails at once, with no retry and no file" {
+  stub_curl "22 404"
+  sc -- "$SURL" "$WORK/x.tar"
+  [ "$rc" -eq 22 ]
+  [ "$(calls)" -eq 1 ]
+  run grep -c retry "$WORK/err"
+  [ "$output" = 0 ]
+  [ ! -e "$WORK/x.tar" ]
+  [ ! -e "$WORK/x.tar.part" ]
+}
+
+@test "shipyard_curl: a reset five times fails after five tries, backing off 2, 4, 8, 16s" {
+  stub_curl "56 000" "56 000" "56 000" "56 000" "56 000" "0 200"
+  sc -- "$SURL" "$WORK/x.tar"
+  [ "$rc" -eq 56 ]
+  [ "$(calls)" -eq 5 ]
+  for n in 1 2 3 4; do
+    w=$((1 << n))
+    grep -qx "shipyard_curl: $SURL: curl exit 56; retry $n of 5 in ${w}s" "$WORK/err"
+  done
+  [ "$(tail -n 1 "$WORK/err")" = "shipyard_curl: $SURL: curl exit 56; giving up after 5 tries" ]
+  [ "$(wc -l < "$WORK/err" | tr -d ' ')" -eq 5 ]
+  [ ! -e "$WORK/x.tar" ]
+  [ ! -e "$WORK/x.tar.part" ]
+}
+
+@test "shipyard_curl: SHIPYARD_FETCH_TRIES bounds the attempts" {
+  stub_curl "56 000" "56 000" "0 200"
+  sc SHIPYARD_FETCH_TRIES=2 -- "$SURL" "$WORK/x.tar"
+  [ "$rc" -eq 56 ]
+  [ "$(calls)" -eq 2 ]
+  sc SHIPYARD_FETCH_TRIES=none -- "$SURL" "$WORK/x.tar"
+  [ "$rc" -eq 2 ]
+}
+
+@test "shipyard_curl: HTTP 503 and 429 are retried, and then the download passes" {
+  stub_curl "22 503" "22 429" "0 200"
+  sc -- "$SURL" "$WORK/x.tar"
+  [ "$rc" -eq 0 ]
+  [ "$(calls)" -eq 3 ]
+  grep -qx "shipyard_curl: $SURL: HTTP 503; retry 1 of 5 in 2s" "$WORK/err"
+  grep -qx "shipyard_curl: $SURL: HTTP 429; retry 2 of 5 in 4s" "$WORK/err"
+  [ "$(cat "$WORK/x.tar")" = "the body" ]
+}
+
+@test "shipyard_curl: a stalled transfer (exit 28) is retried" {
+  stub_curl "28 200" "0 200"
+  sc -- "$SURL" "$WORK/x.tar"
+  [ "$rc" -eq 0 ]
+  [ "$(calls)" -eq 2 ]
+  grep -qx "shipyard_curl: $SURL: curl exit 28; retry 1 of 5 in 2s" "$WORK/err"
+}
+
+@test "shipyard_curl: an exit it does not know (37) is not retried" {
+  stub_curl "37 000" "0 200"
+  sc -- "$SURL" "$WORK/x.tar"
+  [ "$rc" -eq 37 ]
+  [ "$(calls)" -eq 1 ]
+}
+
+@test "shipyard_curl -: a failed attempt prints nothing, and the body prints once on success" {
+  stub_curl "56 000" "0 200"
+  sc -- "$SURL" -
+  [ "$rc" -eq 0 ]
+  printf 'the body\n' > "$WORK/want"
+  cmp "$WORK/want" "$WORK/out"
+  stub_curl "56 000" "22 404"
+  sc -- "$SURL" -
+  [ "$rc" -eq 22 ]
+  [ ! -s "$WORK/out" ]
+}
+
+@test "shipyard_curl under set -e: a retried fetch carries on, a failed one stops the caller" {
+  stub_curl "56 000" "0 200"
+  run env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \
+    sh -ec '. "$1"; shipyard_curl "$2" "$3"; echo after' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$WORK/x.tar"
+  [ "$status" -eq 0 ]
+  [ "${lines[${#lines[@]}-1]}" = after ]
+  stub_curl "22 404"
+  run env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \
+    sh -ec '. "$1"; shipyard_curl "$2" "$3"; echo after' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$WORK/y.tar"
+  [ "$status" -eq 22 ]
+  [[ "$output" != *after* ]] || false
+}
+
+@test "shipyard_fetch_verified retries a reset, and its default output gains only the retry line" {
+  stub_curl "56 000" "0 200"
+  cp "$WORK/stub/body" "$WORK/b"
+  BSHA="$(shasum -a 256 "$WORK/b" | awk '{print $1}')"
+  rc=0
+  env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \
+    sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" x.tar' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$BSHA" "$CACHE" \
+    2>"$WORK/err" || rc=$?
+  [ "$rc" -eq 0 ]
+  [ "$(calls)" -eq 2 ]
+  [ "$(head -n 1 "$WORK/err")" = "shipyard_curl: $SURL: curl exit 56; retry 1 of 5 in 2s" ]
+  [ "$(wc -l < "$WORK/err" | tr -d ' ')" -eq 2 ]
+  [ -f "$CACHE/x.tar" ]
+}
+
+@test "a checksum mismatch after a good download is not retried" {
+  stub_curl "0 200" "0 200"
+  rc=0
+  env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \
+    sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" x.tar' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$SHA" "$CACHE" \
+    2>"$WORK/err" || rc=$?
+  [ "$rc" -ne 0 ]
+  [ "$(calls)" -eq 1 ]
+  grep -q "not the pinned $SHA" "$WORK/err"
+  [ -z "$(find "$CACHE" -mindepth 1)" ]
+}
+
 @test "the mav_* names still answer, until the family has moved to shipyard_*" {
   run sh -c '. "$1"; mav_fetch_verified "$2" "$3" "$4" fixture.tar' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$URL" "$SHA" "$CACHE"
   [ "$status" -eq 0 ]
