@@ -8,6 +8,7 @@
 #          Exit 0 clean, 1 on a mismatch, 2 when the sdist cannot be fetched (--check).
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/../mavericks_fetch.sh"
 pin="$here/pyyaml.pin"
 tree="$here/yaml"
 list="$here/yaml.sha256"
@@ -50,7 +51,7 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/sync-pyyaml.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 
 extract() {
-  curl -fsSL -o "$work/sdist.tar.gz" "https://files.pythonhosted.org/packages/source/P/PyYAML/pyyaml-$PYYAML_VERSION.tar.gz" || return 2
+  shipyard_curl "https://files.pythonhosted.org/packages/source/P/PyYAML/pyyaml-$PYYAML_VERSION.tar.gz" "$work/sdist.tar.gz" || return 2
   [ "$(sha256_of "$work/sdist.tar.gz")" = "$PYYAML_SHA256" ] || {
     echo "sync-pyyaml: the sdist for $PYYAML_VERSION does not match PYYAML_SHA256 in pyyaml.pin" >&2
     return 1

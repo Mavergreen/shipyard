@@ -21,7 +21,7 @@ case "$#:${1:-}" in
   2:--arch) ARCH="$2" ;;
   *) echo "usage: fetch_sdk.sh [--arch x86_64|arm64]" >&2; exit 2 ;;
 esac
-pin="$(mav_sdk_pin "$ARCH")" || { echo "fetch_sdk: no pinned SDK for arch '$ARCH' (x86_64 and arm64 have one)" >&2; exit 2; }
+pin="$(shipyard_sdk_pin "$ARCH")" || { echo "fetch_sdk: no pinned SDK for arch '$ARCH' (x86_64 and arm64 have one)" >&2; exit 2; }
 # shellcheck disable=SC2086  # the pin is four space-free words by construction
 set -- $pin
 CACHE="${MAVERICKS_SDK_CACHE:-$HOME/Library/Caches/mavericks-sdk}"
@@ -31,7 +31,7 @@ SDK="$CACHE/$4"
 if [ ! -d "$SDK" ]; then
   # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the SDK is
   #       published as shipped, stubs and all, on every host: never converted to .tbd.
-  mav_fetch_pinned "$URL" "$SHA" "$CACHE" "$3"
+  shipyard_fetch_pinned "$URL" "$SHA" "$CACHE" "$3"
 fi
 [ -d "$SDK/usr/lib" ] || { echo "SDK missing usr/lib: $SDK" >&2; exit 1; }
 echo "$SDK"

@@ -8,7 +8,7 @@
 #          digits), SHA256 the pinned digest of GitHub's tarball of that commit, which --url prints
 #          (https://codeload.github.com/OWNER/NAME/tar.gz/DIGEST). The tarball is fetched once into
 #          ${MAVERICKS_SOURCE_CACHE:-$HOME/Library/Caches/mavericks-sources} and verified by
-#          mavericks_fetch.sh's mav_fetch_verified: fail closed, a mismatch deleted and its SHA-256
+#          mavericks_fetch.sh's shipyard_fetch_verified: fail closed, a mismatch deleted and its SHA-256
 #          printed. Then DEST is REPLACED by a fresh extraction: the tarball's one top-level directory,
 #          NAME-DIGEST, with its files, modes and symlinks as GitHub wrote them, plus
 #          DEST/.mavergreen-source, one line "REPO DIGEST SHA256". Fresh on every call, so a caller that
@@ -52,7 +52,7 @@ esac
 . "$SELF/mavericks_fetch.sh"
 CACHE="${MAVERICKS_SOURCE_CACHE:-$HOME/Library/Caches/mavericks-sources}"
 TOP="$NAME-$DIGEST"
-mav_fetch_verified "$URL" "$SHA256" "$CACHE" "$TOP.tar.gz" || {
+shipyard_fetch_verified "$URL" "$SHA256" "$CACHE" "$TOP.tar.gz" || {
   echo "fetch_pinned_source: could not fetch and verify $URL" >&2; exit 1; }
 mkdir -p "$(dirname "$DEST")"
 tmp=""; old=""

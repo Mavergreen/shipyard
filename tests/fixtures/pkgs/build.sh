@@ -162,7 +162,7 @@ hello() {  # $1 = tag, $2 = postinstall body
   archive "$w/$1.comp.pkg" "$w/pool/$1.pkg" dev.mavergreen.ed25519
 }
 hello gui-ok '. /usr/local/mavergreen/.base/postinstall-stop-gui.sh
-mav_stop_gui_instance fixture
+shipyard_stop_gui_instance fixture
 open -a Fixture'
 hello gui-bad 'open -a Fixture'
 

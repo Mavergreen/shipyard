@@ -7,7 +7,7 @@ PackageInfo, so the check lints the postinstall script the pkg actually ships, f
 pkg in the dist. "Relaunches a GUI menu-bar app" means open -a of an app, or launchctl asuser ... launchctl
 load of a per-user agent. The shared update-check agent, loaded through launchctl bootstrap gui/ or sudo -u
 ... launchctl load, does not match, and neither does a root LaunchDaemon. "Stops the prior instance" means a
-call to mav_stop_gui_instance (postinstall-stop-gui.sh), a pkill, or launchctl asuser ... unload.
+call to shipyard_stop_gui_instance (postinstall-stop-gui.sh), a pkill, or launchctl asuser ... unload.
 
 ## Incident
 Undated: the bug the script's header names, "two menu-bar icons after an update". The conventions skill and
@@ -19,7 +19,7 @@ right process. A relaunch spelled some other way is not recognised. It needs bsd
 Scripts archive.
 
 ## Deviating
-No deviation is read for this id. Call mav_stop_gui_instance before the relaunch, or pkill or unload the old
+No deviation is read for this id. Call shipyard_stop_gui_instance before the relaunch, or pkill or unload the old
 one.
 
 Formerly assert_gui_relaunch_safe.sh

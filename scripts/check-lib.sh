@@ -72,7 +72,7 @@ chk_deviated() {
   _cd_facts="${SHIPYARD_CHECK_DEVIATION_FACTS:-}"
   [ -n "$_cd_facts" ] && [ -f "$_cd_facts" ] || return 1
   . "$SHIPYARD_CHECK_DIR/deviation-reason.sh"
-  _cd_reason="$(mav_deviation_reason "$_cd_facts" "$1" "${2:-}")"
+  _cd_reason="$(shipyard_deviation_reason "$_cd_facts" "$1" "${2:-}")"
   [ -n "$_cd_reason" ] || return 1
   printf '%s\n' "$_cd_reason"
 }

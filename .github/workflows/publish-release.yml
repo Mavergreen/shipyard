@@ -133,7 +133,8 @@ jobs:
               ;;
           esac
           url="https://raw.githubusercontent.com/$REPO/$SHA/README.md"
-          if curl -fsSL "$url" -o first-release-readme.md; then
+          . .shipyard/scripts/mavericks_fetch.sh
+          if shipyard_curl "$url" first-release-readme.md; then
             :
           else
             echo "::error::could not fetch $url -- refusing to publish a first release without seeing its README."

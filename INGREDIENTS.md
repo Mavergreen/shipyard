@@ -64,12 +64,6 @@ one line):
 - version-scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
-- bare-curl:scripts/assert_update_trusted.sh: it curls the live feed and pkg on its own to see the HTTP status; it does not source the fetch library. Revisit when QUEUE #58's mav_curl lands.
-- bare-curl:scripts/fetch_product_pkg.sh: it fetches the release's SHA256SUMS with a curl of its own, beside the library's verified fetch. Revisit when QUEUE #58's mav_curl lands.
-- bare-curl:.github/workflows/publish-release.yml: its first-release readme step fetches the template with a curl of its own. Revisit when QUEUE #58's mav_curl lands.
-- bare-curl:scripts/build-cmake.sh: it curls Kitware's tarball and checksum file before the fetch library can be sourced. Revisit when QUEUE #58's mav_curl lands.
-- bare-curl:scripts/check-preset-icons.sh: it curls a vendor's icon and apt index on its own. Revisit when QUEUE #58's mav_curl lands.
-- bare-curl:scripts/vendor/sync-pyyaml.sh: it curls the PyYAML sdist on its own. Revisit when QUEUE #58's mav_curl lands.
 - brew:scripts/install-macho-readers.sh: the fallback for llvm-lipo and llvm-strings, which Xcode does not ship. Revisit when every job that runs the compat guard has clang22 installed (vision area 14).
 - brew:.github/workflows/ci.yml: the step that records what the Mach-O readers resolved to asks brew whether llvm is present. Revisit with brew:scripts/install-macho-readers.sh, whose fallback it reports on.
 - brew:.github/actions/install/action.yml: bats-core, where no family bats exists. Revisit when a family product or the runner image supplies bats.

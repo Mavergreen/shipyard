@@ -112,23 +112,23 @@ ALLOW_ARCHS="$(printf '%s\n' ${MAVERICKS_ALLOW_ARCHS:-x86_64} | sort -u | xargs)
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the guard
 #       honours the same sdk-pin:<glob> exemptions as the package-time rule, parsed by the same
-#       deviations.sh and matched by the same mav_deviation_reason, so a file excused in the pkg is
+#       deviations.sh and matched by the same shipyard_deviation_reason, so a file excused in the pkg is
 #       excused at build time. Read before any binary: a malformed declaration fails every run, not
 #       only the one that needed it.
 devs_root="${MAVERICKS_DEVIATIONS_ROOT:-${SHIPYARD_CHECK_REPO:-.}}"
 # platform: not a pipeline -- deviations.sh exits 1 on a malformed entry, and a pipeline would report
-#           mav_deviation_facts' status instead, turning "this declaration is malformed" into "there
+#           shipyard_deviation_facts' status instead, turning "this declaration is malformed" into "there
 #           are no deviations".
 _devs="$(sh "$SELF/deviations.sh" "$devs_root" 2>&1)" \
   || cannot_measure deviation-complete "$devs_root/INGREDIENTS.md declares a malformed conformance deviation: $_devs"
-printf '%s\n' "$_devs" | mav_deviation_facts > "$work/devs"
+printf '%s\n' "$_devs" | shipyard_deviation_facts > "$work/devs"
 
 # platform: nm -m lines look like "<addr|spaces> (undefined) [weak] external _sym (from libX)"; nm
 #           -u loses the weak flag, so nm -m is parsed instead (the undefined NAME set is identical).
 #           Stripping only a trailing " (from libX)" parenthetical, not also " (dynamically looked
 #           up)", left $NF = "up)" for a dynamic_lookup undefined, and the hard import slipped past
 #           the guard.
-mav_undefs() {
+shipyard_undefs() {
   _nm_out="$("$NM" -m "$1" 2>"$work/reader.err")" || return 1
   printf '%s\n' "$_nm_out" | grep -F '(undefined)' | sed -E 's/ \([^)]*\)$//' \
     | awk '{ w = (/ weak /) ? "W" : "H"; print w, $NF }'
@@ -136,7 +136,7 @@ mav_undefs() {
 
 checked=0; excused=0
 guard_fail() {  # $1 = id, $2 = the path deviations match, $3 = why; a deviation for $1 covering $2 excuses it
-  _gf="$(mav_deviation_reason "$work/devs" "$1" "$2")"
+  _gf="$(shipyard_deviation_reason "$work/devs" "$1" "$2")"
   if [ -n "$_gf" ]; then
     echo "compat guard: $2 is excused from $1: $_gf"; excused=$((excused+1))
   else
@@ -147,7 +147,7 @@ guard_fail() {  # $1 = id, $2 = the path deviations match, $3 = why; a deviation
 check_one() {  # $1 = the file, $2 = the path to report and match deviations against, $3 = strict|loose
   b="$2"
   checked=$((checked+1))
-  if mav_sdk_exempt_sha256 "$(shasum -a 256 "$1" | awk '{print $1}')"; then
+  if shipyard_sdk_exempt_sha256 "$(shasum -a 256 "$1" | awk '{print $1}')"; then
     echo "compat guard: $b is a pinned third-party binary (exempt by content)"; return 0
   fi
   rc=0; slices="$(sh "$SELF/macho-slices.sh" "$1" 2>"$work/reader.err")" || rc=$?
@@ -160,7 +160,7 @@ check_one() {  # $1 = the file, $2 = the path to report and match deviations aga
     || guard_fail compat-archs "$b" "$b arches '$archs' != '$ALLOW_ARCHS'"
   sdk_bad=""
   while read -r _a _ft _mn _sd; do
-    why="$(mav_sdk_rule "$_a" "$_ft" "$_mn" "$_sd")" || sdk_bad="${sdk_bad}$b: $why
+    why="$(shipyard_sdk_rule "$_a" "$_ft" "$_mn" "$_sd")" || sdk_bad="${sdk_bad}$b: $why
 "
   done <<EOF
 $slices
@@ -179,7 +179,7 @@ EOF
       || reader_die compat-imports "$LIPO -thin could not read the x86_64 slice of $b"
   fi
 
-  U=$(mav_undefs "$x") || reader_die compat-imports "$NM -m could not read $b's symbols"
+  U=$(shipyard_undefs "$x") || reader_die compat-imports "$NM -m could not read $b's symbols"
   hard_leak=$(printf '%s\n' "$U" | awk '$1=="H"{print $2}' | grep -xE "($POST_10_9)" || true)
   weak_leak=$(printf '%s\n' "$U" | awk '$1=="W"{print $2}' | grep -xE "($POST_10_9)" || true)
   if [ -n "$ALLOW_WEAK" ]; then

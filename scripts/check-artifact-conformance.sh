@@ -80,7 +80,7 @@ fi
 
 grep '^deviation ' "$facts" > "$tmp/devs" || true
 # spec: scripts/deviation-reason.sh -- the ONE matcher, shared with assert_binary_compatible.sh.
-deviation_reason() { mav_deviation_reason "$tmp/devs" "$@"; }  # $1 = check, $2 = subject (optional)
+deviation_reason() { shipyard_deviation_reason "$tmp/devs" "$@"; }  # $1 = check, $2 = subject (optional)
 
 # spec: scripts/check-ids.tsv -- every id this script evaluates; a deviation declared under the name
 #       a check had before it had an id (scheme, ingredients) still excuses it.
@@ -513,8 +513,8 @@ done
 #       binary or a declared sdk-pin:<glob> deviation names its path.
 while read -r kind file path arch ft mn sd sha; do
   [ "$kind" = macho ] || continue
-  mav_sdk_exempt_sha256 "$sha" && continue
-  why="$(mav_sdk_rule "$arch" "$ft" "$mn" "$sd")" \
+  shipyard_sdk_exempt_sha256 "$sha" && continue
+  why="$(shipyard_sdk_rule "$arch" "$ft" "$mn" "$sd")" \
     || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")"
 done < "$facts"
 

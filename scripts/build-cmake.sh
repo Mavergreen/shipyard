@@ -38,12 +38,13 @@ V="$(sed -n 's/^CMAKE_VERSION=//p' "$SELF/../cmake.pin")"
 [ -n "$V" ] || { echo "build-cmake: no CMAKE_VERSION in $SELF/../cmake.pin" >&2; exit 1; }
 BASE="${SHIPYARD_CMAKE_URL_BASE:-https://github.com/Kitware/CMake/releases/download}"
 TARBALL="cmake-$V.tar.gz"
+. "$SELF/mavericks_fetch.sh"
 
 fetch_verified() {  # $1 = dir to download into; prints the tarball path
   mkdir -p "$1"
-  curl -fsSL -o "$1/$TARBALL" "$BASE/v$V/$TARBALL" \
+  shipyard_curl "$BASE/v$V/$TARBALL" "$1/$TARBALL" \
     || { echo "build-cmake: could not download $BASE/v$V/$TARBALL" >&2; return 1; }
-  curl -fsSL -o "$1/cmake-$V-SHA-256.txt" "$BASE/v$V/cmake-$V-SHA-256.txt" \
+  shipyard_curl "$BASE/v$V/cmake-$V-SHA-256.txt" "$1/cmake-$V-SHA-256.txt" \
     || { echo "build-cmake: could not download Kitware's checksum file for $V" >&2; return 1; }
   want="$(awk -v f="$TARBALL" '$2 == f { print $1 }' "$1/cmake-$V-SHA-256.txt")"
   [ -n "$want" ] || { echo "build-cmake: checksum file for $V does not list $TARBALL; refusing" >&2; return 1; }

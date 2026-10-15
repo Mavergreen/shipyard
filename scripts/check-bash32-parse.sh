@@ -18,11 +18,11 @@ sh_="${SHIPYARD_BASH32_SH:-/bin/sh}"
 bash_="${SHIPYARD_BASH32_BASH:-/bin/bash}"
 w="$(mktemp -d "${TMPDIR:-/tmp}/check-bash32-parse.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 
-sh "$SELF/deviations.sh" . 2>/dev/null | mav_deviation_facts > "$w/devfacts" || :
+sh "$SELF/deviations.sh" . 2>/dev/null | shipyard_deviation_facts > "$w/devfacts" || :
 
 cant_measure() {
   _host="$(uname -s | tr 'A-Z' 'a-z')"
-  _why="$(mav_deviation_reason "$w/devfacts" host "$_host")"
+  _why="$(shipyard_deviation_reason "$w/devfacts" host "$_host")"
   if [ -n "$_why" ]; then
     chk_notrun bash32-parse "skipped by deviation (host:$_host): $_why"
     exit 0
@@ -55,7 +55,7 @@ fi
 grep -v '^tests/fixtures/checks/' "$w/tracked" | chk_shell_scripts > "$w/scripts" || :
 n=0; excused=0
 while IFS= read -r f; do
-  if [ -n "$(mav_deviation_reason "$w/devfacts" bash32-parse "$f")" ]; then excused=$((excused + 1)); continue; fi
+  if [ -n "$(shipyard_deviation_reason "$w/devfacts" bash32-parse "$f")" ]; then excused=$((excused + 1)); continue; fi
   n=$((n + 1))
   _s="$sh_"
   head -n 1 "$f" | grep -Eq '^#!(/bin/bash|/usr/bin/env bash)([[:space:]]|$)' && _s="$bash_"

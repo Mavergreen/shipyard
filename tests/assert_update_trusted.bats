@@ -91,9 +91,42 @@ live_release() {  # KEY
 # release" here would wave through exactly the key change this exists to catch.
 @test "a feed that cannot be read (as opposed to one that does not exist) fails closed" {
   mkpkg "$T/new.pkg" "$KNEW" "http://127.0.0.1:9/appcast.xml" TestUpdater
-  run --separate-stderr trusted "$T/new.pkg" "signed-by:$KNEW"
+  SHIPYARD_FETCH_BACKOFF=0 run --separate-stderr trusted "$T/new.pkg" "signed-by:$KNEW"
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"cannot read"* ]] || false
+}
+
+@test "a feed URL that answers 404 is a first release" {
+  mkdir -p "$T/stub"
+  printf '#!/bin/sh\nprintf 404\nexit 22\n' > "$T/stub/curl"
+  chmod +x "$T/stub/curl"
+  mkpkg "$T/new.pkg" "$KNEW" "https://example.invalid/appcast.xml" TestUpdater
+  PATH="$T/stub:$PATH" run --separate-stderr trusted "$T/new.pkg" "signed-by:$KNEW"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"first release"* ]] || false
+}
+
+@test "a feed that answers 503 once is retried, and the retry line still reaches stderr" {
+  live_release "$KOLD"
+  mkpkg "$T/new.pkg" "$KOLD" "$FEED" TestUpdater
+  mkdir -p "$T/stub"
+  printf '#!/bin/sh\nif [ ! -e "%s/stub/once" ]; then : > "%s/stub/once"; printf 503; exit 22; fi\nexec "%s" "$@"\n' \
+    "$T" "$T" "$(command -v curl)" > "$T/stub/curl"
+  chmod +x "$T/stub/curl"
+  PATH="$T/stub:$PATH" SHIPYARD_FETCH_BACKOFF=0 run --separate-stderr trusted "$T/new.pkg" "signed-by:$KOLD"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"shipyard_curl: $FEED: HTTP 503; retry 1 of 5 in 2s"* ]] || false
+  [[ "$stderr" == *"the key installed updaters trust"* ]] || false
+}
+
+@test "a feed that answers 503 every time fails closed after the retries" {
+  mkdir -p "$T/stub"
+  printf '#!/bin/sh\nprintf 503\nexit 22\n' > "$T/stub/curl"
+  chmod +x "$T/stub/curl"
+  mkpkg "$T/new.pkg" "$KNEW" "https://example.invalid/appcast.xml" TestUpdater
+  PATH="$T/stub:$PATH" SHIPYARD_FETCH_BACKOFF=0 run --separate-stderr trusted "$T/new.pkg" "signed-by:$KNEW"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"HTTP 503"*"giving up after 5 tries"* ]] || false
 }
 
 @test "a live feed that offers no enclosure fails closed" {

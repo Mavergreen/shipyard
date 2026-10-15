@@ -522,7 +522,7 @@ delegate comments check-comments.sh \
 # spec: scripts/deviations.sh -- ONE parser for the "## Conformance deviations" grammar, shared with
 #       check-artifact-conformance.sh; an incomplete entry is reported once, by check-deviations.sh.
 DEVS="$(sh "$SELF/deviations.sh" . 2>/dev/null || true)"
-printf '%s\n' "$DEVS" | mav_deviation_facts > "$tmp/devfacts"
+printf '%s\n' "$DEVS" | shipyard_deviation_facts > "$tmp/devfacts"
 SHIPYARD_CHECK_DEVIATION_FACTS="$tmp/devfacts"
 deviated() { chk_deviated "$1" "$2" >/dev/null; }
 
@@ -1122,7 +1122,7 @@ while IFS="$TAB" read -r _id f line; do
     bare-curl)
       chk_fail bare-curl "$f runs curl directly: $_l" \
         "a bare curl does not retry a transient failure, and one connection reset cost a two-hour rerun" \
-        "use mav_curl (QUEUE #58), or declare '- bare-curl:$f: <reason>. Revisit when <exit>.' under ## Conformance deviations" ;;
+        "use shipyard_curl (scripts/mavericks_fetch.sh), or declare '- bare-curl:$f: <reason>. Revisit when <exit>.' under ## Conformance deviations" ;;
     *)
       case "$_id" in
         brew) _mgr="Homebrew, Linuxbrew or Tigerbrew" ;;

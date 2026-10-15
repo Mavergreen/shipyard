@@ -21,6 +21,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
+. "$SELF/mavericks_fetch.sh"
 chk_ran update-trusted
 
 PKG=""; SIG=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no
@@ -45,6 +46,7 @@ bad() {  # $1 = what is wrong, $2 = the fix
 }
 sign_fix="sign with the private key whose public half the live release's updater ships; to move clients to a new key, ship it in a release signed by the old one (a bridge), and to abandon them pass --allow-key-change"
 field() { sed -n "s/^$1=//p" "$2"; }
+retries() { grep '^shipyard_curl:' "$T/curl.err" >&2 || true; }
 # spec: tests/assert_update_trusted.bats -- status 0 when SIG over PKG verifies against KEY, 1 when
 #       it does not. An ed25519-verify that cannot check at all (exit 2: a malformed key or
 #       signature) is neither answer, so that ends the run.
@@ -68,12 +70,14 @@ NEW_KEY="$(field SUPublicEDKey "$T/new")"
 FEED="$(field SUFeedURL "$T/new")"
 [ -n "$FEED" ] || bad "the updater in $PKG names no SUFeedURL, so there is no live release to ask" "give the updater a SUFeedURL"
 
-# platform: not -f: a 404 is an answer ("no feed yet"), not a failure. curl reports HTTP 000 for
-#           file://.
+# platform: a 404 is an answer ("no feed yet"), not a failure, and so is a missing file:// feed
+#           (curl exit 37). curl reports HTTP 000 for file://.
 set +e
-code="$(curl -sSL -o "$T/feed.xml" -w '%{http_code}' "$FEED" 2>"$T/curl.err")"; rc=$?
+shipyard_curl "$FEED" "$T/feed.xml" 2>"$T/curl.err"; rc=$?
 set -e
-if { [ "$rc" -eq 0 ] && [ "$code" = 404 ]; } || [ "$rc" -eq 37 ]; then
+code="$shipyard_curl_http"
+if [ "$code" = 404 ] || [ "$rc" -eq 37 ]; then
+  retries
   verifies "$NEW_KEY" && {
     say "ok -- first release (no live feed at $FEED): signed by $NEW_KEY, the key this pkg's updater ships"
     exit 0
@@ -85,11 +89,13 @@ if [ "$rc" -ne 0 ] || { [ "$code" != 200 ] && [ "$code" != 000 ]; }; then
   bad "cannot read the live feed $FEED (curl exit $rc, HTTP $code): $(cat "$T/curl.err"), and refusing to guess which key installed clients trust" \
     "check the feed URL and the network, then re-run"
 fi
+retries
 
 URL="$(sed -n 's/.*<enclosure[^>]* url="\([^"]*\)".*/\1/p' "$T/feed.xml" | head -1)"
 [ -n "$URL" ] || bad "the live feed $FEED offers no enclosure, so there is no telling which key installed clients trust" "repair the live feed, or pass --pubkey <the key installed clients trust>"
-curl -fsSL -o "$T/live.pkg" "$URL" 2>"$T/curl.err" \
+shipyard_curl "$URL" "$T/live.pkg" 2>"$T/curl.err" \
   || bad "cannot download the live release's pkg $URL: $(cat "$T/curl.err")" "check the network, then re-run"
+retries
 sh "$SELF/updater_pubkey.sh" "$T/live.pkg" > "$T/live" \
   || bad "the live release's pkg ($URL) has no readable Sparkle updater" "pass --pubkey <the key installed clients trust>"
 LIVE_KEY="$(field SUPublicEDKey "$T/live")"

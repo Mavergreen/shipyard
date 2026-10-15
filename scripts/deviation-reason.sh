@@ -1,10 +1,10 @@
 # platform: host-agnostic
 #   usage: . deviation-reason.sh     (sourced; defines the two functions below)
-#          mav_deviation_facts                           stdin: deviations.sh's "<check> <glob or *> <reason>"
+#          shipyard_deviation_facts                      stdin: deviations.sh's "<check> <glob or *> <reason>"
 #                                                        lines; stdout: one fact line per deviation,
 #                                                        "deviation <check> <reason>" when unscoped,
 #                                                        "deviation <check>:<glob> <reason>" when scoped
-#          mav_deviation_reason <facts> <check> [<subject>]
+#          shipyard_deviation_reason <facts> <check> [<subject>]
 #                                                        prints the reason a deviation in <facts> (a file of
 #                                                        those lines) gives to excuse <check> for
 #                                                        <subject>; prints nothing when none does
@@ -15,7 +15,7 @@
 #       matches as a shell `case` pattern, where `*` spans "/" and spaces, the first match with a
 #       reason winning; and a glob with no reason excuses nothing.
 
-mav_deviation_facts() {
+shipyard_deviation_facts() {
   while read -r _mdf_check _mdf_glob _mdf_reason; do
     [ -n "$_mdf_check" ] || continue
     if [ "$_mdf_glob" = '*' ]; then printf 'deviation %s %s\n' "$_mdf_check" "$_mdf_reason"
@@ -23,7 +23,7 @@ mav_deviation_facts() {
   done
 }
 
-mav_deviation_reason() {  # $1 = facts file, $2 = check, $3 = the subject it concerns (optional)
+shipyard_deviation_reason() {  # $1 = facts file, $2 = check, $3 = the subject it concerns (optional)
   _mdr="$(sed -n "s/^deviation ${2} \(..*\)$/\1/p" "$1" | head -1)"
   if [ -z "$_mdr" ] && [ -n "${3:-}" ]; then
     while IFS= read -r _mdr_line; do
@@ -40,3 +40,7 @@ EOF
   fi
   printf '%s' "$_mdr"
 }
+
+# spec: SKILL.md "shipyard: consume its facilities" -- the mav_* names answer until the family calls shipyard_*
+mav_deviation_facts() { shipyard_deviation_facts "$@"; }
+mav_deviation_reason() { shipyard_deviation_reason "$@"; }

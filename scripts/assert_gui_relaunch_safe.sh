@@ -12,7 +12,7 @@
 #           the shared update-check agent loads via `launchctl bootstrap gui/` or
 #           `sudo -u ... launchctl load`, neither of which matches, and a root LaunchDaemon load
 #           (`launchctl load` with no asuser) is not a GUI relaunch either. "Stops the prior
-#           instance" means a call to mav_stop_gui_instance (postinstall-stop-gui.sh), a pkill, or a
+#           instance" means a call to shipyard_stop_gui_instance (postinstall-stop-gui.sh), a pkill, or a
 #           `launchctl asuser ... unload`.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
@@ -21,7 +21,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 chk_ran gui-relaunch-safe
 
 rule="a postinstall that relaunches a GUI app also stops the old instance"
-fix="call mav_stop_gui_instance (postinstall-stop-gui.sh) before the relaunch, or pkill / launchctl unload the old one"
+fix="call shipyard_stop_gui_instance (postinstall-stop-gui.sh) before the relaunch, or pkill / launchctl unload the old one"
 
 lint() {  # $1 = the postinstall file, $2 = the name to report it by
   launches=0
@@ -34,7 +34,7 @@ lint() {  # $1 = the postinstall file, $2 = the name to report it by
     echo "assert_gui_relaunch_safe: ok — $2 does not relaunch a GUI app (nothing to guard)"
     return 0
   fi
-  if grep -Eq 'mav_stop_gui_instance|pkill|launchctl[[:space:]]+unload' "$1"; then
+  if grep -Eq '(shipyard|mav)_stop_gui_instance|pkill|launchctl[[:space:]]+unload' "$1"; then
     echo "assert_gui_relaunch_safe: ok — $2 relaunches a GUI app and also stops an old instance (presence, not order: nothing here checks the stop comes first)"
   else
     chk_fail gui-relaunch-safe "$rule" "$2 relaunches a GUI app but never stops the old instance -- an update will leave two menu-bar icons" "$fix"

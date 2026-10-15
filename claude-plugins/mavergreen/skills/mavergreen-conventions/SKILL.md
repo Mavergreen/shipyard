@@ -158,16 +158,23 @@ updaters, signing, or compat checks:**
 | `mavericks_add_updater_app` · `MavericksSparkle` · `stage_updater.sh` | builds/stages the Sparkle updater (self-fetches the framework) | wiring Sparkle by hand |
 | `set_install_floor.sh` | stamps the 10.9.5 install floor on the `.pkg` | editing the pkg Distribution |
 | `sign_and_appcast.sh` · `gen_appcast.sh` | EdDSA-signs + renders the appcast (fetches `ed25519-sign` via `gh`) | rolling your own signing |
-| `mavericks_fetch` · `MavericksFetch` · `mavericks_fetch.sh` | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
+| `mavericks_fetch` · `MavericksFetch` · `mavericks_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
+| `shipyard_curl URL OUT\|-` · `mavericks_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
 | `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
 | `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh; runs on 10.9 | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
+
+**Shipyard's shell helpers are named `shipyard_*`** (`shipyard_curl`, `shipyard_fetch_verified`,
+`shipyard_sdk_pin`, `shipyard_stop_gui_instance`, ...). The old `mav_*` names still answer, until
+every family repo calls the new ones; then they go.
 
 **`MAVERGREEN_PROGRESS=1` makes the fetch scripts report progress.** Set it and `mavericks_fetch.sh`
 (and so `fetch_sdk.sh`, `fetch_pinned_source.sh`, `fetch_sparkle_framework.sh`) say what they are
 doing on stderr: downloading, verifying and unpacking. At a terminal the download shows curl's progress
 bar; anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
 exactly what it was, so CI logs and every existing consumer see no change. Stdout is untouched. A
-product that drives a fetch for a person at a terminal (Longboat) sets it; a build script does not.
+retried download says so on stderr whatever the setting: one `shipyard_curl:` line per retry, and one
+when it gives up. A product that drives a fetch for a person at a terminal (Longboat) sets it; a build
+script does not.
 
 ## The build must also run natively ON 10.9
 
@@ -2210,11 +2217,11 @@ pointing back into the row below — so this table, not the script, is where a c
 | **`no-pull-request-target`.** No workflow uses `pull_request_target` | It hands a fork PR this repo's secrets |
 | **`checkout-drops-credentials`, `permissions-contents-read`.** Every `actions/checkout` in `release.yml` sets `persist-credentials: false`, and its top-level `permissions:` holds `contents: read` | The build jobs run hours of third-party code; only the job that publishes needs a token that writes |
 | **`upstream-version-bare`, `version-ignored`.** `UPSTREAM_VERSION` is one line, no `v`, no spaces; `.gitignore` ignores `/VERSION` | A stray `v` or space ends up in the release tag; an unignored `VERSION` is committed by the first `git add -A` |
-| **`bare-curl`.** No `curl` at command position in a tracked shell script outside `tests/`, or in a workflow or composite-action `run:` block, except in the fetch library itself (`scripts/mavericks_fetch.sh`, `scripts/mavergreen_fetch.sh`); a script that sources it still calls its helpers, never `curl`; a path is excused by `- bare-curl:<path>: <reason>` | A bare curl does not retry; one connection reset cost rust a two-hour rerun. `mav_curl` is the fix (QUEUE #58) |
+| **`bare-curl`.** No `curl` at command position in a tracked shell script outside `tests/`, or in a workflow or composite-action `run:` block, except in the fetch library itself (`scripts/mavericks_fetch.sh`, `scripts/mavergreen_fetch.sh`); a script that sources it still calls its helpers, never `curl`; a path is excused by `- bare-curl:<path>: <reason>` | A bare curl does not retry; one connection reset cost rust a two-hour rerun. `shipyard_curl` is the fix |
 | **`brew`, `macports`, `pkgsrc`, `apt`.** No use of the manager's commands (`brew`; `port`; `pkgin`, `pkg_add`, `bmake`; `apt-get`, `apt`, `dpkg -i`), at command position in the same text as `bare-curl`, nor of its prefixes (`/opt/homebrew`, `/usr/local/Homebrew`, `/home/linuxbrew`; `/opt/local`; `/opt/pkg`, `/usr/pkg`), without a deviation of that id covering the path | Each use is counted and the family works toward none; the deviation's exit names the family product that replaces it |
 | **`vendored`.** Every tracked path under a directory named `vendor/` or `third_party/` is covered by a `- vendored:<glob>: <reason>` deviation whose reason says what deletes the copy | An undeclared vendored copy is code nobody counts |
 | **`bash32-parse`.** `/bin/sh -n` accepts every tracked shell script, after a canary proving the shell refuses an apostrophe inside `${VAR:?word}`; a host whose `/bin/sh` is not bash 3.2 fails "can't measure here" unless `- host:<os>: <reason>` excuses it, which reports it not run. The install action runs `shipyard-check --only bash32-parse` on every macOS job that installs shipyard, so a repo wires nothing | Bash 3.2 is the `/bin/sh` of 10.9 and macOS, and Linux and newer bashes accept what it refuses |
-| **`docs-no-sudo`.** No `README*`, `*.md` (except `release-notes/**`, this skill, and design, decision and plan records under `docs/decisions/**`, `docs/adr/**`, `docs/plans/**` and `docs/superpowers/**`), man page, pkg resource, or `echo`, `printf` or heredoc text in a tracked script outside `tests/` tells the reader to run `sudo`. Family tools elevate themselves: write the plain command (`mavergreen install <file.pkg>` for a pkg), and the bare `mavergreen`, never its path. An executed `sudo` in a script is code and passes. A root step no family command can do yet, or a tool that hasn't adopted `mav_root_begin`, is excused by `- docs-no-sudo:<path>: <reason, naming the exit>` | A doc that prescribes `sudo` teaches a step the tool does itself, and runs the tool's per-user work as root |
+| **`docs-no-sudo`.** No `README*`, `*.md` (except `release-notes/**`, this skill, and design, decision and plan records under `docs/decisions/**`, `docs/adr/**`, `docs/plans/**` and `docs/superpowers/**`), man page, pkg resource, or `echo`, `printf` or heredoc text in a tracked script outside `tests/` tells the reader to run `sudo`. Family tools elevate themselves: write the plain command (`mavergreen install <file.pkg>` for a pkg), and the bare `mavergreen`, never its path. An executed `sudo` in a script is code and passes. A root step no family command can do yet, or a tool that hasn't adopted `shipyard_root_begin`, is excused by `- docs-no-sudo:<path>: <reason, naming the exit>` | A doc that prescribes `sudo` teaches a step the tool does itself, and runs the tool's per-user work as root |
 
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,

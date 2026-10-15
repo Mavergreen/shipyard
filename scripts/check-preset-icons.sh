@@ -22,10 +22,11 @@ done
 chk_ran preset-icon
 ICON_URL= ICON_GLOB= APT_REPO= APT_KEY_URL= APT_PKGS=
 case "$CONF" in */*) . "$CONF" ;; *) . "./$CONF" ;; esac
+. "$(cd "$(dirname "$0")" && pwd)/mavericks_fetch.sh"
 W=$(mktemp -d "${TMPDIR:-/tmp}/check-preset-icons.XXXXXX"); trap 'rm -rf "$W"' EXIT
 
 if [ -n "$ICON_URL" ]; then
-  if ! curl -fsSL --max-time 30 -o "$W/icon" "$ICON_URL" 2>/dev/null; then
+  if ! shipyard_curl "$ICON_URL" "$W/icon"; then
     chk_fail preset-icon "ICON_URL no longer serves the icon" "fetching $ICON_URL failed" \
       "point ICON_URL in $CONF at the vendor's current PNG"
   elif [ "$(head -c 8 "$W/icon" | od -An -tx1 | tr -d ' \n')" != 89504e470d0a1a0a ]; then
@@ -40,7 +41,7 @@ if [ -n "$ICON_GLOB" ] && [ -n "$APT_REPO" ] && [ -n "$APT_KEY_URL" ]; then
   set -- $(printf '%s\n' "$APT_REPO" | sed 's/\[[^]]*\]//')
   base=$2 suite=$3 comp=$4
   pkg=$(printf '%s\n' "$APT_PKGS" | awk '{ print $1 }'); pkg=${pkg%%=*}
-  curl -fsSL --max-time 60 -o "$W/Packages" "$base/dists/$suite/$comp/binary-amd64/Packages"
+  shipyard_curl "$base/dists/$suite/$comp/binary-amd64/Packages" "$W/Packages"
   awk -v p="$pkg" '
     /^Package: / { k = $2 } /^Version: / { v = $2 } /^Filename: / { f = $2 }
     /^$/ { if (k == p) print v, f; k = "" }
@@ -53,7 +54,7 @@ if [ -n "$ICON_GLOB" ] && [ -n "$APT_REPO" ] && [ -n "$APT_KEY_URL" ]; then
     chk_fail preset-icon "ICON_GLOB cannot be checked" "$pkg is not in $base $suite $comp" \
       "name the vendor's package first in APT_PKGS in $CONF"
   else
-    curl -fsSL -o "$W/pkg.deb" "$base/$best"
+    shipyard_curl "$base/$best" "$W/pkg.deb"
     dpkg-deb -c "$W/pkg.deb" | awk '{ print substr($6, 2) }' > "$W/files"
     depth() { printf '%s' "$1" | tr -cd / | wc -c | tr -d ' '; }
     want=$(depth "$ICON_GLOB")

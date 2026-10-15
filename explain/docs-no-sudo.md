@@ -18,11 +18,11 @@ sudo, and the tools elevate per step.
 ## Limits
 It is a text match on the word sudo; it cannot tell a doc that warns against sudo from one that prescribes it.
 Scripts are scanned for the quoted argument of echo and printf and for heredoc bodies; prose assembled any
-other way is not seen. QUEUE #63's runtime policy (mav_root_policy, mav_sudo) is a separate piece.
+other way is not seen. QUEUE #63's runtime policy (shipyard_root_policy, shipyard_sudo) is a separate piece.
 
 ## Deviating
 Write "- docs-no-sudo:<path>: <reason, naming the exit>". A good reason says what root step no family
-command can do yet, or which tool has not adopted mav_root_begin, and when that ends. shipyard's own entry for
+command can do yet, or which tool has not adopted shipyard_root_begin, and when that ends. shipyard's own entry for
 README.md names the Engine's mavergreen install and uninstall as its exit.
 
 New in the flag day (QUEUE #63)
