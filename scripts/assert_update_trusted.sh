@@ -39,6 +39,7 @@ done
 T="$(mktemp -d "${TMPDIR:-/tmp}/assert_update_trusted.XXXXXX")"; trap 'rm -rf "$T"' EXIT
 say() { echo "assert_update_trusted: $*" >&2; }
 field() { sed -n "s/^$1=//p" "$2"; }
+retries() { grep '^shipyard_curl:' "$T/curl.err" >&2 || true; }
 # spec: tests/assert_update_trusted.bats -- status 0 when SIG over PKG verifies against KEY, 1 when
 #       it does not. An ed25519-verify that cannot check at all (exit 2: a malformed key or
 #       signature) is neither answer, so that ends the run.
@@ -70,6 +71,7 @@ shipyard_curl "$FEED" "$T/feed.xml" 2>"$T/curl.err"; rc=$?
 set -e
 code="$shipyard_curl_http"
 if [ "$code" = 404 ] || [ "$rc" -eq 37 ]; then
+  retries
   verifies "$NEW_KEY" && {
     say "ok -- first release (no live feed at $FEED): signed by $NEW_KEY, the key this pkg's updater ships"
     exit 0
@@ -83,11 +85,13 @@ if [ "$rc" -ne 0 ] || { [ "$code" != 200 ] && [ "$code" != 000 ]; }; then
   say "refusing to guess which key installed clients trust"
   exit 1
 fi
+retries
 
 URL="$(sed -n 's/.*<enclosure[^>]* url="\([^"]*\)".*/\1/p' "$T/feed.xml" | head -1)"
 [ -n "$URL" ] || { say "the live feed $FEED offers no enclosure -- cannot tell which key installed clients trust"; exit 1; }
 shipyard_curl "$URL" "$T/live.pkg" 2>"$T/curl.err" \
   || { say "cannot download the live release's pkg $URL: $(cat "$T/curl.err")"; exit 1; }
+retries
 sh "$SELF/updater_pubkey.sh" "$T/live.pkg" > "$T/live" \
   || { say "the live release's pkg ($URL) has no readable Sparkle updater"; exit 1; }
 LIVE_KEY="$(field SUPublicEDKey "$T/live")"

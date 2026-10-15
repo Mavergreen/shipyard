@@ -172,8 +172,9 @@ every family repo calls the new ones; then they go.
 doing on stderr: downloading, verifying and unpacking. At a terminal the download shows curl's progress
 bar; anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
 exactly what it was, so CI logs and every existing consumer see no change. Stdout is untouched. A
-retried download says so on stderr whatever the setting: one `shipyard_curl:` line per retry. A
-product that drives a fetch for a person at a terminal (Longboat) sets it; a build script does not.
+retried download says so on stderr whatever the setting: one `shipyard_curl:` line per retry, and one
+when it gives up. A product that drives a fetch for a person at a terminal (Longboat) sets it; a build
+script does not.
 
 ## The build must also run natively ON 10.9
 

@@ -10,9 +10,10 @@
 #          with OUT "-" it prints the body on stdout, once, after the attempt that succeeded. It
 #          retries curl exits 6, 7, 18, 28, 35, 52, 55 and 56 and HTTP 429 and 5xx, from scratch,
 #          up to SHIPYARD_FETCH_TRIES attempts (default 5), waiting 2, 4, 8, then 16s between them,
-#          one stderr line per retry. Any other failure, a 404 say, is not retried. On failure it
-#          returns the last curl exit status and leaves no OUT.part. Either way the last attempt's
-#          HTTP code (000 for file://) is in $shipyard_curl_http. Each attempt fails a transfer
+#          one stderr line per retry and one when it gives up. Any other failure, a 404 say, is not
+#          retried. On failure it returns non-zero (the last curl exit status when an attempt failed)
+#          and leaves no OUT.part. The last attempt's HTTP code (000 for file://) is in
+#          $shipyard_curl_http, which is empty when no attempt ran. Each attempt fails a transfer
 #          slower than 1KB/s for 60s. --quiet drops curl's own error line; --progress-bar shows
 #          curl's progress bar. SHIPYARD_FETCH_BACKOFF=0 skips the waits (test-only).
 #          shipyard_fetch_verified downloads URL through shipyard_curl to a unique mktemp file,
@@ -70,6 +71,7 @@ _shipyard_curl_to() {
 }
 
 shipyard_curl() {
+  shipyard_curl_http=
   _sc_show=-sS
   case "${1:-}" in
     --quiet) _sc_show=-s; shift ;;

@@ -89,7 +89,7 @@ printf '%s\n' "$_devs" | shipyard_deviation_facts > "$work/devs"
 #           Stripping only a trailing " (from libX)" parenthetical, not also " (dynamically looked
 #           up)", left $NF = "up)" for a dynamic_lookup undefined, and the hard import slipped past
 #           the guard.
-mav_undefs() {
+shipyard_undefs() {
   _nm_out="$("${NM:-nm}" -m "$1" 2>"$work/reader.err")" || return 1
   printf '%s\n' "$_nm_out" | grep -F '(undefined)' | sed -E 's/ \([^)]*\)$//' \
     | awk '{ w = (/ weak /) ? "W" : "H"; print w, $NF }'
@@ -134,7 +134,7 @@ EOF
       || shipyard_reader_die "${LIPO:-lipo} -thin could not read the x86_64 slice of $b"
   fi
 
-  U=$(mav_undefs "$x") || shipyard_reader_die "${NM:-nm} -m could not read $b's symbols"
+  U=$(shipyard_undefs "$x") || shipyard_reader_die "${NM:-nm} -m could not read $b's symbols"
   hard_leak=$(printf '%s\n' "$U" | awk '$1=="H"{print $2}' | grep -xE "($POST_10_9)" || true)
   weak_leak=$(printf '%s\n' "$U" | awk '$1=="W"{print $2}' | grep -xE "($POST_10_9)" || true)
   if [ -n "$ALLOW_WEAK" ]; then

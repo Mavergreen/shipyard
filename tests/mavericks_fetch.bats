@@ -392,6 +392,19 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
   [ ! -s "$WORK/out" ]
 }
 
+@test "shipyard_curl: a call that makes no attempt leaves no stale HTTP code" {
+  stub_curl "22 404" "22 404"
+  rc=0
+  env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \
+    sh -c '. "$1"; shipyard_curl "$2" "$3"; printf "first=%s\n" "$shipyard_curl_http"
+           shipyard_curl "$2"; printf "usage=%s rc=%s\n" "$shipyard_curl_http" "$?"
+           shipyard_curl "$2" "$3"; SHIPYARD_FETCH_TRIES=0 shipyard_curl "$2" "$3"; printf "tries=%s\n" "$shipyard_curl_http"' \
+    x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$WORK/x.tar" >"$WORK/out" 2>"$WORK/err" || rc=$?
+  cat "$WORK/out"
+  printf 'first=404\nusage= rc=2\ntries=\n' > "$WORK/want"
+  cmp "$WORK/want" "$WORK/out"
+}
+
 @test "shipyard_curl under set -e: a retried fetch carries on, a failed one stops the caller" {
   stub_curl "56 000" "0 200"
   run env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \

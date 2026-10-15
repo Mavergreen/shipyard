@@ -105,6 +105,19 @@ live_release() {  # KEY
   [[ "$stderr" == *"first release"* ]] || false
 }
 
+@test "a feed that answers 503 once is retried, and the retry line still reaches stderr" {
+  live_release "$KOLD"
+  mkpkg "$T/new.pkg" "$KOLD" "$FEED" TestUpdater
+  mkdir -p "$T/stub"
+  printf '#!/bin/sh\nif [ ! -e "%s/stub/once" ]; then : > "%s/stub/once"; printf 503; exit 22; fi\nexec "%s" "$@"\n' \
+    "$T" "$T" "$(command -v curl)" > "$T/stub/curl"
+  chmod +x "$T/stub/curl"
+  PATH="$T/stub:$PATH" SHIPYARD_FETCH_BACKOFF=0 run --separate-stderr trusted "$T/new.pkg" "signed-by:$KOLD"
+  [ "$status" -eq 0 ]
+  [[ "$stderr" == *"shipyard_curl: $FEED: HTTP 503; retry 1 of 5 in 2s"* ]] || false
+  [[ "$stderr" == *"the key installed updaters trust"* ]] || false
+}
+
 @test "a feed that answers 503 every time fails closed after the retries" {
   mkdir -p "$T/stub"
   printf '#!/bin/sh\nprintf 503\nexit 22\n' > "$T/stub/curl"
