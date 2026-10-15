@@ -49,3 +49,8 @@ SHIPYARD_SDK_EXEMPT_SHA256='95ad6ce1558b1ffef550455bf9aa05ad6686d434279631d170ab
 afc568f0d8d2a93eb9e59cda546cafab0a14cc60a4d78b4c611800d33ad5dced
 4ea4718635b69a7746078674aba2af31249d20e3155010bd06f1e9d5487c94b2'
 shipyard_sdk_exempt_sha256() { [ -n "$1" ] && printf '%s\n' "$SHIPYARD_SDK_EXEMPT_SHA256" | grep -qx "$1"; }
+
+# spec: SKILL.md "shipyard: consume its facilities" -- the mav_* names answer until the family calls shipyard_*
+mav_sdk_pin() { shipyard_sdk_pin "$@"; }
+mav_sdk_rule() { shipyard_sdk_rule "$@"; }
+mav_sdk_exempt_sha256() { shipyard_sdk_exempt_sha256 "$@"; }

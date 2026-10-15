@@ -23,3 +23,6 @@ shipyard_stop_gui_instance() {  # $1 = Contents/MacOS/<exec>   $2 = console uid
     sleep 1
     pkill -KILL -U "$_shipyard_uid" -f "$_shipyard_exec" 2>/dev/null || true
 }
+
+# spec: SKILL.md "shipyard: consume its facilities" -- the mav_* names answer until the family calls shipyard_*
+mav_stop_gui_instance() { shipyard_stop_gui_instance "$@"; }

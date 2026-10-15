@@ -40,3 +40,7 @@ EOF
   fi
   printf '%s' "$_mdr"
 }
+
+# spec: SKILL.md "shipyard: consume its facilities" -- the mav_* names answer until the family calls shipyard_*
+mav_deviation_facts() { shipyard_deviation_facts "$@"; }
+mav_deviation_reason() { shipyard_deviation_reason "$@"; }

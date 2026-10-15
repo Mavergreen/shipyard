@@ -67,3 +67,11 @@ sudo -u bob launchctl load -w /Library/LaunchAgents/x.plist')"
   [ "$status" -eq 0 ]
 }
 
+@test "the mav_stop_gui_instance name still answers, and the gate still accepts it" {
+  run sh -c ". '$HELPER'; mav_stop_gui_instance Contents/MacOS/Nope 0"
+  [ "$status" -eq 0 ]
+  f="$(pi old_helper 'mav_stop_gui_instance Contents/MacOS/Foo 501
+launchctl asuser 501 launchctl load -w /Library/LaunchAgents/foo.systray.plist')"
+  run sh "$GATE" "$f"
+  [ "$status" -eq 0 ]
+}

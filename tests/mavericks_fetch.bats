@@ -456,3 +456,13 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
   [ -z "$(find "$CACHE" -mindepth 1)" ]
 }
 
+@test "the mav_* names still answer, until the family has moved to shipyard_*" {
+  run sh -c '. "$1"; mav_fetch_verified "$2" "$3" "$4" fixture.tar' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$URL" "$SHA" "$CACHE"
+  [ "$status" -eq 0 ]
+  [ -f "$CACHE/fixture.tar" ]
+  mkdir "$CACHE/.mav-publish.lock"
+  x="$(shipyard_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar payload)"
+  MAV_FETCH_LOCK_TRIES=2 run shipyard_fetch_publish "$CACHE" "$x"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"held for 2s"* ]] || false
+}

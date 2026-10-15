@@ -146,8 +146,8 @@ shipyard_fetch_publish() {
     _d="$_cache/${_e##*/}"
     _try=1
     until mkdir "$_lock" 2>/dev/null; do
-      [ "$_try" -lt "${SHIPYARD_FETCH_LOCK_TRIES:-120}" ] || {
-        echo "shipyard_fetch: $_lock held for ${SHIPYARD_FETCH_LOCK_TRIES:-120}s -- remove it if no fetch is running" >&2
+      [ "$_try" -lt "${SHIPYARD_FETCH_LOCK_TRIES:-${MAV_FETCH_LOCK_TRIES:-120}}" ] || {
+        echo "shipyard_fetch: $_lock held for ${SHIPYARD_FETCH_LOCK_TRIES:-${MAV_FETCH_LOCK_TRIES:-120}}s -- remove it if no fetch is running" >&2
         rm -rf "$_x"; return 1; }
       _try=$((_try + 1))
       sleep 1
@@ -166,3 +166,9 @@ shipyard_fetch_publish() {
 shipyard_fetch_pinned() {
   _px="$(shipyard_fetch_extract "$@")" && shipyard_fetch_publish "$3" "$_px"
 }
+
+# spec: SKILL.md "shipyard: consume its facilities" -- the mav_* names answer until the family calls shipyard_*
+mav_fetch_verified() { shipyard_fetch_verified "$@"; }
+mav_fetch_extract() { shipyard_fetch_extract "$@"; }
+mav_fetch_publish() { shipyard_fetch_publish "$@"; }
+mav_fetch_pinned() { shipyard_fetch_pinned "$@"; }
