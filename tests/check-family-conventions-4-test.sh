@@ -251,8 +251,18 @@ for cite in "$q #12" "$q.md #3" "shipyard $b #30" "$q#7"; do
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a tracked line citing '$cite' must fail"; exit 1; }
   printf '%s\n' "$out" | grep -q "notes.sh:1 cites a queue entry" || { echo "FAIL: check 27 should name notes.sh:1 for '$cite': $out"; exit 1; }
 done
+for wrap in md sh; do
+  d="$work/ci-wrap-$wrap"; mkrepo "$d"
+  case $wrap in
+    md) printf 'a fetcher (shipyard %s\n#52), never by hand\n' "$q" > "$d/notes.$wrap" ;;
+    sh) printf '# a fetcher (shipyard %s\n#   #52), never by hand\necho\n' "$b" > "$d/notes.$wrap" ;;
+  esac
+  (cd "$d" && git add "notes.$wrap") >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a citation wrapped across lines in notes.$wrap must fail"; exit 1; }
+  printf '%s\n' "$out" | grep -q "notes.$wrap:1 cites a queue entry" || { echo "FAIL: check 27 should name notes.$wrap:1: $out"; exit 1; }
+done
 mkrepo "$work/ci-near"
-printf '# the run queue #ofjobs, a %s of work, TODO #4\n' "$b" > "$work/ci-near/notes.sh"
+printf '# the run queue #ofjobs, a %s of work, TODO #4, the %s\n# #ofthem\n' "$b" "$q" > "$work/ci-near/notes.sh"
 (cd "$work/ci-near" && git add notes.sh && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 27: lowercase queue, a bare $b and TODO #n cite no queue entry: $(cd "$work/ci-near" && sh "$S" 2>&1)"; exit 1; }
 

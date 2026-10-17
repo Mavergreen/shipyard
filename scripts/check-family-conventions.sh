@@ -723,6 +723,11 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
 $_backlogs
 EOF
   _cites="$(git grep -nIE '(BACKLOG|QUEUE)([.]md)? ?#[0-9]' | cut -d: -f1-2)"
+  _wrapped="$(git grep -lIE '(BACKLOG|QUEUE)([.]md)?[[:space:]]*$' | while IFS= read -r _f; do
+    awk -v f="$_f" 'held && /^[[:space:]]*((#|\/\/|[*]|--|;)[[:space:]]*)?#[0-9]/ { print f ":" (NR - 1) }
+                    { held = /(BACKLOG|QUEUE)([.]md)?[[:space:]]*$/ }' "$_f"
+  done)"
+  _cites="$(printf '%s\n%s\n' "$_cites" "$_wrapped" | grep . || :)"
   [ -z "$_cites" ] || while IFS= read -r _c; do
     fail "$_c cites a queue entry by number, which no reader of a tracked file can look up" \
          "write the reason itself on that line, where a reader without the queue can use it"
