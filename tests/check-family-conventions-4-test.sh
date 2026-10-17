@@ -196,7 +196,7 @@ printf '\n## Conformance deviations\n\n- renovate-path:renovate.json: legacy con
   && { echo "FAIL: check 26: a deviation for renovate.json must not excuse renovate.json5"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 27 -- .superpowers/ and .idea/ are ignored, and nothing is
-#       tracked under .superpowers/, docs/superpowers/ or .idea/. The baseline (mkrepo) is the positive control.
+#       tracked under .superpowers/, docs/superpowers/ or .idea/, and no backlog file is tracked. The baseline (mkrepo) is the positive control.
 for form in '.superpowers/' '/.superpowers/' '.superpowers' '/.superpowers'; do
   d="$work/sp-ok$(printf '%s' "$form" | tr -c 'A-Za-z' _)"; mkrepo "$d"
   printf '/VERSION\n%s\n.idea/\n' "$form" > "$d/.gitignore"
@@ -228,6 +228,20 @@ for dir in .superpowers docs/superpowers .idea; do
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a file tracked under $dir must fail"; exit 1; }
   printf '%s\n' "$out" | grep -q "git rm -r --cached $dir " || { echo "FAIL: check 27 should say git rm -r --cached $dir: $out"; exit 1; }
 done
+
+for f in BACKLOG.md docs/TODO.md notes/queue.txt Backlog; do
+  d="$work/bl-$(printf '%s' "$f" | tr -c 'A-Za-z' _)"; mkrepo "$d"
+  mkdir -p "$(dirname "$d/$f")"; printf 'x\n' > "$d/$f"
+  (cd "$d" && git add "$f") >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a tracked $f must fail"; exit 1; }
+  printf '%s\n' "$out" | grep -q "$f is a tracked backlog" || { echo "FAIL: check 27 should name the tracked $f: $out"; exit 1; }
+done
+mkrepo "$work/bl-near"; mkdir -p "$work/bl-near/tests"
+printf 'x\n' > "$work/bl-near/tests/backlog_test.sh"; printf 'x\n' > "$work/bl-near/QUEUES.md"
+(cd "$work/bl-near" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 27: backlog_test.sh and QUEUES.md are not backlogs: $(cd "$work/bl-near" && sh "$S" 2>&1)"; exit 1; }
+mkrepo "$work/bl-untracked"; printf 'x\n' > "$work/bl-untracked/BACKLOG.md"
+(cd "$work/bl-untracked" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 27: an untracked BACKLOG.md must pass"; exit 1; }
 
 mkrepo "$work/sp-untracked"; mkdir -p "$work/sp-untracked/.idea"; printf 'x\n' > "$work/sp-untracked/.idea/misc.xml"
 (cd "$work/sp-untracked" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 27: an untracked, ignored .idea/ must pass"; exit 1; }

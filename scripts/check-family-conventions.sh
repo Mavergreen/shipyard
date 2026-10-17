@@ -700,7 +700,8 @@ done
 
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
 #       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
-#       ignored AND nothing may be tracked under them or under docs/superpowers/. Needs git, like check 7.
+#       ignored AND nothing may be tracked under them or under docs/superpowers/, nor a backlog file
+#       anywhere (a repo's backlog is QUEUE.md under .superpowers/). Needs git, like check 7.
 if git rev-parse --git-dir >/dev/null 2>&1; then
   for _d in .superpowers .idea; do
     grep -qxE "/?\\$_d/?" .gitignore 2>/dev/null \
@@ -713,6 +714,13 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
            "git rm -r --cached $_d (the files stay on disk), and make sure .gitignore ignores it"
     fi
   done
+  _backlogs="$(git ls-files | grep -v '^\.superpowers/' | grep -iE '(^|/)(backlog|queue|todo)(\.(md|markdown|txt))?$' || :)"
+  [ -z "$_backlogs" ] || while IFS= read -r _f; do
+    fail "$_f is a tracked backlog, which is never committed" \
+         "move its entries into QUEUE.md under the gitignored .superpowers/, git rm $_f, and write inline the reason any tracked file cited one of its entries for"
+  done <<EOF
+$_backlogs
+EOF
 else
   echo "check-family-conventions: not a git checkout — cannot check .superpowers/ and .idea/" >&2; status=1
 fi
