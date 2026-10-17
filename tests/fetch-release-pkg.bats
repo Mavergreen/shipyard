@@ -28,14 +28,14 @@ teardown() { rm -rf "$WORK"; }
 @test "an asset SHA256SUMS doesn't list fails, naming it" {
   run sh "$HELPER" shipyard v1.0.9 other.pkg "$WORK/out"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"other.pkg is not listed"* ]]
+  [[ "$output" == *"other.pkg is not listed"* ]] || false
 }
 
 @test "a release with no SHA256SUMS fails" {
   rm "$REL/SHA256SUMS"
   run sh "$HELPER" shipyard v1.0.9 mavericks-shipyard-1.0.9.pkg "$WORK/out"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"could not fetch"*"SHA256SUMS"* ]]
+  [[ "$output" == *"could not fetch"*"SHA256SUMS"* ]] || false
 }
 
 @test "a usage error exits 2" {
