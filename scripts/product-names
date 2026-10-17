@@ -36,3 +36,4 @@ gh dev.mavergreen.gh gh
 pi dev.mavergreen.pi pi
 codex-cli dev.mavergreen.codex-cli codex-cli
 python315 dev.mavergreen.python.python315 python-315
+make dev.mavergreen.make make
