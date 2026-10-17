@@ -249,8 +249,8 @@ def exports(cs, name):
     return False
 
 for pat, why in ((r'resolve-action-version\.sh', "the macOS release path never resolves its ref to a version"),
-                 (r'^gh release download "v\$ver" -R Mavergreen/shipyard --pattern ', "the macOS release path never downloads the release's pkg"),
-                 (r'^sudo installer -pkg ', "the macOS release path never installs the pkg")):
+                 (r'fetch-release-pkg\.sh" shipyard "v\$ver" "mavericks-shipyard-\$ver\.pkg" ', "the macOS release path never downloads the release's pkg through fetch-release-pkg.sh (retried, verified against SHA256SUMS)"),
+                 (r'^sudo installer -pkg "\$pkg" ', "the macOS release path never installs the pkg it fetched")):
     if not any(re.search(pat, c) for c in rel_mac): bad.append(why)
 if not exports(rel_mac, "SHIPYARD_SCRIPTS"):
     bad.append("the macOS release path never exports SHIPYARD_SCRIPTS")
@@ -284,7 +284,7 @@ else:
         bad.append("the non-macOS release path exports MavericksShipyard_DIR without checking the "
                    "config is actually there; a wrong path would surface as a consumer's find_package failure")
     for pat, why in ((r'^sudo installer', "installs a pkg"),
-                     (r'^gh release download', "downloads a release asset")):
+                     (r'^gh release download|fetch-release-pkg\.sh', "downloads a release asset")):
         if any(re.search(pat, c) for c in rel_oth):
             bad.append("the non-macOS release path %s; there is no Linux pkg to install" % why)
 

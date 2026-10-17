@@ -100,8 +100,8 @@ runs:
         ver="$(sh "$root/scripts/resolve-action-version.sh" "$ref")" \
           || { echo "::error::'$ref' names no shipyard release -- pin Mavergreen/shipyard/.github/actions/install@v1 (or an exact @vX.Y.Z)"; exit 1; }
         d="$RUNNER_TEMP/shipyard-pkg"; mkdir -p "$d"
-        gh release download "v$ver" -R Mavergreen/shipyard --pattern 'mavericks-shipyard-*.pkg' --dir "$d"
-        sudo installer -pkg "$d"/mavericks-shipyard-*.pkg -target /
+        pkg="$(sh "$root/scripts/fetch-release-pkg.sh" shipyard "v$ver" "mavericks-shipyard-$ver.pkg" "$d")"
+        sudo installer -pkg "$pkg" -target /
         echo /usr/local/mavergreen/bin >> "$GITHUB_PATH"
         /usr/local/mavergreen/bin/shipyard-cmake --version | head -1
         scripts=/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts
