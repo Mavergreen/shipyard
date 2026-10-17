@@ -196,7 +196,7 @@ printf '\n## Conformance deviations\n\n- renovate-path:renovate.json: legacy con
   && { echo "FAIL: check 26: a deviation for renovate.json must not excuse renovate.json5"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 27 -- .superpowers/ and .idea/ are ignored, and nothing is
-#       tracked under .superpowers/, docs/superpowers/ or .idea/, and no backlog file is tracked. The baseline (mkrepo) is the positive control.
+#       tracked under .superpowers/, docs/superpowers/ or .idea/, no backlog file is tracked, and no tracked line cites a queue entry by number. The baseline (mkrepo) is the positive control.
 for form in '.superpowers/' '/.superpowers/' '.superpowers' '/.superpowers'; do
   d="$work/sp-ok$(printf '%s' "$form" | tr -c 'A-Za-z' _)"; mkrepo "$d"
   printf '/VERSION\n%s\n.idea/\n' "$form" > "$d/.gitignore"
@@ -242,6 +242,19 @@ printf 'x\n' > "$work/bl-near/tests/backlog_test.sh"; printf 'x\n' > "$work/bl-n
   || { echo "FAIL: check 27: backlog_test.sh and QUEUES.md are not backlogs: $(cd "$work/bl-near" && sh "$S" 2>&1)"; exit 1; }
 mkrepo "$work/bl-untracked"; printf 'x\n' > "$work/bl-untracked/BACKLOG.md"
 (cd "$work/bl-untracked" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 27: an untracked BACKLOG.md must pass"; exit 1; }
+
+q="QUEUE"; b="BACKLOG"
+for cite in "$q #12" "$q.md #3" "shipyard $b #30" "$q#7"; do
+  d="$work/ci-$(printf '%s' "$cite" | tr -c 'A-Za-z0-9' _)"; mkrepo "$d"
+  printf '# wait for %s before this\n' "$cite" > "$d/notes.sh"
+  (cd "$d" && git add notes.sh) >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a tracked line citing '$cite' must fail"; exit 1; }
+  printf '%s\n' "$out" | grep -q "notes.sh:1 cites a queue entry" || { echo "FAIL: check 27 should name notes.sh:1 for '$cite': $out"; exit 1; }
+done
+mkrepo "$work/ci-near"
+printf '# the run queue #ofjobs, a %s of work, TODO #4\n' "$b" > "$work/ci-near/notes.sh"
+(cd "$work/ci-near" && git add notes.sh && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 27: lowercase queue, a bare $b and TODO #n cite no queue entry: $(cd "$work/ci-near" && sh "$S" 2>&1)"; exit 1; }
 
 mkrepo "$work/sp-untracked"; mkdir -p "$work/sp-untracked/.idea"; printf 'x\n' > "$work/sp-untracked/.idea/misc.xml"
 (cd "$work/sp-untracked" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 27: an untracked, ignored .idea/ must pass"; exit 1; }
