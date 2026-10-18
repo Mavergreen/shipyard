@@ -5,7 +5,9 @@
 #          create makes Mavergreen/NAME, empty and public, then settles it. settle writes the family's
 #          repo settings, idempotently: public; issues and projects on, wiki off; every merge method and
 #          auto-merge allowed; Actions' token read-only and unable to approve pull requests; once main
-#          exists, main as the default branch and its branch protection. The protection requires each
+#          exists, main as the default branch, after moving the open PRs based on the old default to
+#          main (deleting a PR's base closes it, and Renovate then ignores that update), and its branch
+#          protection. The protection requires each
 #          CHECK, or else every job that ran in the newest green release.yml run off main (a pull request
 #          or a branch push, where publish is skipped); with neither, settle leaves main unprotected and
 #          says so. Prints what GitHub's API cannot set. Needs gh with admin on the repo.
@@ -24,6 +26,19 @@ json_string() { printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 
 settle() {
   if gh api "repos/$repo/branches/main" --jq .name >/dev/null 2>&1; then main=yes; else main=no; fi
+  if [ "$main" = yes ]; then
+    old="$(gh api "repos/$repo" --jq .default_branch)" || die "could not read $repo's default branch"
+    if [ "$old" != main ]; then
+      prs="$(gh pr list -R "$repo" --base "$old" --state open --json number --jq '.[].number')" \
+        || die "could not list $repo's open PRs on $old"
+      n=0
+      for p in $prs; do
+        gh pr edit "$p" -R "$repo" --base main >/dev/null || die "could not move $repo#$p from $old to main"
+        n=$((n + 1))
+      done
+      echo "setup-family-repo: moved $n open PRs from $old to main, so deleting $old closes none of them"
+    fi
+  fi
   {
     printf '{"visibility":"public","has_issues":true,"has_projects":true,"has_wiki":false,'
     printf '"allow_squash_merge":true,"allow_merge_commit":true,"allow_rebase_merge":true,'

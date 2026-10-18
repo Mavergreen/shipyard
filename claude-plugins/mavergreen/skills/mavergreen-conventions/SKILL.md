@@ -2499,9 +2499,11 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    `SPARKLE_PRIVATE_KEY` (python-315 and make, 2026-10-18).
 2. Push the history to a branch first and let CI go green there (see "Propose a branch when only CI
    can prove it"), then push `main`.
-3. `sh scripts/setup-family-repo.sh settle NAME` again: with `main` there, it makes `main` the default
-   branch and protects it, requiring every job of the newest green `release.yml` run off `main` (name
+3. `sh scripts/setup-family-repo.sh settle NAME` again: with `main` there, it moves the open PRs based
+   on the first-push branch to `main`, makes `main` the default branch and protects it, requiring every job of the newest green `release.yml` run off `main` (name
    the checks instead to choose). Without that protection auto-merge is inert (see Renovate, above).
+   Delete the first-push branch only after this: deleting a PR's base closes the PR, and Renovate
+   reads that as a rejection and ignores the update (python-315 and make, 2026-10-18).
 4. By hand, since GitHub's API cannot set them, as the script reminds you: Write on the org's
    `mavericks-vm-images` package for a repo whose workflow runs `Mavergreen/mavericks-vm`, and the
    `mavergreen-pins-bot` installation for one that runs the pins bot.

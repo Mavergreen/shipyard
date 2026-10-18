@@ -14,6 +14,11 @@ case "$1 $2" in
   "run list") cat "$STUB/run" 2>/dev/null; exit 0 ;;
   "run view") cat "$STUB/jobs"; exit 0 ;;
 esac
+case "$1 $2" in
+  "pr list") cat "$STUB/prs" 2>/dev/null; exit 0 ;;
+  "pr edit") echo "pr edit $*" >> "$STUB/log"; exit 0 ;;
+esac
+if [ "$1 $2" = "api repos/Mavergreen/newthing" ]; then cat "$STUB/default" 2>/dev/null || echo main; exit 0; fi
 if [ "$1" = api ] && [ "$2" = -X ]; then
   printf '%s %s ' "$3" "$4" >> "$STUB/log"; cat >> "$STUB/log"; exit 0
 fi
@@ -53,6 +58,25 @@ teardown() { rm -rf "$WORK"; }
   grep -q '"delete_branch_on_merge":false,"default_branch":"main"}$' "$STUB/log"
   grep -q '^PUT repos/Mavergreen/newthing/branches/main/protection {"required_status_checks":{"strict":false,"contexts":\["ver","build","Cross-build + compat gate (macos-26)","say \\"hi\\""\]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}$' "$STUB/log"
   [[ "$output" == *"main requires: ver; build; Cross-build + compat gate (macos-26); say \"hi\""* ]] || false
+}
+
+@test "settle moves open PRs off the old default branch before main takes over" {
+  : > "$STUB/exists"; : > "$STUB/main"
+  echo ci > "$STUB/default"; printf '1\n4\n' > "$STUB/prs"
+  run sh "$HELPER" settle newthing build
+  [ "$status" -eq 0 ]
+  grep -qx 'pr edit pr edit 1 -R Mavergreen/newthing --base main' "$STUB/log"
+  grep -qx 'pr edit pr edit 4 -R Mavergreen/newthing --base main' "$STUB/log"
+  [ "$(grep -n 'pr edit pr edit 1' "$STUB/log" | cut -d: -f1)" -lt "$(grep -n '"default_branch":"main"' "$STUB/log" | cut -d: -f1)" ]
+  [[ "$output" == *"moved 2 open PRs from ci to main"* ]] || false
+}
+
+@test "settle leaves PRs alone when main is already the default" {
+  : > "$STUB/exists"; : > "$STUB/main"
+  echo main > "$STUB/default"; printf '7\n' > "$STUB/prs"
+  run sh "$HELPER" settle newthing build
+  [ "$status" -eq 0 ]
+  ! grep -q 'pr edit' "$STUB/log" || false
 }
 
 @test "settle's named checks replace the run's" {
