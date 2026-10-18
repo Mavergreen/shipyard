@@ -46,15 +46,51 @@ serve() {  # serve ASSET [PRODUCT_IDENTIFIER]: build the archive (base first) an
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
 }
 
-@test "a second call replaces DEST afresh from the cached pkg" {
+@test "a second call for the same pkg keeps DEST in place, so a build using it is not pulled from under" {
   serve widget-1.0.pkg
   run sh "$HELPER" widget 1.0 "$DEST"; [ "$status" -eq 0 ]
-  echo stray > "$DEST/stray"
+  echo kept > "$DEST/marker"
   rm "$REL/widget-1.0.pkg"
+  run sh "$HELPER" widget 1.0 "$DEST"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$DEST/marker")" = kept ]
+}
+
+@test "a tree with no record of its pkg, or another release's, is replaced afresh" {
+  serve widget-1.0.pkg
+  mkdir -p "$DEST"; echo stray > "$DEST/stray"
   run sh "$HELPER" widget 1.0 "$DEST"
   [ "$status" -eq 0 ]
   [ ! -e "$DEST/stray" ]
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
+  echo stray > "$DEST/stray"
+  printf 'X' >> "$WORK/prod/usr/local/mavergreen/widget/lib/libwidget.a"
+  REL="$WORK/rel/Mavergreen/widget-repo/releases/download/2.0"; mkdir -p "$REL"
+  serve widget-2.0.pkg
+  run sh "$HELPER" widget 2.0 "$DEST"
+  [ "$status" -eq 0 ]
+  [ ! -e "$DEST/stray" ]
+  [ "$(cat "$DEST/lib/libwidget.a")" = WX ]
+}
+
+@test "concurrent calls for the same pkg and DEST all succeed, with one whole tree" {
+  serve widget-1.0.pkg
+  for i in 1 2 3 4; do ( sh "$HELPER" widget 1.0 "$DEST" > "$WORK/out$i" 2> "$WORK/err$i"; echo $? > "$WORK/rc$i" ) & done
+  wait
+  for i in 1 2 3 4; do
+    [ "$(cat "$WORK/rc$i")" = 0 ] || { cat "$WORK/err$i"; false; }
+    [ "$(cat "$WORK/out$i")" = "$DEST" ]
+  done
+  [ "$(cat "$DEST/lib/libwidget.a")" = W ]
+  [ -z "$(ls -d "$DEST".tmp.* "$DEST".old.* "$DEST".lock 2>/dev/null)" ]
+}
+
+@test "a lock nobody releases fails after SHIPYARD_LOCK_WAIT seconds, naming it" {
+  serve widget-1.0.pkg
+  mkdir -p "$DEST.lock"
+  SHIPYARD_LOCK_WAIT=1 run sh "$HELPER" widget 1.0 "$DEST"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"$DEST.lock"* ]] || false
 }
 
 @test "a pkg whose SHA-256 does not match fails 1 and leaves no cached pkg" {
