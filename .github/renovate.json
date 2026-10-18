@@ -21,6 +21,16 @@
       "packageNameTemplate": "Mavergreen/clang-22",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The ed25519-sign that signs every family release (scripts/ed25519.pin). sign_and_appcast.sh verifies the pkg against the release's SHA256SUMS.",
+      "managerFilePatterns": ["/^scripts/ed25519\\.pin$/"],
+      "matchStrings": ["ED25519_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "ed25519",
+      "packageNameTemplate": "Mavergreen/ed25519",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{8})-mavericks\\.(?<build>\\d+)$"
     }
   ]
 }

@@ -273,4 +273,35 @@ mkrepo "$work/sp-nogit"; rm -rf "$work/sp-nogit/.git"
 out="$(cd "$work/sp-nogit" && sh "$S" 2>&1)" && { echo "FAIL: check 27: outside a git checkout must fail (cannot verify)"; exit 1; }
 printf '%s\n' "$out" | grep -q 'cannot check .superpowers/' || { echo "FAIL: check 27 should say it cannot verify: $out"; exit 1; }
 
+# spec: SKILL.md "Family conventions" check 28 -- a fetch that takes whatever is newest, rather than a
+#       pinned version, fails unless an unpinned:<path> deviation declares it. The sample lines are
+#       joined through %s at printf time so this file's own source spells none of the forms it tests.
+_g="gh"; _r="release"; _l="latest"
+unpinned() {  # $1 = name, $2 = file, $3 = line: undeclared must fail naming unpinned; declared must pass
+  d="$work/unp-$1"; mkrepo "$d"; mkdir -p "$(dirname "$d/$2")"
+  printf '%s\n' "$3" > "$d/$2"
+  (cd "$d" && git add -A) >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 28: $1 must fail undeclared: $3"; exit 1; }
+  printf '%s\n' "$out" | grep -q "unpinned:$2" || { echo "FAIL: check 28 should name unpinned:$2 for $1: $out"; exit 1; }
+  printf '\n## Conformance deviations\n\n- unpinned:%s: a canary of the newest release on purpose; reconsider if it ever gates a release\n' "$2" >> "$d/INGREDIENTS.md"
+  (cd "$d" && git add -A && sh "$S" >/dev/null 2>&1) \
+    || { echo "FAIL: check 28: a declared unpinned:$2 should excuse $1: $(cd "$d" && sh "$S" 2>&1)"; exit 1; }
+}
+unpinned download build/fetch.sh "$(printf '%s %s download -R Mavergreen/x --pattern "*.pkg"' "$_g" "$_r")"
+unpinned view build/fetch.sh "$(printf 'lb="$(%s %s view -R Mavergreen/x --json tagName --jq .tagName)"' "$_g" "$_r")"
+unpinned redirect build/fetch.sh "$(printf 'curl -fsSL -o /dev/null -w "%%{url_effective}" https://github.com/Mavergreen/x/releases/%s' "$_l")"
+unpinned api build/fetch.sh "$(printf 't="$(%s api repos/Mavergreen/x/releases/%s --jq .tag_name)"' "$_g" "$_l")"
+unpinned npm tests/e2e.sh "$(printf 'npm install -g some-tool@%s' "$_l")"
+unpinned image docker/Dockerfile "$(printf 'FROM alpine:%s' "$_l")"
+pinned() {  # $1 = name, $2 = line: must pass undeclared
+  d="$work/pin-$1"; mkrepo "$d"; printf '%s\n' "$2" > "$d/build/fetch.sh"
+  (cd "$d" && git add -A && sh "$S" >/dev/null 2>&1) \
+    || { echo "FAIL: check 28: $1 is pinned or no fetch, and must pass: $(cd "$d" && sh "$S" 2>&1)"; exit 1; }
+}
+pinned tagged "$(printf '%s %s download "$v" -R Mavergreen/x --pattern "*.pkg"' "$_g" "$_r")"
+pinned own-view "$(printf 'b="$(%s %s view --json body --jq .body)"' "$_g" "$_r")"
+pinned feed-url "$(printf 'feed=https://github.com/Mavergreen/x/releases/%s/download/x.xml' "$_l")"
+pinned comment "$(printf '# was: %s %s download -R Mavergreen/x' "$_g" "$_r")"
+pinned npm-word "$(printf 'for spec in npm npm@%s corepack; do wrap "$spec"; done' "$_l")"
+
 echo "PASS: check-family-conventions-4"

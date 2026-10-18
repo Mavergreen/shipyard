@@ -10,7 +10,7 @@
 #            --product   the registered short name the pkg ships
 #            --feed-dir  where P.xml is written; nothing is written when the run refuses
 #            --signer    the ed25519-sign binary; OPTIONAL -- defaults to the prebuilt ed25519-sign
-#                        fetched from the latest mavericks-ed25519 release (needs gh)
+#                        fetched from the ed25519 release ed25519.pin names, verified against its SHA256SUMS
 #            --verifier  the ed25519-verify binary; OPTIONAL -- defaults to the one beside the signer
 #            --pkg       the .pkg to sign
 #            --pkg-url   the URL the enclosure will point at (the release-asset download URL)
@@ -58,20 +58,15 @@ done
 printenv SPARKLE_PRIVATE_KEY | grep -q . \
   || { echo "sign_and_appcast: SPARKLE_PRIVATE_KEY not set" >&2; exit 1; }
 
-# platform: ed25519 signatures are standard and deterministic, so which build of ed25519-sign
-#           produces them does not change the output -- fetching "latest" is safe.
+# spec: SKILL.md "Family conventions" check 28 -- the signer of every release is pinned in ed25519.pin
+#       and verified against its release's SHA256SUMS, never whatever ed25519 release is newest.
 if [ -z "$SIGNER" ]; then
-  command -v gh >/dev/null 2>&1 || { echo "sign_and_appcast: no --signer, and gh unavailable to fetch ed25519-sign" >&2; exit 1; }
-  # platform: an unauthenticated `gh api` releases call is anonymous (60 req/hr) and 403s under CI
-  #           load.
-  if [ -z "${GH_TOKEN:-}" ] && [ -z "${GITHUB_TOKEN:-}" ] && ! gh auth status >/dev/null 2>&1; then
-    echo "sign_and_appcast: gh is unauthenticated; set GH_TOKEN (e.g. GH_TOKEN: \${{ github.token }}) so the ed25519-sign fetch isn't rate-limited" >&2
-    exit 1
-  fi
+  _v="$(sed -n 's/^ED25519_VERSION=//p' "$SELF/ed25519.pin")"
+  [ -n "$_v" ] || { echo "sign_and_appcast: $SELF/ed25519.pin names no ED25519_VERSION" >&2; exit 1; }
   _dl=$(mktemp -d "${TMPDIR:-/tmp}/sign_and_appcast.XXXXXX")
-  gh release download -R Mavergreen/ed25519 -p '*.pkg' -D "$_dl" \
-    || { echo "sign_and_appcast: could not download the ed25519 .pkg from mavericks-ed25519 releases (is GH_TOKEN set on this step?)" >&2; exit 1; }
-  pkgutil --expand-full "$_dl"/*.pkg "$_dl/x" \
+  _pkg="$(sh "$SELF/fetch-release-pkg.sh" ed25519 "$_v" "ed25519-$_v.pkg" "$_dl")" \
+    || { echo "sign_and_appcast: could not fetch and verify ed25519 $_v's pkg" >&2; exit 1; }
+  pkgutil --expand-full "$_pkg" "$_dl/x" \
     || { echo "sign_and_appcast: could not expand the ed25519 .pkg" >&2; exit 1; }
   SIGNER=$(find "$_dl/x" -type f -name ed25519-sign | head -1)
   [ -n "$SIGNER" ] && chmod +x "$SIGNER"

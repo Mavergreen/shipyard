@@ -53,4 +53,18 @@ rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/
   --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "--feed-dir is required; expected exit 2, got $rc"
 
+# spec: SKILL.md "Family conventions" check 28 -- with no --signer, the signer is the pinned ed25519 release,
+#       verified: a release whose SHA256SUMS does not list that release's pkg is refused, by version.
+pin="$(sed -n 's/^ED25519_VERSION=//p' "$ROOT/scripts/ed25519.pin")"
+[ -n "$pin" ] || fail "scripts/ed25519.pin names an ED25519_VERSION"
+mkdir -p "$T/rel/Mavergreen/ed25519/releases/download/$pin"
+printf 'not the pkg\n' > "$T/rel/Mavergreen/ed25519/releases/download/$pin/ed25519-$pin.pkg"
+: > "$T/rel/Mavergreen/ed25519/releases/download/$pin/SHA256SUMS"
+rc=0; SPARKLE_PRIVATE_KEY=x MAVERGREEN_RELEASES="file://$T/rel" SHIPYARD_FETCH_BACKOFF=0 sh "$ROOT/scripts/sign_and_appcast.sh" \
+  --product openssh --feed-dir "$T/feeds3" --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
+  --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2> "$T/err3" || rc=$?
+[ "$rc" -ne 0 ] || fail "an ed25519 pkg its SHA256SUMS does not list must be refused"
+grep -q "ed25519 $pin" "$T/err3" || fail "the refusal names the pinned ed25519 release: $(cat "$T/err3")"
+[ ! -e "$T/feeds3" ] || fail "a refused signer writes no feed"
+
 echo "sign_and_appcast OK"

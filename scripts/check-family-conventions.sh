@@ -698,6 +698,29 @@ for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*
        "declare what runs translated, why it can't be native yet, and when to reconsider under INGREDIENTS.md's ## Conformance deviations as '- rosetta:$f: <reason>' (see the conventions skill, 'Rosetta')"
 done
 
+# spec: SKILL.md "Family conventions" check 28 -- what a build or test fetches is pinned, in a file
+#       Renovate bumps, so a newer release elsewhere changes nothing here without a commit. A fetch of
+#       whatever is newest needs a declared unpinned:<path> deviation. A feed URL or an install hint
+#       that names a newest-release URL fetches nothing, so only a fetch command's line counts. Like
+#       check 25, no pattern below may spell a form it matches contiguously, or the gate is its own
+#       first offender.
+_unp='(^|[^A-Za-z0-9_.-])gh[[:space:]]+release[[:space:]]+download([[:space:]]+-|[[:space:]]*$)'
+_unp="$_unp"'|(^|[^A-Za-z0-9_.-])gh[[:space:]]+release[[:space:]]+view[[:space:]]+(-R|--repo|-[^|;]*[[:space:]](-R|--repo))'
+_unp="$_unp"'|(curl|wget|shipyard_curl)[[:space:]][^|;]*/releases/lates[t]'
+_unp="$_unp"'|(^|[^A-Za-z0-9_.-])gh[[:space:]]+api[[:space:]]+[^[:space:]]*/releases/lates[t]'
+_unp="$_unp"'|((npm|pnpm|yarn|bun)[[:space:]]+(install|i|add|exec|x|dlx)|npx|go[[:space:]]+(install|run|get)|pipx[[:space:]]+(install|run)|cargo[[:space:]]+install|uvx)[[:space:]][^|;]*@lates[t]([^A-Za-z0-9_.-]|$)'
+_unp="$_unp"'|(FROM|image:|docker[[:space:]]+(pull|run))[[:space:]]+[^[:space:]]+:lates[t]([^A-Za-z0-9_.-]|$)'
+for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*.bats' 'Dockerfile*' '*/Dockerfile*' 2>/dev/null); do
+  hit="$(grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
+    | sed 's/[[:space:]]#.*$//' \
+    | grep -E "$_unp" \
+    | head -1 | sed 's/^[[:space:]]*//' | cut -c1-90)"
+  [ -n "$hit" ] || continue
+  deviated unpinned "$f" && continue
+  fail "$f fetches whatever release is newest instead of a pinned version, with no declared unpinned:<path> deviation: $hit" \
+       "pin the version in a file a Renovate manager tracks and fetch that one, or declare under INGREDIENTS.md's ## Conformance deviations '- unpinned:$f: <why it must be the newest, and when to reconsider>' (see the conventions skill, check 28)"
+done
+
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
 #       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
 #       ignored AND nothing may be tracked under them or under docs/superpowers/, nor a backlog file
