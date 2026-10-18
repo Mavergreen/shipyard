@@ -551,13 +551,18 @@ product's directory and is what people type to the `mavergreen` helper.
 **First decide: does this repo PORT an external upstream, or is it its OWN upstream?** The `-mavericks.N`
 suffix means "our Nth repackage of *someone else's* thing." Most repos port an upstream and use the
 `<upstream>-mavericks.N` machinery below (including date-versioned ports — `mavericks-ed25519`
-`20221003-mavericks.N`, `mavericks-container-tools` `20260727-mavericks.N` — where `UPSTREAM_VERSION` is a
-date but they are still repackaging an upstream). A repo that is **its own upstream** — original
-Mavergreen code, not a port (e.g. `mavericks-porthole`) — has no "repackage-of-someone-else" axis, so
+`20221003-mavericks.N`, where `UPSTREAM_VERSION` is upstream's commit date but it is still repackaging
+an upstream). A repo that is **its own upstream** — original
+Mavergreen code, not a port (porthole, longboat, recaulk; container-tools, which bundles others'
+components but whose product is its own code) — has no "repackage-of-someone-else" axis, so
 it **drops the `-mavericks` suffix** and versions itself directly:
 
-- **date-based `YYYYMMDD.N`** (`mavericks-porthole`; N counts the day's releases starting at `.1`, never
-  omitted) — the family's date form but *without* `-mavericks`, precisely because it is not a port;
+- **date-based `YYYYMMDD.N`** (porthole, longboat) — the family's date form but *without*
+  `-mavericks`, precisely because it is not a port. The date is the day the repo's own code last
+  changed: a release carrying any change besides ingredient pins sets `UPSTREAM_VERSION` to that day
+  and starts again at `.1`; an ingredient-only repackage keeps the date and takes `.N+1`. `.N` is never
+  omitted. Under this rule a version says whether our code moved (container-tools shipped 37 releases
+  as `20260727-mavericks.N`, 21 of them its own code, two of them breaking, all under one date);
 - **semver `vX.Y.Z`**, or dimmit's `v0.0.YYYYMMDD.N`.
 
 Mechanics for a self-upstream repo: `UPSTREAM_VERSION` (if used) is the repo's OWN version/date,
