@@ -20,8 +20,9 @@ chk_python3() {
     set -- "$SHIPYARD_PYTHON3"
     _py_tried="\$SHIPYARD_PYTHON3, which names the interpreter to use"
   else
-    set -- "${SHIPYARD_OPT_PREFIX:-/opt/mavergreen}/bin/python3" python3-315 python3
-    _py_tried="/opt/mavergreen/bin/python3, python3-315 and python3 on PATH"
+    set -- "${SHIPYARD_OPT_PREFIX:-/opt/mavergreen}/bin/python3" \
+      "${SHIPYARD_LOCAL_PREFIX:-/usr/local/mavergreen}/bin/python3-315" python3-315 python3
+    _py_tried="/opt/mavergreen/bin/python3, /usr/local/mavergreen/bin/python3-315, and python3-315 and python3 on PATH"
   fi
   for _py_c in "$@"; do
     _py_p="$(command -v "$_py_c" 2>/dev/null)" || continue

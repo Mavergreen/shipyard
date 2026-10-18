@@ -2,7 +2,8 @@
 # platform: host-agnostic
 #   usage: python3-test.sh
 #          chk_python3 finds a python3 >= 3.9, and fails the python3 check, naming the install
-#          command for the host OS, when it finds none.
+#          command for the host OS, when it finds none. It finds python-315's python3-315 off PATH,
+#          as a 10.9 non-login shell has no /usr/local/mavergreen/bin there.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
 t="$(mktemp -d "${TMPDIR:-/tmp}/python3-test.XXXXXX")"
@@ -18,7 +19,7 @@ printf '#!/bin/sh\nexit 0\n' > "$t/py39"
 chmod +x "$t/py38" "$t/py39"
 
 run() {
-  env -i PATH="$t/bin" SHIPYARD_CHECK_DIR="$here/scripts" SHIPYARD_OPT_PREFIX="$t/none" "$@" \
+  env -i PATH="$t/bin" SHIPYARD_CHECK_DIR="$here/scripts" SHIPYARD_OPT_PREFIX="$t/none" SHIPYARD_LOCAL_PREFIX="$t/none" "$@" \
     "$t/bin/sh" -c '. "$SHIPYARD_CHECK_DIR/lib/py.sh"; chk_python3'
 }
 
@@ -28,7 +29,7 @@ head -1 "$t/err" | grep -q '^python3: ' || fail "the refusal is the python3 chec
 grep -q 'fix: ' "$t/err" || fail "the refusal names a fix"
 
 mkdir "$t/bin39"; cp "$t/bin"/* "$t/bin39/"; cp "$t/py39" "$t/bin39/python3"
-rc=0; env -i PATH="$t/bin39" SHIPYARD_CHECK_DIR="$here/scripts" SHIPYARD_OPT_PREFIX="$t/none" SHIPYARD_PYTHON3="$t/py38" \
+rc=0; env -i PATH="$t/bin39" SHIPYARD_CHECK_DIR="$here/scripts" SHIPYARD_OPT_PREFIX="$t/none" SHIPYARD_LOCAL_PREFIX="$t/none" SHIPYARD_PYTHON3="$t/py38" \
   "$t/bin/sh" -c '. "$SHIPYARD_CHECK_DIR/lib/py.sh"; chk_python3' > "$t/out" 2> "$t/err" || rc=$?
 [ "$rc" -ne 0 ] || fail "SHIPYARD_PYTHON3 names the interpreter: a 3.8 there is refused even with a 3.9 python3 on PATH"
 
@@ -41,5 +42,15 @@ esac
 
 run SHIPYARD_PYTHON3="$t/py39" > "$t/out" 2> "$t/err" || fail "a python3 reporting 3.9 is accepted"
 [ "$(cat "$t/out")" = "$t/py39" ] || fail "chk_python3 prints the path it chose"
+
+mkdir -p "$t/local/bin" "$t/opt/bin"
+cp "$t/py39" "$t/local/bin/python3-315"; cp "$t/py39" "$t/opt/bin/python3"
+run SHIPYARD_LOCAL_PREFIX="$t/local" > "$t/out" 2> "$t/err" || fail "python3-315 under SHIPYARD_LOCAL_PREFIX is found off PATH"
+[ "$(cat "$t/out")" = "$t/local/bin/python3-315" ] || fail "chk_python3 prints \$SHIPYARD_LOCAL_PREFIX/bin/python3-315"
+env -i PATH="$t/bin39" SHIPYARD_CHECK_DIR="$here/scripts" SHIPYARD_OPT_PREFIX="$t/none" SHIPYARD_LOCAL_PREFIX="$t/local" \
+  "$t/bin/sh" -c '. "$SHIPYARD_CHECK_DIR/lib/py.sh"; chk_python3' > "$t/out" 2> "$t/err" || fail "a python3 on PATH is accepted"
+[ "$(cat "$t/out")" = "$t/local/bin/python3-315" ] || fail "python3-315 under SHIPYARD_LOCAL_PREFIX comes before PATH"
+run SHIPYARD_OPT_PREFIX="$t/opt" SHIPYARD_LOCAL_PREFIX="$t/local" > "$t/out" 2> "$t/err" || fail "an /opt python3 is accepted"
+[ "$(cat "$t/out")" = "$t/opt/bin/python3" ] || fail "the /opt python3 comes before python3-315 under SHIPYARD_LOCAL_PREFIX"
 
 echo "PASS python3"

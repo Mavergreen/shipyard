@@ -345,7 +345,7 @@ for d in $(printf '%s' "$PATH" | tr ':' ' '); do
 done
 mkdir -p "$work/emptyopt"
 PATH="$nopy" sh -c 'command -v python3' >/dev/null 2>&1 && { echo "FAIL the no-python3 PATH still finds python3"; exit 1; }
-if out="$(cd "$work/y3" && PATH="$nopy" SHIPYARD_OPT_PREFIX="$work/emptyopt" SHIPYARD_PYTHON3= sh "$S" 2>&1)"; then
+if out="$(cd "$work/y3" && PATH="$nopy" SHIPYARD_OPT_PREFIX="$work/emptyopt" SHIPYARD_LOCAL_PREFIX="$work/emptyopt" SHIPYARD_PYTHON3= sh "$S" 2>&1)"; then
   echo "FAIL missing python3 should fail (cannot-verify is not a pass)"; exit 1
 fi
 first_is "$out" python3 || { echo "FAIL should be the python3 failure: $out"; exit 1; }

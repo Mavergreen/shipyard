@@ -3,7 +3,8 @@ python3: a python3 of version 3.9 or newer is available for the checks that need
 ## Why
 Cannot-verify is a failure, never a pass. The checks that parse workflows and Renovate JSON (workflow-yaml,
 renovate-json-valid, no-tags-trigger, checkout-drops-credentials, the package-manager ids and others) run
-in python3. The check looks for $SHIPYARD_PYTHON3 if set, else /opt/mavergreen/bin/python3, python3-315
+in python3. The check looks for $SHIPYARD_PYTHON3 if set, else /opt/mavergreen/bin/python3,
+/usr/local/mavergreen/bin/python3-315 (a 10.9 non-login shell's PATH lacks that directory), python3-315
 and python3 on PATH, and takes the first that is 3.9 or newer. When none is, it fails and names what to
 install (on macOS, /opt/mavergreen/bin/mavergreen install python315) instead of letting those checks skip.
 The install action also makes PyYAML importable for the job's python3, so a repo neither provisions it nor
