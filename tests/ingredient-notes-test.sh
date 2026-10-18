@@ -643,8 +643,8 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*zstd\*\*: 1.5.6 -> 1.5.7 (\[changes\](
   || { echo "FAIL R1b: a github-tags manager must compare the two tags: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*recaulk\*\*: 20260901.1 -> 20260915.2 (\[release notes\](https://github.com/Mavergreen/recaulk/releases/tag/20260915.2))' \
   || { echo "FAIL R1b: a pin only shipyard's preset owns must still be linked: $out"; exit 1; }
-printf '%s\n' "$out" | grep -qx -- '- \*\*MLS_VERSION\*\*: 1.5.2-mavericks.3 -> 1.5.2-mavericks.4' \
-  || { echo "FAIL R1b: the preset's ^v? manager owns MLS_VERSION but cannot name its tag: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx -- '- \*\*MLS_VERSION\*\*: 1.5.2-mavericks.3 -> 1.5.2-mavericks.4 (\[release notes\](https://github.com/Mavergreen/macports-legacy-support/releases/tag/1.5.2-mavericks.4))' \
+  || { echo "FAIL R1b: the preset's legacy-support manager reads its tags bare, so MLS_VERSION links its release: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*xz / TAG\*\*: v5.8.3 -> v5.8.4 (\[release notes\](https://github.com/tukaani-project/xz/releases/tag/v5.8.4))' \
   || { echo "FAIL R1b: github-release-attachments is a GitHub release too: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q -- '^- \*\*xz / SHA256\*\*: .*](http' \

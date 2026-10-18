@@ -199,9 +199,13 @@ if [ "$SELF_UPSTREAM" = yes ]; then
       [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].*[0-9]) die "$VER is not its date's first release, but this $unfetched" ;;
     esac
     if [ "${GITHUB_ACTIONS:-}" = true ] && [ -n "$SLUG" ]; then
-      released="$(gh release list --repo "$SLUG" --limit 1 --json tagName --jq '.[0].tagName // empty')" \
-        || die "gh cannot list $SLUG's releases, and this $unfetched"
-      [ -z "$released" ] || die "$SLUG has released $released, but this $unfetched"
+      # spec: tests/release-notes-test.sh "m4" -- a gh that cannot list (no GH_TOKEN on the step)
+      #       proves nothing either way, so it warns and trusts the checkout.
+      if released="$(gh release list --repo "$SLUG" --limit 1 --json tagName --jq '.[0].tagName // empty' 2>/dev/null)"; then
+        [ -z "$released" ] || die "$SLUG has released $released, but this $unfetched"
+      else
+        echo "release-notes: warning: gh cannot list $SLUG's releases (is GH_TOKEN set on this step?), so a first release is taken on the checkout's word" >&2
+      fi
     fi
   fi
   if [ -z "$PREV" ]; then
