@@ -2,8 +2,9 @@
 # platform: host-agnostic
 #   usage: deviations.sh <repo>
 #          Prints the deviations declared in <repo>/INGREDIENTS.md under "## Conformance deviations",
-#          one per line as "<check> <glob or *> <reason>". The grammar is "- <check>[:<glob>[:<KEY>]]:
-#          <reason>"; a deviation IS a product fact, so it lives with the other product facts, and
+#          one per line as "<check> <glob or *> <reason>". The grammar is "- <check>[:<glob>]:
+#          <reason>"; unlinked alone may add a KEY, "- unlinked:<glob>[:<KEY>]: <reason>", and must
+#          name a scope. A deviation IS a product fact, so it lives with the other product facts, and
 #          ONE parser keeps every checker reading it alike. Exit 1 if an entry has no reason: an
 #          exception without one is indistinguishable from drift.
 set -eu
@@ -25,10 +26,21 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
         print "deviations.sh: \"" check "\" has an empty glob -- write \"- " check ": <reason>\" or \"- " check ":<glob>: <reason>\"" > "/dev/stderr"
         bad = 1; next
       }
-      # spec: tests/deviations-test.sh -- unlinked: scopes a pin, which is a file plus its KEY.
+      # spec: tests/deviations-test.sh -- unlinked: scopes a pin, which is a file plus its KEY; on
+      #       any other kind a :KEY could never match a subject, so it would excuse nothing, silently.
       if (match(rest, /^[A-Z*][A-Z0-9_*]*:/)) {
+        if (check != "unlinked") {
+          print "deviations.sh: \"" check ":" glob ":" substr(rest, 1, RLENGTH - 1) "\" -- only unlinked: takes a :KEY scope" > "/dev/stderr"
+          bad = 1; next
+        }
         glob = glob ":" substr(rest, 1, RLENGTH - 1); rest = substr(rest, RLENGTH + 1)
       }
+    }
+    # spec: tests/deviations-test.sh -- an unscoped or "*" unlinked: would switch the release-notes
+    #       link rule off for the whole repo.
+    if (check == "unlinked" && glob == "*") {
+      print "deviations.sh: \"unlinked\" must name the pins it excuses: \"- unlinked:<pin path>[:KEY]: <reason>\"" > "/dev/stderr"
+      bad = 1; next
     }
     sub(/^ */, "", rest)
     if (rest == "") { print "deviations.sh: \"" check "\" declares no reason" > "/dev/stderr"; bad = 1; next }

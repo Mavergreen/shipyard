@@ -44,4 +44,19 @@ sh "$S" "$w" | grep -qx 'scheme a/b.pkg a real scope' || { echo "FAIL: a scoped 
 printf '## Conformance deviations\n- unlinked:components/boot2docker/version:BASE: no notes for a digest refresh\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'unlinked components/boot2docker/version:BASE no notes for a digest refresh' \
   || { echo "FAIL: a KEY-qualified scope must keep its KEY; got: $(sh "$S" "$w")"; exit 1; }
+# spec: SKILL.md "Conformance deviations" -- only unlinked: scopes a pin, so only it takes a :KEY;
+#       on any other kind the KEY could never match a subject, and would excuse nothing in silence.
+printf '## Conformance deviations\n- rosetta:build/x.sh:FOO: runs translated\n' > "$w/INGREDIENTS.md"
+if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: a :KEY scope on rosetta must fail; got: $out"; exit 1; fi
+printf '%s\n' "$out" | grep -q 'unlinked' || { echo "FAIL: should say only unlinked: takes a :KEY: $out"; exit 1; }
+
+# spec: SKILL.md "Release notes" -- unlinked: excuses named pins; an unscoped or "*" one would switch
+#       the rule off for the whole repo, which is drift, not a declaration.
+for bad in '- unlinked: no notes anywhere' '- unlinked:*: no notes anywhere'; do
+  printf '## Conformance deviations\n%s\n' "$bad" > "$w/INGREDIENTS.md"
+  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: '$bad' must be refused; got: $out"; exit 1; fi
+done
+printf '## Conformance deviations\n- unlinked:components/*: a glob covers every KEY of every file under it\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'unlinked components/\* a glob covers every KEY of every file under it' \
+  || { echo "FAIL: a file glob is a scope"; exit 1; }
 echo "PASS: deviations"

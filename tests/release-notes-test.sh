@@ -81,9 +81,14 @@ grep -q '3.8.2 -> 3.9.2 (\[release notes\](https://github.com/libressl/portable/
 
 # spec: SKILL.md "Release notes" -- a moved pin with no link source and no declared reason cannot
 #       ship: release-notes.sh's self-check is check-release-notes.sh, which refuses the bare bullet.
-#       A KEY is never linked to this repo's own diff, so a KEY=VALUE pin with no manager is bare.
+#       A KEY a manager owns but cannot link (here a ^v? template, which cannot say which tag exists)
+#       is not this repo's diff to describe, so it is bare.
 r="$work/bare"; mkrepo "$r"
-rm "$r/.github/renovate.json"
+cat > "$r/.github/renovate.json" <<'JSON'
+{"customManagers": [{"customType": "regex", "managerFilePatterns": ["/^components/libressl/version$/"],
+  "matchStrings": ["VERSION=(?<currentValue>\\S+)"], "packageNameTemplate": "libressl/portable",
+  "datasourceTemplate": "github-tags", "extractVersionTemplate": "^v?(?<version>.+)$"}]}
+JSON
 printf 'VERSION=3.8.2\n' > "$r/components/libressl/version"
 ( cd "$r" && git add -A && git commit -qm "no manager" && git tag 9.9p2-mavericks.1 )
 printf 'VERSION=3.9.2\n' > "$r/components/libressl/version"
@@ -91,6 +96,10 @@ printf 'VERSION=3.9.2\n' > "$r/components/libressl/version"
 if out="$(gen "$r" 9.9p2-mavericks.2 2>&1)"; then echo "FAIL bare: a link-less moved pin must not ship"; cat "$r/OUT.md"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'libressl' || { echo "FAIL bare: the complaint must name the pin: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'unlinked:' || { echo "FAIL bare: the complaint must name the fix: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'bug in release-notes.sh' \
+  && { echo "FAIL bare: a pin with no link source is this repo's to fix, not a generator bug: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'the fix is in this repo' \
+  || { echo "FAIL bare: the generator must say where the fix goes: $out"; exit 1; }
 printf '# Build ingredients\n\n## Conformance deviations\n\n- unlinked:components/libressl/version:VERSION: a fixture with no notes\n' > "$r/INGREDIENTS.md"
 ( cd "$r" && git add -A && git commit -qm declare )
 gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL bare: a declared reason must let it ship"; exit 1; }
@@ -776,5 +785,27 @@ if out="$(cd "$r" && env MAVERICKS_ROOT="$r" GITHUB_REPOSITORY= sh "$S" --tag 9.
   echo "FAIL r1d: with no repo to name, a bare whole-file bullet is still a violation"; exit 1
 fi
 printf '%s\n' "$out" | grep -q 'unlinked:' || { echo "FAIL r1d: complaint: $out"; exit 1; }
+
+# spec: scripts/release-notes.sh -- "First release" is a claim, so a self-upstream checkout that
+#       simply lacks its tags must not make it: YYYYMMDD.N with N > 1 says earlier releases exist, and
+#       in CI the repo's own releases say so for any scheme.
+r="$work/m4"; mkrepo "$r"
+if out="$(cd "$r" && env MAVERICKS_ROOT="$r" sh "$S" --tag 20260802.3 --version 20260802.3 \
+    --product Porthole --out "$r/OUT.md" 2>&1)"; then
+  echo "FAIL m4: 20260802.3 with no tags visible is not a first release"; cat "$r/OUT.md"; exit 1
+fi
+printf '%s\n' "$out" | grep -q 'fetch-depth: 0' || { echo "FAIL m4: name the fix: $out"; exit 1; }
+stub="$work/m4-bin"; mkdir -p "$stub"
+printf '#!/bin/sh\nprintf "%%s\\n" "${M4_RELEASE:-}"\n' > "$stub/gh"; chmod +x "$stub/gh"
+if out="$(cd "$r" && env PATH="$stub:$PATH" M4_RELEASE=v1.0.208 GITHUB_ACTIONS=true \
+    GITHUB_REPOSITORY=Mavergreen/shipyard MAVERICKS_ROOT="$r" sh "$S" --tag v1.0.209 \
+    --version 1.0.209 --product Shipyard --out "$r/OUT.md" 2>&1)"; then
+  echo "FAIL m4: the repo has releases, so no tags here means unfetched tags"; cat "$r/OUT.md"; exit 1
+fi
+printf '%s\n' "$out" | grep -q 'fetch-depth: 0' || { echo "FAIL m4: name the fix: $out"; exit 1; }
+( cd "$r" && env PATH="$stub:$PATH" M4_RELEASE= GITHUB_ACTIONS=true GITHUB_REPOSITORY=Mavergreen/shipyard \
+    MAVERICKS_ROOT="$r" sh "$S" --tag v1.0.0 --version 1.0.0 --product Shipyard --out "$r/OUT.md" ) >/dev/null \
+  || { echo "FAIL m4: a repo with no releases yet is a first release"; exit 1; }
+grep -qx -- '- First release of Shipyard 1.0.0\.' "$r/OUT.md" || { echo "FAIL m4: first"; cat "$r/OUT.md"; exit 1; }
 
 echo "PASS: release-notes"

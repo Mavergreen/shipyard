@@ -7,10 +7,12 @@
 Run from the repo root. Reads the repo's .github/renovate.json, then each shipyard preset it extends
 (github>Mavergreen/shipyard[:name] is <shipyard-root>/<name or default>.json). The first regex
 customManager whose managerFilePatterns match the pin path, and whose matchStrings put currentValue
-on the KEY's own assignment line (any line for a whole-file pin), owns the pin. It links only for
+(or, with none, currentDigest) on the KEY's own assignment line (any line for a whole-file pin), owns the pin. It links only for
 github-releases or github-release-attachments (the new release) and github-tags (a compare of the
-two tags); a manager on any other datasource owns the pin with no link, and prints "owned". Prints
-nothing when no manager owns it.
+two tags). The tag is the version with extractVersionTemplate's literal text around (?<version>...)
+put back (^swift-(?<version>.+)-RELEASE$ tags swift-6.4.1-RELEASE). A template that is anything else
+(an optional ^v?, a class, alternation) cannot say which tag exists, so, like a manager on any other
+datasource, it owns the pin with no link and prints "owned". Prints nothing when no manager owns it.
 
 CI-only (release notes are generated in CI), hence python3: Renovate's config is JSON holding
 JavaScript regexes.
@@ -62,11 +64,12 @@ def file_matches(patterns, path):
 def owns(mgr, content, key):
     for src in mgr.get("matchStrings", []):
         for m in js_regex(src).finditer(content):
-            if "currentValue" not in m.groupdict() or m.start("currentValue") < 0:
+            group = "currentValue" if m.groupdict().get("currentValue") is not None else "currentDigest"
+            if m.groupdict().get(group) is None:
                 continue
             if not key:
                 return m
-            start = content.rfind("\n", 0, m.start("currentValue")) + 1
+            start = content.rfind("\n", 0, m.start(group)) + 1
             end = content.find("\n", start)
             line = content[start:] if end < 0 else content[start:end]
             if re.match(r"^\s*(export\s+)?" + re.escape(key) + "=", line):
@@ -91,12 +94,36 @@ def repo_of(mgr, groups):
     return None
 
 
-def tag_prefix(mgr):
-    m = re.match(r"^\^((?:[A-Za-z0-9_.-]\??|\\.)*)\(\?<version>", mgr.get("extractVersionTemplate", ""))
-    if not m:
-        return ""
-    lit = re.sub(r"[A-Za-z0-9_.-]\?", "", m.group(1))
-    return re.sub(r"\\(.)", r"\1", lit)
+LITERAL = r"((?:[A-Za-z0-9_-]|\\[.\-_/])*)"
+
+
+def tag_template(mgr):
+    """(prefix, suffix) around the version, or None when the template is not plain literal text."""
+    tmpl = mgr.get("extractVersionTemplate")
+    if tmpl is None:
+        return ("", "")
+    start = tmpl.find("(?<version>")
+    if start < 0 or tmpl.count("(?<version>") != 1:
+        return None
+    depth, end = 0, None
+    for i in range(start, len(tmpl)):
+        if tmpl[i] == "\\":
+            continue
+        if tmpl[i] == "(" and (i == 0 or tmpl[i - 1] != "\\"):
+            depth += 1
+        elif tmpl[i] == ")" and tmpl[i - 1] != "\\":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    if end is None:
+        return None
+    pre = re.fullmatch(r"\^" + LITERAL, tmpl[:start])
+    post = re.fullmatch(LITERAL + r"\$", tmpl[end + 1:])
+    if not pre or not post:
+        return None
+    unescape = lambda t: re.sub(r"\\(.)", r"\1", t)
+    return (unescape(pre.group(1)), unescape(post.group(1)))
 
 
 def main(argv):
@@ -124,12 +151,16 @@ def main(argv):
             if datasource not in ("github-releases", "github-release-attachments", "github-tags") or not repo:
                 print("owned")
                 return 0
-            pre = tag_prefix(mgr)
+            tt = tag_template(mgr)
+            if tt is None:
+                print("owned")
+                return 0
+            pre, post = tt
             base = "https://github.com/" + repo
             if datasource == "github-tags" and old:
-                print("changes\t%s/compare/%s%s...%s%s" % (base, pre, old, pre, new))
+                print("changes\t%s/compare/%s%s%s...%s%s%s" % (base, pre, old, post, pre, new, post))
             else:
-                print("release notes\t%s/releases/tag/%s%s" % (base, pre, new))
+                print("release notes\t%s/releases/tag/%s%s%s" % (base, pre, new, post))
             return 0
     return 0
 

@@ -1133,35 +1133,44 @@ ordinary commit moves no declared input, so it renders the same digest and publi
      boot2docker compare would be a confidently wrong link for it;
   2. the Renovate `customManager` that owns the pin — the repo's `.github/renovate.json` first, then
      the shipyard preset it extends — where "owns" means its `managerFilePatterns` match the path and
-     its `matchStrings` put `currentValue` on that KEY's own line (any line, for a whole-file pin).
-     `github-releases` and `github-release-attachments` link
+     its `matchStrings` put `currentValue` (or, with none, `currentDigest`) on that KEY's own line
+     (any line, for a whole-file pin). `github-releases` and `github-release-attachments` link
      `https://github.com/<owner>/<repo>/releases/tag/<tag>`, `github-tags` links
-     `compare/<old tag>...<new tag>`; the tag is the version with the prefix `extractVersionTemplate`
-     strips put back (`^v(?<version>…)` → `v<version>`; an optional `v?` puts back nothing, so a
-     manager whose upstream always tags with a `v` should say `^v`, not `^v?`), and `<owner>/<repo>`
-     is `packageNameTemplate`, else `depNameTemplate` when it has that shape. A manager on any other
-     datasource (docker, git-refs) owns the pin with no link;
-  3. a pin that is a whole file of this repo — our patch, script or template, a vendored blob like
-     `vendor/cacert.pem`, a TSV, a one-line version file no manager links — links this repo's own
-     compare view, `https://github.com/<owner>/<repo>/compare/<prev tag>...<tag>`: that file's diff
-     between the two releases is where its change is described. `<owner>/<repo>` is
-     `GITHUB_REPOSITORY`, else the registry entry for the lowercased product noun; with neither, this
-     source does not apply. Never for a KEY of a `KEY=VALUE` pin;
+     `compare/<old tag>...<new tag>`; the tag is the version with `extractVersionTemplate`'s literal
+     text around `(?<version>…)` put back (`^v(?<version>.+)$` → `v<version>`,
+     `^swift-(?<version>.+)-RELEASE$` → `swift-<version>-RELEASE`), and `<owner>/<repo>` is
+     `packageNameTemplate`, else `depNameTemplate` when it has that shape. A template that is anything
+     but literal text around that one group — an optional `^v?`, alternation, a class — cannot say
+     which tag exists, so the manager owns the pin with no link rather than guess; so does a manager on
+     any other datasource (docker, git-refs). A manager whose upstream always tags with a `v` says
+     `^v`, not `^v?`;
+  3. this repo's own compare view, `https://github.com/<owner>/<repo>/compare/<prev tag>...<tag>`,
+     for a pin that is a whole file of this repo (our patch, script or template, a vendored blob like
+     `vendor/cacert.pem`, a TSV, a one-line version file no manager links), and for a KEY of a
+     `KEY=VALUE` pin that no manager owns (golang's `CA_SHA256` moving with `cacert.pem`, a config
+     literal like `MACOS_MIN`): the diff between the two releases is where its change is described.
+     A KEY a manager owns but cannot link (boot2docker's `BASE`, a `^v?` template) is not ours to
+     describe and goes on to 4. `<owner>/<repo>` is `GITHUB_REPOSITORY`, else the registry entry for
+     the lowercased product noun; with neither, this source does not apply;
   4. otherwise a declared reason under `INGREDIENTS.md`'s `## Conformance deviations`:
-     `- unlinked:<pin path>[:KEY]: <reason>` (a glob scope works: `- unlinked:patches/*: …`), and the
-     bullet ends `(no change notes: <reason>)`. A file-level declaration does not cover a KEY in it.
+     `- unlinked:<pin path>[:KEY]: <reason>`, and the bullet ends `(no change notes: <reason>)`. The
+     scope is a shell glob matched against `<path>` or `<path>:<KEY>`, and `*` spans the colon: an
+     exact path does not cover a KEY in it, but a file glob does (`- unlinked:components/*: …` covers
+     every KEY of every file under `components/`). An unscoped `- unlinked: …` or `- unlinked:*: …`
+     would switch the rule off for the whole repo, so `deviations.sh` refuses it.
 
-  **One bump, one bullet:** in one pin file, when a key with a link moved, every other key of that
-  file that moved and has no owning manager of its own is part of that bump — a `DIGEST` with its
-  `REF`, python-315 sqlite's `SHA256` and `YEAR` with its `VERSION`, swift's `*_SHA` and
-  `*_TARBALL_SHA256` with their release keys — and gets no bullet, so it needs no link. A key with its
+  **One bump, one bullet:** in one pin file, when a key with a link moved or was added, every other
+  key of that file that moved or was added and has no owning manager of its own is part of that bump
+  — a `DIGEST` with its `REF`, python-315 sqlite's `SHA256` and `YEAR` with its `VERSION`, swift's
+  `*_SHA` and `*_TARBALL_SHA256` with their release keys, a new component file's `REPO` and `DIGEST`
+  with its `REF`, a `TARBALL_SHA256` added beside a moved `REF` — and gets no bullet. A key with its
   own manager keeps its own bullet and link rule (boot2docker's `BASE`, which the docker manager owns,
   still needs `unlinked:`). When no key in the file is linked, nothing folds: a `DIGEST` moving alone
-  is upstream re-tagging the same ref, and each such key still needs a link or a declaration.
+  is upstream re-tagging the same ref, and it links this repo's compare view like any unowned KEY.
 
   A bullet with none of these is bare, and **`check-release-notes.sh` refuses it**, naming the pin
-  and the fixes — so the generator's self-check stops the release, and `publish-release.yml`
-  stops a hand-rolled body. A `removed` or `still used, now computed` bullet moved nothing upstream
+  and the fixes — so the generator's self-check stops the release (saying the fix is in the repo,
+  not the generator), and `publish-release.yml` stops a hand-rolled body. A `removed` or `still used, now computed` bullet moved nothing upstream
   and needs no link. Reading Renovate's JSON takes python3 (`renovate-link.py`); release notes are
   generated in CI only, and the shipyard pkg installs `default.json` beside its `scripts/` for it.
   container-tools 20260727-mavericks.37's whole ingredient section was
@@ -1174,7 +1183,9 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   `[Changes since <prev>](https://github.com/<owner>/<repo>/compare/<prev tag>...<tag>)` line, the
   repo from `GITHUB_REPOSITORY`, else the registry entry for the lowercased product noun; with
   neither, the link line is left out rather than guessed. It used to say "Release of <product>
-  <version>." for every one, so an ingredient-only repackage read like new code.
+  <version>." for every one, so an ingredient-only repackage read like new code. "First release" is
+  a claim, so a checkout with no tags at all stops instead of making it when the repo evidently has
+  earlier releases: a `YYYYMMDD.N` with N > 1, or, in CI, any release `gh release list` finds.
 - **A self-upstream repo gets a real baseline too, via `--tag-glob`.**
   `previous-release-tag.sh`'s default glob is `*-mavericks.*`, which never matches a self-upstream
   repo's own tags — shipyard (`vX.Y.Z`), porthole (`YYYYMMDD.N`), magic-trackpad2 (`vX.Y.Z`) — so those
@@ -1776,7 +1787,8 @@ indistinguishable from drift.
 Beyond the gate and the artifact checker, `ingredient-notes.sh` reads `unlinked:<pin path>[:KEY]`
 ("Release notes", above): a moved pin with no change notes to link. It is the one kind whose scope
 may end in `:KEY` (uppercase, as the pin's assignment spells it), because a release-notes link
-belongs to a pin, the file plus its KEY.
+belongs to a pin, the file plus its KEY; `deviations.sh` refuses a `:KEY` on any other kind, where it
+could never match and would excuse nothing in silence, and refuses an `unlinked` with no scope or `*`.
 
 **A truncated fact stream fails.** The two scripts run as a pipeline
 (`artifact-facts.sh dist "$v" | check-artifact-conformance.sh`); a pipeline's exit status is its LAST

@@ -121,17 +121,24 @@ declared() {  # path KEY-or-empty
   [ -z "$why" ] || printf ' (no change notes: %s)' "$why"
 }
 
+# spec: tests/ingredient-notes-test.sh "I3" -- this repo's own diff describes a whole file of it,
+#       and a KEY in it no manager owns; a KEY a manager owns but cannot link (a docker BASE, a ^v?
+#       template) is not ours to describe, so it needs a declared reason.
+suffix_for() {  # source_of's answer, path, KEY-or-empty
+  case "$1" in
+    'linked '*) printf '%s' "${1#linked }"; return ;;
+    owned) [ -z "$3" ] || { declared "$2" "$3"; return; } ;;
+  esac
+  if [ -n "$REPO_SLUG" ] && [ -n "$THIS_TAG" ]; then
+    printf ' ([diff](https://github.com/%s/compare/%s...%s))' "$REPO_SLUG" "$prev" "$THIS_TAG"
+  else
+    declared "$2" "$3"
+  fi
+}
+
 link() {  # path KEY-or-empty old-or-empty new-or-empty
   src="$(source_of "$@")" || return 1
-  case "$src" in
-    'linked '*) printf '%s' "${src#linked }" ;;
-    *)
-      if [ -z "$2" ] && [ -n "$REPO_SLUG" ] && [ -n "$THIS_TAG" ]; then
-        printf ' ([diff](https://github.com/%s/compare/%s...%s))' "$REPO_SLUG" "$prev" "$THIS_TAG"
-      else
-        declared "$1" "$2"
-      fi ;;
-  esac
+  suffix_for "$src" "$1" "$2"
 }
 
 bullet() {  # name old new path KEY-or-empty [suffix]
@@ -172,6 +179,41 @@ is_kv_pins() {
   [ -n "$(assignments < "$1")" ]
 }
 
+# spec: tests/ingredient-notes-test.sh "fold"/"I2" -- a key no manager owns that moved or was added
+#       beside a linked key of the same file is part of that bump (a DIGEST with its REF, sqlite's
+#       SHA256 and YEAR with its VERSION, a new component's REPO and DIGEST with its REF), so its
+#       bullet would restate the linked one. Moving ALONE, as a DIGEST does when upstream re-tags the
+#       same ref, it is news and keeps its bullet. Reads $tmp/old and $tmp/new.
+kv_bullets() {  # path exclkey label-prefix
+  : > "$tmp/moved"
+  while IFS= read -r line; do
+    key="${line%%	*}"; newv="${line#*	}"
+    [ "$key" = "$2" ] && continue
+    oldv="$(grep "^$key	" "$tmp/old" | head -1 | cut -f2- || true)"
+    [ "$oldv" != "$newv" ] || continue
+    src="$(source_of "$1" "$key" "$oldv" "$newv")"
+    printf '%s	%s\n' "$key" "$src" >> "$tmp/moved"
+  done < "$tmp/new"
+  anchored=no
+  if grep -q '	linked ' "$tmp/moved"; then anchored=yes; fi
+  while IFS= read -r line; do
+    key="${line%%	*}"; newv="${line#*	}"
+    src="$(cut -f2- <<EOF
+$line
+EOF
+)"
+    [ "$src" = unowned ] && [ "$anchored" = yes ] && continue
+    newv="$(grep "^$key	" "$tmp/new" | head -1 | cut -f2-)"
+    oldv="$(grep "^$key	" "$tmp/old" | head -1 | cut -f2- || true)"
+    sfx="$(suffix_for "$src" "$1" "$key")"
+    if [ -z "$oldv" ]; then
+      printf -- '- **%s%s**: added (%s)%s\n' "$3" "$key" "$newv" "$sfx" >> "$bullets"
+    else
+      bullet "$3$key" "$oldv" "$newv" "$1" "$key" "$sfx"
+    fi
+  done < "$tmp/moved"
+}
+
 for arg in "$@"; do
   case "$arg" in
     *:*) path="${arg%%:*}"; exclkey="${arg##*:}" ;;
@@ -199,13 +241,9 @@ for arg in "$@"; do
           # spec: tests/ingredient-notes-test.sh "a first-time pins.env" -- exclkey (the repo's own
           #       upstream) is excluded even from a brand-new file; every OTHER key in it is still a
           #       real, reportable ingredient.
-          label_prefix="$(label_prefix_for "$path")"
-          assignments < "$path" | sort | while IFS= read -r line; do
-            key="${line%%	*}"; newv="${line#*	}"
-            [ "$key" = "$exclkey" ] && continue
-            sfx="$(link "$path" "$key" "" "$newv")"
-            printf -- '- **%s%s**: added (%s)%s\n' "$label_prefix" "$key" "$newv" "$sfx" >> "$bullets"
-          done
+          : > "$tmp/old"
+          assignments < "$path" | sort > "$tmp/new"
+          kv_bullets "$path" "$exclkey" "$(label_prefix_for "$path")"
         elif [ "$newsize" -lt 256 ]; then
           sfx="$(link "$path" "" "" "$(head -1 "$path")")"
           printf -- '- **%s**: added (%s)%s\n' "$(pin_name "$path")" "$(head -1 "$path")" "$sfx" >> "$bullets"
@@ -246,38 +284,7 @@ for arg in "$@"; do
         label_prefix="$(label_prefix_for "$path")"
         git show "$prev:$path" | assignments | sort > "$tmp/old"
         assignments < "$path" | sort > "$tmp/new"
-        # spec: tests/ingredient-notes-test.sh "fold" -- a key with no manager of its own that moved
-        #       beside a linked key is part of that bump (a DIGEST with its REF, sqlite's SHA256 and
-        #       YEAR with its VERSION), so its bullet would restate the linked one. Moving ALONE, as
-        #       a DIGEST does when upstream re-tags the same ref, it is news and keeps its bullet.
-        : > "$tmp/moved"
-        while IFS= read -r line; do
-          key="${line%%	*}"; newv="${line#*	}"
-          [ "$key" = "$exclkey" ] && continue
-          oldv="$(grep "^$key	" "$tmp/old" | head -1 | cut -f2- || true)"
-          [ -n "$oldv" ] && [ "$oldv" != "$newv" ] || continue
-          src="$(source_of "$path" "$key" "$oldv" "$newv")"
-          printf '%s	%s\n' "$key" "$src" >> "$tmp/moved"
-        done < "$tmp/new"
-        anchored=no
-        if grep -q '	linked ' "$tmp/moved"; then anchored=yes; fi
-        while IFS= read -r line; do
-          key="${line%%	*}"; newv="${line#*	}"
-          [ "$key" = "$exclkey" ] && continue
-          oldv="$(grep "^$key	" "$tmp/old" | head -1 | cut -f2- || true)"
-          if [ -z "$oldv" ]; then
-            sfx="$(link "$path" "$key" "" "$newv")"
-            printf -- '- **%s%s**: added (%s)%s\n' "$label_prefix" "$key" "$newv" "$sfx" >> "$bullets"
-          elif [ "$oldv" != "$newv" ]; then
-            src="$(grep "^$key	" "$tmp/moved" | head -1 | cut -f2-)"
-            case "$src" in
-              'linked '*) sfx="${src#linked }" ;;
-              unowned) [ "$anchored" = no ] || continue; sfx="$(declared "$path" "$key")" ;;
-              *) sfx="$(declared "$path" "$key")" ;;
-            esac
-            bullet "${label_prefix}${key}" "$oldv" "$newv" "$path" "$key" "$sfx"
-          fi
-        done < "$tmp/new"
+        kv_bullets "$path" "$exclkey" "$label_prefix"
         # spec: tests/ingredient-notes-test.sh -- a key that stopped being pinned is a real change,
         #       and walking only the new file would omit it entirely; but it counts as removed only
         #       if the file stopped ASSIGNING it -- still assigned, just no longer a literal, is

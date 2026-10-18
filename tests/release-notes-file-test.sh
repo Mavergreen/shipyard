@@ -14,6 +14,9 @@ git config user.email t@example.com; git config user.name tester
 mkdir -p release-notes
 printf 'x\n' > UPSTREAM_VERSION
 git add -A; git commit -qm base
+# spec: tests/release-notes-test.sh "m4" -- 20260911.2 and later claim earlier releases, so their tag
+#       must be visible or the generator stops rather than call them first releases.
+git tag 20260911.1
 export MAVERICKS_ROOT="$w"
 
 # spec: release-notes-file.sh -- the calls below use a SELF-upstream tag (TAG == FULL, no
