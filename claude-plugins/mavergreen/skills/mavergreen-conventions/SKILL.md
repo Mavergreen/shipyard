@@ -1384,6 +1384,14 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
 
 ## Sparkle updater
 
+- **An update of a large pkg can sit forever after it has installed** (Sparkle 1.27.3, measured
+  2026-10-18 updating clang22-cross on Golden Gate). The privileged helper runs
+  `installer -verboseR`, whose output goes to an 8 KB socket nothing reads, so a long install's
+  output fills it and installer blocks on its last write. Check the receipt
+  (`pkgutil --pkg-info <identifier>`); if it shows the new version, quit the updater's Autoupdate
+  process (no sudo needed), and installer exits at once. No fix is coming to the Sparkle updaters,
+  since the flag day retires them; the Engine that replaces them must never leave installer's
+  output unread.
 - Every product ships a Sparkle updater `.app` that **must not link the product it updates** (self-update
   circularity — assert with `otool -L`). EdDSA-signed; private key is the `SPARKLE_PRIVATE_KEY` secret.
 - **`SPARKLE_PRIVATE_KEY` is an ORGANIZATION secret, visible to every public Mavergreen repo: a new repo
