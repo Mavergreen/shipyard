@@ -63,4 +63,5 @@ one line):
 - scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
+- unpinned:scripts/cut-release.sh: it reads a repo's newest release tag before and after the run it dispatched, to report what that run published; it fetches nothing and builds nothing. Reconsider if it ever downloads an asset.
 - unpinned:scripts/audit-release-sdks.sh: the SDK-pinning acceptance audit exists to judge what each repo has shipped most recently, so it downloads each repo's newest release (verified against its SHA256SUMS). It builds and signs nothing. Reconsider if it is ever wired into a release path.

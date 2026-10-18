@@ -2406,6 +2406,22 @@ in the same commit.
   pre-migration `fileMatch` key, one checking an `.icns` filename that changed when the repo was
   renamed. Neither was a product bug; both were invisible because nothing ran them.
 
+## Cutting a release
+
+**`sh scripts/cut-release.sh REPO`** cuts a release of `Mavergreen/REPO`, by a human or an agent alike.
+It refuses while a run of the repo's `release.yml` is queued or running on the ref; dispatches
+`release.yml` on `main` (`--ref` for another), passing whichever publish-anyway input that workflow
+declares (`local_release`, `repackage` or `release`) as `true`, or dispatching plainly where it
+declares none; watches the run to its end; and prints the tag and URL it published. It fails when
+the run fails, naming the failed jobs, and when a requested publish published nothing. `--if-needed`
+dispatches plainly and lets the repo's own logic decide whether anything needs publishing.
+
+Use it rather than `gh workflow run` by hand: the repos' dispatch inputs differ today (six shapes
+across eleven repos on 2026-10-18), so the right `-f` is per repo, and a re-run of a failed release
+loses the ref shipyard's install action reads, so fix and cut again instead. The flag day (P6)
+replaces those inputs with one, `force_publish` with a required reason, enforced by the gate;
+`cut-release.sh` then takes the reason.
+
 ## Creating a family repo
 
 An agent may create the GitHub repo, with the maintainer's permission for that repo, and only
@@ -2458,7 +2474,9 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    untracked and why. No file-based ingredient pins → no caller (say that in `INGREDIENTS.md` too).
    A tool a build or test only installs (a test's compiler, longboat) is pinned the same way, with a
    Renovate manager but no repackage, and listed as CI only; check 28 fails a fetch of whatever is
-   newest.
+   newest. Where a repackage trigger or a cache key watches `components/**`, exclude that pin
+   (`'!components/longboat/**'`), or its every bump cuts a release and empties the cache (rust,
+   2026-10-18).
    Wire `ingredient-notes.sh` into the notes step and `check-ingredient-pins.sh` into CI so releases
    state which ingredient moved.
 9. Call `check-family-conventions.sh` in CI, and run the suite with `run-repo-tests.sh`. The gate fails
