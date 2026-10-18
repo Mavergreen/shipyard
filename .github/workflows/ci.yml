@@ -71,8 +71,8 @@ jobs:
     uses: ./.github/workflows/linux-host.yml
 
   # spec: tests/on-target-job-test.sh -- the flag-day P1 ruling R5: this job runs every check on Mac OS X
-  #       10.9. The guest has no python3 of its own, so it installs python-315's latest release, unpinned:
-  #       the checks should pass with whatever python-315 a 10.9 box would install today.
+  #       10.9. The guest has no python3 of its own, so it installs the python-315 release python-315.pin
+  #       names, which Renovate bumps.
   on-target:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -85,13 +85,15 @@ jobs:
         with:
           fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
           persist-credentials: false
-      - name: python-315's latest release, fetched on the runner and verified against its SHA256SUMS
+      - name: The pinned python-315 release, fetched on the runner and verified against its SHA256SUMS
         run: |
           set -eu
-          gh release download -R Mavergreen/python-315 --pattern '*.pkg' --pattern SHA256SUMS --dir python-315-pkg
+          v="$(sed -n 's/^PYTHON_315_VERSION=//p' python-315.pin)"
+          [ -n "$v" ] || { echo "::error::python-315.pin names no PYTHON_315_VERSION"; exit 1; }
+          gh release download "$v" -R Mavergreen/python-315 --pattern '*.pkg' --pattern SHA256SUMS --dir python-315-pkg
           cd python-315-pkg
           set -- *.pkg
-          [ "$#" -eq 1 ] || { echo "::error::python-315's latest release has $# pkgs, not one: $*"; exit 1; }
+          [ "$#" -eq 1 ] || { echo "::error::python-315 $v has $# pkgs, not one: $*"; exit 1; }
           awk -v f="$1" '$2 == f' SHA256SUMS | sha256sum -c --strict -
       - name: Fixtures on Mac OS X 10.9
         uses: Mavergreen/mavericks-vm@v1

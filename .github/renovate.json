@@ -21,6 +21,16 @@
       "packageNameTemplate": "Mavergreen/clang-22",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The python-315 release ci.yml's on-target job installs in the 10.9 guest (python-315.pin). CI verifies the pkg against the release's SHA256SUMS; nothing of it ships, so a bump re-runs CI and releases nothing.",
+      "managerFilePatterns": ["/^python-315\\.pin$/"],
+      "matchStrings": ["PYTHON_315_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "python-315",
+      "packageNameTemplate": "Mavergreen/python-315",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
     }
   ]
 }
