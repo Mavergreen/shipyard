@@ -153,10 +153,18 @@ if [ -n "$CALLER" ]; then
     || die "ingredient-pins.sh failed reading the pins $CALLER watches; a repackage caller whose pins cannot be read must not ship notes that call it packaging-only"
   [ -n "$PINS" ] || die "$CALLER calls repackage-on-ingredient-bump.yml but ingredient-pins.sh found no pins in it (check its 'paths:' list and own-upstream-paths)"
 fi
+# spec: tests/release-notes-test.sh "r3new"/"r1d" -- this repo's owner/repo names its own compare
+#       view; with neither source, a link is left out rather than guessed.
+SLUG="${GITHUB_REPOSITORY:-}"
+if [ -z "$SLUG" ]; then
+  short="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
+  if own="$(sh "$SELF/product-name.sh" repo "$short" 2>/dev/null)"; then SLUG="Mavergreen/$own"; fi
+fi
+
 INGREDIENTS=""
 if [ -n "$PREV" ] && [ -n "$PINS" ]; then
   # shellcheck disable=SC2086  # PINS is a deliberate list of paths
-  INGREDIENTS="$(sh "$SELF/ingredient-notes.sh" "$PREV" $PINS)" \
+  INGREDIENTS="$(sh "$SELF/ingredient-notes.sh" ${SLUG:+--repo "$SLUG" --tag "$TAG"} "$PREV" $PINS)" \
     || die "cannot read the ingredient pins that moved since $PREV; a repackage that cannot say what moved must not ship"
 fi
 
@@ -172,8 +180,30 @@ if [ -n "$PREV" ] && [ "$SELF_UPSTREAM" = no ]; then
     || die "cannot read which of our patches changed since $PREV; a release that cannot say whether it changed our patches must not ship"
 fi
 
+# spec: tests/release-notes-test.sh "r3*" -- a self-upstream release says why it was cut, as a
+#       port's does: an ingredient-only YYYYMMDD.N repackage that read "Release of <product>" looked
+#       like new code. The compare names the tags, since shipyard's v1.0.209 is version 1.0.209.
 if [ "$SELF_UPSTREAM" = yes ]; then
-  printf -- '- Release of %s %s.\n' "$PRODUCT" "$VER" >> "$tmp"
+  date_of() {
+    case "$1" in
+      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].*[0-9]) printf '%s' "${1%%.*}" ;;
+    esac
+  }
+  if [ -z "$PREV" ]; then
+    printf -- '- First release of %s %s.\n' "$PRODUCT" "$VER" >> "$tmp"
+  elif [ -n "$(date_of "$VER")" ] && [ "$(date_of "$VER")" = "$(date_of "$PREV")" ]; then
+    if [ -n "$INGREDIENTS" ]; then
+      printf -- '- Rebuilt because build ingredients moved (below); no change to %s itself.\n' "$PRODUCT" >> "$tmp"
+    else
+      printf -- '- Repackage of %s %s; packaging changes only.\n' "$PRODUCT" "$(date_of "$VER")" >> "$tmp"
+    fi
+  else
+    prevver="$PREV"
+    [ "$TAG" != "v$VER" ] || prevver="${PREV#v}"
+    printf -- '- New release of %s %s (was %s).\n' "$PRODUCT" "$VER" "$prevver" >> "$tmp"
+    [ -z "$SLUG" ] \
+      || printf -- '  [Changes since %s](https://github.com/%s/compare/%s...%s)\n' "$PREV" "$SLUG" "$PREV" "$TAG" >> "$tmp"
+  fi
 else
   set +e
   URL="$(sh "$SELF/upstream-notes.sh" --url-only "$VER")"; urc=$?

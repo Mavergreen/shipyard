@@ -39,4 +39,9 @@ printf '%s\n' "$out" | grep -qi 'glob' || { echo "FAIL: should say what is wrong
 
 printf '## Conformance deviations\n- scheme:a/b.pkg: a real scope\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'scheme a/b.pkg a real scope' || { echo "FAIL: a scoped entry must still parse"; exit 1; }
+# spec: SKILL.md "Release notes" -- unlinked: is scoped to a pin, and a pin is a file plus its KEY,
+#       so a scope may end in :KEY (uppercase, as the pin's assignment spells it).
+printf '## Conformance deviations\n- unlinked:components/boot2docker/version:BASE: no notes for a digest refresh\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'unlinked components/boot2docker/version:BASE no notes for a digest refresh' \
+  || { echo "FAIL: a KEY-qualified scope must keep its KEY; got: $(sh "$S" "$w")"; exit 1; }
 echo "PASS: deviations"

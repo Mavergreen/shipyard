@@ -65,4 +65,21 @@ awk '
   fail "section is empty: ${empty:-<unknown>}"
 }
 
+# spec: tests/check-release-notes-test.sh -- a moved ingredient links where its change is
+#       described, or says why nothing does; a removed or now-computed pin moved nothing upstream.
+awk '
+  /^### Build ingredients[[:space:]]*$/ { in_ing = 1; next }
+  /^##/ || /^---[[:space:]]*$/ { in_ing = 0; next }
+  in_ing && /^- / {
+    if ($0 ~ /\]\(https?:/ || $0 ~ /\(no change notes: [^)]/) next
+    if ($0 ~ /: removed$/ || $0 ~ /: still used, now computed rather than pinned \(was /) next
+    print; exit 1
+  }
+' "$f" > "$t" || {
+  bare="$(cat "$t" 2>/dev/null || true)"
+  pin="$(printf '%s' "$bare" | sed -n 's/^- \*\*\(.*\)\*\*:.*/\1/p')"
+  fail "the Build ingredients bullet for ${pin:-<unknown>} says nothing about where its change is described: $bare
+  fix: give that pin a link source -- a Renovate customManager (github-releases or github-tags) that captures it, or a REPO=https://github.com/<owner>/<repo>.git beside its REF/TAG/VERSION -- or declare why it has none under INGREDIENTS.md's ## Conformance deviations as '- unlinked:<pin path>[:KEY]: <reason>'"
+}
+
 echo "check-release-notes: ok — $f is the family shape for $ver"

@@ -78,6 +78,7 @@ install(FILES
   MavericksSparkle.cmake
   MavericksVersion.cmake
   MavericksDecisions.cmake
+  default.json
   DESTINATION "${_dest}")
 
 # platform: CMake expands a preset's ${fileDir} against the file of the preset being CONFIGURED, not
