@@ -59,7 +59,8 @@ w="$(mktemp -d "${TMPDIR:-/tmp}/check-fixtures-run.XXXXXX")"; trap 'rm -rf "$w"'
 GIT_CEILING_DIRECTORIES="$w"; export GIT_CEILING_DIRECTORIES
 mkdir "$w/bin"; cp "$here/lib/gh-stub.sh" "$w/bin/gh"; chmod +x "$w/bin/gh"
 
-have_git=0; command -v git >/dev/null 2>&1 && have_git=1
+# platform: 10.9's /usr/bin/git is a shim that fails without the Command Line Tools, and a git that cannot run is no git.
+have_git=0; git --version >/dev/null 2>&1 && have_git=1
 if [ "$nogit" -eq 1 ]; then
   have_git=0
   mkdir "$w/nogit"; printf '#!/bin/sh\necho "git: hidden by check-fixtures-run --no-git" >&2\nexit 127\n' > "$w/nogit/git"
@@ -89,13 +90,13 @@ apply_env() {  # $1 = fixture dir, $2 = the copy
 make_repo() {  # $1 = fixture dir, $2 = the copy: a git repo holding FILES (or everything), with TAGS
   (
     cd "$2"
-    git init -q
+    git init -q || exit 1
     if [ -f "$1/FILES" ]; then
       while IFS= read -r f; do [ -z "$f" ] || git add -f -- "$f"; done < "$1/FILES"
     else
       git add -f -A .
     fi
-    git -c user.email=fixture@example.invalid -c user.name=fixture commit -q --allow-empty -m fixture
+    git -c user.email=fixture@example.invalid -c user.name=fixture commit -q --allow-empty -m fixture || exit 1
     if [ -f "$1/TAGS" ]; then
       while IFS= read -r t; do [ -z "$t" ] || git tag "$t"; done < "$1/TAGS"
     fi
@@ -111,7 +112,9 @@ run_fixture() {  # $1 = id, $2 = mode, $3 = fixture dir, $4 = scratch dir; sets 
   usegit=0
   [ ! -f "$d/TAGS" ] && [ ! -f "$d/RUN" ] || usegit=1
   if [ -f "$d/NEEDS" ] && grep -qx git "$d/NEEDS"; then usegit=1; fi
-  if [ "$usegit" -eq 1 ]; then make_repo "$d" "$c"; fi
+  if [ "$usegit" -eq 1 ]; then
+    make_repo "$d" "$c" || { echo "git could not make the fixture's repo" > "$s/out"; rc=125; return 0; }
+  fi
   sel="$_id"
   if [ -f "$d/ALSO" ]; then sel="$sel $(grep -vx '\*' "$d/ALSO" | tr '\n' ' ')"; fi
   rc=0
