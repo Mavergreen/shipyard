@@ -43,9 +43,9 @@ printf 'cmake_minimum_required(VERSION 3.16)\nproject(q C)\nfind_package(Maveric
 #           detection -- so this configure needs one named, or it hits "one arch per cross configure"
 #           (empty) before ever reaching the pinned-SDK comparison this case means to exercise.
 # platform: Mavericks.cmake only compares CMAKE_OSX_SYSROOT against the pin when MAVERICKS_MODE is
-#           "cross" (the check is deliberately cross-mode-only -- a native build may legitimately use
-#           xcrun's own 10.9 SDK rather than the fetched one); on a native 10.9 host this configure
-#           just succeeds, so skip the assertion rather than fail it.
+#           "cross" (the check is deliberately cross-mode-only -- a native build takes the same pin
+#           from the toolchain file); on a native 10.9 host this configure just succeeds, so skip
+#           the assertion rather than fail it.
 if [ "$native" -eq 1 ]; then
   echo "skip (native 10.9 host): the backstop is cross-mode only"
 else

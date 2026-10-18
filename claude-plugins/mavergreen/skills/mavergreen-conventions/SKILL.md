@@ -1607,7 +1607,9 @@ ships `fetch_sdk.sh` (in a toolchain's `libexec/`, e.g.) ships `sdk-pins.sh` and
 beside it; without `sdk-pins.sh` it exits 2 naming the missing file.
 `include(Mavericks)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
 Native mode (on the 10.9 box, x86_64 only) pins too, because Xcode 6.1+ defaults to the 10.10 SDK
-there: the toolchain file uses xcrun's own 10.9 SDK when it has one, and the fetched pin otherwise.
+there: the toolchain file uses the same fetched pin and never asks xcrun, so a native build is the
+same with or without the Command Line Tools (vision area 18 A; swift-gg found the old xcrun probe
+running ten times in one ninja build, 2026-10-18).
 
 **The SDK stays as Apple shipped it, on every host.** `fetch_sdk.sh` never converts the 10.9 SDK's
 `MH_DYLIB_STUB` libraries to `.tbd`. Stubs are the one form every family linker reads: lld reads both
