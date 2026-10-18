@@ -5,7 +5,7 @@
     {
       "name": "mavergreen",
       "source": "./claude-plugins/mavergreen",
-      "description": "Mavergreen family conventions: shipyard usage, Renovate/automerge policy (ignoreTests + green-gate), versioning (UPSTREAM_VERSION + version.sh), the release workflow, Sparkle updater, and when a deviation is warranted."
+      "description": "Mavergreen family conventions: shipyard usage, Renovate/automerge policy (ignoreTests + green-gate), versioning (UPSTREAM_VERSION + version.sh), the release workflow, Sparkle updater, when a deviation is warranted, and where work items go (.superpowers/QUEUE.md, never GitHub issues; a hook asks before an agent opens an issue or PR)."
     }
   ]
 }

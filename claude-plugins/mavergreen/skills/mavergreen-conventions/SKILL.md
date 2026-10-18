@@ -1,6 +1,6 @@
 ---
 name: mavergreen-conventions
-description: Use when creating or modifying a Mavergreen project — its release workflow, Renovate/automerge config, versioning, shipyard usage, or Sparkle updater — or when deciding whether a deviation from the family conventions is warranted.
+description: Use when creating or modifying a Mavergreen project — its release workflow, Renovate/automerge config, versioning, shipyard usage, or Sparkle updater — when deciding whether a deviation from the family conventions is warranted, or when asked to queue, track or note a work item, backlog entry, todo, bug or feature for later (it goes in .superpowers/QUEUE.md, never a GitHub issue).
 ---
 
 # Mavergreen project conventions
@@ -2154,6 +2154,14 @@ Specs go in `.superpowers/specs/`, plans in `.superpowers/plans/`, subagent-driv
 in `.superpowers/sdd/` (its default), and a repo's backlog in `.superpowers/QUEUE.md`. All of
 `.superpowers/` is gitignored and never committed. This overrides the superpowers skills' defaults of
 `docs/superpowers/specs/` and `docs/superpowers/plans/`, which those skills honour as a user preference.
+
+**Work items go in `.superpowers/QUEUE.md`, never in GitHub issues.** "Queue it", "add it to the
+backlog", "note that for later" all mean a new entry there, with its evidence. Issues are for the
+product's users to file; an agent opens an issue or a pull request only with the maintainer's express
+permission for that one. The plugin's PreToolUse hook (`hooks/work-items-go-in-the-queue.sh`) asks the
+maintainer before any `gh issue create`, `gh pr create` or MCP create_issue/create_pull_request on a
+Mavergreen repo. A `grep` for an existing backlog skips the gitignored `.superpowers/`, so read
+`.superpowers/QUEUE.md` by name (container-tools filed two issues on 2026-10-18 after such a grep).
 
 They are ephemeral: a plan describes a transition, not a system, and is wrong about the system it
 produced once the transition lands. So no tracked file cites one of them, or a plan task, review
