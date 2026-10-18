@@ -65,7 +65,7 @@ for r in "$@"; do
     echo "audit: $r has no SHA256SUMS -- audited UNVERIFIED"
   fi
   rm -f "$d/dist/SHA256SUMS"
-  gh api "repos/$r/contents/INGREDIENTS.md" --jq .content 2>/dev/null | base64 -d > "$d/src/INGREDIENTS.md" 2>/dev/null || rm -f "$d/src/INGREDIENTS.md"
+  gh api "repos/$r/contents/INGREDIENTS.md" --jq .content 2>/dev/null | base64 --decode > "$d/src/INGREDIENTS.md" 2>/dev/null || rm -f "$d/src/INGREDIENTS.md"
   audit_one "$r" "$d/dist" "$d/src" || rc=1
 done
 exit "$rc"

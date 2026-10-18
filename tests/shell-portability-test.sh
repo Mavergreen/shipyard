@@ -26,6 +26,13 @@ mkrepo "$work/v2"
 printf '#!/bin/sh\nprintf x | sort --version-sort\n' > "$work/v2/a.sh"  # portability-ok: a lint fixture must contain the violation it tests for
 (cd "$work/v2" && git add -A) >/dev/null 2>&1
 if (cd "$work/v2" && sh "$S" >/dev/null 2>&1); then echo "FAIL: sort -V's long-form spelling (--version-sort) should also fail"; exit 1; fi  # portability-ok: names the construct under test
+mkdir -p "$work/b64" && (cd "$work/b64" && git init -q)
+printf '#!/bin/sh\nprintf aGk= | base64 -d\n' > "$work/b64/a.sh"  # portability-ok: a lint fixture must contain the violation it tests for
+(cd "$work/b64" && git add a.sh)
+out="$(cd "$work/b64" && sh "$S" 2>&1)" && { echo "FAIL: base64 -d should fail"; exit 1; }  # portability-ok: names the construct under test
+printf '%s\n' "$out" | grep -q 'base64 --decode' || { echo "FAIL: the base64 rule should say to use --decode: $out"; exit 1; }
+printf '#!/bin/sh\nprintf aGk= | base64 --decode\n' > "$work/b64/a.sh"
+(cd "$work/b64" && git add a.sh && sh "$S" >/dev/null 2>&1) || { echo "FAIL: base64 --decode must pass"; exit 1; }
 
 mkrepo "$work/m"
 printf '#!/bin/sh\nw="$(mktemp -d)"\nl="$(mktemp)"\n' > "$work/m/a.sh"  # portability-ok: a lint fixture must contain the violation it tests for

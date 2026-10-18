@@ -35,7 +35,7 @@ inflight="$(gh run list -R "$repo" --workflow "$wf" --branch "$ref" --limit 20 \
 [ -z "$inflight" ] || die "$repo's $wf already has a run on $ref that is not done; let it finish first:
 $inflight"
 
-yml="$(gh api "repos/$repo/contents/.github/workflows/$wf?ref=$ref" --jq .content | base64 -d 2>/dev/null)" \
+yml="$(gh api "repos/$repo/contents/.github/workflows/$wf?ref=$ref" --jq .content | base64 --decode 2>/dev/null)" \
   || die "could not read $repo's .github/workflows/$wf at $ref"
 inputs="$(printf '%s\n' "$yml" | awk '/^  workflow_dispatch:/ { on = 1; next } on && /^  [^ ]/ { exit }
   on && /^      [A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*$/ { sub(/^ +/, ""); sub(/:.*/, ""); print }')"

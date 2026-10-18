@@ -20,6 +20,9 @@ esac
 echo "stub gh: unexpected $*" >&2; exit 1
 EOF
   chmod +x "$WORK/bin/gh"
+  # platform: the system base64 where there is one, since 10.9's reads -d as debug, not decode,
+  #           and a base64 earlier on PATH could hide that.
+  [ ! -x /usr/bin/base64 ] || ln -s /usr/bin/base64 "$WORK/bin/base64"
   export PATH="$WORK/bin:$PATH"
   echo 4242 > "$STUB/newrun"
   echo 1.0-mavericks.1 > "$STUB/before"
