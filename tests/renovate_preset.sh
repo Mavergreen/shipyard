@@ -12,7 +12,7 @@ assert m, "no mavericks-legacysupport customManager"
 m = m[0]
 assert m["datasourceTemplate"] == "github-releases", "wrong datasource"
 assert m["packageNameTemplate"] == "Mavergreen/macports-legacy-support", "wrong packageName"
-assert "extractVersionTemplate" in m, "must strip the leading v"
+assert "extractVersionTemplate" not in m, "the fork tags releases bare (1.5.2-mavericks.N), so the tag is the version; an optional v? also leaves release notes unable to name the tag"
 
 # no Python (?P<...>) syntax anywhere in the manager -- Renovate uses (?<...>)
 assert "(?P<" not in json.dumps(m), "manager must use Renovate (?<name>...) syntax, not Python (?P<name>...)"
