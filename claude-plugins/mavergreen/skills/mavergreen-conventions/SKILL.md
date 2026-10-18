@@ -668,9 +668,10 @@ a new line repo is warranted.
    nothing packages, and no updater builds, for an unregistered name.
 3. Set the Renovate cap to the next line.
 4. Set the bootstrap cap, where the product has one.
-5. Enable `allow_auto_merge`, and branch protection requiring the real PR check context.
-6. Nothing to set for `SPARKLE_PRIVATE_KEY`: it is an org secret every repo already sees (see Sparkle
-   updater).
+5. `sh scripts/setup-family-repo.sh settle <product>-<line>` once its first branch run is green: auto-merge,
+   branch protection requiring the real PR check contexts, and the rest of the family's settings.
+6. Nothing to set for `SPARKLE_PRIVATE_KEY`: it is an org secret every public repo already sees (see
+   Sparkle updater).
 7. Get a README a human has read (`publish-release.yml` refuses a first release without one).
 8. Pass `--line <tag prefix>` to `release-notes.sh` (`--line 1.27`, the prefix the tags carry).
 9. Consumers move by hand, repo and short name, when one of their own bumps needs the line.
@@ -1380,9 +1381,11 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
 
 - Every product ships a Sparkle updater `.app` that **must not link the product it updates** (self-update
   circularity — assert with `otool -L`). EdDSA-signed; private key is the `SPARKLE_PRIVATE_KEY` secret.
-- **`SPARKLE_PRIVATE_KEY` is an ORGANIZATION secret, visible to every Mavergreen repo: a new repo sets
-  nothing.** It keeps being listed as a per-repo setup step; it is not one. Confirm a repo sees it with
-  `gh api repos/Mavergreen/<repo>/actions/organization-secrets --jq '[.secrets[].name]'`. Never add a
+- **`SPARKLE_PRIVATE_KEY` is an ORGANIZATION secret, visible to every public Mavergreen repo: a new repo
+  sets nothing.** It keeps being listed as a per-repo setup step; it is not one. A private repo gets it
+  empty, on the org's free plan, though
+  `gh api repos/Mavergreen/<repo>/actions/organization-secrets --jq '[.secrets[].name]'` lists it all
+  the same: so check the repo is public (see "Creating a family repo"). Never add a
   repo-level secret of the same name: it shadows the org one, so a key rotation would miss that repo.
 - **An updater's identity is derived, never chosen.** From the product's registry line (`<short>
   <pkg identifier> <repo>`), `product-name.sh` derives the bundle id `<pkg identifier>.updater`, the app
@@ -2389,12 +2392,35 @@ in the same commit.
   pre-migration `fileMatch` key, one checking an `.icns` filename that changed when the repo was
   renamed. Neither was a product bug; both were invisible because nothing ran them.
 
+## Creating a family repo
+
+An agent may create the GitHub repo, with the maintainer's permission for that repo, and only
+through `scripts/setup-family-repo.sh`, so every repo starts with the same settings:
+
+1. `sh scripts/setup-family-repo.sh create NAME "DESCRIPTION"` makes `Mavergreen/NAME`, empty and
+   **public**, and writes the family's settings: issues and projects on, wiki off, every merge method
+   and auto-merge allowed, and Actions' token read-only and unable to approve pull requests.
+   Public is not a preference: on the org's free plan an organization secret never reaches a private
+   repo, so a private product's `vm-test` gets an empty `MAVERICKS_VM_KEY` and its publish has no
+   `SPARKLE_PRIVATE_KEY` (python-315 and make, 2026-10-18).
+2. Push the history to a branch first and let CI go green there (see "Propose a branch when only CI
+   can prove it"), then push `main`.
+3. `sh scripts/setup-family-repo.sh settle NAME` again: with `main` there, it makes `main` the default
+   branch and protects it, requiring every job of the newest green `release.yml` run off `main` (name
+   the checks instead to choose). Without that protection auto-merge is inert (see Renovate, above).
+4. By hand, since GitHub's API cannot set them, as the script reminds you: Write on the org's
+   `mavericks-vm-images` package for a repo whose workflow runs `Mavergreen/mavericks-vm`, and the
+   `mavergreen-pins-bot` installation for one that runs the pins bot.
+
+`settle` is idempotent, so it also brings an existing repo back in line;
+`sh scripts/audit-repo-settings.sh` lists every repo that has drifted.
+
 ## New-project checklist
 
 1. `.github/renovate.json` (that path; see "Renovate & automerge"): extend shipyard; add the upstream `customManager` + patch/minor rules; ensure a
    PR check exists (or set `ignoreTests: true` if no build). For *prompt* automerge, enable **Allow
-   auto-merge** AND add **branch protection requiring the build check** — both are needed (see the
-   Renovate section for the exact commands and the typo-blocks-all-merges caveat).
+   auto-merge** AND add **branch protection requiring the build check** — both are needed, and
+   `setup-family-repo.sh settle` writes both (see "Creating a family repo").
 2. `comment-reasons` (one recognised tag per line: `platform`, `spec`), from the first commit — see
    "Comments cite a reason", above. A new project has no comment debt to sweep, so it does not start by
    writing file headers explaining what the code does and sweeping them out later; it starts with the
@@ -2410,7 +2436,7 @@ in the same commit.
    RUNNING run, not the QUEUED one, and the gate rejects it.)
 6. `release-notes/README.md`; `build/upstream-release-notes-url.sh` (a port: where upstream's notes
    for a version live — see Release notes); Sparkle updater target. (`SPARKLE_PRIVATE_KEY` is an org secret the
-   new repo already sees -- set nothing; see Sparkle updater.)
+   new repo already sees, being public -- set nothing; see Sparkle updater.)
 7. Choose the upstream-verification method; note it if it deviates from a sibling.
 8. If the repo bakes in build ingredients (anything it's built WITH, not the upstream it ports): make
    each pin a **file**, give each a Renovate customManager, add the `repackage-on-ingredient-bump`

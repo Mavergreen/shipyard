@@ -1,7 +1,8 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: audit-repo-settings.sh [org]        (default: Mavergreen)
-#          Prints a verdict line and exits non-zero when anything is off, to be usable from a
+#          Prints a verdict line and exits non-zero when anything is off (a private repo, which on the
+#          org's free plan gets no org secrets; auto-merge off; main without a required check), to be usable from a
 #          scheduled job with a PAT later.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "These two
 #       settings are the only conventions the gate cannot check -- audit them" -- "Allow auto-merge"
@@ -16,12 +17,14 @@ org="${1:-Mavergreen}"
 command -v gh >/dev/null 2>&1 || { echo "audit-repo-settings: needs the gh CLI" >&2; exit 1; }
 
 bad=0
-printf '%-28s %-10s %s\n' REPO AUTO-MERGE 'REQUIRED CHECKS ON main'
+printf '%-28s %-10s %-10s %s\n' REPO VISIBILITY AUTO-MERGE 'REQUIRED CHECKS ON main'
 for repo in $(gh repo list "$org" --limit 100 --json name --jq '.[].name' | sort); do
   am="$(gh api "repos/$org/$repo" --jq '.allow_auto_merge' 2>/dev/null || echo '?')"
+  vis="$(gh api "repos/$org/$repo" --jq '.visibility' 2>/dev/null || echo '?')"
+  [ "$vis" = public ] || bad=$((bad + 1))
 
   if ! gh api "repos/$org/$repo/contents/.github/workflows/release.yml" --jq '.name' >/dev/null 2>&1; then
-    printf '%-28s %-10s %s\n' "$repo" "$am" '(no release.yml — not a product repo)'
+    printf '%-28s %-10s %-10s %s\n' "$repo" "$vis" "$am" '(no release.yml — not a product repo)'
     continue
   fi
 
@@ -36,18 +39,19 @@ for repo in $(gh repo list "$org" --limit 100 --json name --jq '.[].name' | sort
     ctx='NONE'
   fi
 
-  printf '%-28s %-10s %s\n' "$repo" "$am" "$ctx"
+  printf '%-28s %-10s %-10s %s\n' "$repo" "$vis" "$am" "$ctx"
   [ "$am" = true ] || { bad=$((bad + 1)); }
   case "$ctx" in NONE*) bad=$((bad + 1)) ;; esac
 done
 
 echo
 if [ "$bad" -eq 0 ]; then
-  echo "audit-repo-settings: ok — every product repo can automerge a green bump"
+  echo "audit-repo-settings: ok — every repo is public, and every product repo can automerge a green bump"
   exit 0
 fi
-echo "audit-repo-settings: $bad setting(s) would stop a green Renovate bump from merging" >&2
-echo "    fix: gh api -X PATCH repos/$org/<repo> -F allow_auto_merge=true" >&2
+echo "audit-repo-settings: $bad setting(s) keep org secrets from a private repo, or would stop a green Renovate bump from merging" >&2
+echo "    fix: sh scripts/setup-family-repo.sh settle <repo>   (writes every family repo setting, idempotently)" >&2
+echo "    or by hand: gh api -X PATCH repos/$org/<repo> -F allow_auto_merge=true" >&2
 echo "    fix: printf '{\"required_status_checks\":{\"strict\":false,\"contexts\":[\"<job>\"]},\"enforce_admins\":false,\"required_pull_request_reviews\":null,\"restrictions\":null}' | gh api -X PUT repos/$org/<repo>/branches/main/protection --input -" >&2
 echo "    the context is the build JOB NAME; read it from a real run first:" >&2
 echo "    gh api repos/$org/<repo>/commits/main/check-runs --jq '[.check_runs[].name]|unique'" >&2
