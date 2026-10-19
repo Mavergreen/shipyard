@@ -37,6 +37,14 @@ printf '## Conformance deviations\n- scheme:shipyard ports nothing\n' > "$w/INGR
 if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: a missing space after the colon must fail; got: $out"; exit 1; fi
 printf '%s\n' "$out" | grep -qi 'glob' || { echo "FAIL: should say what is wrong (an empty glob): $out"; exit 1; }
 
+# spec: SKILL.md "Acceptance on real 10.9" -- a bare on-target stands in for the 10.9 acceptance job
+#       and parses with scope "*"; on-target:<part> names one gap in the job's coverage and keeps its
+#       part, which is how check 29 tells the two apart.
+printf '## Conformance deviations\n- on-target: no 10.9 acceptance job yet\n- on-target:docker-vm: Fusion cannot nest in QEMU\n' > "$w/INGREDIENTS.md"
+out="$(sh "$S" "$w")"
+printf '%s\n' "$out" | grep -qx 'on-target \* no 10.9 acceptance job yet' || { echo "FAIL: a bare on-target must parse unscoped; got: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx 'on-target docker-vm Fusion cannot nest in QEMU' || { echo "FAIL: on-target:<part> must keep its part; got: $out"; exit 1; }
+
 printf '## Conformance deviations\n- scheme:a/b.pkg: a real scope\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'scheme a/b.pkg a real scope' || { echo "FAIL: a scoped entry must still parse"; exit 1; }
 # spec: SKILL.md "Release notes" -- unlinked: is scoped to a pin, and a pin is a file plus its KEY,

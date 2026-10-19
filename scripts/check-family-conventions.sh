@@ -721,6 +721,56 @@ for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*
        "pin the version in a file a Renovate manager tracks and fetch that one, or declare under INGREDIENTS.md's ## Conformance deviations '- unpinned:$f: <why it must be the newest, and when to reconsider>' (see the conventions skill, check 28)"
 done
 
+# spec: SKILL.md "Family conventions" check 29, and "Acceptance on real 10.9" -- a pkg-building
+#       repo's release.yml has a job whose steps use Mavergreen/mavericks-vm, and its publish job
+#       needs that job directly. Only an unscoped on-target deviation stands in for the job; a scoped
+#       one declares a gap in the job's coverage. A workflow that does not parse is check 8's, and
+#       no PyYAML has already failed check 8.
+if [ -n "$builds_pkg" ] && ! printf '%s\n' "$DEVS" | grep -q '^on-target \* ' \
+   && python3 -c 'import yaml' >/dev/null 2>&1; then
+  _c29="$(python3 - "$REL" <<'PY'
+import sys, yaml
+try:
+    wf = yaml.safe_load(open(sys.argv[1])) or {}
+except Exception:
+    sys.exit(0)
+jobs = wf.get("jobs") if isinstance(wf, dict) else None
+jobs = {str(k): v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
+def on_vm(job):
+    return any(isinstance(st, dict) and isinstance(st.get("uses"), str)
+               and st["uses"].lower().startswith("mavergreen/mavericks-vm@")
+               for st in (job.get("steps") or []))
+vm = [j for j, b in jobs.items() if on_vm(b)]
+pubs = [j for j, b in jobs.items() if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]]
+if not pubs and "publish" in jobs:
+    pubs = ["publish"]
+if not vm:
+    print("novm")
+elif not pubs:
+    print("nopub %s" % ",".join(vm))
+else:
+    for p in pubs:
+        needs = jobs[p].get("needs") or []
+        needs = [needs] if isinstance(needs, str) else [str(n) for n in needs]
+        if not any(v in needs for v in vm):
+            print("unneeded %s %s" % (p, ",".join(vm)))
+PY
+)" || fail "check 29 could not read $REL's jobs (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  _decl="or, where no 10.9 acceptance job exists yet, declare '- on-target: <why, and its exit>' under INGREDIENTS.md's ## Conformance deviations (see the conventions skill, 'Acceptance on real 10.9')"
+  while read -r _k _a _b; do
+    case "$_k" in
+      novm) fail "this repo builds a .pkg ($builds_pkg) but no job in $REL installs and runs the pkg on real 10.9 (Mavergreen/mavericks-vm) -- it can publish a pkg nobody has installed on the platform it targets" \
+                 "add a job to $REL that installs the run's own pkg in the 10.9 guest with Mavergreen/mavericks-vm@v1 and runs the product and its tests, and add it to publish's needs: -- a job in another workflow file does not count, since publish can only need jobs in its own; $_decl" ;;
+      nopub) fail "$REL has no publish job that needs its 10.9 acceptance job ($_a): no job calls publish-release.yml or is named publish" \
+                  "publish through Mavergreen/shipyard/.github/workflows/publish-release.yml@v1 in a job whose needs: include $_a" ;;
+      unneeded) fail "$REL's publish job ($_a) does not need its 10.9 acceptance job ($_b) -- a release can publish before, or without, the pkg passing on real 10.9" \
+                     "add one of ($_b) to $_a's needs:" ;;
+    esac
+  done <<EOF
+$_c29
+EOF
+fi
+
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
 #       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
 #       ignored AND nothing may be tracked under them or under docs/superpowers/, nor a backlog file

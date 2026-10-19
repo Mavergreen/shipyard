@@ -1725,6 +1725,60 @@ when the family-wide inventory above is empty (then make any Rosetta use a hard 
 undeclared one), or when macOS 28 ships, whichever comes first. Declared test uses keep the inventory
 non-empty until they have moved to an x86_64 host; that is expected, and not a reason to skip them.
 
+## Acceptance on real 10.9
+
+**Every product that ships a `.pkg` is installed and run on real 10.9 before it publishes.** Check 29
+(see the family-conventions checks table, further below) enforces that the job exists and that publish
+waits for it; what the job covers is the convention below, not a check.
+
+**The job.** A job in `.github/workflows/release.yml` whose steps run `uses: Mavergreen/mavericks-vm@v1`
+(any job name today: `vm-test`, `on-mavericks`, `e2e`; the flag day renames them all `on-target`). It
+installs the run's OWN pkg(s) in the 10.9 guest, which has no Command Line Tools, and exercises them.
+The publish job (the one calling `publish-release.yml`) lists it in `needs:` directly. It must be in
+`release.yml` itself, with the `uses:` among its own steps: publish can only need jobs in its own
+workflow, so a job in another workflow file does not count, and check 29 does not follow a job that
+calls a reusable workflow either. A job that runs only on publishing runs (`if:` publish, as
+container-tools' `on-mavericks` does) still satisfies it, since publish needs it.
+
+**What the job covers, at least:**
+
+- the run's own pkg installs with `sudo installer -pkg … -target /`, its postinstall included;
+- every executable the pkg ships runs, at least `--version` or an equivalent;
+- the smoke is keyed to the version the job installed: it asserts the installed manifest's version
+  equals it, so a 10.9 box with an older install fails for the right reason;
+- the job's own smoke and guest tests count a skip (exit 77) as a failure: the job exists so that
+  they run;
+- the repo's own tests run, where it has any: `cp -R "$SHIPYARD_SCRIPTS" .shipyard-scripts` on the
+  runner, then `SHIPYARD_SCRIPTS=$PWD/.shipyard-scripts sh .shipyard-scripts/run-repo-tests.sh` in
+  the guest.
+
+openssh's `on-mavericks` is the model: download the dist artifact, install the pkg, run
+`tests/smoke-mavericks.sh` in the guest, fail on 77, and publish needs it.
+
+**Known traps on stock 10.9:** there is no `python3`; `git` is a CLT stub, so no `git ls-files`; and
+a test that needs arguments only ctest passes must exit 77 without them, not 1, since
+`run-repo-tests.sh` runs every `tests/*.sh` bare.
+
+**Required on main.** The job is a required status check on main. `setup-family-repo.sh settle`
+requires every job of a green run, and `audit-repo-settings.sh` flags a main whose required checks
+lack the job's check name (its `name:` if set, else its job id). A required check that is SKIPPED
+passes on GitHub. That is harmless here: settle requires every job of the run, so whatever the VM job
+depends on is itself required, and its failure fails the PR.
+
+**Declared, never silently skipped.** Under `INGREDIENTS.md`'s `## Conformance deviations`:
+
+- `- on-target: <reason>` (bare) stands in for the job, and is the only thing that exempts a repo from
+  check 29. Legitimate where the guest cannot be the target: real hardware (magic-trackpad2's kext
+  drives a physical trackpad), or a library proven through its consumers (recaulk). Otherwise it is
+  a to-do and says so, with its exit: `- on-target: no 10.9 acceptance job yet; exit: a vm-test job
+  that installs and runs the pkg`.
+- `- on-target:<part>: <reason>` declares one gap in the job's coverage, `<part>` one word naming what
+  stays untested in the guest (container-tools: `docker-vm`, since Fusion cannot nest inside QEMU;
+  `menubar-gui`, its menu-bar app's GUI). It does not exempt the repo: the job still has to exist.
+
+**Revisit** when the flag day renames the jobs to `on-target`: check 29 can then ask for the name, and
+the audit can stop inferring the check name from the job.
+
 ## Artifact conformance (checked at package time)
 
 The conventions gate constrains the REPO. `check-artifact-conformance.sh` constrains what comes OUT,
@@ -2306,6 +2360,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **26.** No tracked Renovate config other than `.github/renovate.json` (`renovate.json`, `renovate.json5`, `.renovaterc`, `.renovaterc.json`, `.renovaterc.json5`, `.github/renovate.json5`, `.gitlab/renovate.json`, `.gitlab/renovate.json5`), alone **or** beside it; a path is excused by `- renovate-path:<path>: <reason>` | Checks 4, 4b and 13 read only `.github/renovate.json`, and shipyard's configure step scaffolds it when absent, so a config kept elsewhere exempts its repo from them without anyone deciding it should, and beside the scaffold is dead config (Renovate takes one by precedence). Fix: `git mv <path> .github/renovate.json` |
 | **27.** `.gitignore` has a line ignoring `.superpowers/` and one ignoring `.idea/` (`.superpowers/`, `/.superpowers/`, `.superpowers` or `/.superpowers`, likewise for `.idea`), no file is tracked under `.superpowers/`, `docs/superpowers/` or `.idea/`, and no backlog is tracked anywhere (a file named `BACKLOG`, `QUEUE` or `TODO`, any case, bare or `.md`, `.markdown` or `.txt`), and no tracked line cites a queue entry by number (`QUEUE #n`, `BACKLOG #n`, also when a line break splits the name from the number) | Superpowers specs, plans, ledgers and backlogs are ephemeral: a plan describes a transition, not a system, and once the transition lands the plan is wrong about the system it produced. Committed, it reads as documentation and misleads the next reader (and `docs/superpowers/` is not a place the family uses at all). An IDE's per-user state is the user's, not the project's: committed, it churns on every checkout and fights each contributor's own settings. Both belong in the working tree and out of history, and an ignore line alone is not enough, since it does nothing for a file already tracked, so the check asks git as well. A backlog is the same kind of file under another name: two repos kept theirs as a tracked `BACKLOG.md`, and a code comment cited an entry by number. A citation resolves only in the checkout that has the queue, so a reader elsewhere gets a number and no reason |
 | **28.** Nothing a build or test fetches is taken as whatever is newest: no tagless `gh release download`, no `gh release view` of another repo without a tag, no fetch command (`curl`, `wget`, `shipyard_curl`) or `gh api` on a `/releases/latest` URL, no `@latest` install (`npm install`, `npx`, `go install`, `pipx`, `cargo install`, `uvx`), no `:latest` image (`FROM`, `image:`, `docker pull/run`) — in `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt`, `*.bats` and Dockerfiles, tests included, comments excepted — unless INGREDIENTS.md's `## Conformance deviations` declares `- unpinned:<path>: <why it must be the newest, and when to reconsider>` | A pin in a file a Renovate manager tracks makes every change a commit with CI attached; "latest" lets someone else's release change this repo's results with no commit to blame. It drifted exactly that way: python-315's CI installed longboat's latest, shipyard's on-target job python-315's latest, and `sign_and_appcast.sh` signed every family release with the latest `ed25519` pkg, unverified (all 2026-10-18). A feed URL, an install hint or an end-user `install.sh` names a newest-release URL without fetching it at build time, so only a fetch command's line counts |
+| **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@` (comments do not count; a job in another workflow file does not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or `INGREDIENTS.md` declares a bare `- on-target: <reason>`. A scoped `- on-target:<part>: <reason>` declares a coverage gap and exempts nothing | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
 
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,
