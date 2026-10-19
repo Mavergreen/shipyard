@@ -43,6 +43,12 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       print "deviations.sh: \"unlinked\" must name the pins it excuses: \"- unlinked:<pin path>[:KEY]: <reason>\"" > "/dev/stderr"
       bad = 1; next
     }
+    # spec: tests/deviations-test.sh -- a self-upstream-exclude: of only "*" and "/" would make no
+    #       change own code, so every release would keep the last date.
+    if (check == "self-upstream-exclude" && glob ~ /^[*\/]+$/) {
+      print "deviations.sh: \"self-upstream-exclude\" must name what it excludes: \"- self-upstream-exclude:<glob>: <reason>\"" > "/dev/stderr"
+      bad = 1; next
+    }
     # spec: SKILL.md "Acceptance on real 10.9" -- on-target:<part> names one gap in what the 10.9 guest
     #       covers; a glob there would read as the bare on-target, which exempts the repo from
     #       check 29.

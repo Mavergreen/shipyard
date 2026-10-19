@@ -30,6 +30,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# platform: these variables turn the :(exclude,glob) pathspec magic off.
+unset GIT_LITERAL_PATHSPECS GIT_GLOB_PATHSPECS GIT_NOGLOB_PATHSPECS GIT_ICASE_PATHSPECS
 git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || {
   echo "self-upstream-version: $ROOT is not a git repository" >&2
   exit 2
@@ -66,10 +68,6 @@ if ! sh "$SELF/deviations.sh" "$ROOT" > "$work/devs" 2>"$work/err"; then
 fi
 while read -r check glob _; do
   [ "$check" = self-upstream-exclude ] || continue
-  [ "$glob" != '*' ] || {
-    echo "self-upstream-version: \"self-upstream-exclude\" must name what it excludes: \"- self-upstream-exclude:<glob>: <reason>\"" >&2
-    exit 2
-  }
   printf ':(exclude,glob)%s\n' "$glob" >> "$work/exclude"
 done < "$work/devs"
 
@@ -78,11 +76,11 @@ while IFS= read -r spec; do set -- "$@" "$spec"; done < "$work/exclude"
 
 git -C "$ROOT" tag --merged "$rev" > "$work/tags"
 last=""
-for t in $(grep '^[0-9]\{8\}\.[0-9][0-9]*$' "$work/tags" || true); do
+for t in $(grep '^[0-9]\{8\}\.[1-9][0-9]*$' "$work/tags" || true); do
   if [ -z "$last" ] || [ "$(ver_cmp "$t" "$last")" = 1 ]; then last="$t"; fi
 done
 
-own="$(TZ=UTC git -C "$ROOT" log -1 --date=format-local:%Y%m%d --format='%cd %h' "$rev" -- "$@")"
+own="$(TZ=UTC git -C "$ROOT" log -1 --first-parent --date=format-local:%Y%m%d --format='%cd %h' "$rev" -- "$@")"
 day="${own%% *}"; sha="${own#* }"
 
 if [ -z "$last" ]; then
@@ -90,7 +88,7 @@ if [ -z "$last" ]; then
   ver="$day.1"; why="no release tag yet"
 else
   lastdate="${last%%.*}"; lastn="${last#*.}"
-  if [ -n "$(git -C "$ROOT" log -1 --format=%h "refs/tags/$last..$rev" -- "$@")" ]; then
+  if [ -n "$(git -C "$ROOT" log -1 --first-parent --format=%h "refs/tags/$last..$rev" -- "$@")" ]; then
     if [ "$day" -gt "$lastdate" ]; then ver="$day.1"; else ver="$lastdate.$((lastn + 1))"; fi
     why="own code changed in $sha ($day)"
   else

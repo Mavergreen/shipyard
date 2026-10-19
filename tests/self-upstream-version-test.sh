@@ -185,4 +185,30 @@ mkdir -p "$w/not-a-repo"
 refuses "not a git repository" "a directory outside any repo is refused" --root "$w/not-a-repo"
 refuses "unknown option" "an unknown option is a usage error" --root "$R" --frobnicate
 
+fresh merged
+git -C "$R" tag 20261012.2
+git -C "$R" checkout -qb side
+at 2026-10-15T12:00:00Z src/side.c
+git -C "$R" checkout -q -
+at 2026-10-16T12:00:00Z components/golang/version
+GIT_AUTHOR_DATE=2026-10-19T12:00:00Z GIT_COMMITTER_DATE=2026-10-19T12:00:00Z git -C "$R" merge -q --no-ff -m merge side
+want 20261019.1 "own code merged on the 19th takes the merge's day, not the branch commit's"
+
+fresh zero
+git -C "$R" tag 20261012.3
+git -C "$R" tag 20261012.08
+at 2026-10-19T12:00:00Z components/golang/version
+want 20261012.4 "a tag whose N has a leading zero is not a release tag"
+
+fresh literal
+git -C "$R" tag 20261012.3
+at 2026-10-19T12:00:00Z tests/a.sh
+_rc=0; got="$(GIT_LITERAL_PATHSPECS=1 sh "$S" --root "$R" 2>"$w/err")" || _rc=$?
+[ "$_rc" = 0 ] && [ "$got" = 20261012.4 ] || { echo "FAIL: GIT_LITERAL_PATHSPECS must not disable the exclusions: exit $_rc, got '$got'"; exit 1; }
+
+fresh starstar
+printf '%s\n' '# Build ingredients' '' '## Conformance deviations' '' \
+  '- self-upstream-exclude:**: everything' > "$R/INGREDIENTS.md"
+refuses "self-upstream-exclude" "an exclusion of only * and / is refused" --root "$R"
+
 echo "PASS: self-upstream-version"

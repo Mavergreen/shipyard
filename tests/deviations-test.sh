@@ -69,6 +69,13 @@ for bad in '- unlinked: no notes anywhere' '- unlinked:*: no notes anywhere'; do
   printf '## Conformance deviations\n%s\n' "$bad" > "$w/INGREDIENTS.md"
   if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: '$bad' must be refused; got: $out"; exit 1; fi
 done
+# spec: SKILL.md "Versioning" -- a self-upstream-exclude: that names nothing, or only "*" and "/",
+#       would make no change own code.
+for bad in '- self-upstream-exclude: no own code' '- self-upstream-exclude:*: x' '- self-upstream-exclude:**: x' '- self-upstream-exclude:*/**: x'; do
+  printf '## Conformance deviations\n%s\n' "$bad" > "$w/INGREDIENTS.md"
+  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: '$bad' must be refused; got: $out"; exit 1; fi
+  printf '%s\n' "$out" | grep -q 'self-upstream-exclude' || { echo "FAIL: '$bad': the refusal names self-upstream-exclude: $out"; exit 1; }
+done
 printf '## Conformance deviations\n- unlinked:components/*: a glob covers every KEY of every file under it\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'unlinked components/\* a glob covers every KEY of every file under it' \
   || { echo "FAIL: a file glob is a scope"; exit 1; }
