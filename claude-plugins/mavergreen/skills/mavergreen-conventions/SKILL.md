@@ -1760,6 +1760,9 @@ openssh's `on-mavericks` is the model: download the dist artifact, install the p
 a test that needs arguments only ctest passes must exit 77 without them, not 1, since
 `run-repo-tests.sh` runs every `tests/*.sh` bare. The `mavergreen` helper is
 `/usr/local/bin/mavergreen`, not under `/usr/local/mavergreen/bin` (longboat's first VM run, 2026-10-19).
+`otool`, `lipo`, `nm` and `strings` are CLT stubs there too: export clang22's `llvm-otool`, `llvm-lipo`,
+`llvm-nm` and `llvm-strings` as OTOOL, LIPO, NM and STRINGS, which the compat guard and shipyard's
+Mach-O scripts read (clang-22's first VM run, 2026-10-19).
 
 **Required on main.** The job is a required status check on main. `setup-family-repo.sh settle`
 requires every job of a green run, and `audit-repo-settings.sh` flags a main whose required checks
