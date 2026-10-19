@@ -3,7 +3,8 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 V="$here/../scripts/version.sh"
-L="$here/../scripts/lib.sh"
+SELF="$here/../scripts"; export SELF
+L="$SELF/lib.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/version-lib-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 printf '1.26.5\n' > "$w/UPSTREAM_VERSION"
 export MAVERICKS_ROOT="$w"
@@ -51,7 +52,7 @@ printf '%s\n' "$out" | grep -qx 'FULL=1.27.0-mavericks.1' || { echo "FAIL: tags 
 #       derivation; its absence from previous-release-tag.sh is why no openssh release ever
 #       found its baseline, when gen_appcast.sh's own copy learned the "pN" rule and
 #       previous-release-tag.sh's didn't.
-. "$here/../scripts/lib.sh"
+. "$SELF/lib.sh"
 [ "$(comparison_key 1.102.0-mavericks.4)" = 1.102.0.4 ] || { echo "FAIL key: -mavericks.N"; exit 1; }
 [ "$(comparison_key 9.9p2-mavericks.3)"   = 9.9.2.3 ]   || { echo "FAIL key: pN + N"; exit 1; }
 [ "$(comparison_key 9.9p2)"               = 9.9.2 ]     || { echo "FAIL key: bare pN"; exit 1; }
@@ -66,5 +67,19 @@ grep -q '(\[0-9\])p(\[0-9\])' "$here/../MavericksSparkle.cmake" \
 
 grep -q 's/-mavericks\\./\\./' "$here/../scripts/gen_appcast.sh" 2>/dev/null \
   && { echo "FAIL: gen_appcast.sh must NOT carry its own derivation, only call comparison_key() -- this is a regression test for the family's ONE-derivation rule violated when the pN rule was added to gen_appcast but not to previous-release-tag"; exit 1; }
+
+[ "$(comparison_key 1.0-mavergreen.2)" = 1.0.2 ] || { echo "FAIL key: -mavergreen.N"; exit 1; }
+grep -q 'string(REPLACE "-mavergreen\." ' "$here/../MavericksSparkle.cmake" \
+  || { echo "FAIL MavericksSparkle.cmake lost its -mavergreen derivation (mirror of comparison_key)"; exit 1; }
+
+vc() { r="$(mavergreen_vercmp "$1" "$2")" && s=0 || s=$?; echo "$s:$r"; }
+[ "$(vc 22.1.8-mavericks.5 22.1.8-mavericks.4)" = 0:1 ]   || { echo "FAIL vercmp: .5 > .4"; exit 1; }
+[ "$(vc 22.1.8-mavericks.10 22.1.8-mavericks.9)" = 0:1 ]  || { echo "FAIL vercmp: .10 > .9"; exit 1; }
+[ "$(vc 20261019.1 20261018.12)" = 0:1 ]                  || { echo "FAIL vercmp: dates"; exit 1; }
+[ "$(vc 9.9p2 9.9p1)" = 0:1 ]                             || { echo "FAIL vercmp: pN"; exit 1; }
+[ "$(vc 22.1.8-mavergreen.1 22.1.8-mavericks.1)" = 0:0 ]  || { echo "FAIL vercmp: mavergreen == mavericks"; exit 1; }
+[ "$(vc 1.0 1.0.0)" = 0:0 ]                               || { echo "FAIL vercmp: trailing zero"; exit 1; }
+[ "$(vc 1.0-rc1 1.0)" = 2: ]                              || { echo "FAIL vercmp: -rc1 must be status 2"; exit 1; }
+[ "$(vc abc 1)" = 2: ]                                    || { echo "FAIL vercmp: abc must be status 2"; exit 1; }
 
 echo "PASS: version-lib"

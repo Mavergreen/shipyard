@@ -134,6 +134,7 @@ function(mavericks_add_updater_app)
   # Also normalize an OpenSSH-portable-style "pN" patch to ".N" (9.9p2 -> 9.9.2), order-preserving, so a
   # non-dotted-numeric upstream still yields an orderable CFBundleVersion.
   string(REPLACE "-mavericks." "." MAVERICKS_BUILD_VERSION "${A_VERSION}")
+  string(REPLACE "-mavergreen." "." MAVERICKS_BUILD_VERSION "${MAVERICKS_BUILD_VERSION}")
   string(REGEX REPLACE "([0-9])p([0-9])" "\\1.\\2" MAVERICKS_BUILD_VERSION "${MAVERICKS_BUILD_VERSION}")  # comparison (CFBundleVersion)
   set(MAVERICKS_AUTO_CHECK      "${A_AUTO_CHECK}")                 # plist: true|false
   set(MAVERICKS_LOG_PREFIX      "${A_LOG_PREFIX}")

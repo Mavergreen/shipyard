@@ -56,29 +56,7 @@ msc_scripts() {
   return 1
 }
 
-# platform: 10.9's BSD sort has no -V, so any script relying on it works in CI and dies on the
-#           platform this family targets. A version is in the comparator's orderable domain iff it
-#           is purely dotted-numeric.
-# spec: scripts/assert_appcast_upgradeable.sh -- one comparator serves both this and
-#       previous-release-tag.sh, so "which tag is highest" cannot drift between them.
-numeric() {
-  case "$1" in ''|.*|*.|*..*|*[!0-9.]*) return 1;; *) return 0;; esac
-}
-
-ver_cmp() {
-  awk -v a="$1" -v b="$2" 'BEGIN{
-    na=split(a,A,"."); nb=split(b,B,"."); n=(na>nb)?na:nb;
-    for(i=1;i<=n;i++){ x=(i<=na)?A[i]+0:0; y=(i<=nb)?B[i]+0:0;
-      if(x>y){print 1; exit} if(x<y){print -1; exit} }
-    print 0 }'
-}
-
-# spec: tests/version-lib-test.sh "comparison_key()" -- the ONE dotted-numeric-key derivation for
-#       the family (mirrored in MavericksSparkle.cmake, which cannot source sh); gen_appcast.sh and
-#       previous-release-tag.sh each carried their own copy, and when the pN rule (OpenSSH-portable's
-#       9.9pN, monotonic: p2 is newer than p1) was added to only one side, no openssh release ever
-#       found its baseline. A NON-monotonic suffix (-rc1, beta) must NOT be folded here -- left
-#       unmapped so callers' numeric() checks fail closed.
-comparison_key() {
-  printf '%s' "$1" | sed -e 's/-mavericks\./\./' -e 's/\([0-9]\)p\([0-9]\)/\1.\2/'
-}
+# spec: scripts/lib/vercmp.sh -- numeric(), ver_cmp(), comparison_key() and mavergreen_vercmp() live
+#       there so generated installers can inline the identical text; every caller of this file sets
+#       $SELF to the scripts directory first.
+. "$SELF/lib/vercmp.sh"
