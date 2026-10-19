@@ -4,7 +4,7 @@
 setup() {
   HELPER="$BATS_TEST_DIRNAME/../scripts/cut-release.sh"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/cut-release-test.XXXXXX")" && pwd)"
-  export STUB="$WORK/stub" CUT_RELEASE_POLL=0
+  export STUB="$WORK/stub" CUT_RELEASE_POLL=0 CUT_RELEASE_WAIT=0
   mkdir -p "$WORK/bin" "$STUB"
   cat > "$WORK/bin/gh" <<'EOF'
 #!/bin/sh
@@ -14,8 +14,13 @@ case "$1 $2" in
   "release view") n=$(cat "$STUB/views" 2>/dev/null || echo 0); echo $((n + 1)) > "$STUB/views"
     if [ "$n" -eq 0 ]; then cat "$STUB/before" 2>/dev/null; else cat "$STUB/after" 2>/dev/null; fi; exit 0 ;;
   "workflow run") echo "dispatch $*" >> "$STUB/log"; exit 0 ;;
-  "run watch") exit "$(cat "$STUB/watch-rc" 2>/dev/null || echo 0)" ;;
-  "run view") echo "  build: failure"; exit 0 ;;
+  "run watch") exit 1 ;;
+  "run view") case "$*" in
+      *"--json status"*) n=$(cat "$STUB/polls" 2>/dev/null || echo 0); echo $((n + 1)) > "$STUB/polls"
+        sed -n "$((n + 1))p" "$STUB/states" 2>/dev/null | grep . || echo completed ;;
+      *"--json conclusion"*) cat "$STUB/conclusion" 2>/dev/null || echo success ;;
+      *) echo "  build: failure" ;;
+    esac; exit 0 ;;
 esac
 echo "stub gh: unexpected $*" >&2; exit 1
 EOF
@@ -88,10 +93,10 @@ dispatch_inputs() {  # the release.yml's workflow_dispatch inputs, one name per 
 
 @test "a failed run fails, naming the run and its failed jobs" {
   dispatch_inputs local_release
-  echo 1 > "$STUB/watch-rc"
+  echo failure > "$STUB/conclusion"
   run sh "$HELPER" thing
   [ "$status" -eq 1 ]
-  [[ "$output" == *"run 4242 failed"* ]] || false
+  [[ "$output" == *"run 4242 ended failure"* ]] || false
   [[ "$output" == *"build: failure"* ]] || false
 }
 
@@ -102,4 +107,14 @@ dispatch_inputs() {  # the release.yml's workflow_dispatch inputs, one name per 
   [ "$status" -eq 2 ]
   run sh "$HELPER" thing --frobnicate
   [ "$status" -eq 2 ]
+}
+
+@test "a run that waits long in the queue is waited out, not reported failed" {
+  dispatch_inputs local_release
+  printf 'queued\nqueued\nin_progress\ncompleted\n' > "$STUB/states"
+  echo 1.0-mavericks.2 > "$STUB/after"
+  run sh "$HELPER" thing
+  [ "$status" -eq 0 ]
+  [ "$(cat "$STUB/polls")" -ge 4 ]
+  [[ "$output" == *"released 1.0-mavericks.2"* ]] || false
 }

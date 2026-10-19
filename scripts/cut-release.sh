@@ -66,10 +66,16 @@ while [ -z "$run" ] && [ "$n" -lt 24 ]; do
 done
 [ -n "$run" ] || die "dispatched, but found no new run of $wf on $ref; look at https://github.com/$repo/actions"
 echo "cut-release: watching https://github.com/$repo/actions/runs/$run"
-if ! gh run watch "$run" -R "$repo" --exit-status >/dev/null 2>&1; then
+# platform: gh run watch gives up while a job waits long for a runner and exits non-zero, which read
+#           as a failed release (python-315, 2026-10-19), so the run's own status is polled instead.
+until [ "$(gh run view "$run" -R "$repo" --json status --jq .status)" = completed ]; do
+  sleep "${CUT_RELEASE_WAIT:-60}"
+done
+concl="$(gh run view "$run" -R "$repo" --json conclusion --jq .conclusion)" || die "could not read run $run's conclusion"
+if [ "$concl" != success ]; then
   gh run view "$run" -R "$repo" --json jobs \
     --jq '.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | "  \(.name): \(.conclusion)"' >&2 || :
-  die "run $run failed: https://github.com/$repo/actions/runs/$run"
+  die "run $run ended $concl: https://github.com/$repo/actions/runs/$run"
 fi
 
 after="$(gh release view -R "$repo" --json tagName --jq .tagName 2>/dev/null || :)"
