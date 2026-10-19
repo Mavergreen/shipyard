@@ -558,17 +558,25 @@ components but whose product is its own code) — has no "repackage-of-someone-e
 it **drops the `-mavericks` suffix** and versions itself directly:
 
 - **date-based `YYYYMMDD.N`** (porthole, longboat) — the family's date form but *without*
-  `-mavericks`, precisely because it is not a port. The date is the day the repo's own code last
-  changed: a release carrying any change besides ingredient pins sets `UPSTREAM_VERSION` to that day
-  and starts again at `.1`; an ingredient-only repackage keeps the date and takes `.N+1`. `.N` is never
-  omitted. Under this rule a version says whether our code moved (container-tools shipped 37 releases
+  `-mavericks`, precisely because it is not a port. The date is the UTC day the repo's own code last
+  changed, never earlier than the last release tag's: a release carrying an own-code change takes
+  that day and starts again at `.1`; an ingredient-only release keeps the date and takes `.N+1`. `.N`
+  is never omitted. `$SHIPYARD_SCRIPTS/self-upstream-version.sh` derives it from git history
+  (`fetch-depth: 0`). Own code is every path but `UPSTREAM_VERSION`, `components/*/version`,
+  `ingredients/**`, `.github/**`, `tests/**`, top-level `*.md`, each file `## Declared state` names,
+  and each `## Conformance deviations` entry `- self-upstream-exclude:<glob>: <reason>` (a git
+  pathspec glob: `*` stays in one directory, `**/` spans any). It sets the version only; publishing
+  is unchanged — declared state or a `workflow_dispatch`, which is how own code ships on purpose.
+  `UPSTREAM_VERSION` stays the declared `upstream` entry but is no longer read for the date: editing
+  it changes the digest, so it cuts a release by itself, the other lever besides a dispatch. Under
+  this rule a version says whether our code moved (container-tools shipped 37 releases
   as `20260727-mavericks.N`, 21 of them its own code, two of them breaking, all under one date);
 - **semver `vX.Y.Z`**, or dimmit's `v0.0.YYYYMMDD.N`.
 
-Mechanics for a self-upstream repo: `UPSTREAM_VERSION` (if used) is the repo's OWN version/date,
-hand-bumped (no Renovate datasource — nothing external to track). There is **no `resolve-version.sh`** (it
-hardcodes `-mavericks.`), so `release.yml` computes the version itself (e.g. `<date>.N` from the existing
-`<date>.*` tags, `fetch-depth: 0`). `VERSION` stays a gitignored build product; the family-conventions
+Mechanics for a self-upstream repo: `UPSTREAM_VERSION` (if used) is the repo's OWN version, with no
+Renovate datasource — nothing external to track. There is **no `resolve-version.sh`** (it hardcodes
+`-mavericks.`), so `release.yml` takes a date-based version from `self-upstream-version.sh` and computes a
+semver one itself (`fetch-depth: 0` either way). `VERSION` stays a gitignored build product; the family-conventions
 gate still applies unchanged (committed `UPSTREAM_VERSION` + uncommitted `VERSION` passes it), and you
 still publish via `publish-release.yml@v1`. **Everything below — the two bump axes, `resolve-version.sh`,
 `build/version.sh`, the `-mavericks.N` suffix — is for the PORT case.**
