@@ -2500,6 +2500,12 @@ loses the ref shipyard's install action reads, so fix and cut again instead. The
 replaces those inputs with one, `force_publish` with a required reason, enforced by the gate;
 `cut-release.sh` then takes the reason.
 
+**Don't change workflow files on main while a publishing release run is in flight.** A run's token
+can't create a tag on the older commit it built once main's workflows have changed under it: rust's
+1.99.1-mavericks.3 publish failed with a 403 because a PR that changed workflow files merged during the
+run (2026-10-18). Let the release finish first; if it already failed that way, dispatch it again
+from main (`cut-release.sh`), as publish-release's error says.
+
 ## Creating a family repo
 
 An agent may create the GitHub repo, with the maintainer's permission for that repo, and only
