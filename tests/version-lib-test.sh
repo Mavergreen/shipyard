@@ -3,8 +3,8 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 V="$here/../scripts/version.sh"
-SELF="$here/../scripts"; export SELF
-L="$SELF/lib.sh"
+L="$here/../scripts/lib.sh"
+SHIPYARD_SCRIPTS="$here/../scripts"; export SHIPYARD_SCRIPTS   # how a consumer repo finds lib/vercmp.sh
 w="$(mktemp -d "${TMPDIR:-/tmp}/version-lib-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 printf '1.26.5\n' > "$w/UPSTREAM_VERSION"
 export MAVERICKS_ROOT="$w"
@@ -52,7 +52,7 @@ printf '%s\n' "$out" | grep -qx 'FULL=1.27.0-mavericks.1' || { echo "FAIL: tags 
 #       derivation; its absence from previous-release-tag.sh is why no openssh release ever
 #       found its baseline, when gen_appcast.sh's own copy learned the "pN" rule and
 #       previous-release-tag.sh's didn't.
-. "$SELF/lib.sh"
+. "$here/../scripts/lib.sh"
 [ "$(comparison_key 1.102.0-mavericks.4)" = 1.102.0.4 ] || { echo "FAIL key: -mavericks.N"; exit 1; }
 [ "$(comparison_key 9.9p2-mavericks.3)"   = 9.9.2.3 ]   || { echo "FAIL key: pN + N"; exit 1; }
 [ "$(comparison_key 9.9p2)"               = 9.9.2 ]     || { echo "FAIL key: bare pN"; exit 1; }
@@ -81,5 +81,18 @@ vc() { r="$(mavergreen_vercmp "$1" "$2")" && s=0 || s=$?; echo "$s:$r"; }
 [ "$(vc 1.0 1.0.0)" = 0:0 ]                               || { echo "FAIL vercmp: trailing zero"; exit 1; }
 [ "$(vc 1.0-rc1 1.0)" = 2: ]                              || { echo "FAIL vercmp: -rc1 must be status 2"; exit 1; }
 [ "$(vc abc 1)" = 2: ]                                    || { echo "FAIL vercmp: abc must be status 2"; exit 1; }
+
+# spec: scripts/lib.sh -- consumer repos source it with their OWN $SELF (a build/ dir) and SHIPYARD /
+#       SHIPYARD_SCRIPTS set by msc.sh; it must find lib/vercmp.sh from those, and fail loudly otherwise.
+S="$here/../scripts"
+chk() { [ "$(env "$@" sh -c '. "$L" && mavergreen_vercmp 1.0.1 1.0' 2>&1)" = 1 ]; }
+L="$S/lib.sh"; export L
+chk -u SELF -u SHIPYARD -u SHIPYARD_SCRIPTS SELF="$S"                      || { echo "FAIL lib.sh: shipyard-internal SELF"; exit 1; }
+chk -u SELF -u SHIPYARD_SCRIPTS SHIPYARD="$S"                               || { echo "FAIL lib.sh: consumer, SELF unset, SHIPYARD set"; exit 1; }
+chk -u SHIPYARD -u SHIPYARD_SCRIPTS SELF="$w" SHIPYARD="$S"                 || { echo "FAIL lib.sh: consumer, unrelated SELF"; exit 1; }
+chk -u SELF -u SHIPYARD SHIPYARD_SCRIPTS="$S"                               || { echo "FAIL lib.sh: SHIPYARD_SCRIPTS only"; exit 1; }
+err="$(env -u SHIPYARD -u SHIPYARD_SCRIPTS SELF="$w" sh -c '. "$L" && echo reached' 2>&1)" && rc=0 || rc=$?
+[ "$err" = "lib.sh: cannot find lib/vercmp.sh beside it; set SHIPYARD_SCRIPTS to shipyard's scripts directory" ] \
+  || { echo "FAIL lib.sh: missing vercmp.sh must give exactly the one error line and not continue: $err"; exit 1; }
 
 echo "PASS: version-lib"

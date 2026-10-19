@@ -57,6 +57,16 @@ msc_scripts() {
 }
 
 # spec: scripts/lib/vercmp.sh -- numeric(), ver_cmp(), comparison_key() and mavergreen_vercmp() live
-#       there so generated installers can inline the identical text; every caller of this file sets
-#       $SELF to the scripts directory first.
-. "$SELF/lib/vercmp.sh"
+#       there so generated installers can inline the identical text. Found beside this file via $SELF
+#       (shipyard's own scripts), else $SHIPYARD / $SHIPYARD_SCRIPTS (a consumer repo's msc.sh sets
+#       them; its own $SELF is its build/ dir). A sourced file cannot learn its own path in POSIX sh.
+_lib_vercmp=""
+for _lib_d in "${SELF:-}" "${SHIPYARD:-}" "${SHIPYARD_SCRIPTS:-}"; do
+  if [ -n "$_lib_d" ] && [ -f "$_lib_d/lib/vercmp.sh" ]; then _lib_vercmp="$_lib_d/lib/vercmp.sh"; break; fi
+done
+if [ -z "$_lib_vercmp" ]; then
+  echo "lib.sh: cannot find lib/vercmp.sh beside it; set SHIPYARD_SCRIPTS to shipyard's scripts directory" >&2
+  return 1
+fi
+. "$_lib_vercmp"
+unset _lib_vercmp _lib_d
