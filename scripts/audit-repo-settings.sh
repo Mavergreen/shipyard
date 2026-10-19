@@ -45,18 +45,30 @@ for repo in $(gh repo list "$org" --limit 100 --json name --jq '.[].name' | sort
   case "$ctx" in NONE*) bad=$((bad + 1)) ;; esac
 
   # spec: SKILL.md "Acceptance on real 10.9" -- main requires the release.yml job that runs
-  #       Mavergreen/mavericks-vm, by its check name: its name: if set, else its job id.
+  #       Mavergreen/mavericks-vm, by its check name: its name: if set, else its job id; for a job
+  #       calling a local reusable workflow, "<caller> / <called job>", as GitHub names it.
   if ! relyml="$(gh api -H 'Accept: application/vnd.github.raw' "repos/$org/$repo/contents/.github/workflows/release.yml" 2>/dev/null)" \
      || [ -z "$relyml" ] \
      || ! vmjobs="$(printf '%s\n' "$relyml" | python3 -c '
-import sys, yaml
-wf = yaml.safe_load(sys.stdin) or {}
-jobs = wf.get("jobs") if isinstance(wf, dict) else None
-for j, b in (jobs.items() if isinstance(jobs, dict) else []):
-    if isinstance(b, dict) and any(isinstance(st, dict) and isinstance(st.get("uses"), str)
-                                   and st["uses"].lower().startswith("mavergreen/mavericks-vm@")
-                                   for st in (b.get("steps") or [])):
-        print(b.get("name") or j)')"; then
+import subprocess, sys, yaml
+def jobs_of(wf):
+    j = wf.get("jobs") if isinstance(wf, dict) else None
+    return [(k, b) for k, b in j.items() if isinstance(b, dict)] if isinstance(j, dict) else []
+def runs_vm(b):
+    return any(isinstance(st, dict) and isinstance(st.get("uses"), str)
+               and st["uses"].lower().startswith("mavergreen/mavericks-vm@")
+               for st in (b.get("steps") or []))
+for j, b in jobs_of(yaml.safe_load(sys.stdin) or {}):
+    if runs_vm(b):
+        print(b.get("name") or j)
+    elif isinstance(b.get("uses"), str) and b["uses"].startswith("./.github/workflows/"):
+        called = subprocess.run(["gh", "api", "-H", "Accept: application/vnd.github.raw",
+                                 "repos/%s/contents/%s" % (sys.argv[1], b["uses"][2:])],
+                                capture_output=True, text=True, check=True).stdout
+        for cj, cb in jobs_of(yaml.safe_load(called) or {}):
+            if runs_vm(cb):
+                print("%s / %s" % (b.get("name") or j, cb.get("name") or cj))
+' "$org/$repo")"; then
     printf '%-28s %s\n' '' "-> cannot read release.yml's jobs (needs gh, and python3 with PyYAML)"
     bad=$((bad + 1)); continue
   fi
