@@ -104,6 +104,61 @@ printf '\n## Conformance deviations\n\n- on-target:menubar-gui: the guest has no
 (cd "$work/vm-gap" && git add -A) >/dev/null 2>&1
 vm_passes gap
 
+# spec: SKILL.md "Acceptance on real 10.9" -- a release.yml job calling a LOCAL reusable workflow
+#       that runs mavericks-vm is the VM job; a remote reusable workflow is not read, so it is not.
+CALLEE='name: on-mavericks
+on: workflow_call
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Mavergreen/mavericks-vm@v1'
+CALLER='  on-mavericks:
+    needs: [build]
+    uses: ./.github/workflows/on-mavericks.yml'
+callee() {  # $1 = name, $2 = the called workflow
+  printf '%s\n' "$2" > "$work/vm-$1/.github/workflows/on-mavericks.yml"
+  (cd "$work/vm-$1" && git add -A) >/dev/null 2>&1
+}
+vm local "$CALLER
+$PUB
+    needs: [build, on-mavericks]"
+callee local "$CALLEE"
+vm_passes local
+
+vm localunneeded "$CALLER
+$PUB
+    needs: [build]"
+callee localunneeded "$CALLEE"
+vm_fails localunneeded "$UNNEEDED"
+
+vm localcomment "$CALLER
+$PUB
+    needs: [build, on-mavericks]"
+callee localcomment "$(printf '%s\n' "$CALLEE" | sed "s/^      - uses: Mavergreen/      $H - uses: Mavergreen/")"
+vm_fails localcomment "$NOVM"
+
+vm remote "  on-mavericks:
+    needs: [build]
+    uses: Mavergreen/elsewhere/.github/workflows/on-mavericks.yml@v1
+$PUB
+    needs: [build, on-mavericks]"
+vm_fails remote "$NOVM"
+
+# spec: scripts/deviations.sh -- on-target:<part> is one word naming a coverage gap; a glob there
+#       would read as the bare form and exempt the repo, so it is refused, not honoured.
+vm globpart "$PUB
+    needs: [build]"
+printf '\n## Conformance deviations\n\n- on-target:*: everything is a gap\n' >> "$work/vm-globpart/INGREDIENTS.md"
+(cd "$work/vm-globpart" && git add -A) >/dev/null 2>&1
+vm_fails globpart 'on-target:<part> is one word'
+
+# spec: scripts/check-family-conventions.sh check 21 -- test/ holds fixtures exactly as tests/ does.
+mkrepo "$work/vm-testdir" novm; mkdir -p "$work/vm-testdir/test"
+printf '#!/bin/sh\npkgbuild --root x t.pkg\n' > "$work/vm-testdir/test/fixture.sh"
+(cd "$work/vm-testdir" && git add -A) >/dev/null 2>&1
+vm_passes testdir
+
 (cd "$work/ok" && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 29: a repo that builds no pkg needs no 10.9 acceptance job: $(cd "$work/ok" && sh "$S" 2>&1)"; exit 1; }
 

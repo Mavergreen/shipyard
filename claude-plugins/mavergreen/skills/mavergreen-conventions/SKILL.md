@@ -1734,11 +1734,13 @@ waits for it; what the job covers is the convention below, not a check.
 **The job.** A job in `.github/workflows/release.yml` whose steps run `uses: Mavergreen/mavericks-vm@v1`
 (any job name today: `vm-test`, `on-mavericks`, `e2e`; the flag day renames them all `on-target`). It
 installs the run's OWN pkg(s) in the 10.9 guest, which has no Command Line Tools, and exercises them.
-The publish job (the one calling `publish-release.yml`) lists it in `needs:` directly. It must be in
-`release.yml` itself, with the `uses:` among its own steps: publish can only need jobs in its own
-workflow, so a job in another workflow file does not count, and check 29 does not follow a job that
-calls a reusable workflow either. A job that runs only on publishing runs (`if:` publish, as
-container-tools' `on-mavericks` does) still satisfies it, since publish needs it.
+The publish job (the one calling `publish-release.yml`) lists it in `needs:` directly. Publish can
+only need jobs in its own workflow, so the job is in `release.yml`: either the `uses:` is among its
+own steps, or it calls a LOCAL reusable workflow (`uses: ./.github/workflows/<file>.yml`, claude-code's
+`on-mavericks`) whose own steps run it. A job elsewhere that release.yml does not call does not count,
+and neither does a remote reusable workflow (`owner/repo/…@ref`), which check 29 cannot read. A job
+that runs only on publishing runs (`if:` publish, as container-tools' `on-mavericks` does) still
+satisfies it, since publish needs it.
 
 **What the job covers, at least:**
 
@@ -1746,8 +1748,7 @@ container-tools' `on-mavericks` does) still satisfies it, since publish needs it
 - every executable the pkg ships runs, at least `--version` or an equivalent;
 - the smoke is keyed to the version the job installed: it asserts the installed manifest's version
   equals it, so a 10.9 box with an older install fails for the right reason;
-- the job's own smoke and guest tests count a skip (exit 77) as a failure: the job exists so that
-  they run;
+- the job's own smoke and guest tests fail on 77; `run-repo-tests.sh` keeps treating 77 as a skip;
 - the repo's own tests run, where it has any: `cp -R "$SHIPYARD_SCRIPTS" .shipyard-scripts` on the
   runner, then `SHIPYARD_SCRIPTS=$PWD/.shipyard-scripts sh .shipyard-scripts/run-repo-tests.sh` in
   the guest.
@@ -1761,7 +1762,8 @@ a test that needs arguments only ctest passes must exit 77 without them, not 1, 
 
 **Required on main.** The job is a required status check on main. `setup-family-repo.sh settle`
 requires every job of a green run, and `audit-repo-settings.sh` flags a main whose required checks
-lack the job's check name (its `name:` if set, else its job id). A required check that is SKIPPED
+lack the job's check name (its `name:` if set, else its job id; `<caller> / <called job>` for a local
+reusable workflow). A required check that is SKIPPED
 passes on GitHub. That is harmless here: settle requires every job of the run, so whatever the VM job
 depends on is itself required, and its failure fails the PR.
 
@@ -1772,8 +1774,9 @@ depends on is itself required, and its failure fails the PR.
   drives a physical trackpad), or a library proven through its consumers (recaulk). Otherwise it is
   a to-do and says so, with its exit: `- on-target: no 10.9 acceptance job yet; exit: a vm-test job
   that installs and runs the pkg`.
-- `- on-target:<part>: <reason>` declares one gap in the job's coverage, `<part>` one word naming what
-  stays untested in the guest (container-tools: `docker-vm`, since Fusion cannot nest inside QEMU;
+- `- on-target:<part>: <reason>` declares one gap in the job's coverage. `<part>` is one word, with no
+  space, colon or glob character, naming what stays untested in the guest; `deviations.sh` refuses a
+  glob (`- on-target:*: …`) loudly rather than read it as the bare form (container-tools: `docker-vm`, since Fusion cannot nest inside QEMU;
   `menubar-gui`, its menu-bar app's GUI). It does not exempt the repo: the job still has to exist.
 
 **Revisit** when the flag day renames the jobs to `on-target`: check 29 can then ask for the name, and
@@ -1828,17 +1831,20 @@ Scoping is the point: swift-toolchain republishing swift.org's `.pkg` must not l
 build-support tarball it *does* build to drift. An unscoped deviation quietly covers artifacts nobody
 meant to excuse.
 
-**The same block, and the same parser (`deviations.sh`), covers seven of the family-conventions
-checks, under six names** — name the check and scope it to the file: `registry-read:<path>` (check
+**The same block, and the same parser (`deviations.sh`), covers ten of the family-conventions
+checks, under nine names** — name the check and scope it to the file: `registry-read:<path>` (check
 16), `msc-template:<path>` (check 17), `shipyard-cmake-only:<path>` (check 18), `rosetta:<path>`
-(check 25, "Rosetta", above); and, for the whole repo, `artifact-conformance` (check 21) and
-`product-layout` (checks 23 and 24). One grammar, but not one reader for all six: the first five are
-read identically by the artifact checker and the gate, so a declared exception cannot mean two things
-there; `rosetta:<path>` is gate-only — it declares a build-time fact, not an artifact one, so
-`check-artifact-conformance.sh` reads it off the fact stream like any other deviation but acts on
-none of it, neither rejecting the entry nor checking it against anything a pkg carries. An entry with
-no reason **fails** regardless of which check declares it: an exception without one is
-indistinguishable from drift.
+(check 25, "Rosetta", above), `renovate-path:<path>` (check 26) and `unpinned:<path>` (check 28);
+and, for the whole repo, `artifact-conformance` (check 21), `product-layout` (checks 23 and 24) and a
+bare `on-target` (check 29, "Acceptance on real 10.9", above). `on-target:<part>` is the one scoped
+form no check acts on: it records a gap in the 10.9 job's coverage, and `deviations.sh` refuses a glob
+there, so it can never pass for the bare form. Check 15's `comments` is the exception: the gate reads
+it with its own pattern, not `deviations.sh`, and refuses any scope. All of these are gate-only.
+`artifact-facts.sh` puts every entry on the fact stream, and `check-artifact-conformance.sh` consults
+only its own checks' names there, so it neither rejects these entries nor checks them against
+anything a pkg carries. No `explain` entry or id list describes any of them; this paragraph and the
+checks table are the record. An entry with no reason **fails** regardless of which check declares it:
+an exception without one is indistinguishable from drift.
 
 Beyond the gate and the artifact checker, `ingredient-notes.sh` reads `unlinked:<pin path>[:KEY]`
 ("Release notes", above): a moved pin with no change notes to link. It is the one kind whose scope
@@ -2347,7 +2353,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **4b.** A `packageRules` entry touching `automerge` carries a `description` saying why | The family default is ship-if-green. An exception is legitimate only where a bad bump would BUILD FINE AND BE WRONG (swift-toolchain: a minor Swift bump needs `LLVM_BRANCH` to follow, which no regex can infer). Unexplained, an exception is indistinguishable from drift |
 | **7c.** `build/version.sh` is **not** git-ignored, where the repo uses the wrappers | The version wrappers live in COMMITTED `build/*.sh`. A too-broad ignore (`build/`, `build*/`) makes `git add` skip them without a word: everything works locally and only CI's fresh checkout fails, far from the cause. Ignore build OUTPUT dirs (`/_build/`, `build-*/`, `build/work/`) — never `build/` itself |
 | **7d.** Every build output dir the repo writes IS ignored | The mirror of the above. tailscale configured its updater with `cmake -S updater -B build/updater`, a path the shared presets never name, so nothing connected it to `.gitignore`: 7.4MB of CMake output sat untracked AND unignored, one `git add -A` from being committed, its stale `CMakeCache.txt` still resolving a package renamed away months earlier. The family will not agree on one spelling and does not need to — the gate asks the REPO where it writes (every `cmake … -B <dir>` in its workflows and committed shell, plus every `binaryDir` in a committed `CMakePresets.json`) |
-| **21.** A repo that builds a `.pkg` (a tracked, non-test `pkgbuild`/`productbuild` call, or a workflow that runs `sign_and_appcast.sh`) runs `check-artifact-conformance.sh` in some workflow, on a non-comment line — or declares `- artifact-conformance: <reason>` | The identity and install-path rules ("Install layout and identity") live in the conformance checker, so a product that never calls it is exempt from all of them by omission — four products were, when those rules landed. Exempt-by-default is the opposite of a convention |
+| **21.** A repo that builds a `.pkg` (a tracked `pkgbuild`/`productbuild` call outside `tests/` and `test/`, or a workflow that runs `sign_and_appcast.sh`) runs `check-artifact-conformance.sh` in some workflow, on a non-comment line — or declares `- artifact-conformance: <reason>` | The identity and install-path rules ("Install layout and identity") live in the conformance checker, so a product that never calls it is exempt from all of them by omission — four products were, when those rules landed. Exempt-by-default is the opposite of a convention |
 | **10.** No shell construct the 10.9 base system lacks (`check-shell-portability.sh`) | These are invisible to CI by construction: they work on the runner and fail on the platform every repo here targets, so the machine that would catch them is the one machine CI never uses. shipyard shipped two (`sort -V`, a bare `mktemp -d`) and reached all seven repos through `@v1` before anyone noticed — one of them turning release notes silently empty rather than erroring |
 | **15.** Every comment cites `# platform:` or `# spec:`, delegated to `check-comments.sh`; **opt-in**, only in a repo with its own `comment-reasons` file | See "Comments cite a reason", above, for the full rule. Three false claims that reached review — each confidently wrong, each living in a comment rather than in code — are the reason this check exists at all: a comment is the one artifact that stays wrong while every test passes. Opt-in so `@v1` reaching all fourteen consumers doesn't redden a repo that hasn't swept yet; a swept repo states one declared exception under `INGREDIENTS.md`'s `## Conformance deviations` (`- comments: <reason>`) |
 | **16.** Nothing tracked reads the CMake **user package registry** (`~/.cmake/packages`) | shipyard now lives in `shipyard-cmake`'s own prefix and nothing writes that registry any more, so a script reading it reads a file that is no longer there — and reads it *silently*, resolving to an empty path rather than failing |
@@ -2360,7 +2366,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **26.** No tracked Renovate config other than `.github/renovate.json` (`renovate.json`, `renovate.json5`, `.renovaterc`, `.renovaterc.json`, `.renovaterc.json5`, `.github/renovate.json5`, `.gitlab/renovate.json`, `.gitlab/renovate.json5`), alone **or** beside it; a path is excused by `- renovate-path:<path>: <reason>` | Checks 4, 4b and 13 read only `.github/renovate.json`, and shipyard's configure step scaffolds it when absent, so a config kept elsewhere exempts its repo from them without anyone deciding it should, and beside the scaffold is dead config (Renovate takes one by precedence). Fix: `git mv <path> .github/renovate.json` |
 | **27.** `.gitignore` has a line ignoring `.superpowers/` and one ignoring `.idea/` (`.superpowers/`, `/.superpowers/`, `.superpowers` or `/.superpowers`, likewise for `.idea`), no file is tracked under `.superpowers/`, `docs/superpowers/` or `.idea/`, and no backlog is tracked anywhere (a file named `BACKLOG`, `QUEUE` or `TODO`, any case, bare or `.md`, `.markdown` or `.txt`), and no tracked line cites a queue entry by number (`QUEUE #n`, `BACKLOG #n`, also when a line break splits the name from the number) | Superpowers specs, plans, ledgers and backlogs are ephemeral: a plan describes a transition, not a system, and once the transition lands the plan is wrong about the system it produced. Committed, it reads as documentation and misleads the next reader (and `docs/superpowers/` is not a place the family uses at all). An IDE's per-user state is the user's, not the project's: committed, it churns on every checkout and fights each contributor's own settings. Both belong in the working tree and out of history, and an ignore line alone is not enough, since it does nothing for a file already tracked, so the check asks git as well. A backlog is the same kind of file under another name: two repos kept theirs as a tracked `BACKLOG.md`, and a code comment cited an entry by number. A citation resolves only in the checkout that has the queue, so a reader elsewhere gets a number and no reason |
 | **28.** Nothing a build or test fetches is taken as whatever is newest: no tagless `gh release download`, no `gh release view` of another repo without a tag, no fetch command (`curl`, `wget`, `shipyard_curl`) or `gh api` on a `/releases/latest` URL, no `@latest` install (`npm install`, `npx`, `go install`, `pipx`, `cargo install`, `uvx`), no `:latest` image (`FROM`, `image:`, `docker pull/run`) — in `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt`, `*.bats` and Dockerfiles, tests included, comments excepted — unless INGREDIENTS.md's `## Conformance deviations` declares `- unpinned:<path>: <why it must be the newest, and when to reconsider>` | A pin in a file a Renovate manager tracks makes every change a commit with CI attached; "latest" lets someone else's release change this repo's results with no commit to blame. It drifted exactly that way: python-315's CI installed longboat's latest, shipyard's on-target job python-315's latest, and `sign_and_appcast.sh` signed every family release with the latest `ed25519` pkg, unverified (all 2026-10-18). A feed URL, an install hint or an end-user `install.sh` names a newest-release URL without fetching it at build time, so only a fetch command's line counts |
-| **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@` (comments do not count; a job in another workflow file does not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or `INGREDIENTS.md` declares a bare `- on-target: <reason>`. A scoped `- on-target:<part>: <reason>` declares a coverage gap and exempts nothing | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
+| **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@`, or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) whose steps do (comments do not count; an uncalled job in another workflow file and a remote reusable workflow do not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or `INGREDIENTS.md` declares a bare `- on-target: <reason>`. A scoped `- on-target:<part>: <reason>` declares a coverage gap and exempts nothing; a glob for `<part>` is refused | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
 
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,

@@ -14,8 +14,9 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
   /^- *[a-z][a-z0-9_-]*(:[^ :]*)? *:/ {
     line = $0; sub(/^- */, "", line)
     i = index(line, ":"); check = substr(line, 1, i - 1); rest = substr(line, i + 1)
-    glob = "*"
+    glob = "*"; scoped = 0
     if (rest !~ /^ /) {
+      scoped = 1
       j = index(rest, ":"); glob = substr(rest, 1, j - 1); rest = substr(rest, j + 1)
       # spec: tests/deviations-test.sh -- no second colon leaves an EMPTY glob ("- check:reason",
       #       the same declaration written without the space). It fails SAFE, which is what makes it
@@ -40,6 +41,13 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
     #       link rule off for the whole repo.
     if (check == "unlinked" && glob == "*") {
       print "deviations.sh: \"unlinked\" must name the pins it excuses: \"- unlinked:<pin path>[:KEY]: <reason>\"" > "/dev/stderr"
+      bad = 1; next
+    }
+    # spec: SKILL.md "Acceptance on real 10.9" -- on-target:<part> names one gap in what the 10.9 guest
+    #       covers; a glob there would read as the bare on-target, which exempts the repo from
+    #       check 29.
+    if (check == "on-target" && scoped && glob ~ /[*?]|\[/) {
+      print "deviations.sh: \"on-target:" glob "\" -- on-target:<part> is one word naming what stays untested in the guest, never a glob; a bare \"- on-target: <reason>\" is the one that stands in for the job" > "/dev/stderr"
       bad = 1; next
     }
     sub(/^ */, "", rest)

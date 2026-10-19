@@ -441,7 +441,7 @@ fi
 # spec: scripts/deviations.sh -- ONE parser for the "## Conformance deviations" grammar, shared with
 #       check-artifact-conformance.sh, so a declared exception cannot mean two things.
 if ! DEVS="$(sh "$SELF/deviations.sh" .)"; then
-  fail "INGREDIENTS.md declares a conformance deviation with no reason" "give every '- <check>[:<glob>]:' entry its reason on the same line"
+  fail "INGREDIENTS.md declares a conformance deviation that deviations.sh refuses (it says why, above)" "give every '- <check>[:<glob>]:' entry its reason on the same line, and fix any scope deviations.sh names"
 fi
 deviated() {  # $1 = check name, $2 = path: 0 if a declared deviation covers it
   printf '%s\n' "$DEVS" | { while read -r c g _; do
@@ -610,10 +610,10 @@ fi
 # spec: SKILL.md "Family conventions" check 21 -- a repo that builds a .pkg must run artifact
 #       conformance, or nothing checks what its pkg installs: the identity and install-path rules
 #       ("Install layout and identity") live in check-artifact-conformance.sh, and a product that
-#       never calls it is exempt from all of them by omission. Tests are excluded: fixtures build
-#       throwaway pkgs on purpose.
+#       never calls it is exempt from all of them by omission. tests/ and test/ are excluded:
+#       fixtures build throwaway pkgs on purpose.
 builds_pkg=""
-for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -v '^tests/'); do
+for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -Ev '^tests?/'); do
   grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' && { builds_pkg="$f"; break; }
 done
 [ -n "$builds_pkg" ] || ! ci_mentions 'sign_and_appcast' || builds_pkg="a signing workflow"
@@ -723,9 +723,10 @@ done
 
 # spec: SKILL.md "Family conventions" check 29, and "Acceptance on real 10.9" -- a pkg-building
 #       repo's release.yml has a job whose steps use Mavergreen/mavericks-vm, and its publish job
-#       needs that job directly. Only an unscoped on-target deviation stands in for the job; a scoped
-#       one declares a gap in the job's coverage. A workflow that does not parse is check 8's, and
-#       no PyYAML has already failed check 8.
+#       needs that job directly; a job calling a LOCAL reusable workflow that does is that job. Only
+#       an unscoped on-target deviation stands in for the job; a scoped one declares a gap in the
+#       job's coverage. A workflow that does not parse is check 8's, and no PyYAML has already failed
+#       check 8.
 if [ -n "$builds_pkg" ] && ! printf '%s\n' "$DEVS" | grep -q '^on-target \* ' \
    && python3 -c 'import yaml' >/dev/null 2>&1; then
   _c29="$(python3 - "$REL" <<'PY'
@@ -736,10 +737,22 @@ except Exception:
     sys.exit(0)
 jobs = wf.get("jobs") if isinstance(wf, dict) else None
 jobs = {str(k): v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
-def on_vm(job):
+def runs_vm(job):
     return any(isinstance(st, dict) and isinstance(st.get("uses"), str)
                and st["uses"].lower().startswith("mavergreen/mavericks-vm@")
                for st in (job.get("steps") or []))
+def on_vm(job):
+    if runs_vm(job):
+        return True
+    u = job.get("uses")
+    if not isinstance(u, str) or not u.startswith("./.github/workflows/"):
+        return False
+    try:
+        called = yaml.safe_load(open(u[2:])) or {}
+    except Exception:
+        return False
+    cj = called.get("jobs") if isinstance(called, dict) else None
+    return isinstance(cj, dict) and any(isinstance(b, dict) and runs_vm(b) for b in cj.values())
 vm = [j for j, b in jobs.items() if on_vm(b)]
 pubs = [j for j, b in jobs.items() if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]]
 if not pubs and "publish" in jobs:
@@ -760,7 +773,7 @@ PY
   while read -r _k _a _b; do
     case "$_k" in
       novm) fail "this repo builds a .pkg ($builds_pkg) but no job in $REL installs and runs the pkg on real 10.9 (Mavergreen/mavericks-vm) -- it can publish a pkg nobody has installed on the platform it targets" \
-                 "add a job to $REL that installs the run's own pkg in the 10.9 guest with Mavergreen/mavericks-vm@v1 and runs the product and its tests, and add it to publish's needs: -- a job in another workflow file does not count, since publish can only need jobs in its own; $_decl" ;;
+                 "add a job to $REL that installs the run's own pkg in the 10.9 guest with Mavergreen/mavericks-vm@v1 and runs the product and its tests, and add it to publish's needs: -- a job in another workflow file counts only when a release.yml job calls that file as ./.github/workflows/<file>.yml, since publish can only need jobs in its own workflow; $_decl" ;;
       nopub) fail "$REL has no publish job that needs its 10.9 acceptance job ($_a): no job calls publish-release.yml or is named publish" \
                   "publish through Mavergreen/shipyard/.github/workflows/publish-release.yml@v1 in a job whose needs: include $_a" ;;
       unneeded) fail "$REL's publish job ($_a) does not need its 10.9 acceptance job ($_b) -- a release can publish before, or without, the pkg passing on real 10.9" \

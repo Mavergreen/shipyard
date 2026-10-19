@@ -44,6 +44,11 @@ printf '## Conformance deviations\n- on-target: no 10.9 acceptance job yet\n- on
 out="$(sh "$S" "$w")"
 printf '%s\n' "$out" | grep -qx 'on-target \* no 10.9 acceptance job yet' || { echo "FAIL: a bare on-target must parse unscoped; got: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx 'on-target docker-vm Fusion cannot nest in QEMU' || { echo "FAIL: on-target:<part> must keep its part; got: $out"; exit 1; }
+for part in '*' 'docker-*' 'gui?'; do
+  printf '## Conformance deviations\n- on-target:%s: a glob for a part\n' "$part" > "$w/INGREDIENTS.md"
+  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: on-target:$part is a glob and must be refused; got: $out"; exit 1; fi
+  printf '%s\n' "$out" | grep -q 'one word' || { echo "FAIL: refusing on-target:$part should say a part is one word: $out"; exit 1; }
+done
 
 printf '## Conformance deviations\n- scheme:a/b.pkg: a real scope\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'scheme a/b.pkg a real scope' || { echo "FAIL: a scoped entry must still parse"; exit 1; }
