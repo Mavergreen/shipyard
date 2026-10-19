@@ -2090,7 +2090,10 @@ scripts:
 - **preinstall**: first, for every `--requires <short>` (repeatable), refuses to proceed — before
   `mavergreen unlink`, before anything else — if `usr/local/mavergreen/<short>/mavergreen.plist` is
   missing on the target volume, naming this product's display name, `<short>`, and its releases URL
-  (from the registry) on stderr, and exits 1 having changed nothing; then `mavergreen unlink
+  (from the registry) on stderr, and exits 1 having changed nothing. `--requires <short>>=<version>`
+  also refuses when that manifest's `version` is older than `<version>`, or is missing or
+  unorderable (`1.0-rc1`), naming the minimum and the installed version; every unmet requirement
+  is reported before it exits. Then `mavergreen unlink
   <product>` if a helper exists; then the product's
   `--preinstall-hook`, which still sees the outgoing version's tree and bundles; then removes each
   bundle directory (`.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`) that the
@@ -2104,12 +2107,15 @@ scripts:
 - **postinstall**: `mavergreen link <product>`, failing the install if it fails; then the updater's
   agent load (`--updater-app`, whose place and label come from the registry); then the `--postinstall-hook`.
 
-`--requires` replaces a hand-written "is product X installed?" check in a preinstall hook: 1password
-once checked for Porthole and Container Tools, signal-desktop only for Porthole, and Porthole for
-nothing, and the three drifted. Each `--requires <short>` must name a different, registered product
-(`scripts/product-names`); an unregistered or self-naming `--requires` fails staging (exit 2). It
-takes no version constraint and does no old-layout detection, and is stage_product-only: it never
-reaches `render-manifest.sh` or the manifest.
+`--requires` replaces a hand-written "is product X installed?" or "is it new enough?" check in a
+preinstall hook: 1password once checked for Porthole and Container Tools, signal-desktop only for
+Porthole, and Porthole for nothing, and the three drifted. Each `--requires <short>` must name a
+different, registered product (`scripts/product-names`); an unregistered or self-naming
+`--requires` fails staging (exit 2). A minimum (`--requires container-tools>=20261019.1`) is
+compared by `scripts/lib/vercmp.sh`, the family's one comparator, which the preinstall carries
+inline; a minimum it cannot order (empty, `1.0-rc1`, `abc`) fails staging (exit 2). It does no
+old-layout detection, and is stage_product-only: it never reaches `render-manifest.sh` or the
+manifest.
 
 Both anchor on Installer's target volume and never on `/`: with none, the preinstall removes nothing
 and the postinstall fails. **A product's own steps go in the hooks**, appended to the generated

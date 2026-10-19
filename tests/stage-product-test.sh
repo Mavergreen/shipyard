@@ -159,6 +159,7 @@ grep -q '^launchctl bootstrap gui/501 ' "$alog" \
 fake="$w/fake"; mkdir -p "$fake"
 cp "$S" "$fake/stage_product.sh"
 cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$fake/"
+mkdir -p "$fake/lib"; cp "$here/../scripts/lib/vercmp.sh" "$fake/lib/"
 RM_LOG="$w/rm.log"; export RM_LOG
 cat > "$fake/render-manifest.sh" <<'EOF'
 #!/bin/sh
@@ -452,5 +453,85 @@ rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --sc
   --requires porthole 2>"$w/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "staging with --requires naming the product itself must exit 2, got $rc"
 grep -q porthole "$w/err" || fail "the refusal names the self-requirement: $(cat "$w/err")"
+
+reqvol() {
+  _rv="$1"; shift
+  mkdir -p "$_rv/usr/local/mavergreen/porthole/bin" "$_rv/usr/local/bin"
+  echo old > "$_rv/usr/local/mavergreen/porthole/bin/porthole"
+  printf '#!/bin/sh\necho called "$@" >> "%s"\n' "$mglog" > "$_rv/usr/local/bin/mavergreen"
+  chmod +x "$_rv/usr/local/bin/mavergreen"
+  while [ $# -ge 2 ]; do
+    mkdir -p "$_rv/usr/local/mavergreen/$1"
+    _rvp="$_rv/usr/local/mavergreen/$1/mavergreen.plist"
+    if [ "$2" = - ]; then
+      /usr/libexec/PlistBuddy -c 'Add :name string x' "$_rvp" >/dev/null
+    else
+      /usr/libexec/PlistBuddy -c "Add :version string $2" "$_rvp" >/dev/null
+    fi
+    shift 2
+  done
+}
+SCRM="$w/scr-porthole-min"
+sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRM" \
+  --requires 'container-tools>=20261019.1' \
+  || fail "staging porthole with --requires container-tools>=20261019.1 must succeed"
+sh -n "$SCRM/preinstall" || fail "generated preinstall with a minimum must be valid sh"
+sh "$here/../scripts/check-shell-portability.sh" "$SCRM/preinstall" >/dev/null \
+  || fail "generated preinstall with a minimum must pass check-shell-portability.sh"
+grep -q mavergreen_vercmp "$SCRP/preinstall" && fail "a preinstall with no minimum carries no comparator"
+for v in 20261019.1 20261019.2; do
+  V="$w/vol-min-$v"; reqvol "$V" container-tools "$v"
+  sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
+    || fail "preinstall proceeds when the required product is at $v (minimum 20261019.1): $(cat "$w/err")"
+done
+V="$w/vol min old"; : > "$mglog"; reqvol "$V" container-tools 20261018.9
+rc=0; sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "preinstall must exit 1 when the required product is older than the minimum, got $rc"
+grep -qF "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again." "$w/err" \
+  || fail "the refusal names the requirement, its minimum and the installed version: $(cat "$w/err")"
+[ -f "$V/usr/local/mavergreen/porthole/bin/porthole" ] \
+  || fail "an unmet minimum must leave the existing installed tree untouched"
+[ ! -s "$mglog" ] || fail "an unmet minimum is checked before mavergreen unlink runs: $(cat "$mglog")"
+V="$w/vol min ok"; reqvol "$V" container-tools 20261019.1
+sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
+  || fail "a volume path containing a space must work with a minimum: $(cat "$w/err")"
+for v in - 1.0-rc1; do
+  V="$w/vol-min-unorderable$v"; reqvol "$V" container-tools "$v"
+  rc=0; sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
+  [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when the installed version ($v) cannot be compared, got $rc"
+  grep -q "container-tools.*cannot be compared" "$w/err" \
+    || fail "the refusal says the installed version ($v) cannot be compared: $(cat "$w/err")"
+  [ -f "$V/usr/local/mavergreen/porthole/bin/porthole" ] \
+    || fail "an uncomparable installed version ($v) must leave the existing installed tree untouched"
+done
+
+SCRM2="$w/scr-porthole-min2"
+sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRM2" \
+  --requires 'container-tools>=20261019.1' --requires 'openssh>=9.9p2' \
+  || fail "staging porthole with two minimums must succeed"
+[ "$(grep -c '^mavergreen_vercmp()' "$SCRM2/preinstall")" -eq 1 ] \
+  || fail "the comparator is inlined once, however many minimums there are"
+V="$w/vol-min-one-unmet"; reqvol "$V" container-tools 20261019.1 openssh 9.9p1
+rc=0; sh "$SCRM2/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "preinstall must exit 1 when one of two minimums is unmet, got $rc"
+grep -q "openssh 9.9p2 or newer (installed: 9.9p1)" "$w/err" || fail "the unmet minimum (openssh) must be named: $(cat "$w/err")"
+grep -q "container-tools" "$w/err" && fail "the met minimum (container-tools) must not be named: $(cat "$w/err")"
+V="$w/vol-min-both-unmet"; reqvol "$V" container-tools 20261018.9 openssh 9.9p1
+rc=0; sh "$SCRM2/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "preinstall must exit 1 when both minimums are unmet, got $rc"
+grep -q "container-tools 20261019.1 or newer (installed: 20261018.9)" "$w/err" \
+  && grep -q "openssh 9.9p2 or newer (installed: 9.9p1)" "$w/err" \
+  || fail "both unmet minimums must be named: $(cat "$w/err")"
+
+V="$w/vol-nomin-any"; reqvol "$V" container-tools 1.0-rc1
+sh "$SCRP/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
+  || fail "--requires with no minimum passes with any installed version: $(cat "$w/err")"
+
+for bad in 'container-tools>=' 'container-tools>=1.0-rc1' 'container-tools>=abc' '>=20261019.1'; do
+  rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-badmin" \
+    --requires "$bad" 2>"$w/err" || rc=$?
+  [ "$rc" -eq 2 ] || fail "staging with --requires $bad must exit 2, got $rc"
+  grep -qF -- "$bad" "$w/err" || fail "the refusal names the value $bad: $(cat "$w/err")"
+done
 
 echo "PASS: stage-product"

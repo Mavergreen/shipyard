@@ -2,7 +2,7 @@
 # platform: macOS-only -- PlistBuddy reads the updater's identity, and render-manifest.sh reads back and lints the manifest
 #   usage: stage_product.sh --stage ROOT --product P --name N --version V --scripts-out DIR
 #            [--group G] [--line L] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
-#            [--requires SHORT]... [--updater-app P-updater.app] [--preinstall-hook FILE]
+#            [--requires SHORT[>=VERSION]]... [--updater-app P-updater.app] [--preinstall-hook FILE]
 #            [--postinstall-hook FILE]
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
 #          staged its files under ROOT/usr/local/mavergreen/P/ (and anything the OS dictates elsewhere).
@@ -10,11 +10,14 @@
 #          for anything else is refused, and so are --appcast, --app-dir and --agent-label.
 #          --requires SHORT (repeatable) makes the generated preinstall refuse to run, before
 #          anything is removed, when SHORT's product is not installed on the target volume. SHORT
-#          must be a different, registered product; stage_product refuses otherwise.
+#          must be a different, registered product; stage_product refuses otherwise. With
+#          >=VERSION it also refuses when the installed SHORT is older than VERSION, or its version
+#          cannot be compared; VERSION must be orderable by scripts/lib/vercmp.sh.
 # spec: tests/stage-product-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
+. "$SELF/lib/vercmp.sh"
 nl='
 '
 shq() { printf '%s' "$1" | sed "s/'/'\\\\''/g"; }
@@ -46,15 +49,23 @@ case "$P" in ''|-*|*[!a-z0-9-]*) echo "stage_product: bad product name '$P'" >&2
 _ifs="$IFS"; IFS="$nl"
 for r in $REQ; do
   IFS="$_ifs"
+  _rs="${r%%>=*}"
   case "$r" in
+    *'>='*)
+      _rmin="${r#*>=}"
+      numeric "$(comparison_key "$_rmin")" \
+        || { echo "stage_product: --requires $r: '$_rmin' is not an orderable version (see scripts/lib/vercmp.sh)" >&2; exit 2; } ;;
+  esac
+  case "$_rs" in
+    '') echo "stage_product: --requires $r names no product" >&2; exit 2 ;;
     "$P") echo "stage_product: --requires $r: a product cannot require itself" >&2; exit 2 ;;
   esac
   _rlrc=0
-  registry_lookup repo "$r" || _rlrc=$?
+  registry_lookup repo "$_rs" || _rlrc=$?
   case "$_rlrc" in
     0) : ;;
-    1) echo "stage_product: --requires $r is not in shipyard's scripts/product-names -- register it there first" >&2; exit 2 ;;
-    *) printf 'stage_product: cannot look up %s in shipyard'"'"'s registry\n%s\n' "$r" "$REG_WHY" >&2; exit 2 ;;
+    1) echo "stage_product: --requires $r: $_rs is not in shipyard's scripts/product-names -- register it there first" >&2; exit 2 ;;
+    *) printf 'stage_product: cannot look up %s in shipyard'"'"'s registry\n%s\n' "$_rs" "$REG_WHY" >&2; exit 2 ;;
   esac
   IFS="$nl"
 done
@@ -85,14 +96,38 @@ sh "$SELF/render-manifest.sh" "$@"
   printf 'ROOT="${3%%/}"\n'
   if [ -n "$REQ" ]; then
     printf '_reqs_missing=0\n'
+    # platform: Installer runs every component's preinstall before the base component's postinstall,
+    #           so the comparator is inlined rather than called from an installed helper.
+    case "$REQ" in *'>='*) cat "$SELF/lib/vercmp.sh"; printf '\n' ;; esac
     _ifs="$IFS"; IFS="$nl"
     for r in $REQ; do
       IFS="$_ifs"
-      registry_need stage_product repo "$r"; _reqrepo="$REG_V"
-      _reqmsg="$NAME needs $r installed first: https://github.com/Mavergreen/$_reqrepo/releases/latest -- install it, then run this installer again."
-      printf 'if [ ! -f "$ROOT/usr/local/mavergreen/%s/mavergreen.plist" ]; then\n' "$r"
+      _rs="${r%%>=*}"
+      registry_need stage_product repo "$_rs"; _reqrepo="$REG_V"
+      _requrl="https://github.com/Mavergreen/$_reqrepo/releases/latest"
+      _reqmsg="$NAME needs $_rs installed first: $_requrl -- install it, then run this installer again."
+      printf 'if [ ! -f "$ROOT/usr/local/mavergreen/%s/mavergreen.plist" ]; then\n' "$_rs"
       printf "  echo '%s' >&2\n" "$(shq "$_reqmsg")"
       printf '  _reqs_missing=1\n'
+      case "$r" in
+        *'>='*)
+          _rmin="${r#*>=}"
+          printf 'else\n'
+          printf '  _req_v="$(/usr/libexec/PlistBuddy -c '"'"'Print :version'"'"' "$ROOT/usr/local/mavergreen/%s/mavergreen.plist" 2>/dev/null)" || _req_v=""\n' "$_rs"
+          printf "  _req_rc=0; _req_c=\"\$(mavergreen_vercmp \"\$_req_v\" '%s')\" || _req_rc=\$?\n" "$(shq "$_rmin")"
+          printf '  if [ "$_req_rc" -ne 0 ]; then\n'
+          printf "    printf '%%s%%s%%s\\\\n' '%s' \"\${_req_v:-none}\" '%s' >&2\n" \
+            "$(shq "$NAME needs $_rs $_rmin or newer, but its installed version (")" \
+            "$(shq ") cannot be compared: $_requrl -- update it, then run this installer again.")"
+          printf '    _reqs_missing=1\n'
+          printf '  elif [ "$_req_c" = -1 ]; then\n'
+          printf "    printf '%%s%%s%%s\\\\n' '%s' \"\$_req_v\" '%s' >&2\n" \
+            "$(shq "$NAME needs $_rs $_rmin or newer (installed: ")" \
+            "$(shq "): $_requrl -- update it, then run this installer again.")"
+          printf '    _reqs_missing=1\n'
+          printf '  fi\n'
+          ;;
+      esac
       printf 'fi\n'
       IFS="$nl"
     done
