@@ -456,3 +456,36 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
   [ -z "$(find "$CACHE" -mindepth 1)" ]
 }
 
+
+# spec: tests/mavericks_fetch.bats "sha256 tool" -- a Linux without perl has sha256sum but no shasum, and
+#       a missing hasher used to read as a pin mismatch ("is sha256 , not the pinned ...").
+bare_path() {  # $1 = dir: the tools a fetch uses, without shasum or sha256sum
+  mkdir -p "$1"
+  for t in curl mktemp mv rm cut awk tar mkdir sed grep rmdir ln ls cp date dirname basename wc tr head sleep cat env sh; do
+    p="$(command -v "$t" 2>/dev/null)" && [ -n "$p" ] && ln -sf "$p" "$1/$t"
+  done
+}
+
+@test "sha256 tool: with no shasum, sha256sum verifies the pin" {
+  real="$(command -v shasum || command -v sha256sum)"
+  bare_path "$WORK/bin"
+  case "$real" in
+    */shasum) printf '#!/bin/sh\nexec %s -a 256 "$@"\n' "$real" > "$WORK/bin/sha256sum" ;;
+    *) ln -sf "$real" "$WORK/bin/sha256sum" ;;
+  esac
+  chmod +x "$WORK/bin/sha256sum"
+  run env PATH="$WORK/bin" sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" fixture.tar' sh \
+    "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$URL" "$SHA" "$CACHE"
+  [ "$status" -eq 0 ]
+  [ -f "$CACHE/fixture.tar" ]
+}
+
+@test "sha256 tool: with neither, it fails as a missing tool, not as a mismatch" {
+  bare_path "$WORK/bin"
+  run env PATH="$WORK/bin" sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" fixture.tar' sh \
+    "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$URL" "$SHA" "$CACHE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no SHA-256 tool"* ]] || false
+  [[ "$output" != *"not the pinned"* ]] || false
+  [ ! -e "$CACHE/fixture.tar" ]
+}
