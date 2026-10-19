@@ -1,14 +1,8 @@
 # platform: host-agnostic
-# spec: tests/version-lib-test.sh -- the family's ONE version comparator. Definitions only (no
-#       exit, no $0, no set), because generated installer scripts inline this file verbatim and the
-#       same text must also be sourced by lib.sh; a second copy would drift the way gen_appcast.sh's
-#       and previous-release-tag.sh's key derivations once did.
+# spec: tests/version-lib-test.sh -- the family's one comparator: definitions only (no exit, $0 or
+#       set), so lib.sh sources it and generated preinstalls inline it verbatim.
 
-# platform: 10.9's BSD sort has no -V, so any script relying on it works in CI and dies on the
-#           platform this family targets. A version is in the comparator's orderable domain iff it
-#           is purely dotted-numeric.
-# spec: scripts/assert_appcast_upgradeable.sh -- one comparator serves both this and
-#       previous-release-tag.sh, so "which tag is highest" cannot drift between them.
+# platform: 10.9's BSD sort has no -V; a key is orderable iff it is purely dotted-numeric.
 numeric() {
   case "$1" in ''|.*|*.|*..*|*[!0-9.]*) return 1;; *) return 0;; esac
 }
@@ -21,22 +15,17 @@ ver_cmp() {
     print 0 }'
 }
 
-# spec: tests/version-lib-test.sh "comparison_key()" -- the ONE dotted-numeric-key derivation for
-#       the family (mirrored in MavericksSparkle.cmake, which cannot source sh); gen_appcast.sh and
-#       previous-release-tag.sh each carried their own copy, and when the pN rule (OpenSSH-portable's
-#       9.9pN, monotonic: p2 is newer than p1) was added to only one side, no openssh release ever
-#       found its baseline. A NON-monotonic suffix (-rc1, beta) must NOT be folded here -- left
-#       unmapped so callers' numeric() checks fail closed. -mavergreen. is the same build-number
-#       suffix as -mavericks., so a product renamed between the two stays comparable.
+# spec: tests/version-lib-test.sh "comparison_key()" -- maps only monotonic suffixes (-mavericks.N,
+#       -mavergreen.N, pN), so -rc1 stays unorderable; MavericksSparkle.cmake mirrors it.
 comparison_key() {
   printf '%s' "$1" | sed -e 's/-mavericks\./\./' -e 's/-mavergreen\./\./' -e 's/\([0-9]\)p\([0-9]\)/\1.\2/'
 }
 
-# spec: tests/version-lib-test.sh "mavergreen_vercmp" -- status 2 (nothing printed) when either key is
-#       unorderable, so a caller can refuse rather than guess; 1.0-rc1 has no place in the order.
-mavergreen_vercmp() {
-  _mv_a="$(comparison_key "$1")"
-  _mv_b="$(comparison_key "$2")"
-  numeric "$_mv_a" && numeric "$_mv_b" || return 2
-  ver_cmp "$_mv_a" "$_mv_b"
-}
+# spec: tests/version-lib-test.sh "mavergreen_vercmp" -- status 2, printing nothing, when either key is
+#       unorderable; a subshell body, so it sets no caller variable.
+mavergreen_vercmp() (
+  a="$(comparison_key "$1")"
+  b="$(comparison_key "$2")"
+  numeric "$a" && numeric "$b" || return 2
+  ver_cmp "$a" "$b"
+)

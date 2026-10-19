@@ -483,11 +483,12 @@ for v in 20261019.1 20261019.2; do
   V="$w/vol-min-$v"; reqvol "$V" container-tools "$v"
   sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
     || fail "preinstall proceeds when the required product is at $v (minimum 20261019.1): $(cat "$w/err")"
+  [ ! -s "$w/err" ] || fail "a met minimum ($v) prints nothing: $(cat "$w/err")"
 done
 V="$w/vol min old"; : > "$mglog"; reqvol "$V" container-tools 20261018.9
 rc=0; sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when the required product is older than the minimum, got $rc"
-grep -qF "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again." "$w/err" \
+[ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again." ] \
   || fail "the refusal names the requirement, its minimum and the installed version: $(cat "$w/err")"
 [ -f "$V/usr/local/mavergreen/porthole/bin/porthole" ] \
   || fail "an unmet minimum must leave the existing installed tree untouched"
@@ -495,11 +496,18 @@ grep -qF "Porthole needs container-tools 20261019.1 or newer (installed: 2026101
 V="$w/vol min ok"; reqvol "$V" container-tools 20261019.1
 sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
   || fail "a volume path containing a space must work with a minimum: $(cat "$w/err")"
-for v in - 1.0-rc1; do
-  V="$w/vol-min-unorderable$v"; reqvol "$V" container-tools "$v"
+for v in - 1.0-rc1 dict; do
+  V="$w/vol-min-unorderable$v"
+  case "$v" in
+    -) reqvol "$V" container-tools -; shown=none ;;
+    dict) reqvol "$V" container-tools -; shown='Dict {'
+      /usr/libexec/PlistBuddy -c 'Add :version dict' -c 'Add :version:a string 1' \
+        "$V/usr/local/mavergreen/container-tools/mavergreen.plist" >/dev/null ;;
+    *) reqvol "$V" container-tools "$v"; shown="$v" ;;
+  esac
   rc=0; sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
   [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when the installed version ($v) cannot be compared, got $rc"
-  grep -q "container-tools.*cannot be compared" "$w/err" \
+  [ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer, but its installed version ($shown) cannot be compared: https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again." ] \
     || fail "the refusal says the installed version ($v) cannot be compared: $(cat "$w/err")"
   [ -f "$V/usr/local/mavergreen/porthole/bin/porthole" ] \
     || fail "an uncomparable installed version ($v) must leave the existing installed tree untouched"
@@ -514,13 +522,13 @@ sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-
 V="$w/vol-min-one-unmet"; reqvol "$V" container-tools 20261019.1 openssh 9.9p1
 rc=0; sh "$SCRM2/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when one of two minimums is unmet, got $rc"
-grep -q "openssh 9.9p2 or newer (installed: 9.9p1)" "$w/err" || fail "the unmet minimum (openssh) must be named: $(cat "$w/err")"
-grep -q "container-tools" "$w/err" && fail "the met minimum (container-tools) must not be named: $(cat "$w/err")"
+[ "$(cat "$w/err")" = "Porthole needs openssh 9.9p2 or newer (installed: 9.9p1): https://github.com/Mavergreen/openssh/releases/latest -- update it, then run this installer again." ] \
+  || fail "only the unmet minimum (openssh) is named: $(cat "$w/err")"
 V="$w/vol-min-both-unmet"; reqvol "$V" container-tools 20261018.9 openssh 9.9p1
 rc=0; sh "$SCRM2/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when both minimums are unmet, got $rc"
-grep -q "container-tools 20261019.1 or newer (installed: 20261018.9)" "$w/err" \
-  && grep -q "openssh 9.9p2 or newer (installed: 9.9p1)" "$w/err" \
+[ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again.
+Porthole needs openssh 9.9p2 or newer (installed: 9.9p1): https://github.com/Mavergreen/openssh/releases/latest -- update it, then run this installer again." ] \
   || fail "both unmet minimums must be named: $(cat "$w/err")"
 
 V="$w/vol-nomin-any"; reqvol "$V" container-tools 1.0-rc1
@@ -531,7 +539,11 @@ for bad in 'container-tools>=' 'container-tools>=1.0-rc1' 'container-tools>=abc'
   rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-badmin" \
     --requires "$bad" 2>"$w/err" || rc=$?
   [ "$rc" -eq 2 ] || fail "staging with --requires $bad must exit 2, got $rc"
-  grep -qF -- "$bad" "$w/err" || fail "the refusal names the value $bad: $(cat "$w/err")"
+  case "$bad" in
+    '>='*) want="stage_product: --requires $bad names no product" ;;
+    *) want="stage_product: --requires $bad: '${bad#*>=}' is not an orderable version (see scripts/lib/vercmp.sh)" ;;
+  esac
+  [ "$(cat "$w/err")" = "$want" ] || fail "the refusal names the value $bad: $(cat "$w/err")"
 done
 
 echo "PASS: stage-product"

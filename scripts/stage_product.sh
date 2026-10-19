@@ -96,8 +96,7 @@ sh "$SELF/render-manifest.sh" "$@"
   printf 'ROOT="${3%%/}"\n'
   if [ -n "$REQ" ]; then
     printf '_reqs_missing=0\n'
-    # platform: Installer runs every component's preinstall before the base component's postinstall,
-    #           so the comparator is inlined rather than called from an installed helper.
+    # platform: inline the comparator: a product's preinstall runs before the base component's postinstall.
     case "$REQ" in *'>='*) cat "$SELF/lib/vercmp.sh"; printf '\n' ;; esac
     _ifs="$IFS"; IFS="$nl"
     for r in $REQ; do
@@ -113,7 +112,7 @@ sh "$SELF/render-manifest.sh" "$@"
         *'>='*)
           _rmin="${r#*>=}"
           printf 'else\n'
-          printf '  _req_v="$(/usr/libexec/PlistBuddy -c '"'"'Print :version'"'"' "$ROOT/usr/local/mavergreen/%s/mavergreen.plist" 2>/dev/null)" || _req_v=""\n' "$_rs"
+          printf '  _req_v="$(/usr/libexec/PlistBuddy -c '"'"'Print :version'"'"' "$ROOT/usr/local/mavergreen/%s/mavergreen.plist" 2>/dev/null | sed -n 1p)"\n' "$_rs"
           printf "  _req_rc=0; _req_c=\"\$(mavergreen_vercmp \"\$_req_v\" '%s')\" || _req_rc=\$?\n" "$(shq "$_rmin")"
           printf '  if [ "$_req_rc" -ne 0 ]; then\n'
           printf "    printf '%%s%%s%%s\\\\n' '%s' \"\${_req_v:-none}\" '%s' >&2\n" \

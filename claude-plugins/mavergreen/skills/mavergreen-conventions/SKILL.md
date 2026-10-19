@@ -1241,8 +1241,8 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   release time — checked structurally (the call carries no `||`/`&&`/`;`/pipe fallback and no `set +e`
   precedes it), not by grepping for a token list, so `|| true`, `|| exit 0`, or wrapping the call in
   `set +e` are all caught the same as an outright missing call.
-- **`comparison_key()` in `lib.sh` is the one Sparkle-comparable-version derivation**
-  (`-mavericks.N` → `.N`, and OpenSSH-portable's `9.9p2` → `9.9.2`), now shared by `gen_appcast.sh` and
+- **`comparison_key()` in `lib/vercmp.sh` (sourced by `lib.sh`) is the one Sparkle-comparable-version derivation**
+  (`-mavericks.N` and `-mavergreen.N` → `.N`, and OpenSSH-portable's `9.9p2` → `9.9.2`), now shared by `gen_appcast.sh` and
   `previous-release-tag.sh`. Its absence from the latter is why no openssh release ever listed a moved
   ingredient — the appcast's `<sparkle:version>` folded `p2` and found a baseline; the notes generator's
   own numeric comparison didn't, and silently found none.

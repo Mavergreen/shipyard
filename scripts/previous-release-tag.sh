@@ -8,7 +8,7 @@
 #          assert_appcast_upgradeable.sh uses) replaces the default "*-mavericks.*" pattern VERBATIM,
 #          for a product whose tags are not <upstream>-mavericks.N (shipyard/magic-trackpad2 tag
 #          vX.Y.Z, porthole tags YYYYMMDD.N) -- the two are mutually exclusive.
-# spec: scripts/lib.sh "numeric()" -- ver_cmp/comparison_key are the one comparator this and
+# spec: scripts/lib/vercmp.sh "numeric()" -- ver_cmp/comparison_key are the one comparator this and
 #       gen_appcast.sh both use, so "which tag is highest" cannot drift between them.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"

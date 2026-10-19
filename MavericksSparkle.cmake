@@ -130,7 +130,7 @@ function(mavericks_add_updater_app)
   # Give the comparator a numeric-only build version by turning "-mavericks." into ".", e.g.
   # 1.102.0-mavericks.4 -> 1.102.0.4. That orders correctly on BOTH axes (upstream and N), and an already
   # installed "-mavericks.N" host still sees a numeric appcast as newer (Sparkle ranks a number above the
-  # "-mavericks" string), so existing installs self-migrate. Must match scripts/gen_appcast.sh.
+  # "-mavericks" string), so existing installs self-migrate. Must match comparison_key() in scripts/lib/vercmp.sh.
   # Also normalize an OpenSSH-portable-style "pN" patch to ".N" (9.9p2 -> 9.9.2), order-preserving, so a
   # non-dotted-numeric upstream still yields an orderable CFBundleVersion.
   string(REPLACE "-mavericks." "." MAVERICKS_BUILD_VERSION "${A_VERSION}")
