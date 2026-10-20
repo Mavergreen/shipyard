@@ -38,8 +38,7 @@ install_shipyard() {  # $1 = build dir  $2 = prefix  $3 = SHIPYARD_CMAKE_MIN
     || { echo "FAIL: could not install shipyard into $2:"; sed 's/^/    | /' "$1.install.log"; exit 1; }
 }
 install_shipyard "$w/sb" "$fx/shipyard" "$ver"
-install_shipyard "$w/sb" "$w/dev/shipyard" "$ver"
-ln -s "$fx/cmake" "$w/dev/cmake"
+install_shipyard "$w/sb" "$w/dev" "$ver"
 install_shipyard "$w/sb-above" "$w/above/shipyard" "$above"
 ln -s "$fx/cmake" "$w/above/cmake"
 
@@ -67,8 +66,18 @@ refused "the host cmake run directly" "$ver" \
 refused "a cmake below the minimum, through shipyard-cmake" "$above" \
   "$w/above/shipyard/bin/shipyard-cmake" -S "$w/c" -B "$w/b2a"
 
-out="$(CMAKE_PREFIX_PATH="$w/dev/shipyard" "$sc" -S "$w/c" -B "$w/b3" 2>&1)" || { echo "FAIL: dev override must configure; got:"; echo "$out"; exit 1; }
-printf '%s' "$out" | grep -q "DIR=$w/dev/shipyard/share/cmake/MavericksShipyard" || { echo "FAIL: dev override must load the dev copy; got:"; echo "$out"; exit 1; }
+# spec: 2026-10-09 C5 "Developer override" -- a bare dev prefix, with no cmake beside it.
+out="$(CMAKE_PREFIX_PATH="$w/dev" "$sc" -S "$w/c" -B "$w/b3" 2>&1)" || { echo "FAIL: dev override must configure; got:"; echo "$out"; exit 1; }
+printf '%s' "$out" | grep -q "DIR=$w/dev/share/cmake/MavericksShipyard" || { echo "FAIL: dev override must load the dev copy; got:"; echo "$out"; exit 1; }
+
+# platform: a cmake in a directory named cmake, beside a shipyard that has no launcher. Its CMAKE_ROOT
+#           is linked, not copied: nothing is installed into it.
+mkdir -p "$w/lone/cmake/bin" "$w/lone/cmake/share" "$w/lone/shipyard/share/cmake/MavericksShipyard"
+cp "$fx/cmake/bin/cmake" "$w/lone/cmake/bin/cmake"
+for d in "$fx/cmake/share"/*; do ln -s "$d" "$w/lone/cmake/share/"; done
+: > "$w/lone/shipyard/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake"
+refused "a cmake at <Y>/cmake/bin/cmake with no <Y>/shipyard/bin/shipyard-cmake" "$ver" \
+  "$w/lone/cmake/bin/cmake" -S "$w/c" -B "$w/b3a" -DMavericksShipyard_DIR="$fx/shipyard/share/cmake/MavericksShipyard"
 
 # spec: R-P1-23 -- the refusal is keyed on CMAKE_HOST_APPLE and must NOT fire on a non-Apple host:
 #       shipyard ships no Linux pkg and no Linux cmake, so demanding shipyard-cmake there is

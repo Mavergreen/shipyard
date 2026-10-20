@@ -9,29 +9,25 @@
 # guard below enforces this so consumers don't silently drift onto a stale
 # in-tree copy).
 
-# spec: 2026-10-09 C5 -- on a macOS host only the cmake product beside this shipyard, at or above the
-#       minimum configured in at install, may configure against it. A guardrail, not a sandbox:
-#       CMAKE_COMMAND is an ordinary variable.
+# spec: 2026-10-09 C5 -- on a macOS host only a cmake product paired with a shipyard, <X>/cmake/bin/cmake
+#       beside <X>/shipyard/bin/shipyard-cmake, at or above the minimum, may configure against it. Any
+#       shipyard may be the one loaded, so a CMAKE_PREFIX_PATH dev prefix needs no cmake beside it. A
+#       guardrail, not a sandbox: CMAKE_COMMAND is an ordinary variable.
 # spec: R-P1-23 -- CMAKE_HOST_APPLE, not APPLE: the running cmake is a property of the host, and a
 #       Linux host has no cmake product to demand, so it skips the check.
-# spec: tests/shipyard-cmake-refusal-test.sh -- a CHECKOUT (the minimum still a placeholder), as
-#       standalone-include and toolchain-file-test load it, has no sibling: it takes its own pin as
-#       the minimum and accepts the cmake product beside any installed shipyard.
+# spec: tests/shipyard-cmake-refusal-test.sh -- the install configures the minimum in; a CHECKOUT,
+#       where it is still a placeholder, takes the Kitware part of its own pin.
 if(CMAKE_HOST_APPLE)
   set(_shipyard_cmake_min "@SHIPYARD_CMAKE_MIN@")
-  get_filename_component(_shipyard_cmake_used "${CMAKE_COMMAND}" REALPATH)
-  if(_shipyard_cmake_min MATCHES "^[0-9]")
-    get_filename_component(_shipyard_cmake_want "${CMAKE_CURRENT_LIST_DIR}/../../../../cmake/bin/cmake" REALPATH)
-  else()
+  if(NOT _shipyard_cmake_min MATCHES "^[0-9]")
     file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/components/cmake/version" _shipyard_cmake_min LIMIT_COUNT 1)
     string(REGEX REPLACE "-mavericks\\..*$" "" _shipyard_cmake_min "${_shipyard_cmake_min}")
-    string(REGEX REPLACE "/cmake/bin/cmake$" "" _shipyard_cmake_pair "${_shipyard_cmake_used}")
-    set(_shipyard_cmake_want "")
-    if(EXISTS "${_shipyard_cmake_pair}/shipyard/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake")
-      set(_shipyard_cmake_want "${_shipyard_cmake_used}")
-    endif()
   endif()
-  if(NOT _shipyard_cmake_used STREQUAL _shipyard_cmake_want OR CMAKE_VERSION VERSION_LESS _shipyard_cmake_min)
+  get_filename_component(_shipyard_cmake_used "${CMAKE_COMMAND}" REALPATH)
+  string(REGEX REPLACE "/cmake/bin/cmake$" "" _shipyard_cmake_pair "${_shipyard_cmake_used}")
+  if(_shipyard_cmake_pair STREQUAL _shipyard_cmake_used
+     OR NOT EXISTS "${_shipyard_cmake_pair}/shipyard/bin/shipyard-cmake"
+     OR CMAKE_VERSION VERSION_LESS _shipyard_cmake_min)
     message(FATAL_ERROR
       "mavericks-shipyard must be configured with shipyard-cmake (/usr/local/mavergreen/bin/shipyard-cmake), "
       "which runs the Mavergreen cmake product installed beside shipyard, CMake ${_shipyard_cmake_min} or later. "

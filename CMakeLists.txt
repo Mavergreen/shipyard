@@ -59,8 +59,8 @@ endif()
 # instead of vendoring a submodule.
 # spec: 2026-10-09 C4 -- consumers find this package through bin/shipyard-cmake, which runs the cmake
 #       product in the sibling prefix with this prefix on CMAKE_PREFIX_PATH. To develop shipyard,
-#       install it as <dir>/shipyard beside a link <dir>/cmake to that product, and run
-#       <dir>/shipyard/bin/shipyard-cmake.
+#       install it into a prefix of your own and configure with CMAKE_PREFIX_PATH=<that prefix>
+#       shipyard-cmake; the launcher appends, so the dev copy is found first.
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -68,12 +68,23 @@ include(CMakePackageConfigHelpers)
 set(_dest "${CMAKE_INSTALL_DATADIR}/cmake/MavericksShipyard")
 
 # spec: 2026-10-09 C5 -- the config refuses a cmake below the Kitware part of shipyard's cmake pin.
-#       -DSHIPYARD_CMAKE_MIN sets another, so a fixture can pair shipyard with the host's cmake.
+#       -DSHIPYARD_CMAKE_MIN sets another for one configure, so a fixture can pair shipyard with the
+#       host's cmake; it is dropped from the cache so that a later configure reads the pin again.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS components/cmake/version)
-if(NOT DEFINED SHIPYARD_CMAKE_MIN)
-  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/components/cmake/version" SHIPYARD_CMAKE_MIN LIMIT_COUNT 1)
-  string(REGEX REPLACE "-mavericks\\..*$" "" SHIPYARD_CMAKE_MIN "${SHIPYARD_CMAKE_MIN}")
+if(DEFINED CACHE{SHIPYARD_CMAKE_MIN})
+  set(_shipyard_cmake_min "$CACHE{SHIPYARD_CMAKE_MIN}")
+  unset(SHIPYARD_CMAKE_MIN CACHE)
+else()
+  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/components/cmake/version" _shipyard_cmake_min LIMIT_COUNT 1)
+  string(REGEX REPLACE "-mavericks\\.[0-9]+$" "" _shipyard_cmake_min "${_shipyard_cmake_min}")
 endif()
+# spec: MavericksShipyardConfig.cmake -- a minimum that is not a version reads as a checkout's
+#       placeholder there, and every consumer would then fail on a missing components/cmake/version.
+if(NOT _shipyard_cmake_min MATCHES "^[0-9]+(\\.[0-9]+)*$")
+  message(FATAL_ERROR "shipyard's cmake minimum is '${_shipyard_cmake_min}', not a version: "
+    "components/cmake/version must hold X.Y.Z-mavericks.N, and -DSHIPYARD_CMAKE_MIN must be X.Y.Z")
+endif()
+set(SHIPYARD_CMAKE_MIN "${_shipyard_cmake_min}")
 configure_file(MavericksShipyardConfig.cmake "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake" @ONLY)
 
 # spec: 2026-10-09 C4 -- the launchers, plus bin/{cmake,ctest,cpack} linked to them so a build

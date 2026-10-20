@@ -74,6 +74,12 @@ expect "found on PATH it still finds <root>/cmake" \
 expect "run by a relative path it still finds <root>/cmake" \
   "tool=cmake${nl}CMAKE_PREFIX_PATH=$sy" \
   sh -c 'cd "$1" && exec env -u CMAKE_PREFIX_PATH ./shipyard-cmake' sh "$root/bin"
+# platform: a relative $0 with no leading ./ resolves to bin/../shipyard/bin, which an exported CDPATH
+#           would send to the decoy's copy of that path, printing it.
+mkdir -p "$w/decoy/bin" "$w/decoy/shipyard/bin"
+expect "run by a relative path with CDPATH exported it still finds <root>/cmake" \
+  "tool=cmake${nl}CMAKE_PREFIX_PATH=$sy" \
+  sh -c 'cd "$1" && CDPATH="$2" && export CDPATH && exec env -u CMAKE_PREFIX_PATH bin/shipyard-cmake' sh "$root" "$w/decoy"
 for t in cmake ctest cpack; do
   want="tool=$t${nl}CMAKE_PREFIX_PATH=<unset>"
   [ "$t" != cmake ] || want="tool=cmake${nl}CMAKE_PREFIX_PATH=$sy"

@@ -21,7 +21,8 @@ case "${self##*/}" in
   shipyard-cpack) tool=cpack ;;
   *) echo "shipyard-launcher: install this as shipyard-cmake, shipyard-ctest or shipyard-cpack, not ${self##*/}" >&2; exit 2 ;;
 esac
-bin="$(cd -P "${self%/*}" && pwd)"
+# platform: with CDPATH exported, cd searches it for a relative path and prints where it went.
+bin="$(CDPATH= cd -P -- "${self%/*}" && pwd)"
 shipyard="${bin%/*}"
 exe="${shipyard%/*}/cmake/bin/$tool"
 if [ ! -x "$exe" ]; then

@@ -53,6 +53,13 @@ got="$(env -i PATH="$w/pbin:/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" sh -c ". '$T
 want="$fx/shipyard/share/cmake/MavericksShipyard/scripts"
 [ "$got" = "$want|$want" ] || { echo "FAIL: probe gave '$got', want '$want|$want'"; exit 1; }
 
+# spec: 2026-10-09 C5 "Developer override" -- a bare dev prefix moves the scripts with the modules.
+"$real" --install "$w/sb" --prefix "$w/dev" > "$w/install-dev.log" 2>&1 \
+  || { echo "FAIL: could not install the dev copy:"; sed 's/^/    | /' "$w/install-dev.log"; exit 1; }
+got="$(env -i PATH="$w/pbin:/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" CMAKE_PREFIX_PATH="$w/dev" sh -c ". '$T'; printf '%s' \"\$SHIPYARD\"")" \
+  || { echo "FAIL: the probe must find the dev copy under CMAKE_PREFIX_PATH"; exit 1; }
+[ "$got" = "$w/dev/share/cmake/MavericksShipyard/scripts" ] || { echo "FAIL: under CMAKE_PREFIX_PATH the probe gave '$got', want the dev copy's scripts"; exit 1; }
+
 mkdir -p "$w/fallback"; ln -s "$fx/shipyard/bin/shipyard-cmake" "$w/fallback/shipyard-cmake"
 sed "s#$installed_cm#$w/fallback/shipyard-cmake#g" "$T" > "$w/msc-fallback.sh"
 got="$(env -i PATH=/usr/bin:/bin TMPDIR="${TMPDIR:-/tmp}" sh -c ". '$w/msc-fallback.sh'; printf '%s' \"\$SHIPYARD\"")" \
