@@ -3,7 +3,8 @@
 #   usage: msc-template-test.sh
 #          scripts/templates/msc.sh is how a product's build scripts find shipyard with no registry:
 #          $SHIPYARD_SCRIPTS when CI exported it, else asking shipyard-cmake where find_package
-#          lands. Exit 0 clean, 1 on failure, 77 with no cmake for the probe case.
+#          lands. The probe cases run the template unchanged through a fixture pair's launcher.
+#          Exit 0 clean, 1 on failure, 77 with no cmake for the probe case.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 . "$here/lib/cmake_fixture.sh"
@@ -32,25 +33,27 @@ got="$(env -i PATH=/usr/bin:/bin sh -c ". '$w/msc-nofallback.sh' >/dev/null 2>&1
 [ -z "$got" ] || { echo "FAIL: a failed probe must leave SHIPYARD empty; got '$got'"; exit 1; }
 
 real="$(command -v cmake 2>/dev/null)" || { echo "SKIP: no cmake for the probe case"; exit 77; }
-croot="$(printf 'message("${CMAKE_ROOT}")\n' > "$w/r.cmake"; "$real" -P "$w/r.cmake" 2>&1)"
-fx="$w/fx"; mkdir -p "$fx/bin" "$fx/share" "$w/pbin"
-cp "$real" "$fx/bin/cmake"
-# spec: tests/lib/cmake_fixture.sh -- the two ways a copied CMAKE_ROOT goes wrong are written out
-#       there, and tests/cmake-fixture-test.sh proves the helper on this box.
-copy_cmake_root "$croot" "$fx/share/$(basename "$croot")"
+# platform: the launcher resolves its prefix physically, and macOS's TMPDIR is under /var, a link to
+#           /private/var, so the path compared below is the physical one.
+w="$(cd -P "$w" && pwd)"
+printf 'message("${CMAKE_VERSION}")\n' > "$w/v.cmake"
+ver="$("$real" -P "$w/v.cmake" 2>&1)"
+fx="$w/fx"; mkdir -p "$w/pbin"
+# spec: tests/lib/cmake_fixture.sh -- the fixture is a pair <root>/{shipyard,cmake}, as installed.
+copy_cmake_product "$real" "$fx/cmake"
 # platform: keep this output. Redirected to /dev/null, a failure here kills the script under set -e
 #           with nothing said, and CI reports a bare "exit 1" with no way to tell what broke.
-"$real" -S "$root" -B "$w/sb" > "$w/configure.log" 2>&1 \
+"$real" -S "$root" -B "$w/sb" -DSHIPYARD_CMAKE_MIN="$ver" > "$w/configure.log" 2>&1 \
   || { echo "FAIL: could not configure shipyard for the fixture:"; sed 's/^/    | /' "$w/configure.log"; exit 1; }
-HOME="$w/home" "$real" --install "$w/sb" --prefix "$fx" > "$w/install.log" 2>&1 \
+"$real" --install "$w/sb" --prefix "$fx/shipyard" > "$w/install.log" 2>&1 \
   || { echo "FAIL: could not install shipyard into the fixture prefix:"; sed 's/^/    | /' "$w/install.log"; exit 1; }
-ln -s "$fx/bin/cmake" "$w/pbin/shipyard-cmake"
+ln -s "$fx/shipyard/bin/shipyard-cmake" "$w/pbin/shipyard-cmake"
 got="$(env -i PATH="$w/pbin:/usr/bin:/bin" TMPDIR="${TMPDIR:-/tmp}" sh -c ". '$T'; printf '%s|%s' \"\$SHIPYARD\" \"\$SHIPYARD_SCRIPTS\"")" \
   || { echo "FAIL: the probe must find the fixture's shipyard"; exit 1; }
-want="$fx/share/cmake/MavericksShipyard/scripts"
+want="$fx/shipyard/share/cmake/MavericksShipyard/scripts"
 [ "$got" = "$want|$want" ] || { echo "FAIL: probe gave '$got', want '$want|$want'"; exit 1; }
 
-mkdir -p "$w/fallback"; ln -s "$fx/bin/cmake" "$w/fallback/shipyard-cmake"
+mkdir -p "$w/fallback"; ln -s "$fx/shipyard/bin/shipyard-cmake" "$w/fallback/shipyard-cmake"
 sed "s#$installed_cm#$w/fallback/shipyard-cmake#g" "$T" > "$w/msc-fallback.sh"
 got="$(env -i PATH=/usr/bin:/bin TMPDIR="${TMPDIR:-/tmp}" sh -c ". '$w/msc-fallback.sh'; printf '%s' \"\$SHIPYARD\"")" \
   || { echo "FAIL: with shipyard-cmake off PATH (a launchd job, a non-login shell), msc.sh must fall back to the absolute $installed_cm"; exit 1; }

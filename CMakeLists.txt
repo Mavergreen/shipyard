@@ -45,7 +45,7 @@ if(SHIPYARD_BUILD_UPDATER)
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "MavShipyardUpdater"
     CONFIRM_TITLE "Mavericks Shipyard updated"
-    CONFIRM_BODY "Mavericks Shipyard and shipyard-cmake in /usr/local/mavergreen/shipyard were updated."
+    CONFIRM_BODY "Mavericks Shipyard in /usr/local/mavergreen/shipyard was updated."
     RELAUNCH_MARKER "/tmp/.mavericks-shipyard-updater-relaunched"
     ALLOW_GENERIC
     # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification. shipyard has no UI.
@@ -56,19 +56,39 @@ endif()
 # installs itself as a find_package() config package so consumers can just:
 #   find_package(MavericksShipyard REQUIRED)
 #   include(Mavericks)
-# instead of vendoring a submodule. Consumers find this package through
-# shipyard-cmake (it lives in the same prefix as this install) -- there is no
-# user package registry to write. `cmake --install` here is for developing
-# shipyard itself: point shipyard-cmake at the result with
-# -DCMAKE_PREFIX_PATH=<that prefix>.
+# instead of vendoring a submodule.
+# spec: 2026-10-09 C4 -- consumers find this package through bin/shipyard-cmake, which runs the cmake
+#       product in the sibling prefix with this prefix on CMAKE_PREFIX_PATH. To develop shipyard,
+#       install it as <dir>/shipyard beside a link <dir>/cmake to that product, and run
+#       <dir>/shipyard/bin/shipyard-cmake.
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 set(_dest "${CMAKE_INSTALL_DATADIR}/cmake/MavericksShipyard")
 
+# spec: 2026-10-09 C5 -- the config refuses a cmake below the Kitware part of shipyard's cmake pin.
+#       -DSHIPYARD_CMAKE_MIN sets another, so a fixture can pair shipyard with the host's cmake.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS components/cmake/version)
+if(NOT DEFINED SHIPYARD_CMAKE_MIN)
+  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/components/cmake/version" SHIPYARD_CMAKE_MIN LIMIT_COUNT 1)
+  string(REGEX REPLACE "-mavericks\\..*$" "" SHIPYARD_CMAKE_MIN "${SHIPYARD_CMAKE_MIN}")
+endif()
+configure_file(MavericksShipyardConfig.cmake "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake" @ONLY)
+
+# spec: 2026-10-09 C4 -- the launchers, plus bin/{cmake,ctest,cpack} linked to them so a build
+#       directory configured before the cmake product existed still regenerates; the pkg keeps those
+#       three out of the link farm. Revisit at the flag day: the move to /opt breaks those build
+#       directories anyway.
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/compat")
+foreach(_tool cmake ctest cpack)
+  install(PROGRAMS scripts/shipyard-launcher.sh DESTINATION bin RENAME "shipyard-${_tool}")
+  file(CREATE_LINK "shipyard-${_tool}" "${CMAKE_CURRENT_BINARY_DIR}/compat/${_tool}" SYMBOLIC)
+  install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/compat/${_tool}" DESTINATION bin)
+endforeach()
+
 install(FILES
-  MavericksShipyardConfig.cmake
+  "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake"
   Mavericks.cmake
   MavericksMode.cmake
   RequireAppleClang.cmake

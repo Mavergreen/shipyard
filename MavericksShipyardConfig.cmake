@@ -9,35 +9,35 @@
 # guard below enforces this so consumers don't silently drift onto a stale
 # in-tree copy).
 
-# Only shipyard's own cmake may configure against shipyard (spec 2026-09-11). shipyard ships its cmake
-# as /usr/local/mavergreen/bin/shipyard-cmake, whose real binary lives in the same prefix as this
-# package, and a cmake always searches its own install prefix -- so under shipyard-cmake this package
-# is found with no registry, no PATH and no CMAKE_PREFIX_PATH. Any OTHER cmake reaching this file
-# (Homebrew's, MacPorts', pkgsrc's, CMake.app's -- even pointed here on purpose) is refused: nothing
-# may depend on a cmake shipyard did not build. CMAKE_COMMAND is the resolved real path, so the check
-# is not fooled by a symlink named shipyard-cmake. An exception is a declared conventions deviation,
-# not a flag.
-# This is a guardrail, not a sandbox (spec 2026-09-11, R-P1-13): CMAKE_COMMAND is an ordinary
-# variable, so someone determined enough can point it at any prefix that happens to hold a
-# shipyard, same as they could just edit this file -- the check exists to catch the wrong cmake
-# reaching here BY ACCIDENT, which is how the real drift happens, not to stop deliberate abuse.
-#
-# CMAKE_HOST_APPLE, not APPLE (R-P1-23): the question is which cmake BINARY is running, which is a
-# property of the host, not the target. So a macOS box cross-compiling for Linux still has to use
-# shipyard-cmake -- the drift this prevents is just as real there -- while a Linux host skips the
-# check entirely. It has to: shipyard ships no Linux pkg and no Linux cmake, so demanding
-# shipyard-cmake where it cannot exist is incoherent, and it broke container-tools' two ubuntu-latest
-# jobs, which find_package shipyard only to read its scripts. install@v1 hands those jobs the action's
-# own checkout (MavericksShipyard_DIR), which is shipyard at the ref they pinned.
+# spec: 2026-10-09 C5 -- on a macOS host only the cmake product beside this shipyard, at or above the
+#       minimum configured in at install, may configure against it. A guardrail, not a sandbox:
+#       CMAKE_COMMAND is an ordinary variable.
+# spec: R-P1-23 -- CMAKE_HOST_APPLE, not APPLE: the running cmake is a property of the host, and a
+#       Linux host has no cmake product to demand, so it skips the check.
+# spec: tests/shipyard-cmake-refusal-test.sh -- a CHECKOUT (the minimum still a placeholder), as
+#       standalone-include and toolchain-file-test load it, has no sibling: it takes its own pin as
+#       the minimum and accepts the cmake product beside any installed shipyard.
 if(CMAKE_HOST_APPLE)
-  get_filename_component(_shipyard_cmake_bin "${CMAKE_COMMAND}" DIRECTORY)
-  get_filename_component(_shipyard_cmake_prefix "${_shipyard_cmake_bin}" DIRECTORY)
-  if(NOT EXISTS "${_shipyard_cmake_prefix}/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake")
+  set(_shipyard_cmake_min "@SHIPYARD_CMAKE_MIN@")
+  get_filename_component(_shipyard_cmake_used "${CMAKE_COMMAND}" REALPATH)
+  if(_shipyard_cmake_min MATCHES "^[0-9]")
+    get_filename_component(_shipyard_cmake_want "${CMAKE_CURRENT_LIST_DIR}/../../../../cmake/bin/cmake" REALPATH)
+  else()
+    file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/components/cmake/version" _shipyard_cmake_min LIMIT_COUNT 1)
+    string(REGEX REPLACE "-mavericks\\..*$" "" _shipyard_cmake_min "${_shipyard_cmake_min}")
+    string(REGEX REPLACE "/cmake/bin/cmake$" "" _shipyard_cmake_pair "${_shipyard_cmake_used}")
+    set(_shipyard_cmake_want "")
+    if(EXISTS "${_shipyard_cmake_pair}/shipyard/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake")
+      set(_shipyard_cmake_want "${_shipyard_cmake_used}")
+    endif()
+  endif()
+  if(NOT _shipyard_cmake_used STREQUAL _shipyard_cmake_want OR CMAKE_VERSION VERSION_LESS _shipyard_cmake_min)
     message(FATAL_ERROR
-      "mavericks-shipyard must be configured with shipyard-cmake "
-      "(/usr/local/mavergreen/bin/shipyard-cmake, installed by the shipyard pkg; in GitHub Actions, "
-      "Mavergreen/shipyard/.github/actions/install@v1 provides it). This configure is running "
-      "${CMAKE_COMMAND}. IDEs and CMake GUIs: point their cmake setting at /usr/local/mavergreen/bin/shipyard-cmake.")
+      "mavericks-shipyard must be configured with shipyard-cmake (/usr/local/mavergreen/bin/shipyard-cmake), "
+      "which runs the Mavergreen cmake product installed beside shipyard, CMake ${_shipyard_cmake_min} or later. "
+      "In GitHub Actions, Mavergreen/shipyard/.github/actions/install@v1 provides both. This configure is "
+      "running ${CMAKE_COMMAND}, CMake ${CMAKE_VERSION}. IDEs and CMake GUIs: point their cmake setting at "
+      "/usr/local/mavergreen/bin/shipyard-cmake.")
   endif()
 endif()
 
