@@ -1,8 +1,8 @@
 #!/bin/sh
 # platform: host-agnostic
-# spec: 2026-09-11 decision 1 -- the pkg is ONE prefix holding shipyard's own CMake and shipyard
-#       itself, three uniquely named commands exported through the mavergreen link farm, and one
-#       universal updater. No registration, no arch picking.
+# spec: 2026-10-09 C4 -- the pkg is ONE prefix holding shipyard, its three launchers into the cmake
+#       product it requires, exported through the mavergreen link farm, and one universal updater.
+#       No registration, no arch picking.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 S="$root/scripts/package-pkg.sh"
@@ -15,11 +15,16 @@ for gone in register-with-cmake sysctl agent-load-cross uname CrossUpdater moder
   code | grep -q -- "$gone" && { echo "FAIL: package-pkg.sh still mentions $gone"; exit 1; }
 done
 for c in cmake ctest cpack; do
-  code | grep -q "ln -s $c \"\$STAGE\$PREFIX_DIR/bin/shipyard-$c\"" \
-    || { echo "FAIL: shipyard-$c must be a RELATIVE link to $c inside shipyard's own bin, so the farm link resolves through it on any volume"; exit 1; }
   code | grep -q -- "--exclude bin/$c" \
     || { echo "FAIL: bin/$c must be in exports-exclude -- a bare $c in the link farm would shadow whatever cmake the user already has on the path"; exit 1; }
 done
+code | grep -q 'ln -s' && { echo "FAIL: package-pkg.sh makes links of its own; the launchers and compatibility links come from shipyard's cmake --install"; exit 1; }
+code | grep -q -- '--cmake-tree' && { echo "FAIL: package-pkg.sh still takes --cmake-tree; CMake is the cmake product's now, never shipyard's payload"; exit 1; }
+# spec: 2026-10-09 C4 -- the preinstall refuses a box without the cmake product at shipyard's pin.
+code | grep -q -- '--requires "cmake>=\$' \
+  || { echo "FAIL: package-pkg.sh must pass stage_product.sh --requires \"cmake>=<the pin>\", quoted"; exit 1; }
+code | grep -q 'components/cmake/version' \
+  || { echo "FAIL: the required cmake version must come from components/cmake/version, shipyard's one pin"; exit 1; }
 code | grep -q 'PREFIX_DIR="/usr/local/mavergreen/shipyard"' \
   || { echo "FAIL: shipyard installs into /usr/local/mavergreen/shipyard, the one directory its short name owns"; exit 1; }
 code | grep -q 'usr/local/bin' && { echo "FAIL: shipyard installs nothing into /usr/local/bin -- only the base component's helper lives there"; exit 1; }
@@ -27,8 +32,8 @@ code | grep -q 'stage_product.sh' || { echo "FAIL: shipyard gets its install scr
 code | grep -q -- '--base-version "\$VER"' \
   || { echo "FAIL: the base component shipyard ships must be stamped with the version being built (--base-version \"\$VER\")"; exit 1; }
 
-for missing in --cmake-tree --shipyard-prefix --app --version --out; do
-  args="--cmake-tree $w/t --shipyard-prefix $w/p --app $w/shipyard-updater.app --version 1.0.0 --out $w/o.pkg"
+for missing in --shipyard-prefix --app --version --out; do
+  args="--shipyard-prefix $w/p --app $w/shipyard-updater.app --version 1.0.0 --out $w/o.pkg"
   args="$(printf '%s' "$args" | sed "s|$missing [^ ]*||")"
   # shellcheck disable=SC2086
   if err="$(sh "$S" $args 2>&1 >/dev/null)"; then echo "FAIL: $missing must be required"; exit 1; fi
@@ -36,18 +41,20 @@ for missing in --cmake-tree --shipyard-prefix --app --version --out; do
     || { echo "FAIL: the refusal for a missing $missing must name it; got '$err'"; exit 1; }
 done
 mkdir -p "$w/Other.app"
-if sh "$S" --cmake-tree "$w/t" --shipyard-prefix "$w/p" --app "$w/Other.app" --version 1.0.0 --out "$w/o.pkg" >/dev/null 2>&1; then
+if sh "$S" --shipyard-prefix "$w/p" --app "$w/Other.app" --version 1.0.0 --out "$w/o.pkg" >/dev/null 2>&1; then
   echo "FAIL: an app not named shipyard-updater.app must be refused"; exit 1
 fi
 
-# spec: 2026-09-11 decision 1 -- both --cmake-tree and --shipyard-prefix BECOME the product prefix
-#       verbatim, so a stray file beside a tree (the tarball it was unpacked from, a .DS_Store, a
-#       build dir) would otherwise install into /usr/local/mavergreen/shipyard.
-mkfixture() {  # $1 = dir: a tree, a shipyard prefix and an app that all pass every other check
+# spec: 2026-09-11 decision 1 -- --shipyard-prefix BECOMES the product prefix verbatim, so a stray
+#       file in it (a tarball, a .DS_Store, a build dir) would otherwise install into
+#       /usr/local/mavergreen/shipyard.
+mkfixture() {  # $1 = dir: a shipyard prefix and an app that pass every other check
   rm -rf "$1"
-  mkdir -p "$1/tree/bin" "$1/tree/doc" "$1/tree/man" "$1/tree/share" \
-           "$1/sp/share/cmake/MavericksShipyard" "$1/app/shipyard-updater.app"
-  for c in cmake ctest cpack; do printf '#!/bin/sh\n' > "$1/tree/bin/$c"; chmod +x "$1/tree/bin/$c"; done
+  mkdir -p "$1/sp/bin" "$1/sp/share/cmake/MavericksShipyard" "$1/app/shipyard-updater.app"
+  for c in cmake ctest cpack; do
+    printf '#!/bin/sh\n' > "$1/sp/bin/shipyard-$c"; chmod +x "$1/sp/bin/shipyard-$c"
+    ln -s "shipyard-$c" "$1/sp/bin/$c"
+  done
   : > "$1/sp/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake"
   presets "$1" /usr/local/mavergreen/shipyard
   : > "$1/notadir"
@@ -62,26 +69,31 @@ presets() {  # $1 = fixture dir  $2 = the prefix its installed presets name
 #           for valid input.
 run_pkg() {  # $1 = fixture dir; sets $rc and $err
   rc=0
-  err="$(sh "$S" --cmake-tree "$1/tree" --shipyard-prefix "$1/sp" \
+  err="$(sh "$S" --shipyard-prefix "$1/sp" \
     --app "$1/app/shipyard-updater.app" --version 1.0.0 --out "$1/notadir/o.pkg" 2>&1 >/dev/null)" || rc=$?
 }
 mkfixture "$w/fa"; run_pkg "$w/fa"
 [ "$rc" -ne 0 ] || { echo "FAIL: the fixture was built to stop at --out; it did not fail at all"; exit 1; }
-if printf '%s\n' "$err" | grep -q 'unexpected top-level entry'; then
-  echo "FAIL: bin/doc/man/share are the payload; none may be refused as unexpected; got '$err'"; exit 1
-fi
-mkfixture "$w/fb"; : > "$w/fb/tree/shipyard-cmake-tree.tar.gz"; run_pkg "$w/fb"
-[ "$rc" -ne 0 ] || { echo "FAIL: a stray file at the --cmake-tree root must be refused"; exit 1; }
-printf '%s\n' "$err" | grep -q 'shipyard-cmake-tree.tar.gz' \
-  || { echo "FAIL: the refusal must name the stray entry; got '$err'"; exit 1; }
-printf '%s\n' "$err" | grep -q -- '--cmake-tree' \
-  || { echo "FAIL: the refusal must name the flag that carried it; got '$err'"; exit 1; }
+printf '%s\n' "$err" | grep -q 'notadir' \
+  || { echo "FAIL: bin (three launchers, three compatibility links) and share are the payload; the fixture must pass every check and stop at --out; got '$err'"; exit 1; }
 mkfixture "$w/fc"; mkdir -p "$w/fc/sp/build"; run_pkg "$w/fc"
 [ "$rc" -ne 0 ] || { echo "FAIL: a stray dir at the --shipyard-prefix root must be refused"; exit 1; }
 printf '%s\n' "$err" | grep -q 'build' \
   || { echo "FAIL: the refusal must name the stray entry; got '$err'"; exit 1; }
 printf '%s\n' "$err" | grep -q -- '--shipyard-prefix' \
   || { echo "FAIL: the refusal must name the flag that carried it; got '$err'"; exit 1; }
+mkfixture "$w/fs"; : > "$w/fs/sp/bin/shipyard-cmake-tree.tar.gz"; run_pkg "$w/fs"
+[ "$rc" -ne 0 ] || { echo "FAIL: a stray file in --shipyard-prefix's bin must be refused"; exit 1; }
+printf '%s\n' "$err" | grep -q 'shipyard-cmake-tree.tar.gz' \
+  || { echo "FAIL: the refusal must name the stray entry; got '$err'"; exit 1; }
+for c in cmake ctest cpack; do
+  mkfixture "$w/fl"; rm "$w/fl/sp/bin/shipyard-$c"; run_pkg "$w/fl"
+  printf '%s\n' "$err" | grep -q "bin/shipyard-$c" \
+    || { echo "FAIL: a --shipyard-prefix with no launcher bin/shipyard-$c must be refused, naming it; got '$err'"; exit 1; }
+  mkfixture "$w/fk"; rm "$w/fk/sp/bin/$c"; cp "$w/fk/sp/bin/shipyard-$c" "$w/fk/sp/bin/$c"; run_pkg "$w/fk"
+  printf '%s\n' "$err" | grep -q "bin/$c" \
+    || { echo "FAIL: bin/$c must be the compatibility link to shipyard-$c, so a build directory configured before the cmake product still regenerates; got '$err'"; exit 1; }
+done
 
 # spec: scripts/package-pkg.sh -- the install bakes its --prefix into the presets' toolchainFile, so a prefix
 #       installed anywhere but the pkg's own (a bare `--prefix "$RUNNER_TEMP/..."`) ships presets naming

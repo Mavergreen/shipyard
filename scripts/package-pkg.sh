@@ -1,16 +1,16 @@
 #!/bin/sh
 # platform: macOS-only -- builds the pkg
-#   usage: package-pkg.sh --cmake-tree DIR --shipyard-prefix DIR --app APP --version V --out PKG
-#          Packages shipyard as ONE prefix -- /usr/local/mavergreen/shipyard holding shipyard's own
-#          CMake (bin/{cmake,ctest,cpack}, share/cmake-X.Y), bin/shipyard-{cmake,ctest,cpack} linked
-#          to it, and shipyard itself (share/cmake/MavericksShipyard) -- plus one universal updater
-#          and the dev.mavergreen.base component. The mavergreen helper exports the three
-#          shipyard-* names into /usr/local/mavergreen/bin, never the bare cmake/ctest/cpack; nothing
-#          is installed into /usr/local/bin. The install scripts come from stage_product.sh. The
-#          updater is a stopgap until Mavericks Lineup exists.
-# spec: 2026-09-11 -- a cmake always searches its own install prefix, and finds that prefix through a
-#       symlink, so shipyard-cmake finds shipyard with no registry, no PATH change and no
-#       CMAKE_PREFIX_PATH, and MavericksShipyardConfig.cmake refuses every other cmake.
+#   usage: package-pkg.sh --shipyard-prefix DIR --app APP --version V --out PKG
+#          Packages shipyard as ONE prefix -- /usr/local/mavergreen/shipyard holding shipyard itself
+#          (share/cmake/MavericksShipyard), the launchers bin/shipyard-{cmake,ctest,cpack} into the
+#          cmake product, and bin/{cmake,ctest,cpack} linked to them -- plus one universal updater and
+#          the dev.mavergreen.base component. The mavergreen helper exports the three shipyard-* names
+#          into /usr/local/mavergreen/bin, never the bare cmake/ctest/cpack; nothing is installed into
+#          /usr/local/bin. The install scripts come from stage_product.sh, and its preinstall refuses
+#          a box without the cmake product at components/cmake/version. The updater is a stopgap
+#          until Mavericks Lineup exists.
+# spec: 2026-10-09 C4 -- shipyard ships no CMake of its own: the launchers run the cmake product
+#       installed beside it, with shipyard on CMAKE_PREFIX_PATH.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "On-target/
 #       off-target parity" -- shipyard's own .pkg is the worked example: one artifact serves both
 #       boxes because developing under Mavericks and developing under modern macOS are equally
@@ -22,10 +22,9 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
-TREE=""; SPREFIX=""; APP=""; VER=""; OUT=""
+SPREFIX=""; APP=""; VER=""; OUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --cmake-tree) TREE="${2%/}"; shift 2;;
     --shipyard-prefix) SPREFIX="${2%/}"; shift 2;;
     --app) APP="${2%/}"; shift 2;;
     --version) VER="$2"; shift 2;;
@@ -39,7 +38,6 @@ PREFIX_DIR="/usr/local/mavergreen/shipyard"
 registry_need package-pkg updater-app shipyard; APP_REL="$REG_V"
 APP_NAME="${APP_REL##*/}"
 
-: "${TREE:?package-pkg: --cmake-tree required}"
 : "${SPREFIX:?package-pkg: --shipyard-prefix required}"
 : "${APP:?package-pkg: --app required}"
 : "${VER:?package-pkg: --version required}"
@@ -48,9 +46,8 @@ APP_NAME="${APP_REL##*/}"
 [ "$(basename "$APP")" = "$APP_NAME" ] \
   || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
 [ -d "$APP" ] || { echo "package-pkg: no such app: $APP" >&2; exit 1; }
-for f in bin/cmake bin/ctest bin/cpack; do
-  [ -x "$TREE/$f" ] || { echo "package-pkg: --cmake-tree has no $f: $TREE" >&2; exit 1; }
-done
+cmake_pin="$(sed -n 1p "$SELF/../components/cmake/version" 2>/dev/null || true)"
+[ -n "$cmake_pin" ] || { echo "package-pkg: no cmake pin in $SELF/../components/cmake/version" >&2; exit 1; }
 require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-separated
   _flag="$1"; _dir="$2"; _allowed="$3"
   for _e in "$_dir"/* "$_dir"/.*; do
@@ -66,26 +63,28 @@ require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-sep
     done
     [ "$_ok" = yes ] || {
       echo "package-pkg: $_flag has an unexpected top-level entry: $_b" >&2
-      echo "    everything at the root of $_dir is installed into $PREFIX_DIR, and the payload is" >&2
+      echo "    everything in $_dir is installed under $PREFIX_DIR, and the payload is" >&2
       echo "    specified exactly (spec 2026-09-11 decision 1): $_allowed" >&2
       echo "    move $_dir/$_b elsewhere, or add it to the payload deliberately" >&2
       exit 1
     }
   done
 }
-# spec: 2026-09-11 decision 1 -- both roots BECOME the product prefix verbatim, so the enumeration of
-#       the payload is a gate rather than a description: a stray shipyard-cmake-tree.tar.gz left
-#       beside the tree it was made from shipped a copy of the whole payload inside the payload, and
-#       nothing complained. `man` is allowed though our build does not produce it -- CMake installs
-#       man pages there when Sphinx is present, and a doc-enabled build must not become a packaging
-#       failure.
-require_only --cmake-tree "$TREE" "bin doc man share"
 [ -f "$SPREFIX/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake" ] \
   || { echo "package-pkg: --shipyard-prefix has no share/cmake/MavericksShipyard: $SPREFIX" >&2; exit 1; }
-# spec: CMakeLists.txt -- every install() targets ${CMAKE_INSTALL_DATADIR}/cmake/MavericksShipyard,
-#       so `share` is the only thing that may be here; anything else means a build dir, a source tree
-#       or a shared prefix was passed by mistake.
-require_only --shipyard-prefix "$SPREFIX" "share"
+# spec: 2026-09-11 decision 1 -- the prefix BECOMES the product prefix verbatim, so the enumeration of
+#       the payload is a gate rather than a description: a stray shipyard-cmake-tree.tar.gz once
+#       shipped a copy of the whole payload inside the payload, and nothing complained.
+require_only --shipyard-prefix "$SPREFIX" "bin share"
+require_only --shipyard-prefix "$SPREFIX/bin" "cmake ctest cpack shipyard-cmake shipyard-ctest shipyard-cpack"
+# spec: 2026-10-09 C4 -- the compatibility links keep a build directory configured before the cmake
+#       product regenerating, so each must name its launcher.
+for c in cmake ctest cpack; do
+  { [ -x "$SPREFIX/bin/shipyard-$c" ] && [ ! -L "$SPREFIX/bin/shipyard-$c" ]; } \
+    || { echo "package-pkg: --shipyard-prefix has no launcher bin/shipyard-$c: $SPREFIX" >&2; exit 1; }
+  [ -L "$SPREFIX/bin/$c" ] && [ "$(readlink "$SPREFIX/bin/$c")" = "shipyard-$c" ] \
+    || { echo "package-pkg: --shipyard-prefix bin/$c must be a link to shipyard-$c: $SPREFIX" >&2; exit 1; }
+done
 # spec: tests/installed-presets-test.sh -- the install bakes its --prefix into the presets' toolchainFile, so this prefix
 #       must have been installed AS $PREFIX_DIR (staged under DESTDIR), or every consumer's
 #       `cmake --preset` looks for the toolchain file in a directory that exists only on the runner.
@@ -105,13 +104,7 @@ fi
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-pkg.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 STAGE="$WORK/stage"; SCR="$WORK/scripts"
 mkdir -p "$STAGE$PREFIX_DIR" "$SCR" "$WORK/component" "$(dirname "$OUT")"
-COPYFILE_DISABLE=1 cp -R "$TREE"/. "$STAGE$PREFIX_DIR/"
 COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
-# platform: the link targets are RELATIVE, so the farm link through them resolves on whatever volume
-#           Installer lays them down on.
-ln -s cmake "$STAGE$PREFIX_DIR/bin/shipyard-cmake"
-ln -s ctest "$STAGE$PREFIX_DIR/bin/shipyard-ctest"
-ln -s cpack "$STAGE$PREFIX_DIR/bin/shipyard-cpack"
 
 # platform: an NFS or otherwise shared stage sprays AppleDouble "._*" sidecars, which would ship as
 #           payload -- and, left in place while the manifest is rendered, be listed in its `outside`.
@@ -119,7 +112,7 @@ strip_appledouble() { find "$STAGE" -name '._*' -delete 2>/dev/null || true; }
 strip_appledouble
 sh "$SELF/stage_product.sh" --stage "$STAGE" --product shipyard --name "Mavericks Shipyard" \
   --version "$VER" --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack \
-  --updater-app "$APP" --scripts-out "$SCR"
+  --requires "cmake>=$cmake_pin" --updater-app "$APP" --scripts-out "$SCR"
 strip_appledouble
 
 # platform: pkgbuild makes a payload holding a .app relocatable and version-checked, so a locally

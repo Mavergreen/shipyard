@@ -1,28 +1,17 @@
 name: Install mavericks-shipyard
 description: >
   Provide shipyard and shipyard-cmake to a job. A consumer references this action at the ref it pins
-  (@v1 or @vX.Y.Z -- that ref IS the version) and gets exactly the pkg a developer installs: CI and dev
-  boxes run the same bytes. Consumers configure with shipyard-cmake; MavericksShipyardConfig.cmake
-  refuses any other cmake.
+  (@v1 or @vX.Y.Z -- that ref IS the version) and gets exactly the pkgs a developer installs: the cmake
+  product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. Consumers
+  configure with shipyard-cmake; MavericksShipyardConfig.cmake refuses any other cmake.
 
 inputs:
   source:
     description: >
       'release' (default): install the released pkg this action's ref names. 'build': shipyard's own
-      workflows only -- assemble shipyard-cmake from the cached CMake build plus this checkout.
+      workflows only -- assemble shipyard from this checkout beside the cmake product.
     required: false
     default: release
-  cmake-tree:
-    description: >
-      source: build only. The universal CMake tree to assemble the prefix from -- the `tree` output of
-      shipyard's own .github/actions/shipyard-cmake, which the CALLING WORKFLOW runs. This action must
-      not run it itself: a `uses: ./...` inside a composite resolves against the CONSUMER's
-      GITHUB_WORKSPACE, and nested actions are prepared before step `if:` conditions are evaluated, so
-      every consumer would fail with "Can't find 'action.yml'" for a step that was never going to run
-      -- and shipyard's own CI could never reproduce it, because its workspace does have that path
-      (R-P1-19).
-    required: false
-    default: ""
 
 runs:
   using: composite
@@ -62,7 +51,7 @@ runs:
       shell: bash
       run: |
         set -eu
-        echo "::error::source: build needs a macOS runner -- it builds the universal CMake from Kitware's source against an Apple toolchain. Consumers want the default (source: release)."
+        echo "::error::source: build needs a macOS runner -- it pairs this checkout with the cmake product, which is a macOS pkg. Consumers want the default (source: release)."
         exit 1
 
     # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- every
@@ -81,6 +70,21 @@ runs:
       with:
         path: ~/Library/Caches/mavericks-sdk
         key: ${{ steps.mav-sdk-key.outputs.key }}
+
+    # spec: 2026-10-09 C4 -- shipyard's launchers run the cmake product beside shipyard, and shipyard's
+    #       pkg refuses to install without it, so it goes in first, in both modes, at the pin this ref
+    #       carries.
+    - if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -eu
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        v="$(cat "$root/components/cmake/version")"
+        [ -n "$v" ] || { echo "::error::$root/components/cmake/version names no cmake release"; exit 1; }
+        d="$RUNNER_TEMP/cmake-pkg"; mkdir -p "$d"
+        pkg="$(sh "$root/scripts/fetch-release-pkg.sh" cmake "$v" "cmake-$v.pkg" "$d")"
+        sudo installer -pkg "$pkg" -target /
+        /usr/local/mavergreen/cmake/bin/cmake --version | head -1
 
     - if: inputs.source == 'release' && runner.os == 'macOS'
       shell: bash
@@ -137,29 +141,25 @@ runs:
 
     # spec: R-P1-19 -- THIS ACTION MUST CONTAIN NO `uses: ./...`. GitHub resolves a local action path
     #       inside a composite against the CONSUMER's GITHUB_WORKSPACE, and prepares nested actions
-    #       BEFORE evaluating step `if:` conditions, so `source: build` being false would not spare
-    #       them: every consumer's job would die with "Can't find 'action.yml'", and shipyard's own CI
-    #       could not reproduce it. The caller runs the composite and passes its output in.
+    #       BEFORE evaluating step `if:` conditions, so every consumer's job would die with "Can't find
+    #       'action.yml'", and shipyard's own CI could not reproduce it.
     - if: inputs.source == 'build'
       shell: bash
       run: |
         set -eu
-        tree='${{ inputs.cmake-tree }}'
-        [ -n "$tree" ] || {
-          echo "::error::source: build needs cmake-tree -- run shipyard's .github/actions/shipyard-cmake in the calling workflow and pass its 'tree' output in. (This action cannot run it: see the comment above this step.)"; exit 1; }
-        [ -x "$tree/bin/cmake" ] || { echo "::error::cmake-tree has no bin/cmake: $tree"; exit 1; }
-        p="$RUNNER_TEMP/shipyard-prefix"; rm -rf "$p"; cp -R "$tree" "$p"
-        "$p/bin/cmake" -S "$GITHUB_WORKSPACE" -B "$RUNNER_TEMP/shipyard-self-build" >/dev/null
-        "$p/bin/cmake" --install "$RUNNER_TEMP/shipyard-self-build" --prefix "$p" >/dev/null
+        mg="$RUNNER_TEMP/mg"; rm -rf "$mg"; mkdir -p "$mg"
+        # spec: MavericksShipyardConfig.cmake -- a copy, not a link: the pair rule takes the cmake's
+        #       REALPATH, and /usr/local/mavergreen, where a link resolves, has no shipyard yet.
+        cp -R /usr/local/mavergreen/cmake "$mg/cmake"
+        "$mg/cmake/bin/cmake" -S "$GITHUB_WORKSPACE" -B "$RUNNER_TEMP/shipyard-self-build" >/dev/null
+        "$mg/cmake/bin/cmake" --install "$RUNNER_TEMP/shipyard-self-build" --prefix "$mg/shipyard" >/dev/null
+        # platform: shipyard's own bin also holds bare cmake/ctest/cpack, which on PATH would shadow
+        #           the runner's cmake, so PATH gets a directory of the three launchers alone.
         b="$RUNNER_TEMP/shipyard-bin"; mkdir -p "$b"
-        for c in cmake ctest cpack; do ln -sf "$p/bin/$c" "$b/shipyard-$c"; done
+        for c in cmake ctest cpack; do ln -sf "$mg/shipyard/bin/shipyard-$c" "$b/shipyard-$c"; done
         echo "$b" >> "$GITHUB_PATH"
-        # spec: scripts/package-pkg.sh -- --cmake-tree refuses a tree holding anything outside
-        #       bin/doc/man/share, so SHIPYARD_CMAKE_TREE must be the UNTOUCHED tree: "$p" has
-        #       shipyard installed into it.
         {
-          echo "SHIPYARD_SCRIPTS=$p/share/cmake/MavericksShipyard/scripts"
+          echo "SHIPYARD_SCRIPTS=$mg/shipyard/share/cmake/MavericksShipyard/scripts"
           echo "SHIPYARD_CMAKE=$b/shipyard-cmake"
-          echo "SHIPYARD_CMAKE_TREE=$tree"
         } >> "$GITHUB_ENV"
         "$b/shipyard-cmake" --version | head -1

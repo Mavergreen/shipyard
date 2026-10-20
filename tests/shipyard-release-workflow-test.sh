@@ -71,13 +71,12 @@ inst = [s for s in build_steps
         if str(s.get("uses", "")) == "./.github/actions/install" and (s.get("with") or {}).get("source") == "build"]
 if not inst:
     bad.append("the build job must use ./.github/actions/install with source: build")
-# ...and the CMake tree is built by THIS WORKFLOW and handed in. install@v1 must not reach for it
-# itself: see the R-P1-19 note in the install-action block at the end of this file.
-elif "outputs.tree" not in str((inst[0].get("with") or {}).get("cmake-tree", "")):
-    bad.append("the build job must pass cmake-tree: the `tree` output of ./.github/actions/shipyard-cmake "
-               "into install@v1 (R-P1-19); got %r" % (inst[0].get("with") or {}).get("cmake-tree"))
-elif not any(str(s.get("uses", "")) == "./.github/actions/shipyard-cmake" for s in build_steps):
-    bad.append("the build job passes a cmake-tree but never runs ./.github/actions/shipyard-cmake to produce it")
+# spec: 2026-10-09 C4 -- CMake is the cmake product's, which install@v1 installs at shipyard's pin.
+#       shipyard builds none, so nothing hands install@v1 a tree.
+elif "cmake-tree" in (inst[0].get("with") or {}):
+    bad.append("the build job still passes cmake-tree to install@v1; shipyard builds no CMake now")
+if any(str(s.get("uses", "")) == "./.github/actions/shipyard-cmake" for s in build_steps):
+    bad.append("the build job still runs ./.github/actions/shipyard-cmake; shipyard builds no CMake now")
 
 # One universal updater: configured per arch at its own floor (the loop supplies $1/$2), built, merged.
 need(r'^for a in "x86_64 10\.9" "arm64 11\.0"; do$',
@@ -105,9 +104,11 @@ for arch in ("x86_64", "arm64"):
     need(r'^case " \$archs " in \*" %s "\*\) ;; \*\) echo "::error::the merged updater has no %s slice' % (arch, arch),
          "the merged updater's %s slice is never asserted after the merge" % arch)
 
-# The pkg: the CMake tree + shipyard's install prefix + the merged app.
-need(r"^sh scripts/package-pkg\.sh .*--cmake-tree \S+ .*--shipyard-prefix \S+ .*--app \S*/shipyard-updater\.app\"?",
-     "release.yml never runs scripts/package-pkg.sh with --cmake-tree, --shipyard-prefix and the merged --app")
+# The pkg: shipyard's install prefix + the merged app. CMake is the cmake product's, never in the pkg.
+need(r"^sh scripts/package-pkg\.sh .*--shipyard-prefix \S+ .*--app \S*/shipyard-updater\.app\"?",
+     "release.yml never runs scripts/package-pkg.sh with --shipyard-prefix and the merged --app")
+if find(r"--cmake-tree"):
+    bad.append("release.yml still passes --cmake-tree; the pkg carries no CMake now")
 
 # The built pkg is gated the way the family gates one: what the installer does on a box that has the
 # previous version, and whether the artifacts agree with each other.
@@ -151,17 +152,15 @@ if not smoke:
 else:
     i = smoke[0]; s = build_steps[i]; sc = step_cmds(s)
     def has(p): return any(re.search(p, c) for c in sc)
-    if not has(r"^want=\"\$\(sed -n 's/\^CMAKE_VERSION=//p' cmake\.pin\)\"$"):
-        bad.append("the smoke never reads the pinned CMake version out of cmake.pin")
     # The PLUMBING, not just the call. Both of these run under `set -eu` with their failure caught, so
     # that the installer log can be dumped before the step dies -- and `|| true` in place of `|| bad=1`
     # makes the whole smoke decorative while every other assertion here stays green (R-P1-20).
     if not has(r'^sudo installer -pkg "?dist/mavericks-shipyard-\$v\.pkg"? -target / \|\| bad=1$'):
         bad.append("the smoke's `sudo installer` does not record its failure (|| bad=1), so a pkg that "
                    "fails to install cannot fail the step")
-    if not has(r'^sh scripts/assert-installed-shipyard\.sh --cmake-version "\$want" --root / \|\| bad=1$'):
+    if not has(r'''^sh scripts/assert-installed-shipyard\.sh --cmake-version "\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)" --root / \|\| bad=1$'''):
         bad.append("the smoke never runs scripts/assert-installed-shipyard.sh against the installed "
-                   "root with its failure recorded (|| bad=1)")
+                   "root, with the Kitware part of components/cmake/version and its failure recorded (|| bad=1)")
     if not has(r'^/usr/local/bin/mavergreen check \|\| bad=1$'):
         bad.append("the smoke never runs the installed helper's own check (/usr/local/bin/mavergreen "
                    "check || bad=1), so a pkg whose farm links or manifest are wrong would publish")
@@ -201,8 +200,8 @@ a = yaml.safe_load(open(sys.argv[1]))
 bad = []
 if "source" not in (a.get("inputs") or {}):
     bad.append("install@v1 has no 'source' input (release | build)")
-if "cmake-tree" not in (a.get("inputs") or {}):
-    bad.append("install@v1 has no 'cmake-tree' input; source: build must be HANDED the CMake tree (R-P1-19)")
+if "cmake-tree" in (a.get("inputs") or {}):
+    bad.append("install@v1 still has a 'cmake-tree' input; source: build installs the cmake product instead")
 steps = (a.get("runs") or {}).get("steps") or []
 
 # R-P1-19. NO local `uses: ./...` may appear in this composite, ever. GitHub resolves such a path
@@ -288,34 +287,80 @@ else:
         if any(re.search(pat, c) for c in rel_oth):
             bad.append("the non-macOS release path %s; there is no Linux pkg to install" % why)
 
-# Only source: build may refuse a non-macOS runner -- it compiles CMake against an Apple toolchain.
+# Only source: build may refuse a non-macOS runner -- it needs the macOS cmake product pkg.
 if not any("exit 1" in c for c in cmds(lambda c: "'build'" in c and "runner.os != 'macOS'" in c)):
-    bad.append("source: build no longer refuses a non-macOS runner, where it cannot build CMake at all")
+    bad.append("source: build no longer refuses a non-macOS runner, where there is no cmake product to install")
 # ...and nothing outside source: build may do so, which is the failure R-P1-18 exists to undo.
 for c in cmds(lambda c: "'build'" not in c):
     if re.search(r'uname -s.*Darwin', c) and "exit 1" in c:
         bad.append("install@v1 fails on a non-macOS runner outside source: build (%s) -- R-P1-18: the "
                    "release path must hand those jobs shipyard's shell half instead" % c)
 
+# spec: 2026-10-09 C4 -- shipyard's launchers run the cmake product, and shipyard's pkg refuses to
+#       install without it, so on macOS install@v1 installs the cmake product first, in BOTH modes, at
+#       the pin the action's own checkout carries, verified against that release's SHA256SUMS.
+def both_modes_mac(c): return "runner.os == 'macOS'" in c and "'release'" not in c and "'build'" not in c
+cm_steps = [i for i, st in enumerate(steps)
+            if both_modes_mac(str(st.get("if", ""))) and "fetch-release-pkg.sh" in (st.get("run") or "")]
+cm = cmds(both_modes_mac)
+for pat, why in ((r'^root="\$\(cd "\$GITHUB_ACTION_PATH/\.\./\.\./\.\." && pwd\)"$',
+                  "the cmake step never finds the action's own checkout ($GITHUB_ACTION_PATH/../../..)"),
+                 (r'^v="\$\(cat "\$root/components/cmake/version"\)"$',
+                  "install@v1 never reads the cmake pin from its own checkout ($root/components/cmake/version)"),
+                 # fetch-release-pkg.sh fetches the release's SHA256SUMS and refuses an asset it does not
+                 # list once, or whose hash differs, through shipyard_curl's retries.
+                 (r'^pkg="\$\(sh "\$root/scripts/fetch-release-pkg\.sh" cmake "\$v" "cmake-\$v\.pkg" "\$d"\)"$',
+                  "install@v1 never fetches cmake-<pin>.pkg from the Mavergreen/cmake release <pin> through "
+                  "fetch-release-pkg.sh (verified against that release's SHA256SUMS)"),
+                 (r'^sudo installer -pkg "\$pkg" -target /$', "install@v1 never installs the cmake product it fetched")):
+    if not any(re.search(pat, c) for c in cm):
+        bad.append(why)
+if len(cm_steps) != 1:
+    bad.append("install@v1 must install the cmake product in exactly one step that runs on macOS in both "
+               "modes (if: runner.os == 'macOS'); found %d" % len(cm_steps))
+else:
+    later = [i for i, st in enumerate(steps)
+             if (st.get("run") or "") and (("'release'" in str(st.get("if", "")) and "runner.os == 'macOS'" in str(st.get("if", "")))
+                                           or ("'build'" in str(st.get("if", "")) and "runner.os" not in str(st.get("if", ""))))]
+    if len(later) != 2 or any(j < cm_steps[0] for j in later):
+        bad.append("install@v1 must install the cmake product BEFORE shipyard, in both modes: shipyard's "
+                   "pkg refuses to install without it, and the build-mode launchers need it")
+
 if not exports(bld, "SHIPYARD_SCRIPTS"):
     bad.append("build mode never exports SHIPYARD_SCRIPTS")
-if not exports(bld, "SHIPYARD_CMAKE_TREE"):
-    bad.append("build mode never exports SHIPYARD_CMAKE_TREE, which is what release.yml packages")
+if not exports(bld, "SHIPYARD_CMAKE"):
+    bad.append("build mode never exports SHIPYARD_CMAKE")
 if not any(re.search(r'^echo "\$b" >> "\$GITHUB_PATH"$', c) for c in bld):
     bad.append("build mode never puts the shipyard-* commands on PATH")
-if not any("inputs.cmake-tree" in c for c in bld):
-    bad.append("build mode never reads the cmake-tree input (R-P1-19)")
-if not any(re.search(r'^\[ -n "\$tree" \] \|\|', c) for c in bld):
-    bad.append("build mode never refuses an empty cmake-tree; it would `cp -R` from nowhere and fail "
-               "somewhere far from the caller that forgot to pass it")
-# The tree goes to packaging UNTOUCHED: package-pkg.sh refuses a --cmake-tree with anything outside
-# bin/doc/man/share, and the build-mode prefix has shipyard installed into it.
-if any(re.search(r'SHIPYARD_CMAKE_TREE="?\$p', c) for c in bld):
-    bad.append("SHIPYARD_CMAKE_TREE must be the untouched CMake tree, not the prefix shipyard was installed into")
+# The launchers find the cmake product as their prefix's sibling, so build mode assembles the pair the
+# two pkgs install: $RUNNER_TEMP/mg/{shipyard,cmake}.
+if not any(re.search(r'^mg="\$RUNNER_TEMP/mg"', c) for c in bld):
+    bad.append("build mode never assembles its pair under $RUNNER_TEMP/mg")
+if not any(re.search(r'^cp -R /usr/local/mavergreen/cmake "\$mg/cmake"$', c) for c in bld):
+    bad.append("build mode never gives $RUNNER_TEMP/mg/shipyard its sibling $RUNNER_TEMP/mg/cmake from "
+               "the installed cmake product")
+if not any(re.search(r'--install \S+ --prefix "\$mg/shipyard"', c) for c in bld):
+    bad.append("build mode never installs this checkout into $RUNNER_TEMP/mg/shipyard")
+if not any(re.search(r'^for c in cmake ctest cpack; do ln -sf "\$mg/shipyard/bin/shipyard-\$c" "\$b/shipyard-\$c"; done$', c) for c in bld):
+    bad.append("build mode's PATH entry must hold only links to the shipyard-* launchers: shipyard's own "
+               "bin also carries bare cmake/ctest/cpack, which would shadow the runner's cmake")
+for gone in ("SHIPYARD_CMAKE_TREE", "inputs.cmake-tree"):
+    if any(gone in c for c in bld):
+        bad.append("build mode still mentions %s; shipyard builds no CMake now" % gone)
 if any("cmake/packages" in c for c in rel_mac + rel_oth + bld):
     bad.append("install@v1 still reads the CMake user package registry")
 for b in bad: print("FAIL: " + b)
 if bad: sys.exit(1)
-print("ok: install@v1 installs the released pkg on macOS, hands non-macOS jobs the shell half, and source-builds only for shipyard")
+print("ok: install@v1 installs the cmake product then the released pkg on macOS, hands non-macOS jobs the shell half, and source-builds only for shipyard")
 PY
+
+# spec: 2026-10-09 C4 -- shipyard builds no CMake, so nothing of that build survives in the files
+#       that drove it, comments included.
+[ ! -e "$here/../.github/actions/shipyard-cmake" ] \
+  || { echo "FAIL: .github/actions/shipyard-cmake still exists; shipyard builds no CMake now"; exit 1; }
+for f in "$here/../.github/actions/install/action.yml" "$here/../.github/workflows/ci.yml" "$w"; do
+  if grep -n -e 'cmake-tree' -e 'actions/shipyard-cmake' "$f"; then
+    echo "FAIL: ${f##*/} still names cmake-tree or the shipyard-cmake action"; exit 1
+  fi
+done
 echo "PASS: shipyard-release-workflow"

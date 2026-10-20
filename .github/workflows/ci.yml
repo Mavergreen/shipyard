@@ -13,7 +13,7 @@ concurrency:
 jobs:
   test:
     runs-on: macos-26   # the CMake modules gate on Apple clang; Linux cannot exercise them
-    timeout-minutes: 90     # source-build mode builds CMake twice on a cache miss
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
         with:
@@ -25,13 +25,10 @@ jobs:
           path: ~/Library/Caches/mavericks-sdk
           key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
-      - id: cm
-        uses: ./.github/actions/shipyard-cmake
       - name: Install mavericks-shipyard (self, source-build) -- and bats, so the *.bats suites below can run
         uses: ./.github/actions/install
         with:
           source: build
-          cmake-tree: ${{ steps.cm.outputs.tree }}
 
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
@@ -50,14 +47,12 @@ jobs:
   linux:
     uses: ./.github/workflows/linux-host.yml
 
-  # spec: R-P1-17 -- this job builds (or restores) the universal shipyard-cmake and publishes it as a
-  #       run artifact so it can be run on a real 10.9 box, the only proof the x86_64 slice works
-  #       there; and it REHEARSES release.yml's whole packaging path. release.yml runs only on a push
-  #       to main, so the packaging and install-smoke steps below would otherwise first execute during
-  #       the flag-day push -- the one push that must not be a rehearsal.
-  shipyard-cmake:
+  # spec: R-P1-17 -- this job REHEARSES release.yml's whole packaging path. release.yml runs only on a
+  #       push to main, so the packaging and install-smoke steps below would otherwise first execute
+  #       during a push that is already publishing.
+  package:
     runs-on: macos-26
-    timeout-minutes: 90     # a cache miss builds CMake twice
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
         with:
@@ -69,26 +64,13 @@ jobs:
           path: ~/Library/Caches/mavericks-sdk
           key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
-      - id: cm
-        uses: ./.github/actions/shipyard-cmake
       - name: Install mavericks-shipyard (self, source-build)
         uses: ./.github/actions/install
         with:
           source: build
-          cmake-tree: ${{ steps.cm.outputs.tree }}
 
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
-
-      # spec: scripts/package-pkg.sh -- $SHIPYARD_CMAKE_TREE, never the prefix install@v1 assembled:
-      #       that prefix has shipyard installed into it, and this artifact is the bare CMake tree a
-      #       10.9 box can unpack and run.
-      - name: Pack the tree
-        run: tar -czf "$RUNNER_TEMP/shipyard-cmake-tree.tar.gz" -C "$SHIPYARD_CMAKE_TREE" .
-      - uses: actions/upload-artifact@v7
-        with:
-          name: shipyard-cmake-tree
-          path: ${{ runner.temp }}/shipyard-cmake-tree.tar.gz
 
       # spec: .github/workflows/release.yml -- the same two-arch build and merge it does, stated in
       #       full on its copy of this step.
@@ -128,7 +110,6 @@ jobs:
           DESTDIR="$RUNNER_TEMP/payload-stage" shipyard-cmake --install "$RUNNER_TEMP/payload-build" \
             --prefix /usr/local/mavergreen/shipyard
           sh scripts/package-pkg.sh \
-            --cmake-tree "$SHIPYARD_CMAKE_TREE" \
             --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
             --app "$RUNNER_TEMP/shipyard-updater.app" \
             --version "$v" \
@@ -154,8 +135,7 @@ jobs:
           set -eu
           bad=0
           sudo installer -pkg "$RUNNER_TEMP"/dist/mavericks-shipyard-*.pkg -target / || bad=1
-          want="$(sed -n 's/^CMAKE_VERSION=//p' cmake.pin)"
-          sh scripts/assert-installed-shipyard.sh --cmake-version "$want" --root / || bad=1
+          sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root / || bad=1
           /usr/local/bin/mavergreen check || bad=1
           if [ "$bad" -ne 0 ]; then
             echo "---- /var/log/install.log, the pkg's scripts ----"

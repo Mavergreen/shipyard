@@ -87,8 +87,9 @@ for pat, what in ((r"^sh scripts/lipo-merge-tree\.sh ", "merge the two updater b
                   (r"^sh scripts/package-pkg\.sh ", "build the pkg (scripts/package-pkg.sh)"),
                   (r"^sh scripts/assert_pkg_installs_in_place\.sh ", "gate the pkg (scripts/assert_pkg_installs_in_place.sh)"),
                   (r"^sudo installer -pkg .* \|\| bad=1$", "install the pkg on the runner, recording failure (sudo installer ... || bad=1)"),
-                  (r"^sh scripts/assert-installed-shipyard\.sh .* \|\| bad=1$",
-                   "assert the install, recording failure (scripts/assert-installed-shipyard.sh ... || bad=1)"),
+                  (r"^sh scripts/assert-installed-shipyard\.sh --cmake-version \"\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)\" .* \|\| bad=1$",
+                   "assert the install against the Kitware part of components/cmake/version, recording failure "
+                   "(scripts/assert-installed-shipyard.sh ... || bad=1)"),
                   # The merge's own result, asserted rather than assumed: lipo-merge-tree.sh's
                   # --require-archs covers every Mach-O in the tree, and this says out loud that the
                   # one binary the whole pkg exists to deliver came out with both slices.
@@ -134,34 +135,24 @@ for name, cs in (("ci.yml", ci), ("release.yml", rel)):
             bad.append("%s asserts %s inline; that belongs in scripts/assert-installed-shipyard.sh, "
                        "which both workflows and tests/assert-installed-shipyard-test.sh share" % (name, what))
 
-# R-P1-19: install@v1 may not nest `uses: ./.github/actions/shipyard-cmake` -- that path resolves
-# against the CONSUMER's workspace, and nested actions are prepared before step `if:` conditions are
-# evaluated, so every consumer would break on a step that was never going to run. The tree is
-# therefore built by the CALLING workflow. That is a coupling: it lives in neither file alone, and
-# each looks complete without it.
+# spec: 2026-10-09 C4 -- shipyard builds no CMake: install@v1 installs the cmake product, so no job
+#       builds a tree or hands one in.
 for name in ("ci.yml", "release.yml"):
     d = yaml.safe_load(open(os.path.join(wf, name)))
     for job, spec in (d.get("jobs") or {}).items():
-        steps = spec.get("steps") or []
-        for step in steps:
-            if str(step.get("uses", "")) != "./.github/actions/install":
-                continue
-            with_ = step.get("with") or {}
-            if with_.get("source") != "build":
-                continue
-            if "outputs.tree" not in str(with_.get("cmake-tree", "")):
-                bad.append("%s job %s installs with source: build but passes no cmake-tree from "
-                           "./.github/actions/shipyard-cmake; install@v1 cannot fetch it itself "
-                           "(R-P1-19)" % (name, job))
-            elif not any(str(t.get("uses", "")) == "./.github/actions/shipyard-cmake" for t in steps):
-                bad.append("%s job %s passes a cmake-tree but never runs "
-                           "./.github/actions/shipyard-cmake to produce it" % (name, job))
+        for step in (spec.get("steps") or []):
+            if str(step.get("uses", "")) == "./.github/actions/shipyard-cmake":
+                bad.append("%s job %s still runs ./.github/actions/shipyard-cmake" % (name, job))
+            if "cmake-tree" in (step.get("with") or {}):
+                bad.append("%s job %s still passes cmake-tree to install@v1" % (name, job))
+if os.path.exists(os.path.join(wf, "..", "actions", "shipyard-cmake")):
+    bad.append(".github/actions/shipyard-cmake still exists")
 
 if bad:
     for b in bad:
         print("FAIL:", b)
     sys.exit(1)
-print("ok: ci.yml rehearses the packaging path release.yml only ever runs while publishing, and both "
-      "hand install@v1 the CMake tree rather than letting it nest a local action")
+print("ok: ci.yml rehearses the packaging path release.yml only ever runs while publishing, and "
+      "neither builds CMake")
 PY
 echo "PASS: shipyard-workflow-coupling"
