@@ -176,6 +176,21 @@ else:
 jobs = wf.get("jobs") or {}
 if "scan-for-key.yml" not in str((jobs.get("scan") or {}).get("uses", "")):
     bad.append("the scan job (./.github/workflows/scan-for-key.yml) is gone")
+# spec: release.yml "canary" -- @v1 moves only after the published release installs through source: release.
+can = jobs.get("canary") or {}
+if "publish" not in (can.get("needs") or []):
+    print("FAIL: a canary job must need publish"); sys.exit(1)
+cst = can.get("steps") or []
+if not any((st.get("uses") or "") == "./.github/actions/install"
+           and "needs.build.outputs.version" in str((st.get("with") or {}).get("release-version", ""))
+           and (st.get("with") or {}).get("source", "release") == "release" for st in cst):
+    print("FAIL: the canary must run ./.github/actions/install with source: release and release-version from needs.build.outputs.version"); sys.exit(1)
+if not any("needs.build.outputs.version" in str((st.get("with") or {}).get("ref", "")) for st in cst if "actions/checkout" in (st.get("uses") or "")):
+    print("FAIL: the canary must check out the release it installs"); sys.exit(1)
+if not any("assert-installed-shipyard.sh" in (st.get("run") or "") for st in cst):
+    print("FAIL: the canary must run assert-installed-shipyard.sh"); sys.exit(1)
+if "canary" not in ((jobs.get("major-tag") or {}).get("needs") or []):
+    print("FAIL: major-tag must need canary, so @v1 never names a release that will not install"); sys.exit(1)
 if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan"]:
     bad.append("publish must need exactly [build, linux, scan]")
 

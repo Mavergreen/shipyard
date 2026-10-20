@@ -208,8 +208,28 @@ jobs:
       artifact: shipyard-dist
       shipyard-ref: ${{ github.sha }}
 
-  major-tag:
+  # spec: tests/shipyard-release-workflow-test.sh -- every consumer installs through source: release,
+  #       which no earlier job runs, so @v1 moves only once the release just published installs that way.
+  canary:
     needs: [build, publish]
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.build.outputs.version }}
+          fetch-depth: 0
+      - uses: ./.github/actions/install
+        with:
+          release-version: v${{ needs.build.outputs.version }}
+      - name: The release installs as a consumer gets it
+        run: |
+          set -eu
+          sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root /
+          /usr/local/bin/mavergreen check
+          shipyard-cmake --version | head -1
+
+  major-tag:
+    needs: [build, publish, canary]
     runs-on: ubuntu-latest
     permissions:
       contents: write
