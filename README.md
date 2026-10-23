@@ -197,3 +197,19 @@ claude plugin install mavergreen@mavergreen --scope user
 
 then turn on auto-update in `/plugin` → Marketplaces → mavergreen. The plugin carries no
 version, so every push to `main` is an update.
+
+### Linux product archives
+
+For a product that publishes a Linux x86_64 archive, use
+`sh "$SHIPYARD_SCRIPTS/fetch_product_tar.sh" SHORT VERSION SHA256 DEST`.
+Pin the version and archive SHA-256 together in the consuming repository. The helper
+uses the product registry to find its release, verifies cached downloads and extracted
+files, and prints the user-owned prefix on stdout. It requires Python 3.9 or newer,
+curl, and either shasum or sha256sum. Override `MAVERGREEN_TAR_CACHE` to choose a
+local-disk cache; no root installation is required.
+
+A Linux build targeting Mavericks uses `MavericksToolchain.cmake` with explicit
+Linux-native clang22 compiler and LLVM tool paths. It selects Darwin/x86_64, the
+pinned 10.9 SDK and deployment target before compiler detection. Use host-native
+CMake and build tools. Target executables must be tested on Mavericks, not run as
+Linux configure probes. Apple SDK bytes remain separately fetched by `fetch_sdk.sh`.
