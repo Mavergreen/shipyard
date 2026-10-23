@@ -143,5 +143,13 @@ jobs:
           fi
           [ "$bad" -eq 0 ] || exit 1
 
+      # spec: scripts/assert-installed-shipyard.sh -- retain the exact smoke-tested pkg for rehearsal on developer Macs.
+      - name: Save the rehearsed package
+        uses: actions/upload-artifact@v7
+        with:
+          name: shipyard-rehearsal-pkg
+          path: ${{ runner.temp }}/dist/*.pkg
+          if-no-files-found: error
+
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
