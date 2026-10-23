@@ -22,8 +22,10 @@ endif()
 if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "10.9")
   message(FATAL_ERROR "incorrect floor")
 endif()
-if(NOT CMAKE_OSX_SYSROOT STREQUAL "$ENV{TEST_SDK}")
-  message(FATAL_ERROR "SDK path lost")
+get_filename_component(actual_sdk "${CMAKE_OSX_SYSROOT}" REALPATH)
+get_filename_component(expected_sdk "$ENV{TEST_SDK}" REALPATH)
+if(NOT actual_sdk STREQUAL expected_sdk)
+  message(FATAL_ERROR "SDK path lost: ${CMAKE_OSX_SYSROOT} (expected $ENV{TEST_SDK})")
 endif()
 CMAKE
 export TEST_SDK="$T/SDK with spaces"
