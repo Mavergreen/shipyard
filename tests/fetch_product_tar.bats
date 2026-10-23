@@ -30,7 +30,7 @@ with tarfile.open(sys.argv[1],'w:gz') as t:
  if kind=='special':
   m=tarfile.TarInfo(p+'device');m.type=tarfile.FIFOTYPE;t.addfile(m)
 PY
-  SHA="$(sha256sum "$ASSET" | cut -d ' ' -f 1)"
+  SHA="$(python3 -c 'import hashlib,pathlib,sys; print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())' "$ASSET")"
 }
 @test 'fetches by pinned hash, preserves links/modes and returns only prefix' {
   fixture
