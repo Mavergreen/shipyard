@@ -56,7 +56,8 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 ## shipyard: consume its facilities, never hand-roll them
 
 - Install via its **action**: `uses: Mavergreen/shipyard/.github/actions/install@v1`. On a macOS
-  runner it installs the released `.pkg`, adds `/usr/local/mavergreen/bin` to `$GITHUB_PATH` (a
+  runner it verifies and installs the pinned cmake product first, then shipyard's released `.pkg`.
+  It adds `/usr/local/mavergreen/bin` to `$GITHUB_PATH` (a
   job's steps are not login shells, so `paths.d` never reaches them) and exports `SHIPYARD_SCRIPTS`
   (`/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts`). On any other runner
   it installs nothing and adds nothing to `PATH`: `SHIPYARD_SCRIPTS` is the action checkout's own
@@ -69,21 +70,26 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   provisions PyYAML itself nor skips the gate for want of it: both were tried (drydock and pi
   provisioned their own, fd and rg skipped), and a skipped gate checks nothing.
 
-  **Installing shipyard: the pkg.** Download it from the latest release
+  **Installing shipyard: cmake first, then the pkg.** Install the [cmake product](https://github.com/Mavergreen/cmake/releases)
+  at or above `components/cmake/version`; shipyard's preinstall refuses an absent or older product.
+  Download shipyard from the latest release
   (`gh release download -R Mavergreen/shipyard --pattern '*.pkg'`) and install it. It is a family
   product like any other (see "Install layout and identity"): one whole prefix at
-  `/usr/local/mavergreen/shipyard` — CMake, the shipyard modules and the scripts — whose
+  `/usr/local/mavergreen/shipyard` — modules, scripts and launchers — whose
   `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` the `mavergreen` helper links into
   `/usr/local/mavergreen/bin` (never the bare `cmake`/`ctest`/`cpack`: its manifest excludes them).
   `/etc/paths.d/mavergreen` puts that directory on every *login* shell's `PATH`, so open a new
   terminal after the first install. The pkg also installs a Sparkle updater that keeps it current,
-  so an install can never quietly become a month old.
+  and cmake has its own updater. CMake lives at `/usr/local/mavergreen/cmake`.
 
   **Configure, test and package with `shipyard-cmake` / `shipyard-ctest` / `shipyard-cpack`** — in
-  workflows and in `build/*.sh` alike. `MavericksShipyardConfig.cmake` **refuses any other cmake**,
-  by name, at configure time; the conventions gate finds the call in a PR instead. shipyard is found
-  in shipyard-cmake's own prefix, so there is nothing to register and no order of installation to get
-  right.
+  workflows and in `build/*.sh` alike. These POSIX sh launchers exec the sibling cmake product's tools.
+  `shipyard-cmake` appends shipyard's prefix to `CMAKE_PREFIX_PATH`, after the developer's entries.
+  On macOS, `MavericksShipyardConfig.cmake` accepts only a cmake product paired with a shipyard
+  (`<prefix>/cmake/bin/cmake` beside `<prefix>/shipyard/bin/shipyard-cmake`) at or above the
+  pinned upstream version. Foreign and older cmakes are refused by name. Linux skips this refusal.
+  Compatibility links at `shipyard/bin/{cmake,ctest,cpack}` keep existing build directories
+  regenerating. A missing cmake product produces an installation hint, not a dangling farm link.
 
   **A GitHub Action's own checkout has no `.git`.** The runner unpacks an action as a tarball, not a
   clone, so anything inside `install@v1` that tries to derive a version by counting commits
@@ -100,24 +106,26 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   IDE's bundled cmake is one of the ones the config refuses, a failure that surfaces as an
   unexplained configure error inside the IDE.
 
-  **shipyard-cmake has no HTTPS in CMake's own downloader.** `file(DOWNLOAD https://…)` and
-  `FetchContent` over HTTPS fail with "Unsupported protocol". That is deliberate: it is built with
-  `CMAKE_USE_SYSTEM_LIBRARIES=0` so it links nothing from the build host, CMake's bundled curl has no
-  macOS TLS backend without OpenSSL, and 10.9's libcurl is too old to build CMake 4.4 against. Since this is now
-  the only cmake the family may use, the limitation applies to every repo — **fetch with
-  `mavericks_fetch.sh` (tarball, pinned SHA-256) or `clone_pinned.sh` (git, pinned digest)**, which is
-  what the family already did and which verifies what `file(DOWNLOAD)` never did.
+  CMake.app (`cmake-gui`) uses its own bundled CMake and cannot be pointed at the launcher.
+  It can open a build directory first configured with `shipyard-cmake`.
+
+  **The cmake product has no HTTPS downloader.** `file(DOWNLOAD https://…)` and HTTPS
+  `FetchContent` fail with "Unsupported protocol". Its [README](https://github.com/Mavergreen/cmake#readme)
+  documents the limit and offline FetchContent pattern. Fetch with `mavericks_fetch.sh`
+  (tarball, pinned SHA-256), `clone_pinned.sh` (git, pinned digest), or `fetch_pinned_source.sh`
+  (a commit's tarball, pinned SHA-256).
 
   `--install` is for **developing shipyard itself**. Install into a prefix of your own and override
   one configure with `CMAKE_PREFIX_PATH=<that prefix> shipyard-cmake …`; it is searched first, so the
-  override is explicit and gone when you stop asking.
+  launcher appends the installed prefix after yours. The dev copy needs no cmake beside it.
 - `@v1` is the **moving major tag**; Renovate's native github-actions manager tracks it — **no custom
   manager, no SHA pin, no marker comment** for it. It moves **automatically**: shipyard's `release.yml`
   runs on every push to `main`, derives the version from the committed line in `UPSTREAM_VERSION` plus
   the commit count (`scripts/shipyard-version.sh`), publishes a GitHub Release for the immutable
   `vX.Y.Z`, and fast-forwards `@v1` to that commit. So a shipyard change reaches consumers by **pushing
   `main`** — never move `@v1` by hand, and there's no separate "publish" step to run.
-  **The fast-forward happens only AFTER the publish succeeds**, and is a separate job that `needs:` it:
+  **The fast-forward happens only AFTER publish and the release-install canary succeed.** The canary
+  installs that exact release with its pinned cmake and checks both installations; `major-tag` needs it:
   `@v1` must never name a version that failed to release, because fifteen repos would consume it within
   minutes of the move.
 - **After `install@v1`, use `$SHIPYARD_SCRIPTS`** — the action exports the installed scripts dir.
@@ -1597,8 +1605,8 @@ the vendor's newest package.
 | x86_64 | minos 10.9, sdk 10.9 | `fetch_sdk.sh` (MacOSX10.9.sdk) |
 | arm64 | minos 11.0, sdk 11.3 | `fetch_sdk.sh --arch arm64` (MacOSX11.3.sdk) |
 
-This covers cross toolchains installed on modern Macs too (clang-cross, golang-cross, shipyard-cmake's
-arm64 half). The pins and the rule live in exactly one place, `scripts/sdk-pins.sh`.
+This covers cross toolchains installed on modern Macs too (clang-cross, golang-cross, the cmake product's
+arm64 slice). The pins and the rule live in exactly one place, `scripts/sdk-pins.sh`.
 
 **Why:** a 2026-09-24 audit of every family release found builds that go through `mavericks-clang`, the
 Go wrapper or an explicit sysroot recorded 10.9, while plain CMake builds with AppleClang silently linked
@@ -1666,7 +1674,7 @@ restores a stale SDK.
 
 ## Rosetta: declared wherever used, never avoided at the cost of a test
 
-**The family is transitioning off Rosetta.** macOS 28 removes it — `build-cmake.sh` already drops its
+**The family is transitioning off Rosetta.** macOS 28 removes it — the cmake product's `build/build-cmake.sh` drops its
 `./bootstrap` stage-0 rather than working around the loss: "macOS 28 removes Rosetta, so the stage-0 is
 gone from this recipe rather than worked around." The maintainer's rule: every use of Rosetta is
 declared, so the family can take inventory and sweep the remainders before it goes.
@@ -1918,7 +1926,7 @@ through `paths.d` plus absolute paths.
 
 Everything in a product's `bin/`, `sbin/` and `share/man/man*/` is exported by default; `--exclude
 <path in the tree>` keeps one out (shipyard excludes `bin/cmake`, `bin/ctest` and `bin/cpack`, so
-only its `shipyard-*` names reach the farm).
+only its `shipyard-*` launchers reach the farm; the cmake product excludes those bare names too).
 
 **A product's pre-uninstall hook** is a fixed path in its tree,
 `<product>/libexec/mavergreen/pre-uninstall` — no manifest key, and never a symlink (the helper
@@ -2374,9 +2382,9 @@ pointing back into the row below — so this table, not the script, is where a c
 | **21.** A repo that builds a `.pkg` (a tracked `pkgbuild`/`productbuild` call outside `tests/` and `test/`, or a workflow that runs `sign_and_appcast.sh`) runs `check-artifact-conformance.sh` in some workflow, on a non-comment line — or declares `- artifact-conformance: <reason>` | The identity and install-path rules ("Install layout and identity") live in the conformance checker, so a product that never calls it is exempt from all of them by omission — four products were, when those rules landed. Exempt-by-default is the opposite of a convention |
 | **10.** No shell construct the 10.9 base system lacks (`check-shell-portability.sh`) | These are invisible to CI by construction: they work on the runner and fail on the platform every repo here targets, so the machine that would catch them is the one machine CI never uses. shipyard shipped two (`sort -V`, a bare `mktemp -d`) and reached all seven repos through `@v1` before anyone noticed — one of them turning release notes silently empty rather than erroring |
 | **15.** Every comment cites `# platform:` or `# spec:`, delegated to `check-comments.sh`; **opt-in**, only in a repo with its own `comment-reasons` file | See "Comments cite a reason", above, for the full rule. Three false claims that reached review — each confidently wrong, each living in a comment rather than in code — are the reason this check exists at all: a comment is the one artifact that stays wrong while every test passes. Opt-in so `@v1` reaching all fourteen consumers doesn't redden a repo that hasn't swept yet; a swept repo states one declared exception under `INGREDIENTS.md`'s `## Conformance deviations` (`- comments: <reason>`) |
-| **16.** Nothing tracked reads the CMake **user package registry** (`~/.cmake/packages`) | shipyard now lives in `shipyard-cmake`'s own prefix and nothing writes that registry any more, so a script reading it reads a file that is no longer there — and reads it *silently*, resolving to an empty path rather than failing |
+| **16.** Nothing tracked reads the CMake **user package registry** (`~/.cmake/packages`) | the `shipyard-cmake` launcher supplies shipyard's prefix and nothing writes that registry any more, so a script reading it reads a file that is no longer there — and reads it *silently*, resolving to an empty path rather than failing |
 | **17.** A repo's **committed** `build/msc.sh` (or `./msc.sh`) equals `$SHIPYARD_SCRIPTS/templates/msc.sh` **byte for byte** | It is the one piece each product carries in order to find shipyard. Eleven hand-kept copies had drifted into three variants, so "the incantation" meant three different things depending on which repo you opened. Tracked copies only — an untracked scratch copy in your worktree is not what the repo ships, and the failure shows the first differing line |
-| **18.** No plain `cmake` / `ctest` / `cpack` at command position — in workflow `run:` bodies or in committed `*.sh` outside `tests/` | `MavericksShipyardConfig.cmake` refuses any other cmake at configure time; this finds the call in the PR instead of in the release. `tests/` is excluded because fixtures quote the command on purpose |
+| **18.** No plain `cmake` / `ctest` / `cpack` at command position — in workflow `run:` bodies or in committed `*.sh` outside `tests/` | `MavericksShipyardConfig.cmake` refuses foreign or too-old cmakes on macOS; this finds the call in the PR instead of in the release. `tests/` is excluded because fixtures quote the command on purpose |
 | **22.** Every tracked script declares its host in its header — `# platform: host-agnostic` or `# platform: macOS-only -- <why>` — and a host-agnostic one runs no macOS-only tool at command position (`check-host-tools.sh`); **opt-in**, in a repo where at least one script declares | Nothing stopped a script that a Linux job depends on from growing an `otool` or `sw_vers`: it passed every gate and broke on the runner. `check-shell-portability.sh` cannot see it — flawless POSIX sh can still call `lipo`. An undeclared script **fails** rather than defaulting to host-agnostic, because a default makes the gate silently incomplete. Opt-in, like 15, so `@v1` reaching fourteen consumers reddens none of them |
 | **23.** A repo that builds a `.pkg` (the same test as 21) calls `stage_product.sh`, on a non-comment line of a tracked, non-test `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt`, at command position — line start, after `;` `&` `\|` or a backtick, after `$(`, `then`, `do` or `exec`, after a YAML `run:` or a CMake `COMMAND`, any of these optionally followed by `if`, `elif`, `while`, `until` or `!` — spelled `sh` or `/bin/sh` (with any option flags, `sh -e`) and a word ending `stage_product.sh`, or a word ending `/stage_product.sh` (`"$SHIPYARD_SCRIPTS"/stage_product.sh`, `./stage_product.sh`); or declares `- product-layout: <reason>` | Conformance enforces the install layout, and `stage_product.sh` is what produces it: the manifest, and the unlink–remove–link install scripts that make an upgrade replace the tree while keeping the selection. A hand-rolled pkg fails `manifest` only at package time; this finds it on the PR. A mention is not a call — `echo "sh stage_product.sh"` does not count, and neither does an assignment (`SP="$S/stage_product.sh"`: a word holding `=`). **Known false negatives:** a bare `stage_product.sh` found on `PATH`; `bash` or `.` instead of `sh`; a call behind a prefix command (`sudo`, `env`, `time`, `command`) or opening a `{ … }` group or a `( … )` subshell; a path with a space or `=` in it (`"$(dirname "$0")"/stage_product.sh`); and a call followed directly by `;` or `)` (`then sh "$S/stage_product.sh"; fi`, `$(sh …/stage_product.sh)`) — give the call its own line, or at least a space before the separator |
 | **24.** A repo that builds a `.pkg` (the same test as 21), where `$GITHUB_REPOSITORY` is set, is the repo of at least one short name in shipyard's `scripts/product-names` (by name, not owner); a `product-layout` deviation exempts it | Every feed URL and updater identity is derived from the registry's repo, so a repo the registry does not name publishes feeds no installed updater polls. The short names themselves are known only at package time, where conformance's `repository` check holds each to its registered repo; this finds an unregistered or renamed repo on the PR |

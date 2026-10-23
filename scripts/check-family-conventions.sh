@@ -465,7 +465,7 @@ for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*
   grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -q '\.cmake/package[s]' || continue
   deviated registry-read "$f" && continue
   fail "$f reads the CMake user package registry (the ~/.cmake export(PACKAGE) tree), which nothing writes any more" \
-       "source msc.sh (it asks shipyard-cmake and exports SHIPYARD_SCRIPTS), or use \$SHIPYARD_SCRIPTS in CI"
+       "source msc.sh (it asks the shipyard-cmake launcher and exports SHIPYARD_SCRIPTS), or use \$SHIPYARD_SCRIPTS in CI"
 done
 
 # spec: SKILL.md "Family conventions" check 26 -- a family repo's Renovate config is
@@ -580,7 +580,7 @@ awk -F"$TAB" '{
 while IFS="$TAB" read -r f line; do
   deviated shipyard-cmake-only "$f" && continue
   fail "$f runs plain cmake/ctest/cpack: $(printf '%s' "$line" | sed 's/^[[:space:]]*//' | cut -c1-70)" \
-       "use shipyard-cmake / shipyard-ctest / shipyard-cpack -- MavericksShipyardConfig.cmake refuses any other cmake"
+       "use shipyard-cmake / shipyard-ctest / shipyard-cpack -- the launchers use the pinned cmake product; macOS refuses foreign or too-old cmakes"
 done < "$cmdhits"
 rm -f "$cmdlist" "$cmdhits"
 
