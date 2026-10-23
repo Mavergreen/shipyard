@@ -3,7 +3,7 @@
 set -eu
 [ "$(uname -s)" = Linux ] || { echo 'SKIP: Linux CMake host configuration'; exit 77; }
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+T="$(mktemp -d "${TMPDIR:-/tmp}/linux-host.XXXXXX")"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/shipyard/scripts" "$T/project" "$T/SDK with spaces"
 cp "$ROOT/MavericksToolchain.cmake" "$T/shipyard/"
 cat > "$T/shipyard/scripts/fetch_sdk.sh" <<'SH'

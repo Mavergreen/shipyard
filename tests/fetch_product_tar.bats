@@ -2,7 +2,7 @@
 # platform: host-agnostic
 setup() {
   HELPER="$BATS_TEST_DIRNAME/../scripts/fetch_product_tar.sh"
-  WORK="$(mktemp -d)"
+  WORK="$(mktemp -d "${TMPDIR:-/tmp}/linux-host.XXXXXX")"
   printf 'widget dev.mavergreen.widget widget-repo\n' > "$WORK/names"
   export MAVERGREEN_PRODUCT_NAMES="$WORK/names" MAVERGREEN_RELEASES="file://$WORK/releases" MAVERGREEN_TAR_CACHE="$WORK/cache"
   REL="$WORK/releases/Mavergreen/widget-repo/releases/download/1.0"
