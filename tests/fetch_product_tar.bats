@@ -8,7 +8,8 @@ setup() {
   REL="$WORK/releases/Mavergreen/widget-repo/releases/download/1.0"
   mkdir -p "$REL"
   ASSET="$REL/widget-1.0-linux-x86_64.tar.gz"
-  DEST="$WORK/out with spaces/widget"
+  ln -s "$WORK" "$WORK/alias"
+  DEST="$WORK/alias/out with spaces/widget"
 }
 teardown() { rm -rf "$WORK"; }
 fixture() {
@@ -35,7 +36,7 @@ PY
 @test 'fetches by pinned hash, preserves links/modes and returns only prefix' {
   fixture
   out="$(sh "$HELPER" widget 1.0 "$SHA" "$DEST" 2>/dev/null)"
-  [ "$out" = "$DEST" ]
+  [ "$out" = "$(cd "$DEST" && pwd -P)" ]
   [ "$(cat "$DEST/bin/tool")" = W ]
   [ -x "$DEST/bin/tool" ] && [ -L "$DEST/bin/alias" ]
 }
@@ -68,7 +69,7 @@ PY
   fixture
   for i in 1 2 3; do sh "$HELPER" widget 1.0 "$SHA" "$DEST" > "$WORK/out$i" 2> "$WORK/err$i" & done
   wait
-  for i in 1 2 3; do [ "$(cat "$WORK/out$i")" = "$DEST" ]; done
+  for i in 1 2 3; do [ "$(cat "$WORK/out$i")" = "$(cd "$DEST" && pwd -P)" ]; done
   [ "$(cat "$DEST/bin/tool")" = W ]
 }
 @test 'rejects a cached implicit parent replaced with a symlink' {
