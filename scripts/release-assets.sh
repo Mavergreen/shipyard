@@ -4,8 +4,8 @@
 #          Prints the release assets in a downloaded artifact directory, one per line: everything
 #          except the notes file and any pre-existing SHA256SUMS (the publish workflow regenerates
 #          that). Refuses, exit 1, a missing directory, a missing or empty notes file, notes carrying
-#          stand-in-feeds.sh's stand-in heading, an asset named appcast*.xml (a retired feed name), an
-#          asset carrying stand-in-feeds.sh's unsigned signature, and a directory with no assets.
+#          stand-in-feeds.sh's stand-in heading, an asset named appcast*.xml (a retired feed name) or
+#          local-backfill-report* (CI evidence, never released), an asset carrying stand-in-feeds.sh's unsigned signature, and a directory with no assets.
 #          --notes-only is a release of notes alone, for a product with nothing to attach (a GitHub
 #          Action, which its consumers fetch by tag): every notes check stands, it prints nothing,
 #          and any asset in the directory is refused rather than silently left behind.
@@ -32,6 +32,7 @@ for f in "$dir"/*; do
   b="${f##*/}"
   case "$b" in
     "$notes"|SHA256SUMS) continue ;;
+    local-backfill-report*) echo "release-assets: $b is local-backfill evidence -- it travels as the local-backfill-report CI artifact and is never a release asset" >&2; exit 1 ;;
     appcast*.xml) echo "release-assets: $b is a retired feed name -- a product's feed is <short name>.xml (sign_and_appcast.sh --product), the file its updater polls" >&2; exit 1 ;;
   esac
   [ "$notes_only" -eq 0 ] \

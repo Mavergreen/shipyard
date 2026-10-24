@@ -17,6 +17,26 @@ in macports-legacy-support. A product links `librecaulk.a` instead of carrying i
   build. Both exit 2 when the scan, the inventory or the deviation section cannot be read.
   Publication always runs strict.
 
+## Publication
+
+Publication runs the rule strict twice, and nothing downgrades either run.
+
+- The build runs `scripts/local-backfill-report.sh REPO DIST SOURCE_SHA REPORT` after its last write
+  to the release assets. It writes REPORT only when strict passes on REPO, a clean checkout at
+  SOURCE_SHA: a `source-sha` line, then `asset<TAB><sha256><TAB><name>` for each releasable asset,
+  sorted by name. The build uploads it as the CI artifact `local-backfill-report`. It is never a
+  release asset.
+- `publish-release.yml` checks out the caller (its GitHub identity, not anything it was passed) at
+  the commit being released, and `scripts/verify-local-backfill-report.sh` refuses, before any tag
+  or release is touched: an absent or malformed report, a report for another commit, an asset whose
+  hash differs from its record, an asset with no record or a record with no asset, and a source
+  that fails strict when it runs again there. A notes-only release needs the report too, with no
+  asset records.
+
+The report is evidence, not permission: a forged one gets no further than a missing one, because
+the publisher recomputes it. A workflow that publishes some other way bypasses all of this, so the
+conventions gate (check 30) fails it.
+
 Only source is judged. A product that links `librecaulk.a` defines the backfilled symbols in its
 binary, as it should, so symbol presence in a binary is never a finding.
 

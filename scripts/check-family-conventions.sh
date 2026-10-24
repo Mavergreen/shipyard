@@ -784,6 +784,84 @@ $_c29
 EOF
 fi
 
+# spec: SKILL.md "Family conventions" check 30 -- a workflow publishes only through shipyard's
+#       publish-release.yml, and a job calling it needs, directly or not, a job that runs
+#       local-backfill-report.sh and uploads the local-backfill-report artifact. The shared publisher
+#       itself, byte for byte, is the one workflow that publishes with the release action.
+if [ -n "$CI_FILES" ] && python3 -c 'import yaml' >/dev/null 2>&1; then
+  # shellcheck disable=SC2086  # CI_FILES is a deliberate word-split list of paths
+  _c30="$(python3 - "$SELF/../.github/workflows/publish-release.yml" $CI_FILES <<'PY'
+import re, sys, yaml
+try:
+    shared = open(sys.argv[1], "rb").read()
+except Exception:
+    shared = None
+INLINE_USES = ("softprops/action-gh-release@", "ncipollo/release-action@", "actions/create-release@",
+               "actions/upload-release-asset@")
+def cmds(run):
+    lines = [l for l in str(run).splitlines() if not l.lstrip().startswith("#")]
+    return re.sub(r"\\\s*\n\s*", " ", "\n".join(lines)).splitlines()
+def inline(run):
+    for c in cmds(run):
+        if re.search(r"(^|[\s;&|(`])gh\s+release\s+(create|upload|edit)\b", c):
+            return c.strip()
+        if re.search(r"(^|[\s;&|(`])gh\s+api\b", c) and "releases" in c \
+           and re.search(r"(-X|--method)\s*['\"]?(POST|PATCH|PUT)", c):
+            return c.strip()
+    return None
+def makes_report(b):
+    steps = [st for st in (b.get("steps") or []) if isinstance(st, dict)]
+    up = any(isinstance(st.get("uses"), str) and st["uses"].startswith("actions/upload-artifact@")
+             and str((st.get("with") or {}).get("name", "")) == "local-backfill-report" for st in steps)
+    run = any(re.search(r"(^|[\s/\"'])local-backfill-report\.sh[\"']?(\s|$)", c)
+              for st in steps for c in cmds(st.get("run") or ""))
+    return up and run
+for f in sys.argv[2:]:
+    try:
+        raw = open(f, "rb").read()
+        wf = yaml.safe_load(raw) or {}
+    except Exception:
+        continue
+    jobs = wf.get("jobs") if isinstance(wf, dict) else None
+    if not isinstance(jobs, dict):
+        continue
+    jobs = {str(k): v for k, v in jobs.items() if isinstance(v, dict)}
+    for j, b in jobs.items():
+        for st in b.get("steps") or []:
+            if not isinstance(st, dict):
+                continue
+            u = st.get("uses")
+            if isinstance(u, str) and u.lower().startswith(INLINE_USES) and raw != shared:
+                print("inline\t%s\t%s\tuses: %s" % (f, j, u))
+            c = inline(st.get("run") or "")
+            if c:
+                print("inline\t%s\t%s\t%s" % (f, j, c[:80]))
+    def needs(j, seen):
+        n = jobs.get(j, {}).get("needs") or []
+        for d in ([n] if isinstance(n, str) else [str(x) for x in n]):
+            if d not in seen:
+                seen.add(d)
+                needs(d, seen)
+        return seen
+    for j, b in jobs.items():
+        if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]:
+            if not any(makes_report(jobs[d]) for d in needs(j, set()) if d in jobs):
+                print("noreport\t%s\t%s\t-" % (f, j))
+PY
+)" || fail "check 30 could not read the workflows (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  _tab="$(printf '\t')"
+  while IFS="$_tab" read -r _k _f _j _what; do
+    case "$_k" in
+      inline) fail "$_f's job $_j publishes a release itself ($_what), so nothing checks its source against the local-backfill policy before it ships" \
+                   "publish through Mavergreen/shipyard/.github/workflows/publish-release.yml@v1, which refuses a release whose source or assets do not match its local-backfill evidence" ;;
+      noreport) fail "$_f's job $_j publishes through publish-release.yml, but no job it needs makes the local-backfill-report artifact -- the publisher refuses a release without that evidence" \
+                     "in the job that builds the assets, after its last write to dist, run sh \"\$SHIPYARD_SCRIPTS/local-backfill-report.sh\" . dist \"\$GITHUB_SHA\" \"\$RUNNER_TEMP/local-backfill-report.tsv\" with MAVERGREEN_CHECK_REPOSITORY set from github.repository, upload that file with actions/upload-artifact as name: local-backfill-report, and make $_j need that job" ;;
+    esac
+  done <<EOF
+$_c30
+EOF
+fi
+
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
 #       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
 #       ignored AND nothing may be tracked under them or under docs/superpowers/, nor a backlog file

@@ -301,7 +301,7 @@ mkrepo "$work/g17b"
 grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/g17b/.github/workflows/release.yml"
 cat >> "$work/g17b/.github/workflows/release.yml" <<'YML'
       - run: |
-          gh release create "$TAG" dist/* --notes-file \
+          sh "$SHIPYARD_SCRIPTS/gen_appcast.sh" --out dist/w.xml --notes-file \
             dist/RELEASE_NOTES.md
 YML
 (cd "$work/g17b" && sh "$S" >/dev/null) || { echo "FAIL a line-wrapped --notes-file value should pass"; exit 1; }
@@ -313,7 +313,7 @@ mkrepo "$work/g17c"
 grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/g17c/.github/workflows/release.yml"
 cat >> "$work/g17c/.github/workflows/release.yml" <<'YML'
       - run: |
-          gh release create "$TAG" dist/* --notes-file \
+          sh "$SHIPYARD_SCRIPTS/gen_appcast.sh" --out dist/w.xml --notes-file \
             release-notes/README.md
 YML
 if out="$(cd "$work/g17c" && sh "$S" 2>&1)"; then echo "FAIL a wrapped notes path the generator never wrote should fail"; exit 1; fi
@@ -327,20 +327,24 @@ grep -v 'notes-file' "$work/g8/.github/workflows/release.yml" > "$work/g8/releas
 mv "$work/g8/release.yml" "$work/g8/.github/workflows/release.yml"
 cat >> "$work/g8/.github/workflows/release.yml" <<'YML'
   publish:
+    needs: [build]
     uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
 YML
 (cd "$work/g8" && sh "$S" >/dev/null) || { echo "FAIL a repo that stages no appcast from the notes should pass"; exit 1; }
 
-# spec: scripts/check-family-conventions.sh -- porthole's feed-porthole moving-tag release passes a bare --notes "<text>" to gh release.
-#       That is a feed pointer, not a product release body, and failing it would redden a
-#       correct repo. golang does the same for each go-line feed.
+# spec: scripts/check-family-conventions.sh -- a moving-tag feed release (porthole's feed-porthole once) passes a bare --notes "<text>" to
+#       gh release. That is a feed pointer, not a product release body, so check 14 leaves it
+#       alone; check 30 refuses it, since it publishes without the shared publisher.
 mkrepo "$work/g9"
 cat >> "$work/g9/.github/workflows/release.yml" <<'YML'
       - run: |
           gh release create feed-porthole --title 'Porthole appcast' \
             --notes "Sparkle appcast for Porthole; asset replaced every release, tag never moves."
 YML
-(cd "$work/g9" && sh "$S" >/dev/null) || { echo "FAIL a bare --notes on a moving-tag feed release must not fail"; exit 1; }
+out="$(cd "$work/g9" && sh "$S" 2>&1)" && { echo "FAIL an inline gh release create must fail check 30"; exit 1; }
+printf '%s\n' "$out" | grep -q 'publishes a release itself' || { echo "FAIL the inline feed release should be named by check 30: $out"; exit 1; }
+others="$(printf '%s\n' "$out" | grep '^check-family-conventions:' | grep -v 'publishes a release itself' || :)"
+[ -z "$others" ] || { echo "FAIL a bare --notes on a feed release must fail nothing but check 30: $others"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- golang renders TWO appcasts from one body. The comparison is between SETS, so the same
 #       path read twice is one member, not a duplicate to complain about.

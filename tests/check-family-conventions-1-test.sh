@@ -99,7 +99,8 @@ mkrepo "$work/r2"
 printf '{"extends":["github>Mavergreen/shipyard"],"ignoreTests":true}\n' > "$work/r2/.github/renovate.json"
 (cd "$work/r2" && sh "$S" >/dev/null) || { echo "FAIL deliberate ignoreTests:true override should pass"; exit 1; }
 
-mkrepo "$work/n"; grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/n/.github/workflows/release.yml"
+mkrepo "$work/n" novm; grep -v 'notes-file' "$work/n/.github/workflows/release.yml" > "$work/n/release.yml"
+mv "$work/n/release.yml" "$work/n/.github/workflows/release.yml"
 if (cd "$work/n" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a release that publishes no notes should fail"; exit 1; fi
 
 # spec: scripts/check-family-conventions.sh -- an automerge exception must say WHY. The family default is ship-if-green (patch, minor
@@ -129,10 +130,13 @@ mkrepo "$work/p" novm
 python3 - "$work/p/.github/workflows/release.yml" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
-s=s.replace('      - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md\n',
-            '  publish:\n'
-            '    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1\n'
-            '    with: { version: "1.0.0", artifact: pkg }\n')
+old = '      - run: sh "$SHIPYARD_SCRIPTS/gen_appcast.sh" --notes-file dist/RELEASE_NOTES.md --out dist/w.xml\n'
+assert old in s
+s=s.replace(old, '')
+s += ('  publish:\n'
+      '    needs: [build]\n'
+      '    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1\n'
+      '    with: { version: "1.0.0", artifact: pkg }\n')
 open(p,'w').write(s)
 PY
 (cd "$work/p" && sh "$S" >/dev/null) || { echo "FAIL publish-release caller should satisfy the notes check"; exit 1; }

@@ -36,6 +36,10 @@ mkd retired; printf 'xml\n' > "$w/retired/appcast.xml"
 if err="$(sh "$S" "$w/retired" 2>&1)"; then echo "FAIL: appcast.xml is a retired feed name -- no installed updater polls it"; exit 1; fi
 printf '%s\n' "$err" | grep -q '<short name>.xml' || { echo "FAIL: the refusal should name the feed's real shape: $err"; exit 1; }
 
+mkd evidence; printf 'source-sha\t%040d\n' 0 > "$w/evidence/local-backfill-report.tsv"
+if err="$(sh "$S" "$w/evidence" 2>&1)"; then echo "FAIL: the local-backfill report is CI evidence and never a release asset"; exit 1; fi
+printf '%s\n' "$err" | grep -q 'local-backfill-report CI artifact' || { echo "FAIL: the refusal should say where the report belongs: $err"; exit 1; }
+
 mkd standinsig; printf 'sparkle:edSignature="%s" length="10"\n' "$STAND_IN_SIGNATURE" > "$w/standinsig/x.xml"
 if err="$(sh "$S" "$w/standinsig" 2>&1)"; then echo "FAIL: an unsigned stand-in feed must never be published"; exit 1; fi
 printf '%s\n' "$err" | grep -q 'x.xml' || { echo "FAIL: the refusal should name the stand-in asset: $err"; exit 1; }

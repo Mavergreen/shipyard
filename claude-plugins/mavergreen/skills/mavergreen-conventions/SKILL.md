@@ -364,7 +364,9 @@ shipyard's `explain/local-backfill.md` is the full rule. In short:
   "Recaulk already provides it" are refused. The checker cannot authenticate `decision=`: the
   maintainer's review of the change adding it is the evidence.
 - Strict exits 1 on any finding; `--report` prints them and exits 0 for exploratory builds; both exit
-  2 on unreadable input. Publication always runs strict.
+  2 on unreadable input. Publication always runs strict: the build's `local-backfill-report.sh`
+  and `publish-release.yml` each run it, and no input or variable downgrades either (see
+  "Publishing a release").
 - Only `MAVERGREEN_CHECK_REPOSITORY=Mavergreen/recaulk`, supplied by the caller, exempts a repo from
   owning backfills; the audited tree's names and metadata grant nothing, and unset means not Recaulk.
 - Binary symbols are never a finding: linking `librecaulk.a` defines them by design.
@@ -988,18 +990,41 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   tested that, and it fails open — a repo carrying an unrelated tag (a `backup/*` from a rebase, an
   old annotation, anything a human pushed once) looks like it has already published and the gate
   silently switches itself off, the worst behaviour available to a guard. Three such tags were found
-  sitting in one family checkout. This job checks out shipyard, never the calling repo, so there is
-  no working tree to read locally; `GH_TOKEN` is the job's own token, because the unauthenticated
+  sitting in one family checkout. `GH_TOKEN` is the job's own token, because the unauthenticated
   API limit (60/hour) is shared across every runner's outbound IP and an authenticated read is the
   difference between a guard and a coin flip. The README itself is fetched at the commit being
-  released (`target-commitish`, defaulting to `github.sha`), not the default branch's head — the
+  released (`target-commitish`, defaulting to `github.sha`, resolved to the full sha the job
+  checked out and audited), not the default branch's head — the
   release is cut from that commit, and that is the README the release will be read beside; a missing
   README is the underlying script's to refuse, so an empty fetch still runs it. Nothing inspects git
-  authorship: it cannot tell a human's edit from an assistant committing a human's words, and the
-  publish job has no checkout of your repo to inspect anyway. The point is narrow and worth it — the
+  authorship: it cannot tell a human's edit from an assistant committing a human's words. The point is narrow and worth it — the
   README is the page every visitor lands on, and nobody reads their own front door until something
   makes them.
 
+- **The build hands the publisher local-backfill evidence, as its own artifact.** In the job that
+  builds the assets, after its last write to `dist`:
+  ```yaml
+  - name: Local-backfill evidence for the publisher
+    env:
+      MAVERGREEN_CHECK_REPOSITORY: ${{ github.repository }}
+    run: sh "$SHIPYARD_SCRIPTS/local-backfill-report.sh" . dist "$GITHUB_SHA" "$RUNNER_TEMP/local-backfill-report.tsv"
+  - uses: actions/upload-artifact@v7
+    with:
+      name: local-backfill-report
+      path: ${{ runner.temp }}/local-backfill-report.tsv
+  ```
+  `local-backfill-report.sh` runs the rule strict (see "Rule `local-backfill`") and writes the
+  report only when it passes: the build source sha, then each asset's SHA256 and name. The artifact
+  is named `local-backfill-report`, exactly; it is never a release asset, and `release-assets.sh`
+  refuses one in `dist`. `publish-release.yml` checks out the caller (`github.repository`, never an
+  input) at `target-commitish || github.sha`, resolved to a full sha, and before it touches any tag
+  or release (`verify-local-backfill-report.sh`) refuses an absent or malformed report, a report
+  for another commit, an asset whose bytes differ from its record, an asset the report omits or a
+  record for an asset that is not there, and a source that fails the rule strict when it reruns it
+  on that checkout. The report is evidence, not authorization, so a hand-written one buys nothing.
+  A notes-only release still needs it: the sha line and no asset records. The tag is minted at the
+  audited sha. Check 30 fails a publisher whose workflow makes no report, and a workflow that
+  publishes a release itself.
 - Put the assets **and** `RELEASE_NOTES.md` in that artifact. The workflow regenerates `SHA256SUMS`
   (so drop any local `shasum` step), uses the notes as the Release body, and **fails if the notes are
   missing or empty**. An empty body is not a degraded release, it is the defect this removes: tailscale
@@ -2423,6 +2448,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **27.** `.gitignore` has a line ignoring `.superpowers/` and one ignoring `.idea/` (`.superpowers/`, `/.superpowers/`, `.superpowers` or `/.superpowers`, likewise for `.idea`), no file is tracked under `.superpowers/`, `docs/superpowers/` or `.idea/`, and no backlog is tracked anywhere (a file named `BACKLOG`, `QUEUE` or `TODO`, any case, bare or `.md`, `.markdown` or `.txt`), and no tracked line cites a queue entry by number (`QUEUE #n`, `BACKLOG #n`, also when a line break splits the name from the number) | Superpowers specs, plans, ledgers and backlogs are ephemeral: a plan describes a transition, not a system, and once the transition lands the plan is wrong about the system it produced. Committed, it reads as documentation and misleads the next reader (and `docs/superpowers/` is not a place the family uses at all). An IDE's per-user state is the user's, not the project's: committed, it churns on every checkout and fights each contributor's own settings. Both belong in the working tree and out of history, and an ignore line alone is not enough, since it does nothing for a file already tracked, so the check asks git as well. A backlog is the same kind of file under another name: two repos kept theirs as a tracked `BACKLOG.md`, and a code comment cited an entry by number. A citation resolves only in the checkout that has the queue, so a reader elsewhere gets a number and no reason |
 | **28.** Nothing a build or test fetches is taken as whatever is newest: no tagless `gh release download`, no `gh release view` of another repo without a tag, no fetch command (`curl`, `wget`, `shipyard_curl`) or `gh api` on a `/releases/latest` URL, no `@latest` install (`npm install`, `npx`, `go install`, `pipx`, `cargo install`, `uvx`), no `:latest` image (`FROM`, `image:`, `docker pull/run`) — in `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt`, `*.bats` and Dockerfiles, tests included, comments excepted — unless INGREDIENTS.md's `## Conformance deviations` declares `- unpinned:<path>: <why it must be the newest, and when to reconsider>` | A pin in a file a Renovate manager tracks makes every change a commit with CI attached; "latest" lets someone else's release change this repo's results with no commit to blame. It drifted exactly that way: python-315's CI installed longboat's latest, shipyard's on-target job python-315's latest, and `sign_and_appcast.sh` signed every family release with the latest `ed25519` pkg, unverified (all 2026-10-18). A feed URL, an install hint or an end-user `install.sh` names a newest-release URL without fetching it at build time, so only a fetch command's line counts |
 | **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@`, or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) whose steps do (comments do not count; an uncalled job in another workflow file and a remote reusable workflow do not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or `INGREDIENTS.md` declares a bare `- on-target: <reason>`. A scoped `- on-target:<part>: <reason>` declares a coverage gap and exempts nothing; a glob for `<part>` is refused | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
+| **30.** No workflow publishes a release itself (`gh release create`/`upload`/`edit`, a `gh api` POST/PATCH/PUT on releases, or a release action such as `softprops/action-gh-release`) except shipyard's own `publish-release.yml`, recognised byte for byte; and every job calling `publish-release.yml` needs, directly or through other jobs, a job that runs `local-backfill-report.sh` and uploads the `local-backfill-report` artifact | The publisher refuses a release whose source fails the local-backfill rule or whose assets are not the ones the report records, so a release made any other way skips that check entirely, and a caller that makes no report is refused at release time, far from the PR that could fix it. An inline publisher is reported, never treated as out of scope. See "Publishing a release", above |
 
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,

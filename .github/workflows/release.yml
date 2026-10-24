@@ -175,10 +175,20 @@ jobs:
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
 
+      - name: Local-backfill evidence for the publisher
+        env:
+          MAVERGREEN_CHECK_REPOSITORY: ${{ github.repository }}
+        run: sh scripts/local-backfill-report.sh . dist "$GITHUB_SHA" "$RUNNER_TEMP/local-backfill-report.tsv"
+
       - uses: actions/upload-artifact@v7
         with:
           name: shipyard-dist
           path: dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: local-backfill-report
+          path: ${{ runner.temp }}/local-backfill-report.tsv
 
   scan:
     needs: build

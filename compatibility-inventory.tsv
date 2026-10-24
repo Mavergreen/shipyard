@@ -1,0 +1,67 @@
+path	kind	symbols	reason
+MavericksCompatGuard.cmake	product-adaptation	-	shipyard's compat guard, a build-time check that shipped binaries are 10.9-safe; it implements no OS API, so an OS-API library is the wrong home
+explain/local-backfill.md	product-adaptation	-	shipyard's local-backfill rule (scanner, checker, evidence or its explanation), named for what it checks; it implements no OS API, so an OS-API library is the wrong home
+scripts/assert_binary_compatible.sh	product-adaptation	-	shipyard's compat guard, a build-time check that shipped binaries are 10.9-safe; it implements no OS API, so an OS-API library is the wrong home
+scripts/check-local-backfills.sh	product-adaptation	-	shipyard's local-backfill rule (scanner, checker, evidence or its explanation), named for what it checks; it implements no OS API, so an OS-API library is the wrong home
+scripts/local-backfill-deviations.sh	product-adaptation	-	shipyard's local-backfill rule (scanner, checker, evidence or its explanation), named for what it checks; it implements no OS API, so an OS-API library is the wrong home
+scripts/local-backfill-report.sh	product-adaptation	-	shipyard's local-backfill rule (scanner, checker, evidence or its explanation), named for what it checks; it implements no OS API, so an OS-API library is the wrong home
+scripts/local-backfill-symbols	product-adaptation	-	shipyard's local-backfill rule (scanner, checker, evidence or its explanation), named for what it checks; it implements no OS API, so an OS-API library is the wrong home
+scripts/local-backfills.awk	product-adaptation	-	shipyard's local-backfill rule (scanner, checker, evidence or its explanation), named for what it checks; it implements no OS API, so an OS-API library is the wrong home
+scripts/scan-local-backfills.sh	product-adaptation	-	shipyard's local-backfill rule (scanner, checker, evidence or its explanation), named for what it checks; it implements no OS API, so an OS-API library is the wrong home
+scripts/verify-local-backfill-report.sh	product-adaptation	-	shipyard's local-backfill rule (scanner, checker, evidence or its explanation), named for what it checks; it implements no OS API, so an OS-API library is the wrong home
+tests/compat-guard-cmake-test.sh	test-only	-	a shipyard test, never shipped
+tests/compat-guard-exemptions-test.sh	test-only	-	a shipyard test, never shipped
+tests/compat_guard.bats	test-only	-	a shipyard test, never shipped
+tests/fixtures/local-backfills/command-wrapper/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/command-wrapper/repo/compatibility-inventory.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/command-wrapper/repo/libexec/ssh-askpass-shim	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/declaration-only/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/declaration-only/repo/compatibility-inventory.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/declaration-only/repo/include/mg_decls.h	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/declaration-only/repo/include/mg_decls.h	test-only	clock_gettime,aligned_alloc,timingsafe_bcmp	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/declaration-only/repo/src/use.c	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/disabled-fallback/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/disabled-fallback/repo/src/uv-darwin.c	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/disabled-fallback/repo/src/uv-darwin.c	test-only	clock_gettime,mkostemp	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/edited-upstream/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/edited-upstream/repo/compatibility-inventory.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/edited-upstream/repo/vendor/libfoo/src/time.c	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/edited-upstream/repo/vendor/libfoo/src/time.c	test-only	clock_gettime	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/external-definition/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/external-definition/repo/src/time_backport.c	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/external-definition/repo/src/time_backport.c	test-only	clock_gettime,clock_getres	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/macro-wrapper/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/macro-wrapper/repo/include/mg_time.h	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/macro-wrapper/repo/include/mg_time.h	test-only	clock_gettime,aligned_alloc	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/patch-addition/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/patch-addition/repo/patches/0001-thread-qos.patch	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/patch-addition/repo/patches/0001-thread-qos.patch	test-only	pthread_set_qos_class_self_np	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pinned-upstream/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pinned-upstream/repo/compatibility-inventory.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pinned-upstream/repo/patches/libfoo-time.patch	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pinned-upstream/repo/patches/libfoo-time.patch	test-only	clock_getres	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pinned-upstream/repo/vendor/libfoo/src/time.c	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pinned-upstream/repo/vendor/libfoo/src/time.c	test-only	clock_gettime	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pkgsrc-patch/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pkgsrc-patch/repo/patches/patch-aa	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pkgsrc-patch/repo/patches/patch-aa	test-only	aligned_alloc	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pkgsrc-patch/repo/patches/patch-src_time.c	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/pkgsrc-patch/repo/patches/patch-src_time.c	test-only	clock_gettime	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/renamed-helper/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/renamed-helper/repo/src/mg_time.c	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/shell-heredoc/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/shell-heredoc/repo/tools/gen-time.sh	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/shell-heredoc/repo/tools/gen-time.sh	test-only	clock_gettime	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/static-inline/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/static-inline/repo/include/mg_alloc.h	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/static-inline/repo/include/mg_alloc.h	test-only	aligned_alloc,timingsafe_bcmp	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/test-double/expected.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/test-double/repo/compatibility-inventory.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/test-double/repo/tests/fakes/fake_clock.c	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/test-double/repo/tests/fakes/fake_clock.c	test-only	clock_gettime	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/unknown-classification/repo/compatibility-inventory.tsv	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/unknown-classification/repo/src/time.c	test-only	-	a scanner/checker test fixture, never built or shipped
+tests/fixtures/local-backfills/unknown-classification/repo/src/time.c	test-only	clock_gettime	a scanner/checker test fixture, never built or shipped
+tests/local-backfill-policy-test.sh	test-only	-	a shipyard test, never shipped
+tests/local-backfill-publish-test.sh	test-only	-	a shipyard test, never shipped
+tests/local-backfill-scan-test.sh	test-only	-	a shipyard test, never shipped

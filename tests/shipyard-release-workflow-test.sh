@@ -172,6 +172,24 @@ else:
     if not up or i > up[0]:
         bad.append("the install smoke must run BEFORE upload-artifact, so a pkg that fails it is never published")
 
+# The publisher refuses a release with no local-backfill evidence, and shipyard publishes through it.
+# The report hashes dist as it is uploaded, so it is made after every step that writes dist.
+rep = [i for i, s in enumerate(build_steps)
+       if any(re.search(r'^sh scripts/local-backfill-report\.sh \. dist "\$GITHUB_SHA" "\$RUNNER_TEMP/local-backfill-report\.tsv"$', c) for c in step_cmds(s))]
+if not rep:
+    bad.append('the build job never runs sh scripts/local-backfill-report.sh . dist "$GITHUB_SHA" "$RUNNER_TEMP/local-backfill-report.tsv"')
+else:
+    if (build_steps[rep[0]].get("env") or {}).get("MAVERGREEN_CHECK_REPOSITORY") != "${{ github.repository }}":
+        bad.append("the local-backfill report must take MAVERGREEN_CHECK_REPOSITORY from github.repository")
+    writers = [i for i, s in enumerate(build_steps) if any("dist" in c for c in step_cmds(s)) and i != rep[0]]
+    if writers and max(writers) > rep[0]:
+        bad.append("a step after the local-backfill report still touches dist: %r" % build_steps[max(writers)].get("name"))
+    ups = [i for i, s in enumerate(build_steps) if str(s.get("uses", "")).startswith("actions/upload-artifact")
+           and (s.get("with") or {}).get("name") == "local-backfill-report"
+           and (s.get("with") or {}).get("path") == "${{ runner.temp }}/local-backfill-report.tsv"]
+    if not ups or ups[0] < rep[0]:
+        bad.append("the report is never uploaded, after it is made, as the local-backfill-report artifact")
+
 # The key scan stays between build and publish (another session's work; a rewrite must not drop it).
 jobs = wf.get("jobs") or {}
 if "scan-for-key.yml" not in str((jobs.get("scan") or {}).get("uses", "")):

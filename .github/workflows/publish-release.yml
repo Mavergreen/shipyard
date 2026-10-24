@@ -71,6 +71,51 @@ jobs:
       - name: A signed release must have been scanned for the signing key
         run: sh .shipyard/scripts/require_key_scan.sh dist .keyscan
 
+      - name: Check out the product at the build source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.target-commitish || github.sha }}
+          path: .product
+          persist-credentials: false
+
+      - name: Resolve the build source commit
+        id: source
+        env:
+          WANT: ${{ inputs.target-commitish || github.sha }}
+        run: |
+          set -eu
+          sha="$(git -C .product rev-parse --verify 'HEAD^{commit}')"
+          case "$WANT" in
+            "$sha") ;;
+            *[!0-9a-f]*) echo "$WANT resolves to $sha" ;;
+            *) echo "::error::target-commitish $WANT is not the commit checked out, $sha -- pass a full commit sha, a branch or a tag"; exit 1 ;;
+          esac
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Look for the local-backfill report
+        uses: actions/download-artifact@v8
+        with:
+          pattern: local-backfill-report
+          merge-multiple: true
+          path: .local-backfill
+
+      - name: The source and assets must match the local-backfill evidence
+        env:
+          MAVERGREEN_CHECK_REPOSITORY: ${{ github.repository }}
+          SHA: ${{ steps.source.outputs.sha }}
+          NOTES: ${{ inputs.notes-file }}
+          ASSETS: ${{ inputs.assets }}
+        run: |
+          set -eu
+          case "$ASSETS" in
+            required) only= ;;
+            none) only=--notes-only ;;
+            *) echo "::error::assets: want required or none (got '$ASSETS')"; exit 1 ;;
+          esac
+          sh .shipyard/scripts/verify-local-backfill-report.sh $only \
+            .local-backfill/local-backfill-report.tsv .product dist "$SHA" "$NOTES"
+
       - name: Select assets, verify the notes, checksum
         id: assets
         env:
@@ -116,7 +161,7 @@ jobs:
       - name: A first release needs a README a human has read
         env:
           REPO: ${{ github.repository }}
-          SHA: ${{ inputs.target-commitish || github.sha }}
+          SHA: ${{ steps.source.outputs.sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
@@ -148,7 +193,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.version }}
-          target_commitish: ${{ inputs.target-commitish || github.sha }}
+          target_commitish: ${{ steps.source.outputs.sha }}
           body_path: dist/${{ inputs.notes-file }}
           files: ${{ steps.assets.outputs.files }}
 
@@ -170,7 +215,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.version }}
-          target_commitish: ${{ inputs.target-commitish || github.sha }}
+          target_commitish: ${{ steps.source.outputs.sha }}
           body_path: dist/${{ inputs.notes-file }}
           files: ${{ steps.assets.outputs.files }}
 
@@ -191,7 +236,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.version }}
-          target_commitish: ${{ inputs.target-commitish || github.sha }}
+          target_commitish: ${{ steps.source.outputs.sha }}
           body_path: dist/${{ inputs.notes-file }}
           files: ${{ steps.assets.outputs.files }}
 

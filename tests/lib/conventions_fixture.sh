@@ -17,6 +17,9 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/family-conventions.XXXXXX")"; trap 'rm -rf "$
 #       acceptance job, so a case that makes it build a .pkg still passes; both come before build,
 #       so a case appending steps appends them to build. "novm" leaves both out, for check 29's
 #       own cases.
+# spec: SKILL.md "Family conventions" check 30 -- the baseline publishes through
+#       publish-release.yml, whose publish job needs build, and build makes the local-backfill
+#       report; nothing in it publishes inline.
 mkrepo() {  # $1 = dir, $2 = novm (optional)
   mkdir -p "$1/.github/workflows" "$1/tests"
   cat > "$1/.github/workflows/release.yml" <<'YML'
@@ -35,10 +38,8 @@ YML
     steps:
       - uses: Mavergreen/mavericks-vm@v1
   publish:
-    needs: [vm-test]
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo published
+    needs: [vm-test, build]
+    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
 YML
   cat >> "$1/.github/workflows/release.yml" <<'YML'
   build:
@@ -49,7 +50,12 @@ YML
           sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "$TAG" --version "$FULL" \
             --product Widget --min-os 10.9.5 --out dist/RELEASE_NOTES.md
       - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
-      - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
+      - run: sh "$SHIPYARD_SCRIPTS/gen_appcast.sh" --notes-file dist/RELEASE_NOTES.md --out dist/w.xml
+      - run: sh "$SHIPYARD_SCRIPTS/local-backfill-report.sh" . dist "$GITHUB_SHA" "$RUNNER_TEMP/local-backfill-report.tsv"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: local-backfill-report
+          path: ${{ runner.temp }}/local-backfill-report.tsv
 YML
   printf '# Build ingredients\n' > "$1/INGREDIENTS.md"
   printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$1/.github/renovate.json"
