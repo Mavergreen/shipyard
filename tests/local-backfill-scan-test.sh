@@ -22,22 +22,24 @@ prep() {
 scan() { MAVERGREEN_SOURCE_FILES="$w/$1.files" sh "$S" "$w/$1"; }
 
 for name in external-definition static-inline patch-addition shell-heredoc macro-wrapper \
-            disabled-fallback declaration-only command-wrapper test-double pinned-upstream renamed-helper; do
+            disabled-fallback declaration-only command-wrapper test-double pinned-upstream renamed-helper \
+            pkgsrc-patch edited-upstream; do
   prep "$name"
   rc=0; out="$(scan "$name" 2>"$w/err")" || rc=$?
   [ "$rc" -eq 0 ] || { echo "FAIL: $name: a completed scan exits 0, findings or not; got $rc:"; cat "$w/err"; exit 1; }
   printf '%s\n' "$out" | sed '/^$/d' > "$w/got"
   diff "$FX/$name/expected.tsv" "$w/got" > "$w/diff" || {
     echo "FAIL: $name: findings differ from $FX/$name/expected.tsv (< expected, > got):"; cat "$w/diff"; exit 1; }
+  cp "$w/got" "$w/got.$name"
   grep -q 'not proof' "$w/err" || { echo "FAIL: $name: a completed scan must say on stderr that finding nothing is not proof of absence; got:"; cat "$w/err"; exit 1; }
 done
 
 for name in external-definition static-inline patch-addition shell-heredoc macro-wrapper disabled-fallback; do
-  cut -f3,4 "$FX/$name/expected.tsv" | grep -v "^declaration$TAB" | grep -v "$TAB-\$" | grep -q . \
+  cut -f3,4 "$w/got.$name" | grep -v "^declaration$TAB" | grep -v "$TAB-\$" | grep -q . \
     || { echo "FAIL: $name must yield an implementation finding that names its symbol"; exit 1; }
 done
 
-if cut -f3 "$FX/declaration-only/expected.tsv" | grep -vx declaration | grep -q .; then
+if cut -f3 "$w/got.declaration-only" | grep -vx declaration | grep -q .; then
   echo "FAIL: a declaration alone is a candidate to classify, never an implementation finding"; exit 1
 fi
 prep declaration-only
@@ -54,11 +56,14 @@ for pair in command-wrapper:product-adaptation test-double:test-only; do
 done
 
 prep pinned-upstream
-uprows="$(MAVERGREEN_SOURCE_FILES="$w/pinned-upstream.files" sh "$S" --inventory "$w/pinned-upstream")"
-printf '%s\n' "$uprows" | cut -f1 | grep -qx 'patches/libfoo-time.patch' \
-  && { echo "FAIL: pinned-upstream fixture must not classify the patch"; exit 1; }
-grep -q "^patches/libfoo-time.patch$TAB.*${TAB}patch-definition$TAB" "$FX/pinned-upstream/expected.tsv" \
-  || { echo "FAIL: a local patch to pinned upstream code must be its own finding, not covered by the upstream row"; exit 1; }
+MAVERGREEN_SOURCE_FILES="$w/pinned-upstream.files" sh "$S" --inventory "$w/pinned-upstream" | cut -f1 > "$w/classified"
+uncovered="$(awk -F "$TAB" 'NR == FNR { c[$1] = 1; next } !($1 in c)' "$w/classified" "$w/got.pinned-upstream")"
+[ "$uncovered" = "patches/libfoo-time.patch${TAB}11${TAB}patch-definition${TAB}clock_getres${TAB}patch adds a definition of a known Darwin/Recaulk API" ] \
+  || { echo "FAIL: a local patch to pinned upstream code must not inherit the upstream row: the patch's finding is the one left unclassified; got: $uncovered"; exit 1; }
+
+echo "limit: an in-place edit to a vendored file classified upstream looks exactly like the unmodified file"
+grep "^vendor/libfoo/src/time.c$TAB" "$w/got.pinned-upstream" | diff - "$w/got.edited-upstream" >/dev/null \
+  || { echo "FAIL: edited-upstream: the scanner now tells an edited upstream file from the pinned one -- update this detection-limit regression and its expected.tsv"; exit 1; }
 
 prep unknown-classification
 rc=0; scan unknown-classification > /dev/null 2>"$w/err" || rc=$?
@@ -81,8 +86,7 @@ scan test-double 2>/dev/null | grep -q fake_clock.c || { echo "FAIL: a classifie
 
 a="$(scan external-definition 2>/dev/null)"; b="$(scan external-definition 2>/dev/null)"
 [ "$a" = "$b" ] || { echo "FAIL: two scans of one tree must print identical bytes"; exit 1; }
-prep pinned-upstream
-LC_ALL=C sort -t "$TAB" -k1,1 -k2,2n -k3,3 -k4,4 "$FX/pinned-upstream/expected.tsv" | diff - "$FX/pinned-upstream/expected.tsv" >/dev/null \
+LC_ALL=C sort -t "$TAB" -k1,1 -k2,2n -k3,3 -k4,4 "$w/got.disabled-fallback" | diff - "$w/got.disabled-fallback" >/dev/null \
   || { echo "FAIL: findings are sorted by path, then line numerically"; exit 1; }
 
 bad() {

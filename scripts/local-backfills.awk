@@ -74,7 +74,17 @@ function candidates(body, type, prev, ln,   i, s, off, rest, p, at, pre, inl, ca
     }
   }
 }
+function ispatch(path,   line, last, r) {
+  last = ""
+  while ((r = (getline line < path)) > 0) {
+    if (last ~ /^--- / && line ~ /^\+\+\+ /) { close(path); return 1 }
+    last = line
+  }
+  close(path)
+  return 0
+}
 function scan(path, type,   line, ln, r, c, body, plus, prev, m, lb) {
+  if (type != "patch" && ispatch(path)) type = "patch"
   ln = 0; prev = ""; pend_sym = ""
   while ((r = (getline line < path)) > 0) {
     ln++

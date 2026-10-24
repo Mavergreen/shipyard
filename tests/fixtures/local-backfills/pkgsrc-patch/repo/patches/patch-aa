@@ -1,0 +1,10 @@
+--- lib/alloc.c.orig
++++ lib/alloc.c
+@@ -4,2 +4,8 @@
+ #include <stdlib.h>
++void *
++aligned_alloc(size_t alignment, size_t size)
++{
++	void *p = NULL;
++	return posix_memalign(&p, alignment, size) == 0 ? p : NULL;
++}

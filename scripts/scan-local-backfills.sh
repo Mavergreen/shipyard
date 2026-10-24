@@ -8,7 +8,9 @@
 #          macro-definition, declaration, annotation, suspicious-path. A candidate is a name from
 #          local-backfill-symbols or from compatibility-inventory.tsv, a compatibility annotation, or
 #          a shim/polyfill/backfill/compat path; renamed helpers, new APIs and macro-generated
-#          functions are not found, so no finding is not proof of absence.
+#          functions are not found, so no finding is not proof of absence. An in-place edit
+#          to a tracked file classified upstream looks exactly like the unmodified file: nothing
+#          here can tell, so the upstream row keeps covering it.
 #          --inventory validates REPO/compatibility-inventory.tsv and prints its rows, header
 #          dropped; no file prints nothing. The header is "path<TAB>kind<TAB>symbols<TAB>reason";
 #          kind is local-backfill, product-adaptation, upstream or test-only; path is one tracked
@@ -67,7 +69,7 @@ done < "$w/paths"
 
 rows="$w/inventory"; : > "$rows"
 if [ -e "$repo/$INV" ]; then
-  grep -qx "$INV" "$files" || die "$INV exists but is not in the file list ($source)"
+  grep -qxF "$INV" "$files" || die "$INV exists but is not in the file list ($source)"
   LC_ALL=C awk -v INV="$INV" '
     function fail(msg) { print "scan-local-backfills: " INV ":" FNR ": " msg > "/dev/stderr"; bad = 1 }
     FNR == NR { tracked[$0] = 1; next }

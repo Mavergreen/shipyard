@@ -1,0 +1,2 @@
+patches/patch-aa	6	patch-definition	aligned_alloc	patch adds a definition of a known Darwin/Recaulk API
+patches/patch-src_time.c	10	patch-definition	clock_gettime	patch adds a definition of a known Darwin/Recaulk API

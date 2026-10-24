@@ -1,0 +1,2 @@
+path	kind	symbols	reason
+vendor/libfoo/src/time.c	upstream	clock_gettime	libfoo 1.2.3 at the commit pinned in components/libfoo/version, unmodified
