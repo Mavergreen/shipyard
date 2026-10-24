@@ -1,0 +1,2 @@
+src/time_backport.c	4	definition	clock_gettime	defines a known Darwin/Recaulk API
+src/time_backport.c	17	definition	clock_getres	defines a known Darwin/Recaulk API

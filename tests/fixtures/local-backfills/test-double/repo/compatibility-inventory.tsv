@@ -1,0 +1,2 @@
+path	kind	symbols	reason
+tests/fakes/fake_clock.c	test-only	clock_gettime	a fixed clock linked only into the unit tests; never shipped

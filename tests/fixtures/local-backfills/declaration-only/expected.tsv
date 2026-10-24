@@ -1,0 +1,3 @@
+include/mg_decls.h	4	declaration	clock_gettime	declares a known Darwin/Recaulk API
+include/mg_decls.h	5	declaration	aligned_alloc	declares a known Darwin/Recaulk API
+include/mg_decls.h	7	declaration	timingsafe_bcmp	declares a known Darwin/Recaulk API

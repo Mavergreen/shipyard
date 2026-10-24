@@ -1,0 +1,3 @@
+src/uv-darwin.c	4	annotation	-	compatibility annotation
+src/uv-darwin.c	5	definition	clock_gettime	defines a known Darwin/Recaulk API
+src/uv-darwin.c	14	definition	mkostemp	defines a known Darwin/Recaulk API

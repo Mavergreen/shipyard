@@ -1,0 +1,13 @@
+--- a/src/thread.c
++++ b/src/thread.c
+@@ -10,6 +10,12 @@
+ #include <pthread.h>
++
++int pthread_set_qos_class_self_np(int qos_class, int relative_priority)
++{
++	(void)qos_class; (void)relative_priority;
++	return 0;
++}
+ int clock_gettime(clockid_t clk_id, struct timespec *tp) { return upstream_now(clk_id, tp); }
+-int mkostemp(char *path, int flags) { return mkstemp(path); }
+ static int unrelated(void) { return 0; }

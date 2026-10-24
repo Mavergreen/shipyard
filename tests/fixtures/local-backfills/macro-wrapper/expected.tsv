@@ -1,0 +1,2 @@
+include/mg_time.h	3	macro-definition	clock_gettime	macro defines a known Darwin/Recaulk API name
+include/mg_time.h	4	macro-definition	aligned_alloc	macro defines a known Darwin/Recaulk API name

@@ -1,0 +1,2 @@
+path	kind	symbols	reason
+include/mg_decls.h	product-adaptation	clock_gettime,aligned_alloc,timingsafe_bcmp	declares APIs Recaulk implements; the header has not reached Recaulk yet

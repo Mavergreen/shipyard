@@ -1,0 +1,2 @@
+path	kind	symbols	reason
+libexec/ssh-askpass-shim	product-adaptation	-	an executable wrapper that runs the product's own askpass; it backfills no OS API

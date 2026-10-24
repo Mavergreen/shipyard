@@ -1,0 +1,2 @@
+include/mg_alloc.h	3	inline-definition	aligned_alloc	inline definition of a known Darwin/Recaulk API
+include/mg_alloc.h	11	inline-definition	timingsafe_bcmp	inline definition of a known Darwin/Recaulk API

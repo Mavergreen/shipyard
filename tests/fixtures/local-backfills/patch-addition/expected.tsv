@@ -1,0 +1,1 @@
+patches/0001-thread-qos.patch	6	patch-definition	pthread_set_qos_class_self_np	patch adds a definition of a known Darwin/Recaulk API

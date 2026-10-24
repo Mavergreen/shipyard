@@ -1,0 +1,2 @@
+patches/libfoo-time.patch	11	patch-definition	clock_getres	patch adds a definition of a known Darwin/Recaulk API
+vendor/libfoo/src/time.c	3	definition	clock_gettime	defines a known Darwin/Recaulk API

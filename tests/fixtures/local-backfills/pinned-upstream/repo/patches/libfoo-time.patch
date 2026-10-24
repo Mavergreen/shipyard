@@ -1,0 +1,14 @@
+--- a/vendor/libfoo/src/time.c
++++ b/vendor/libfoo/src/time.c
+@@ -1,6 +1,12 @@
+ #include <time.h>
+ 
+ int clock_gettime(clockid_t clk_id, struct timespec *tp)
+ {
+ 	return libfoo_now(clk_id, tp);
+ }
++
++int clock_getres(clockid_t clk_id, struct timespec *res)
++{
++	return libfoo_res(clk_id, res);
++}

@@ -1,0 +1,3 @@
+#!/bin/sh
+# platform: host-agnostic
+exec /usr/local/mavergreen/openssh/libexec/ssh-askpass "$@"

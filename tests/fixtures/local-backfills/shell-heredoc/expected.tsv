@@ -1,0 +1,1 @@
+tools/gen-time.sh	6	embedded-definition	clock_gettime	code producer embeds a definition of a known Darwin/Recaulk API
