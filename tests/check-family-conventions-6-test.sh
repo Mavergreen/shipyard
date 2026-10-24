@@ -67,7 +67,11 @@ fails localcaller-noreport "$NOREPORT"
 
 n=0
 for inline in 'gh release create "$TAG" dist/*' 'gh release upload "$TAG" dist/x.pkg' 'gh release edit "$TAG" --draft=false' \
-              'gh api -X POST repos/Mavergreen/w/releases -f tag_name=v1' 'x=1; gh release create v1'; do
+              'gh api -X POST repos/Mavergreen/w/releases -f tag_name=v1' 'x=1; gh release create v1' \
+              'gh release delete-asset "$TAG" x.pkg --yes' 'gh api repos/Mavergreen/w/releases -f tag_name=v1' \
+              'gh api --method=PATCH repos/Mavergreen/w/releases/1' 'gh api repos/Mavergreen/w/releases --input body.json' \
+              'curl -X POST -H @headers https://api.github.com/repos/Mavergreen/w/releases' \
+              'curl --data-binary @x.pkg "https://uploads.github.com/repos/Mavergreen/w/releases/1/assets?name=x.pkg"'; do
   n=$((n + 1))
   case_ "inline$n" <<PY
 s += '      - run: $inline\n'
@@ -84,8 +88,31 @@ done
 
 case_ reads <<'PY'
 s += '      - run: |\n          # gh release create "$TAG"\n          gh release view v1 --json tagName\n          gh release download v1 -R Mavergreen/x\n          gh release list -R Mavergreen/x\n'
+s += '          gh api repos/Mavergreen/x/releases/tags/v1 --jq .id\n          gh api -X GET repos/Mavergreen/x/releases -f per_page=1\n'
+s += '          curl -fsSL https://api.github.com/repos/Mavergreen/x/releases/tags/v1\n'
 PY
 passes reads
+
+script_case() {  # $1 = name, $2 = script body, $3 = the run line calling it
+  d="$work/c30-$1"; mkrepo "$d"
+  printf '#!/bin/sh\n%s\n' "$2" > "$d/build/pub.sh"
+  printf '      - run: %s\n' "$3" >> "$d/$REL"
+  (cd "$d" && git add -A) >/dev/null 2>&1
+}
+PUBLISHES='set -eu
+gh release upload "$TAG" dist/x.pkg --clobber'
+n=0
+for call in 'sh build/pub.sh upload' 'bash -e ./build/pub.sh' '. build/pub.sh' './build/pub.sh upload' 'set -e; sh "build/pub.sh"'; do
+  n=$((n + 1))
+  script_case "script$n" "$PUBLISHES" "$call"
+  fails "script$n" 'build/pub.sh, which runs: gh release upload'
+done
+script_case script-reads 'gh release view "$TAG" --json assets' 'sh build/pub.sh'
+passes script-reads
+script_case script-mention "$PUBLISHES" 'cat build/pub.sh'
+passes script-mention
+script_case script-commented '# gh release create "$TAG"' 'sh build/pub.sh'
+passes script-commented
 
 mkrepo "$work/c30-shared"; cp "$here/../.github/workflows/publish-release.yml" "$work/c30-shared/.github/workflows/publish-release.yml"
 (cd "$work/c30-shared" && git add -A) >/dev/null 2>&1

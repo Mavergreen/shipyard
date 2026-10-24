@@ -33,6 +33,9 @@ Publication runs the rule strict twice, and nothing downgrades either run.
   that fails strict when it runs again there. A notes-only release needs the report too, with no
   asset records.
 
+The evidence covers the source and the attached assets, not the release body: the notes file is
+checked for its shape by `check-release-notes.sh`, and holds no code.
+
 The report is evidence, not permission: a forged one gets no further than a missing one, because
 the publisher recomputes it. A workflow that publishes some other way bypasses all of this, so the
 conventions gate (check 30) fails it.

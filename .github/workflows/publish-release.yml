@@ -153,7 +153,7 @@ jobs:
           REPO: ${{ github.repository }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
-          SHA: ${{ github.sha }}
+          SHA: ${{ steps.source.outputs.sha }}
         run: |
           sh .shipyard/scripts/assert_tag_publishable.sh \
             "$VER" "https://github.com/$REPO" "$REF_TYPE" "$REF_NAME" "$SHA"

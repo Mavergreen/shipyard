@@ -91,7 +91,7 @@ mkdir -p "$w/bin"
 REALGIT="$(command -v git)"
 cat > "$w/bin/git" <<EOF
 #!/bin/sh
-[ "\$1" = ls-remote ] && exit 0
+if [ "\$1" = ls-remote ]; then [ -s "$w/tags" ] && cat "$w/tags"; exit 0; fi
 exec "$REALGIT" "\$@"
 EOF
 cat > "$w/bin/gh" <<'EOF'
@@ -219,13 +219,13 @@ PY
 A="$w/artifacts"
 publish() {  # $1 = assets input, $2 = target-commitish input; artifacts already staged under $A
   rm -rf "$w/run"; mkdir -p "$w/run"
-  python3 - "$w/cfg.json" "$w/run" "$root/scripts" "$P" "$A" "$1" "$2" "$CLEAN" <<'PY'
+  python3 - "$w/cfg.json" "$w/run" "$root/scripts" "$P" "$A" "$1" "$2" "$CLEAN" "${REF_TYPE:-branch}" "${REF_NAME:-main}" <<'PY'
 import json, os, sys
-cfg, run, scripts, product, arts, assets, target, sha = sys.argv[1:]
+cfg, run, scripts, product, arts, assets, target, sha, ref_type, ref_name = sys.argv[1:]
 json.dump({"run": run, "shipyard_scripts": scripts, "product": product,
            "artifacts": {n: os.path.join(arts, n) for n in os.listdir(arts)},
            "inputs": {"version": "1.0.0", "artifact": "product-dist", "assets": assets, "target-commitish": target},
-           "github": {"repository": "Mavergreen/fixture", "sha": sha, "ref_type": "branch", "ref_name": "main",
+           "github": {"repository": "Mavergreen/fixture", "sha": sha, "ref_type": ref_type, "ref_name": ref_name,
                       "token": "t", "action_ref": ""}}, open(cfg, "w"))
 PY
   PATH="$w/bin:$PATH" python3 "$w/harness.py" "$WF" "$w/cfg.json" > "$w/out" 2>&1 \
@@ -308,6 +308,18 @@ G checkout -q "$CLEAN"
 [ -s "$w/report-mode.tsv" ] || { echo "FAIL: --report printed nothing to substitute"; exit 1; }
 stage "$w/report-mode.tsv"; publish required "$BAD"; refused "--report output in place of the evidence" "malformed"
 
+printf '%s\trefs/tags/1.0.0\n' "$CLEAN" > "$w/tags"
+stage "$w/good.tsv"; REF_TYPE=tag REF_NAME=1.0.0 publish required ""
+published "a run started by its own tag, at the audited commit"
+G checkout -q release-branch
+report "$P" "$D" "$SECOND" "$w/branch.tsv"; expect 0 "the report at the release branch"
+G checkout -q "$CLEAN"
+stage "$w/branch.tsv"; REF_TYPE=tag REF_NAME=1.0.0 publish required "$SECOND"
+[ ! -e "$w/run/PUBLISHED.json" ] || { echo "FAIL: an existing tag at github.sha must not publish a release audited at another commit"; exit 1; }
+[ "$(cat "$w/run/RESULT")" = "refused: Refuse an already-taken tag" ] \
+  || { echo "FAIL: the tag guard must compare the existing tag with the audited commit; $(cat "$w/run/RESULT"):"; cat "$w/out"; exit 1; }
+rm -f "$w/tags"
+
 fresh_dist none
 report "$P" "$D" "$CLEAN" "$w/notes.tsv"; expect 0 "the notes-only report"
 stage "$w/notes.tsv"; publish none ""; published "a notes-only release with its evidence"
@@ -340,6 +352,8 @@ else:
     if env.get("MAVERGREEN_CHECK_REPOSITORY") != "${{ github.repository }}":
         bad.append("the evidence step must take MAVERGREEN_CHECK_REPOSITORY from github.repository, got %r" % env.get("MAVERGREEN_CHECK_REPOSITORY"))
     guard = [i for i, s in enumerate(steps) if "assert_tag_publishable.sh" in (s.get("run") or "")]
+    if guard and (steps[guard[0]].get("env") or {}).get("SHA") != "${{ steps.source.outputs.sha }}":
+        bad.append("the tag guard must compare an existing tag with the audited commit (steps.source.outputs.sha)")
     if not guard or ver[0] > guard[0] or (co and co[0] > guard[0]):
         bad.append("the checkout and the evidence step must come before the tag guard and everything after it")
 pubs = [s for s in steps if "action-gh-release" in (s.get("uses") or "")]

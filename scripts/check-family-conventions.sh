@@ -786,29 +786,71 @@ fi
 
 # spec: SKILL.md "Family conventions" check 30 -- a workflow publishes only through shipyard's
 #       publish-release.yml, and a job calling it needs, directly or not, a job that runs
-#       local-backfill-report.sh and uploads the local-backfill-report artifact. The shared publisher
-#       itself, byte for byte, is the one workflow that publishes with the release action.
+#       local-backfill-report.sh and uploads the local-backfill-report artifact. A release mutation
+#       in a tracked script a run: block calls counts as the workflow's own. The shared publisher
+#       itself, byte for byte, is the one workflow that publishes.
 if [ -n "$CI_FILES" ] && python3 -c 'import yaml' >/dev/null 2>&1; then
-  # shellcheck disable=SC2086  # CI_FILES is a deliberate word-split list of paths
-  _c30="$(python3 - "$SELF/../.github/workflows/publish-release.yml" $CI_FILES <<'PY'
+  _tracked30="$(mktemp "${TMPDIR:-/tmp}/c30.XXXXXX")"
+  git ls-files > "$_tracked30" 2>/dev/null || : > "$_tracked30"
+  _py30="$(mktemp "${TMPDIR:-/tmp}/c30py.XXXXXX")"
+  cat > "$_py30" <<'PY'
 import re, sys, yaml
 try:
     shared = open(sys.argv[1], "rb").read()
 except Exception:
     shared = None
+tracked = set(l.rstrip("\n") for l in open(sys.argv[2]))
 INLINE_USES = ("softprops/action-gh-release@", "ncipollo/release-action@", "actions/create-release@",
                "actions/upload-release-asset@")
-def cmds(run):
-    lines = [l for l in str(run).splitlines() if not l.lstrip().startswith("#")]
+WRITE = r"(POST|PATCH|PUT|DELETE)"
+def cmds(text):
+    lines = [l for l in str(text).splitlines() if not l.lstrip().startswith("#")]
     return re.sub(r"\\\s*\n\s*", " ", "\n".join(lines)).splitlines()
-def inline(run):
+def word(c, w):
+    return re.search(r"(^|[\s;&|(`])" + w, c)
+def mutation(c):
+    if word(c, r"gh\s+release\s+(create|upload|edit|delete|delete-asset)\b"):
+        return True
+    if word(c, r"gh\s+api\b") and "releases" in c:
+        m = re.search(r"(\s-X\s*|\s--method[\s=]+)['\"]?([A-Za-z]+)", c)
+        if m:
+            return re.match(WRITE + "$", m.group(2).upper()) is not None
+        return re.search(r"\s(-f|-F|--field|--raw-field|--input)([\s=]|$)", c) is not None
+    if word(c, r"curl\b"):
+        if "uploads.github.com" in c:
+            return True
+        if re.search(r"api\.github\.com/\S*/releases", c) and (
+                re.search(r"\s(-X\s*|--request[\s=]+)['\"]?" + WRITE, c)
+                or re.search(r"\s(-d|--data\S*|-F|--form|-T|--upload-file)([\s=]|$)", c)):
+            return True
+    return False
+POS = r"(?:^|[;&|(`]|\bthen\b|\bdo\b|\bexec\b|\bif\b|!)\s*"
+PATH = r"['\"]?((?:\./)?[A-Za-z0-9_][A-Za-z0-9_./-]*)['\"]?(?=\s|$|;)"
+CALL = re.compile(POS + r"(?:(?:sh|bash|/bin/sh|/bin/bash)(?:\s+-\w+)*\s+|\.\s+)" + PATH)
+EXEC = re.compile(POS + r"['\"]?(\./[A-Za-z0-9_][A-Za-z0-9_./-]*)['\"]?(?=\s|$|;)")
+def called(c):
+    out = []
+    for m in list(CALL.finditer(c)) + list(EXEC.finditer(c)):
+        p = m.group(1)
+        p = p[2:] if p.startswith("./") else p
+        if p in tracked:
+            out.append(p)
+    return out
+def findings(run):
+    found = []
     for c in cmds(run):
-        if re.search(r"(^|[\s;&|(`])gh\s+release\s+(create|upload|edit)\b", c):
-            return c.strip()
-        if re.search(r"(^|[\s;&|(`])gh\s+api\b", c) and "releases" in c \
-           and re.search(r"(-X|--method)\s*['\"]?(POST|PATCH|PUT)", c):
-            return c.strip()
-    return None
+        if mutation(c):
+            found.append(c.strip()[:80])
+        for p in called(c):
+            try:
+                body = open(p, errors="replace").read()
+            except Exception:
+                continue
+            for sc in cmds(body):
+                if mutation(sc):
+                    found.append("%s, which runs: %s" % (p, sc.strip()[:70]))
+                    break
+    return found
 def makes_report(b):
     steps = [st for st in (b.get("steps") or []) if isinstance(st, dict)]
     up = any(isinstance(st.get("uses"), str) and st["uses"].startswith("actions/upload-artifact@")
@@ -816,26 +858,29 @@ def makes_report(b):
     run = any(re.search(r"(^|[\s/\"'])local-backfill-report\.sh[\"']?(\s|$)", c)
               for st in steps for c in cmds(st.get("run") or ""))
     return up and run
-for f in sys.argv[2:]:
+for f in sys.argv[3:]:
     try:
         raw = open(f, "rb").read()
         wf = yaml.safe_load(raw) or {}
     except Exception:
+        continue
+    if raw == shared:
         continue
     jobs = wf.get("jobs") if isinstance(wf, dict) else None
     if not isinstance(jobs, dict):
         continue
     jobs = {str(k): v for k, v in jobs.items() if isinstance(v, dict)}
     for j, b in jobs.items():
+        seen = []
         for st in b.get("steps") or []:
             if not isinstance(st, dict):
                 continue
             u = st.get("uses")
-            if isinstance(u, str) and u.lower().startswith(INLINE_USES) and raw != shared:
-                print("inline\t%s\t%s\tuses: %s" % (f, j, u))
-            c = inline(st.get("run") or "")
-            if c:
-                print("inline\t%s\t%s\t%s" % (f, j, c[:80]))
+            if isinstance(u, str) and u.lower().startswith(INLINE_USES):
+                seen.append("uses: %s" % u)
+            seen += findings(st.get("run") or "")
+        for c in sorted(set(seen), key=seen.index):
+            print("inline\t%s\t%s\t%s" % (f, j, c))
     def needs(j, seen):
         n = jobs.get(j, {}).get("needs") or []
         for d in ([n] if isinstance(n, str) else [str(x) for x in n]):
@@ -848,7 +893,10 @@ for f in sys.argv[2:]:
             if not any(makes_report(jobs[d]) for d in needs(j, set()) if d in jobs):
                 print("noreport\t%s\t%s\t-" % (f, j))
 PY
-)" || fail "check 30 could not read the workflows (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  # shellcheck disable=SC2086  # CI_FILES is a deliberate word-split list of paths
+  _c30="$(python3 "$_py30" "$SELF/../.github/workflows/publish-release.yml" "$_tracked30" $CI_FILES)" \
+    || fail "check 30 could not read the workflows (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  rm -f "$_tracked30" "$_py30"
   _tab="$(printf '\t')"
   while IFS="$_tab" read -r _k _f _j _what; do
     case "$_k" in
