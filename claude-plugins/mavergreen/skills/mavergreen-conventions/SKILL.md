@@ -339,12 +339,39 @@ carries it -- golang just *links* it (now through Recaulk). Our *own* back-fill 
    a deviation is a bug. Recaulk builds with the runner's clang and the pinned SDK, never clang22's
    compiler, to avoid a cycle.
 3. **Per-repo** -- a last resort, only for a genuinely repo-specific quirk (a header one product's build
-   alone needs), recorded in that repo's `INGREDIENTS.md` as a baked-in input. Delete it when Recaulk
-   gains the symbol.
+   alone needs), classified `local-backfill` and excepted in that repo's `INGREDIENTS.md` (rule
+   `local-backfill`, below). Delete it when Recaulk gains the symbol.
 
 **Do NOT** hand-carry a generically-useful back-fill as a private `.c`/header per repo, and **do NOT**
 put a linked runtime symbol in `shipyard` (it holds build facilities -- CMake fns + scripts -- not
 runtime back-fills).
+
+### Rule `local-backfill`: a product ships no backfill of its own
+
+`sh "$SHIPYARD_SCRIPTS/check-local-backfills.sh" [--report] .` enforces the tiers above on source;
+shipyard's `explain/local-backfill.md` is the full rule. In short:
+
+- `scan-local-backfills.sh` finds **candidates** (definitions, inline and macro forms, patch hunks,
+  generated code, declarations, compatibility annotations, shim/compat paths). A candidate is not a
+  verdict, and no candidate is not proof: a renamed helper is invisible until source review names it.
+- Every candidate is classified in a tracked `compatibility-inventory.tsv` (`path kind symbols
+  reason`; kinds `local-backfill`, `product-adaptation`, `upstream`, `test-only`), one literal file per
+  row; a row matching no candidate fails. `upstream` is for unmodified pinned code and its reason
+  cites the pin and says unmodified; a patch is never `upstream`.
+- A `local-backfill` row fails strict mode unless `## Conformance deviations` carries
+  `- local-backfill:<file>: <concrete reason>; symbols=<names>; decision=<maintainer's decision>; evidence=<review URL>; revisit=<exit condition>`.
+  Globs, bare exemptions, unmatched paths, blank or missing fields, `approved=`-style switches and
+  "Recaulk already provides it" are refused. The checker cannot authenticate `decision=`: the
+  maintainer's review of the change adding it is the evidence.
+- Strict exits 1 on any finding; `--report` prints them and exits 0 for exploratory builds; both exit
+  2 on unreadable input. Publication always runs strict.
+- Only `MAVERGREEN_CHECK_REPOSITORY=Mavergreen/recaulk`, supplied by the caller, exempts a repo from
+  owning backfills; the audited tree's names and metadata grant nothing, and unset means not Recaulk.
+- Binary symbols are never a finding: linking `librecaulk.a` defines them by design.
+
+The `INGREDIENTS.md` reader is transitional: when the shared metadata directory migration lands
+(flag-day P2), these records move to the shared deviations directory and
+`local-backfill-deviations.sh` is deleted.
 
 ## Renovate & automerge
 
@@ -1871,6 +1898,9 @@ Beyond the gate and the artifact checker, `ingredient-notes.sh` reads `unlinked:
 may end in `:KEY` (uppercase, as the pin's assignment spells it), because a release-notes link
 belongs to a pin, the file plus its KEY; `deviations.sh` refuses a `:KEY` on any other kind, where it
 could never match and would excuse nothing in silence, and refuses an `unlinked` with no scope or `*`.
+`check-local-backfills.sh` reads `local-backfill:<file>` (rule `local-backfill`, under "Where
+family-authored 10.9 back-fills live", above) through `local-backfill-deviations.sh`, which takes
+`deviations.sh`'s output and refuses anything but one literal file with every labeled field.
 
 **A truncated fact stream fails.** The two scripts run as a pipeline
 (`artifact-facts.sh dist "$v" | check-artifact-conformance.sh`); a pipeline's exit status is its LAST
