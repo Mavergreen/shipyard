@@ -25,43 +25,68 @@ out="$(MAVERICKS_SDK_CACHE="$w/c2" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SD
   || { echo "FAIL: no --arch must default to x86_64 and succeed"; exit 1; }
 [ "$out" = "$w/c2/MacOSX10.9.sdk" ] || { echo "FAIL: the default must be the 10.9 SDK dir, got: $out"; exit 1; }
 
-# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the 10.9 SDK
-#       ships only SDKSettings.plist, and Swift's driver reads the SDK version only from
-#       SDKSettings.json, so fetch_sdk.sh gives the 10.9 SDK one. The 11.3 SDK ships its own.
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the pinned
+#       10.9 SDK stays byte-for-byte the archive's (clang22's setup-sdk verifies the tree against it);
+#       only a sibling made on request carries the SDKSettings.json Swift needs.
 want_json='{"CanonicalName":"macosx10.9","MaximumDeploymentTarget":"10.9","Version":"10.9"}'
-j="$w/c2/MacOSX10.9.sdk/SDKSettings.json"
-[ -f "$j" ] || { echo "FAIL: a fresh 10.9 fetch must write SDKSettings.json"; exit 1; }
-[ "$(cat "$j")" = "$want_json" ] || { echo "FAIL: SDKSettings.json must be $want_json, got: $(cat "$j")"; exit 1; }
-[ "$(wc -l < "$j" | tr -d ' ')" = 1 ] || { echo "FAIL: SDKSettings.json must be one newline-terminated line"; exit 1; }
-v='"[A-Za-z]+":"[0-9a-z.]+"'
-grep -Eqx "\\{$v(,$v)*\\}" "$j" || { echo "FAIL: SDKSettings.json must parse as a flat JSON object of strings, got: $(cat "$j")"; exit 1; }
-for k in CanonicalName Version MaximumDeploymentTarget; do
-  [ "$(grep -o "\"$k\":" "$j" | wc -l | tr -d ' ')" = 1 ] || { echo "FAIL: SDKSettings.json must hold $k exactly once"; exit 1; }
-done
+[ ! -e "$w/c2/MacOSX10.9.sdk/SDKSettings.json" ] || { echo "FAIL: the default fetch must leave no SDKSettings.json in the pinned 10.9 SDK"; exit 1; }
+[ "$(cd "$w/c2" && find MacOSX10.9.sdk | LC_ALL=C sort)" = "$(cd "$w/src" && find MacOSX10.9.sdk | LC_ALL=C sort)" ] \
+  || { echo "FAIL: the pinned 10.9 SDK's file list must equal the archive's"; exit 1; }
 [ ! -e "$w/c1/MacOSX11.3.sdk/SDKSettings.json" ] || { echo "FAIL: the arm64 SDK ships its own SDKSettings.json; fetch_sdk.sh must not invent one"; exit 1; }
+[ ! -e "$w/c2/with-sdk-settings-json" ] || { echo "FAIL: the default fetch must not make the sibling"; exit 1; }
 
 mkdir -p "$w/c7/MacOSX10.9.sdk/usr/lib"
+printf '%s\n' "$want_json" > "$w/c7/MacOSX10.9.sdk/SDKSettings.json"
 out="$(MAVERICKS_SDK_CACHE="$w/c7" MAVERICKS_SDK_URL="file://$w/absent.tar" MAVERICKS_SDK_SHA256="$s109" sh "$S")" \
   || { echo "FAIL: an already-unpacked 10.9 SDK must be used without a download"; exit 1; }
 [ "$out" = "$w/c7/MacOSX10.9.sdk" ] || { echo "FAIL: an already-unpacked SDK must print its dir, got: $out"; exit 1; }
-[ "$(cat "$w/c7/MacOSX10.9.sdk/SDKSettings.json")" = "$want_json" ] \
-  || { echo "FAIL: an already-unpacked 10.9 SDK must gain SDKSettings.json"; exit 1; }
-[ ! -e "$w/c7/MacOSX10.9.sdk.tar.xz" ] || { echo "FAIL: adding SDKSettings.json must not download the SDK"; exit 1; }
-[ -z "$(leftovers "$w/c7")" ] \
-  || { echo "FAIL: adding SDKSettings.json left temp entries"; exit 1; }
+[ ! -e "$w/c7/MacOSX10.9.sdk/SDKSettings.json" ] || { echo "FAIL: the SDKSettings.json v1.0.544 wrote must be removed"; exit 1; }
+[ ! -e "$w/c7/MacOSX10.9.sdk.tar.xz" ] || { echo "FAIL: healing the SDK must not download it"; exit 1; }
+[ -z "$(leftovers "$w/c7")" ] || { echo "FAIL: healing the SDK left temp entries"; exit 1; }
 
-ino="$(ls -i "$w/c7/MacOSX10.9.sdk/SDKSettings.json" | awk '{print $1}')"
-chmod a-w "$w/c7/MacOSX10.9.sdk"
-rc=0; MAVERICKS_SDK_CACHE="$w/c7" MAVERICKS_SDK_URL="file://$w/absent.tar" MAVERICKS_SDK_SHA256="$s109" sh "$S" >/dev/null 2>&1 || rc=$?
-chmod u+w "$w/c7/MacOSX10.9.sdk"
-[ "$rc" -eq 0 ] || { echo "FAIL: a correct SDKSettings.json must be left alone, even in a read-only SDK, got exit $rc"; exit 1; }
-[ "$(ls -i "$w/c7/MacOSX10.9.sdk/SDKSettings.json" | awk '{print $1}')" = "$ino" ] \
-  || { echo "FAIL: a correct SDKSettings.json must never be rewritten"; exit 1; }
-
-printf '{"Version":' > "$w/c7/MacOSX10.9.sdk/SDKSettings.json"
+printf '{"Version":"10.9"}\n' > "$w/c7/MacOSX10.9.sdk/SDKSettings.json"
 MAVERICKS_SDK_CACHE="$w/c7" MAVERICKS_SDK_URL="file://$w/absent.tar" MAVERICKS_SDK_SHA256="$s109" sh "$S" >/dev/null \
-  || { echo "FAIL: a truncated SDKSettings.json must be repaired"; exit 1; }
-[ "$(cat "$w/c7/MacOSX10.9.sdk/SDKSettings.json")" = "$want_json" ] || { echo "FAIL: a truncated SDKSettings.json must be replaced"; exit 1; }
+  || { echo "FAIL: a foreign SDKSettings.json must not fail the fetch"; exit 1; }
+[ "$(cat "$w/c7/MacOSX10.9.sdk/SDKSettings.json")" = '{"Version":"10.9"}' ] || { echo "FAIL: a foreign SDKSettings.json must be left alone"; exit 1; }
+
+sib() { MAVERICKS_SDK_SETTINGS_JSON=1 MAVERICKS_SDK_CACHE="$w/c9" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" sh "$S" "$@"; }
+out="$(sib)" || { echo "FAIL: MAVERICKS_SDK_SETTINGS_JSON=1 must succeed"; exit 1; }
+[ "$out" = "$w/c9/with-sdk-settings-json/MacOSX10.9.sdk" ] || { echo "FAIL: the opt-in must print the sibling, got: $out"; exit 1; }
+[ -f "$out/SDKSettings.json" ] && [ ! -L "$out/SDKSettings.json" ] || { echo "FAIL: the sibling's SDKSettings.json must be a real file"; exit 1; }
+[ "$(cat "$out/SDKSettings.json")" = "$want_json" ] && [ "$(wc -l < "$out/SDKSettings.json" | tr -d ' ')" = 1 ] \
+  || { echo "FAIL: the sibling's SDKSettings.json must be the pin's JSON plus a newline"; exit 1; }
+[ -L "$out/usr" ] && [ "$(readlink "$out/usr")" = "$w/c9/MacOSX10.9.sdk/usr" ] \
+  || { echo "FAIL: the sibling's entries must be symlinks to the pinned SDK's, absolute"; exit 1; }
+[ -f "$out/usr/lib/libSystem.tbd" ] || { echo "FAIL: the sibling must resolve usr/lib through the symlink"; exit 1; }
+[ ! -e "$w/c9/MacOSX10.9.sdk/SDKSettings.json" ] \
+  && [ "$(cd "$w/c9" && find MacOSX10.9.sdk | LC_ALL=C sort)" = "$(cd "$w/src" && find MacOSX10.9.sdk | LC_ALL=C sort)" ] \
+  || { echo "FAIL: the opt-in must leave the pinned SDK pristine"; exit 1; }
+[ -z "$(leftovers "$w/c9")" ] || { echo "FAIL: the opt-in left temp entries: $(leftovers "$w/c9")"; exit 1; }
+ino="$(ls -i "$out/SDKSettings.json" | awk '{print $1}')"
+sib >/dev/null || { echo "FAIL: a repeated opt-in must succeed"; exit 1; }
+[ "$(ls -i "$out/SDKSettings.json" | awk '{print $1}')" = "$ino" ] || { echo "FAIL: a correct sibling must not be rebuilt"; exit 1; }
+
+printf '{"Version":' > "$out/SDKSettings.json"
+sib >/dev/null || { echo "FAIL: the opt-in must repair a sibling with wrong JSON"; exit 1; }
+[ "$(cat "$out/SDKSettings.json")" = "$want_json" ] || { echo "FAIL: the opt-in must replace a sibling's wrong JSON"; exit 1; }
+rm "$out/usr"
+sib >/dev/null || { echo "FAIL: the opt-in must repair a sibling missing an entry"; exit 1; }
+[ -f "$out/usr/lib/libSystem.tbd" ] || { echo "FAIL: the opt-in must restore a missing sibling entry"; exit 1; }
+ln -sfn /nonexistent "$out/usr"
+sib >/dev/null || { echo "FAIL: the opt-in must repair a sibling with a stale entry"; exit 1; }
+[ -f "$out/usr/lib/libSystem.tbd" ] || { echo "FAIL: the opt-in must restore a stale sibling entry"; exit 1; }
+
+out="$(MAVERICKS_SDK_SETTINGS_JSON=1 MAVERICKS_SDK_CACHE="$w/c10" MAVERICKS_SDK_URL="file://$t113" MAVERICKS_SDK_SHA256="$s113" sh "$S" --arch arm64)" \
+  || { echo "FAIL: the opt-in on arm64 must succeed"; exit 1; }
+[ "$out" = "$w/c10/MacOSX11.3.sdk" ] || { echo "FAIL: the opt-in on arm64 must print the pristine 11.3 SDK, got: $out"; exit 1; }
+[ ! -e "$w/c10/with-sdk-settings-json" ] || { echo "FAIL: the opt-in on arm64 must make no sibling"; exit 1; }
+
+for v in 0 yes true; do
+  rc=0; MAVERICKS_SDK_SETTINGS_JSON=$v MAVERICKS_SDK_CACHE="$w/c11" sh "$S" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: MAVERICKS_SDK_SETTINGS_JSON=$v is a usage error (2), got $rc"; exit 1; }
+done
+MAVERICKS_SDK_SETTINGS_JSON= MAVERICKS_SDK_CACHE="$w/c2" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" sh "$S" >/dev/null \
+  || { echo "FAIL: an empty MAVERICKS_SDK_SETTINGS_JSON is the same as unset"; exit 1; }
 
 mkdir -p "$w/c8/MacOSX11.3.sdk/usr/lib"
 printf '{"Version":"11.3"}' > "$w/c8/MacOSX11.3.sdk/SDKSettings.json"
@@ -112,7 +137,7 @@ for os in 10.9.5 13.0; do
   FAKE_OS=$os PATH="$w/bin:$PATH" MAVERGREEN_PROGRESS=1 MAVERICKS_SDK_CACHE="$w/c-$os" MAVERICKS_SDK_URL="file://$w/stub.tar" MAVERICKS_SDK_SHA256="$sstub" \
     sh "$S" > /dev/null 2> "$w/err-$os" || { echo "FAIL: a first fetch on $os must succeed"; exit 1; }
   [ ! -s "$w/tools.log" ] || { echo "FAIL: a first fetch on $os must run no tapi, xcrun or otool, ran: $(cat "$w/tools.log")"; exit 1; }
-  d="$( (cd "$w/stub" && find MacOSX10.9.sdk; echo MacOSX10.9.sdk/SDKSettings.json) | LC_ALL=C sort)"
+  d="$( (cd "$w/stub" && find MacOSX10.9.sdk) | LC_ALL=C sort)"
   [ "$(cd "$w/c-$os" && find MacOSX10.9.sdk | LC_ALL=C sort)" = "$d" ] \
     || { echo "FAIL: a first fetch on $os must keep the SDK's files as shipped, got: $(cd "$w/c-$os" && find MacOSX10.9.sdk -name '*.tbd')"; exit 1; }
   [ "$(cat "$w/c-$os/MacOSX10.9.sdk/usr/lib/libSystem.B.dylib")" = stub ] && [ -L "$w/c-$os/MacOSX10.9.sdk/usr/lib/libSystem.dylib" ] \

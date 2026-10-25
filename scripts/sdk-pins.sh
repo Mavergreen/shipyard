@@ -1,7 +1,7 @@
 # platform: host-agnostic
 #   usage: . sdk-pins.sh     (sourced; defines the four functions below)
 #          shipyard_sdk_pin <arch>                            "<url> <sha256> <tarball> <sdk-dir>"; 1 if unknown
-#          shipyard_sdk_settings_json <arch>                  the SDKSettings.json fetch_sdk.sh adds; 1 if none
+#          shipyard_sdk_settings_json <arch>                  the SDKSettings.json fetch_sdk.sh puts in the SDK sibling; 1 if none
 #          shipyard_sdk_rule <arch> <filetype> <minos> <sdk>  0 if compliant, else prints why and returns 1
 #          shipyard_sdk_exempt_sha256 <sha256>                0 if the bytes are a pinned third-party file
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the ONE place
@@ -43,7 +43,7 @@ shipyard_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk
   esac
   # platform: an object file (a static archive's member, x86_64 only) may record sdk "n/a" when
   #           compiled against a 10.9 SDK with no SDKSettings.json to read a version from (Apple ships
-  #           none; fetch_sdk.sh adds one) -- so a member can prove its minos but not its SDK. The 11.3 arm64 SDK includes
+  #           none; the sibling fetch_sdk.sh makes on request has one) -- so a member can prove its minos but not its SDK. The 11.3 arm64 SDK includes
   #           SDKSettings.json, so arm64 members must record their SDK version.
   [ "$1" = x86_64 ] && [ "$2" = OBJECT ] && [ "$4" = n/a ] && [ "$3" = "$_want_min" ] && return 0
   # platform: OS X 10.9's own clang (pre-Xcode 7) writes no version-min load command into a

@@ -1633,11 +1633,13 @@ forms, but CLT 6.2's ld64-241.9 can't read `.tbd`. Stubs are also the one form t
 everywhere: lld orders a `.tbd`'s exports by name and a stub's in export-trie order, so the two forms give
 different symbol tables. It used to convert wherever tapi existed, which meant only on a modern Mac, so
 that host alone linked C differently from 10.9 and Linux (measured 2026-10-13). The cost is that Apple's
-ld from Xcode 15 on warns once per stub it reads, but the family links with lld. The one file added
-is `SDKSettings.json`, in the 10.9 SDK only (`shipyard_sdk_settings_json`): Apple shipped just
-`SDKSettings.plist`, and swiftc reads the SDK version only from the JSON, so every Swift link recorded
-sdk `n/a` until 2026-10-25. It holds the three keys LLVM's `DarwinSDKInfo` needs, valued from the
-plist, and is added to an already-unpacked cache too, never rewritten when correct. A cache key for the
+ld from Xcode 15 on warns once per stub it reads, but the family links with lld. The pinned SDK is never
+modified (clang22's `setup-sdk` verifies the tree against the archive). Swift needs an `SDKSettings.json`
+that Apple's 10.9 SDK lacks (swiftc reads the SDK version only from the JSON), so with
+`MAVERICKS_SDK_SETTINGS_JSON=1` `fetch_sdk.sh` prints a sibling, `<cache>/with-sdk-settings-json/MacOSX10.9.sdk`:
+symlinks to the pinned SDK's entries plus that file (`shipyard_sdk_settings_json`, the three keys LLVM's
+`DarwinSDKInfo` needs). The 11.3 SDK ships its own, so the opt-in is a no-op for arm64. The sibling is
+interim until `setup-sdk` accepts the file in the pinned SDK. A cache key for the
 fetched SDK covers `fetch_sdk.sh` as well as `sdk-pins.sh`, so a change to what the fetch produces never
 restores a stale SDK.
 
@@ -1668,8 +1670,8 @@ restores a stale SDK.
 **Known limits, stated rather than hidden:**
 - **A kext records no version load command.** It is checked for arch only (x86_64), and its build must
   pass the 10.9 SDK.
-- **A static archive's members compiled against the 10.9 SDK may record sdk `n/a`,** if built before
-  `fetch_sdk.sh` gave that SDK an SDKSettings.json. They must match minos, and `n/a` is accepted for x86_64
+- **A static archive's members compiled against the 10.9 SDK may record sdk `n/a`,** because the pinned
+  SDK has no SDKSettings.json (only the opt-in sibling does). They must match minos, and `n/a` is accepted for x86_64
   `OBJECT` files only (the 11.3 SDK ships SDKSettings.json, so arm64 members must record 11.3).
 - **A static archive built natively on 10.9 records no version at all.** 10.9's own clang (pre-Xcode 7)
   writes no version-min load command into a `.o`, only into what it links. So an x86_64 `OBJECT` that
