@@ -3,7 +3,8 @@
 #   usage: fetch_sdk.sh [--arch x86_64|arm64]
 #          Fetches + caches + checksum-verifies the family's PINNED SDK for one arch (sdk-pins.sh):
 #          MacOSX10.9.sdk for x86_64 (the default), MacOSX11.3.sdk for arm64. Prints the SDK root on
-#          stdout. A native 10.9 build uses this pin too, never xcrun's own SDK (MavericksToolchain.cmake).
+#          stdout, with SDKSettings.json added where the SDK ships none (sdk-pins.sh). A native 10.9
+#          build uses this pin too, never xcrun's own SDK (MavericksToolchain.cmake).
 #          Apple SDK bytes are never committed -- this is a build-time fetch. The cache default is per-machine and durable:
 #          TMPDIR gets purged by macOS (stranding the path CMake cached at configure time).
 #          MAVERICKS_SDK_URL / MAVERICKS_SDK_SHA256 override the selected arch's pin (the tests use
@@ -34,4 +35,13 @@ if [ ! -d "$SDK" ]; then
   shipyard_fetch_pinned "$URL" "$SHA" "$CACHE" "$3"
 fi
 [ -d "$SDK/usr/lib" ] || { echo "SDK missing usr/lib: $SDK" >&2; exit 1; }
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- an SDK that
+#       ships no SDKSettings.json gets the pin's, in a fresh cache or an old one alike; a correct one is
+#       never rewritten.
+if json="$(shipyard_sdk_settings_json "$ARCH")" \
+   && ! printf '%s\n' "$json" | cmp -s - "$SDK/SDKSettings.json"; then
+  j="$(mktemp "$SDK/.SDKSettings.json.XXXXXX")" || { echo "fetch_sdk: cannot write SDKSettings.json into $SDK" >&2; exit 1; }
+  { printf '%s\n' "$json" > "$j" && chmod 644 "$j" && mv -f "$j" "$SDK/SDKSettings.json"; } \
+    || { rm -f "$j"; echo "fetch_sdk: cannot write SDKSettings.json into $SDK" >&2; exit 1; }
+fi
 echo "$SDK"
