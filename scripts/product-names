@@ -40,3 +40,4 @@ make dev.mavergreen.make make
 ninja dev.mavergreen.ninja ninja
 sdk113 dev.mavergreen.longboat.sdk113 longboat
 cmake dev.mavergreen.cmake cmake
+stevedore dev.mavergreen.stevedore stevedore
