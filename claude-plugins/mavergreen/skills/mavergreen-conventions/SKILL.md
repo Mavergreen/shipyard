@@ -2362,6 +2362,26 @@ finding or round: write the reason in, where a reader without the file can use i
 per-user state) is likewise ignored and never tracked. Check 27 below enforces both, and fails a tracked
 backlog by any of its usual names, and a tracked line citing a queue entry by number.
 
+## Before you plan or execute: open issues and pull requests
+
+In a repo that has been pushed to GitHub, when a session starts, and again before planning or
+executing superpowers work in it, list its open issues (except Renovate's Dependency Dashboard) and its
+open pull requests, Renovate's included:
+
+```sh
+gh issue list -R Mavergreen/<repo> --state open   # ignore "Dependency Dashboard"
+gh pr list -R Mavergreen/<repo> --state open
+```
+
+Renovate pull requests should merge themselves; one that stays open is a symptom, not a backlog. For
+each item, tell the maintainer before starting the work:
+
+- **A person is waiting** (an issue or PR from someone, or a question in one): suggest a reply for the
+  maintainer to send. Never post it yourself.
+- **A Renovate PR is not going to clear itself** (a failing required check, a merge conflict, a pins-bot
+  step that cannot run, an update that needs a code change): say why, and suggest what to do about it.
+- **Anything else open**: say what it is and whether it bears on the planned work.
+
 ## Family conventions (checked, not just written down)
 
 `sh "$SHIPYARD_SCRIPTS/check-family-conventions.sh"` runs in every product repo's CI and **fails the build**
