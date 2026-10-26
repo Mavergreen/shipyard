@@ -84,7 +84,10 @@ linux_release() {
 }
 
 @test "pin is a version, never latest" {
-  case "$PIN" in ''|latest|*[!0-9A-Za-z._-]*) false ;; esac
-  run sh "$BATS_TEST_DIRNAME/../scripts/check-family-conventions.sh"
-  [[ "$output" != *"fetches whatever release is newest"* ]] || false
+  pin="$BATS_TEST_DIRNAME/../scripts/stevedore.pin"
+  [ "$(grep -c '^STEVEDORE_VERSION=' "$pin")" -eq 1 ]
+  grep -qE '^STEVEDORE_VERSION=[0-9]{8}\.[0-9]+$' "$pin"
+  renovate="$BATS_TEST_DIRNAME/../.github/renovate.json"
+  grep -qF '/^scripts/stevedore\\.pin$/' "$renovate"
+  grep -qF '"STEVEDORE_VERSION=(?<currentValue>' "$renovate"
 }

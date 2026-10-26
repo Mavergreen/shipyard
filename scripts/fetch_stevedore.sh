@@ -9,7 +9,8 @@
 #          ${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/stevedore/VERSION (Darwin) or
 #          ${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-pkgs/stevedore/VERSION (Linux); a cached binary of
 #          another version is replaced. Needs no python. Exit 1 on a failed fetch, checksum or version
-#          check. MAVERGREEN_RELEASES replaces https://github.com (the tests serve file://).
+#          check. MAVERGREEN_RELEASES replaces https://github.com (the tests serve file://). STEVEDORE_HOST
+#          replaces `uname -s` and is a test-only override, so a macOS host can exercise the Linux branch.
 #          Runs on 10.9: pkgutil --expand only, never --expand-full.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
