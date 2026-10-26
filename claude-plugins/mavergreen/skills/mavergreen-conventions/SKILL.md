@@ -44,6 +44,13 @@ arm64 consumer, never speculatively. Parity is about *developers'* tools, not ab
 products for Apple Silicon. A product spec that plans a universal build without such a reason is
 following a retired direction (universal-by-default never landed); correct the spec.
 
+**A repo has no secrets to set. Never list one as a setup or release step.** `SPARKLE_PRIVATE_KEY`,
+`MAVERICKS_VM_KEY` and `PINS_BOT_PRIVATE_KEY` are ORGANIZATION secrets, and every public Mavergreen
+repo already sees them; `gh api repos/Mavergreen/<repo>/actions/organization-secrets --jq
+'[.secrets[].name]'` shows it. Agents keep telling the maintainer to add them to a new repo; that is
+wrong. Never add a repo-level secret of those names either: it shadows the org one, so a key rotation
+would miss that repo. The repo must be public for them to arrive (see "Creating a family repo").
+
 ## Canonical templates (copy these, not the others)
 
 The family has an older/simpler variant and a current/mature variant. **Start from the mature one.**
@@ -2620,6 +2627,8 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
 4. By hand, since GitHub's API cannot set them, as the script reminds you: Write on the org's
    `mavericks-vm-images` package for a repo whose workflow runs `Mavergreen/mavericks-vm`, and the
    `mavergreen-pins-bot` installation for one that runs the pins bot.
+5. No secrets: the repo already sees the org's `SPARKLE_PRIVATE_KEY`, `MAVERICKS_VM_KEY` and
+   `PINS_BOT_PRIVATE_KEY`, because it is public. Do not tell the maintainer to set any.
 
 `settle` is idempotent, so it also brings an existing repo back in line;
 `sh scripts/audit-repo-settings.sh` lists every repo that has drifted.
@@ -2790,6 +2799,8 @@ it here.** A silently dropped increment is how the family drifted in the first p
 
 ## Common mistakes
 
+- Telling the maintainer to add `SPARKLE_PRIVATE_KEY` or `MAVERICKS_VM_KEY` to a repo → they are org
+  secrets every public repo already has; a repo-level copy would shadow the org's.
 - Hardcoding the upstream version in a test → self-blocks the next Renovate automerge.
 - `ignoreTests: false` (default) but no PR check → automerge **stalls forever**. Add the `pull_request`
   gate or set `ignoreTests: true`.
