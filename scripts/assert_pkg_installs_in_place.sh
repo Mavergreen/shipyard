@@ -39,10 +39,11 @@ count_bundles() {  # $1=PackageInfo  $2=element
     END { print c + 0 }'
 }
 
-STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
+STEVEDORE=""
 status=0
 for pkg in "$@"; do
   [ -f "$pkg" ] || { echo "assert_pkg_installs_in_place: no such pkg: $pkg" >&2; status=1; continue; }
+  [ -n "$STEVEDORE" ] || STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
   x="$(mktemp -d "${TMPDIR:-/tmp}/pkg-inplace.XXXXXX")"   # template: 10.9 BSD mktemp requires one
   if ! "$STEVEDORE" expand "$pkg" "$x/e" >/dev/null 2>&1; then
     echo "assert_pkg_installs_in_place: cannot expand $pkg" >&2; status=1; rm -rf "$x"; continue

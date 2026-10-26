@@ -84,6 +84,18 @@ build() {
   [ "$status" -eq 1 ]
 }
 
+# needs stevedore >= the release after 20261026.1 (its tree walk skips ._* files)
+@test "build_component_pkg: AppleDouble files never reach the pkg" {
+  mkdir -p "$WORK/dirty/x" "$WORK/clean/x"
+  printf 'data\n' > "$WORK/dirty/x/f"; printf 'junk\n' > "$WORK/dirty/x/._f"
+  printf 'data\n' > "$WORK/clean/x/f"
+  for v in dirty clean; do
+    sh "$BUILD" --root "$WORK/$v" --identifier dev.mavergreen.fake --version 1 \
+      --install-location / --out "$WORK/$v.pkg" >/dev/null 2>&1
+  done
+  cmp "$WORK/dirty.pkg" "$WORK/clean.pkg"
+}
+
 @test "gate: missing pkg fails loudly rather than passing vacuously" {
   run sh "$GATE" "$WORK/does-not-exist.pkg"
   [ "$status" -ne 0 ]

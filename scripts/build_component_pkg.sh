@@ -3,7 +3,9 @@
 #   usage: build_component_pkg.sh --root DIR --identifier ID --version V --install-location LOC
 #                                  --out PKG [--scripts DIR]
 #          Prints the output .pkg path on stdout (everything else goes to stderr), matching
-#          set_install_floor.sh.
+#          set_install_floor.sh. Files are stamped with $SOURCE_DATE_EPOCH, or when unset the commit
+#          time of the git repo at the caller's current directory; a caller without git must export
+#          SOURCE_DATE_EPOCH.
 # platform: builds a flat component .pkg with stevedore, whose bundles install EXACTLY where
 #           declared and ALWAYS overwrite. stevedore writes every component install-in-place, so
 #           PackageKit's two "defer to whatever is already on disk" defaults are OFF on every bundle:
