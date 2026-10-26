@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- pkgutil expands the pkg
+# platform: host-agnostic
 #   usage: assert_pkg_installs_in_place.sh PKG [PKG...]
 #          Gates a BUILT .pkg against the two install-time footguns build_component_pkg.sh disables,
 #          by reading what the .pkg ACTUALLY declares in its PackageInfo -- so a regression (a
@@ -25,6 +25,7 @@
 #           A relocatable / version-checked bundle appears as <bundle id="..."/> under those elements.
 #           A clean pkg leaves them empty (<relocate/> / <bundle-version/>) or absent.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
 [ "$#" -ge 1 ] || { echo "assert_pkg_installs_in_place: need at least one .pkg" >&2; exit 2; }
 
 # platform: a PackageInfo's XML may be pretty-printed or written as one line, and its
@@ -38,11 +39,12 @@ count_bundles() {  # $1=PackageInfo  $2=element
     END { print c + 0 }'
 }
 
+STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
 status=0
 for pkg in "$@"; do
   [ -f "$pkg" ] || { echo "assert_pkg_installs_in_place: no such pkg: $pkg" >&2; status=1; continue; }
   x="$(mktemp -d "${TMPDIR:-/tmp}/pkg-inplace.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-  if ! pkgutil --expand "$pkg" "$x/e" >/dev/null 2>&1; then
+  if ! "$STEVEDORE" expand "$pkg" "$x/e" >/dev/null 2>&1; then
     echo "assert_pkg_installs_in_place: cannot expand $pkg" >&2; status=1; rm -rf "$x"; continue
   fi
   found=0

@@ -1,12 +1,12 @@
 #!/bin/sh
-# platform: macOS-only -- pkgbuild and PlistBuddy build the component pkg
+# platform: host-agnostic
 #   usage: build_component_pkg.sh --root DIR --identifier ID --version V --install-location LOC
 #                                  --out PKG [--scripts DIR]
 #          Prints the output .pkg path on stdout (everything else goes to stderr), matching
 #          set_install_floor.sh.
-# platform: builds a flat component .pkg whose bundles install EXACTLY where declared and ALWAYS
-#           overwrite, by turning OFF PackageKit's two "defer to whatever is already on disk"
-#           defaults on every bundle:
+# platform: builds a flat component .pkg with stevedore, whose bundles install EXACTLY where
+#           declared and ALWAYS overwrite. stevedore writes every component install-in-place, so
+#           PackageKit's two "defer to whatever is already on disk" defaults are OFF on every bundle:
 #             BundleIsRelocatable=false    -- otherwise Installer, finding a bundle with the same
 #               CFBundleIdentifier already on disk at a DIFFERENT path, RELOCATES the payload onto
 #               that old path and ignores the declared install-location. (mavericks-container-tools:
@@ -20,7 +20,7 @@
 #           Both are one bug family: an internally-consistent .pkg that behaves wrong on a machine
 #           that already has a previous version -- invisible to any check that reads the artifact in
 #           isolation. Pair with assert_pkg_installs_in_place.sh, which gates the BUILT .pkg so a
-#           regression (a product that bypasses this, or a future pkgbuild default) fails CI instead
+#           regression (a product that bypasses this, or a packager change) fails CI instead
 #           of shipping.
 set -eu
 
@@ -40,25 +40,18 @@ done
   || { echo "build_component_pkg: need --root --identifier --version --install-location --out" >&2; exit 2; }
 [ -d "$ROOT" ] || { echo "build_component_pkg: no payload root: $ROOT" >&2; exit 1; }
 
-# platform: --analyze emits a component plist: an array with one dict per BUNDLE in the payload
-#           (plain files are not components and never appear). Flip both flags off on every entry,
-#           Add-ing the key when --analyze omitted it. PlistBuddy (not python) so this runs on the
-#           10.9 dev box AND macOS-26 CI.
-plist="$(dirname "$OUT")/$(basename "$OUT" .pkg)-components.plist"
-pkgbuild --analyze --root "$ROOT" "$plist" >&2
-i=0
-while /usr/libexec/PlistBuddy -c "Print :$i" "$plist" >/dev/null 2>&1; do
-  for key in BundleIsRelocatable BundleIsVersionChecked; do
-    /usr/libexec/PlistBuddy -c "Set :$i:$key false" "$plist" 2>/dev/null \
-      || /usr/libexec/PlistBuddy -c "Add :$i:$key bool false" "$plist"
-  done
-  i=$((i + 1))
-done
-echo "build_component_pkg: forced install-in-place on $i bundle component(s)" >&2
+SELF="$(cd "$(dirname "$0")" && pwd)"
+EPOCH="$(sh "$SELF/source-date-epoch.sh")"
+STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
 
-set -- --root "$ROOT" --component-plist "$plist" \
-       --identifier "$IDENT" --version "$VER" --install-location "$LOC"
+n="$(find "$ROOT" -type d \( -name '*.app' -o -name '*.bundle' \) \
+       \( -exec test -f '{}/Contents/Info.plist' \; -o -exec test -f '{}/Info.plist' \; \) -print | wc -l)"
+n=$((n + 0))
+echo "build_component_pkg: forced install-in-place on $n bundle component(s)" >&2
+
+set -- component --root "$ROOT" --identifier "$IDENT" --version "$VER" --install-location "$LOC" \
+       --mtime "$EPOCH"
 [ -n "$SCRIPTS" ] && set -- "$@" --scripts "$SCRIPTS"
-pkgbuild "$@" "$OUT" >&2
+"$STEVEDORE" "$@" --out "$OUT" >&2
 
 echo "$OUT"

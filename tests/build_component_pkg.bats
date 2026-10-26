@@ -1,14 +1,14 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- pkgbuild is the subject
-# Tests for scripts/build_component_pkg.sh and scripts/assert_pkg_installs_in_place.sh -- the
-# install-in-place guarantee. A tiny real .app bundle stands in for a product payload, so pkgbuild
-# actually classifies it as a relocatable/version-checked component (a plain-file payload would not
-# exercise either flag). macOS-only: pkgbuild/pkgutil are the system under test, so skip elsewhere.
+# platform: host-agnostic
+# Tests for scripts/build_component_pkg.sh and scripts/assert_pkg_installs_in_place.sh. A tiny real
+# .app bundle stands in for a product payload. The packager is the pinned stevedore, fetched once.
 
 setup() {
   BUILD="$BATS_TEST_DIRNAME/../scripts/build_component_pkg.sh"
   GATE="$BATS_TEST_DIRNAME/../scripts/assert_pkg_installs_in_place.sh"
-  command -v pkgbuild >/dev/null 2>&1 && command -v pkgutil >/dev/null 2>&1 || skip "no pkgbuild/pkgutil"
+  STEVEDORE="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")" || skip "no stevedore"
+  export STEVEDORE
+  export SOURCE_DATE_EPOCH=1700000000
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/build_component_pkg_test.XXXXXX")"
   APP="$WORK/root/Applications/Fake.app"
   mkdir -p "$APP/Contents/MacOS"
@@ -28,26 +28,60 @@ PL
 }
 teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
 
-@test "build_component_pkg: output installs in place (relocation + version-check both off)" {
-  run sh "$BUILD" --root "$WORK/root" --identifier dev.mavergreen.fake \
-    --version 1.2.3 --install-location / --out "$WORK/clean.pkg"
+build() {
+  sh "$BUILD" --root "$WORK/root" --identifier dev.mavergreen.fake \
+    --version 1.2.3 --install-location / --out "$1"
+}
+
+@test "build_component_pkg: writes a component that installs in place" {
+  run build "$WORK/clean.pkg"
   [ "$status" -eq 0 ]
   [ -f "$WORK/clean.pkg" ]
-  # component plist the helper generated has both flags flipped
-  grep -A1 BundleIsRelocatable "$WORK/clean-components.plist" | grep -q '<false/>'
-  grep -A1 BundleIsVersionChecked "$WORK/clean-components.plist" | grep -q '<false/>'
-  # and the built artifact passes the gate
   run sh "$GATE" "$WORK/clean.pkg"
   [ "$status" -eq 0 ]
 }
 
-@test "gate: a PLAIN pkgbuild pkg is rejected (this is the shipped-bug shape)" {
-  pkgbuild --root "$WORK/root" --identifier dev.mavergreen.fake \
-    --version 1.2.3 --install-location / "$WORK/plain.pkg"
-  run sh "$GATE" "$WORK/plain.pkg"
+@test "build_component_pkg: stdout is the out path alone and the bundle count goes to stderr" {
+  out="$(build "$WORK/clean.pkg" 2>"$WORK/err")"
+  [ "$out" = "$WORK/clean.pkg" ]
+  grep -q 'forced install-in-place on 1 bundle component(s)' "$WORK/err"
+}
+
+@test "build_component_pkg: leaves no -components.plist" {
+  run build "$WORK/clean.pkg"
+  [ "$status" -eq 0 ]
+  [ ! -e "$WORK/clean-components.plist" ]
+}
+
+@test "build_component_pkg: same tree same bytes" {
+  build "$WORK/a.pkg" >/dev/null 2>&1
+  build "$WORK/b.pkg" >/dev/null 2>&1
+  cmp "$WORK/a.pkg" "$WORK/b.pkg"
+}
+
+@test "build_component_pkg: no epoch source fails naming SOURCE_DATE_EPOCH" {
+  mkdir "$WORK/nogit"
+  cd "$WORK/nogit"
+  unset SOURCE_DATE_EPOCH
+  GIT_CEILING_DIRECTORIES="$WORK" run build "$WORK/none.pkg"
   [ "$status" -ne 0 ]
-  echo "$output" | grep -q 'BundleIsRelocatable is ON'
-  echo "$output" | grep -q 'BundleIsVersionChecked is ON'
+  echo "$output" | grep -q SOURCE_DATE_EPOCH
+  [ ! -e "$WORK/none.pkg" ]
+}
+
+@test "build_component_pkg: a missing argument exits 2" {
+  run sh "$BUILD" --root "$WORK/root" --identifier x --version 1 --install-location /
+  [ "$status" -eq 2 ]
+}
+
+@test "build_component_pkg: an unknown argument exits 2" {
+  run sh "$BUILD" --bogus
+  [ "$status" -eq 2 ]
+}
+
+@test "build_component_pkg: a missing root exits 1" {
+  run sh "$BUILD" --root "$WORK/nope" --identifier x --version 1 --install-location / --out "$WORK/x.pkg"
+  [ "$status" -eq 1 ]
 }
 
 @test "gate: missing pkg fails loudly rather than passing vacuously" {
