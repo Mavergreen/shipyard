@@ -20,6 +20,16 @@
       "packageNameTemplate": "Mavergreen/ed25519",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^(?<major>\\d{8})-mavericks\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The stevedore packager (scripts/stevedore.pin). fetch_stevedore.sh verifies the asset against the release's SHA256SUMS.",
+      "managerFilePatterns": ["/^scripts/stevedore\\.pin$/"],
+      "matchStrings": ["STEVEDORE_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "stevedore",
+      "packageNameTemplate": "Mavergreen/stevedore",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$"
     }
   ]
 }
