@@ -2416,7 +2416,7 @@ finding that predates checks 21 (widened), 35 and 36, under the check names `art
 runner or a packager call deletes that repo's line. `tests/check-family-conventions-7-test.sh` asserts it
 is sorted, free of duplicates and well-formed (the repo set is every org repo whose workflows call `family-conventions.yml`, registered or not), and pins each check's line count as a
 ceiling that may only go down. Regenerate with `sh scripts/gen-conventions-grandfathered.sh <clones-dir> > scripts/conventions-grandfathered`
-(lists the org's repos with `gh`, clones or refreshes each, keeps those calling `family-conventions.yml`, runs the gate
+(an empty or new `<clones-dir>`, which it marks and owns; it lists the org's repos with `gh`, clones or refreshes each, keeps those calling `family-conventions.yml`, runs the gate
 without the file in each). A new check that needs the
 treatment adds its name to that script, the test and this paragraph.
 

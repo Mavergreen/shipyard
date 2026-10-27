@@ -187,7 +187,7 @@ done
 # spec: SKILL.md "Family conventions" check 36 -- a run without GITHUB_REPOSITORY (a developer's
 #       shell through $SHIPYARD_SCRIPTS) takes the repo's name from origin, https or ssh.
 grandfather "macos-runner ed25519 ci.yml:mac"
-for url in https://github.com/Mavergreen/ed25519.git https://github.com/Mavergreen/ed25519 git@github.com:Mavergreen/ed25519.git; do
+for url in https://github.com/Mavergreen/ed25519.git https://github.com/Mavergreen/ed25519 git@github.com:Mavergreen/ed25519.git ssh://git@github.com/Mavergreen/ed25519.git; do
   (cd "$work/mac-scalar" && git config remote.origin.url "$url")
   (cd "$work/mac-scalar" && sh "$S2" >/dev/null 2>&1) || { echo "FAIL: origin $url should name the repo: $(cd "$work/mac-scalar" && sh "$S2" 2>&1)"; exit 1; }
 done

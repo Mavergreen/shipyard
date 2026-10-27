@@ -79,4 +79,15 @@ done
 printf '## Conformance deviations\n- unlinked:components/*: a glob covers every KEY of every file under it\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'unlinked components/\* a glob covers every KEY of every file under it' \
   || { echo "FAIL: a file glob is a scope"; exit 1; }
+# spec: SKILL.md "Family conventions" checks 35 and 36 -- packager names one path and macos-runner one
+#       <workflow file>:<job>; a bare form or a wildcard would excuse everything, so it is refused.
+for line in '- packager: every path' '- packager:*: every path' '- packager:build/*: every path' \
+            '- macos-runner: every job' '- macos-runner:*: every job' '- macos-runner:ci.yml:*: every job' \
+            '- macos-runner:ci.yml: no job named' '- macos-runner:build: bare job id'; do
+  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
+  if sh "$S" "$w" >/dev/null 2>&1; then echo "FAIL: [$line] must be refused"; exit 1; fi
+done
+printf '## Conformance deviations\n- packager:build/package.sh: oracle; exit when stevedore is it\n- macos-runner:ci.yml:build: needs macOS; exit when Linux\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'packager build/package.sh oracle; exit when stevedore is it' || { echo "FAIL: a named packager path is a scope"; exit 1; }
+sh "$S" "$w" | grep -qx 'macos-runner ci.yml:build needs macOS; exit when Linux' || { echo "FAIL: macos-runner scopes <file>:<job>"; exit 1; }
 echo "PASS: deviations"
