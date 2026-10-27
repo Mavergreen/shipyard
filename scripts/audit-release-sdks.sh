@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- artifact-facts.sh reads pkgs with pkgutil and Mach-O with lipo/otool
+# platform: macOS-only -- artifact-facts.sh reads Mach-O with lipo/otool
 #   usage: audit-release-sdks.sh <owner/repo>...
 #          audit-release-sdks.sh --dist DIR REPO_CHECKOUT
 #          The family acceptance audit for "SDK pinning": downloads each repo's LATEST release (verified

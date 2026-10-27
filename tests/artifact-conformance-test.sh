@@ -1206,10 +1206,15 @@ PLIST
     || { echo "FAIL: a build that signs nothing passes conformance once stand-in-feeds.sh has staged its feed: $_cr"; exit 1; }
 
   _un="$(mktemp -d "${TMPDIR:-/tmp}/conformance-unreadable.XXXXXX")"; echo "not a pkg" > "$_un/bad.pkg"
+  mkdir "$_un/root"; echo x > "$_un/root/f"
+  "$SD" component --root "$_un/root" --identifier dev.mavergreen.ok --version 1 --install-location / --mtime 1700000000 --out "$_un/good.pkg" >/dev/null \
+    || { echo "FAIL: stevedore could not build the positive-control pkg"; exit 1; }
+  rm -rf "$_un/root"
   _fu="$(sh "$AF" "$_un" 1.0.0-mavericks.1 "$_un")" && _ur=0 || _ur=$?
   rm -rf "$_un"
   [ "$_ur" -eq 0 ] && printf "%s\n" "$_fu" | grep -qxF "pkg bad.pkg unreadable none none" \
     && printf "%s\n" "$_fu" | grep -qxF end-of-facts && ! printf "%s\n" "$_fu" | grep -q "^abort" \
+    && printf "%s\n" "$_fu" | grep -q "^pkg good.pkg 1 none dev.mavergreen.ok$" \
     || { echo "FAIL: unreadable pkg is a fact, not an abort: $_fu"; exit 1; }
 }
 
