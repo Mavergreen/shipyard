@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- fetch_product_pkg.sh expands the pkg with pkgutil
+# platform: host-agnostic -- stevedore builds the fixtures and fetch_product_pkg.sh reads them
 
 mkcomp() {  # mkcomp IDENTIFIER ROOT OUT
   sh "$BATS_TEST_DIRNAME/../scripts/build_component_pkg.sh" --root "$2" --identifier "$1" --version 1.0 \

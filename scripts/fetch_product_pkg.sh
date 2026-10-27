@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- pkgutil
+# platform: host-agnostic
 #   usage: fetch_product_pkg.sh [--asset NAME] SHORT VERSION DEST
 #          One component of a pinned Mavergreen release's .pkg, for a build that consumes another family
 #          product (librecaulk.a out of Recaulk's pkg, say). SHORT is a short name in the registry
@@ -17,7 +17,7 @@
 #          lock directory DEST.lock, waiting up to SHIPYARD_LOCK_WAIT seconds (default 900) for it.
 #          Prints DEST on stdout; progress goes to stderr. Exit 1 on a failed fetch, checksum or
 #          extraction, 2 on a usage error or a registry that cannot answer. MAVERGREEN_RELEASES replaces
-#          https://github.com (the tests serve a file:// tree). Runs on 10.9: pkgutil --expand only.
+#          https://github.com (the tests serve a file:// tree).
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 usage() { echo "usage: fetch_product_pkg.sh [--asset NAME] SHORT VERSION DEST" >&2; exit 2; }
@@ -75,7 +75,8 @@ rm -f "$DEST.stamp"
 shipyard_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET" || {
   echo "fetch_product_pkg: could not fetch and verify $BASE/$ASSET" >&2; exit 1; }
 
-pkgutil --expand "$CACHE/$ASSET" "$tmp/expanded" >&2 || {
+[ -n "${STEVEDORE:-}" ] || STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || { echo "fetch_product_pkg: no stevedore to expand the pkg with" >&2; exit 1; }
+"$STEVEDORE" expand "$CACHE/$ASSET" "$tmp/expanded" >&2 || {
   echo "fetch_product_pkg: could not expand $CACHE/$ASSET" >&2; exit 1; }
 matches="$(grep -l "identifier=\"$ID\"" "$tmp"/expanded/*/PackageInfo 2>/dev/null || true)"
 n="$(printf '%s\n' "$matches" | grep -c . || true)"
