@@ -200,6 +200,6 @@ add_test(NAME stage-updater
 add_test(NAME sign-and-appcast
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/sign_and_appcast.sh ${CMAKE_CURRENT_SOURCE_DIR})
 
-# Prove the Renovate preset is valid and includes the mavericks-legacysupport customManager.
+# Prove the Renovate preset is valid and carries the shared Recaulk manager.
 add_test(NAME renovate-preset
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/renovate_preset.sh)

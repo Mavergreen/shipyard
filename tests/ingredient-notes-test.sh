@@ -576,7 +576,7 @@ cd "$work"; rm -rf "$work17"
 #       Renovate customManager that owns the pin is a source: github-releases links the new release,
 #       github-tags compares the two tags, and the tag is the version with the prefix
 #       extractVersionTemplate strips put back. The repo's own managers come first, then shipyard's
-#       preset (the recaulk pin and the mavericks-legacysupport marker live only there).
+#       preset (the recaulk pin lives only there).
 work18="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work18"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -624,17 +624,15 @@ printf '1.26.9-mavericks.1\n' > components/golang/version
 printf '3.8.2\n' > components/libressl/version
 printf '1.5.6\n' > components/zstd/version
 printf '20260901.1\n' > components/recaulk/version
-printf 'export MLS_VERSION=1.5.2-mavericks.3   # mavericks-legacysupport\n' > build/versions.sh
 printf 'TAG=v5.8.3\nSHA256=%064d\n' 1 > components/xz/version
 git add -A; git commit -qm base; git tag base
 printf '1.26.10-mavericks.1\n' > components/golang/version
 printf '3.9.2\n' > components/libressl/version
 printf '1.5.7\n' > components/zstd/version
 printf '20260915.2\n' > components/recaulk/version
-printf 'export MLS_VERSION=1.5.2-mavericks.4   # mavericks-legacysupport\n' > build/versions.sh
 printf 'TAG=v5.8.4\nSHA256=%064d\n' 2 > components/xz/version
 out="$(sh "$S" base components/golang/version components/libressl/version components/zstd/version \
-        components/recaulk/version build/versions.sh components/xz/version)"
+        components/recaulk/version components/xz/version)"
 printf '%s\n' "$out" | grep -qx -- '- \*\*golang\*\*: 1.26.9-mavericks.1 -> 1.26.10-mavericks.1' \
   || { echo "FAIL R1b: an optional prefix (^v?) cannot say which tag exists, so it links nothing rather than guess: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*libressl\*\*: 3.8.2 -> 3.9.2 (\[release notes\](https://github.com/libressl/portable/releases/tag/v3.9.2))' \
@@ -643,8 +641,6 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*zstd\*\*: 1.5.6 -> 1.5.7 (\[changes\](
   || { echo "FAIL R1b: a github-tags manager must compare the two tags: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*recaulk\*\*: 20260901.1 -> 20260915.2 (\[release notes\](https://github.com/Mavergreen/recaulk/releases/tag/20260915.2))' \
   || { echo "FAIL R1b: a pin only shipyard's preset owns must still be linked: $out"; exit 1; }
-printf '%s\n' "$out" | grep -qx -- '- \*\*MLS_VERSION\*\*: 1.5.2-mavericks.3 -> 1.5.2-mavericks.4 (\[release notes\](https://github.com/Mavergreen/macports-legacy-support/releases/tag/1.5.2-mavericks.4))' \
-  || { echo "FAIL R1b: the preset's legacy-support manager reads its tags bare, so MLS_VERSION links its release: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*xz / TAG\*\*: v5.8.3 -> v5.8.4 (\[release notes\](https://github.com/tukaani-project/xz/releases/tag/v5.8.4))' \
   || { echo "FAIL R1b: github-release-attachments is a GitHub release too: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q -- '^- \*\*xz / SHA256\*\*: .*](http' \

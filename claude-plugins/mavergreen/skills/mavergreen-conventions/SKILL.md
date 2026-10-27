@@ -489,14 +489,13 @@ never reaches this repo's automerge at all; it becomes a new repo (`golang-127`)
 - Pick the datasource for how upstream ships: `github-tags` (+`extractVersionTemplate` to strip `v`),
   `golang-version`, `git-refs`/`currentDigest` for a raw commit, etc.
 - Track the pin in a dedicated bare file (`UPSTREAM_VERSION` = `1.4.2`) matched whole-file, **or** an
-  inline value carrying a marker comment (`… # mavericks-legacysupport`) when it lives in a shared file.
+  inline value carrying a marker comment (`… # some-marker`) when it lives in a shared file.
 - **A pin on a sibling's `-mavericks.N` release needs versioning that compares N:**
   `"versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"`.
   Renovate's default versioning coerces the suffix away, so `.1` and `.4` compare **equal** and the bot
   proposes nothing — no PR, no error, and the Dashboard still lists the dep as tracked. swift-runtime's
   swift-toolchain pin sat at `6.3.3-mavericks.1` through `.2`, `.3` and `.4` this way, *after* its
-  manager was wired. The shared preset's legacysupport manager and the golang consumers
-  (container-tools, tailscale) already do this; `check-family-conventions.sh` fails a manager whose
+  manager was wired. The golang consumers (container-tools, tailscale) do this; `check-family-conventions.sh` fails a manager whose
   captured pin ends in `-mavericks.N` without it.
 
 **This customManager is the release trigger** — it's how the package auto-updates when upstream does:

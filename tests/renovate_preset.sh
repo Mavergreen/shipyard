@@ -7,33 +7,8 @@ python3 - default.json <<'PY'
 import json, re, sys
 c = json.load(open(sys.argv[1]))
 cms = c.get("customManagers", [])
-m = [x for x in cms if x.get("depNameTemplate") == "mavericks-legacysupport"]
-assert m, "no mavericks-legacysupport customManager"
-m = m[0]
-assert m["datasourceTemplate"] == "github-releases", "wrong datasource"
-assert m["packageNameTemplate"] == "Mavergreen/macports-legacy-support", "wrong packageName"
-assert "extractVersionTemplate" not in m, "the fork tags releases bare (1.5.2-mavericks.N), so the tag is the version; an optional v? also leaves release notes unable to name the tag"
-
-# no Python (?P<...>) syntax anywhere in the manager -- Renovate uses (?<...>)
-assert "(?P<" not in json.dumps(m), "manager must use Renovate (?<name>...) syntax, not Python (?P<name>...)"
-
-# The patterns must be anchored regexes (NOT bare globs). Renovate renamed fileMatch ->
-# managerFilePatterns and wraps each pattern as a regex literal (/.../); this assertion still said
-# fileMatch long after the preset moved on, and nothing ran it to notice.
-fm = m["managerFilePatterns"]
-assert "/(^|/)versions\\.sh$/" in fm, "managerFilePatterns must contain the anchored /(^|/)versions\\.sh$/ regex, not a glob"
-
-# matchStrings must name-capture via Renovate syntax and, semantically, capture the version
-pat = m["matchStrings"][0]
-assert "(?<currentValue>" in pat, "matchStrings must capture currentValue via Renovate (?<...>) syntax"
-assert m["versioningTemplate"].startswith("regex:"), "versioningTemplate must be a regex: scheme"
-py_pat = re.sub(r'\(\?<(?![=!])', '(?P<', pat)   # translate for a Python-side capture check
-mm = re.search(py_pat, 'export MLS_VERSION=1.5.2-mavericks.1   # mavericks-legacysupport')
-assert mm and mm.group("currentValue") == "1.5.2-mavericks.1", "marker regex must capture the version"
-# The legacysupport manager must not claim a Recaulk release.
-vt = m["versioningTemplate"][len("regex:"):]
-py_vt = re.sub(r'\(\?<(?![=!])', '(?P<', vt)
-assert not re.match(py_vt, "20261006.1"), "a Recaulk release must never read as a legacysupport version: consumers still pinned to macports-legacy-support would be bumped onto a different product"
+assert "mavericks-legacysupport" not in json.dumps(c) and "macports-legacy-support" not in json.dumps(c), "no repo pins macports-legacy-support any more; the preset must not track it"
+assert "(?P<" not in json.dumps(cms), "managers must use Renovate (?<name>...) syntax, not Python (?P<name>...)"
 
 rc = [x for x in cms if x.get("managerFilePatterns") == ["/^components/recaulk/version$/"]]
 assert len(rc) == 1, "consumers track components/recaulk/version through this one shared manager (contract), never a repo-local one"
