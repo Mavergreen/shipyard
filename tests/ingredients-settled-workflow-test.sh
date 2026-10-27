@@ -50,8 +50,15 @@ for s in pr + sw:
         if "state=" + st not in r: fail("missing state " + st)
     if "0) state=success" not in r or "1) state=pending" not in r or "*) state=failure" not in r:
         fail("exit codes must map 0 success, 1 pending, anything else failure")
-    if "cut -c1-140" not in r: fail("description must be trimmed to 140 characters")
+    if "[:140]" not in r or "grep -v '^::'" not in r: fail("description must skip :: lines and be trimmed to 140 characters")
     if "GH_TOKEN" not in str(s.get("env", {})): fail("step needs GH_TOKEN")
+
+last = steps[-1]
+if last.get("if") != "failure() && inputs.mode == 'pr'": fail("last step must post failure when the job fails in pr mode: %r" % last.get("if"))
+if "state=failure" not in last["run"] or "context=ingredients-settled" not in last["run"]: fail("failure step must post failure to ingredients-settled")
+if "github.event.pull_request.head.sha" not in str(last.get("env", {})) or "GH_TOKEN" not in str(last.get("env", {})): fail("failure step needs head sha and GH_TOKEN in env")
+if "SHIPYARD" in str(last): fail("failure step must not depend on the install step")
+if "</dev/null" not in sw[0]["run"]: fail("sweep loop commands must read /dev/null")
 
 for s in steps:
     r = s.get("run") or ""

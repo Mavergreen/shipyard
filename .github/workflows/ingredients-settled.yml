@@ -39,7 +39,7 @@ jobs:
           out="$(sh "$SHIPYARD_SCRIPTS/ingredients-settled.sh" --repo "$REPO" --base "$BASE" --head "$HEAD" --labels "$LABELS" --branch "$BRANCH")" || rc=$?
           echo "$out"
           case "$rc" in 0) state=success ;; 1) state=pending ;; *) state=failure ;; esac
-          desc="$(printf '%s\n' "$out" | head -n 1 | cut -c1-140)"
+          desc="$(printf '%s\n' "$out" | grep -v '^::' | head -n 1 | python3 -c "import sys; sys.stdout.write(sys.stdin.buffer.read().decode('utf-8', 'replace').rstrip('\\n')[:140])")"
           [ -n "$desc" ] || desc="ingredients-settled exited $rc with no reason"
           gh api "repos/$REPO/statuses/$HEAD" -f state="$state" -f context=ingredients-settled -f description="$desc"
 
@@ -59,12 +59,21 @@ jobs:
           while IFS="$tab" read -r number branch head base labels; do
             echo "::group::PR #$number"
             rc=0
-            out="$(sh "$SHIPYARD_SCRIPTS/ingredients-settled.sh" --repo "$REPO" --base "$base" --head "$head" --labels "$labels" --branch "$branch")" || rc=$?
+            out="$(sh "$SHIPYARD_SCRIPTS/ingredients-settled.sh" --repo "$REPO" --base "$base" --head "$head" --labels "$labels" --branch "$branch" </dev/null)" || rc=$?
             echo "$out"
             case "$rc" in 0) state=success ;; 1) state=pending ;; *) state=failure ;; esac
-            desc="$(printf '%s\n' "$out" | head -n 1 | cut -c1-140)"
+            desc="$(printf '%s\n' "$out" | grep -v '^::' | head -n 1 | python3 -c "import sys; sys.stdout.write(sys.stdin.buffer.read().decode('utf-8', 'replace').rstrip('\\n')[:140])")"
             [ -n "$desc" ] || desc="ingredients-settled exited $rc with no reason"
-            gh api "repos/$REPO/statuses/$head" -f state="$state" -f context=ingredients-settled -f description="$desc" || failed=1
+            gh api "repos/$REPO/statuses/$head" -f state="$state" -f context=ingredients-settled -f description="$desc" </dev/null || failed=1
             echo "::endgroup::"
           done < prs.tsv
           exit "$failed"
+
+      - name: Say so when the check could not run
+        if: failure() && inputs.mode == 'pr'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/$REPO/statuses/$HEAD" -f state=failure -f context=ingredients-settled -f description="ingredients-settled could not run; see the workflow log"
