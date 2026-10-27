@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: required-checks.sh [DIR]
 #          Prints, one per line and sorted, the check contexts branch protection should require for the
-#          clone at DIR (default .): "<job key> / conventions" for each job in a tracked workflow that
+#          clone at DIR (default .): "<job name or key> / conventions" for each job in a tracked workflow that
 #          uses family-conventions.yml, and "required (<stem>)" for each tracked workflow triggered by
 #          pull_request. Tracked means listed by git ls-files .github/workflows. Exits 1, naming the file,
 #          when a workflow does not parse, or a pull_request workflow has no job "required" named
@@ -42,7 +42,7 @@ for path in sys.stdin.read().split("\n"):
         jobs = {}
     for key, job in jobs.items():
         if isinstance(job, dict) and str(job.get("uses", "")).split("@")[0].endswith("family-conventions.yml"):
-            out.append("%s / conventions" % key)
+            out.append("%s / conventions" % (job.get("name") or key))
     if isinstance(on, list) and "pull_request" in on:
         want = "required (%s)" % stem
         gate = jobs.get("required")

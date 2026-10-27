@@ -56,8 +56,9 @@ settle() {
   else
     checks="$(printf '%s\n' "$@")"
     if [ $# -eq 0 ]; then
-      tree="$(mktemp -d "${TMPDIR:-/tmp}/settle.XXXXXX")"
-      gh repo clone "$repo" "$tree/clone" -- --depth 1 --branch main >/dev/null 2>&1 || { rm -rf "$tree"; die "could not clone $repo's main"; }
+      tree="$(mktemp -d "${TMPDIR:-/tmp}/settle.XXXXXX")" || die "could not make a temp dir to clone $repo into"
+      gh repo clone "$repo" "$tree/clone" -- --depth 1 --branch main >/dev/null \
+        || { rm -rf "$tree"; die "could not clone $repo's main"; }
       checks="$(sh "$SELF/required-checks.sh" "$tree/clone")" \
         || { rm -rf "$tree"; die "adopt the gate, or name the checks"; }
       rm -rf "$tree"

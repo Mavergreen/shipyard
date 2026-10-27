@@ -53,6 +53,13 @@ gate() {
   [ "$output" = "conventions / conventions" ]
 }
 
+@test "a conventions caller with a name: uses it" {
+  printf 'on: [push]\njobs:\n  conv:\n    name: Family conventions\n    uses: ./.github/workflows/family-conventions.yml\n' | wf conv.yml
+  run sh "$CHECKS" "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = "Family conventions / conventions" ]
+}
+
 @test "output is sorted and combines both kinds" {
   printf 'on: [push]\njobs:\n  conventions:\n    uses: ./.github/workflows/family-conventions.yml\n' | wf conv.yml
   { printf 'on: pull_request\njobs:\n'; gate zed; } | wf zed.yml

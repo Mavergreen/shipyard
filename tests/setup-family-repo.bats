@@ -62,6 +62,7 @@ teardown() { rm -rf "$WORK"; }
   grep -q 'clone repo clone Mavergreen/newthing .* -- --depth 1 --branch main$' "$STUB/log"
   grep -q '^PUT repos/Mavergreen/newthing/branches/main/protection {"required_status_checks":{"strict":false,"contexts":\["conventions / conventions","required (ci)"\]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}$' "$STUB/log"
   [[ "$output" == *"main requires: conventions / conventions; required (ci)"* ]] || false
+  [ -z "$(git -C "$BATS_TEST_DIRNAME/.." ls-files --others --exclude-standard)" ]
 }
 
 @test "settle with no checks dies, naming the file, when a PR workflow has no gate" {
