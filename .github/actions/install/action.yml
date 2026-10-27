@@ -140,10 +140,18 @@ runs:
         #       rejected -- container-tools' two ubuntu-latest jobs need exactly that.
         [ -f "$root/MavericksShipyardConfig.cmake" ] || {
           echo "::error::$root holds no MavericksShipyardConfig.cmake -- find_package(MavericksShipyard) would not resolve on this runner"; exit 1; }
+        ref='${{ inputs.release-version }}'
+        [ -n "$ref" ] || ref='${{ github.action_ref }}'
+        ref="${ref:-$(basename "$root")}"
         {
           echo "SHIPYARD_SCRIPTS=$scripts"
           echo "MavericksShipyard_DIR=$root"
         } >> "$GITHUB_ENV"
+        if ver="$(sh "$root/scripts/resolve-action-version.sh" "$ref")"; then
+          echo "SHIPYARD_VERSION=$ver" >> "$GITHUB_ENV"
+        else
+          echo "::warning::'$ref' names no shipyard release, so SHIPYARD_VERSION is unset and packaging a .pkg here will fail -- pin install@v1 or an exact @vX.Y.Z"
+        fi
         echo "${RUNNER_OS:-this runner} is not macOS and shipyard has no Linux pkg yet, so nothing was installed. You get shipyard's shell half from the ref you pinned: SHIPYARD_SCRIPTS=$scripts, and find_package(MavericksShipyard) resolves via MavericksShipyard_DIR=$root. There is no shipyard-cmake here, so a configure that needs one must run on a macOS runner."
 
     # spec: R-P1-19 -- THIS ACTION MUST CONTAIN NO `uses: ./...`. GitHub resolves a local action path

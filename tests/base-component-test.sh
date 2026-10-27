@@ -40,4 +40,7 @@ sh "$S" --version 1.0.9 --out "$w/base.pkg" >/dev/null 2>&1 || fail "the compone
 grep -q 'identifier="dev.mavergreen.base"' "$w/x/PackageInfo" || fail "the component is dev.mavergreen.base"
 (cd "$w/x" && gzip -dc Payload | cpio -it 2>/dev/null) | grep -qx './usr/local/mavergreen/.base/1.0.9/mavergreen' \
   || fail "the payload stages the helper under .base/<version>/"
+SHIPYARD_VERSION=7.7.7 sh "$S" --emit-postinstall "$w/post-env" \
+  || fail "with no installed config, SHIPYARD_VERSION names the base's version (install@v1 exports it on Linux, where the action's checkout has no .git)"
+grep -q '7\.7\.7' "$w/post-env" || fail "the emitted postinstall carries SHIPYARD_VERSION's version"
 echo "PASS: base-component"

@@ -1,6 +1,8 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: build-base-component.sh [--version V] --out COMP.pkg
+#          With no --version: the installed shipyard's version, else $SHIPYARD_VERSION (install@v1 sets it
+#          off macOS), else shipyard-version.sh from the checkout's git history.
 #          build-base-component.sh --emit-postinstall FILE --version V
 #          Builds dev.mavergreen.base: the mavergreen helper and the paths.d/manpaths.d entries,
 #          staged under /usr/local/mavergreen/.base/<V>/ and installed by its postinstall only over a
@@ -21,6 +23,8 @@ done
 if [ -z "$VER" ]; then
   if [ -f "$SELF/../MavericksShipyardConfigVersion.cmake" ]; then
     VER="$(sed -n 's/.*set(PACKAGE_VERSION "\([^"]*\)").*/\1/p' "$SELF/../MavericksShipyardConfigVersion.cmake" | head -1)"
+  elif [ -n "${SHIPYARD_VERSION:-}" ]; then
+    VER="$SHIPYARD_VERSION"
   else
     VER="$(sh "$SELF/shipyard-version.sh" | sed -n 's/^FULL=//p')"
   fi
