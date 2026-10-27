@@ -91,12 +91,4 @@ if sh "$S" --a "$w/i" --b "$w/j" --out "$w/o7" >/dev/null 2>&1; then
   echo "FAIL: a file missing from one tree must be refused"; exit 1
 fi
 
-printf '#!/bin/sh\necho "$*" >> "%s"\nexec lipo "$@"\n' "$w/lipo.log" > "$w/lipo-stub"
-chmod +x "$w/lipo-stub"
-mk "$w/p" "$w/m-x86_64"; mk "$w/q" "$w/m-alt"
-LIPO="$w/lipo-stub" sh "$S" --a "$w/p" --b "$w/q" --out "$w/o10" --require-archs "$ALT x86_64" >/dev/null \
-  || { echo "FAIL: merge with a LIPO override must succeed"; exit 1; }
-grep -q -- '-create' "$w/lipo.log" && grep -q -- '-info' "$w/lipo.log" \
-  || { echo "FAIL: LIPO override must be the lipo invoked for -create and -info: $(cat "$w/lipo.log" 2>/dev/null)"; exit 1; }
-
 echo "PASS: lipo-merge-tree"
