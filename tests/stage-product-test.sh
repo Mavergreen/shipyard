@@ -160,7 +160,7 @@ grep -q '^launchctl bootstrap gui/501 ' "$alog" \
 
 fake="$w/fake"; mkdir -p "$fake"
 cp "$S" "$fake/stage_product.sh"
-cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$fake/"
+cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$here/../scripts/fetch_stevedore.sh" "$here/../scripts/stevedore.pin" "$fake/"
 mkdir -p "$fake/lib"; cp "$here/../scripts/lib/vercmp.sh" "$fake/lib/"
 RM_LOG="$w/rm.log"; export RM_LOG
 cat > "$fake/render-manifest.sh" <<'EOF'
