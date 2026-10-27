@@ -2160,6 +2160,17 @@ inline; a minimum it cannot order (empty, `1.0-rc1`, `abc`) fails staging (exit 
 old-layout detection, and is stage_product-only: it never reaches `render-manifest.sh` or the
 manifest.
 
+Require what you use, at the version that has it. The 10.9 SDK is installed once, by
+`sudo longboat sdk install 10.9`, as the product `sdk109`, and each toolchain's `SDKs` links to
+`../sdk109/SDKs` instead of shipping a copy. So clang-22's toolchains require `sdk109`. A product
+that reads the installed SDK's `SDKSettings.json` requires `sdk109>=20261024.3`, the first Longboat
+to write it; an `sdk109` from an older Longboat gets `sudo longboat sdk install 10.9` again. A `--requires`
+binds every repo whose CI installs that pkg, too: a 10.9 test that installs a toolchain first
+installs Longboat's pinned release and runs that command, as clang-22's and swift's
+`on-mavericks` jobs do. Pin it as clang-22 does: a `components/longboat/version` labelled CI only
+in `INGREDIENTS.md`, released by nothing. Longboat refuses to uninstall `sdk109` while a toolchain
+links into it.
+
 Both anchor on Installer's target volume and never on `/`: with none, the preinstall removes nothing
 and the postinstall fails. **A product's own steps go in the hooks**, appended to the generated
 scripts, never in a hand-written script: that is what keeps unlink-remove-link the same in every
