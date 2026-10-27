@@ -11,8 +11,10 @@ setup() {
 case "$1 $2" in
   "repo view") [ -e "$STUB/exists" ]; exit ;;
   "repo create") echo "create $*" >> "$STUB/log"; : > "$STUB/exists"; exit 0 ;;
-  "run list") cat "$STUB/run" 2>/dev/null; exit 0 ;;
-  "run view") cat "$STUB/jobs"; exit 0 ;;
+  "repo clone")
+    [ -e "$STUB/noclone" ] && exit 1
+    mkdir -p "$4" && git -C "$4" init -q && cp -R "$STUB/tree/." "$4/" && git -C "$4" add -A
+    echo "clone $*" >> "$STUB/log"; exit 0 ;;
 esac
 case "$1 $2" in
   "pr list") cat "$STUB/prs" 2>/dev/null; exit 0 ;;
@@ -49,15 +51,35 @@ teardown() { rm -rf "$WORK"; }
   [ ! -e "$STUB/log" ]
 }
 
-@test "settle requires every job of the newest green run off main, names with spaces and quotes intact" {
+@test "settle with no checks requires what required-checks.sh prints" {
   : > "$STUB/exists"; : > "$STUB/main"
-  echo 4242 > "$STUB/run"
-  printf 'ver\nbuild\nCross-build + compat gate (macos-26)\nsay "hi"\n' > "$STUB/jobs"
+  mkdir -p "$STUB/tree/.github/workflows"
+  printf 'on: [push]\njobs:\n  conventions:\n    uses: ./.github/workflows/family-conventions.yml\n' > "$STUB/tree/.github/workflows/conv.yml"
+  printf 'on: pull_request\njobs:\n  required:\n    name: required (ci)\n' > "$STUB/tree/.github/workflows/ci.yml"
   run sh "$HELPER" settle newthing
   [ "$status" -eq 0 ]
   grep -q '"delete_branch_on_merge":false,"default_branch":"main"}$' "$STUB/log"
-  grep -q '^PUT repos/Mavergreen/newthing/branches/main/protection {"required_status_checks":{"strict":false,"contexts":\["ver","build","Cross-build + compat gate (macos-26)","say \\"hi\\""\]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}$' "$STUB/log"
-  [[ "$output" == *"main requires: ver; build; Cross-build + compat gate (macos-26); say \"hi\""* ]] || false
+  grep -q 'clone repo clone Mavergreen/newthing .* -- --depth 1 --branch main$' "$STUB/log"
+  grep -q '^PUT repos/Mavergreen/newthing/branches/main/protection {"required_status_checks":{"strict":false,"contexts":\["conventions / conventions","required (ci)"\]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}$' "$STUB/log"
+  [[ "$output" == *"main requires: conventions / conventions; required (ci)"* ]] || false
+}
+
+@test "settle with no checks dies, naming the file, when a PR workflow has no gate" {
+  : > "$STUB/exists"; : > "$STUB/main"
+  mkdir -p "$STUB/tree/.github/workflows"
+  printf 'on: pull_request\njobs:\n  build:\n    runs-on: x\n' > "$STUB/tree/.github/workflows/ci.yml"
+  run sh "$HELPER" settle newthing
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ci.yml"* ]] || false
+  [[ "$output" == *"adopt the gate, or name the checks"* ]] || false
+  ! grep -q 'protection' "$STUB/log" || false
+}
+
+@test "settle with no checks dies when main cannot be cloned" {
+  : > "$STUB/exists"; : > "$STUB/main"; : > "$STUB/noclone"
+  run sh "$HELPER" settle newthing
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"could not clone"* ]] || false
 }
 
 @test "settle moves open PRs off the old default branch before main takes over" {
@@ -79,16 +101,17 @@ teardown() { rm -rf "$WORK"; }
   ! grep -q 'pr edit' "$STUB/log" || false
 }
 
-@test "settle's named checks replace the run's" {
+@test "settle's named checks replace the files' and clone nothing" {
   : > "$STUB/exists"; : > "$STUB/main"
-  echo 4242 > "$STUB/run"; printf 'ver\n' > "$STUB/jobs"
   run sh "$HELPER" settle newthing build vm-test
   [ "$status" -eq 0 ]
   grep -q '"contexts":\["build","vm-test"\]' "$STUB/log"
+  ! grep -q '^clone' "$STUB/log" || false
 }
 
-@test "settle with main but no green run off main leaves main unprotected and says so" {
+@test "settle with main but no conventions job or PR workflow leaves main unprotected and says so" {
   : > "$STUB/exists"; : > "$STUB/main"
+  mkdir -p "$STUB/tree"
   run sh "$HELPER" settle newthing
   [ "$status" -eq 0 ]
   ! grep -q 'protection' "$STUB/log" || false

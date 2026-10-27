@@ -696,8 +696,9 @@ a new line repo is warranted.
    nothing packages, and no updater builds, for an unregistered name.
 3. Set the Renovate cap to the next line.
 4. Set the bootstrap cap, where the product has one.
-5. `sh scripts/setup-family-repo.sh settle <product>-<line>` once its first branch run is green: auto-merge,
-   branch protection requiring the real PR check contexts, and the rest of the family's settings.
+5. `sh scripts/setup-family-repo.sh settle <product>-<line>` once `main` has its workflows: auto-merge,
+   branch protection requiring `conventions / conventions` and each PR workflow's `required (<stem>)`
+   gate (read from `main`'s tracked workflow files), and the rest of the family's settings.
 6. Nothing to set for `SPARKLE_PRIVATE_KEY`: it is an org secret every public repo already sees (see
    Sparkle updater).
 7. Get a README a human has read (`publish-release.yml` refuses a first release without one).
@@ -1794,11 +1795,11 @@ a test that needs arguments only ctest passes must exit 77 without them, not 1, 
 Mach-O scripts read (clang-22's first VM run, 2026-10-19).
 
 **Required on main.** The job is a required status check on main. `setup-family-repo.sh settle`
-requires every job of a green run, and `audit-repo-settings.sh` flags a main whose required checks
+requires the repo's `required (<stem>)` gates and `conventions / conventions`, and `audit-repo-settings.sh` flags a main whose required checks
 lack the job's check name (its `name:` if set, else its job id; `<caller> / <called job>` for a local
 reusable workflow). A required check that is SKIPPED
-passes on GitHub. That is harmless here: settle requires every job of the run, so whatever the VM job
-depends on is itself required, and its failure fails the PR.
+passes on GitHub. That is harmless here: the `required` gate needs every other job of its workflow, so
+whatever the VM job depends on is covered, and its failure fails the PR.
 
 **Declared, never silently skipped.** Under `INGREDIENTS.md`'s `## Conformance deviations`:
 
@@ -2633,8 +2634,9 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
 2. Push the history to a branch first and let CI go green there (see "Propose a branch when only CI
    can prove it"), then push `main`.
 3. `sh scripts/setup-family-repo.sh settle NAME` again: with `main` there, it moves the open PRs based
-   on the first-push branch to `main`, makes `main` the default branch and protects it, requiring every job of the newest green `release.yml` run off `main` (name
-   the checks instead to choose). Without that protection auto-merge is inert (see Renovate, above).
+   on the first-push branch to `main`, makes `main` the default branch and protects it, requiring what `scripts/required-checks.sh` prints for `main`'s workflow files:
+   `conventions / conventions` and each PR workflow's `required (<stem>)` (name the checks instead to
+   choose; a PR workflow with no such gate makes settle fail). Without that protection auto-merge is inert (see Renovate, above).
    Delete the first-push branch only after this: deleting a PR's base closes the PR, and Renovate
    reads that as a rejection and ignores the update (python-315 and make, 2026-10-18).
 4. By hand, since GitHub's API cannot set them, as the script reminds you: Write on the org's

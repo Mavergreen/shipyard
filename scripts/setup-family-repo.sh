@@ -7,13 +7,13 @@
 #          auto-merge allowed; Actions' token read-only and unable to approve pull requests; once main
 #          exists, main as the default branch, after moving the open PRs based on the old default to
 #          main (deleting a PR's base closes it, and Renovate then ignores that update), and its branch
-#          protection. The protection requires each
-#          CHECK, or else every job that ran in the newest green release.yml run off main (a pull request
-#          or a branch push, where publish is skipped); with neither, settle leaves main unprotected and
-#          says so. Prints what GitHub's API cannot set. Needs gh with admin on the repo.
+#          protection. The protection requires each CHECK, or else what required-checks.sh prints for a
+#          clone of the repo's main: the conventions job and each PR workflow's required gate. If that
+#          fails, settle dies. Prints what GitHub's API cannot set. Needs gh with admin on the repo.
 # spec: SKILL.md "Creating a family repo"
 set -eu
 org=Mavergreen
+SELF="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "setup-family-repo: $*" >&2; exit 1; }
 usage() { echo "usage: setup-family-repo.sh create NAME DESCRIPTION | settle NAME [CHECK...]" >&2; exit 2; }
 command -v gh >/dev/null 2>&1 || die "needs the gh CLI"
@@ -56,14 +56,15 @@ settle() {
   else
     checks="$(printf '%s\n' "$@")"
     if [ $# -eq 0 ]; then
-      run="$(gh run list -R "$repo" --workflow release.yml --status success --limit 50 \
-               --json databaseId,headBranch --jq '[.[] | select(.headBranch != "main")][0].databaseId // ""')"
-      [ -z "$run" ] || checks="$(gh run view "$run" -R "$repo" --json jobs \
-                                   --jq '.jobs[] | select(.conclusion != "skipped") | .name')"
+      tree="$(mktemp -d "${TMPDIR:-/tmp}/settle.XXXXXX")"
+      gh repo clone "$repo" "$tree/clone" -- --depth 1 --branch main >/dev/null 2>&1 || { rm -rf "$tree"; die "could not clone $repo's main"; }
+      checks="$(sh "$SELF/required-checks.sh" "$tree/clone")" \
+        || { rm -rf "$tree"; die "adopt the gate, or name the checks"; }
+      rm -rf "$tree"
     fi
     if [ -z "$checks" ]; then
-      echo "setup-family-repo: main is NOT protected: $repo has no green release.yml run off main to read" \
-        "its checks from; push a branch, then settle again (or name the checks)"
+      echo "setup-family-repo: main is NOT protected: $repo's main has no conventions job or PR workflow" \
+        "to read checks from (or name the checks)"
     else
       ctx="$(printf '%s\n' "$checks" | while IFS= read -r c; do json_string "$c"; echo; done | paste -sd, -)"
       printf '{"required_status_checks":{"strict":false,"contexts":[%s]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null,"allow_force_pushes":false,"allow_deletions":false}\n' "$ctx" \
