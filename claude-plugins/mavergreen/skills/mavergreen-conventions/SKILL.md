@@ -179,13 +179,16 @@ updaters, signing, or compat checks:**
 | `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh with `stevedore expand`; runs on 10.9 and Linux | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
 
 **Seam hosts.** `build_component_pkg.sh`, `set_install_floor.sh`, `build-base-component.sh`,
-`package-system-replace.sh` and the pkg readers (`check-artifact-conformance.sh`, `fetch_product_pkg.sh`)
+`package-system-replace.sh` and the pkg readers (`artifact-facts.sh`, `fetch_product_pkg.sh`)
 run on any host, through stevedore, the C packager that `fetch_stevedore.sh` fetches at the version
 `scripts/stevedore.pin` names. None of them needs `pkgbuild`, `productbuild`, `pkgutil` or `PlistBuddy`, or a
 macOS host. A pkg's bytes depend only on the staged tree, the arguments and the mtime. The mtime is
-`SOURCE_DATE_EPOCH`, else the git commit time, else the seam fails (`source-date-epoch.sh`). 10.9 has
-no git, so a caller there sets `SOURCE_DATE_EPOCH`. Reading a Mach-O off macOS takes `LIPO` and `OTOOL`
-overrides (`macho-slices.sh`).
+`SOURCE_DATE_EPOCH`, else the git commit time, else the seam fails (`source-date-epoch.sh`). A 10.9 box
+without the Command Line Tools has no git, so a caller there sets `SOURCE_DATE_EPOCH`. Reading a Mach-O
+off macOS takes `LIPO` and `OTOOL` overrides (`macho-slices.sh`). The seams fetch stevedore over the
+network on first use, cached, unless `STEVEDORE` names a binary of the pinned version;
+`STEVEDORE_RELEASES` and `STEVEDORE_CACHE` replace its source and cache, and the product's
+`MAVERGREEN_RELEASES` and `MAVERGREEN_PKG_CACHE` never reach it.
 
 **Shipyard's shell helpers are named `shipyard_*`** (`shipyard_curl`, `shipyard_fetch_verified`,
 `shipyard_sdk_pin`, `shipyard_stop_gui_instance`, ...). The old `mav_*` names are gone (2026-10-15).
