@@ -18,7 +18,7 @@ set -eu
 PKG="$1"
 T="$(mktemp -d "${TMPDIR:-/tmp}/updater_pubkey.XXXXXX")"; trap 'rm -rf "$T"' EXIT
 
-STEVEDORE="${STEVEDORE:-$(sh "$(dirname "$0")/fetch_stevedore.sh")}"
+STEVEDORE="$(sh "$(dirname "$0")/fetch_stevedore.sh")"
 "$STEVEDORE" expand "$PKG" "$T/x" >/dev/null 2>&1 \
   || { echo "updater_pubkey: cannot expand $PKG as a pkg" >&2; exit 1; }
 mkdir "$T/p"

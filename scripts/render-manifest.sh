@@ -91,7 +91,7 @@ PLIST_HEADER
     | while IFS= read -r o; do printf '    <string>%s</string>\n' "$(xesc "$o")"; done
   printf '  </array>\n</dict>\n</plist>\n'
 } > "$M"
-STEVEDORE="${STEVEDORE:-$(sh "$SELF/fetch_stevedore.sh")}"
+STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
 "$STEVEDORE" plist xml1 "$M" >/dev/null || { echo "render-manifest: $M is not a valid plist after writing" >&2; exit 1; }
 verify() {
   _got="$("$STEVEDORE" plist get "$M" "$1" 2>/dev/null)" || { echo "render-manifest: could not read back :$1 after writing $M" >&2; exit 1; }

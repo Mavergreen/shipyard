@@ -82,7 +82,7 @@ snippet=""
 if [ -n "$APP" ]; then
   registry_need stage_product updater-bundle-id "$P"; _want_id="$REG_V"
   registry_need stage_product feed "$P"; _want_feed="$REG_V"
-  STEVEDORE="${STEVEDORE:-$(sh "$SELF/fetch_stevedore.sh")}"; export STEVEDORE
+  STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"; export STEVEDORE
   _got_id="$("$STEVEDORE" plist get "$APP/Contents/Info.plist" CFBundleIdentifier 2>/dev/null)" || _got_id=""
   _got_feed="$("$STEVEDORE" plist get "$APP/Contents/Info.plist" SUFeedURL 2>/dev/null)" || _got_feed=""
   [ "$_got_id" = "$_want_id" ] && [ "$_got_feed" = "$_want_feed" ] \
