@@ -24,6 +24,7 @@ if [ -f "$f.error" ]; then cat "$f.error" >&2; exit 1; fi
 cat "$f"
 EOF
   chmod +x "$WORK/bin/gh"
+  export REAL_GIT="$(command -v git)"
   export PATH="$WORK/bin:$PATH"
 
   R="$WORK/repo"
@@ -186,12 +187,12 @@ clang_caught_up() {
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
-  [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1 (clang22 22.1.0-mavericks.4 pins 20261025.1)"* ]] || false
+  [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1 (clang22 22.1.0-mavericks.4 pins recaulk 20261025.1)"* ]] || false
   [[ "$output" != *WAITING* ]] || false
   [[ "$output" != *"recaulk for clang22"* ]] || false
 }
 
-@test "rename is not a bump" {
+@test "rename is not a bump (same path, same value)" {
   fx rust/contents/INGREDIENTS.md@1.92.0-mavericks.1 "## Declared state
 - upstream: UPSTREAM_VERSION
 - clang22: components/clang22/version"
@@ -349,4 +350,57 @@ clang_caught_up() {
   cd "$R"
   run sh "$SCRIPT" --repo Mavergreen/porthole --base nosuchrev --head pr-head --branch renovate/x --now 1
   [ "$status" -eq 2 ]
+}
+
+@test "a sibling product's pin counts as a pin of X" {
+  fx rust/contents/INGREDIENTS.md@1.92.0-mavericks.1 "## Declared state
+- upstream: UPSTREAM_VERSION
+- clang22-cross: components/clang22-cross/version"
+  fx rust/contents/components/clang22-cross/version@1.92.0-mavericks.1 22.1.0-mavericks.3
+  pin clang22 22.1.0-mavericks.4
+  head_commit
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"WAITING rust for clang22 22.1.0-mavericks.4"* ]] || false
+}
+
+@test "an unexpected failure is failure, not waiting" {
+  recaulk_bump
+  cat > "$WORK/bin/git" <<'EOF2'
+#!/bin/sh
+case "$1 $2" in "show "*:INGREDIENTS.md) echo "fatal: simulated" >&2; exit 1 ;; esac
+exec "$REAL_GIT" "$@"
+EOF2
+  chmod +x "$WORK/bin/git"
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 2 ]
+  [[ "$output" == *FAILED* ]] || false
+}
+
+@test "a 404 on Y's latest release is failure" {
+  recaulk_bump
+  rm "$GH_FIX/repos/Mavergreen/clang-22/releases/latest"
+  settled $((RECAULK_PUB + 30 * DAY))
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"no published release"* ]] || false
+}
+
+@test "the 24h clock reads a v-prefixed release tag" {
+  recaulk_bump
+  rm "$GH_FIX/repos/Mavergreen/recaulk/releases/tags/20261025.1"
+  fx recaulk/releases/tags/v20261025.1 '{"tag_name":"v20261025.1","draft":false,"prerelease":false,"published_at":"2026-10-25T12:00:00Z"}'
+  settled $((RECAULK_PUB + DAY - 60))
+  [ "$status" -eq 1 ]
+  settled $((RECAULK_PUB + DAY))
+  [ "$status" -eq 0 ]
+  [[ "$output" == *RELEASED-ANYWAY* ]] || false
+}
+
+@test "Y ahead while the PR pins an old Y waits" {
+  recaulk_bump
+  clang_caught_up
+  fx clang-22/contents/components/recaulk/version@22.1.0-mavericks.4 20261026.1
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavericks.4 (it carries recaulk 20261025.1)"* ]] || false
 }
