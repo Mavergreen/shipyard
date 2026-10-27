@@ -33,5 +33,10 @@ jobs:
       - name: Our own conventions gate, where consumers run it
         run: sh scripts/check-family-conventions.sh
 
+      - name: Renovate's own validator accepts default.json
+        run: |
+          . scripts/renovate.pin
+          npx --yes --package "renovate@$RENOVATE_VERSION" -- renovate-config-validator --strict default.json
+
       - name: The suites must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh

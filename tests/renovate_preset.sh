@@ -49,12 +49,20 @@ import fnmatch
 gr = [x for x in c.get("packageRules", []) if x.get("groupName") == "Mavergreen ingredients"]
 assert len(gr) == 1, "one packageRule must group every Mavergreen update under groupName 'Mavergreen ingredients'"
 gr = gr[0]
-assert gr["matchPackageNames"] == ["Mavergreen/**"], "the group rule must match Mavergreen/** so the recaulk manager and every ingredient land in one PR"
+assert gr["matchPackageNames"] == ["Mavergreen/**", "!Mavergreen/shipyard", "!Mavergreen/mavericks-vm"], "the group rule must match Mavergreen/** minus the shipyard and mavericks-vm workflow actions"
 def glob_match(pattern, name):
     return re.match("^" + re.escape(pattern).replace(r"\*\*", ".*").replace(r"\*", "[^/]*") + "$", name) is not None
-assert glob_match("Mavergreen/**", "Mavergreen/recaulk"), "the group rule must match Mavergreen/recaulk"
-assert glob_match("Mavergreen/**", "Mavergreen/clang-22"), "the group rule must match Mavergreen/clang-22"
-assert not glob_match("Mavergreen/**", "madler/zlib"), "the group rule must not match madler/zlib"
+def grouped(name):
+    pats = gr["matchPackageNames"]
+    if any(glob_match(p[1:], name) for p in pats if p.startswith("!")):
+        return False
+    return any(glob_match(p, name) for p in pats if not p.startswith("!"))
+assert grouped("Mavergreen/recaulk"), "the group rule must match Mavergreen/recaulk"
+assert grouped("Mavergreen/clang-22"), "the group rule must match Mavergreen/clang-22"
+assert not grouped("madler/zlib"), "the group rule must not match madler/zlib"
+assert not grouped("Mavergreen/shipyard"), "the shipyard workflow action must not be grouped with ingredients"
+assert not grouped("Mavergreen/mavericks-vm"), "the mavericks-vm workflow action must not be grouped with ingredients"
+assert "holds the whole" in " ".join(c["description"]), "the exception guidance must say an automerge:false exception holds the whole group"
 assert c.get("vulnerabilityAlerts", {}).get("labels") == ["security"], "security updates must carry the security label so they can skip the queue"
 print("renovate-preset OK")
 PY

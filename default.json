@@ -15,7 +15,8 @@
     "which costs less than a human reviewing every routine bump.",
     "EXCEPTION RULE: a repo restricts automerge only where a bad bump would BUILD FINE AND BE WRONG --",
     "the case a green build cannot catch. State that reason in the packageRule's description; an",
-    "exception without one is indistinguishable from drift."
+    "exception without one is indistinguishable from drift.",
+    "An automerge:false exception on one Mavergreen dependency holds the whole 'Mavergreen ingredients' group, because the group is one PR."
   ],
   "extends": [
     "config:recommended"
@@ -53,9 +54,11 @@
   ],
   "packageRules": [
     {
-      "description": "One grouped PR for every Mavergreen release (ingredients, toolchains, the recaulk manager), so an ingredient release costs a consumer one PR, not one per ingredient.",
+      "description": "One grouped PR for every Mavergreen product release (ingredients, toolchains, recaulk), so a release costs a consumer one PR, not one per ingredient. The Mavergreen/shipyard and Mavergreen/mavericks-vm workflow actions are not grouped.",
       "matchPackageNames": [
-        "Mavergreen/**"
+        "Mavergreen/**",
+        "!Mavergreen/shipyard",
+        "!Mavergreen/mavericks-vm"
       ],
       "groupName": "Mavergreen ingredients"
     }

@@ -30,6 +30,14 @@
       "packageNameTemplate": "Mavergreen/stevedore",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The Renovate release that validates default.json in CI (scripts/renovate.pin, run by linux-host.yml). Pinned so the check does not move without a commit.",
+      "managerFilePatterns": ["/^scripts/renovate\\.pin$/"],
+      "matchStrings": ["RENOVATE_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "renovate",
+      "datasourceTemplate": "npm"
     }
   ]
 }
