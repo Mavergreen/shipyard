@@ -2073,7 +2073,7 @@ pass Installer's target volume rather than assuming `/`; with any other root it 
 | `system-replace <product>` / `system-restore <product>` | below |
 | `version` | the helper's version |
 
-**`uninstall`** runs the tree's `libexec/mavergreen/pre-uninstall` hook first, if there is one, by its
+**`uninstall`** first refuses, exit 1 and nothing removed, while another installed product's tree (a directory under the prefix holding a `mavergreen.plist`) holds a symlink that resolves into this product's tree, relative or absolute and even if its target is missing; it prints why, then one `sudo mavergreen uninstall <dependent>` line per dependent product. Links inside the product's own tree never count. Then it runs the tree's `libexec/mavergreen/pre-uninstall` hook, if there is one, by its
 own shebang, with `MAVERGREEN_ROOT`/`MAVERGREEN_PRODUCT` set and stdin/stdout/stderr inherited; a
 hook that is a symlink, that exists but is not executable, that exits non-zero, or whose parent path
 resolves outside the target volume stops uninstall before anything is removed, naming the hook's
