@@ -1,0 +1,18 @@
+name: Required gate
+description: >
+  The one `required` job of a pull-request workflow, so branch protection can require a single check
+  per workflow. Fails when any job it needs failed or was cancelled; skipped passes. List every other
+  job of the workflow in the gate's needs: and run it with if: always().
+
+inputs:
+  needs:
+    description: The caller's ${{ toJSON(needs) }}.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        NEEDS_JSON: ${{ inputs.needs }}
+      run: sh "${{ github.action_path }}/../../../scripts/required-gate.sh"
