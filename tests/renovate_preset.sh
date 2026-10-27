@@ -45,5 +45,16 @@ assert rc["versioningTemplate"] == "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$", 
 rv = re.sub(r'\(\?<(?![=!])', '(?P<', rc["versioningTemplate"][len("regex:"):])
 assert re.match(rv, "20261005.1"), "the recaulk versioning regex must match 20261005.1"
 assert not re.match(rv, "1.5.2-mavericks.6"), "the recaulk versioning regex must not match 1.5.2-mavericks.6"
+import fnmatch
+gr = [x for x in c.get("packageRules", []) if x.get("groupName") == "Mavergreen ingredients"]
+assert len(gr) == 1, "one packageRule must group every Mavergreen update under groupName 'Mavergreen ingredients'"
+gr = gr[0]
+assert gr["matchPackageNames"] == ["Mavergreen/**"], "the group rule must match Mavergreen/** so the recaulk manager and every ingredient land in one PR"
+def glob_match(pattern, name):
+    return re.match("^" + re.escape(pattern).replace(r"\*\*", ".*").replace(r"\*", "[^/]*") + "$", name) is not None
+assert glob_match("Mavergreen/**", "Mavergreen/recaulk"), "the group rule must match Mavergreen/recaulk"
+assert glob_match("Mavergreen/**", "Mavergreen/clang-22"), "the group rule must match Mavergreen/clang-22"
+assert not glob_match("Mavergreen/**", "madler/zlib"), "the group rule must not match madler/zlib"
+assert c.get("vulnerabilityAlerts", {}).get("labels") == ["security"], "security updates must carry the security label so they can skip the queue"
 print("renovate-preset OK")
 PY

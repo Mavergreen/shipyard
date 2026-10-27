@@ -50,5 +50,19 @@
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$"
     }
-  ]
+  ],
+  "packageRules": [
+    {
+      "description": "One grouped PR for every Mavergreen release (ingredients, toolchains, the recaulk manager), so an ingredient release costs a consumer one PR, not one per ingredient.",
+      "matchPackageNames": [
+        "Mavergreen/**"
+      ],
+      "groupName": "Mavergreen ingredients"
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": [
+      "security"
+    ]
+  }
 }
