@@ -82,7 +82,7 @@ vm_fails otherfile "$NOVM"
 
 vm declared "$PUB
     needs: [build]"
-printf '\n## Conformance deviations\n\n- on-target: drives a kext that needs the real trackpad; exit: a VM with USB passthrough\n' \
+printf '\n- on-target: drives a kext that needs the real trackpad; exit: a VM with USB passthrough\n' \
   >> "$work/vm-declared/INGREDIENTS.md"
 (cd "$work/vm-declared" && git add -A) >/dev/null 2>&1
 vm_passes declared
@@ -91,7 +91,7 @@ vm_passes declared
 #       job's coverage; only the unscoped form stands in for the job itself.
 vm scoped "$PUB
     needs: [build]"
-printf '\n## Conformance deviations\n\n- on-target:docker-vm: Fusion cannot nest inside the QEMU guest; exit: a nested-virt runner\n' \
+printf '\n- on-target:docker-vm: Fusion cannot nest inside the QEMU guest; exit: a nested-virt runner\n' \
   >> "$work/vm-scoped/INGREDIENTS.md"
 (cd "$work/vm-scoped" && git add -A) >/dev/null 2>&1
 vm_fails scoped "$NOVM"
@@ -99,7 +99,7 @@ vm_fails scoped "$NOVM"
 vm gap "$(printf '%s\n    if: needs.ver.outputs.publish == '"'"'true'"'"'' "$VMJOB" | sed 's/^  vm-test:/  on-mavericks:/')
 $PUB
     needs: [build, on-mavericks]"
-printf '\n## Conformance deviations\n\n- on-target:menubar-gui: the guest has no logged-in GUI session; exit: a guest with one\n' \
+printf '\n- on-target:menubar-gui: the guest has no logged-in GUI session; exit: a guest with one\n' \
   >> "$work/vm-gap/INGREDIENTS.md"
 (cd "$work/vm-gap" && git add -A) >/dev/null 2>&1
 vm_passes gap
@@ -149,7 +149,7 @@ vm_fails remote "$NOVM"
 #       would read as the bare form and exempt the repo, so it is refused, not honoured.
 vm globpart "$PUB
     needs: [build]"
-printf '\n## Conformance deviations\n\n- on-target:*: everything is a gap\n' >> "$work/vm-globpart/INGREDIENTS.md"
+printf '\n- on-target:*: everything is a gap\n' >> "$work/vm-globpart/INGREDIENTS.md"
 (cd "$work/vm-globpart" && git add -A) >/dev/null 2>&1
 vm_fails globpart 'on-target:<part> is one word'
 

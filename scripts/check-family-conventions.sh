@@ -450,6 +450,15 @@ deviated() {  # $1 = check name, $2 = path: 0 if a declared deviation covers it
     case "$2" in $g) exit 0;; esac
   done; exit 1; }
 }
+# spec: scripts/conventions-grandfathered -- "<check> <repo> <job|path>" lines naming what predates a
+#       check, so moving @v1 reddens no repo; a repo is its $GITHUB_REPOSITORY, as in check 24.
+grandfathered() {  # $1 = check name, $2 = job or path
+  [ -n "${GITHUB_REPOSITORY:-}" ] && [ -f "$SELF/conventions-grandfathered" ] \
+    && grep -qxF "$1 ${GITHUB_REPOSITORY#*/} $2" "$SELF/conventions-grandfathered"
+}
+excused() {  # $1 = check name, $2 = job or path: a declared deviation or a grandfathered line covers it
+  deviated "$1" "$2" || grandfathered "$1" "$2"
+}
 
 # spec: SKILL.md "Family conventions" check 16 -- nothing tracked may read the CMake user package
 #       registry. tests/ is excluded for the same reason check 18 excludes it: a test that asserts the
@@ -612,10 +621,15 @@ fi
 #       ("Install layout and identity") live in check-artifact-conformance.sh, and a product that
 #       never calls it is exempt from all of them by omission. tests/ and test/ are excluded:
 #       fixtures build throwaway pkgs on purpose.
-builds_pkg=""
+builds_pkg=""; stv_pkg=""
 for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -Ev '^tests?/'); do
-  grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' && { builds_pkg="$f"; break; }
+  body="$(grep -v '^[[:space:]]*#' "$f" 2>/dev/null || true)"
+  printf '%s\n' "$body" | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' && { builds_pkg="$f"; break; }
+  [ -z "$stv_pkg" ] || continue
+  printf '%s\n' "$body" | grep -qE '(^|[^A-Za-z0-9_.-])stevedore[[:space:]]+(component|product)([[:space:]]|$)|(build_component_pkg|set_install_floor)\.sh' \
+    && ! grandfathered artifact-conformance "$f" && stv_pkg="$f"
 done
+[ -n "$builds_pkg" ] || [ -z "$stv_pkg" ] || builds_pkg="$stv_pkg via stevedore"
 [ -n "$builds_pkg" ] || ! ci_mentions 'sign_and_appcast' || builds_pkg="a signing workflow"
 if [ -n "$builds_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! deviated artifact-conformance "$REL"; then
   fail "this repo builds a .pkg ($builds_pkg) but no workflow runs check-artifact-conformance.sh -- nothing checks what it installs or under which identity" \
@@ -782,6 +796,50 @@ PY
   done <<EOF
 $_c29
 EOF
+fi
+
+# spec: SKILL.md "Family conventions" check 35 -- a pkg is built by stevedore, which runs on any host;
+#       a direct call to the system packager ties the build to a macOS runner. tests/ and test/ build
+#       throwaway pkgs on purpose, as in check 21.
+for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -Ev '^tests?/'); do
+  grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' || continue
+  excused packager "$f" && continue
+  fail "packager $f: builds a pkg with the system packager directly, which only a macOS host has" \
+       "build it with stevedore's component and product commands, or declare '- packager:$f: <why it must, and its exit>' under INGREDIENTS.md's ## Conformance deviations (see the conventions skill, check 35)"
+done
+
+# spec: SKILL.md "Family conventions" check 36 -- a job on a macos-* runner needs a declared reason:
+#       those runners are scarce. A runs-on of ${{ matrix.X }} is read through the job's matrix. No
+#       PyYAML already failed check 8.
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  # shellcheck disable=SC2086  # CI_FILES is a deliberate word-split list of paths
+  _c36="$(python3 - $CI_FILES <<'PY'
+import json, re, sys, yaml
+seen = set()
+for path in sys.argv[1:]:
+    try:
+        wf = yaml.safe_load(open(path)) or {}
+    except Exception:
+        continue
+    jobs = wf.get("jobs") if isinstance(wf, dict) else None
+    if not isinstance(jobs, dict):
+        continue
+    for name, job in jobs.items():
+        if not isinstance(job, dict) or str(name) in seen:
+            continue
+        runs = json.dumps(job.get("runs-on", ""))
+        if "matrix" in runs:
+            runs += json.dumps((job.get("strategy") or {}).get("matrix", ""))
+        if re.search(r"macos-", runs, re.I):
+            seen.add(str(name))
+            print(name)
+PY
+)" || fail "check 36 could not read the workflows (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  for _j in $_c36; do
+    excused macos-runner "$_j" && continue
+    fail "macos-runner $_j: runs on a macos-* runner, and those are scarce" \
+         "move the job to Linux (stevedore builds pkgs there), or declare '- macos-runner:$_j: <why it needs macOS, and its exit>' under INGREDIENTS.md's ## Conformance deviations (see the conventions skill, check 36)"
+  done
 fi
 
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored

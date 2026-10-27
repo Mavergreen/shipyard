@@ -51,7 +51,10 @@ YML
       - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
       - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
 YML
-  printf '# Build ingredients\n' > "$1/INGREDIENTS.md"
+  # spec: SKILL.md "Family conventions" check 35 -- these fixtures build pkgs with the system packager on
+  #       purpose, so the baseline declares it; a case adds its own deviations beneath this heading, and
+  #       tests/check-family-conventions-7-test.sh, which tests check 35 itself, strips the line.
+  printf '# Build ingredients\n\n## Conformance deviations\n\n- packager:*: fixtures build pkgs with the system packager\n' > "$1/INGREDIENTS.md"
   printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$1/.github/renovate.json"
   printf '#!/bin/sh\nexit 0\n' > "$1/tests/a-test.sh"
   # spec: scripts/check-family-conventions.sh -- a compliant repo commits UPSTREAM_VERSION and
