@@ -138,19 +138,57 @@ RECAULK_VERSION="20261020.1"'
   [[ "$output" == *"WAITING clang22 for recaulk 20261025.1"* ]] || false
 }
 
-@test "both ends of a diamond in one PR" {
-  pin recaulk 20261025.1
-  pin clang22 22.1.0-mavericks.4
-  head_commit
+clang_caught_up() {
   fx clang-22/releases/latest '{"tag_name":"22.1.0-mavericks.4","draft":false,"prerelease":false,"published_at":"2026-10-25T18:00:00Z"}'
   fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.4 "## Declared state
 - upstream: UPSTREAM_VERSION
 - recaulk: components/recaulk/version"
   fx clang-22/contents/components/recaulk/version@22.1.0-mavericks.4 20261025.1
+}
+
+@test "upstream caught up but PR pins old Y waits" {
+  recaulk_bump
+  clang_caught_up
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavericks.4 (it carries recaulk 20261025.1)"* ]] || false
+  [[ "$output" != *SETTLED* ]] || false
+}
+
+@test "upstream caught up and PR takes it is settled" {
+  pin recaulk 20261025.1
+  pin clang22 22.1.0-mavericks.4
+  head_commit
+  clang_caught_up
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
   [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1"* ]] || false
+}
+
+@test "a PR left behind by Y is released anyway after 24h" {
+  recaulk_bump
+  clang_caught_up
+  settled $((RECAULK_PUB + DAY))
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"::warning::ingredients-settled: Mavergreen/porthole has not taken clang22 22.1.0-mavericks.4 (it carries recaulk 20261025.1)"* ]] || false
+  [[ "$output" == *RELEASED-ANYWAY* ]] || false
+}
+
+@test "both ends of a diamond in one PR" {
+  clang_caught_up
+  pin recaulk 20261025.1
+  head_commit
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavericks.4"* ]] || false
+
+  pin clang22 22.1.0-mavericks.4
+  head_commit
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1 (clang22 22.1.0-mavericks.4 pins 20261025.1)"* ]] || false
   [[ "$output" != *WAITING* ]] || false
+  [[ "$output" != *"recaulk for clang22"* ]] || false
 }
 
 @test "rename is not a bump" {

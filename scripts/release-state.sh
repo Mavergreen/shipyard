@@ -19,6 +19,7 @@
 #       tree, and the upstream/version.sh coupling.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/lib.sh"          # pin_value()
 
 ROOT="."; RENDER=no; REF=""
 while [ $# -gt 0 ]; do
@@ -37,10 +38,6 @@ if [ -n "$REF" ]; then
     exit 2
   }
 fi
-
-pin_value() {  # $1 = file  $2 = key
-  sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1 | sed 's/^"//; s/"$//' | tr -d '[:space:]'
-}
 
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/release-state.XXXXXX")"; trap 'rm -rf "$work"' EXIT

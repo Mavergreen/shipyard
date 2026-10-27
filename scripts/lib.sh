@@ -46,6 +46,12 @@ EOF
   printf '%s\n' "$_sm_pick"
 }
 
+# spec: tests/release-state-test.sh -- a "path:KEY" Declared-state entry's value: KEY's first
+#       assignment in the file, one pair of surrounding double quotes dropped, whitespace removed.
+pin_value() {
+  sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1 | sed 's/^"//; s/"$//' | tr -d '[:space:]'
+}
+
 # spec: SKILL.md "shipyard: consume its facilities, never hand-roll them" -- never a hard-coded
 #       prefix, never a vendored copy.
 msc_scripts() {

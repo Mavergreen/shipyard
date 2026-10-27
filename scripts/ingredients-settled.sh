@@ -60,11 +60,7 @@ mkdir -p "$work/cache"
 TAB="$(printf '\t')"
 
 value_of() {
-  if [ -n "$2" ]; then
-    sed -n "s/^$2=//p" "$1" | head -1 | sed 's/^"//; s/"$//' | tr -d '[:space:]'
-  else
-    tr -d '[:space:]' < "$1"
-  fi
+  if [ -n "$2" ]; then pin_value "$1" "$2"; else tr -d '[:space:]' < "$1"; fi
 }
 
 declared_at() {
@@ -141,9 +137,9 @@ while IFS="$TAB" read -r name spec; do
     *) fail "cannot look up $name in shipyard's registry: $REG_WHY" ;;
   esac
   nrepo="$REG_V"
-  printf '%s\t%s\n' "$name" "$nrepo" >> "$work/pinned"
   local_value "$head" "$spec" || fail "$name is declared from $spec, which $head cannot read"
   new="$LV"
+  printf '%s\t%s\t%s\n' "$name" "$nrepo" "$new" >> "$work/pinned"
   old_spec="$(spec_of "$name" "$work/base.decl")"
   local_value "$base" "${old_spec:-$spec}" || continue
   [ "$LV" != "$new" ] || continue
@@ -189,7 +185,7 @@ y_pin() {
 : > "$work/settled"; : > "$work/lagging"
 while IFS="$TAB" read -r x xrepo xv; do
   seen=" "
-  while IFS="$TAB" read -r y yrepo; do
+  while IFS="$TAB" read -r y yrepo ypr; do
     [ "$y" != "$x" ] && [ "$yrepo" != "$xrepo" ] && [ "$yrepo" != "$self_repo" ] || continue
     case "$seen" in *" $yrepo "*) continue ;; esac
     seen="$seen$yrepo "
@@ -198,8 +194,19 @@ while IFS="$TAB" read -r x xrepo xv; do
     [ -n "$YPIN" ] || continue
     c=0; cmp="$(mavergreen_vercmp "$YPIN" "$xv")" || c=$?
     [ "$c" -eq 0 ] || fail "$y's $YTAG pins $x at '$YPIN', which is not a version"
-    line="$y for $x $xv ($y $YTAG pins $YPIN)"
-    if [ "$cmp" -ge 0 ]; then echo "SETTLED $line" >> "$work/settled"; else echo "$line" >> "$work/lagging"; fi
+    if [ "$cmp" -lt 0 ]; then
+      printf '%s\t%s\n' "$y for $x $xv ($y $YTAG pins $YPIN)" \
+        "$y has not caught up with $x $xv ($y $YTAG pins $YPIN)" >> "$work/lagging"
+      continue
+    fi
+    c=0; took="$(mavergreen_vercmp "$ypr" "${YTAG#v}")" || c=$?
+    [ "$c" -eq 0 ] || fail "this PR pins $y at '$ypr', or its latest release is tagged '$YTAG': not both versions"
+    if [ "$took" -lt 0 ]; then
+      printf '%s\t%s\n' "$repo to take $y ${YTAG#v} (it carries $x $xv)" \
+        "$repo has not taken $y ${YTAG#v} (it carries $x $xv)" >> "$work/lagging"
+      continue
+    fi
+    echo "SETTLED $y for $x $xv ($y $YTAG pins $YPIN)" >> "$work/settled"
   done < "$work/pinned"
 done < "$work/bumped"
 
@@ -223,11 +230,11 @@ done < "$work/bumped"
 deadline=$((newest + 86400))
 
 if [ "$now" -ge "$deadline" ]; then
-  sed 's/^\([^ ]*\) for \(.*\)$/::warning::ingredients-settled: \1 has not caught up with \2/' "$work/lagging"
+  cut -f2 "$work/lagging" | sed 's/^/::warning::ingredients-settled: /'
   echo "RELEASED-ANYWAY 24h after $newest_what was published"
   exit 0
 fi
-sed 's/^/WAITING /' "$work/lagging"
+cut -f1 "$work/lagging" | sed 's/^/WAITING /'
 left=$((deadline - now))
 echo "WAITING at most $((left / 3600))h$(printf '%02d' $((left % 3600 / 60)))m more (24h after $newest_what was published)"
 exit 1
