@@ -15,4 +15,4 @@ runs:
     - shell: bash
       env:
         NEEDS_JSON: ${{ inputs.needs }}
-      run: sh "${{ github.action_path }}/../../../scripts/required-gate.sh"
+      run: sh "$GITHUB_ACTION_PATH/../../../scripts/required-gate.sh"

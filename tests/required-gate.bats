@@ -39,3 +39,42 @@ setup() {
   run env -u NEEDS_JSON sh "$GATE"
   [ "$status" -eq 2 ]
 }
+
+@test "unknown result fails" {
+  NEEDS_JSON='{"a":{"result":"weird"}}' run sh "$GATE"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"::error::a weird"* ]] || false
+}
+
+@test "missing result key fails" {
+  NEEDS_JSON='{"a":{}}' run sh "$GATE"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"::error::a no result"* ]] || false
+}
+
+@test "null result fails" {
+  NEEDS_JSON='{"a":{"result":null}}' run sh "$GATE"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"::error::a no result"* ]] || false
+}
+
+@test "malformed JSON is a misconfiguration" {
+  NEEDS_JSON='{"a":' run sh "$GATE"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"::error::"* ]] || false
+  [[ "$output" != *Traceback* ]] || false
+}
+
+@test "top-level array is a misconfiguration" {
+  NEEDS_JSON='[{"result":"success"}]' run sh "$GATE"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"::error::"* ]] || false
+  [[ "$output" != *Traceback* ]] || false
+}
+
+@test "non-object value is a misconfiguration" {
+  NEEDS_JSON='{"a":"success"}' run sh "$GATE"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"::error::"* ]] || false
+  [[ "$output" != *Traceback* ]] || false
+}
