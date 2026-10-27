@@ -7,7 +7,10 @@
 #          each cycle once, starting at its smallest name. Each group is sorted. Nodes are registry repos.
 #          Default: reads every registry repo's INGREDIENTS.md at its default branch with read-only
 #          `gh api` (needs gh and python3). --from-dir DIR reads DIR/<repo>/INGREDIENTS.md instead.
-#          Exit 0; 1 when a Declared state is malformed; 2 on a usage error or when gh fails.
+#          stderr names what could not be read: "SKIP <repo>: <reason>" for a repo with no clone or no
+#          INGREDIENTS.md, "UNMAPPED <repo>: <name>" for a declared name the registry does not know.
+#          Exit 0 when everything was read; 3 when anything was skipped or unmapped (the graph still
+#          prints); 1 when a Declared state is malformed; 2 on a usage error or when gh fails.
 # spec: scripts/declared-state.sh; scripts/product-names
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
@@ -41,19 +44,34 @@ def fetch(repo, into):
     if r.returncode == 0:
         with open(os.path.join(into, "INGREDIENTS.md"), "w") as f:
             f.write(r.stdout)
-    elif "HTTP 404" not in r.stderr:
-        print("family-graph: gh api for %s: %s" % (repo, r.stderr.strip().replace("\n", " ")), file=sys.stderr)
-        sys.exit(2)
+        return True
+    if "HTTP 404" in r.stderr:
+        return False
+    print("family-graph: gh api for %s: %s" % (repo, r.stderr.strip().replace("\n", " ")), file=sys.stderr)
+    sys.exit(2)
 
 edges = {}
 bad = False
+partial = False
+
+def skip(repo, why):
+    global partial
+    partial = True
+    print("SKIP %s: %s" % (repo, why), file=sys.stderr)
+
 with tempfile.TemporaryDirectory() as tmp:
     for repo in repos:
         d = os.path.join(src, repo) if src else os.path.join(tmp, repo)
         if not src:
             os.mkdir(d)
-            fetch(repo, d)
-        if not os.path.isdir(d):
+            if not fetch(repo, d):
+                skip(repo, "no INGREDIENTS.md (HTTP 404)")
+                continue
+        elif not os.path.isdir(d):
+            skip(repo, "no clone in %s" % src)
+            continue
+        elif not os.path.isfile(os.path.join(d, "INGREDIENTS.md")):
+            skip(repo, "no INGREDIENTS.md")
             continue
         r = subprocess.run(["sh", os.path.join(self_dir, "declared-state.sh"), d],
                            stdin=subprocess.DEVNULL, capture_output=True, text=True)
@@ -63,8 +81,13 @@ with tempfile.TemporaryDirectory() as tmp:
             continue
         for line in r.stdout.splitlines():
             name = line.split("\t")[0]
-            if name != "upstream" and name in repo_of:
+            if name == "upstream":
+                continue
+            if name in repo_of:
                 edges.setdefault(repo, set()).add(repo_of[name])
+            else:
+                partial = True
+                print("UNMAPPED %s: %s" % (repo, name), file=sys.stderr)
 if bad:
     sys.exit(1)
 
@@ -104,4 +127,5 @@ for start in sorted(set(edges) | {m for v in edges.values() for m in v}):
                 stack.append((m, path + [m]))
 for c in sorted(cycles):
     print("CYCLE " + c)
+sys.exit(3 if partial else 0)
 PY

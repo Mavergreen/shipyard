@@ -146,3 +146,10 @@ ingredients-settled" ]
 ingredients-settled
 required (release)" ]
 }
+
+@test "a settled caller that also has real PR jobs still needs its gate" {
+  printf 'on: pull_request\njobs:\n  settled:\n    uses: Mavergreen/shipyard/.github/workflows/ingredients-settled.yml@v1\n  build:\n    runs-on: ubuntu-latest\n' | wf ingredients-settled.yml
+  run sh "$CHECKS" "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ingredients-settled.yml"* ]] || false
+}

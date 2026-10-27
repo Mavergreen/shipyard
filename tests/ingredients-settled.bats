@@ -98,6 +98,18 @@ recaulk_bump() { pin recaulk 20261025.1; head_commit; }
   [[ "$output" != *WAITING* ]] || false
 }
 
+@test "an unmapped name in Y's Declared state warns once and does not change the decision" {
+  recaulk_bump
+  fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.3 "## Declared state
+- upstream: UPSTREAM_VERSION
+- recaulk: components/recaulk/version
+- mystery: components/mystery/version"
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"WAITING clang22 for recaulk 20261025.1"* ]] || false
+  [ "$(printf '%s\n' "$output" | grep -c '^::warning::clang-22: Declared state names mystery, which the registry doesn.t know; its pins are not checked$')" -eq 1 ]
+}
+
 @test "Y without the pin is settled" {
   recaulk_bump
   fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.3 "## Declared state

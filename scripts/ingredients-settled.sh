@@ -183,7 +183,7 @@ y_pin() {
       _rc=0; registry_lookup repo "$_n" < /dev/null || _rc=$?
       case "$_rc" in
         0) printf '%s\t%s\t%s\n' "$_n" "$_s" "$REG_V" >> "$_d.repos.part" ;;
-        1) ;;
+        1) echo "::warning::$1: Declared state names $_n, which the registry doesn't know; its pins are not checked" ;;
         *) fail "cannot look up $_n in shipyard's registry: $REG_WHY" ;;
       esac
     done < "$_d.decl"

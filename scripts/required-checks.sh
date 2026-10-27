@@ -4,8 +4,9 @@
 #          Prints, one per line and sorted, the check contexts branch protection should require for the
 #          clone at DIR (default .): "<job name or key> / conventions" for each job in a tracked workflow that
 #          uses family-conventions.yml, and "required (<stem>)" for each tracked workflow triggered by
-#          pull_request, and "ingredients-settled" for a workflow with a job that uses
-#          Mavergreen/shipyard's ingredients-settled.yml (such a workflow needs no gate job). Tracked means listed by git ls-files .github/workflows. Exits 1, naming the file,
+#          pull_request, and "ingredients-settled" for a workflow whose every job uses Mavergreen/shipyard's
+#          ingredients-settled.yml (such a workflow needs no gate job; one with other jobs still does).
+#          Tracked means listed by git ls-files .github/workflows. Exits 1, naming the file,
 #          when a workflow does not parse, or a pull_request workflow has no job "required" named
 #          "required (<stem>)". Exits 2 on a usage error or when git cannot list DIR.
 # spec: SKILL.md "Creating a family repo"
@@ -44,7 +45,7 @@ for path in sys.stdin.read().split("\n"):
     for key, job in jobs.items():
         if isinstance(job, dict) and str(job.get("uses", "")).split("@")[0].endswith("family-conventions.yml"):
             out.append("%s / conventions" % (job.get("name") or key))
-    if any(
+    if jobs and all(
             isinstance(j, dict) and str(j.get("uses", "")).startswith("Mavergreen/shipyard/.github/workflows/ingredients-settled.yml@")
             for j in jobs.values()):
         out.append("ingredients-settled")
