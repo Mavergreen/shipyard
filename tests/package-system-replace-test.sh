@@ -67,6 +67,7 @@ grep -q 'id="dev.mavergreen.openssh.system-replace"' "$w/x/Distribution" || fail
 grep -q 'dev.mavergreen.base' "$w/x/Distribution" || fail "it carries the base like every product archive"
 ls "$w/x/system-replace.pkg" >/dev/null 2>&1 || fail "the expanded archive carries system-replace.pkg"
 [ ! -e "$w/x/system-replace.pkg/Payload" ] || fail "the system-replace pkg has no payload member"
+[ -f "$w/x/system-replace.pkg/PackageInfo" ] || fail "the expanded system-replace component has a PackageInfo"
 ! grep -q "<payload" "$w/x/system-replace.pkg/PackageInfo" || fail "the system-replace component declares a payload, so it would install files"
 [ ! -e "$w/x/system-replace.pkg/Bom" ] || fail "the system-replace component carries a Bom, so it would install files"
 for t in a b; do
