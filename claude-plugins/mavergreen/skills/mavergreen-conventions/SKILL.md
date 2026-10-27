@@ -176,7 +176,7 @@ updaters, signing, or compat checks:**
 | `mavericks_fetch` · `MavericksFetch` · `mavericks_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
 | `shipyard_curl URL OUT\|-` · `mavericks_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
 | `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
-| `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh; runs on 10.9 | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
+| `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh with `stevedore expand`; runs on 10.9 and Linux | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
 
 **Shipyard's shell helpers are named `shipyard_*`** (`shipyard_curl`, `shipyard_fetch_verified`,
 `shipyard_sdk_pin`, `shipyard_stop_gui_instance`, ...). The old `mav_*` names are gone (2026-10-15).

@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: host-agnostic
+# platform: host-agnostic -- Mach-O payloads need LIPO and OTOOL off macOS (macho-slices.sh)
 #   usage: stand-in-feeds.sh <dist-dir> <version>
 #          For a build that signs nothing (a PR build, a local rehearsal): writes an UNSIGNED
 #          <short>.xml for every updater the dist's pkgs install that has no feed yet, and stand-in
