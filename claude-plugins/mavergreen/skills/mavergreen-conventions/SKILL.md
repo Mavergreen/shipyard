@@ -1987,8 +1987,9 @@ where a hand-edited registry lists it. **A registered tree path can be a contrac
 registered ahead of its repo, and its tree path
 `/usr/local/mavergreen/ca-certs/etc/openssl/certs/ca-certificates.crt` is a contract, which nothing
 in code enforces: ca-certs installs its bundle exactly there, root-owned, and leaves out any root the
-running Mac's admin trust settings deny for TLS. golang-127 already adds that file to the roots it
-trusts, and golang-126 does from golang-port v1.0.0. That's a union with the keychain, in which a
+running Mac's admin trust settings deny for TLS. golang-127's keychain-union patch (`0008`) already
+lists that file among the roots it trusts; golang-126's patch lists only its own bundle and the system
+paths, not this one. That's a union with the keychain, in which a
 keychain deny vetoes a root found anywhere, not a search order. The family's rule for trust on a Mac
 is that every consumer reaches the keychain's verdict: a consumer that can read the keychain takes
 its verdict, and the bundle serves those that can't.
