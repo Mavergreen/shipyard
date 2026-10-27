@@ -6,7 +6,8 @@
 setup() {
   BUILD="$BATS_TEST_DIRNAME/../scripts/build_component_pkg.sh"
   GATE="$BATS_TEST_DIRNAME/../scripts/assert_pkg_installs_in_place.sh"
-  STEVEDORE="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")" || skip "no stevedore"
+  STEVEDORE="${STEVEDORE:-}"
+  [ -n "$STEVEDORE" ] || STEVEDORE="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")" || { echo "fetch_stevedore.sh failed" >&2; return 1; }
   export STEVEDORE
   export SOURCE_DATE_EPOCH=1700000000
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/build_component_pkg_test.XXXXXX")"

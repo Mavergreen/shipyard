@@ -1,14 +1,20 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- pkgbuild and productbuild make the fixture pkg
+# platform: macOS-only -- fetch_product_pkg.sh expands the pkg with pkgutil
 
 mkcomp() {  # mkcomp IDENTIFIER ROOT OUT
-  pkgbuild --quiet --root "$2" --identifier "$1" --version 1.0 --install-location / "$3"
+  sh "$BATS_TEST_DIRNAME/../scripts/build_component_pkg.sh" --root "$2" --identifier "$1" --version 1.0 \
+    --install-location / --out "$3" > /dev/null 2>&1
 }
 
 setup() {
   HELPER="$BATS_TEST_DIRNAME/../scripts/fetch_product_pkg.sh"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch_product_pkg_test.XXXXXX")" && pwd)"
   printf 'widget dev.mavergreen.widget widget-repo\n' > "$WORK/product-names"
+  export SOURCE_DATE_EPOCH=1700000000
+  if [ -z "${STEVEDORE:-}" ]; then
+    STEVEDORE="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")" || { echo "fetch_stevedore.sh failed" >&2; return 1; }
+  fi
+  export STEVEDORE
   export MAVERGREEN_PRODUCT_NAMES="$WORK/product-names"
   export MAVERGREEN_RELEASES="file://$WORK/rel" MAVERGREEN_PKG_CACHE="$WORK/cache"
   REL="$WORK/rel/Mavergreen/widget-repo/releases/download/1.0"
@@ -24,7 +30,18 @@ teardown() { rm -rf "$WORK"; }
 serve() {  # serve ASSET [PRODUCT_IDENTIFIER]: build the archive (base first) and list it in SHA256SUMS
   mkcomp dev.mavergreen.base "$WORK/base" "$WORK/base.pkg"
   mkcomp "${2:-dev.mavergreen.widget}" "$WORK/prod" "$WORK/prod.pkg"
-  productbuild --quiet --package "$WORK/base.pkg" --package "$WORK/prod.pkg" "$REL/$1"
+  cat > "$WORK/dist.xml" <<DIST
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+  <pkg-ref id="dev.mavergreen.base" version="1.0">base.pkg</pkg-ref>
+  <pkg-ref id="${2:-dev.mavergreen.widget}" version="1.0">prod.pkg</pkg-ref>
+  <choices-outline><line choice="dev.mavergreen.base"/><line choice="${2:-dev.mavergreen.widget}"/></choices-outline>
+  <choice id="dev.mavergreen.base"><pkg-ref id="dev.mavergreen.base"/></choice>
+  <choice id="${2:-dev.mavergreen.widget}"><pkg-ref id="${2:-dev.mavergreen.widget}"/></choice>
+</installer-gui-script>
+DIST
+  "$STEVEDORE" product --distribution "$WORK/dist.xml" --package "$WORK/base.pkg" --package "$WORK/prod.pkg" \
+    --mtime 1700000000 --out "$REL/$1" > /dev/null
   ( cd "$REL" && shasum -a 256 "$1" > SHA256SUMS )
 }
 

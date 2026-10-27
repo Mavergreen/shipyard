@@ -1,4 +1,4 @@
-# platform: macOS-only -- sign_and_appcast.sh expands the pkg with pkgutil
+# platform: macOS-only -- sign_and_appcast.sh fetches the Mach-O ed25519-sign and expands its pkg with pkgutil --expand-full; plan 03 builds a Linux signer
 bats_require_minimum_version 1.5.0
 load lib/sparkle_pkg
 
