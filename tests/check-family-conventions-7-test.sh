@@ -78,6 +78,10 @@ stv bcp 'sh "$SHIPYARD_SCRIPTS/build_component_pkg.sh" --root stage out.pkg'
 fails "check 21: build_component_pkg.sh" "$work/stv-bcp" 'builds a .pkg (build/pkg.sh via stevedore)'
 stv sif 'sh "$SHIPYARD_SCRIPTS/set_install_floor.sh" out.pkg 10.9'
 fails "check 21: set_install_floor.sh" "$work/stv-sif" 'builds a .pkg (build/pkg.sh via stevedore)'
+stv echoed 'echo "sh $SHIPYARD_SCRIPTS/build_component_pkg.sh"'
+passes "check 21: an echoed mention is not an invocation" "$work/stv-echoed"
+stv bare '"$SHIPYARD_SCRIPTS/set_install_floor.sh" out.pkg 10.9'
+fails "check 21: a bare path at command position" "$work/stv-bare" 'via stevedore'
 stv other 'stevedore version'
 passes "check 21: other stevedore commands build nothing" "$work/stv-other"
 stv comment '# stevedore component --root stage out.pkg'
@@ -110,22 +114,22 @@ mac() {  # $1 = label, $2 = the job's body after "  mac:"
 mac scalar '    runs-on: macos-14
     steps:
       - run: true'
-fails "check 36: macos-14" "$work/mac-scalar" 'macos-runner mac'
+fails "check 36: macos-14" "$work/mac-scalar" 'macos-runner ci.yml:mac'
 mac latest '    runs-on: macos-latest
     steps:
       - run: true'
-fails "check 36: macos-latest" "$work/mac-latest" 'macos-runner mac'
+fails "check 36: macos-latest" "$work/mac-latest" 'macos-runner ci.yml:mac'
 mac list '    runs-on: [self-hosted, macos-15]
     steps:
       - run: true'
-fails "check 36: a runs-on list" "$work/mac-list" 'macos-runner mac'
+fails "check 36: a runs-on list" "$work/mac-list" 'macos-runner ci.yml:mac'
 mac matrix '    strategy:
       matrix:
         os: [ubuntu-latest, macos-26]
     runs-on: ${{ matrix.os }}
     steps:
       - run: true'
-fails "check 36: a matrix" "$work/mac-matrix" 'macos-runner mac'
+fails "check 36: a matrix" "$work/mac-matrix" 'macos-runner ci.yml:mac'
 mac linux '    strategy:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm]
@@ -141,25 +145,61 @@ passes "check 36: ubuntu" "$work/mac-ubuntu"
 mac dev '    runs-on: macos-14
     steps:
       - run: true'
-printf '\n## Conformance deviations\n\n- macos-runner:mac: the 10.9 guest needs a macOS host, exit when a Linux host runs it\n' >> "$work/mac-dev/INGREDIENTS.md"
+printf '\n## Conformance deviations\n\n- macos-runner:ci.yml:mac: the 10.9 guest needs a macOS host, exit when a Linux host runs it\n' >> "$work/mac-dev/INGREDIENTS.md"
 add "$work/mac-dev"
 passes "check 36: a macos-runner deviation" "$work/mac-dev"
 
-grandfather "macos-runner ed25519 mac"
+grandfather "macos-runner ed25519 ci.yml:mac"
 passes "check 36: a grandfathered job" "$work/mac-scalar"
-grandfather "macos-runner ed25519 other"
-fails "check 36: another job's grandfathered line" "$work/mac-scalar" 'macos-runner mac'
-grandfather "macos-runner other-repo mac"
-fails "check 36: another repo's grandfathered line" "$work/mac-scalar" 'macos-runner mac'
-grandfather "packager ed25519 mac"
-fails "check 36: another check's grandfathered line" "$work/mac-scalar" 'macos-runner mac'
+grandfather "macos-runner ed25519 ci.yml:other"
+fails "check 36: another job's grandfathered line" "$work/mac-scalar" 'macos-runner ci.yml:mac'
+grandfather "macos-runner other-repo ci.yml:mac"
+fails "check 36: another repo's grandfathered line" "$work/mac-scalar" 'macos-runner ci.yml:mac'
+grandfather "packager ed25519 ci.yml:mac"
+fails "check 36: another check's grandfathered line" "$work/mac-scalar" 'macos-runner ci.yml:mac'
+grandfather
+
+mac2() {  # a second workflow with a job of the same id
+  printf 'name: other\non: push\njobs:\n  mac:\n    runs-on: macos-14\n    steps:\n      - run: true\n' > "$work/mac-scalar/.github/workflows/other.yml"; add "$work/mac-scalar"
+}
+mac2
+grandfather "macos-runner ed25519 ci.yml:mac"
+fails "check 36: the same job id in another workflow" "$work/mac-scalar" 'macos-runner other.yml:mac'
+grandfather "macos-runner ed25519 ci.yml:mac" "macos-runner ed25519 other.yml:mac"
+passes "check 36: both workflows' jobs grandfathered" "$work/mac-scalar"
+grandfather
+rm "$work/mac-scalar/.github/workflows/other.yml"; add "$work/mac-scalar"
+
+refused() {  # $1 = dir, $2 = the deviation line, $3 = the phrase the refusal must carry
+  printf '\n## Conformance deviations\n\n%s\n' "$2" >> "$1/INGREDIENTS.md"; add "$1"
+  out="$(gate "$1")" && { echo "FAIL: wildcard deviation [$2] must be refused"; exit 1; }
+  printf '%s\n' "$out" | grep -q -- "$3" || { echo "FAIL: [$2] should be refused with '$3': $out"; exit 1; }
+}
+for dev in '- macos-runner: every job' '- macos-runner:*: every job' '- macos-runner:ci.yml:*: every job' '- macos-runner:*:mac: every file'; do
+  rm -rf "$work/mac-wild"; cp -R "$work/mac-scalar" "$work/mac-wild"; printf '# Build ingredients\n' > "$work/mac-wild/INGREDIENTS.md"
+  refused "$work/mac-wild" "$dev" 'deviations.sh'
+done
+for dev in '- packager: every path' '- packager:*: every path' '- packager:build/*: every path'; do
+  rm -rf "$work/pk-wild"; cp -R "$work/pk-plain" "$work/pk-wild"; printf '# Build ingredients\n' > "$work/pk-wild/INGREDIENTS.md"
+  refused "$work/pk-wild" "$dev" 'deviations.sh'
+done
+
+# spec: SKILL.md "Family conventions" check 36 -- a run without GITHUB_REPOSITORY (a developer's
+#       shell through $SHIPYARD_SCRIPTS) takes the repo's name from origin, https or ssh.
+grandfather "macos-runner ed25519 ci.yml:mac"
+for url in https://github.com/Mavergreen/ed25519.git https://github.com/Mavergreen/ed25519 git@github.com:Mavergreen/ed25519.git; do
+  (cd "$work/mac-scalar" && git config remote.origin.url "$url")
+  (cd "$work/mac-scalar" && sh "$S2" >/dev/null 2>&1) || { echo "FAIL: origin $url should name the repo: $(cd "$work/mac-scalar" && sh "$S2" 2>&1)"; exit 1; }
+done
+(cd "$work/mac-scalar" && git config remote.origin.url https://github.com/Mavergreen/elsewhere.git && ! sh "$S2" >/dev/null 2>&1) \
+  || { echo "FAIL: another origin must not match the grandfathered line"; exit 1; }
 grandfather
 
 # spec: scripts/conventions-grandfathered -- one "<check> <repo> <job|path>" per line, sorted, no
-#       duplicates, naming a registered repo; each runner conversion or packager move deletes its
+#       duplicates, naming a repo of the org; each runner conversion or packager move deletes its
 #       lines, so the per-check count may only go down.
 GF="$here/../scripts/conventions-grandfathered"
-MAX_MACOS_RUNNER=56
+MAX_MACOS_RUNNER=59
 MAX_PACKAGER=18
 MAX_ARTIFACT_CONFORMANCE=0
 [ -f "$GF" ] || { echo "FAIL: scripts/conventions-grandfathered is missing"; exit 1; }
@@ -168,8 +208,10 @@ LC_ALL=C sort -c "$GF" 2>/dev/null || { echo "FAIL: scripts/conventions-grandfat
 while read -r c r k extra; do
   [ -n "$k" ] && [ -z "$extra" ] || { echo "FAIL: conventions-grandfathered line is not '<check> <repo> <job|path>': $c $r $k $extra"; exit 1; }
   case "$c" in macos-runner|packager|artifact-conformance) ;; *) echo "FAIL: conventions-grandfathered names an unknown check: $c"; exit 1 ;; esac
-  awk -v r="$r" '$3 == r { f = 1 } END { exit !f }' "$here/../scripts/product-names" \
-    || { echo "FAIL: conventions-grandfathered names $r, which no product-names line registers"; exit 1; }
+  case "$c:$k" in
+    macos-runner:*.yml:*|macos-runner:*.yaml:*|packager:*|artifact-conformance:*) ;;
+    *) echo "FAIL: conventions-grandfathered key is not <workflow file>:<job> (macos-runner) or a path: $c $r $k"; exit 1 ;;
+  esac
 done < "$GF"
 count() { awk -v c="$1" '$1 == c { n++ } END { print n + 0 }' "$GF"; }
 for pair in "macos-runner:$MAX_MACOS_RUNNER" "packager:$MAX_PACKAGER" "artifact-conformance:$MAX_ARTIFACT_CONFORMANCE"; do

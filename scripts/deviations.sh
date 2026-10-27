@@ -56,6 +56,20 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       print "deviations.sh: \"on-target:" glob "\" -- on-target:<part> is one word naming what stays untested in the guest, never a glob; a bare \"- on-target: <reason>\" is the one that stands in for the job" > "/dev/stderr"
       bad = 1; next
     }
+    # spec: SKILL.md "Family conventions" checks 35 and 36 -- a wildcard would excuse every path or job
+    #       at once, which defeats a check meant to be burned down one entry at a time. macos-runner
+    #       is keyed "<workflow file>:<job>", so a job id alone cannot excuse the same id elsewhere.
+    if (check == "macos-runner" && scoped && match(rest, /^[A-Za-z0-9_-]+:/)) {
+      glob = glob ":" substr(rest, 1, RLENGTH - 1); rest = substr(rest, RLENGTH + 1)
+    }
+    if (check == "macos-runner" && glob !~ /^[^*?[:]+:[^*?[:]+$/) {
+      print "deviations.sh: \"macos-runner\" names one job: \"- macos-runner:<workflow file>:<job>: <reason, exit>\", never a wildcard" > "/dev/stderr"
+      bad = 1; next
+    }
+    if (check == "packager" && (!scoped || glob ~ /[*?[]/)) {
+      print "deviations.sh: \"packager\" names one path: \"- packager:<path>: <reason, exit>\", never a wildcard" > "/dev/stderr"
+      bad = 1; next
+    }
     sub(/^ */, "", rest)
     if (rest == "") { print "deviations.sh: \"" check "\" declares no reason" > "/dev/stderr"; bad = 1; next }
     print check " " glob " " rest

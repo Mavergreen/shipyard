@@ -451,10 +451,18 @@ deviated() {  # $1 = check name, $2 = path: 0 if a declared deviation covers it
   done; exit 1; }
 }
 # spec: scripts/conventions-grandfathered -- "<check> <repo> <job|path>" lines naming what predates a
-#       check, so moving @v1 reddens no repo; a repo is its $GITHUB_REPOSITORY, as in check 24.
+#       check, so moving @v1 reddens no repo. The repo is $GITHUB_REPOSITORY's name (as in check 24),
+#       else the last path component of origin's URL, https or ssh, so a local run through
+#       $SHIPYARD_SCRIPTS agrees with CI.
+REPO_NAME=""
+if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+  REPO_NAME="${GITHUB_REPOSITORY#*/}"
+elif _url="$(git config --get remote.origin.url 2>/dev/null)"; then
+  _url="${_url%/}"; _url="${_url%.git}"; REPO_NAME="${_url##*[/:]}"
+fi
 grandfathered() {  # $1 = check name, $2 = job or path
-  [ -n "${GITHUB_REPOSITORY:-}" ] && [ -f "$SELF/conventions-grandfathered" ] \
-    && grep -qxF "$1 ${GITHUB_REPOSITORY#*/} $2" "$SELF/conventions-grandfathered"
+  [ -n "$REPO_NAME" ] && [ -f "$SELF/conventions-grandfathered" ] \
+    && grep -qxF "$1 $REPO_NAME $2" "$SELF/conventions-grandfathered"
 }
 excused() {  # $1 = check name, $2 = job or path: a declared deviation or a grandfathered line covers it
   deviated "$1" "$2" || grandfathered "$1" "$2"
@@ -621,12 +629,14 @@ fi
 #       ("Install layout and identity") live in check-artifact-conformance.sh, and a product that
 #       never calls it is exempt from all of them by omission. tests/ and test/ are excluded:
 #       fixtures build throwaway pkgs on purpose.
+_stv_call='(^|[^A-Za-z0-9_.-])stevedore[[:space:]]+(component|product)([[:space:]]|$)'
+_stv_call="$_stv_call"'|(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|^[[:space:]]*-?[[:space:]]*run:)[[:space:]]*((/bin/)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]+)?"?[^[:space:]=]*(build_component_pkg|set_install_floor)\.sh'
 builds_pkg=""; stv_pkg=""
 for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -Ev '^tests?/'); do
   body="$(grep -v '^[[:space:]]*#' "$f" 2>/dev/null || true)"
   printf '%s\n' "$body" | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' && { builds_pkg="$f"; break; }
   [ -z "$stv_pkg" ] || continue
-  printf '%s\n' "$body" | grep -qE '(^|[^A-Za-z0-9_.-])stevedore[[:space:]]+(component|product)([[:space:]]|$)|(build_component_pkg|set_install_floor)\.sh' \
+  printf '%s\n' "$body" | grep -qE "$_stv_call" \
     && ! grandfathered artifact-conformance "$f" && stv_pkg="$f"
 done
 [ -n "$builds_pkg" ] || [ -z "$stv_pkg" ] || builds_pkg="$stv_pkg via stevedore"
@@ -814,7 +824,7 @@ done
 if python3 -c 'import yaml' >/dev/null 2>&1; then
   # shellcheck disable=SC2086  # CI_FILES is a deliberate word-split list of paths
   _c36="$(python3 - $CI_FILES <<'PY'
-import json, re, sys, yaml
+import json, os, re, sys, yaml
 seen = set()
 for path in sys.argv[1:]:
     try:
@@ -825,19 +835,20 @@ for path in sys.argv[1:]:
     if not isinstance(jobs, dict):
         continue
     for name, job in jobs.items():
-        if not isinstance(job, dict) or str(name) in seen:
+        key = "%s:%s" % (os.path.basename(path), name)
+        if not isinstance(job, dict) or key in seen:
             continue
         runs = json.dumps(job.get("runs-on", ""))
         if "matrix" in runs:
             runs += json.dumps((job.get("strategy") or {}).get("matrix", ""))
         if re.search(r"macos-", runs, re.I):
-            seen.add(str(name))
-            print(name)
+            seen.add(key)
+            print(key)
 PY
 )" || fail "check 36 could not read the workflows (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
   for _j in $_c36; do
     excused macos-runner "$_j" && continue
-    fail "macos-runner $_j: runs on a macos-* runner, and those are scarce" \
+    fail "macos-runner $_j: that job runs on a macos-* runner, and those are scarce" \
          "move the job to Linux (stevedore builds pkgs there), or declare '- macos-runner:$_j: <why it needs macOS, and its exit>' under INGREDIENTS.md's ## Conformance deviations (see the conventions skill, check 36)"
   done
 fi
