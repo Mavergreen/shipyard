@@ -33,6 +33,10 @@ jobs:
       - name: Our own conventions gate, where consumers run it
         run: sh scripts/check-family-conventions.sh
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
       - name: Renovate's own validator accepts default.json
         run: |
           . scripts/renovate.pin

@@ -44,6 +44,14 @@ for name, job in jobs.items():
     if "sh scripts/check-family-conventions.sh" not in c:
         bad.append("linux-host.yml job %s never runs the conventions gate on Linux, where consumers run it" % name)
 
+for name, job in jobs.items():
+    steps = job.get("steps") or []
+    at = [i for i, st in enumerate(steps) if str(st.get("uses", "")).startswith("actions/setup-node@")]
+    use = [i for i, st in enumerate(steps) if "renovate-config-validator" in str(st.get("run", ""))]
+    node = steps[at[0]].get("with", {}).get("node-version") if at else None
+    if not use or not at or at[0] > use[0] or str(node) != "24":
+        bad.append("linux-host.yml job %s must set up node 24 before the Renovate validator, which needs ^24.11.0" % name)
+
 def callers(n):
     return [j for j, spec in (load(n).get("jobs") or {}).items()
             if spec.get("uses") == "./.github/workflows/linux-host.yml"]
