@@ -1,0 +1,50 @@
+name: Retry a release after a tag race
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "The version the failed publish tried to tag."
+        type: string
+        required: true
+      release-workflow:
+        description: "The release workflow to re-dispatch."
+        type: string
+        required: false
+        default: "release.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: Mavergreen/shipyard/.github/actions/install@v1
+
+      - id: decide
+        env:
+          VERSION: ${{ inputs.version }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          REF: ${{ github.ref }}
+          RECONCILE: ${{ github.event.inputs.reconcile }}
+        run: |
+          set -eu
+          answer="$(sh "$SHIPYARD_SCRIPTS/retry-decision.sh" "$VERSION" "$REPO_URL" "$REF" "$RECONCILE")"
+          echo "$answer"
+          echo "answer=$answer" >> "$GITHUB_OUTPUT"
+
+      - name: Re-dispatch the release, gated
+        if: steps.decide.outputs.answer == 'RETRY'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_WORKFLOW: ${{ inputs.release-workflow }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -eu
+          echo "::notice::$VERSION was tagged by another run; re-dispatching $RELEASE_WORKFLOW with reconcile=true"
+          gh workflow run "$RELEASE_WORKFLOW" --ref main -f reconcile=true
