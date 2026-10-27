@@ -1,14 +1,14 @@
 #!/bin/sh
-# platform: macOS-only -- productbuild and pkgutil write the distribution
+# platform: host-agnostic
 #   usage: set_install_floor.sh --identifier ID --title T --component COMP.pkg --out OUT.pkg
 #            [--resources DIR] [--welcome FILE] [--license FILE] [--conclusion FILE]
 #            [--require-scripts] [--host-arch x86_64] [--min-os 10.9.5] [--base-version V]
 #          FILE for --welcome, --license and --conclusion names a file inside --resources.
 #          Wraps a flat component pkg into a distributable product archive that enforces a hard OS
 #          install floor (default MAVERICKS_MIN_OS, the single source of truth for "the Mavericks
-#          install floor" across the family) via productbuild --distribution -- a bare pkgbuild
-#          product cannot express an OS floor. Generates distribution.xml from flags, runs
-#          productbuild, then self-checks that the floor made it into the output pkg. Every archive
+#          install floor" across the family) via a Distribution -- a bare component
+#          cannot express an OS floor. Generates distribution.xml from flags, runs
+#          stevedore product, then self-checks that the floor made it into the output pkg. Every archive
 #          also carries dev.mavergreen.base (built via build-base-component.sh, --base-version picks
 #          its version; default: the base's own default) and lists it FIRST in the choices-outline,
 #          so its postinstall -- which installs or upgrades /usr/local/bin/mavergreen -- runs before
@@ -71,11 +71,13 @@ esac
   || { echo "productbuild_floor: --conclusion file not found: $RES/$CONCLUSION" >&2; exit 2; }
 [ -f "$COMPONENT" ] || { echo "productbuild_floor: no component pkg: $COMPONENT" >&2; exit 1; }
 
-COMP_DIR=$(dirname "$COMPONENT"); COMP_BASE=$(basename "$COMPONENT")
+COMP_BASE=$(basename "$COMPONENT")
 [ "$COMP_BASE" != mavergreen-base.pkg ] || { echo "productbuild_floor: the product component may not be named mavergreen-base.pkg" >&2; exit 2; }
 BASEDIR=$(mktemp -d "${TMPDIR:-/tmp}/mavergreen-base.XXXXXX")
-DIST=$(mktemp -t distribution.XXXXXX.xml)
-trap 'rm -f "$DIST"; rm -rf "$BASEDIR"' EXIT
+DIST="$BASEDIR/distribution.xml"
+trap 'rm -rf "$BASEDIR"' EXIT
+EPOCH="$(sh "$(dirname "$0")/source-date-epoch.sh")"
+STEVEDORE="$(sh "$(dirname "$0")/fetch_stevedore.sh")"
 
 BASE="$BASEDIR/mavergreen-base.pkg"
 if [ -n "$BASEVER" ]; then
@@ -110,14 +112,12 @@ _opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\""
   echo '</installer-gui-script>'
 } > "$DIST"
 
-if [ -n "$RES" ]; then
-  productbuild --distribution "$DIST" --resources "$RES" --package-path "$COMP_DIR" --package-path "$BASEDIR" "$OUT"
-else
-  productbuild --distribution "$DIST" --package-path "$COMP_DIR" --package-path "$BASEDIR" "$OUT"
-fi
+set -- product --distribution "$DIST" --package "$BASE" --package "$COMPONENT" --mtime "$EPOCH"
+[ -z "$RES" ] || set -- "$@" --resources "$RES"
+"$STEVEDORE" "$@" --out "$OUT" >&2
 
-X=$(mktemp -d -t pkgfloor.XXXXXX)
-pkgutil --expand "$OUT" "$X/x"
+X=$(mktemp -d "${TMPDIR:-/tmp}/pkgfloor.XXXXXX")
+"$STEVEDORE" expand "$OUT" "$X/x" >&2
 got=$(grep -o 'os-version min="[0-9.]*"' "$X/x/Distribution" || true)
 first="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$X/x/Distribution" | grep -v '^default$' | head -1)"
 concl="$(grep -c '<conclusion file=' "$X/x/Distribution" || true)"

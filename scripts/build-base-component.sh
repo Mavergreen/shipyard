@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- build_component_pkg.sh builds the component with pkgbuild
+# platform: host-agnostic
 #   usage: build-base-component.sh [--version V] --out COMP.pkg
 #          build-base-component.sh --emit-postinstall FILE --version V
 #          Builds dev.mavergreen.base: the mavergreen helper and the paths.d/manpaths.d entries,
@@ -7,6 +7,7 @@
 #          missing or older helper. Every product archive carries it first (set_install_floor.sh).
 # spec: tests/base-component-test.sh
 set -eu
+umask 022
 SELF="$(cd "$(dirname "$0")" && pwd)"
 VER=""; OUT=""; EMIT=""
 while [ $# -gt 0 ]; do
