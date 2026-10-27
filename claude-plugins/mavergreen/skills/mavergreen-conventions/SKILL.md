@@ -171,12 +171,21 @@ updaters, signing, or compat checks:**
 | `RequireAppleClang` | enforces Apple `/usr/bin/clang` (cgo/ObjC) | assuming the toolchain |
 | `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set) | a bespoke compat check |
 | `mavericks_add_updater_app` · `MavericksSparkle` · `stage_updater.sh` | builds/stages the Sparkle updater (self-fetches the framework) | wiring Sparkle by hand |
-| `set_install_floor.sh` | stamps the 10.9.5 install floor on the `.pkg` | editing the pkg Distribution |
+| `build_component_pkg.sh` · `set_install_floor.sh` | builds a component `.pkg`; stamps the 10.9.5 install floor on a product `.pkg` (see "Seam hosts", below) | `pkgbuild`, `productbuild`, editing the pkg Distribution |
 | `sign_and_appcast.sh` · `gen_appcast.sh` | EdDSA-signs + renders the appcast (fetches `ed25519-sign` via `gh`) | rolling your own signing |
 | `mavericks_fetch` · `MavericksFetch` · `mavericks_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
 | `shipyard_curl URL OUT\|-` · `mavericks_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
 | `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
 | `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh with `stevedore expand`; runs on 10.9 and Linux | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
+
+**Seam hosts.** `build_component_pkg.sh`, `set_install_floor.sh`, `build-base-component.sh`,
+`package-system-replace.sh` and the pkg readers (`check-artifact-conformance.sh`, `fetch_product_pkg.sh`)
+run on any host, through stevedore, the C packager that `fetch_stevedore.sh` fetches at the version
+`scripts/stevedore.pin` names. None of them needs `pkgbuild`, `productbuild`, `pkgutil` or `PlistBuddy`, or a
+macOS host. A pkg's bytes depend only on the staged tree, the arguments and the mtime. The mtime is
+`SOURCE_DATE_EPOCH`, else the git commit time, else the seam fails (`source-date-epoch.sh`). 10.9 has
+no git, so a caller there sets `SOURCE_DATE_EPOCH`. Reading a Mach-O off macOS takes `LIPO` and `OTOOL`
+overrides (`macho-slices.sh`).
 
 **Shipyard's shell helpers are named `shipyard_*`** (`shipyard_curl`, `shipyard_fetch_verified`,
 `shipyard_sdk_pin`, `shipyard_stop_gui_instance`, ...). The old `mav_*` names are gone (2026-10-15).
@@ -803,7 +812,7 @@ before you push to its `main` — in the left column, that push is a release.
 - **Nothing replaced that lock, and nothing needed to.** Two dispatches can now compute the same
   `-mavericks.(N+1)`; both build, and shipyard's `publish-release.yml` refuses the loser at publish time
   with a message naming the tag. A wasted build with a red X beats a release that silently never happened.
-  The version is baked into `pkgbuild --version`, the pkg filename and the appcast's `<sparkle:version>`,
+  The version is baked into the pkg's version, the pkg filename and the appcast's `<sparkle:version>`,
   so a collision must **rebuild** — re-dispatch — and must never be relabeled.
 - **Why branch pushes do not supersede, even though superseding would be cheaper.** In every repo in the table's left
   column (and tailscale, via its bump dispatchers) a push to `main` can publish. Concurrency is resolved when a run is queued,
@@ -1820,7 +1829,7 @@ the audit can stop inferring the check name from the job.
 ## Artifact conformance (checked at package time)
 
 The conventions gate constrains the REPO. `check-artifact-conformance.sh` constrains what comes OUT,
-and runs at package time — before publish, where the artifacts exist and `pkgutil` does.
+and runs at package time — before publish, where the artifacts exist.
 
 It exists because every piece was already checked in isolation — the compat guard reads binaries,
 `set_install_floor` stamps a floor, `sign_and_appcast` signs, `publish-release` checksums — and
@@ -1839,7 +1848,7 @@ uniformity by inventing a bespoke "kind" per product. If a check can only pass b
 product is built rather than *what it emits*, it is the wrong check.
 
 **Structure matters more than it looks.** A product archive (`Distribution`) declares an install
-floor; a component package (`PackageInfo`) cannot — floors are a `productbuild` concept — so its
+floor; a component package (`PackageInfo`) cannot — a floor belongs to a product archive — so its
 minimum lives in the appcast instead. golang's cross product is exactly that: it TARGETS 10.9 but RUNS
 on 11.0+, so demanding 10.9.5 of it would be wrong.
 
@@ -2422,6 +2431,70 @@ ceiling that may only go down. Regenerate with `sh scripts/gen-conventions-grand
 without the file in each). A new check that needs the
 treatment adds its name to that script, the test and this paragraph.
 
+**The required gate (checks 30-34, not landed yet; adopted per repo).** Branch protection requires one check
+per PR-triggered workflow, `required (<stem>)`, so a job added later is covered without touching the
+protection. Each such workflow ends in this job, which lists every other job in its `needs:`:
+
+```yaml
+  required:
+    name: required (<stem>)
+    if: always()
+    needs: [every other job]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Mavergreen/shipyard/.github/actions/required-gate@v1
+        with: { needs: "${{ toJSON(needs) }}" }
+```
+
+It fails when a needed job failed or was cancelled; skipped passes. `needs` is the action's only input,
+and an empty one is a misconfiguration (exit 2). `required-checks.sh [DIR]` prints what a repo's
+protection must require, read from its workflows, and `setup-family-repo.sh settle` uses it. A
+release workflow's `publish` job gets a caller of `retry-release.yml`, which re-dispatches the release,
+gated, when publish lost its tag to another run (`retry-decision.sh` decides: on `main`, not already a
+reconcile run, tag taken):
+
+```yaml
+  retry:
+    needs: [publish]
+    if: always() && needs.publish.result == 'failure'
+    permissions: { contents: read, actions: write }
+    uses: Mavergreen/shipyard/.github/workflows/retry-release.yml@v1
+    with: { version: <the same expression publish gets> }
+```
+
+**The settled check (coalesced ingredient bumps).** A repo whose ingredients are products of other
+family repos would otherwise merge a bump of X before the product between them has taken X. A repo
+that wants the check adds this caller, as `.github/workflows/ingredients-settled.yml`:
+
+```yaml
+on: { pull_request: { branches: [main] }, schedule: [{ cron: "17 * * * *" }] }
+concurrency:
+  group: ingredients-settled-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  settled:
+    permissions: { contents: read, statuses: write, pull-requests: read }
+    uses: Mavergreen/shipyard/.github/workflows/ingredients-settled.yml@v1
+    with: { mode: "${{ github.event_name == 'schedule' && 'sweep' || 'pr' }}" }
+```
+
+- **The status is `ingredients-settled`**, posted on the PR's head commit. `success`: nothing to wait
+  for (not a Renovate branch, no Mavergreen ingredient changed, every other product between has caught
+  up, or the PR is labelled). `pending`: waiting, and the description says on whom and for how long.
+  `failure`: it could not tell (a registry or Declared state it cannot read, or the job itself could not
+  run). Never a silent pass.
+- **A PR labelled `urgent` or `security` is settled at once.**
+- **The 24h backstop:** a bump waits at most 24 hours after the newest bumped ingredient was published,
+  then goes through with a warning naming who lagged.
+- **The hourly sweep** (`mode: sweep`) re-judges every open same-repo `renovate/*` PR, since a release
+  elsewhere or a late label changes the answer with no event on the PR.
+- **`settle` requires the status** once this caller exists, via `required-checks.sh`.
+- **The caller needs no `required` job**: a workflow whose every job is this call is exempt from the gate.
+
+`sh "$SHIPYARD_SCRIPTS/family-graph.sh" [--from-dir DIR]` prints the family's ingredient graph
+(`consumer -> ingredient`, then `DIAMOND` and `CYCLE` lines); it exits 3 when the graph is incomplete
+(a repo skipped or a name unmapped, listed on stderr), though the graph still prints.
+
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,
 rather than skipping. A gate that passes when it did not run is the exact rot the gate exists to
@@ -2491,7 +2564,7 @@ carry its own declaration.
   case pattern, a prefix wrapper other than the ones listed above (`nice`, `timeout`, `env -u X`,
   `xargs -n 1`), a `$(...)` inside a `${x:-...}` default, and `find ... -exec tool`.
 - **`--strict-host` cannot see a host-agnostic suite that skips PART of itself internally** without
-  exiting 77 or using bats' `# skip` -- e.g. artifact-conformance-test.sh's pkgbuild block.
+  exiting 77 or using bats' `# skip`.
 - **Opt-in by declaring.** A repo where no script declares a host passes and prints that it has not
   adopted the split. `--required` makes that a failure. shipyard's own test suite runs it that way, so
   shipyard cannot quietly un-adopt.
