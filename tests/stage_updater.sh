@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- plutil lints the staged agent
+# platform: host-agnostic
 set -eu
 # spec: scripts/run-repo-tests.sh -- exit 77 is the family's SKIP idiom, not a failure. Called
 #       bare, as the shared runner does when it globs tests/*.sh, there is no root to test
@@ -33,7 +33,7 @@ PL="$STAGE/Library/LaunchAgents/$LABEL.plist"
 grep -q "<string>$LABEL</string>" "$PL" || fail "agent label not set"
 grep -q "<string>$installed_exe</string>" "$PL" \
   || fail "agent exec path not set to the INSTALLED path (the staged file lives under \$STAGE, but the plist must reference the path with no \$STAGE prefix)"
-plutil -lint "$PL" >/dev/null || fail "agent plist is not valid"
+"$(sh "$ROOT/scripts/fetch_stevedore.sh")" plist xml1 "$PL" >/dev/null || fail "agent plist is not valid"
 no_token "$PL"
 
 PI="$SCR/postinstall"

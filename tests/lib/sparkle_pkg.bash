@@ -1,6 +1,6 @@
-# platform: macOS-only -- pkgbuild and productbuild build the fixtures
+# platform: host-agnostic -- stevedore builds the fixtures
 # Fixtures for the Sparkle-key checks (tests/lib/ is not itself run: run-repo-tests.sh takes top-level
-# tests only). Real .pkg files, built with the same pkgbuild/productbuild the products use.
+# tests only). Real .pkg files, built with the stevedore that builds the products.
 
 # mkpkg OUT [KEY FEED [APP]] ... -- a product archive whose payload holds one updater app per
 # KEY FEED APP triple, under "Library/Application Support/Mavergreen/" (the space is on purpose:
@@ -28,10 +28,19 @@ mkpkg() {
 EOF
     shift 3
   done
-  pkgbuild --root "$root" --identifier dev.mavergreen.test --version 1 --install-location / \
-    "$out.component.pkg" >/dev/null
-  productbuild --package "$out.component.pkg" "$out" >/dev/null
-  rm -f "$out.component.pkg"
+  local sd; sd="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")" || { echo "fetch_stevedore.sh failed: no stevedore to build the fixture" >&2; return 1; }
+  "$sd" component --root "$root" --identifier dev.mavergreen.test --version 1 --install-location / \
+    --mtime 1700000000 --out "$out.component.pkg" >/dev/null
+  cat > "$out.dist" <<DIST
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+  <pkg-ref id="dev.mavergreen.test" version="1">${out##*/}.component.pkg</pkg-ref>
+  <choices-outline><line choice="dev.mavergreen.test"/></choices-outline>
+  <choice id="dev.mavergreen.test"><pkg-ref id="dev.mavergreen.test"/></choice>
+</installer-gui-script>
+DIST
+  "$sd" product --distribution "$out.dist" --package "$out.component.pkg" --mtime 1700000000 --out "$out" >/dev/null
+  rm -f "$out.component.pkg" "$out.dist"
 }
 
 # An appcast whose one enclosure points at ENCLOSURE_URL, in gen_appcast.sh's shape.

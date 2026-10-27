@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- PlistBuddy reads the updater's identity, and render-manifest.sh reads back and lints the manifest
+# platform: host-agnostic -- stevedore reads the updater's identity; the generated preinstall's PlistBuddy text runs on the target
 #   usage: stage_product.sh --stage ROOT --product P --name N --version V --scripts-out DIR
 #            [--group G] [--line L] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
 #            [--requires SHORT[>=VERSION]]... [--updater-app P-updater.app] [--preinstall-hook FILE]
@@ -82,8 +82,9 @@ snippet=""
 if [ -n "$APP" ]; then
   registry_need stage_product updater-bundle-id "$P"; _want_id="$REG_V"
   registry_need stage_product feed "$P"; _want_feed="$REG_V"
-  _got_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist" 2>/dev/null)" || _got_id=""
-  _got_feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$APP/Contents/Info.plist" 2>/dev/null)" || _got_feed=""
+  STEVEDORE="${STEVEDORE:-$(sh "$SELF/fetch_stevedore.sh")}"; export STEVEDORE
+  _got_id="$("$STEVEDORE" plist get "$APP/Contents/Info.plist" CFBundleIdentifier 2>/dev/null)" || _got_id=""
+  _got_feed="$("$STEVEDORE" plist get "$APP/Contents/Info.plist" SUFeedURL 2>/dev/null)" || _got_feed=""
   [ "$_got_id" = "$_want_id" ] && [ "$_got_feed" = "$_want_feed" ] \
     || { echo "stage_product: $APP was not built for $P: it is '${_got_id:-none}' polling '${_got_feed:-none}', and the registry says $_want_id polling $_want_feed -- build it with mavericks_add_updater_app(PRODUCT $P)" >&2; exit 1; }
   snippet="$SCR/.agent-load"

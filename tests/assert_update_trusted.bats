@@ -1,4 +1,4 @@
-# platform: macOS-only -- pkgbuild builds the fixtures
+# platform: host-agnostic -- stevedore builds the fixtures
 bats_require_minimum_version 1.5.0
 load lib/sparkle_pkg
 

@@ -1,4 +1,4 @@
-# platform: macOS-only -- pkgbuild builds the fixtures
+# platform: macOS-only -- sign_and_appcast.sh expands the pkg with pkgutil
 bats_require_minimum_version 1.5.0
 load lib/sparkle_pkg
 

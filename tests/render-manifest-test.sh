@@ -1,9 +1,9 @@
 #!/bin/sh
-# platform: macOS-only -- PlistBuddy reads back the rendered manifest
+# platform: host-agnostic
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/render-manifest.sh"
-PB=/usr/libexec/PlistBuddy; [ -x "$PB" ] || { echo "no PlistBuddy -- skipping"; exit 77; }
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed"; exit 1; }; export STEVEDORE="$SD"
 w="$(mktemp -d "${TMPDIR:-/tmp}/render-manifest.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
 st="$w/stage"
@@ -15,7 +15,7 @@ touch "$st/usr/local/mavergreen/openssh/bin/ssh" "$st/Applications/Mavericks X.a
 sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version 10.5p1-mavericks.5 \
   --replaces /usr/bin/ssh=bin/ssh
 M="$st/usr/local/mavergreen/openssh/mavergreen.plist"
-p() { "$PB" -c "Print :$1" "$M"; }
+p() { "$SD" plist get "$M" "$1"; }
 [ "$(p identifier)" = dev.mavergreen.openssh ] || fail "the identifier comes from the registry"
 [ "$(p group)" = openssh ] && [ "$(p line)" = "" ] || fail "group defaults to the product, line to empty"
 [ "$(p replaces:/usr/bin/ssh)" = bin/ssh ] || fail "replaces is carried"
@@ -26,13 +26,13 @@ sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version
   || fail "with an updater, the feed comes from the registry: openssh's repo, openssh.xml"
 sh "$S" --stage "$st" --product openssh --name x --version 1 --appcast https://example/appcast.xml 2>/dev/null \
   && fail "--appcast must be refused: the registry, not the repo, names the feed"
-outside="$(i=0; while v="$("$PB" -c "Print :outside:$i" "$M" 2>/dev/null)"; do echo "$v"; i=$((i+1)); done)"
+outside="$(i=0; while v="$("$SD" plist get "$M" "outside:$i" 2>/dev/null)"; do echo "$v"; i=$((i+1)); done)"
 [ "$outside" = "$(printf '%s\n' 'Applications/Mavericks X.app' 'Library/Application Support/Mavergreen/OpenSSHUpdater.app' 'Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist')" ] \
   || fail "outside lists what is installed outside the tree, bundles collapsed, spaces intact: $outside"
 nasty_name='O'\''Brien "quoted" \back & <angle>'
 sh "$S" --stage "$st" --product openssh --name "$nasty_name" --version 1
 [ "$(p name)" = "$nasty_name" ] \
-  || fail "name must round-trip exactly through PlistBuddy, including apostrophe/quotes/backslash/ampersand/angle-brackets"
+  || fail "name must round-trip exactly through the plist reader, including apostrophe/quotes/backslash/ampersand/angle-brackets"
 sh "$S" --stage "$st" --product not-registered --name x --version 1 2>/dev/null && fail "an unregistered product must be refused"
 MAVERGREEN_PRODUCT_NAMES="$w/absent-registry" sh "$S" --stage "$st" --product openssh --name x --version 1 2>"$w/err" \
   && fail "an unreadable registry must refuse the manifest"

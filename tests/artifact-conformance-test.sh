@@ -580,7 +580,7 @@ A real body.
 
 - Fixed a thing
 NOTES
-# platform: a text file with a .pkg name would be reported `unreadable` by pkgutil and fail for
+# platform: a text file with a .pkg name would be reported `unreadable` by stevedore and fail for
 #           a reason this fixture is not about, so it uses a .tgz instead. What it proves is
 #           that a COMPLETE run reaches the sentinel and the checker accepts it -- the pkg
 #           records have their own fixtures above. A real (if trivial) tarball, not a text file
@@ -1091,7 +1091,9 @@ repository someone/golang-126"
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
 #       top-level bundle, a symlink, and a path with a space are each a way to report the wrong thing.
-if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&1 && [ -x /usr/libexec/PlistBuddy ]; then
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed -- the real-pkg block is the only gate for artifact-facts reading a pkg, so it cannot be skipped"; exit 1; }
+export STEVEDORE="$SD"
+{
   _pk="$(mktemp -d "${TMPDIR:-/tmp}/conformance-pkg.XXXXXX")"   # template: 10.9 BSD mktemp requires one
   _st="$_pk/stage"; _ap="$_st/Library/Application Support/Mavergreen/x-updater.app/Contents"
   mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/usr/local/mavergreen/x/bin" "$_pk/dist" "$_pk/comp" "$_pk/archive"
@@ -1100,27 +1102,34 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
   _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
   _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
   echo x > "$_st/usr/local/mavergreen/x/bin/x"; ln -s bin/x "$_st/usr/local/mavergreen/x/link"
-  printf 'int main(void){return 0;}\n' > "$_pk/h.c"
-  # platform: the runner's SDK would make this fixture fail the sdk-pin rule the archive assertion below now enforces; clang honours SDKROOT
-  SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/usr/local/mavergreen/x/bin/hello"
-  ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
-  # platform: guarded macOS-only call -- the enclosing `if command -v pkgbuild` skips this block without it
-  /usr/libexec/PlistBuddy -c "Add :product string x" -c "Add :identifier string dev.mavergreen.x" \
-    -c "Add :outside array" -c "Add :outside:0 string Library/Application Support/Mavergreen/x-updater.app" \
-    -c "Add :outside:1 string Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist" \
-    -c "Add :generated array" -c "Add :generated:0 string Applications/Linux X.app" \
-    -c "Add :appcast string https://github.com/Mavergreen/x/releases/latest/download/x.xml" \
-    "$_st/usr/local/mavergreen/x/mavergreen.plist" >/dev/null
+  _macho=""
+  if [ "$(uname -s)" = Darwin ] && command -v cc >/dev/null 2>&1 && command -v lipo >/dev/null 2>&1; then
+    _macho=1
+    printf 'int main(void){return 0;}\n' > "$_pk/h.c"
+    # platform: the runner's SDK would make this fixture fail the sdk-pin rule the archive assertion below now enforces; clang honours SDKROOT
+    SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/usr/local/mavergreen/x/bin/hello"
+    ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
+  fi
+  cat > "$_st/usr/local/mavergreen/x/mavergreen.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>product</key><string>x</string>
+<key>identifier</key><string>dev.mavergreen.x</string>
+<key>outside</key><array>
+<string>Library/Application Support/Mavergreen/x-updater.app</string>
+<string>Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist</string>
+</array>
+<key>generated</key><array><string>Applications/Linux X.app</string></array>
+<key>appcast</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string>
+</dict></plist>
+PLIST
   printf 'x dev.mavergreen.x x\n' > "$_pk/product-names"
-  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
-  pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
-    "$_pk/dist/x-1.0.0-mavericks.1.pkg"
-  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
-  pkgbuild --quiet --root "$_st/usr/local/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
-    --install-location /usr/local/y "$_pk/dist/y-1.0.0-mavericks.1.pkg"
-  # platform: guarded macOS-only call -- the same `if command -v pkgbuild` as above
-  pkgbuild --quiet --root "$_st" --identifier dev.mavergreen.z --version 1.0.0-mavericks.1 --install-location /opt/z \
-    "$_pk/dist/z-1.0.0-mavericks.1.pkg"
+  "$SD" component --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
+    --mtime 1700000000 --out "$_pk/dist/x-1.0.0-mavericks.1.pkg"
+  "$SD" component --root "$_st/usr/local/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
+    --install-location /usr/local/y --mtime 1700000000 --out "$_pk/dist/y-1.0.0-mavericks.1.pkg"
+  "$SD" component --root "$_st" --identifier dev.mavergreen.z --version 1.0.0-mavericks.1 --install-location /opt/z \
+    --mtime 1700000000 --out "$_pk/dist/z-1.0.0-mavericks.1.pkg"
   cp "$_pk/dist/x-1.0.0-mavericks.1.pkg" "$_pk/comp/x-component.pkg"
   sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --base-version 1.0.9 \
     --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavericks.1.pkg" >/dev/null 2>&1 \
@@ -1168,10 +1177,12 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
+  if [ -n "$_macho" ]; then
   printf '%s\n' "$_f" | grep -qE '^macho x-1\.0\.0-mavericks\.1\.pkg usr/local/mavergreen/x/bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
     || { echo "FAIL: a Mach-O in a pkg payload must yield a macho fact -- got: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -qE '^macho x-tools\.tar\.gz bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
     || { echo "FAIL: a Mach-O in a shipped tarball must yield a macho fact -- got: $_f"; exit 1; }
+  fi
   printf '%s\n' "$_f" | grep -q '^macho .* usr/local/mavergreen/x/bin/x ' \
     && { echo "FAIL: a non-Mach-O file must not yield a macho fact: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q 'org.sparkle-project' \
@@ -1193,8 +1204,13 @@ if command -v pkgbuild >/dev/null 2>&1 && command -v productbuild >/dev/null 2>&
     || { echo "FAIL: an archive set_install_floor.sh built from a laid-out stage must pass conformance: $_ca"; exit 1; }
   _cr="$(printf '%s\n' "$_fr" | sh "$S" 2>&1)" \
     || { echo "FAIL: a build that signs nothing passes conformance once stand-in-feeds.sh has staged its feed: $_cr"; exit 1; }
-else
-  echo "artifact-conformance: no pkgbuild/productbuild/PlistBuddy here -- the real-pkg payload fixture is skipped" >&2
-fi
+
+  _un="$(mktemp -d "${TMPDIR:-/tmp}/conformance-unreadable.XXXXXX")"; echo "not a pkg" > "$_un/bad.pkg"
+  _fu="$(sh "$AF" "$_un" 1.0.0-mavericks.1 "$_un")" && _ur=0 || _ur=$?
+  rm -rf "$_un"
+  [ "$_ur" -eq 0 ] && printf "%s\n" "$_fu" | grep -qxF "pkg bad.pkg unreadable none none" \
+    && printf "%s\n" "$_fu" | grep -qxF end-of-facts && ! printf "%s\n" "$_fu" | grep -q "^abort" \
+    || { echo "FAIL: unreadable pkg is a fact, not an abort: $_fu"; exit 1; }
+}
 
 echo "PASS: artifact-conformance"

@@ -1,12 +1,12 @@
 #!/bin/sh
-# platform: macOS-only -- PlistBuddy and pkgutil read a built pkg
+# platform: host-agnostic
 #   usage: artifact-facts.sh <dist-dir> <version> [repo-root]
 #          Emits the fact stream check-artifact-conformance.sh consumes, by inspecting a built dist/
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
 #          payload and shipped tarball.
-# platform: runs at PACKAGE TIME, on macOS, where pkgutil exists and the artifacts do.
+# platform: runs at PACKAGE TIME, on any host that has the artifacts; stevedore reads the pkgs and plists.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
 #       reads a repo in seconds and gates every PR.
@@ -102,8 +102,8 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
           _id=none; _feed=""
           for _ip in Contents/Info.plist Resources/Info.plist Info.plist; do
             [ -f "$_root/$_bd/$_ip" ] || continue
-            _id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$_root/$_bd/$_ip" 2>/dev/null || echo none)"
-            _feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$_root/$_bd/$_ip" 2>/dev/null || true)"; break
+            _id="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" CFBundleIdentifier 2>/dev/null || echo none)"
+            _feed="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" SUFeedURL 2>/dev/null || true)"; break
           done
           printf 'bundle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" "$(printf '%s' "$_bd" | enc)" "${_id:-none}"
           [ -z "$_feed" ] || printf 'sparkle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" \
@@ -113,7 +113,7 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       [ -z "$_loc" ] && [ -d "$_root/$_ld" ] || continue
       for _lp in "$_root/$_ld"/*.plist; do
         [ -f "$_lp" ] || continue
-        _lab="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$_lp" 2>/dev/null || echo none)"
+        _lab="$("$STEVEDORE" plist get "$_lp" Label 2>/dev/null || echo none)"
         printf 'launchd %s %s/%s %s\n' "$1" "$_ld" "$(basename "$_lp" | enc)" "${_lab:-none}"
       done
     done
@@ -125,8 +125,8 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     for _mf in "$_root"/usr/local/mavergreen/*/mavergreen.plist; do
       [ -f "$_mf" ] || continue
       _dir="$(basename "$(dirname "$_mf")" | enc)"
-      _mp="$(/usr/libexec/PlistBuddy -c 'Print :product' "$_mf" 2>/dev/null)" || _mp=""
-      _mi="$(/usr/libexec/PlistBuddy -c 'Print :identifier' "$_mf" 2>/dev/null)" || _mi=""
+      _mp="$("$STEVEDORE" plist get "$_mf" product 2>/dev/null)" || _mp=""
+      _mi="$("$STEVEDORE" plist get "$_mf" identifier 2>/dev/null)" || _mi=""
       _reg=""; _repo=""; _dv=""
       for _q in identifier repo updater-bundle-id agent-label updater-app feed; do
         _rc=0; registry_lookup "$_q" "$_mp" || _rc=$?
@@ -140,8 +140,8 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
         esac
       done
       _dv="${_dv# }"
-      _ml="$(/usr/libexec/PlistBuddy -c 'Print :line' "$_mf" 2>/dev/null)" || _ml=""
-      _ma="$(/usr/libexec/PlistBuddy -c 'Print :appcast' "$_mf" 2>/dev/null)" || _ma=""
+      _ml="$("$STEVEDORE" plist get "$_mf" line 2>/dev/null)" || _ml=""
+      _ma="$("$STEVEDORE" plist get "$_mf" appcast 2>/dev/null)" || _ma=""
       _mp="$(printf '%s' "${_mp:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest %s %s %s %s\n' "$1" "$_mp" "$(printf '%s' "${_mi:-none}" | tr -s '[:space:]' '_')" "$_dir"
       printf 'registered %s %s %s\n' "$_mp" "$(printf '%s' "${_reg:-none}" | tr -s '[:space:]' '_')" "${_repo:-none}"
@@ -149,11 +149,11 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       printf 'manifest-appcast %s %s\n' "$1" "$(printf '%s' "${_ma:-none}" | tr -s '[:space:]' '_')"
       [ -z "$_dv" ] || printf 'derived %s %s\n' "$_mp" "$_dv"
       _k=0
-      while _o="$(/usr/libexec/PlistBuddy -c "Print :outside:$_k" "$_mf" 2>/dev/null)"; do
+      while _o="$("$STEVEDORE" plist get "$_mf" "outside:$_k" 2>/dev/null)"; do
         printf 'manifest-outside %s %s\n' "$1" "$(printf '%s' "$_o" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
       done
       _k=0
-      while _g="$(/usr/libexec/PlistBuddy -c "Print :generated:$_k" "$_mf" 2>/dev/null)"; do
+      while _g="$("$STEVEDORE" plist get "$_mf" "generated:$_k" 2>/dev/null)"; do
         printf 'manifest-generated %s %s\n' "$1" "$(printf '%s' "$_g" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
       done
     done
@@ -182,10 +182,11 @@ for f in "$dist"/*; do
 
   case "$b" in
     *.pkg)
-      # platform: pkgutil is the only way to read what the .pkg actually declares; a filename is a
+      # platform: stevedore expand is how to read what the .pkg actually declares; a filename is a
       #           claim, not a fact.
+      [ -n "${STEVEDORE:-}" ] || STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || abort "cannot fetch stevedore to read $b"
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-      if pkgutil --expand "$f" "$x/x" >/dev/null 2>&1; then
+      if "$STEVEDORE" expand "$f" "$x/x" >/dev/null 2>&1; then
         if [ -f "$x/x/Distribution" ]; then
           # platform: a product archive: version, floor and identity all live in Distribution. The
           #           version and identity are the product's, not those of the dev.mavergreen.base
