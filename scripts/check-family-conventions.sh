@@ -853,6 +853,58 @@ PY
   done
 fi
 
+# spec: SKILL.md "Family conventions" check 37 -- an arm64 slice is a declared deviation, and what
+#       declares one runs it: release.yml has a modern-smoke job on a macos-* runner that publish
+#       needs exactly when INGREDIENTS.md declares '- arm64:<glob>: <reason>'. Conformance holds
+#       the pkg to the declaration. No PyYAML already failed check 8.
+_ms="modern-smoke release.yml:modern-smoke"
+if ! grandfathered modern-smoke release.yml:modern-smoke && python3 -c 'import yaml' >/dev/null 2>&1; then
+  _c37="$(python3 - "$REL" <<'PY'
+import json, re, sys, yaml
+try:
+    wf = yaml.safe_load(open(sys.argv[1])) or {}
+except Exception:
+    sys.exit(0)
+jobs = wf.get("jobs") if isinstance(wf, dict) else None
+jobs = {str(k): v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
+job = jobs.get("modern-smoke")
+if job is None:
+    sys.exit(0)
+print("job")
+runs = json.dumps(job.get("runs-on", ""))
+if "matrix" in runs:
+    runs += json.dumps((job.get("strategy") or {}).get("matrix", ""))
+if not re.search(r"macos-", runs, re.I):
+    print("offmac")
+pubs = [j for j, b in jobs.items() if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]]
+if not pubs and "publish" in jobs:
+    pubs = ["publish"]
+for p in pubs or ["publish"]:
+    needs = jobs.get(p, {}).get("needs") or []
+    needs = [needs] if isinstance(needs, str) else [str(n) for n in needs]
+    if "modern-smoke" not in needs:
+        print("unneeded %s" % p)
+PY
+)" || fail "check 37 could not read $REL's jobs (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  _decl37="$(printf '%s\n' "$DEVS" | awk '$1 == "arm64" { print $2; exit }')"
+  _job37=no; printf '%s\n' "$_c37" | grep -qx job && _job37=yes
+  if [ -n "$_decl37" ] && [ "$_job37" = no ]; then
+    fail "$_ms: INGREDIENTS.md declares an arm64 slice, but release.yml has no modern-smoke job -- nothing runs the arm64 slice before it ships" \
+         "add a job named modern-smoke to $REL, on a macos-* runner, that installs the run's own pkg and runs its arm64 slice, and add it to publish's needs: (see the conventions skill, check 37)"
+  elif [ -z "$_decl37" ] && [ "$_job37" = yes ]; then
+    fail "$_ms: release.yml has a modern-smoke job, but INGREDIENTS.md declares no arm64 slice -- an arm64 slice ships only with a reason" \
+         "declare '- arm64:<install-path glob>: <who runs it on Apple Silicon, and why>' under INGREDIENTS.md's ## Conformance deviations, or remove the job and ship x86_64 only (see the conventions skill, check 37)"
+  elif [ "$_job37" = yes ]; then
+    printf '%s\n' "$_c37" | grep -qx offmac \
+      && fail "$_ms: the modern-smoke job does not run on a macos-* runner -- an arm64 slice runs only on Apple Silicon" \
+              "give the modern-smoke job in $REL runs-on: macos-<version> (see the conventions skill, check 37)"
+    for _p in $(printf '%s\n' "$_c37" | sed -n 's/^unneeded //p'); do
+      fail "$_ms: publish does not need the modern-smoke job ($_p) -- a release can ship an arm64 slice nothing ran" \
+           "add modern-smoke to $_p's needs: in $REL (see the conventions skill, check 37)"
+    done
+  fi
+fi
+
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
 #       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
 #       ignored AND nothing may be tracked under them or under docs/superpowers/, nor a backlog file

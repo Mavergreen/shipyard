@@ -7,9 +7,13 @@
 #          clone whose origin is not Mavergreen/<name>), keeps those whose workflows
 #          reference family-conventions.yml (the repos this gate runs in, registered or not), runs a
 #          copy of this gate WITHOUT the grandfathered file in each, and prints what the checks that
-#          consult it (packager, macos-runner, artifact-conformance) find, as sorted
+#          consult it (packager, macos-runner, artifact-conformance, modern-smoke) find, as sorted
 #          "<check> <repo> <job|path>" lines. shipyard itself is read from this working tree.
-#          Needs gh and a python3 with PyYAML first on PATH.
+#          modern-smoke is also found in what each repo last shipped: the latest release's pkgs,
+#          downloaded into <clones-dir>/.releases/<repo>/<tag> (kept until the tag moves), read by
+#          artifact-facts.sh and that copy of check-artifact-conformance.sh. A release that cannot
+#          be read fails the run; a repo with no release, or none carrying a pkg, ships nothing.
+#          Needs gh, a python3 with PyYAML first on PATH, and lipo and otool (or LIPO and OTOOL).
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SELF/.." && pwd)"
@@ -50,6 +54,28 @@ while read -r repo; do
     | sed -n \
         -e "s|^check-family-conventions: \(packager\) \([^ ]*\): .*|\1 $repo \2|p" \
         -e "s|^check-family-conventions: \(macos-runner\) \([^ ]*\): .*|\1 $repo \2|p" \
+        -e "s|^check-family-conventions: \(modern-smoke\) \([^ ]*\): .*|\1 $repo \2|p" \
         -e "s|.*builds a \.pkg (\([^ )]*\) via stevedore).*|artifact-conformance $repo \1|p"
+  rc=0; view="$(gh release view --repo "Mavergreen/$repo" --json tagName,assets --jq '.tagName, (.assets[].name)' </dev/null 2>"$tmp/err")" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    grep -q 'release not found' "$tmp/err" && continue
+    echo "gen-conventions-grandfathered: cannot read Mavergreen/$repo's latest release: $(cat "$tmp/err")" >&2; exit 1
+  fi
+  tag="$(printf '%s\n' "$view" | head -1)"
+  case "$tag" in ''|.*|*[!A-Za-z0-9._+-]*) echo "gen-conventions-grandfathered: refusing Mavergreen/$repo's release tag '$tag'" >&2; exit 2 ;; esac
+  printf '%s\n' "$view" | sed 1d | grep -q '\.pkg$' || continue
+  rel="$clones/.releases/$repo"
+  if [ ! -f "$rel/$tag/.complete" ]; then
+    rm -rf "$rel"; mkdir -p "$rel/$tag"
+    gh release download "$tag" --repo "Mavergreen/$repo" --pattern '*.pkg' --dir "$rel/$tag" </dev/null >&2
+    : > "$rel/$tag/.complete"
+  fi
+  (cd "$dir" && GITHUB_REPOSITORY="Mavergreen/$repo" sh "$tmp/scripts/artifact-facts.sh" "$rel/$tag" "$tag" "$dir" </dev/null 2>"$tmp/err" || :) > "$tmp/facts"
+  if grep -q '^abort ' "$tmp/facts" || ! grep -qx 'end-of-facts' "$tmp/facts"; then
+    echo "gen-conventions-grandfathered: cannot read what Mavergreen/$repo $tag shipped: $(cat "$tmp/err")" >&2; exit 1
+  fi
+  if sh "$tmp/scripts/check-artifact-conformance.sh" < "$tmp/facts" 2>&1 >/dev/null | grep -q '^conformance: arm64: .* with an arm64 slice'; then
+    echo "modern-smoke $repo release.yml:modern-smoke"
+  fi
 done < "$tmp/repos" > "$tmp/found"
 LC_ALL=C sort -u "$tmp/found"

@@ -35,6 +35,7 @@ $M x86_64 EXECUTE 10.9 10.9 aa"
 no "an x86_64 slice linked against the runner's SDK" "sdk-pin" "$GOOD
 $M x86_64 EXECUTE 10.9 26.5 aa"
 ok "a pinned arm64 slice" "$GOOD
+deviation arm64:usr/local/go/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
 $M arm64 EXECUTE 11.0 11.3 aa"
 no "an arm64 slice on the runner's SDK" "sdk-pin" "$GOOD
 $M arm64 EXECUTE 11.0 26.5 aa"
@@ -54,6 +55,68 @@ macho p.pkg usr/local/go/src/runtime/race/race_darwin.syso x86_64 OBJECT 10.12 1
 no "and only those" "sdk-pin" "$GOOD
 deviation sdk-pin:usr/local/go/src/* Go's own race-detector and testdata objects, shipped verbatim in src/
 macho p.pkg usr/local/go/bin/go x86_64 EXECUTE 10.9 26.5 aa"
+
+# spec: SKILL.md "Family conventions" check 37 -- a pkg's arm64 slice is a declared deviation,
+#       '- arm64:<glob>: <reason>' matched against the install path; a Sparkle updater's slices are
+#       exempt, and a repo grandfathered as modern-smoke is warned rather than failed.
+T='macho golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go'
+U='sparkle golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
+macho golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa'
+no "an undeclared arm64 tool slice" "arm64: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
+$T x86_64 EXECUTE 10.9 10.9 aa
+$T arm64 EXECUTE 11.0 11.3 aa"
+ok "a declared arm64 tool slice" "$GOOD
+deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
+$T x86_64 EXECUTE 10.9 10.9 aa
+$T arm64 EXECUTE 11.0 11.3 aa"
+no "a declaration covers only the install paths its glob names" "arm64: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
+deviation arm64:build/build.sh a source path names nothing the pkg installs
+$T arm64 EXECUTE 11.0 11.3 aa"
+no "a declaration of another check does not cover it" "with an arm64 slice" "$GOOD
+deviation sdk-pin:usr/local/mavergreen/go126/bin/* not an arm64 declaration
+$T arm64 EXECUTE 11.0 11.3 aa"
+ok "an updater-only arm64 slice needs no declaration" "$GOOD
+$U"
+ok "artifact-facts reports a payload's Mach-O before its bundles" "$GOOD
+$(printf '%s\n' "$U" | sed -n 2p)
+$(printf '%s\n' "$U" | sed -n 1p)"
+no "the updater exemption is the updater's bundle, not a path beside it" "with an arm64 slice" "$GOOD
+$U
+macho golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app-helper/tool arm64 EXECUTE 11.0 11.3 aa"
+no "another pkg's updater exempts nothing here" "with an arm64 slice" "$GOOD
+pkg other-1.26.5-mavericks.5.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
+sparkle other-1.26.5-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
+macho golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa"
+R='manifest golang-1.26.5-native-mavericks.5.pkg go126 dev.mavergreen.golang.go126 go126
+registered go126 dev.mavergreen.golang.go126 golang-126
+derived go126 dev.mavergreen.golang.go126.updater dev.mavergreen.golang.go126-updatecheck Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml'
+_ro="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "$R" "$U" | sh "$S" 2>&1)" || :
+printf '%s\n' "$_ro" | grep -q 'with an arm64 slice' && { echo "FAIL: the registry's updater is exempt: $_ro"; exit 1; }
+printf '%s\n' "$_ro" | grep -q 'arm64: 0 declared, 0 undeclared' && { echo "FAIL: the arm64 summary prints only when there is something to count: $_ro"; exit 1; }
+no "a product with a registered updater exempts only that bundle" "with an arm64 slice" "$GOOD
+$R
+sparkle golang-1.26.5-native-mavericks.5.pkg Applications/Vendor.app https://vendor.example/appcast.xml
+macho golang-1.26.5-native-mavericks.5.pkg Applications/Vendor.app/Contents/MacOS/Vendor arm64 EXECUTE 11.0 11.3 aa"
+ok "an x86_64-only pkg needs no declaration" "$GOOD
+$T x86_64 EXECUTE 10.9 10.9 aa"
+ok "a shipped tarball is not a pkg" "$GOOD
+macho tools.tar.gz bin/go arm64 EXECUTE 11.0 11.3 aa"
+no "arm64e is an arm64 slice" "with an arm64 slice" "$GOOD
+$T arm64e EXECUTE 11.0 11.3 aa"
+
+_gfs="$(mktemp -d "${TMPDIR:-/tmp}/conformance-gf.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+cp -R "$here/../scripts" "$_gfs/scripts"
+printf 'modern-smoke golang-126 release.yml:modern-smoke\n' > "$_gfs/scripts/conventions-grandfathered"
+_gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-126" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
+  || { echo "FAIL: a grandfathered repo's undeclared arm64 slice warns, never fails: $_gfo"; exit 1; }
+printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: arm64: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go' \
+  || { echo "FAIL: a grandfathered repo's undeclared arm64 slice is reported as a ::warning:: naming it: $_gfo"; exit 1; }
+_gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-127" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
+  && { echo "FAIL: another repo's modern-smoke line excuses nothing here: $_gfo"; exit 1; }
+printf 'macos-runner golang-126 release.yml:modern-smoke\n' > "$_gfs/scripts/conventions-grandfathered"
+_gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-126" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
+  && { echo "FAIL: another check's grandfathered line excuses nothing here: $_gfo"; exit 1; }
+rm -rf "$_gfs"
 
 no "pkg version disagrees with the tag" "version" 'expected 1.26.5-mavericks.5
 pkg p.pkg 1.26.5-mavericks.4 10.9.5 dev.mavergreen.golang.go126

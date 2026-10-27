@@ -43,6 +43,11 @@ reverse-engineering tool. The reason names that use. A library gets an arm64 sli
 arm64 consumer, never speculatively. Parity is about *developers'* tools, not about shipping Mavericks
 products for Apple Silicon. A product spec that plans a universal build without such a reason is
 following a retired direction (universal-by-default never landed); correct the spec.
+The glob is matched against the install path in the pkg (`usr/local/mavergreen/cmake/bin/*`), never a
+build script's path; a bare `- arm64: <reason>`, or a glob of nothing but wildcards, is refused.
+Conformance fails a pkg whose Mach-O carries an arm64 slice that no declaration covers; the Sparkle
+updater's slices are exempt (only the registry's updater bundle, where the registry derives one). A repo that declares one has a `modern-smoke` job in
+`release.yml`, on a `macos-*` runner, that runs the arm64 slice and that publish needs (check 37).
 
 **A repo has no secrets to set. Never list one as a setup or release step.** `SPARKLE_PRIVATE_KEY`,
 `MAVERICKS_VM_KEY` and `PINS_BOT_PRIVATE_KEY` are ORGANIZATION secrets, and every public Mavergreen
@@ -2462,16 +2467,24 @@ pointing back into the row below — so this table, not the script, is where a c
 | **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@`, or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) whose steps do (comments do not count; an uncalled job in another workflow file and a remote reusable workflow do not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or `INGREDIENTS.md` declares a bare `- on-target: <reason>`. A scoped `- on-target:<part>: <reason>` declares a coverage gap and exempts nothing; a glob for `<part>` is refused | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
 | **35.** No tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt` outside `tests/` and `test/` calls the system `pkgbuild` or `productbuild` on a non-comment line, unless the path is grandfathered or INGREDIENTS.md declares `- packager:<path>: <reason, exit>` | The pkg is built by stevedore, which runs on any host; a direct call keeps the build on a scarce macOS runner. This steers repos off the system packager one path at a time, and `@v1` moving reddens none of them while their lines stand |
 | **36.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` runner (as a string, a list, or `${{ matrix.X }}` read through the job's matrix) is grandfathered or declares `- macos-runner:<workflow file>:<job>: <reason, exit>` (`ci.yml:build`) | macOS runners are scarce, and a job lands on one by default. The deviation names the reason it needs macOS and what would let it leave; the key is `<workflow file>:<job>`, so a new `build` job in another workflow is caught. Needs PyYAML, which check 8 already requires |
+| **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or a glob of only `*`, `?` and `/` is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
 
 **Grandfathered findings.** `scripts/conventions-grandfathered` holds one `<check> <repo> <job|path>` line per
-finding that predates checks 21 (widened), 35 and 36, under the check names `artifact-conformance`,
-`packager` and `macos-runner`; a line, like a declared deviation, excuses its finding. A repo is its
+finding that predates checks 21 (widened), 35, 36 and 37, under the check names `artifact-conformance`,
+`packager`, `macos-runner` and `modern-smoke`; a line, like a declared deviation, excuses its finding. A
+`modern-smoke` line is keyed per repo (`modern-smoke <repo> release.yml:modern-smoke`): it skips check 37's
+job check, and conformance warns about that repo's undeclared arm64 slices instead of failing them.
+Conformance knows the repo only from `$GITHUB_REPOSITORY`, so a local conformance run without it fails a
+grandfathered repo's slices rather than warning. A repo is its
 `$GITHUB_REPOSITORY`, else the name in `origin`'s URL (https or ssh), so a local run agrees with CI. It exists so moving `@v1` turns no repo red without a push per repo; converting a
 runner or a packager call deletes that repo's line. `tests/check-family-conventions-7-test.sh` asserts it
 is sorted, free of duplicates and well-formed (the repo set is every org repo whose workflows call `family-conventions.yml`, registered or not), and pins each check's line count as a
 ceiling that may only go down. Regenerate with `sh scripts/gen-conventions-grandfathered.sh <clones-dir> > scripts/conventions-grandfathered`
 (an empty or new `<clones-dir>`, which it marks and owns; it lists the org's repos with `gh`, clones or refreshes each, keeps those calling `family-conventions.yml`, runs the gate
-without the file in each). A new check that needs the
+without the file in each). For `modern-smoke` it also downloads each repo's latest release's pkgs into
+`<clones-dir>/.releases/` and runs `artifact-facts.sh` and conformance on them, since a repo that ships an
+undeclared arm64 slice and has no `modern-smoke` job passes the gate; that needs `lipo` and `otool` (or
+`LIPO` and `OTOOL`), and a release it cannot read fails the run. A new check that needs the
 treatment adds its name to that script, the test and this paragraph.
 
 **The required gate (checks 30-34, not landed yet; adopted per repo).** Branch protection requires one check

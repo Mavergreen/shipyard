@@ -418,5 +418,48 @@ while read -r kind file path arch ft mn sd sha; do
     || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")"
 done < "$facts"
 
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Family conventions" check 37 --
+#       a pkg ships x86_64 unless INGREDIENTS.md declares '- arm64:<glob>: <reason>' for the install
+#       path; a Sparkle updater's slices are exempt, and where the registry derives the product's
+#       updater, only that bundle's. A repo grandfathered as modern-smoke is warned.
+arm_gf=no
+[ -n "$repository" ] && [ -f "$SELF/conventions-grandfathered" ] \
+  && grep -qxF "modern-smoke ${repository#*/} release.yml:modern-smoke" "$SELF/conventions-grandfathered" && arm_gf=yes
+awk '$1 == "pkg" { pkg[$2] = 1 }
+     $1 == "manifest" { prod[$2] = $3 }
+     $1 == "derived" { app[$2] = $5 }
+     $1 == "sparkle" { spk[$2 "\t" $3] = 1 }
+     $1 == "macho" && $4 ~ /^arm64e?$/ { arm[$2 "\t" $3] = 1 }
+     END {
+       for (k in spk) {
+         split(k, u, "\t"); p = prod[u[1]]
+         if (p != "" && (p in app) && app[p] != u[2]) continue
+         upd[u[1] "\t" u[2] "/"] = 1
+       }
+       for (a in arm) {
+         split(a, m, "\t"); if (!(m[1] in pkg)) continue
+         exempt = 0
+         for (k in upd) { split(k, u, "\t"); if (u[1] == m[1] && index(m[2], u[2]) == 1) exempt = 1 }
+         if (!exempt) print m[1], m[2]
+       } }' "$facts" | sort -u > "$tmp/arm64"
+arm_declared=0; arm_undeclared=0
+while read -r file path; do
+  if [ -n "$(deviation_reason arm64 "$(dec "$path")")" ]; then arm_declared=$((arm_declared + 1)); continue; fi
+  arm_undeclared=$((arm_undeclared + 1))
+  [ "$arm_undeclared" -le 20 ] || continue
+  msg="arm64: $file installs $(dec "$path") with an arm64 slice, and no '- arm64:<glob>: <reason>' under INGREDIENTS.md's ## Conformance deviations matches that install path"
+  if [ "$arm_gf" = yes ]; then
+    echo "::warning::conformance: $msg (grandfathered: modern-smoke ${repository#*/})"
+  else
+    echo "conformance: $msg" >&2; status=1
+  fi
+done < "$tmp/arm64"
+if [ "$arm_undeclared" -gt 20 ]; then
+  if [ "$arm_gf" = yes ]; then echo "::warning::conformance: arm64: and $((arm_undeclared - 20)) more undeclared arm64 files"
+  else echo "conformance: arm64: and $((arm_undeclared - 20)) more undeclared arm64 files" >&2; fi
+fi
+[ "$arm_declared" -eq 0 ] && [ "$arm_undeclared" -eq 0 ] \
+  || echo "conformance: arm64: $arm_declared declared, $arm_undeclared undeclared non-updater arm64 files in pkgs"
+
 [ "$status" -eq 0 ] && echo "conformance: ok — $expected"
 exit "$status"

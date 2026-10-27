@@ -195,6 +195,53 @@ done
   || { echo "FAIL: another origin must not match the grandfathered line"; exit 1; }
 grandfather
 
+# spec: SKILL.md "Family conventions" check 37 -- release.yml has a job named modern-smoke, on a
+#       macos-* runner, that publish needs, exactly when INGREDIENTS.md declares an arm64:<glob>
+#       deviation; a repo grandfathered as modern-smoke skips the check.
+ms() {  # $1 = label, $2 = decl|nodecl, $3 = runs-on (empty: no job), $4 = needed|unneeded
+  d="$work/ms-$1"; mkrepo7 "$d"
+  { printf '\n## Conformance deviations\n\n'
+    [ "$2" = decl ] && printf -- '- arm64:usr/local/mavergreen/w/bin/*: developers on Apple Silicon run w to build Mavericks artifacts\n'
+    printf -- '- macos-runner:release.yml:modern-smoke: the arm64 slice runs only on Apple Silicon, exit when a Linux host can run it\n'
+  } >> "$d/INGREDIENTS.md"
+  if [ -n "$3" ]; then
+    printf '  modern-smoke:\n    runs-on: %s\n    steps:\n      - run: true\n' "$3" >> "$d/.github/workflows/release.yml"
+    if [ "$4" = needed ]; then
+      sed 's/^    needs: \[vm-test\]$/    needs: [vm-test, modern-smoke]/' "$d/.github/workflows/release.yml" > "$d/r.yml"
+      mv "$d/r.yml" "$d/.github/workflows/release.yml"
+    fi
+  fi
+  add "$d"
+}
+grandfather
+ms none nodecl '' ''
+passes "check 37: no arm64 declaration and no modern-smoke job" "$work/ms-none"
+ms full decl macos-26 needed
+passes "check 37: a declaration and a modern-smoke job publish needs" "$work/ms-full"
+ms list decl '[self-hosted, macos-15]' needed
+passes "check 37: a runs-on list naming macos-*" "$work/ms-list"
+ms nojob decl '' ''
+fails "check 37: a declaration with no modern-smoke job" "$work/ms-nojob" 'modern-smoke release.yml:modern-smoke: INGREDIENTS.md declares an arm64 slice, but release.yml has no modern-smoke job'
+ms linux decl ubuntu-latest needed
+fails "check 37: a modern-smoke job off macOS" "$work/ms-linux" 'modern-smoke release.yml:modern-smoke: the modern-smoke job does not run on a macos-\* runner'
+ms unneeded decl macos-26 unneeded
+fails "check 37: a modern-smoke job publish does not need" "$work/ms-unneeded" 'modern-smoke release.yml:modern-smoke: publish does not need the modern-smoke job'
+ms nodecl nodecl macos-26 needed
+fails "check 37: a modern-smoke job with no declaration" "$work/ms-nodecl" 'modern-smoke release.yml:modern-smoke: release.yml has a modern-smoke job, but INGREDIENTS.md declares no arm64 slice'
+out="$(gate "$work/ms-nojob")" || :
+printf '%s\n' "$out" | grep -q 'declares no arm64 slice' && { echo "FAIL: check 37: each direction has its own message: $out"; exit 1; }
+out="$(gate "$work/ms-nodecl")" || :
+printf '%s\n' "$out" | grep -q 'has no modern-smoke job' && { echo "FAIL: check 37: each direction has its own message: $out"; exit 1; }
+
+grandfather "modern-smoke ed25519 release.yml:modern-smoke"
+passes "check 37: a grandfathered declaration with no job" "$work/ms-nojob"
+passes "check 37: a grandfathered job with no declaration" "$work/ms-nodecl"
+grandfather "modern-smoke other-repo release.yml:modern-smoke"
+fails "check 37: another repo's grandfathered line" "$work/ms-nojob" 'modern-smoke release.yml:modern-smoke'
+grandfather "macos-runner ed25519 release.yml:modern-smoke"
+fails "check 37: another check's grandfathered line" "$work/ms-nojob" 'modern-smoke release.yml:modern-smoke'
+grandfather
+
 # spec: scripts/conventions-grandfathered -- one "<check> <repo> <job|path>" per line, sorted, no
 #       duplicates, naming a repo of the org; each runner conversion or packager move deletes its
 #       lines, so the per-check count may only go down.
@@ -202,19 +249,20 @@ GF="$here/../scripts/conventions-grandfathered"
 MAX_MACOS_RUNNER=57
 MAX_PACKAGER=17
 MAX_ARTIFACT_CONFORMANCE=0
+MAX_MODERN_SMOKE=13
 [ -f "$GF" ] || { echo "FAIL: scripts/conventions-grandfathered is missing"; exit 1; }
 LC_ALL=C sort -c "$GF" 2>/dev/null || { echo "FAIL: scripts/conventions-grandfathered is not sorted"; exit 1; }
 [ -z "$(LC_ALL=C sort "$GF" | uniq -d)" ] || { echo "FAIL: scripts/conventions-grandfathered has duplicate lines"; exit 1; }
 while read -r c r k extra; do
   [ -n "$k" ] && [ -z "$extra" ] || { echo "FAIL: conventions-grandfathered line is not '<check> <repo> <job|path>': $c $r $k $extra"; exit 1; }
-  case "$c" in macos-runner|packager|artifact-conformance) ;; *) echo "FAIL: conventions-grandfathered names an unknown check: $c"; exit 1 ;; esac
+  case "$c" in macos-runner|packager|artifact-conformance|modern-smoke) ;; *) echo "FAIL: conventions-grandfathered names an unknown check: $c"; exit 1 ;; esac
   case "$c:$k" in
-    macos-runner:*.yml:*|macos-runner:*.yaml:*|packager:*|artifact-conformance:*) ;;
-    *) echo "FAIL: conventions-grandfathered key is not <workflow file>:<job> (macos-runner) or a path: $c $r $k"; exit 1 ;;
+    macos-runner:*.yml:*|macos-runner:*.yaml:*|packager:*|artifact-conformance:*|modern-smoke:release.yml:modern-smoke) ;;
+    *) echo "FAIL: conventions-grandfathered key is not <workflow file>:<job> (macos-runner), release.yml:modern-smoke (modern-smoke) or a path: $c $r $k"; exit 1 ;;
   esac
 done < "$GF"
 count() { awk -v c="$1" '$1 == c { n++ } END { print n + 0 }' "$GF"; }
-for pair in "macos-runner:$MAX_MACOS_RUNNER" "packager:$MAX_PACKAGER" "artifact-conformance:$MAX_ARTIFACT_CONFORMANCE"; do
+for pair in "macos-runner:$MAX_MACOS_RUNNER" "packager:$MAX_PACKAGER" "artifact-conformance:$MAX_ARTIFACT_CONFORMANCE" "modern-smoke:$MAX_MODERN_SMOKE"; do
   c="${pair%%:*}"; max="${pair#*:}"; n="$(count "$c")"
   [ "$n" -le "$max" ] || { echo "FAIL: conventions-grandfathered has $n $c lines; the ceiling is $max and may only go down"; exit 1; }
 done

@@ -90,4 +90,12 @@ done
 printf '## Conformance deviations\n- packager:build/package.sh: oracle; exit when stevedore is it\n- macos-runner:ci.yml:build: needs macOS; exit when Linux\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'packager build/package.sh oracle; exit when stevedore is it' || { echo "FAIL: a named packager path is a scope"; exit 1; }
 sh "$S" "$w" | grep -qx 'macos-runner ci.yml:build needs macOS; exit when Linux' || { echo "FAIL: macos-runner scopes <file>:<job>"; exit 1; }
+# spec: SKILL.md "Family conventions" check 37 -- arm64 names the install paths it covers; a bare
+#       form or a glob of nothing but wildcards would declare the whole pkg universal, so it is refused.
+for line in '- arm64: every path' '- arm64:*: every path' '- arm64:*/*: every path' '- arm64:**: every path' '- arm64:?: every path'; do
+  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
+  if sh "$S" "$w" >/dev/null 2>&1; then echo "FAIL: [$line] must be refused"; exit 1; fi
+done
+printf '## Conformance deviations\n- arm64:usr/local/mavergreen/cmake/*: developers on Apple Silicon run it\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'arm64 usr/local/mavergreen/cmake/\* developers on Apple Silicon run it' || { echo "FAIL: an install-path glob is an arm64 scope"; exit 1; }
 echo "PASS: deviations"

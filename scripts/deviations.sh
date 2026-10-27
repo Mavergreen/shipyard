@@ -66,6 +66,12 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       print "deviations.sh: \"macos-runner\" names one job: \"- macos-runner:<workflow file>:<job>: <reason, exit>\", never a wildcard" > "/dev/stderr"
       bad = 1; next
     }
+    # spec: SKILL.md "Family conventions" check 37 -- arm64 names install paths; a bare form or an
+    #       all-wildcard glob would declare the whole pkg universal.
+    if (check == "arm64" && (!scoped || glob ~ /^[*?\/]+$/)) {
+      print "deviations.sh: \"arm64\" names the install paths it covers: \"- arm64:<install-path glob>: <reason>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
+      bad = 1; next
+    }
     if (check == "packager" && (!scoped || glob ~ /[*?[]/)) {
       print "deviations.sh: \"packager\" names one path: \"- packager:<path>: <reason, exit>\", never a wildcard" > "/dev/stderr"
       bad = 1; next
