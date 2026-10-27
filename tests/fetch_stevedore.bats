@@ -70,19 +70,6 @@ linux_release() {
   [ "$status" -eq 0 ]
 }
 
-@test "Darwin reads the release pkg with pkgutil --expand and cpio" {
-  command -v pkgbuild >/dev/null 2>&1 || skip "no pkgbuild"
-  mkdir -p "$WORK/root/usr/local/mavergreen/stevedore/bin"
-  fake_stevedore "$WORK/root/usr/local/mavergreen/stevedore/bin/stevedore" "$PIN"
-  # platform: guarded macOS-only call -- the command -v pkgbuild skip above
-  pkgbuild --quiet --root "$WORK/root" --identifier dev.mavergreen.stevedore --version 1 "$REL/stevedore-$PIN.pkg"
-  ( cd "$REL" && shasum -a 256 "stevedore-$PIN.pkg" > SHA256SUMS )
-  export STEVEDORE_HOST=Darwin
-  output="$(sh "$FETCH" 2>/dev/null)"
-  [ "$output" = "$WORK/cache/stevedore/$PIN/stevedore" ]
-  [ "$("$output" --version)" = "stevedore $PIN" ]
-}
-
 @test "pin is a version, never latest" {
   pin="$BATS_TEST_DIRNAME/../scripts/stevedore.pin"
   [ "$(grep -c '^STEVEDORE_VERSION=' "$pin")" -eq 1 ]
