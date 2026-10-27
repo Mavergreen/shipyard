@@ -53,6 +53,20 @@ gate() {
   [ "$output" = "conventions / conventions" ]
 }
 
+@test "a pull_request conventions caller needs no gate job" {
+  printf 'on:\n  pull_request:\njobs:\n  conventions:\n    uses: Mavergreen/shipyard/.github/workflows/family-conventions.yml@v1\n' | wf conventions.yml
+  run sh "$CHECKS" "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = "conventions / conventions" ]
+}
+
+@test "a conventions caller that also has real PR jobs still needs its gate" {
+  printf 'on: pull_request\njobs:\n  conventions:\n    uses: Mavergreen/shipyard/.github/workflows/family-conventions.yml@v1\n  build:\n    runs-on: ubuntu-latest\n' | wf conventions.yml
+  run sh "$CHECKS" "$REPO"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"conventions.yml"* ]] || false
+}
+
 @test "a conventions caller with a name: uses it" {
   printf 'on: [push]\njobs:\n  conv:\n    name: Family conventions\n    uses: ./.github/workflows/family-conventions.yml\n' | wf conv.yml
   run sh "$CHECKS" "$REPO"
