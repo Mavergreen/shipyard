@@ -20,9 +20,6 @@ permissions:
 jobs:
   retry:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: write
     steps:
       - uses: Mavergreen/shipyard/.github/actions/install@v1
 
@@ -47,4 +44,4 @@ jobs:
         run: |
           set -eu
           echo "::notice::$VERSION was tagged by another run; re-dispatching $RELEASE_WORKFLOW with reconcile=true"
-          gh workflow run "$RELEASE_WORKFLOW" --ref main -f reconcile=true
+          gh workflow run "$RELEASE_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref main -f reconcile=true

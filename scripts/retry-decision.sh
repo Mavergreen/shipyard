@@ -16,7 +16,7 @@ esac
 [ "$RECONCILE" != true ] || { echo "SKIP=reconcile-run"; exit 0; }
 
 set +e
-refs="$(git ls-remote --tags "$URL" "refs/tags/$VER" "refs/tags/$VER^{}" 2>/dev/null)"
+refs="$(git ls-remote --tags "$URL" "refs/tags/$VER" 2>/dev/null)"
 rc=$?
 set -e
 if [ "$rc" -ne 0 ]; then

@@ -22,8 +22,9 @@ if r.get("required"): fail("release-workflow must be optional")
 job = list(wf["jobs"].values())
 if len(job) != 1: fail("expected exactly one job")
 job = job[0]
-if job.get("permissions") != {"contents": "read", "actions": "write"}:
-    fail("job permissions must be contents: read, actions: write, got %r" % job.get("permissions"))
+perms = job.get("permissions", wf.get("permissions"))
+if perms != {"contents": "read", "actions": "write"}:
+    fail("permissions must be contents: read, actions: write, got %r" % perms)
 
 steps = job["steps"]
 dec = [s for s in steps if s.get("id") == "decide"]
@@ -38,6 +39,8 @@ cond = d.get("if") or ""
 if "steps.decide.outputs.answer" not in cond or "'RETRY'" not in cond:
     fail("dispatch must be conditioned on the decision output being RETRY: %r" % cond)
 if "-f reconcile=true" not in d["run"]: fail("dispatch must pass -f reconcile=true")
+if "--repo" not in d["run"] and "GH_REPO" not in str(d.get("env", {})):
+    fail("dispatch must name the repo (--repo or GH_REPO): the job has no checkout")
 if "--ref main" not in d["run"]: fail("dispatch must use --ref main")
 if "::notice::" not in d["run"]: fail("dispatch must say which version it lost")
 if steps.index(d) < steps.index(dec[0]): fail("dispatch runs before the decision")
