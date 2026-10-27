@@ -6,7 +6,7 @@ setup() {
   PIN="$(sed -n 's/^STEVEDORE_VERSION=//p' "$BATS_TEST_DIRNAME/../scripts/stevedore.pin")"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch-stevedore-test.XXXXXX")" && pwd)"
   export STEVEDORE_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_BACKOFF=0
-  export STEVEDORE_CACHE="$WORK/cache" XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home"
+  export STEVEDORE_CACHE="$WORK/cache" XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home" STEVEDORE_EUID=1000
   unset STEVEDORE
   REL="$WORK/rel/Mavergreen/stevedore/releases/download/$PIN"
   mkdir -p "$REL"

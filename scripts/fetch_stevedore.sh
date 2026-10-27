@@ -7,7 +7,9 @@
 #          tarball, Darwin its .pkg, each verified against the release's SHA256SUMS by
 #          fetch-release-pkg.sh, and keeps the binary in
 #          ${STEVEDORE_CACHE:-$HOME/Library/Caches/mavergreen-pkgs/stevedore}/VERSION (Darwin) or
-#          ${STEVEDORE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-pkgs/stevedore}/VERSION (Linux); a
+#          ${STEVEDORE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-pkgs/stevedore}/VERSION (Linux); as root (euid 0, so sudo, sudo -i and a root
+#          shell alike) the same paths under root's own home from the passwd entry, never the caller's HOME, which sudo
+#          may keep. STEVEDORE_EUID and STEVEDORE_ROOT_HOME replace the euid and that home (test-only). A
 #          cached binary of another version is replaced. Needs no python. Exit 1 on a failed fetch, checksum
 #          or version check. STEVEDORE_RELEASES replaces https://github.com (the tests serve file://). It
 #          never reads MAVERGREEN_RELEASES or MAVERGREEN_PKG_CACHE, which belong to the product being
@@ -30,11 +32,19 @@ if [ -n "${STEVEDORE:-}" ]; then
 fi
 
 OS="${STEVEDORE_HOST:-$(uname -s)}"
+if [ "${STEVEDORE_EUID:-$(id -u)}" = 0 ]; then
+  home="${STEVEDORE_ROOT_HOME:-$(eval "printf %s ~root")}"
+  xdg="$home/.cache"
+else
+  home="$HOME"
+  xdg="${XDG_CACHE_HOME:-$HOME/.cache}"
+fi
 case "$OS" in
-  Darwin) CACHE="${STEVEDORE_CACHE:-$HOME/Library/Caches/mavergreen-pkgs/stevedore}/$V" ;;
-  Linux) CACHE="${STEVEDORE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-pkgs/stevedore}/$V" ;;
+  Darwin) default="$home/Library/Caches/mavergreen-pkgs/stevedore" ;;
+  Linux) default="$xdg/mavergreen-pkgs/stevedore" ;;
   *) echo "fetch_stevedore: no stevedore release for $OS" >&2; exit 1 ;;
 esac
+CACHE="${STEVEDORE_CACHE:-$default}/$V"
 BIN="$CACHE/stevedore"
 if confirm "$BIN"; then absolute "$BIN"; exit 0; fi
 

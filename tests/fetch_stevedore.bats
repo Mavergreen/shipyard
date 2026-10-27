@@ -6,7 +6,7 @@ setup() {
   PIN="$(sed -n 's/^STEVEDORE_VERSION=//p' "$BATS_TEST_DIRNAME/../scripts/stevedore.pin")"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch-stevedore-test.XXXXXX")" && pwd)"
   export STEVEDORE_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_BACKOFF=0
-  export XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home"
+  export XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home" STEVEDORE_EUID=1000
   unset STEVEDORE
   REL="$WORK/rel/Mavergreen/stevedore/releases/download/$PIN"
   mkdir -p "$REL"
@@ -94,4 +94,30 @@ linux_release() {
   renovate="$BATS_TEST_DIRNAME/../.github/renovate.json"
   grep -qF '/^scripts/stevedore\\.pin$/' "$renovate"
   grep -qF '"STEVEDORE_VERSION=(?<currentValue>' "$renovate"
+}
+
+@test "as root the default cache is root's own home, not the caller's HOME" {
+  linux_release "$PIN"
+  export STEVEDORE_HOST=Linux STEVEDORE_EUID=0 STEVEDORE_ROOT_HOME="$WORK/roothome"
+  unset STEVEDORE_CACHE
+  output="$(sh "$FETCH" 2>/dev/null)"
+  [ "$output" = "$WORK/roothome/.cache/mavergreen-pkgs/stevedore/$PIN/stevedore" ]
+  [ ! -e "$WORK/home" ]
+  [ ! -e "$WORK/xdg" ]
+}
+
+@test "as root on Darwin the default cache is root's Library/Caches" {
+  export STEVEDORE_HOST=Darwin STEVEDORE_EUID=0 STEVEDORE_ROOT_HOME="$WORK/roothome"
+  unset STEVEDORE_CACHE
+  mkdir -p "$WORK/roothome/Library/Caches/mavergreen-pkgs/stevedore/$PIN"
+  fake_stevedore "$WORK/roothome/Library/Caches/mavergreen-pkgs/stevedore/$PIN/stevedore" "$PIN"
+  output="$(sh "$FETCH" 2>/dev/null)"
+  [ "$output" = "$WORK/roothome/Library/Caches/mavergreen-pkgs/stevedore/$PIN/stevedore" ]
+}
+
+@test "an explicit STEVEDORE_CACHE still wins as root" {
+  linux_release "$PIN"
+  export STEVEDORE_HOST=Linux STEVEDORE_EUID=0 STEVEDORE_CACHE="$WORK/chosen" STEVEDORE_ROOT_HOME="$WORK/roothome"
+  output="$(sh "$FETCH" 2>/dev/null)"
+  [ "$output" = "$WORK/chosen/$PIN/stevedore" ]
 }
