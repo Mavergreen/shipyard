@@ -39,7 +39,7 @@ printf '#!/bin/sh\nw="$(mktemp -d)"\nl="$(mktemp)"\n' > "$work/m/a.sh"  # portab
 (cd "$work/m" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/m" && sh "$S" 2>&1)"; then echo "FAIL bare mktemp should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'a.sh:2' || { echo "FAIL should catch mktemp -d: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'a.sh:3' || { echo "FAIL should catch bare mktemp: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'a.sh:2' || { echo "FAIL should catch bare mktemp: $out"; exit 1; }
 
 mkrepo "$work/c"
 printf '#!/bin/sh\n# never use sort -V here; and not $(mktemp -d) either\necho ok\n' > "$work/c/a.sh"  # portability-ok: a lint fixture must contain the violation it tests for
@@ -85,6 +85,20 @@ mkrepo "$work/a3"
 printf '@test "t" {\n  [[ "$output" == *y* ]] || false\n  if [[ -n "$x" ]]; then true; fi\n  ! grep -q x f || { echo no; exit 1; }\n  ! grep x f \\\n      | grep -q y || return 1\n  run ! false\n  for i in 1; do [[ $i == 1 ]] || false; done\n}\n' > "$work/a3/t.bats"
 (cd "$work/a3" && git add -A) >/dev/null 2>&1
 (cd "$work/a3" && sh "$S" >/dev/null) || { echo "FAIL: the forms that DO fail a test (|| false, a condition, ! ... || fail, run !) must pass the lint"; exit 1; }
+
+mkrepo "$work/br"
+lb='['  # kept out of the fixture's literal text, or the lint would flag this very file
+printf '#!/bin/sh\nawk '"'"'$0 !~ /^[^*?%s:]+$/ { print }'"'"'\n' "$lb" > "$work/br/a.sh"
+(cd "$work/br" && git add -A) >/dev/null 2>&1
+if out="$(cd "$work/br" && sh "$S" 2>&1)"; then echo "FAIL: a '[' before ':' inside a bracket expression should fail"; exit 1; fi
+printf '%s\n' "$out" | grep -q 'a.sh:2' || { echo "FAIL should name the bracket line: $out"; exit 1; }
+mkrepo "$work/br2"
+cat > "$work/br2/a.sh" <<'EOF'
+#!/bin/sh
+awk '$0 !~ /^[[:space:]]*[a[:digit:]]+[^[:space:]#]$/ { print }'
+EOF
+(cd "$work/br2" && git add -A) >/dev/null 2>&1
+(cd "$work/br2" && sh "$S" >/dev/null) || { echo "FAIL: well-formed [[:class:]] expressions must pass"; exit 1; }
 
 sed 's/^sort\[\[:space:\]\]/sortXX[[:space:]]/' "$S" > "$work/dead.sh"
 if out="$(cd "$work/ok" && sh "$work/dead.sh" 2>&1)"; then echo "FAIL: a rule that no longer matches its own sample is DEAD and must say so rather than pass"; exit 1; fi

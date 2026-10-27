@@ -27,6 +27,7 @@ lipo[^|;&]*[[:space:]]-archs\b	for a in $(lipo -archs "$b"); do	lipo -archs	use 
 ^[[:space:]]*\[\[[[:space:]].*\]\][[:space:]]*(#.*)?$|\]\][[:space:]]*;[[:space:]]*done	  [[ "$output" == *"<li>one</li>"* ]]	a bare [[ ]] assertion	end it `|| false` (what bats documents for this) -- on bash < 4.1, 10.9's /bin/bash and the one pkgsrc's bats runs under, a failing [[ ]] that is not the last command of a test does NOT fail it, so on 10.9 the assertion checks nothing
 ^[[:space:]]*![[:space:]]([^|&]|\|[^|]|&[^&])*[^\\|&]$	  ! echo "$output" | grep -q 'tag v1)'	a bare !-negated command	end it `|| false`, or in bats write `run ! cmd` -- on ANY bash a !-negated command never trips errexit, so anywhere but a test's last line it checks nothing
 base64[^|;&]*[[:space:]]-d([[:space:]]|$)	gh api x --jq .content | base64 -d > out	base64 -d	use base64 --decode -- 10.9's base64 reads -d as debug: it re-encodes its input and exits 0, so a decode silently yields base64 again (cut-release.sh, 2026-10-18); --decode works on 10.9, modern macOS and GNU
+\[\^?[^][]*\[[:.=]([^a-z]|$)	if (glob !~ /^[^*?[:]+$/) {	a bracket expression with a '[' just before ':', '.' or '='	keep '[' out of the bracket expression -- test for it with index() in awk, or put it first: '[[]'. gawk and mawk (every Linux runner) read '[:' as the start of a POSIX class and die "unterminated regexp" on it, as does the newer BWK awk on a macOS runner, while 10.9's awk accepts it, so the host this family develops on cannot see the failure (deviations.sh, 2026-10-27)
 RULES
 
 TAB="$(printf '\t')"
