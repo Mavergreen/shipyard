@@ -75,7 +75,7 @@ rm -f "$DEST.stamp"
 shipyard_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET" || {
   echo "fetch_product_pkg: could not fetch and verify $BASE/$ASSET" >&2; exit 1; }
 
-[ -n "${STEVEDORE:-}" ] || STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || { echo "fetch_product_pkg: no stevedore to expand the pkg with" >&2; exit 1; }
+STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || { echo "fetch_product_pkg: no stevedore to expand the pkg with" >&2; exit 1; }
 "$STEVEDORE" expand "$CACHE/$ASSET" "$tmp/expanded" >&2 || {
   echo "fetch_product_pkg: could not expand $CACHE/$ASSET" >&2; exit 1; }
 matches="$(grep -l "identifier=\"$ID\"" "$tmp"/expanded/*/PackageInfo 2>/dev/null || true)"

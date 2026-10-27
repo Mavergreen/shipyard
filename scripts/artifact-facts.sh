@@ -184,7 +184,7 @@ for f in "$dist"/*; do
     *.pkg)
       # platform: stevedore expand is how to read what the .pkg actually declares; a filename is a
       #           claim, not a fact.
-      [ -n "${STEVEDORE:-}" ] || STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || abort "cannot fetch stevedore to read $b"
+      [ -n "${stevedore_checked:-}" ] || { STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" && stevedore_checked=1; } || abort "cannot fetch stevedore to read $b"
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
       if "$STEVEDORE" expand "$f" "$x/x" >/dev/null 2>&1; then
         if [ -f "$x/x/Distribution" ]; then
