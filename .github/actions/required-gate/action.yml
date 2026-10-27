@@ -6,7 +6,7 @@ description: >
 
 inputs:
   needs:
-    description: The caller's ${{ toJSON(needs) }}.
+    description: The caller's needs context, as JSON (toJSON of needs).
     required: true
 
 runs:
