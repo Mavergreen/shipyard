@@ -105,3 +105,44 @@ required (zed)" ]
   run sh "$CHECKS" "$REPO"
   [ "$status" -eq 2 ]
 }
+
+@test "a caller of shipyard's ingredients-settled adds the ingredients-settled context" {
+  printf 'on: [push]\njobs:\n  settled:\n    uses: Mavergreen/shipyard/.github/workflows/ingredients-settled.yml@v1\n' | wf ingredients-settled.yml
+  run sh "$CHECKS" "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = "ingredients-settled" ]
+}
+
+@test "ingredients-settled sorts among the other contexts" {
+  printf 'on: [push]\njobs:\n  settled:\n    uses: Mavergreen/shipyard/.github/workflows/ingredients-settled.yml@v1\n' | wf ingredients-settled.yml
+  printf 'on: [push]\njobs:\n  conventions:\n    uses: Mavergreen/shipyard/.github/workflows/family-conventions.yml@v1\n' | wf conv.yml
+  run sh "$CHECKS" "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = "conventions / conventions
+ingredients-settled" ]
+}
+
+@test "a commented-out ingredients-settled call yields nothing" {
+  printf 'on: [push]\njobs:\n  build:\n    runs-on: ubuntu-latest\n  # settled:\n  #   uses: Mavergreen/shipyard/.github/workflows/ingredients-settled.yml@v1\n' | wf ingredients-settled.yml
+  run sh "$CHECKS" "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "a workflow of that name that does not call shipyard's yields nothing" {
+  printf 'on: [push]\njobs:\n  settled:\n    uses: ./.github/workflows/other.yml\n' | wf ingredients-settled.yml
+  run sh "$CHECKS" "$REPO"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "both callers and a gated release yield exactly three contexts, with no gate demanded of the settled caller" {
+  printf 'on:\n  pull_request:\n  schedule:\n    - cron: "17 * * * *"\njobs:\n  settled:\n    uses: Mavergreen/shipyard/.github/workflows/ingredients-settled.yml@v1\n' | wf ingredients-settled.yml
+  printf 'on: [push]\njobs:\n  conventions:\n    uses: Mavergreen/shipyard/.github/workflows/family-conventions.yml@v1\n' | wf conventions.yml
+  { printf 'on: pull_request\njobs:\n  build:\n    runs-on: ubuntu-latest\n'; gate release; } | wf release.yml
+  run sh "$CHECKS" "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$output" = "conventions / conventions
+ingredients-settled
+required (release)" ]
+}
