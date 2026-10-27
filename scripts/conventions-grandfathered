@@ -48,8 +48,6 @@ macos-runner shipyard ci.yml:test
 macos-runner shipyard release.yml:build
 macos-runner shipyard release.yml:canary
 macos-runner signal-desktop release.yml:build
-macos-runner stevedore ci.yml:oracle
-macos-runner stevedore release.yml:package
 macos-runner swift release.yml:build
 macos-runner swift release.yml:build-cross
 macos-runner swift release.yml:collect
@@ -67,7 +65,6 @@ packager golang-127 build/package-pkg.sh
 packager openssh build/package-pkg.sh
 packager recaulk build/package-pkg.sh
 packager rust build/package-lib.sh
-packager shipyard scripts/package-system-replace.sh
 packager signal-desktop .github/workflows/release.yml
 packager signal-desktop packaging/macos/build_pkg.sh
 packager stevedore .github/workflows/release.yml
