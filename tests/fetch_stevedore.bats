@@ -5,8 +5,8 @@ setup() {
   FETCH="$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh"
   PIN="$(sed -n 's/^STEVEDORE_VERSION=//p' "$BATS_TEST_DIRNAME/../scripts/stevedore.pin")"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch-stevedore-test.XXXXXX")" && pwd)"
-  export MAVERGREEN_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_BACKOFF=0
-  export MAVERGREEN_PKG_CACHE="$WORK/cache" XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home"
+  export STEVEDORE_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_BACKOFF=0
+  export XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home"
   unset STEVEDORE
   REL="$WORK/rel/Mavergreen/stevedore/releases/download/$PIN"
   mkdir -p "$REL"
@@ -31,6 +31,23 @@ linux_release() {
   output="$(sh "$FETCH" 2>/dev/null)"
   [ "$output" = "$WORK/xdg/mavergreen-pkgs/stevedore/$PIN/stevedore" ]
   [ "$("$output" --version)" = "stevedore $PIN" ]
+}
+
+@test "a product's MAVERGREEN_RELEASES and MAVERGREEN_PKG_CACHE never reach stevedore" {
+  linux_release "$PIN"
+  mkdir -p "$WORK/product-rel"
+  export STEVEDORE_HOST=Linux MAVERGREEN_RELEASES="file://$WORK/product-rel" MAVERGREEN_PKG_CACHE="$WORK/product-cache"
+  output="$(sh "$FETCH" 2>/dev/null)"
+  [ "$output" = "$WORK/xdg/mavergreen-pkgs/stevedore/$PIN/stevedore" ]
+  [ ! -e "$WORK/product-cache" ]
+}
+
+@test "without STEVEDORE_RELEASES the source is github, not MAVERGREEN_RELEASES" {
+  mkdir -p "$WORK/product-rel"
+  unset STEVEDORE_RELEASES
+  export STEVEDORE_HOST=Linux MAVERGREEN_RELEASES="file://$WORK/product-rel"
+  run sh "$FETCH"
+  case "$output" in *"file://$WORK/product-rel"*) false ;; esac
 }
 
 @test "sum mismatch refuses" {

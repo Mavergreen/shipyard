@@ -6,10 +6,12 @@
 #          check, and fails when it names another version. Linux fetches the release's linux-x86_64
 #          tarball, Darwin its .pkg, each verified against the release's SHA256SUMS by
 #          fetch-release-pkg.sh, and keeps the binary in
-#          ${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/stevedore/VERSION (Darwin) or
-#          ${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-pkgs/stevedore/VERSION (Linux); a cached binary of
-#          another version is replaced. Needs no python. Exit 1 on a failed fetch, checksum or version
-#          check. MAVERGREEN_RELEASES replaces https://github.com (the tests serve file://). STEVEDORE_HOST
+#          ${STEVEDORE_CACHE:-$HOME/Library/Caches/mavergreen-pkgs/stevedore}/VERSION (Darwin) or
+#          ${STEVEDORE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-pkgs/stevedore}/VERSION (Linux); a
+#          cached binary of another version is replaced. Needs no python. Exit 1 on a failed fetch, checksum
+#          or version check. STEVEDORE_RELEASES replaces https://github.com (the tests serve file://). It
+#          never reads MAVERGREEN_RELEASES or MAVERGREEN_PKG_CACHE, which belong to the product being
+#          fetched and may point at a fixture tree that holds no stevedore. STEVEDORE_HOST
 #          replaces `uname -s` and is a test-only override, so a macOS host can exercise the Linux branch.
 #          Runs on 10.9: pkgutil --expand only, never --expand-full.
 set -eu
@@ -29,14 +31,15 @@ fi
 
 OS="${STEVEDORE_HOST:-$(uname -s)}"
 case "$OS" in
-  Darwin) CACHE="${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/stevedore/$V" ;;
-  Linux) CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-pkgs/stevedore/$V" ;;
+  Darwin) CACHE="${STEVEDORE_CACHE:-$HOME/Library/Caches/mavergreen-pkgs/stevedore}/$V" ;;
+  Linux) CACHE="${STEVEDORE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-pkgs/stevedore}/$V" ;;
   *) echo "fetch_stevedore: no stevedore release for $OS" >&2; exit 1 ;;
 esac
 BIN="$CACHE/stevedore"
 if confirm "$BIN"; then absolute "$BIN"; exit 0; fi
 
 mkdir -p "$CACHE"
+MAVERGREEN_RELEASES="${STEVEDORE_RELEASES:-https://github.com}"; export MAVERGREEN_RELEASES
 tmp="$(mktemp -d "$CACHE.tmp.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 if [ "$OS" = Linux ]; then

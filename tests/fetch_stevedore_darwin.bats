@@ -5,8 +5,8 @@ setup() {
   FETCH="$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh"
   PIN="$(sed -n 's/^STEVEDORE_VERSION=//p' "$BATS_TEST_DIRNAME/../scripts/stevedore.pin")"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch-stevedore-test.XXXXXX")" && pwd)"
-  export MAVERGREEN_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_BACKOFF=0
-  export MAVERGREEN_PKG_CACHE="$WORK/cache" XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home"
+  export STEVEDORE_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_BACKOFF=0
+  export STEVEDORE_CACHE="$WORK/cache" XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home"
   unset STEVEDORE
   REL="$WORK/rel/Mavergreen/stevedore/releases/download/$PIN"
   mkdir -p "$REL"
@@ -25,6 +25,6 @@ fake_stevedore() {
   ( cd "$REL" && shasum -a 256 "stevedore-$PIN.pkg" > SHA256SUMS )
   export STEVEDORE_HOST=Darwin
   output="$(sh "$FETCH" 2>/dev/null)"
-  [ "$output" = "$WORK/cache/stevedore/$PIN/stevedore" ]
+  [ "$output" = "$WORK/cache/$PIN/stevedore" ]
   [ "$("$output" --version)" = "stevedore $PIN" ]
 }
