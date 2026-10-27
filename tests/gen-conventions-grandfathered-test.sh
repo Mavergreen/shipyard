@@ -66,6 +66,20 @@ rm -rf "$work/clones/bravo"; mkdir "$work/clones/bravo"; printf 'x\n' > "$work/c
 sh "$G" "$work/clones" >/dev/null 2>&1 && { echo "FAIL: a non-git directory where a clone belongs must be refused"; exit 1; }
 [ -f "$work/clones/bravo/f" ] || { echo "FAIL: that directory must be left alone"; exit 1; }
 
+# spec: scripts/gen-conventions-grandfathered.sh -- git walks up from a non-git directory, so an outer
+#       checkout whose origin is Mavergreen/<name> must not pass for the clone and be reset.
+mkdir -p "$work/outer/clones/alpha"; : > "$work/outer/clones/.gen-conventions-grandfathered"
+git clone -q "file://$work/src/alpha" "$work/outer/co" >/dev/null 2>&1
+mv "$work/outer/co/.git" "$work/outer/.git"; rm -rf "$work/outer/co"
+git -C "$work/outer" remote set-url origin https://github.com/Mavergreen/alpha.git
+git -C "$work/outer" -c user.name=t -c user.email=t@t commit -q --allow-empty -m local
+printf 'dirty\n' > "$work/outer/keep"; head="$(git -C "$work/outer" rev-parse HEAD)"
+printf 'alpha\n' > "$work/repos"
+sh "$G" "$work/outer/clones" >/dev/null 2>"$work/err" && { echo "FAIL: a non-git directory inside an outer checkout must be refused"; exit 1; }
+grep -q 'not itself a git checkout' "$work/err" || { echo "FAIL: the refusal should say why: $(cat "$work/err")"; exit 1; }
+[ "$(git -C "$work/outer" rev-parse HEAD)" = "$head" ] && [ -f "$work/outer/keep" ] \
+  || { echo "FAIL: the outer checkout must not be reset"; exit 1; }
+
 printf 'alpha\n../escape\n' > "$work/repos"
 sh "$G" "$work/clones2" >/dev/null 2>&1 && { echo "FAIL: a repo name that is a path must be refused"; exit 1; }
 

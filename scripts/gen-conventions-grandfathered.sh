@@ -28,6 +28,10 @@ while read -r repo; do
   if [ "$repo" = shipyard ]; then dir="$ROOT"; else
     dir="$clones/$repo"
     if [ -e "$dir" ]; then
+      top="$(git -C "$dir" rev-parse --show-toplevel </dev/null 2>/dev/null || :)"
+      phys="$(cd -P "$dir" && pwd -P)"
+      [ -n "$top" ] && [ "$(cd -P "$top" && pwd -P)" = "$phys" ] \
+        || { echo "gen-conventions-grandfathered: $dir is not itself a git checkout (git finds '${top:-none}' above it); remove it yourself" >&2; exit 2; }
       url="$(git -C "$dir" config --get remote.origin.url </dev/null 2>/dev/null || :)"; url="${url%.git}"
       case "$url" in
         */Mavergreen/"$repo"|*:Mavergreen/"$repo") ;;
