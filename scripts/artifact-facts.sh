@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: host-agnostic
+# platform: host-agnostic -- Mach-O payloads need LIPO and OTOOL off macOS (macho-slices.sh)
 #   usage: artifact-facts.sh <dist-dir> <version> [repo-root]
 #          Emits the fact stream check-artifact-conformance.sh consumes, by inspecting a built dist/
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
