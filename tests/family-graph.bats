@@ -54,7 +54,7 @@ DIAMOND app: base via lib" ]
   declare_in c a
   declare_in a b
   declare_in b c
-  run --separate-stderr timeout 20 sh "$GRAPH" --from-dir "$W/fam"
+  run --separate-stderr perl -e 'alarm 20; exec @ARGV' sh "$GRAPH" --from-dir "$W/fam"
   [ "$status" -eq 0 ]
   [ "$(printf '%s\n' "$output" | grep -c '^CYCLE')" -eq 1 ]
   [[ "$output" == *"CYCLE a -> b -> c -> a"* ]] || false
@@ -67,7 +67,7 @@ DIAMOND app: base via lib" ]
   declare_in base
   declare_in x y
   declare_in y x
-  run --separate-stderr timeout 20 sh "$GRAPH" --from-dir "$W/fam"
+  run --separate-stderr perl -e 'alarm 20; exec @ARGV' sh "$GRAPH" --from-dir "$W/fam"
   [ "$status" -eq 0 ]
   [[ "$output" == *"DIAMOND app: base via lib"* ]] || false
   [[ "$output" == *"CYCLE x -> y -> x"* ]] || false
