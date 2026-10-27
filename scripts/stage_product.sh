@@ -15,6 +15,7 @@
 #          cannot be compared; VERSION must be orderable by scripts/lib/vercmp.sh.
 # spec: tests/stage-product-test.sh
 set -eu
+umask 022
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
 . "$SELF/lib/vercmp.sh"

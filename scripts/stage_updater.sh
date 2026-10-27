@@ -14,6 +14,7 @@
 #          the agent checks daily on its own, and a command nobody documented is a command nobody runs.
 # spec: tests/stage_updater.sh
 set -eu
+umask 022
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
 TPL="$SELF/../updater"

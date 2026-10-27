@@ -6,7 +6,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/floor-base.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
 mkdir -p "$w/root/usr/local/mavergreen/x" "$w/c"; echo x > "$w/root/usr/local/mavergreen/x/f"
-SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "no stevedore -- skipping"; exit 77; }
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed -- the pkg block is the only gate for this seam, so it cannot be skipped"
 "$SD" component --root "$w/root" --identifier dev.mavergreen.x --version 1.0 --install-location / --mtime "$SOURCE_DATE_EPOCH" --out "$w/c/x.pkg"
 sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
   --out "$w/out.pkg" --base-version 1.0.9 >/dev/null 2>&1 || fail "the archive must build"
@@ -36,7 +36,7 @@ grep -q '<conclusion file="Conclusion.html"' "$w/xc/Distribution" \
 rc=0
 sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
   --out "$w/out-c2.pkg" --conclusion Conclusion.html >/dev/null 2>&1 || rc=$?
-[ "$rc" -eq 2 ] || fail "--conclusion without --resources is a usage error (exit 2) -- productbuild would have nowhere to find the file; got $rc"
+[ "$rc" -eq 2 ] || fail "--conclusion without --resources is a usage error (exit 2) -- the Distribution would name a file nothing ships; got $rc"
 
 rc=0
 sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
@@ -77,5 +77,13 @@ sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title
 (umask 077; TMPDIR="$w/tmpa"; mkdir -p "$TMPDIR"; export TMPDIR; sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" --out "$w/seam-a.pkg" --base-version 1.0.9 >/dev/null 2>&1) || fail "the archive must build under umask 077"
 (umask 022; TMPDIR="$w/tmpb-with-a-longer-name"; mkdir -p "$TMPDIR"; export TMPDIR; sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" --out "$w/seam-b.pkg" --base-version 1.0.9 >/dev/null 2>&1) || fail "the archive must build under umask 022"
 cmp "$w/seam-a.pkg" "$w/seam-b.pkg" || fail "seam output ignores umask and TMPDIR"
+
+mkdir -p "$w/res2"; cp "$w/res/Conclusion.html" "$w/res2/Conclusion.html"
+for t in a b; do
+  case $t in a) um=077;; b) um=022;; esac
+  mkdir -p "$w/rtmp$t-xx"
+  (umask $um; TMPDIR="$w/rtmp$t-xx"; export TMPDIR; sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" --out "$w/rseam-$t.pkg" --base-version 1.0.9 --resources "$w/res2" --conclusion Conclusion.html >/dev/null 2>&1) || fail "the archive with a conclusion must build under umask $um"
+done
+cmp "$w/rseam-a.pkg" "$w/rseam-b.pkg" || fail "seam output with --resources and a conclusion ignores umask and TMPDIR"
 
 echo "PASS: set-install-floor-base"

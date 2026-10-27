@@ -34,7 +34,7 @@ rm "$V/usr/local/bin/mavergreen"; stage 1.0.9
 out="$(sh "$w/post-1.0.9" 2>&1)" && fail "no target volume must fail rather than assume /: $out"
 sh "$S" --out "$w/x.pkg" --version 'v1.0' 2>/dev/null && fail "a non-numeric version must be refused -- the compare is numeric"
 SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
-SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "no stevedore -- skipping"; exit 77; }
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed -- the pkg block is the only gate for this seam, so it cannot be skipped"
 sh "$S" --version 1.0.9 --out "$w/base.pkg" >/dev/null 2>&1 || fail "the component must build"
 "$SD" expand "$w/base.pkg" "$w/x"
 grep -q 'identifier="dev.mavergreen.base"' "$w/x/PackageInfo" || fail "the component is dev.mavergreen.base"

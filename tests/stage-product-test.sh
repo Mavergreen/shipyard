@@ -535,6 +535,14 @@ V="$w/vol-nomin-any"; reqvol "$V" container-tools 1.0-rc1
 sh "$SCRP/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
   || fail "--requires with no minimum passes with any installed version: $(cat "$w/err")"
 
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed"
+for u in 077 022; do
+  mkdir -p "$w/um$u/usr/local/mavergreen/openssh/bin"; echo ssh > "$w/um$u/usr/local/mavergreen/openssh/bin/ssh"
+  (umask $u; sh "$S" --stage "$w/um$u" --product openssh --name OpenSSH --version 1 --scripts-out "$w/umscr$u") >/dev/null 2>&1 || fail "stage_product must run under umask $u"
+  SOURCE_DATE_EPOCH=1700000000 "$SD" component --root "$w/um$u" --scripts "$w/umscr$u" --identifier dev.mavergreen.openssh --version 1 --install-location / --mtime 1700000000 --out "$w/um$u.pkg" || fail "component must build under umask $u"
+done
+cmp "$w/um077.pkg" "$w/um022.pkg" || fail "stage_product output ignores umask"
+
 for bad in 'container-tools>=' 'container-tools>=1.0-rc1' 'container-tools>=abc' '>=20261019.1'; do
   rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-badmin" \
     --requires "$bad" 2>"$w/err" || rc=$?
