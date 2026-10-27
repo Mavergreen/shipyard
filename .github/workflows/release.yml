@@ -94,7 +94,7 @@ jobs:
           #       of an app carrying a VERSIONED framework is ambiguous by design, which is how this
           #       was found.
           exe="$RUNNER_TEMP/shipyard-updater.app/Contents/MacOS/shipyard-updater"
-          archs="$(lipo -info "$exe" | sed -n 's/.*: //p')"
+          archs="$(${LIPO:-lipo} -info "$exe" | sed -n 's/.*: //p')"
           case " $archs " in *" x86_64 "*) ;; *) echo "::error::the merged updater has no x86_64 slice: $archs"; exit 1;; esac
           case " $archs " in *" arm64 "*) ;; *) echo "::error::the merged updater has no arm64 slice: $archs"; exit 1;; esac
           echo "merged updater: $archs"
