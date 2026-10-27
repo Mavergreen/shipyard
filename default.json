@@ -60,7 +60,8 @@
         "!Mavergreen/shipyard",
         "!Mavergreen/mavericks-vm"
       ],
-      "groupName": "Mavergreen ingredients"
+      "groupName": "Mavergreen ingredients",
+      "separateMajorMinor": false
     }
   ],
   "vulnerabilityAlerts": {

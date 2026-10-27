@@ -57,6 +57,7 @@ def grouped(name):
     if any(glob_match(p[1:], name) for p in pats if p.startswith("!")):
         return False
     return any(glob_match(p, name) for p in pats if not p.startswith("!"))
+assert gr.get("separateMajorMinor") is False, "the group rule must set separateMajorMinor false: every date-versioned bump is a major, and Renovate would split those out of the one grouped PR"
 assert grouped("Mavergreen/recaulk"), "the group rule must match Mavergreen/recaulk"
 assert grouped("Mavergreen/clang-22"), "the group rule must match Mavergreen/clang-22"
 assert not grouped("madler/zlib"), "the group rule must not match madler/zlib"
