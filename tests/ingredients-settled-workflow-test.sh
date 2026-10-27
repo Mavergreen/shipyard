@@ -39,7 +39,9 @@ if len(pr) != 1 or len(sw) != 1: fail("need one pr step and one sweep step")
 if "headRefOid" not in sw[0]["run"] or "baseRefOid" not in sw[0]["run"] or "labels" not in sw[0]["run"]:
     fail("sweep must read each PR's own head, base and labels")
 if "renovate/" not in sw[0]["run"]: fail("sweep must select renovate/* branches")
-if "isCrossRepository" not in sw[0]["run"]: fail("sweep must skip fork PRs")
+if "isCrossRepository" not in sw[0]["run"]: fail("sweep must tell fork PRs from same-repo ones")
+if "not a Renovate PR; not checked" not in sw[0]["run"]: fail("sweep must post success, described as not checked, on every non-Renovate PR, forks included")
+if sw[0]["run"].count("statuses/") != 2 or "others.tsv" not in sw[0]["run"]: fail("sweep must post for the non-Renovate PRs in a loop of its own")
 
 for s in pr + sw:
     r = s["run"]
@@ -64,6 +66,6 @@ for s in steps:
     r = s.get("run") or ""
     if "gh run rerun" in r or "gh workflow run" in r: fail("no re-runs or dispatches")
     if "${{" in r: fail("an expression is interpolated into a run: script")
-print("ok: ingredients-settled posts the status in both modes and skips fork PRs")
+print("ok: ingredients-settled posts the status in both modes and skips fork PRs in pr mode and the sweep marks them not checked")
 PY
 echo "PASS: ingredients-settled-workflow"

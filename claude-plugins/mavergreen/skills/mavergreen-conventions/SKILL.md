@@ -2510,7 +2510,10 @@ jobs:
 - **The 24h backstop:** a bump waits at most 24 hours after the newest bumped ingredient was published,
   then goes through with a warning naming who lagged.
 - **The hourly sweep** (`mode: sweep`) re-judges every open same-repo `renovate/*` PR, since a release
-  elsewhere or a late label changes the answer with no event on the PR.
+  elsewhere or a late label changes the answer with no event on the PR. PR mode checks only same-repo
+  PRs, because a fork PR's read-only token cannot post a status. The sweep runs in the base repo with
+  write permission, so it also posts `success`, "not a Renovate PR; not checked", on the head of every
+  other open PR, forks included. Once the status is required, a fork PR's arrives within the hour.
 - **`settle` requires the status** once this caller exists, via `required-checks.sh`.
 - **The caller needs no `required` job**: a workflow whose every job is this call is exempt from the gate.
 

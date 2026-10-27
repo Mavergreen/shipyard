@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       mode:
-        description: "pr: judge the pull request that triggered this run. sweep: judge every open renovate/* pull request."
+        description: "pr: judge the pull request that triggered this run. sweep: judge every open same-repo renovate/* pull request, and mark every other open pull request, forks included, not checked."
         type: string
         required: true
 
@@ -67,6 +67,10 @@ jobs:
             gh api "repos/$REPO/statuses/$head" -f state="$state" -f context=ingredients-settled -f description="$desc" </dev/null || failed=1
             echo "::endgroup::"
           done < prs.tsv
+          jq -r '.[] | select((.isCrossRepository == false and (.headRefName | startswith("renovate/"))) | not) | [.number, .headRefOid] | @tsv' prs.json > others.tsv || exit 1
+          while IFS="$tab" read -r number head; do
+            gh api "repos/$REPO/statuses/$head" -f state=success -f context=ingredients-settled -f description="not a Renovate PR; not checked" </dev/null || failed=1
+          done < others.tsv
           exit "$failed"
 
       - name: Say so when the check could not run
