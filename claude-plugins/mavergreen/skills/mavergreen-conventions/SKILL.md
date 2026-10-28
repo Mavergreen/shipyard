@@ -1698,6 +1698,15 @@ restores a stale SDK.
   both the payload path and the staged or build path the guard sees. `*` spans `/`.
 - An excuse covers the minos/SDK rule only. The guard still checks the file's arches and its post-10.9
   imports and selectors. A malformed entry fails the guard, as it fails packaging.
+
+**A vendor's prebuilt C++ archive may carry its own C++ runtime.** The family allows one libc++abi per
+process, the system's. Before linking a prebuilt `.a` that holds C++ (rusty_v8's V8, say), check it
+with `llvm-nm` for `___cxa_throw` or `___gxx_personality_v0`. If it defines either, do one of three
+things: strip those members from the archive, rebuild it against the family runtime, or declare
+`- cxxabi:<path>: <reason>; exit: <how it goes away>`. The link will not tell you: codex-cli shipped
+two runtimes in 0.161.0-mavericks.1, and the only signal was an accidental duplicate symbol against
+Recaulk, which clang-22 22.1.8-mavericks.12 removed by linking Recaulk last. Artifact conformance's
+runtime rule, once it lands, is what will catch it.
 - Sparkle 1.27.3 is exempt **by content**: `sdk-pins.sh` lists the sha256 of its three Mach-O files, so
   only the exact pinned bytes pass.
 
