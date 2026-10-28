@@ -1,3 +1,3 @@
 # The ed25519-sign that signs every family release (sign_and_appcast.sh). Renovate bumps it
 # (github-releases Mavergreen/ed25519); the pkg is verified against that release's SHA256SUMS.
-ED25519_VERSION=20221003-mavericks.7
+ED25519_VERSION=20221003-mavericks.9
