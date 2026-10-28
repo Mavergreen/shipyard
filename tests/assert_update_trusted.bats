@@ -1,4 +1,4 @@
-# platform: host-agnostic -- stevedore builds the fixtures
+# platform: host-agnostic -- the fixture pkgs are built with build_component_pkg.sh and set_install_floor.sh, and read with stevedore
 bats_require_minimum_version 1.5.0
 load lib/sparkle_pkg
 
@@ -134,6 +134,33 @@ live_release() {  # KEY
   run --separate-stderr trusted "$T/new.pkg" "signed-by:$KNEW"
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"enclosure"* ]] || false
+}
+
+@test "unreadable live pkg fails closed" {
+  printf 'not a pkg\n' > "$T/prev.pkg"
+  mkfeed "$T/appcast.xml" "file://$T/prev.pkg"
+  mkpkg "$T/new.pkg" "$KNEW" "$FEED" TestUpdater
+  run --separate-stderr trusted "$T/new.pkg" "signed-by:$KNEW"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"no readable Sparkle updater"* ]] || false
+  [[ "$stderr" != *"first release"* ]] || false
+}
+
+@test "a live pkg whose updater trusts no key fails closed" {
+  mkpkg "$T/prev.pkg"
+  mkfeed "$T/appcast.xml" "file://$T/prev.pkg"
+  mkpkg "$T/new.pkg" "$KNEW" "$FEED" TestUpdater
+  run --separate-stderr trusted "$T/new.pkg" "signed-by:$KNEW"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"no readable Sparkle updater"* ]] || false
+}
+
+@test "a live pkg that cannot be downloaded fails closed" {
+  mkfeed "$T/appcast.xml" "file://$T/missing.pkg"
+  mkpkg "$T/new.pkg" "$KNEW" "$FEED" TestUpdater
+  SHIPYARD_FETCH_BACKOFF=0 run --separate-stderr trusted "$T/new.pkg" "signed-by:$KNEW"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"cannot download"* ]] || false
 }
 
 @test "requires --pkg, --signature and --verifier" {

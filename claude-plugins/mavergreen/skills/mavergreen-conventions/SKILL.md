@@ -1531,7 +1531,12 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   has no feed, and its manifest's `appcast` is empty. Conformance's `updater` and `feed` checks hold
   what ships to all of it.
 - `mavericks_add_updater_app()` self-fetches the Sparkle framework at configure time; signing/appcast use
-  the shared `sign_and_appcast.sh` (fetches `ed25519-sign` via `gh` → needs `GH_TOKEN`).
+  the shared `sign_and_appcast.sh`. **The signer is per-host, and signing may run on Linux.** With no
+  `--signer` it takes `ed25519-sign` and `ed25519-verify` from the ed25519 release `ed25519.pin` names,
+  verified against that release's `SHA256SUMS`: the `linux-x86_64` tarball on Linux, the `.pkg` (read by
+  stevedore, no `pkgutil`) elsewhere. A pin older than the first release with a tarball fails on Linux,
+  naming the asset. `assert_update_trusted.sh` reads pkgs with stevedore too, so the whole signing step,
+  trust check included, runs on either host.
 - **The app's `Info.plist` is refreshed on every build**, from the configured
   `<short>-updater-Info.plist`, by a target the updater depends on. The version lives only there, not
   in the executable, so when the copy ran only on relink, a rebuild at a new `VERSION` in the same

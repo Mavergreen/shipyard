@@ -128,7 +128,7 @@ jobs:
       - name: Sign + appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-          GH_TOKEN: ${{ github.token }}   # sign_and_appcast.sh fetches ed25519-sign via gh
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
           v='${{ steps.ver.outputs.version }}'

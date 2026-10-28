@@ -13,7 +13,6 @@ macos-runner codex-cli release.yml:build
 macos-runner container-tools release.yml:build-macos
 macos-runner container-tools release.yml:package
 macos-runner drydock release.yml:build
-macos-runner ed25519 release.yml:build
 macos-runner fd release.yml:build
 macos-runner gh release.yml:build
 macos-runner golang-126 release.yml:build
@@ -59,7 +58,6 @@ modern-smoke clang-22 release.yml:modern-smoke
 modern-smoke claude-code release.yml:modern-smoke
 modern-smoke cmake release.yml:modern-smoke
 modern-smoke drydock release.yml:modern-smoke
-modern-smoke ed25519 release.yml:modern-smoke
 modern-smoke golang-126 release.yml:modern-smoke
 modern-smoke golang-127 release.yml:modern-smoke
 modern-smoke make release.yml:modern-smoke
@@ -70,7 +68,6 @@ modern-smoke stevedore release.yml:modern-smoke
 modern-smoke swift release.yml:modern-smoke
 packager 1password .github/workflows/release.yml
 packager 1password packaging/macos/build_pkg.sh
-packager ed25519 build/package-pkg.sh
 packager golang-126 build/package-cross-pkg.sh
 packager golang-126 build/package-pkg.sh
 packager golang-127 build/package-cross-pkg.sh
