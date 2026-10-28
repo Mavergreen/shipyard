@@ -172,4 +172,6 @@ ok 9.9p2-mavericks.6 "bare bullets outside the ingredient section" <<'EOF'
 - Repackage of upstream OpenSSH 9.9p2; packaging changes only.
 EOF
 
+printf '## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.1)\n\nWords.\n<!-- edited by a human -->\n\n### What changed\n\n- a change\n' \
+  | no 9.9p2-mavericks.1 "a body carrying the mark is refused" 'edited by a human'
 echo "PASS: check-release-notes"

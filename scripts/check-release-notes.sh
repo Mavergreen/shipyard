@@ -20,6 +20,9 @@ fail() { echo "check-release-notes: $1" >&2; exit 1; }
 [ -s "$f" ] || fail "$f is empty; a release body must say something"
 [ -n "$(tr -d '[:space:]' < "$f")" ] || fail "$f is empty apart from whitespace"
 
+awk '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l == "<!-- edited by a human -->") f = 1 } END { exit !f }' "$f" \
+  && fail "$f still carries the human-edit mark '<!-- edited by a human -->'; release-notes.sh strips it, so this body was not composed by release-notes.sh"
+
 first="$(sed -n '1p' "$f")"
 case "$first" in
   '## '*) ;;

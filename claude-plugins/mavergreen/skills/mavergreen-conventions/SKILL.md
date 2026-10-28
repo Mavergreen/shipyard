@@ -1138,6 +1138,15 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   `Mavergreen-State:` marker above is the live case — and the separator is emitted only when
   something already precedes it, since a footer that opens with a blank line renders an empty leading
   `<p>`.
+- **Committed prose publishes only once a human has edited it.** `release-notes.sh` refuses a
+  non-empty `release-notes/<TAG>.md` until it holds the line `<!-- edited by a human -->`, which a
+  human adds after editing the prose, and it strips that line from what it publishes.
+  `check-release-notes.sh` refuses a body that still carries it, so publish-release.yml catches a body
+  composed some other way. **An agent never adds the mark,** and an agent that changes marked prose
+  removes it in the same commit, so a human looks again. As with the README gate, nothing checks
+  authorship. Prose reaches every user in the update dialog, and nobody reads text they did not ask
+  to review. Revisit when an unedited body ships anyway: then publish needs a GitHub environment
+  approval.
 - **The shape, in order:** title, the committed `release-notes/<TAG>.md` prose verbatim when present,
   `### What changed`, `### Our patches` when one of our modifications changed, `### Build
   ingredients` when a pin moved, then a footer (the floor line, a compare link). Prose stays optional

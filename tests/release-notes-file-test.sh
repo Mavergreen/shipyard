@@ -34,7 +34,7 @@ grep -q 'release-notes: wrote' "$w/out.log" \
   && { echo "FAIL: the generator's own progress line must land on the wrapper's STDERR, never mixed into what a caller captures as \$NOTES -- it leaked onto the wrapper's stdout"; exit 1; }
 rm -f "$p"
 
-printf '## Hand-written\n\nProse that must survive.\n' > release-notes/20260911.2.md
+printf '## Hand-written\n\nProse that must survive.\n<!-- edited by a human -->\n' > release-notes/20260911.2.md
 git add -A; git commit -qm notes
 before="$(git hash-object release-notes/20260911.2.md)"
 p="$(sh "$S" 20260911.2 20260911.2 Porthole 2>/dev/null)"
