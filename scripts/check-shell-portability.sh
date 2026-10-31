@@ -37,6 +37,8 @@ conditional_predicate() {
   printf '%s\n' "$1" | LC_ALL=C awk '
     {
       if (NR != 1 || index($0, "$(") || index($0, "`") || index($0, "<<")) exit 1
+      # spec: tests/shell-portability-test.sh -- dollar prefixes can change nested quoting across shells.
+      if (index($0, "$\047") || index($0, "$\"") || index($0, "${") || index($0, "$[")) exit 1
       if (index($0, "||") || index($0, "&&")) exit 1
       if ($0 ~ /(^[[:space:]]*![[:space:]]+|[|][[:space:]]*)(if|then|elif|else|fi|while|until|for|do|done|case|esac|in|time|coproc|select|function|\[\[|!)([[:space:];|&<>]|$)/) exit 1
       quote = ""; boundary = 1; previous = ""; semicolons = 0

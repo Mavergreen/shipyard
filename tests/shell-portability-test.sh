@@ -219,6 +219,19 @@ diagnostic_case bash_pipeline_coproc 1
 printf '! true | select x in a;do\n:\ndone\n:\n' > "$work/bash_pipeline_select.sh"
 diagnostic_case bash_pipeline_select 1
 
+# spec: scripts/check-shell-portability.sh -- dollar-prefixed quotes and nested
+#       expansions stay uncertain across shell grammars, even in quoted data.
+#       These static Bash fixtures are syntax-checked separately, never executed.
+printf '%s\n' "! true \$'x\\'\"'; : \"; then #\"" > "$work/bash_ansi_quote.sh"
+diagnostic_case bash_ansi_quote 1
+printf '%s\n' 'if false ||' "    ! true \$'x'; then" ':' 'fi' > "$work/bash_ansi_predicate.sh"
+diagnostic_case bash_ansi_predicate 2
+printf '%s\n' 'if false ||' '    ! true $"x"; then' ':' 'fi' > "$work/bash_locale_predicate.sh"
+diagnostic_case bash_locale_predicate 2
+syntax_case uncertain_parameter 2 'if false ||\n    ! true "${x:-value}"; then\n    :\nfi'
+printf '%s\n' 'if false ||' '    ! true "$[1+2]"; then' ':' 'fi' > "$work/bash_arithmetic_predicate.sh"
+diagnostic_case bash_arithmetic_predicate 2
+
 # spec: scripts/check-shell-portability.sh -- parsing must never execute source.
 #       Extract only the functions so direct guard and mutation probes share them.
 sed -n '/^conditional_predicate() {/,/^TAB=/p' "$S" | sed '$d' > "$work/filter.sh"
@@ -241,9 +254,23 @@ done
 mutation_case() {  # $1 name, $2 sed mutation, $3 candidate that must be rejected
   if conditional_predicate "$3"; then echo "FAIL guard accepted $1"; exit 1; fi
   sed "$2" "$work/filter.sh" > "$work/mutant.sh"
+  # A missing keyword guard exposes these forms only when the host grammar
+  # accepts them as ordinary words. Probe the exact scaffolds independently of
+  # the mutant; a stricter parser must still protect the unconditional regression.
+  expected=0
+  if [ "${4:-}" = host-grammar ]; then
+    if printf 'if : ||\n%s\n:\nfi\n' "$3" | /bin/sh -n 2>/dev/null ||
+       printf 'while : ||\n%s\n:\ndone\n' "$3" | /bin/sh -n 2>/dev/null; then
+      expected=0
+    else
+      expected=1
+    fi
+  fi
+  actual=0
   # shellcheck source=/dev/null  # generated mutation of the extracted functions
-  if ! ( . "$work/mutant.sh"; conditional_predicate "$3" ); then
-    echo "FAIL $1 mutation did not expose its counterexample"; exit 1
+  ( . "$work/mutant.sh"; conditional_predicate "$3" ) || actual=1
+  if [ "$actual" -ne "$expected" ]; then
+    echo "FAIL $1 mutation: expected exit $expected, got $actual"; exit 1
   fi
 }
 mutation_case semicolon 's/semicolons != 1/semicolons < 1/' '! true; :; then'
@@ -259,13 +286,17 @@ mutation_case syntax_gate 's@/bin/sh -n@true@g' '! true >; then'
 mutation_case logical_or '/if (index($0, "||")/d' '! true \&|| :; then'
 mutation_case logical_and '/if (index($0, "||")/d' '! printf "%s" "|&&"; then'
 mutation_case escaped_operator '/if (index($0, "||")/d' '! printf "%s" "\||"; then'
-mutation_case bash_time '/if ($0 ~/d' '! time if true;then'
-mutation_case bash_coproc '/if ($0 ~/d' '! coproc if true;then'
-mutation_case bash_select '/if ($0 ~/d' '! select x in a;do'
-mutation_case bash_function '/if ($0 ~/d' '! function f;then'
-mutation_case bash_brackets '/if ($0 ~/d' '! [[ x;then'
-mutation_case pipeline_coproc '/if ($0 ~/d' '! true | coproc if true;then'
-mutation_case pipeline_select '/if ($0 ~/d' '! true | select x in a;do'
+mutation_case ansi_quote '/if (index($0, "$\\047")/d' "! true \$'x'; then"
+mutation_case locale_quote '/if (index($0, "$\\047")/d' '! true $"x"; then'
+mutation_case parameter '/if (index($0, "$\\047")/d' '! true "${x:-value}"; then'
+mutation_case arithmetic '/if (index($0, "$\\047")/d' '! true "$[1+2]"; then'
+mutation_case bash_time '/if ($0 ~/d' '! time if true;then' host-grammar
+mutation_case bash_coproc '/if ($0 ~/d' '! coproc if true;then' host-grammar
+mutation_case bash_select '/if ($0 ~/d' '! select x in a;do' host-grammar
+mutation_case bash_function '/if ($0 ~/d' '! function f;then' host-grammar
+mutation_case bash_brackets '/if ($0 ~/d' '! [[ x;then' host-grammar
+mutation_case pipeline_coproc '/if ($0 ~/d' '! true | coproc if true;then' host-grammar
+mutation_case pipeline_select '/if ($0 ~/d' '! true | select x in a;do' host-grammar
 
 # spec: scripts/check-shell-portability.sh -- a filter that hides the original
 #       bare-negation sample must fail its extended self-check, even on clean input.
