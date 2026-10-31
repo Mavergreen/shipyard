@@ -30,6 +30,60 @@ base64[^|;&]*[[:space:]]-d([[:space:]]|$)	gh api x --jq .content | base64 -d > o
 \[\^?[^][]*\[[:.=]([^a-z]|$)	if (glob !~ /^[^*?[:]+$/) {	a bracket expression with a '[' just before ':', '.' or '='	keep '[' out of the bracket expression -- test for it with index() in awk, or put it first: '[[]'. gawk and mawk (every Linux runner) read '[:' as the start of a POSIX class and die "unterminated regexp" on it, as does the newer BWK awk on a macOS runner, while 10.9's awk accepts it, so the host this family develops on cannot see the failure (deviations.sh, 2026-10-27)
 RULES
 
+# spec: tests/shell-portability-test.sh -- a single physical line only: uncertain syntax keeps the original diagnostic.
+#       Reject lists and compound/Bash prefixes before sh -n checks a terminal keyword.
+#       No surrounding-context, runtime alias or eval analysis is attempted.
+conditional_predicate() {
+  printf '%s\n' "$1" | LC_ALL=C awk '
+    {
+      if (NR != 1 || index($0, "$(") || index($0, "`") || index($0, "<<")) exit 1
+      if (index($0, "||") || index($0, "&&")) exit 1
+      if ($0 ~ /(^[[:space:]]*![[:space:]]+|[|][[:space:]]*)(if|then|elif|else|fi|while|until|for|do|done|case|esac|in|time|coproc|select|function|\[\[|!)([[:space:];|&<>]|$)/) exit 1
+      quote = ""; boundary = 1; previous = ""; semicolons = 0
+      for (i = 1; i <= length($0); i++) {
+        c = substr($0, i, 1)
+        if (quote == "\047") {
+          if (c == quote) quote = ""
+          continue
+        }
+        if (c == "\\") {
+          if (i == length($0)) exit 1
+          nextchar = substr($0, i + 1, 1)
+          if (quote == "" || index("$`\"\\", nextchar)) i++
+          boundary = 0; previous = ""
+          continue
+        }
+        if (quote == "\"") {
+          if (c == quote) quote = ""
+          continue
+        }
+        if (c == "#" && boundary) break
+        if (c == "\047" || c == "\"") {
+          quote = c; boundary = 0; previous = ""
+          continue
+        }
+        if (index("(){}", c)) exit 1
+        if (c == "&" && previous != "<" && previous != ">") exit 1
+        if (c == ";") { semicolons++; separator = i }
+        boundary = (c ~ /[[:space:];|&<>]/)
+        previous = c
+      }
+      if (quote != "" || semicolons != 1) exit 1
+      if (substr($0, separator + 1, i - separator - 1) !~ /^[[:space:]]*(then|do)[[:space:]]*$/) exit 1
+    }
+  ' || return 1
+  printf 'if : ||\n%s\n:\nfi\n' "$1" | /bin/sh -n 2>/dev/null ||
+    printf 'while : ||\n%s\n:\ndone\n' "$1" | /bin/sh -n 2>/dev/null
+}
+
+# spec: tests/shell-portability-test.sh -- preserve grep hits unless both gates accept.
+filter_negation_hits() {
+  while IFS= read -r hit; do
+    if conditional_predicate "${hit#*:}"; then continue; fi
+    printf '%s\n' "$hit"
+  done
+}
+
 TAB="$(printf '\t')"
 status=0
 
@@ -42,6 +96,14 @@ while IFS="$TAB" read -r pat sample what instead; do
     echo "    fix: repair the pattern, or drop the rule deliberately" >&2
     status=1
   }
+done < "$rulesfile"
+
+while IFS="$TAB" read -r pat sample what instead; do
+  [ "$what" = 'a bare !-negated command' ] || continue
+  if [ -z "$(printf '1:%s\n' "$sample" | filter_negation_hits)" ]; then
+    echo "check-shell-portability: the negation filter hides its own sample -- the lint is dead, not clean" >&2
+    status=1
+  fi
 done < "$rulesfile"
 
 if [ "$#" -gt 0 ]; then
@@ -66,6 +128,9 @@ while IFS="$TAB" read -r pat sample what instead; do
     [ -f "$f" ] || continue
     [ "$(basename "$f")" = "$(basename "$0")" ] && continue
     hits="$(sed -e 's/^[[:space:]]*#.*//' -e '/portability-ok:[[:space:]]*[^[:space:]]/s/.*//' "$f" | grep -nE "$pat" || true)"
+    if [ "$what" = 'a bare !-negated command' ] && [ -n "$hits" ]; then
+      hits="$(printf '%s\n' "$hits" | filter_negation_hits)"
+    fi
     [ -n "$hits" ] || continue
     printf '%s\n' "$hits" | while IFS= read -r h; do
       echo "check-shell-portability: $f:${h%%:*} uses $what -- a hazard on 10.9" >&2
