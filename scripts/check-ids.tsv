@@ -85,12 +85,25 @@ permissions-contents-read	checkout	scripts/check-family-conventions.sh	new (hand
 upstream-version-bare	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 version-ignored	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 renovate-json-valid	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
-bare-curl	checkout	scripts/check-family-conventions.sh	new (QUEUE #58)	P1
+bare-curl	checkout	scripts/check-family-conventions.sh	new (shared retrying fetcher)	P1
 brew	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1
 macports	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1
 pkgsrc	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1
 apt	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1
 vendored	checkout	scripts/check-family-conventions.sh	new (R11)	P1
-bash32-parse	only	scripts/check-bash32-parse.sh	new (QUEUE #59)	P1
-host	key	scripts/check-bash32-parse.sh	deviation key (QUEUE #59)	P1
-docs-no-sudo	checkout	scripts/check-family-conventions.sh	new (QUEUE #63)	P1
+bash32-parse	only	scripts/check-bash32-parse.sh	new (bash 3.2 parse, from snow-leopard-vm)	P1
+host	key	scripts/check-bash32-parse.sh	deviation key (bash 3.2 parse, from snow-leopard-vm)	P1
+docs-no-sudo	checkout	scripts/check-family-conventions.sh	new (docs never prescribe sudo)	P1
+no-tracked-backlog	checkout	scripts/check-family-conventions.sh	gate 27 (backlog)	P1
+no-queue-citation	checkout	scripts/check-family-conventions.sh	gate 27 (queue citation)	P1
+unpinned	checkout	scripts/check-family-conventions.sh	gate 28	P1
+on-target	checkout	scripts/check-family-conventions.sh	gate 29	P1
+packager	checkout	scripts/check-family-conventions.sh	gate 35	P1
+macos-runner	checkout	scripts/check-family-conventions.sh	gate 36	P1
+modern-smoke	checkout	scripts/check-family-conventions.sh	gate 37	P1
+arm64	dist	scripts/check-artifact-conformance.sh	conformance arm64	P1
+cxxabi	dist	scripts/check-artifact-conformance.sh	conformance cxxabi	P1
+repo-public	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh visibility	P1
+repo-requires-on-target	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh on-target	P1
+unlinked	key	scripts/ingredient-notes.sh	ingredient-notes.sh unlinked	P1
+self-upstream-exclude	key	scripts/self-upstream-version.sh	self-upstream-version.sh self-upstream-exclude	P1

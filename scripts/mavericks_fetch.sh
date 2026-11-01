@@ -116,13 +116,19 @@ shipyard_fetch_verified() {
       echo "shipyard_fetch: downloaded $_tarball" >&2
     fi
   fi
+  # platform: 10.9 and macOS have shasum (perl); a Linux without perl has only coreutils' sha256sum,
+  #           whose -c prints the same "FILE: OK"; with neither, say so rather than report a mismatch.
+  if command -v shasum >/dev/null 2>&1; then _hash="shasum -a 256"
+  elif command -v sha256sum >/dev/null 2>&1; then _hash=sha256sum
+  else echo "shipyard_fetch: no SHA-256 tool (shasum or sha256sum) to verify $_tarball" >&2; rm -f "$_chk"; return 1
+  fi
   if [ "${MAVERGREEN_PROGRESS:-}" = 1 ]; then
-    _vout="$(printf '%s  %s\n' "$_sha" "$_chk" | shasum -a 256 -c - 2>&1)" && _vok=1 || { _vok=0; printf '%s\n' "$_vout" >&2; }
+    _vout="$(printf '%s  %s\n' "$_sha" "$_chk" | $_hash -c - 2>&1)" && _vok=1 || { _vok=0; printf '%s\n' "$_vout" >&2; }
   else
-    echo "$_sha  $_chk" | shasum -a 256 -c - >&2 && _vok=1 || _vok=0
+    echo "$_sha  $_chk" | $_hash -c - >&2 && _vok=1 || _vok=0
   fi
   [ "$_vok" -eq 1 ] || {
-    echo "shipyard_fetch: $_tb ($_url) is sha256 $(shasum -a 256 < "$_chk" | cut -c1-64), not the pinned $_sha" >&2
+    echo "shipyard_fetch: $_tb ($_url) is sha256 $($_hash < "$_chk" | cut -c1-64), not the pinned $_sha" >&2
     rm -f "$_chk"; return 1; }
   [ "${MAVERGREEN_PROGRESS:-}" != 1 ] || echo "shipyard_fetch: verified $_tarball" >&2
   [ "$_chk" = "$_tb" ] || mv -f "$_chk" "$_tb" || { rm -f "$_chk"; return 1; }

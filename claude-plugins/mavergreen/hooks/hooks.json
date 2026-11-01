@@ -1,0 +1,12 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|mcp__.*(create_issue|create_pull_request).*)$",
+        "hooks": [
+          { "type": "command", "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/work-items-go-in-the-queue.sh\"" }
+        ]
+      }
+    ]
+  }
+}

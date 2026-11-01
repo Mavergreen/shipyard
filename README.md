@@ -6,15 +6,21 @@ Features: yes. Whatever helps native builds to succeed and cross builds to match
 
 ## Install (once)
 
-Install shipyard from the pkg. Download it from the latest release and install it:
+Install the [Mavergreen CMake product](https://github.com/Mavergreen/cmake/releases) first, then
+shipyard. Shipyard's installer checks that CMake meets the release pinned in
+[`components/cmake/version`](components/cmake/version); an absent or older product is refused.
+For a first install, download both current packages into separate directories:
 
 ```sh
-gh release download -R Mavergreen/shipyard --pattern '*.pkg'
-sudo installer -pkg mavericks-shipyard-*.pkg -target /
+gh release download -R Mavergreen/cmake --pattern '*.pkg' --dir cmake-pkg
+gh release download -R Mavergreen/shipyard --pattern '*.pkg' --dir shipyard-pkg
+sudo installer -pkg cmake-pkg/cmake-*.pkg -target /
+sudo installer -pkg shipyard-pkg/mavericks-shipyard-*.pkg -target /
 ```
 
-Everything lands in `/usr/local/mavergreen/shipyard` — one directory holding CMake, the shipyard
-modules and the shell scripts — and nothing in `/usr/local/bin` but the family's `mavergreen` helper.
+Shipyard's modules, scripts and launchers land in `/usr/local/mavergreen/shipyard`.
+CMake lives separately in `/usr/local/mavergreen/cmake`. Nothing goes in `/usr/local/bin` but the
+family's `mavergreen` helper.
 The helper links three commands into `/usr/local/mavergreen/bin`, which the pkg puts on every login
 shell's `PATH` through `/etc/paths.d/mavergreen` (open a new terminal to pick it up):
 
@@ -24,11 +30,19 @@ shell's `PATH` through `/etc/paths.d/mavergreen` (open a new terminal to pick it
 /usr/local/mavergreen/bin/shipyard-cpack
 ```
 
-**Configure your projects with `shipyard-cmake`.** It is a real CMake (4.4.3) that finds shipyard in
-its own prefix, so there is nothing to register and no search path to set. Any *other* cmake is
-refused at configure time, by name — `MavericksShipyardConfig.cmake` says so rather than half-working.
-There is no longer a "install shipyard first and cmake afterwards" order to get right: the pkg brings
-its own.
+**Configure your projects with `shipyard-cmake`.** It launches the sibling CMake product after
+appending shipyard's prefix to `CMAKE_PREFIX_PATH`, so your own search paths still take precedence.
+`shipyard-ctest` and `shipyard-cpack` launch that product's matching tools. The bare names
+`cmake`, `ctest` and `cpack` stay out of the family's link farm.
+
+On macOS, `MavericksShipyardConfig.cmake` accepts only a CMake product paired with an installed
+shipyard and at least the pinned upstream version; it names a foreign or older CMake when refusing it.
+Existing build directories keep regenerating through compatibility links at
+`shipyard/bin/{cmake,ctest,cpack}`. If the CMake product has been removed, the launchers print its
+release URL and ask you to install it.
+
+In GitHub Actions, `install@v1` verifies and installs the pinned CMake package before shipyard.
+Consumers keep using the same action and `shipyard-*` commands.
 
 The pkg also keeps itself current: its updater checks daily and installs each new release. The same
 pkg works on Intel, on Apple Silicon and on 10.9.
@@ -38,22 +52,10 @@ anything else that never runs a login shell do not see `paths.d`: point them at
 `/usr/local/mavergreen/bin/shipyard-cmake`. The shared presets live at
 `/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/mavericks-presets.json`.
 
-**One thing shipyard-cmake cannot do: HTTPS from inside CMake.** `file(DOWNLOAD https://…)` and
-`FetchContent` over HTTPS fail with "Unsupported protocol" — deliberately, and loudly rather than
-fragilely. shipyard-cmake is built with `CMAKE_USE_SYSTEM_LIBRARIES=0` so it links nothing from the
-build host; CMake's own bundled curl has no macOS TLS backend without OpenSSL, and 10.9's system
-libcurl (7.30) is too old for CMake 4.4 to build against. Since this is the cmake the family is now
-required to use, the limitation is everyone's: **fetch with the shipyard helpers instead**, pinned and
-integrity-checked in a way `file(DOWNLOAD)` never was —
-
-```sh
-sh "$SHIPYARD_SCRIPTS/mavericks_fetch.sh"        # a tarball, verified against a pinned SHA-256
-sh "$SHIPYARD_SCRIPTS/clone_pinned.sh"           # a git source, pinned to a digest
-sh "$SHIPYARD_SCRIPTS/fetch_pinned_source.sh"    # a GitHub source's commit as a tarball, pinned SHA-256 (no git)
-```
-
-Nothing in the org used CMake-level downloads, so nothing broke; if you are porting something that
-does, that is the substitution to make.
+**The CMake product has no HTTPS downloader.** `file(DOWNLOAD https://…)` and HTTPS
+`FetchContent` fail with "Unsupported protocol". See [CMake's README](https://github.com/Mavergreen/cmake#readme)
+for the limit and the offline FetchContent pattern. Fetch pinned sources with shipyard's
+`mavericks_fetch.sh`, `clone_pinned.sh` or `fetch_pinned_source.sh` instead.
 
 If you have a machine that ran an older shipyard, `rm -rf ~/.cmake/packages/MavericksShipyard` once.
 Nothing reads it any more.
@@ -65,6 +67,9 @@ Remove it by hand, once:
 ```sh
 sudo rm -rf /usr/local/mavergreen-shipyard /usr/local/bin/shipyard-cmake /usr/local/bin/shipyard-ctest /usr/local/bin/shipyard-cpack
 ```
+
+CMake.app (`cmake-gui`) uses its own bundled CMake and cannot be pointed at the launcher.
+It can open a build directory first configured with `shipyard-cmake`.
 
 ### Developing shipyard itself
 
@@ -82,8 +87,8 @@ Then point a consumer at the dev copy for one configure, without disturbing the 
 CMAKE_PREFIX_PATH="$HOME/.local/opt/shipyard-dev" shipyard-cmake -S . -B build
 ```
 
-`CMAKE_PREFIX_PATH` is searched before shipyard-cmake's own prefix, so the override is explicit, scoped
-to the command that asks for it, and gone the moment you stop asking.
+The launcher appends the installed shipyard prefix after your `CMAKE_PREFIX_PATH`, so the dev copy
+wins for that command. The dev prefix does not need a CMake product of its own.
 
 ### Developing shipyard on Linux
 
@@ -96,10 +101,10 @@ sh scripts/run-repo-tests.sh --strict-host      # every host-agnostic suite; a s
 sh scripts/check-family-conventions.sh          # the gate every product repo runs
 ```
 
-**What you cannot do on Linux** is anything that produces or inspects an Apple artifact: the pkg,
-shipyard-cmake, the updater, and the `lipo`/`otool`/`pkgbuild` assertions. There is no Linux pkg and no
-Linux shipyard-cmake. On Linux, shipyard's CMake config accepts any `cmake`, because there is nothing
-else to demand. Those suites run in CI's macOS jobs.
+**What you cannot do on Linux** is anything that inspects an Apple artifact: shipyard-cmake, the updater,
+and the `lipo`/`otool` assertions on real Mach-O files. The pkg seams are not on that list: they run on any
+host, through stevedore. There is no Linux shipyard-cmake. On Linux, shipyard's CMake config accepts any
+`cmake`, because there is nothing else to demand. Those suites run in CI's macOS jobs.
 
 **How to tell which is which:** every script and test says so in its header, and check 22 enforces it:
 
@@ -157,8 +162,8 @@ shipyard-ctest --preset native
 shipyard-cpack --preset native    # where the product packages with CPack
 ```
 
-Plain `cmake` is refused: `find_package(MavericksShipyard)` fails with a message naming
-`shipyard-cmake`, rather than configuring against a CMake that cannot target 10.9.
+On macOS, a foreign or too-old CMake is refused by `find_package(MavericksShipyard)`, with a
+message naming the minimum version and `shipyard-cmake`. On Linux, any CMake may configure it.
 
 ## Sparkle
 
@@ -192,3 +197,20 @@ claude plugin install mavergreen@mavergreen --scope user
 
 then turn on auto-update in `/plugin` → Marketplaces → mavergreen. The plugin carries no
 version, so every push to `main` is an update.
+
+### Linux product archives
+
+For a product that publishes a Linux x86_64 archive, use
+`sh "$SHIPYARD_SCRIPTS/fetch_product_tar.sh" SHORT VERSION SHA256 DEST`.
+Pin the version and archive SHA-256 together in the consuming repository. The helper
+uses the product registry to find its release, verifies cached downloads and extracted
+files, and prints the user-owned prefix on stdout. It requires Python 3.9 or newer,
+curl, and either shasum or sha256sum. Override `MAVERGREEN_TAR_CACHE` to choose a
+local-disk cache; no root installation is required.
+
+A Linux build targeting Mavericks uses `MavericksToolchain.cmake` with explicit
+Linux-native clang22 compiler and LLVM tool paths. It selects Darwin and the
+configured arch (x86_64 against the pinned 10.9 SDK, arm64 against the pinned 11.3 SDK with
+deployment target 11.0) before compiler detection. Use host-native
+CMake and build tools. Target executables must be tested on Mavericks, not run as
+Linux configure probes. Apple SDK bytes remain separately fetched by `fetch_sdk.sh`.

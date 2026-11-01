@@ -259,7 +259,7 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*SWIFT_TAG\*\*: swift-6.3.3-RELEASE -> 
   || { echo "FAIL both-directions: build.sh SWIFT_TAG dropped: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*TOOLCHAIN_SHA\*\*: cccc -> dddd' \
   || { echo "FAIL both-directions: build.sh TOOLCHAIN_SHA dropped: $out"; exit 1; }
-printf '%s\n' "$out" | grep -qx -- '- \*\*tailscale / REF\*\*: v1.102.4 -> v1.102.5' \
+printf '%s\n' "$out" | grep -qx -- '- \*\*tailscale / REF\*\*: v1.102.4 -> v1.102.5 (\[changes\](https://github.com/tailscale/tailscale/compare/v1.102.4...v1.102.5))' \
   || { echo "FAIL both-directions: tailscale component REF dropped: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q -- 'updated (' \
   && { echo "FAIL both-directions: a real KV pin fell through to the opaque byte-delta fallback: $out"; exit 1; }
@@ -286,9 +286,9 @@ printf 'REPO=https://github.com/docker/cli.git\nREF=v29.9.0\nDIGEST=111111111111
 printf 'REPO=https://github.com/docker/compose.git\nREF=v2.40.0\nDIGEST=222222222222222222222222222222222222222\n' \
   > components/docker-compose/version
 out="$(sh "$S" base components/docker-cli/version components/docker-compose/version)"
-printf '%s\n' "$out" | grep -qx -- '- \*\*docker-cli / REF\*\*: v29.8.0 -> v29.9.0' \
+printf '%s\n' "$out" | grep -qx -- '- \*\*docker-cli / REF\*\*: v29.8.0 -> v29.9.0 (\[changes\](https://github.com/docker/cli/compare/v29.8.0...v29.9.0))' \
   || { echo "FAIL CRITICAL2: docker-cli REF not prefixed with its component name: $out"; exit 1; }
-printf '%s\n' "$out" | grep -qx -- '- \*\*docker-compose / REF\*\*: v5.5.1 -> v2.40.0' \
+printf '%s\n' "$out" | grep -qx -- '- \*\*docker-compose / REF\*\*: v5.5.1 -> v2.40.0 (\[changes\](https://github.com/docker/compose/compare/v5.5.1...v2.40.0))' \
   || { echo "FAIL CRITICAL2: docker-compose REF not prefixed with its component name: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q -- '- \*\*REF\*\*:' \
   && { echo "FAIL CRITICAL2: an unprefixed, ambiguous REF bullet leaked: $out"; exit 1; }
@@ -551,7 +551,7 @@ REF=v29.8.0
 DIGEST=5f94fb0aa42a2cd1248c6e6c7fafb87546b9c8de
 SH
 out="$(sh "$S" base components/docker-cli/version)"
-printf '%s\n' "$out" | grep -qx -- '- \*\*docker-cli / REF\*\*: v29.7.0 -> v29.8.0' \
+printf '%s\n' "$out" | grep -qx -- '- \*\*docker-cli / REF\*\*: v29.7.0 -> v29.8.0 (\[changes\](https://github.com/docker/cli/compare/v29.7.0...v29.8.0))' \
   || { echo "FAIL task7-together: the REF move is still reported: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'DIGEST' \
   && { echo "FAIL task7-together: a DIGEST that moved with its REF restates it: $out"; exit 1; }
@@ -571,5 +571,367 @@ out="$(sh "$S" retag-base components/docker-cli/version)"
 printf '%s\n' "$out" | grep -qx -- '- \*\*docker-cli / DIGEST\*\*: 88096ef00576... -> 5f94fb0aa42a...' \
   || { echo "FAIL task7-alone: a DIGEST moving alone is a re-tag and must be reported: $out"; exit 1; }
 cd "$work"; rm -rf "$work17"
+
+# spec: SKILL.md "Release notes" -- a moved ingredient links to where its change is described. A
+#       Renovate customManager that owns the pin is a source: github-releases links the new release,
+#       github-tags compares the two tags, and the tag is the version with the prefix
+#       extractVersionTemplate strips put back. The repo's own managers come first, then shipyard's
+#       preset (the recaulk pin lives only there).
+work18="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work18"
+git init -q -b main .
+git config user.email t@example.com; git config user.name tester
+mkdir -p .github components/golang components/libressl components/zstd components/recaulk components/xz build
+cat > .github/renovate.json <<'JSON'
+{
+  "extends": ["github>Mavergreen/shipyard"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^components/golang/version$/"],
+      "matchStrings": ["^(?<currentValue>.+?)\\s*$"],
+      "depNameTemplate": "mavericks-golang",
+      "packageNameTemplate": "Mavergreen/golang-126",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v?(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^components/libressl/version$/"],
+      "matchStrings": ["^(?<currentValue>\\S+)\\s*$"],
+      "depNameTemplate": "libressl/portable",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^components/zstd/version$/"],
+      "matchStrings": ["^(?<currentValue>\\S+)\\s*$"],
+      "packageNameTemplate": "facebook/zstd",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^components/xz/version$/"],
+      "matchStrings": ["TAG=(?<currentValue>\\S+)\\s+SHA256=(?<currentDigest>[0-9a-f]{64})"],
+      "packageNameTemplate": "tukaani-project/xz",
+      "datasourceTemplate": "github-release-attachments"
+    }
+  ]
+}
+JSON
+printf '1.26.9-mavericks.1\n' > components/golang/version
+printf '3.8.2\n' > components/libressl/version
+printf '1.5.6\n' > components/zstd/version
+printf '20260901.1\n' > components/recaulk/version
+printf 'TAG=v5.8.3\nSHA256=%064d\n' 1 > components/xz/version
+git add -A; git commit -qm base; git tag base
+printf '1.26.10-mavericks.1\n' > components/golang/version
+printf '3.9.2\n' > components/libressl/version
+printf '1.5.7\n' > components/zstd/version
+printf '20260915.2\n' > components/recaulk/version
+printf 'TAG=v5.8.4\nSHA256=%064d\n' 2 > components/xz/version
+out="$(sh "$S" base components/golang/version components/libressl/version components/zstd/version \
+        components/recaulk/version components/xz/version)"
+printf '%s\n' "$out" | grep -qx -- '- \*\*golang\*\*: 1.26.9-mavericks.1 -> 1.26.10-mavericks.1' \
+  || { echo "FAIL R1b: an optional prefix (^v?) cannot say which tag exists, so it links nothing rather than guess: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx -- '- \*\*libressl\*\*: 3.8.2 -> 3.9.2 (\[release notes\](https://github.com/libressl/portable/releases/tag/v3.9.2))' \
+  || { echo "FAIL R1b: the prefix extractVersionTemplate strips must be put back, and an owner/repo depName names the repo: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx -- '- \*\*zstd\*\*: 1.5.6 -> 1.5.7 (\[changes\](https://github.com/facebook/zstd/compare/v1.5.6...v1.5.7))' \
+  || { echo "FAIL R1b: a github-tags manager must compare the two tags: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx -- '- \*\*recaulk\*\*: 20260901.1 -> 20260915.2 (\[release notes\](https://github.com/Mavergreen/recaulk/releases/tag/20260915.2))' \
+  || { echo "FAIL R1b: a pin only shipyard's preset owns must still be linked: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx -- '- \*\*xz / TAG\*\*: v5.8.3 -> v5.8.4 (\[release notes\](https://github.com/tukaani-project/xz/releases/tag/v5.8.4))' \
+  || { echo "FAIL R1b: github-release-attachments is a GitHub release too: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q -- '^- \*\*xz / SHA256\*\*: .*](http' \
+  && { echo "FAIL R1b: the manager captures TAG, not SHA256 on the next line: $out"; exit 1; }
+cd "$work"; rm -rf "$work18"
+
+# spec: SKILL.md "Release notes" -- a link is resolved per pin, the file plus its KEY. container-tools'
+#       boot2docker pin holds a git source (REPO=/REF=/DIGEST=) and BASE=, which Renovate's docker
+#       datasource owns; 20260727-mavericks.34's only move was BASE. A file-level rule links BASE to a
+#       boot2docker compare that shows no change: confidently wrong. A docker manager has no change
+#       link, so BASE needs the KEY-qualified unlinked: declaration, and gets none of REPO='s links.
+work19="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work19"
+git init -q -b main .
+git config user.email t@example.com; git config user.name tester
+mkdir -p .github components/boot2docker
+cat > .github/renovate.json <<'JSON'
+{
+  "extends": ["github>Mavergreen/shipyard"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^components/[^/]+/version$/"],
+      "matchStrings": ["REPO=(?<packageName>\\S+?)\\.git\\s+REF=(?<currentValue>\\S+)\\s+DIGEST=(?<currentDigest>[0-9a-f]{40})"],
+      "datasourceTemplate": "git-refs",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^components/boot2docker/version$/"],
+      "matchStrings": ["BASE=(?<depName>[^:\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}
+JSON
+cat > components/boot2docker/version <<'PIN'
+REPO=https://github.com/dragonflylee/boot2docker.git
+REF=v23.0.6
+DIGEST=d4a73208aacc94f8f2ee85b3f9db53ac67ef865c
+BASE=debian:13-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+PIN
+git add -A; git commit -qm base; git tag base
+cat > components/boot2docker/version <<'PIN'
+REPO=https://github.com/dragonflylee/boot2docker.git
+REF=v23.0.6
+DIGEST=d4a73208aacc94f8f2ee85b3f9db53ac67ef865c
+BASE=debian:13-slim@sha256:b39326f7b46f62f33bee128a998e0f3fa37f23e75b3bad21e876f5bbf5a5a22a
+PIN
+out="$(sh "$S" base components/boot2docker/version)"
+printf '%s\n' "$out" | grep -q 'boot2docker / BASE' \
+  || { echo "FAIL per-key: the BASE move is missing: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'compare\|](http' \
+  && { echo "FAIL per-key: BASE must not borrow the boot2docker git source's link: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'no change notes' \
+  && { echo "FAIL per-key: nothing declared BASE unlinked yet: $out"; exit 1; }
+printf '# Build ingredients\n\n## Conformance deviations\n\n- unlinked:components/boot2docker/version: the git source only\n' > INGREDIENTS.md
+out="$(sh "$S" base components/boot2docker/version)"
+printf '%s\n' "$out" | grep -q 'no change notes' \
+  && { echo "FAIL per-key: a file-level declaration must not cover a KEY in it: $out"; exit 1; }
+printf '# Build ingredients\n\n## Conformance deviations\n\n- unlinked:components/boot2docker/version:BASE: a Debian slim image digest refresh publishes no notes\n' > INGREDIENTS.md
+out="$(sh "$S" base components/boot2docker/version)"
+printf '%s\n' "$out" | grep -qx -- '- \*\*boot2docker / BASE\*\*: debian:13-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f -> debian:13-slim@sha256:b39326f7b46f62f33bee128a998e0f3fa37f23e75b3bad21e876f5bbf5a5a22a (no change notes: a Debian slim image digest refresh publishes no notes)' \
+  || { echo "FAIL per-key: the KEY-qualified unlinked: declaration must give the BASE bullet its reason: $out"; exit 1; }
+cd "$work"; rm -rf "$work19"
+
+# spec: SKILL.md "Release notes" -- a pin with no link source can still say why, in INGREDIENTS.md's
+#       deviations; a scoped glob covers a family of pins (patches, a vendored blob) at once.
+work20="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work20"
+git init -q -b main .
+git config user.email t@example.com; git config user.name tester
+mkdir -p components/widget vendor patches
+printf '1.0\n' > components/widget/version
+printf 'line one\n' > vendor/cacert.pem
+printf 'Subject: [PATCH] one\n' > patches/0001-one.patch
+cat > INGREDIENTS.md <<'MD'
+# Build ingredients
+
+## Conformance deviations
+
+- unlinked:components/widget/version: widget publishes no release notes
+- unlinked:vendor/cacert.pem: Mozilla's CA bundle has no per-refresh notes
+- unlinked:patches/*: our own patches; the subject line is the description
+MD
+git add -A; git commit -qm base; git tag base
+printf '1.1\n' > components/widget/version
+printf 'line one\nline two\n' > vendor/cacert.pem
+printf 'Subject: [PATCH] one\n+x\n' > patches/0001-one.patch
+out="$(sh "$S" base components/widget/version vendor/cacert.pem patches/0001-one.patch)"
+printf '%s\n' "$out" | grep -qx -- '- \*\*widget\*\*: 1.0 -> 1.1 (no change notes: widget publishes no release notes)' \
+  || { echo "FAIL R1c: a single-line pin's declared reason: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q -- "^- \*\*vendor/cacert.pem\*\*: updated (.*) (no change notes: Mozilla's CA bundle has no per-refresh notes)\$" \
+  || { echo "FAIL R1c: a blob's declared reason: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q -- '^- \*\*0001-one.patch\*\*: updated (.*) (no change notes: our own patches; the subject line is the description)$' \
+  || { echo "FAIL R1c: a glob-scoped declaration covers a patch pin: $out"; exit 1; }
+cd "$work"; rm -rf "$work20"
+
+# spec: SKILL.md "Release notes" -- within one pin file, a key with no owning manager of its own that
+#       moved alongside a linked key is part of that bump: python-315's sqlite SHA256 and YEAR move by
+#       hand with VERSION, and a bullet each would restate it with nothing to link.
+work21="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work21"
+git init -q -b main .
+git config user.email t@example.com; git config user.name tester
+mkdir -p .github components/sqlite
+cat > .github/renovate.json <<'JSON'
+{
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^components/sqlite/version$/"],
+      "matchStrings": ["VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "sqlite",
+      "packageNameTemplate": "sqlite/sqlite",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^version-(?<version>\\d+\\.\\d+\\.\\d+)$"
+    }
+  ]
+}
+JSON
+printf 'VERSION=3.53.0\nYEAR=2025\nSHA256=%064d\n' 1 > components/sqlite/version
+git add -A; git commit -qm base; git tag base
+printf 'VERSION=3.54.0\nYEAR=2026\nSHA256=%064d\n' 2 > components/sqlite/version
+out="$(sh "$S" base components/sqlite/version)"
+[ "$(printf '%s\n' "$out" | grep -c '^- ')" = 1 ] \
+  || { echo "FAIL fold: VERSION, YEAR and SHA256 are one bump, so one bullet: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx -- '- \*\*sqlite / VERSION\*\*: 3.53.0 -> 3.54.0 (\[changes\](https://github.com/sqlite/sqlite/compare/version-3.53.0...version-3.54.0))' \
+  || { echo "FAIL fold: the linked VERSION bullet: $out"; exit 1; }
+
+# spec: SKILL.md "Release notes" -- with no key in the file linked, nothing folds: each moved key
+#       still needs a link or a declared reason.
+printf 'VERSION=3.54.0\nYEAR=2026\nSHA256=%064d\n' 3 > components/sqlite/version
+git add -A; git commit -qm hash-only; git tag hash-only
+printf 'VERSION=3.54.0\nYEAR=2026\nSHA256=%064d\n' 4 > components/sqlite/version
+out="$(sh "$S" hash-only components/sqlite/version)"
+printf '%s\n' "$out" | grep -q -- '^- \*\*sqlite / SHA256\*\*: ' \
+  || { echo "FAIL fold: a lone unowned move folds into nothing and keeps its bullet: $out"; exit 1; }
+cd "$work"; rm -rf "$work21"
+
+# spec: SKILL.md "Release notes" -- boot2docker's REF and DIGEST are one bump (DIGEST has no manager
+#       of its own), but BASE has its own docker manager, so it keeps its own bullet and link rule.
+work22="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work22"
+git init -q -b main .
+git config user.email t@example.com; git config user.name tester
+mkdir -p .github components/boot2docker
+cat > .github/renovate.json <<'JSON'
+{
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^components/[^/]+/version$/"],
+      "matchStrings": ["REPO=(?<packageName>\\S+?)\\.git\\s+REF=(?<currentValue>\\S+)\\s+DIGEST=(?<currentDigest>[0-9a-f]{40})"],
+      "datasourceTemplate": "git-refs",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^components/boot2docker/version$/"],
+      "matchStrings": ["BASE=(?<depName>[^:\\s]+):(?<currentValue>[^@\\s]+)@(?<currentDigest>sha256:[0-9a-f]{64})"],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}
+JSON
+printf 'REPO=https://github.com/dragonflylee/boot2docker.git\nREF=v23.0.6\nDIGEST=%040d\nBASE=debian:13-slim@sha256:%064d\n' 1 1 \
+  > components/boot2docker/version
+git add -A; git commit -qm base; git tag base
+printf 'REPO=https://github.com/dragonflylee/boot2docker.git\nREF=v23.0.7\nDIGEST=%040d\nBASE=debian:13-slim@sha256:%064d\n' 2 2 \
+  > components/boot2docker/version
+out="$(sh "$S" base components/boot2docker/version)"
+printf '%s\n' "$out" | grep -qx -- '- \*\*boot2docker / REF\*\*: v23.0.6 -> v23.0.7 (\[changes\](https://github.com/dragonflylee/boot2docker/compare/v23.0.6...v23.0.7))' \
+  || { echo "FAIL fold: the REF bullet: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'DIGEST' \
+  && { echo "FAIL fold: DIGEST is part of REF's bump: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q -- '^- \*\*boot2docker / BASE\*\*: ' \
+  || { echo "FAIL fold: BASE has its own manager, so its own bullet: $out"; exit 1; }
+printf '%s\n' "$out" | grep -- '^- \*\*boot2docker / BASE\*\*: ' | grep -q '](http' \
+  && { echo "FAIL fold: BASE must not borrow REF's link: $out"; exit 1; }
+cd "$work"; rm -rf "$work22"
+
+# spec: SKILL.md "Release notes" -- --repo and --tag let a whole-file pin link this repo's compare
+#       view; a KEY of a KEY=VALUE pin never does, so it still needs a link or a declaration.
+work23="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work23"
+git init -q -b main .
+git config user.email t@example.com; git config user.name tester
+mkdir -p .github patches components/thing
+cat > .github/renovate.json <<'JSON'
+{"customManagers": [{"customType": "regex", "managerFilePatterns": ["/^components/thing/version$/"],
+  "matchStrings": ["BASE=(?<depName>[^@\\s]+)@(?<currentDigest>sha256:[0-9]+)"],
+  "datasourceTemplate": "docker"}]}
+JSON
+printf 'Subject: [PATCH] one\n' > patches/x.patch
+printf 'BASE=img@sha256:%064d\n' 1 > components/thing/version
+git add -A; git commit -qm base; git tag base
+printf 'Subject: [PATCH] one\n+x\n' > patches/x.patch
+printf 'BASE=img@sha256:%064d\n' 2 > components/thing/version
+out="$(sh "$S" --repo Mavergreen/thing --tag next base patches/x.patch components/thing/version)"
+printf '%s\n' "$out" | grep -q -- '^- \*\*x.patch\*\*: updated (.*) (\[diff\](https://github.com/Mavergreen/thing/compare/base...next))$' \
+  || { echo "FAIL R1d: a whole-file pin links the repo's compare: $out"; exit 1; }
+printf '%s\n' "$out" | grep -- '^- \*\*thing / BASE\*\*' | grep -q 'compare' \
+  && { echo "FAIL R1d: never for a KEY: $out"; exit 1; }
+out="$(sh "$S" base patches/x.patch)"
+printf '%s\n' "$out" | grep -q 'compare' && { echo "FAIL R1d: no --repo, no link: $out"; exit 1; }
+cd "$work"; rm -rf "$work23"
+
+# spec: SKILL.md "Release notes" -- a tag is rebuilt from the literal text around (?<version>...):
+#       swift's ^swift-(?<version>.+)-RELEASE$ tags swift-6.4.1-RELEASE, and swift-6.4.1 does not
+#       exist. Anything but literal text (openssh's ^v?, a class, alternation) cannot say which tag
+#       exists, so the KEY is owned with no link and needs a declaration, never a guess.
+work24="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work24"
+git init -q -b main .
+git config user.email t@example.com; git config user.name tester
+mkdir -p .github build
+cat > .github/renovate.json <<'JSON'
+{
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^pins\\.env$/"],
+      "matchStrings": ["LLVM_SWIFT_RELEASE=\"(?<currentValue>[^\"]+)\""],
+      "packageNameTemplate": "swiftlang/llvm-project",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^swift-(?<version>.+)-RELEASE$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^build/versions.sh$/"],
+      "matchStrings": ["LIBRESSL_VERSION=(?<currentValue>\\S+)\\s+# renovate: libressl/portable"],
+      "depNameTemplate": "libressl/portable",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v?(?<version>.+)$"
+    }
+  ]
+}
+JSON
+printf 'LLVM_SWIFT_RELEASE="6.4.0"\n' > pins.env
+printf 'LIBRESSL_VERSION=4.3.2 # renovate: libressl/portable\n' > build/versions.sh
+git add -A; git commit -qm base; git tag base
+printf 'LLVM_SWIFT_RELEASE="6.4.1"\n' > pins.env
+printf 'LIBRESSL_VERSION=4.3.3 # renovate: libressl/portable\n' > build/versions.sh
+out="$(sh "$S" --repo Mavergreen/swift --tag next base pins.env build/versions.sh)"
+printf '%s\n' "$out" | grep -qx -- '- \*\*LLVM_SWIFT_RELEASE\*\*: 6.4.0 -> 6.4.1 (\[changes\](https://github.com/swiftlang/llvm-project/compare/swift-6.4.0-RELEASE...swift-6.4.1-RELEASE))' \
+  || { echo "FAIL I1: the literal suffix must be put back too: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx -- '- \*\*LIBRESSL_VERSION\*\*: 4.3.2 -> 4.3.3' \
+  || { echo "FAIL I1: ^v? owns the KEY but links nothing, not even this repo's diff: $out"; exit 1; }
+cd "$work"; rm -rf "$work24"
+
+# spec: SKILL.md "Release notes" -- a KEY no manager owns, in this repo's own pin file, is described by
+#       this repo's diff: golang-127's CA refresh moves vendor/cacert.pem and build/versions.sh's
+#       CA_SHA256 together, and a config literal moves alone. Folding still comes first, for added keys
+#       too: a new REPO=/REF=/DIGEST= component is one bullet, as is a TARBALL_SHA256 added beside a
+#       moved REF.
+work25="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work25"
+git init -q -b main .
+git config user.email t@example.com; git config user.name tester
+mkdir -p .github build vendor components/mls
+printf '{"extends": ["github>Mavergreen/shipyard"]}\n' > .github/renovate.json
+cat > build/versions.sh <<'SH'
+export MLS_VERSION=1.5.2-mavericks.6   # mavericks-legacysupport
+export PREFIX="/usr/local/mavergreen/go${GO_LINE}"
+export MACOS_MIN="10.9"
+export CROSS_MIN_OS="13.0"
+export CA_URL="https://curl.se/ca/cacert.pem"
+export CA_SHA256="3ff344e30b9b1ed2971044eabb438a08f2e2245ddb5f8ab1a3ad8b63ab4eaf91"  # curl.se cacert.pem, Mozilla 2026-07-16
+SH
+printf '##\n## Bundle of CA Root Certificates\n##\n-----BEGIN CERTIFICATE-----\nMIIDdZWAUWpL\nMK9=\n-----END CERTIFICATE-----\n' > vendor/cacert.pem
+printf 'REPO=https://github.com/macports/macports-legacy-support.git\nREF=v1.5.1\nDIGEST=%040d\n' 1 > components/mls/version
+git add -A; git commit -qm base; git tag base
+sed 's/3ff344e30b9b1ed2971044eabb438a08f2e2245ddb5f8ab1a3ad8b63ab4eaf91/9a1c72b4aa0f1e8d5c3b7e6f2d4a8091ccee5577bb33ff11aa99887766554433/' \
+  build/versions.sh > build/v.new && mv build/v.new build/versions.sh
+printf -- '-----BEGIN CERTIFICATE-----\nMIIEeZWAUWpL\n-----END CERTIFICATE-----\n' >> vendor/cacert.pem
+out="$(sh "$S" --repo Mavergreen/golang-127 --tag next base build/versions.sh vendor/cacert.pem)"
+diffl='(\[diff\](https://github.com/Mavergreen/golang-127/compare/base...next))'
+printf '%s\n' "$out" | grep -qx -- "- \*\*CA_SHA256\*\*: 3ff344e30b9b... -> 9a1c72b4aa0f... $diffl" \
+  || { echo "FAIL I3: CA_SHA256 moving alone links this repo's diff: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q -- "^- \*\*vendor/cacert.pem\*\*: updated (.*) $diffl\$" \
+  || { echo "FAIL I3: the bundle links this repo's diff: $out"; exit 1; }
+git add -A; git commit -qm ca; git tag ca
+sed 's/MACOS_MIN="10.9"/MACOS_MIN="10.9.5"/' build/versions.sh > build/v.new && mv build/v.new build/versions.sh
+out="$(sh "$S" --repo Mavergreen/golang-127 --tag next ca build/versions.sh)"
+printf '%s\n' "$out" | grep -qx -- "- \*\*MACOS_MIN\*\*: 10.9 -> 10.9.5 (\[diff\](https://github.com/Mavergreen/golang-127/compare/ca...next))" \
+  || { echo "FAIL I3: a config literal moving alone links this repo's diff: $out"; exit 1; }
+printf 'REPO=https://github.com/macports/macports-legacy-support.git\nREF=v1.5.2\nDIGEST=%040d\nTARBALL_SHA256=%064d\n' 2 2 > components/mls/version
+mkdir -p components/lazydocker
+printf 'REPO=https://github.com/jesseduffield/lazydocker.git\nREF=v0.25.2\nDIGEST=%040d\n' 3 > components/lazydocker/version
+out="$(sh "$S" --repo Mavergreen/golang-127 --tag next ca components/mls/version components/lazydocker/version)"
+printf '%s\n' "$out" | grep -qx -- '- \*\*mls / REF\*\*: v1.5.1 -> v1.5.2 (\[changes\](https://github.com/macports/macports-legacy-support/compare/v1.5.1...v1.5.2))' \
+  || { echo "FAIL I2: the moved REF: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'TARBALL_SHA256\|DIGEST\|REPO' \
+  && { echo "FAIL I2: a key added or moved beside a linked REF is part of its bump: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx -- '- \*\*lazydocker / REF\*\*: added (v0.25.2) (\[source\](https://github.com/jesseduffield/lazydocker/tree/v0.25.2))' \
+  || { echo "FAIL I2: a new component file is one bullet, its REF's: $out"; exit 1; }
+[ "$(printf '%s\n' "$out" | grep -c '^- ')" = 2 ] || { echo "FAIL I2: two bullets: $out"; exit 1; }
+cd "$work"; rm -rf "$work25"
 
 echo "PASS: ingredient-notes"

@@ -6,7 +6,8 @@ glob as a shell pattern, where "*" spans "/" and spaces, against the tracked pat
 a path. A "*" glob, or no glob, covers the repo and needs no match. The comments deviation is repo-wide
 only, so any glob on it fails here: "- comments:vendor/*: ..." is not honoured, rather than narrowing the
 check. Deviations of a check that works on artifacts rather than tracked files (an identifier, a Label, an
-installed path) are not matched against the tree.
+installed path) are not matched against the tree, and nor are the two checkout scopes that name no path:
+on-target's <part> (a gap in the 10.9 job's coverage) and macos-runner's <workflow file>:<job>.
 
 ## Incident
 None recorded.

@@ -3,8 +3,8 @@
 # misses both -- the SDK-pinning spike's porthole could not find Cocoa that way). One arch per configure:
 #   x86_64 (default) -> MacOSX10.9.sdk, deployment target 10.9
 #   arm64            -> MacOSX11.3.sdk, deployment target 11.0
-# On a 10.9 host (native mode, x86_64 only) the sysroot is pinned too: Xcode 6.1+ defaults to the 10.10
-# SDK there, so it is xcrun's own 10.9 SDK when xcrun finds one, else the fetched pin. Package-time
+# On a 10.9 host (native mode, x86_64 only) the sysroot is the same fetched pin: the build never asks
+# xcrun, so it is identical with or without the Command Line Tools (vision area 18 A). Package-time
 # conformance verifies what each build records. Pins: scripts/sdk-pins.sh; rule: SKILL.md "SDK pinning".
 # Use it via the shipyard presets (mavericks-cross / mavericks-native) or -DCMAKE_TOOLCHAIN_FILE=<this>.
 if(NOT CMAKE_OSX_ARCHITECTURES)
@@ -22,29 +22,41 @@ elseif(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
 else()
   message(FATAL_ERROR "MavericksToolchain.cmake: arch '${CMAKE_OSX_ARCHITECTURES}' has no pinned SDK (x86_64 and arm64 do)")
 endif()
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+  set(CMAKE_SYSTEM_NAME Darwin)
+  set(CMAKE_SYSTEM_PROCESSOR "${CMAKE_OSX_ARCHITECTURES}")
+  set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+  foreach(_mav_lang OBJC C CXX OBJCXX)
+    if(IS_ABSOLUTE "${CMAKE_${_mav_lang}_COMPILER}")
+      get_filename_component(_mav_bin "${CMAKE_${_mav_lang}_COMPILER}" DIRECTORY)
+      if(EXISTS "${_mav_bin}/llvm-install-name-tool")
+        foreach(_mav_pair INSTALL_NAME_TOOL=llvm-install-name-tool AR=llvm-ar RANLIB=llvm-ranlib STRIP=llvm-strip NM=llvm-nm)
+          string(REPLACE "=" ";" _mav_pair "${_mav_pair}")
+          list(GET _mav_pair 0 _mav_var)
+          list(GET _mav_pair 1 _mav_tool)
+          if(EXISTS "${_mav_bin}/${_mav_tool}")
+            set(CMAKE_${_mav_var} "${_mav_bin}/${_mav_tool}" CACHE FILEPATH "clang22's ${_mav_tool}, which writes Mach-O")
+          endif()
+        endforeach()
+        break()
+      endif()
+    endif()
+  endforeach()
+endif()
 set(CMAKE_OSX_DEPLOYMENT_TARGET "${_mav_target}" CACHE STRING "pinned per arch" FORCE)
 
 execute_process(COMMAND sw_vers -productVersion OUTPUT_VARIABLE _mav_osv
                 OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-set(_mav_sdk "")
 if(_mav_osv MATCHES "^10\\.9\\.")
   if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
     message(FATAL_ERROR "MavericksToolchain.cmake: a native build (on 10.9) is x86_64 only (got '${CMAKE_OSX_ARCHITECTURES}') -- "
                         "build ${CMAKE_OSX_ARCHITECTURES} cross, on a modern host")
   endif()
-  # A 10.9 SDK that xcrun cannot find, or that it names but is not there, falls back to the fetched pin.
-  execute_process(COMMAND xcrun --sdk macosx10.9 --show-sdk-path OUTPUT_VARIABLE _mav_sdk
-                  OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _mav_xrc ERROR_QUIET)
-  if(NOT _mav_xrc EQUAL 0 OR _mav_sdk STREQUAL "" OR NOT IS_DIRECTORY "${_mav_sdk}")
-    set(_mav_sdk "")
-  endif()
 endif()
-if(_mav_sdk STREQUAL "")
-  execute_process(
-    COMMAND sh "${CMAKE_CURRENT_LIST_DIR}/scripts/fetch_sdk.sh" --arch "${CMAKE_OSX_ARCHITECTURES}"
-    OUTPUT_VARIABLE _mav_sdk OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _mav_rc)
-  if(NOT _mav_rc EQUAL 0)
-    message(FATAL_ERROR "MavericksToolchain.cmake: fetch_sdk.sh --arch ${CMAKE_OSX_ARCHITECTURES} failed")
-  endif()
+execute_process(
+  COMMAND sh "${CMAKE_CURRENT_LIST_DIR}/scripts/fetch_sdk.sh" --arch "${CMAKE_OSX_ARCHITECTURES}"
+  OUTPUT_VARIABLE _mav_sdk OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _mav_rc)
+if(NOT _mav_rc EQUAL 0)
+  message(FATAL_ERROR "MavericksToolchain.cmake: fetch_sdk.sh --arch ${CMAKE_OSX_ARCHITECTURES} failed")
 endif()
 set(CMAKE_OSX_SYSROOT "${_mav_sdk}" CACHE PATH "the pinned SDK" FORCE)

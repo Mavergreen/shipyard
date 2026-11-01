@@ -129,7 +129,7 @@ printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"packageRules":[{"match
 # spec: scripts/check-family-conventions.sh -- a repo that publishes via the shared workflow satisfies the notes check: the caller has
 #       no --notes-file or body_path of its own, because publish-release.yml owns the body (and
 #       fails on an empty one, which is stronger than what this check can see).
-mkrepo "$work/p"
+mkrepo "$work/p" novm
 chk_py /dev/stdin "$work/p/.github/workflows/release.yml" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()

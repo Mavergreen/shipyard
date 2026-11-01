@@ -1,10 +1,9 @@
 # Build ingredients
 
-Everything baked into what shipyard ships, and how a change to it reaches a release. shipyard **does**
-compile: it builds CMake itself — shipped as `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` —
-and the Sparkle updater app, alongside the CMake modules and shell scripts it has always shipped. So
-its build inputs are now both the things it compiles WITH and the things its scripts fetch on a
-consumer's behalf.
+Everything baked into what shipyard ships, and how a change to it reaches a release. shipyard no longer
+compiles CMake: `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` are launchers into the
+Mavergreen cmake product, which shipyard pins and its pkg requires. The only thing shipyard compiles is
+its Sparkle updater app, with clang22, alongside the CMake modules and shell scripts it has always shipped.
 
 This repo is consumed through a **moving** tag. Fifteen repos pin `@v1`, so anything merged here reaches
 all of them within minutes — which is why the version is derived from the commit count (see
@@ -16,8 +15,9 @@ all of them within minutes — which is why the version is derived from the comm
 | MacOSX10.9 SDK | `scripts/fetch_sdk.sh` (`MAVERICKS_SDK_URL` + `MAVERICKS_SDK_SHA256`, phracker/MacOSX-SDKs 11.3) | ❌ **untrackable**: pinned by SHA-256 against a frozen third-party release. There is no newer 10.9 SDK to move to; the pin exists to prove the bytes, not to track a stream. | n/a — a change here would mean a different SDK, which is a deliberate port decision |
 | GitHub Actions (`actions/checkout@v7`, `actions/download-artifact@v8`, `actions/setup-python@v7`, `actions/upload-artifact@v7`, `softprops/action-gh-release@v3`) | `.github/workflows/*.yml` | ✅ native `github-actions` manager | automerges on green (`ship-if-green`), and the merge itself cuts the next shipyard version |
 | `bats` (shell test driver) | installed by `.github/actions/install` from the platform package manager | ✅ tracked by the package manager, not pinned here | a new bats reaches CI on its next run; the suites are version-agnostic |
-| CMake 4.4.3 (shipped as shipyard-cmake) | `cmake.pin` (version only) | ✅ Renovate customManager (github-releases Kitware/CMake) | `build-cmake.sh` verifies Kitware's published SHA-256; CI rebuilds the universal tree on a cache miss; the next push releases it |
-| mavericks-clang 22.1.1-mavericks.1 (compiles shipyard-cmake's x86_64/10.9 half) | `mavericks-clang.pin` | ✅ Renovate customManager (github-releases Mavergreen/clang, `-mavericks.N` compared) | CI installs the pinned cross pkg (SHA256SUMS-verified); a bump rebuilds shipyard-cmake on green |
+| cmake 4.4.4-mavericks.1 (the Mavergreen cmake product; role `shipped`, which the launchers run) | `components/cmake/version` | ✅ Renovate customManager (github-releases Mavergreen/cmake, `-mavericks.N` compared) | the pkg's preinstall `requires` cmake at or above the pin; `install@v1` installs that release (SHA256SUMS-verified) before shipyard; a bump runs shipyard's full CI against it and the merge releases shipyard |
+| clang22 22.1.8-mavericks.12 (the family's LLVM 22, which compiles and links shipyard's Sparkle updater on every host) | `components/clang22/version`, and its Linux archive's SHA-256 in `components/clang22/linux-sha256` | ✅ Renovate customManager (github-releases Mavergreen/clang-22, `-mavericks.N` compared); the digest beside it is written by hand from the release's SHA256SUMS (the bump PR says how) | `scripts/fetch_clang22.sh` fetches that release (the Linux archive against the pinned digest, a pkg against its release's SHA256SUMS, or the installed one at that version); a bump rebuilds the updater in shipyard's full CI and the merge releases shipyard |
+| stevedore 20261027.1 (the Mavergreen packager that writes and reads family pkgs) | `scripts/stevedore.pin` | ✅ Renovate customManager (github-releases Mavergreen/stevedore) | `scripts/fetch_stevedore.sh` fetches that release (SHA256SUMS-verified, `--version` checked); a bump runs shipyard's full CI against it and the merge releases shipyard |
 | PyYAML 6.0.3 (vendored: the checks' YAML reader; role shipped) | `scripts/vendor/pyyaml.pin` (`PYYAML_VERSION` + `PYYAML_SHA256` of the sdist) | ✅ Renovate customManager (pypi PyYAML) | the bump fails CI until `sh scripts/vendor/sync-pyyaml.sh` re-vendors `scripts/vendor/yaml` from the new sdist and rewrites `yaml.sha256` |
 | shipyard's own version | `UPSTREAM_VERSION` (the **line**) + `git rev-list --count` | n/a — first-party | every push to `main` cuts `<line>.<count>`; `@v1` moves to it |
 
@@ -67,14 +67,16 @@ one line):
 - brew:scripts/install-macho-readers.sh: the fallback for llvm-lipo and llvm-strings, which Xcode does not ship. Revisit when every job that runs the compat guard has clang22 installed (vision area 14).
 - brew:.github/workflows/ci.yml: the step that records what the Mach-O readers resolved to asks brew whether llvm is present. Revisit with brew:scripts/install-macho-readers.sh, whose fallback it reports on.
 - brew:.github/actions/install/action.yml: bats-core, where no family bats exists. Revisit when a family product or the runner image supplies bats.
-- brew:scripts/build-cmake.sh: it names the prefix only to exclude it (CMAKE_IGNORE_PREFIX_PATH): /opt/homebrew is kept out of CMake's search and nothing from it is used. Revisit if the exclusion list moves into a shared CMake module.
-- macports:scripts/build-cmake.sh: it names the prefix only to exclude it (CMAKE_IGNORE_PREFIX_PATH): /opt/local is kept out of CMake's search and nothing from it is used. Revisit if the exclusion list moves into a shared CMake module.
-- pkgsrc:scripts/build-cmake.sh: it names the prefix only to exclude it (CMAKE_IGNORE_PREFIX_PATH): /opt/pkg is kept out of CMake's search and nothing from it is used. Revisit if the exclusion list moves into a shared CMake module.
 - apt:.github/workflows/linux-host.yml: the Linux CI job installs llvm and libarchive-tools. Revisit when area 14's pinned LLVM tarball supplies the readers and bsdtar comes from a family Linux tarball or the job's image.
 - apt:.github/actions/install/action.yml: bats-core on a Linux runner, where no family bats exists. Revisit when a family product or the runner image supplies bats.
-- host:linux: bash32-parse needs a bash 3.2 /bin/sh and Linux has none. Revisit when QUEUE #60's Apple-shells collection ships its Linux tarball.
+- host:linux: bash32-parse needs a bash 3.2 /bin/sh and Linux has none. Revisit when the Apple-shells collection (bash 3.2 and the other shells Apple ships) has a Linux tarball.
 - vendored:scripts/vendor/yaml/**: PyYAML is vendored because python-315's phase 1 has no ssl, so pip cannot fetch it on 10.9, and the checks keep their Python. Revisit when python-315 ships ssl and pip works (its phase 2); then delete the vendored copy and the checks import a pip-installed PyYAML (/opt/mavergreen/bin/python3 -m pip install --user pyyaml).
 - vendored:scripts/vendor/pyyaml.pin: the pin that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
 - vendored:scripts/vendor/yaml.sha256: the checksum that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
 - vendored:scripts/vendor/sync-pyyaml.sh: the sync script that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
 - docs-no-sudo:README.md: its install, uninstall and Linux dev-dependency steps are written as root commands; the Engine does not exist yet, so no family command does the first two. Revisit when the Engine's `mavergreen install` and `mavergreen uninstall` ship in the flag day; the dev-dependency line goes with `apt:.github/actions/install/action.yml`.
+- docs-no-sudo:scripts/mavergreen.sh: the helper's uninstall, refusing while other products link into the target, names each one's uninstall as the root command it is today; the helper does not elevate itself. Revisit when the Engine's `mavergreen uninstall` ships in the flag day and elevates per step.
+- unpinned:scripts/cut-release.sh: it reads a repo's newest release tag before and after the run it dispatched, to report what that run published; it fetches nothing and builds nothing. Reconsider if it ever downloads an asset.
+- unpinned:scripts/audit-release-sdks.sh: the SDK-pinning acceptance audit exists to judge what each repo has shipped most recently, so it downloads each repo's newest release (verified against its SHA256SUMS). It builds and signs nothing. Reconsider if it is ever wired into a release path.
+- unpinned:scripts/gen-conventions-grandfathered.sh: it grandfathers the arm64 slices each repo ships today, so it reads each repo's newest release and downloads its pkgs to inspect them. It builds, signs and publishes nothing. Reconsider if it is ever wired into a release path.
+- on-target:pkg-install: the 10.9 job (linux-host.yml's on-target-updater, which release.yml's publish needs through its linux job) launches the Linux-built updater check-only in the guest; it does not install the run's mavericks-shipyard pkg, which is built on macOS, nor run the host-agnostic tests there. Exit: install the run's own pkg in that guest, run its tests there, and keep the launch.

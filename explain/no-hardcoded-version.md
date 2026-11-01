@@ -11,12 +11,12 @@ UPSTREAM_VERSION. The one exception worth keeping is a test that pins a transfor
 ## Incident
 2026-09-13: openssh's tests/derive-upstream-version.bats asserted the derived value equals "9.9p2". Moving
 the pin to V_10_5_P1 failed it, run-repo-tests gates the build, and the release never ran; fixed in
-bba3750 (QUEUE #1). clang's tests/version-test.sh hardcoded the version in the same way and blocked its
+bba3750. clang's tests/version-test.sh hardcoded the version in the same way and blocked its
 automerge, unfixed when it was filed.
 
 ## Limits
-It scans only the files named above, so a hardcoded version in tests/ is outside it (QUEUE #1 proposed
-scanning tests with an escape hatch for fixtures). It needs a UPSTREAM_VERSION that is a full dotted version
+It scans only the files named above, so a hardcoded version in tests/ is outside it (scanning tests, with an
+escape hatch for fixtures, was proposed and not done). It needs a UPSTREAM_VERSION that is a full dotted version
 (or at least five characters). A repo whose upstream is derived has no such file.
 
 ## Deviating

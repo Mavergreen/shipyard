@@ -17,15 +17,18 @@ chk_ran notes-shape
 f="${1:?check-release-notes: notes file required}"
 ver="${2:?check-release-notes: version required}"
 
-fail() {
+fail() {  # $1 = what is wrong, $2 = the fix (default: regenerate)
   chk_fail notes-shape "the release body is not the family shape" "$1" \
-    "generate the body with release-notes.sh and publish exactly that file"
+    "${2:-generate the body with release-notes.sh and publish exactly that file}"
   exit 1
 }
 
 [ -f "$f" ] || fail "no such file: $f"
 [ -s "$f" ] || fail "$f is empty; a release body must say something"
 [ -n "$(tr -d '[:space:]' < "$f")" ] || fail "$f is empty apart from whitespace"
+
+awk '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l == "<!-- edited by a human -->") f = 1 } END { exit !f }' "$f" \
+  && fail "$f still carries the human-edit mark '<!-- edited by a human -->'; release-notes.sh strips it, so this body was not composed by release-notes.sh"
 
 first="$(sed -n '1p' "$f")"
 case "$first" in
@@ -70,6 +73,23 @@ awk '
 ' "$f" > "$t" || {
   empty="$(cat "$t" 2>/dev/null || true)"
   fail "section is empty: ${empty:-<unknown>}"
+}
+
+# spec: tests/check-release-notes-test.sh -- a moved ingredient links where its change is
+#       described, or says why nothing does; a removed or now-computed pin moved nothing upstream.
+awk '
+  /^### Build ingredients[[:space:]]*$/ { in_ing = 1; next }
+  /^##/ || /^---[[:space:]]*$/ { in_ing = 0; next }
+  in_ing && /^- / {
+    if ($0 ~ /\]\(https?:/ || $0 ~ /\(no change notes: [^)]/) next
+    if ($0 ~ /: removed$/ || $0 ~ /: still used, now computed rather than pinned \(was /) next
+    print; exit 1
+  }
+' "$f" > "$t" || {
+  bare="$(cat "$t" 2>/dev/null || true)"
+  pin="$(printf '%s' "$bare" | sed -n 's/^- \*\*\(.*\)\*\*:.*/\1/p')"
+  fail "the Build ingredients bullet for ${pin:-<unknown>} says nothing about where its change is described: $bare" \
+    "give that pin a link source -- a Renovate customManager (github-releases or github-tags) that captures it, or a REPO=https://github.com/<owner>/<repo>.git beside its REF/TAG/VERSION -- or declare why it has none under INGREDIENTS.md's ## Conformance deviations as '- unlinked:<pin path>[:KEY]: <reason>'"
 }
 
 echo "check-release-notes: ok — $f is the family shape for $ver"

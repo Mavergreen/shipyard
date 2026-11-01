@@ -46,6 +46,12 @@ EOF
   printf '%s\n' "$_sm_pick"
 }
 
+# spec: tests/release-state-test.sh -- a "path:KEY" Declared-state entry's value: KEY's first
+#       assignment in the file, one pair of surrounding double quotes dropped, whitespace removed.
+pin_value() {
+  sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1 | sed 's/^"//; s/"$//' | tr -d '[:space:]'
+}
+
 # spec: SKILL.md "shipyard: consume its facilities, never hand-roll them" -- never a hard-coded
 #       prefix, never a vendored copy.
 msc_scripts() {
@@ -56,29 +62,16 @@ msc_scripts() {
   return 1
 }
 
-# platform: 10.9's BSD sort has no -V, so any script relying on it works in CI and dies on the
-#           platform this family targets. A version is in the comparator's orderable domain iff it
-#           is purely dotted-numeric.
-# spec: scripts/assert_appcast_upgradeable.sh -- one comparator serves both this and
-#       previous-release-tag.sh, so "which tag is highest" cannot drift between them.
-numeric() {
-  case "$1" in ''|.*|*.|*..*|*[!0-9.]*) return 1;; *) return 0;; esac
-}
-
-ver_cmp() {
-  awk -v a="$1" -v b="$2" 'BEGIN{
-    na=split(a,A,"."); nb=split(b,B,"."); n=(na>nb)?na:nb;
-    for(i=1;i<=n;i++){ x=(i<=na)?A[i]+0:0; y=(i<=nb)?B[i]+0:0;
-      if(x>y){print 1; exit} if(x<y){print -1; exit} }
-    print 0 }'
-}
-
-# spec: tests/version-lib-test.sh "comparison_key()" -- the ONE dotted-numeric-key derivation for
-#       the family (mirrored in MavericksSparkle.cmake, which cannot source sh); gen_appcast.sh and
-#       previous-release-tag.sh each carried their own copy, and when the pN rule (OpenSSH-portable's
-#       9.9pN, monotonic: p2 is newer than p1) was added to only one side, no openssh release ever
-#       found its baseline. A NON-monotonic suffix (-rc1, beta) must NOT be folded here -- left
-#       unmapped so callers' numeric() checks fail closed.
-comparison_key() {
-  printf '%s' "$1" | sed -e 's/-mavericks\./\./' -e 's/\([0-9]\)p\([0-9]\)/\1.\2/'
-}
+# spec: tests/version-lib-test.sh -- lib/vercmp.sh is found via $SELF, $SHIPYARD or $SHIPYARD_SCRIPTS:
+#       a sourced file cannot learn its own path in POSIX sh.
+_lib_vercmp=""
+for _lib_d in "${SELF:-}" "${SHIPYARD:-}" "${SHIPYARD_SCRIPTS:-}"; do
+  if [ -n "$_lib_d" ] && [ -f "$_lib_d/lib/vercmp.sh" ]; then _lib_vercmp="$_lib_d/lib/vercmp.sh"; break; fi
+done
+if [ -z "$_lib_vercmp" ]; then
+  unset _lib_vercmp _lib_d
+  echo "lib.sh: cannot find lib/vercmp.sh beside it; set SHIPYARD_SCRIPTS to shipyard's scripts directory" >&2
+  return 1
+fi
+. "$_lib_vercmp"
+unset _lib_vercmp _lib_d

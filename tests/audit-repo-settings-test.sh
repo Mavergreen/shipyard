@@ -22,8 +22,17 @@ reset() {
   printf 'true\n' > "$w/gh/am-good"; printf 'true\n' > "$w/gh/am-noauto"; printf 'true\n' > "$w/gh/am-noprot"; printf 'true\n' > "$w/gh/am-plain"
   printf 'false\n' > "$w/gh/am-noauto"
   printf 'build\n' > "$w/gh/ctx-good"; printf 'build\n' > "$w/gh/ctx-noauto"
+  for r in good noauto noprot; do
+    mkdir -p "$w/gh/raw-$r/.github/workflows"
+    printf 'name: release\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n' > "$w/gh/raw-$r/.github/workflows/release.yml"
+  done
 }
-printf 'repo-auto-merge\trepo-state\tscripts/audit-repo-settings.sh\tx\tP1\nrepo-required-context\trepo-state\tscripts/audit-repo-settings.sh\tx\tP1\n' > "$w/reg"
+vmjob() {  # $1 = repo: its release.yml gains a job that runs the 10.9 guest, named on-target
+  printf '  vm:\n    name: on-target\n    runs-on: ubuntu-latest\n    steps:\n      - uses: Mavergreen/mavericks-vm@v1\n' >> "$w/gh/raw-$1/.github/workflows/release.yml"
+}
+for id in repo-public repo-auto-merge repo-required-context repo-requires-on-target; do
+  printf '%s\trepo-state\tscripts/audit-repo-settings.sh\tx\tP1\n' "$id"
+done > "$w/reg"
 SHIPYARD_CHECK_REGISTRY="$w/reg"; export SHIPYARD_CHECK_REGISTRY
 run() { rc=0; PATH="$w/bin:$PATH" sh "$@" > "$w/out" 2> "$w/err" || rc=$?; }
 
@@ -64,11 +73,31 @@ run "$SC" --repo-state
 reset; printf "Token scopes: 'repo'\n" > "$w/gh/scopes"; printf 'true\n' > "$w/gh/shipyard-admin"
 run "$SC" --repo-state
 [ "$rc" -eq 1 ] || fail "repo admin should be enough to run, and this org has failures: got $rc: $(cat "$w/err")"
-grep -qx 'shipyard-check: 2 checks, 2 failed' "$w/out" || fail "the dispatcher should count both ids failed: $(cat "$w/out")"
+grep -qx 'shipyard-check: 4 checks, 2 failed' "$w/out" || fail "the dispatcher should count both ids failed: $(cat "$w/out")"
 
 reset; printf 'true\n' > "$w/gh/am-noauto"; printf 'build\n' > "$w/gh/ctx-noprot"
 run "$SC" --repo-state
 [ "$rc" -eq 0 ] || fail "a healthy org under --repo-state should exit 0, got $rc: $(cat "$w/err")"
-grep -qx 'shipyard-check: 2 checks, 0 failed' "$w/out" || fail "the dispatcher should count two checks: $(cat "$w/out")"
+grep -qx 'shipyard-check: 4 checks, 0 failed' "$w/out" || fail "the dispatcher should count four checks: $(cat "$w/out")"
+
+reset; printf 'true\n' > "$w/gh/am-noauto"; printf 'build\n' > "$w/gh/ctx-noprot"; printf 'private\n' > "$w/gh/vis-plain"
+run "$S"
+[ "$rc" -eq 1 ] || fail "a private repo should exit 1, got $rc"
+grep -q '^repo-public: .*Mavergreen/plain is public' "$w/err" || fail "a private repo is repo-public, even with no release.yml: $(cat "$w/err")"
+
+reset; printf 'true\n' > "$w/gh/am-noauto"; printf 'build\n' > "$w/gh/ctx-noprot"; vmjob good
+run "$S"
+[ "$rc" -eq 1 ] || fail "a 10.9 job main does not require should exit 1, got $rc"
+grep -q '^repo-requires-on-target: .*Mavergreen/good' "$w/err" || fail "an unrequired 10.9 job is repo-requires-on-target: $(cat "$w/err")"
+grep -q 'main does not require on-target' "$w/err" || fail "it names the job by its check name: $(cat "$w/err")"
+
+reset; printf 'true\n' > "$w/gh/am-noauto"; printf 'build\n' > "$w/gh/ctx-noprot"; vmjob good; printf 'build,on-target\n' > "$w/gh/ctx-good"
+run "$S"
+[ "$rc" -eq 0 ] || fail "a required 10.9 job should pass, got $rc: $(cat "$w/err")"
+
+reset; printf 'true\n' > "$w/gh/am-noauto"; printf 'build\n' > "$w/gh/ctx-noprot"; rm -r "$w/gh/raw-good"
+run "$S"
+[ "$rc" -eq 1 ] || fail "a release.yml that cannot be read should exit 1, got $rc"
+grep -q '^repo-requires-on-target: .*Mavergreen/good' "$w/err" || fail "an unreadable release.yml is repo-requires-on-target: $(cat "$w/err")"
 
 echo "PASS audit-repo-settings"

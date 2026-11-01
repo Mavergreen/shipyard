@@ -15,7 +15,7 @@
 #            ENV    VAR=value lines exported for the run ($FIXTURE is the copy; a bare NAME is NAME=$FIXTURE)
 #            FILES  the tracked-file list: SHIPYARD_CHECK_FILES, or git's index when NEEDS says git
 #            NEEDS  what the fixture cannot run without, one per line: a tool (git also makes the copy a git
-#                   repo), or bash32, a bash 3.2 /bin/sh and /bin/bash
+#                   repo), bash32, a bash 3.2 /bin/sh and /bin/bash, or llvm, LLVM's Mach-O readers
 #            ALSO   other ids the fixture legitimately fails too, one per line, which the run selects
 #                   beside <id> (* for any: an unparseable workflow trips every rule that reads workflows)
 #            ARGS   the arguments of the id's own script, which then runs directly rather than through
@@ -162,6 +162,10 @@ check_one() {  # $1 = scratch dir, $2 = "<id> <name>"; prints FAIL or SKIP lines
     while IFS= read -r t; do
       [ -n "$t" ] || continue
       if [ "$t" = git ] && [ "$have_git" -eq 0 ]; then miss="$miss git"; continue; fi
+      if [ "$t" = llvm ]; then
+        [ "$have_llvm" -eq 1 ] || miss="$miss LLVM's Mach-O readers"
+        continue
+      fi
       if [ "$t" = bash32 ]; then
         [ "$have_bash32" -eq 1 ] || { miss="$miss a bash 3.2 /bin/sh and /bin/bash"; hostbound=1; }
         continue

@@ -17,7 +17,7 @@ audit_one() {  # $1 = label, $2 = dist dir, $3 = repo root holding INGREDIENTS.m
   # platform: only the macho, deviation and sentinel facts reach the checker, so the version it is told
   #           is never compared with anything; a fixed well-formed one keeps its scheme check quiet.
   # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the filter
-  #       below drops every `pkg` record, so a pkg bsdtar could not expand (artifact-facts.sh emits
+  #       below drops every `pkg` record, so a pkg stevedore could not expand (artifact-facts.sh emits
   #       "pkg <file> unreadable none none" rather than aborting the stream) would otherwise leave the
   #       checker NOTHING to examine and pass this audit having looked at nothing. Captured ONCE to
   #       "$w/facts": the checker reads the filtered view of it, and this function separately reads the
@@ -33,7 +33,7 @@ audit_one() {  # $1 = label, $2 = dist dir, $3 = repo root holding INGREDIENTS.m
   if [ -n "$_unreadable" ]; then
     _ok=0
     { printf '%s\n' "$_unreadable" | while IFS= read -r _pf; do
-        printf 'conformance: pkg-unreadable: %s could not be expanded -- nothing in it was checked\n' "$_pf"
+        printf 'conformance: pkg-unreadable: %s could not be expanded by stevedore -- nothing in it was checked\n' "$_pf"
       done
       cat "$w/out" 2>/dev/null
     } > "$w/out.combined"
@@ -65,7 +65,7 @@ for r in "$@"; do
     echo "audit: $r has no SHA256SUMS -- audited UNVERIFIED"
   fi
   rm -f "$d/dist/SHA256SUMS"
-  gh api "repos/$r/contents/INGREDIENTS.md" --jq .content 2>/dev/null | base64 -d > "$d/src/INGREDIENTS.md" 2>/dev/null || rm -f "$d/src/INGREDIENTS.md"
+  gh api "repos/$r/contents/INGREDIENTS.md" --jq .content 2>/dev/null | base64 --decode > "$d/src/INGREDIENTS.md" 2>/dev/null || rm -f "$d/src/INGREDIENTS.md"
   audit_one "$r" "$d/dist" "$d/src" || rc=1
 done
 exit "$rc"

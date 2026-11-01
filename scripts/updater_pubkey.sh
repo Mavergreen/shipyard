@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- pkgutil and PlistBuddy read the updater out of a pkg
+# platform: host-agnostic -- stevedore reads the updater out of a pkg
 #   usage: updater_pubkey.sh PKG   ->   SUPublicEDKey=<base64>
 #                                       SUFeedURL=<url>
 #          Prints the SUPublicEDKey and SUFeedURL of the Sparkle updater a .pkg installs -- what a
@@ -10,7 +10,7 @@
 #          are fine when they agree; when they disagree, which one a client runs is not ours to
 #          guess, so this fails -- so does a pkg with no updater at all.
 #          Exit 0 with an answer, 1 without one, 2 on usage.
-# platform: uses `pkgutil --expand` (10.9's pkgutil has no --expand-full) on the gzip'd cpio Payload
+# platform: uses `stevedore expand` on the gzip'd cpio Payload
 #           that pkgbuild writes on both 10.9 and CI, so this runs unchanged on either.
 # spec: tests/updater_pubkey.bats
 set -eu
@@ -18,7 +18,8 @@ set -eu
 PKG="$1"
 T="$(mktemp -d "${TMPDIR:-/tmp}/updater_pubkey.XXXXXX")"; trap 'rm -rf "$T"' EXIT
 
-pkgutil --expand "$PKG" "$T/x" >/dev/null 2>&1 \
+STEVEDORE="$(sh "$(dirname "$0")/fetch_stevedore.sh")"
+"$STEVEDORE" expand "$PKG" "$T/x" >/dev/null 2>&1 \
   || { echo "updater_pubkey: cannot expand $PKG as a pkg" >&2; exit 1; }
 mkdir "$T/p"
 find "$T/x" -type f -name Payload | while IFS= read -r payload; do
@@ -27,8 +28,8 @@ find "$T/x" -type f -name Payload | while IFS= read -r payload; do
 done
 
 pairs="$(find "$T/p" -type f -path '*.app/Contents/Info.plist' | while IFS= read -r plist; do
-  key="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$plist" 2>/dev/null)" || continue
-  feed="$(/usr/libexec/PlistBuddy -c 'Print :SUFeedURL' "$plist" 2>/dev/null)" || feed=
+  key="$("$STEVEDORE" plist get "$plist" SUPublicEDKey 2>/dev/null)" || continue
+  feed="$("$STEVEDORE" plist get "$plist" SUFeedURL 2>/dev/null)" || feed=
   printf '%s\t%s\n' "$key" "$feed"
 done | sort -u)"
 

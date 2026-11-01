@@ -17,7 +17,7 @@ a user's machine, weeks later, one product at a time"; no date or product is rec
 
 ## Limits
 It reads what the pkg declares in PackageInfo, not what Installer then does. A pkg with no PackageInfo fails.
-It needs bsdtar (libarchive-tools off macOS) and a readable xar.
+It needs stevedore, which fetch_stevedore.sh fetches at its pinned version, and a readable xar.
 
 ## Deviating
 No deviation is read for this id. Build the component with build_component_pkg.sh, which disables both.

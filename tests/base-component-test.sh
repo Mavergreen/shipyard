@@ -33,12 +33,14 @@ rm "$V/usr/local/bin/mavergreen"; stage 1.0.9
 [ -x "$V/usr/local/bin/mavergreen" ] || fail "a missing helper is reinstalled even from an older base"
 out="$(sh "$w/post-1.0.9" 2>&1)" && fail "no target volume must fail rather than assume /: $out"
 sh "$S" --out "$w/x.pkg" --version 'v1.0' 2>/dev/null && fail "a non-numeric version must be refused -- the compare is numeric"
-if command -v pkgbuild >/dev/null 2>&1; then
-  sh "$S" --version 1.0.9 --out "$w/base.pkg" >/dev/null 2>&1 || fail "the component must build"
-  # platform: guarded macOS-only call -- the enclosing `if command -v pkgbuild` skips this block without it
-  pkgutil --expand "$w/base.pkg" "$w/x"
-  grep -q 'identifier="dev.mavergreen.base"' "$w/x/PackageInfo" || fail "the component is dev.mavergreen.base"
-  (cd "$w/x" && gzip -dc Payload | cpio -it 2>/dev/null) | grep -qx './usr/local/mavergreen/.base/1.0.9/mavergreen' \
-    || fail "the payload stages the helper under .base/<version>/"
-fi
+SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed -- the pkg block is the only gate for this seam, so it cannot be skipped"
+sh "$S" --version 1.0.9 --out "$w/base.pkg" >/dev/null 2>&1 || fail "the component must build"
+"$SD" expand "$w/base.pkg" "$w/x"
+grep -q 'identifier="dev.mavergreen.base"' "$w/x/PackageInfo" || fail "the component is dev.mavergreen.base"
+(cd "$w/x" && gzip -dc Payload | cpio -it 2>/dev/null) | grep -qx './usr/local/mavergreen/.base/1.0.9/mavergreen' \
+  || fail "the payload stages the helper under .base/<version>/"
+SHIPYARD_VERSION=7.7.7 sh "$S" --emit-postinstall "$w/post-env" \
+  || fail "with no installed config, SHIPYARD_VERSION names the base's version (install@v1 exports it on Linux, where the action's checkout has no .git)"
+grep -q '7\.7\.7' "$w/post-env" || fail "the emitted postinstall carries SHIPYARD_VERSION's version"
 echo "PASS: base-component"

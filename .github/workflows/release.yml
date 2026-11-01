@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26   # the CMake modules gate on Apple clang; Linux cannot exercise them
-    timeout-minutes: 90   # a cache miss builds CMake twice (x86_64/10.9 and arm64/11.0) before anything else
+    timeout-minutes: 90
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
@@ -31,24 +31,22 @@ jobs:
           path: ~/Library/Caches/mavericks-sdk
           key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavergreen-clang22
+          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
+
       # spec: R-P1-19 -- shipyard cannot install a RELEASED shipyard to test the one it is about to
-      #       release, so it installs itself in source-build mode, and the CMake tree is built HERE
-      #       and passed in rather than by install@v1 itself: a `uses: ./...` inside a composite
-      #       resolves against the consumer's workspace and is prepared before step `if:` conditions
-      #       run, so nesting it there would break every consumer in a way this repo's CI could never
-      #       reproduce.
+      #       release, so it installs itself in source-build mode, beside the pinned cmake product.
       # spec: scripts/install-macho-readers.sh -- the compat guard reads Mach-O with LLVM's readers and
       #       never Apple's, and a macOS runner has only Apple's; this must run before the first build.
       - name: LLVM's Mach-O readers
         run: sh scripts/install-macho-readers.sh
 
-      - id: cm
-        uses: ./.github/actions/shipyard-cmake
       - name: Install mavericks-shipyard (self, source-build)
         uses: ./.github/actions/install
         with:
           source: build
-          cmake-tree: ${{ steps.cm.outputs.tree }}
 
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
@@ -83,22 +81,7 @@ jobs:
       - name: Build the universal updater
         run: |
           set -eu
-          # platform: CMAKE_OSX_ARCHITECTURES and the deployment target are directory-scoped, so this
-          #           needs two configures, not two targets -- and arm64 has no 10.9. /usr/bin/clang
-          #           pins the Apple toolchain regardless of what else the runner image puts on PATH.
-          for a in "x86_64 10.9" "arm64 11.0"; do
-            set -- $a
-            shipyard-cmake -S . -B "$RUNNER_TEMP/upd-$1" -DSHIPYARD_BUILD_UPDATER=ON \
-              -DMAVERICKS_ALLOW_GENERIC_ICON=ON -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
-              -DCMAKE_OSX_ARCHITECTURES="$1" -DCMAKE_OSX_DEPLOYMENT_TARGET="$2" \
-              -DCMAKE_TOOLCHAIN_FILE="$PWD/MavericksToolchain.cmake"
-            shipyard-cmake --build "$RUNNER_TEMP/upd-$1"
-          done
-          sh scripts/lipo-merge-tree.sh \
-            --a "$RUNNER_TEMP/upd-x86_64/shipyard-updater.app" \
-            --b "$RUNNER_TEMP/upd-arm64/shipyard-updater.app" \
-            --out "$RUNNER_TEMP/shipyard-updater.app" \
-            --require-archs "x86_64 arm64"
+          sh tests/lib/build-updater.sh --arch x86_64 --arch arm64 --out "$RUNNER_TEMP/shipyard-updater.app"
           # spec: R-P1-22 -- NOT re-signed. Nothing in shipyard's build signs this app, so the merge
           #       breaks no bundle seal; `lipo -create` copies each slice byte for byte, so the ad-hoc
           #       signature ld puts on the arm64 slice -- which Apple Silicon requires to run it at
@@ -107,7 +90,7 @@ jobs:
           #       of an app carrying a VERSIONED framework is ambiguous by design, which is how this
           #       was found.
           exe="$RUNNER_TEMP/shipyard-updater.app/Contents/MacOS/shipyard-updater"
-          archs="$(lipo -info "$exe" | sed -n 's/.*: //p')"
+          archs="$(${LIPO:-lipo} -info "$exe" | sed -n 's/.*: //p')"
           case " $archs " in *" x86_64 "*) ;; *) echo "::error::the merged updater has no x86_64 slice: $archs"; exit 1;; esac
           case " $archs " in *" arm64 "*) ;; *) echo "::error::the merged updater has no arm64 slice: $archs"; exit 1;; esac
           echo "merged updater: $archs"
@@ -117,10 +100,6 @@ jobs:
           set -eu
           v='${{ steps.ver.outputs.version }}'
           mkdir -p dist
-          # spec: scripts/package-pkg.sh -- $SHIPYARD_CMAKE_TREE (exported by install@v1 in
-          #       source-build mode) is the UNTOUCHED tree, not the prefix that step installed
-          #       shipyard into: --cmake-tree refuses a root carrying anything but bin/doc/man/share,
-          #       and --shipyard-prefix anything but share. Two clean roots in, one prefix out.
           shipyard-cmake -S . -B "$RUNNER_TEMP/payload-build"
           # spec: scripts/package-pkg.sh -- the install bakes its prefix into mavericks-presets.json, so
           #       it installs INTO the pkg's prefix, staged under DESTDIR; package-pkg.sh refuses presets
@@ -128,7 +107,6 @@ jobs:
           DESTDIR="$RUNNER_TEMP/payload-stage" shipyard-cmake --install "$RUNNER_TEMP/payload-build" \
             --prefix /usr/local/mavergreen/shipyard
           sh scripts/package-pkg.sh \
-            --cmake-tree "$SHIPYARD_CMAKE_TREE" \
             --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
             --app "$RUNNER_TEMP/shipyard-updater.app" \
             --version "$v" \
@@ -146,7 +124,7 @@ jobs:
       - name: Sign + appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-          GH_TOKEN: ${{ github.token }}   # sign_and_appcast.sh fetches ed25519-sign via gh
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
           v='${{ steps.ver.outputs.version }}'
@@ -185,8 +163,7 @@ jobs:
           v='${{ steps.ver.outputs.version }}'
           bad=0
           sudo installer -pkg "dist/mavericks-shipyard-$v.pkg" -target / || bad=1
-          want="$(sed -n 's/^CMAKE_VERSION=//p' cmake.pin)"
-          sh scripts/assert-installed-shipyard.sh --cmake-version "$want" --root / || bad=1
+          sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root / || bad=1
           /usr/local/bin/mavergreen check || bad=1
           if [ "$bad" -ne 0 ]; then
             echo "---- /var/log/install.log, the pkg's scripts ----"
@@ -218,7 +195,12 @@ jobs:
   # spec: .github/workflows/linux-host.yml -- a release whose host-agnostic half is broken on Linux
   #       breaks every consumer's ubuntu-latest job the moment @v1 moves, so it does not publish.
   linux:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/linux-host.yml
+    secrets:
+      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   publish:
     needs: [build, linux, scan]
@@ -230,8 +212,29 @@ jobs:
       artifact: shipyard-dist
       shipyard-ref: ${{ github.sha }}
 
-  major-tag:
+  # spec: tests/shipyard-release-workflow-test.sh -- every consumer installs through source: release,
+  #       which no earlier job runs, so @v1 moves only once the release just published installs that way.
+  canary:
     needs: [build, publish]
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v${{ needs.build.outputs.version }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/install
+        with:
+          release-version: v${{ needs.build.outputs.version }}
+      - name: The release installs as a consumer gets it
+        run: |
+          set -eu
+          sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root /
+          /usr/local/bin/mavergreen check
+          shipyard-cmake --version | head -1
+
+  major-tag:
+    needs: [build, publish, canary]
     runs-on: ubuntu-latest
     permissions:
       contents: write

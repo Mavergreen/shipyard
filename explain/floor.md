@@ -17,6 +17,6 @@ guard's job and the on-target run's.
 
 ## Deviating
 Write "- floor:<pkg or appcast file glob>: <reason>". A good reason says what the artifact's real minimum is
-and why it differs from 10.9.5, and the exit. A floor below 10.9 is a different decision (QUEUE #42).
+and why it differs from 10.9.5, and the exit. A floor below 10.9 (Snow Leopard, maybe Tiger) is a different decision.
 
 Formerly the conformance rule floor

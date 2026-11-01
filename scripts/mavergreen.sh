@@ -366,8 +366,46 @@ run_pre_uninstall_hook() {
     fi
   }
 }
+phys_path() {
+  _pp="$1"; _ps=""
+  while [ "${_pp%/}" != "$_pp" ]; do _pp="${_pp%/}"; done
+  while [ -n "$_pp" ] && [ ! -d "$_pp" ]; do
+    _ps="/${_pp##*/}$_ps"; _pp="${_pp%/*}"
+  done
+  [ -n "$_pp" ] || _pp=/
+  _pd="$(cd -P "$_pp" 2>/dev/null && pwd -P)" || return 1
+  printf '%s%s' "${_pd%/}" "$_ps"
+}
+links_into() {
+  _li_links="$(find "$MG/$1" -type l 2>/dev/null)"
+  [ -n "$_li_links" ] || return 1
+  while IFS= read -r _l; do
+    _t="$(readlink "$_l")" || continue
+    case "$_t" in /*) ;; *) _t="$(dirname "$_l")/$_t" ;; esac
+    _t="$(phys_path "$_t")" || continue
+    case "$_t/" in "$2/"*) return 0 ;; esac
+  done <<EOL
+$_li_links
+EOL
+  return 1
+}
+refuse_if_depended_on() {
+  _real="$(phys_path "$MG/$1")" || return 0
+  _deps=""
+  for _q in $(installed); do
+    [ "$_q" != "$1" ] || continue
+    if links_into "$_q" "$_real"; then _deps="$_deps $_q"; fi
+  done
+  [ -z "$_deps" ] && return 0
+  {
+    echo "mavergreen: not uninstalling $1 -- other products link into it, and would be left dangling. Uninstall them first:"
+    for _q in $_deps; do echo "sudo mavergreen uninstall $_q"; done
+  } >&2
+  exit 1
+}
 do_uninstall() {
   need_product "$1"
+  refuse_if_depended_on "$1"
   run_pre_uninstall_hook "$1"
   if [ -f "$MG/var/system-replace/$1/.replaced" ]; then
     do_system_restore "$1" \

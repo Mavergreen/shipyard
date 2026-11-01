@@ -45,7 +45,7 @@ mkrepo "$work/r16"; printf '#!/bin/sh\ncat "$HOME/.cmake/packages/MavericksShipy
 (cd "$work/r16" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/r16" && sh "$S" 2>&1)"; then echo "FAIL 16: a registry read should fail"; exit 1; fi
 first_is "$out" registry-read || { echo "FAIL should be a registry-read failure: $out"; exit 1; }
-printf '\n## Conformance deviations\n- registry-read:build/x.sh: a shim that leaves with the flag day\n' >> "$work/r16/INGREDIENTS.md"
+printf '\n- registry-read:build/x.sh: a shim that leaves with the flag day\n' >> "$work/r16/INGREDIENTS.md"
 (cd "$work/r16" && sh "$S" >/dev/null) || { echo "FAIL 16: a declared registry-read deviation should pass"; exit 1; }
 
 # spec: tests/shipyard-release-workflow-test.sh -- a test asserting the registry is GONE has to be
@@ -66,7 +66,7 @@ mkrepo "$work/m17"; cp "$here/../scripts/templates/msc.sh" "$work/m17/build/msc.
 echo '# a local tweak' >> "$work/m17/build/msc.sh"
 if out="$(cd "$work/m17" && sh "$S" 2>&1)"; then echo "FAIL 17: a drifted msc.sh should fail"; exit 1; fi
 first_is "$out" msc-template || { echo "FAIL should be a msc-template failure: $out"; exit 1; }
-printf '\n## Conformance deviations\n- msc-template:build/msc.sh: exercising the deviation path\n' >> "$work/m17/INGREDIENTS.md"
+printf '\n- msc-template:build/msc.sh: exercising the deviation path\n' >> "$work/m17/INGREDIENTS.md"
 (cd "$work/m17" && sh "$S" >/dev/null) || { echo "FAIL 17: a declared msc-template deviation should pass"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 17 -- only TRACKED copies count, the rule 7c/7d already
@@ -105,7 +105,7 @@ mkrepo "$work/p18ok"; printf '      - run: shipyard-cmake -S . -B "$RUNNER_TEMP/
 printf '#!/bin/sh\n# cmake -S would be wrong here, but this is a comment\n' > "$work/p18ok/build/c.sh"
 (cd "$work/p18ok" && git add -A) >/dev/null 2>&1
 (cd "$work/p18ok" && sh "$S" >/dev/null) || { echo "FAIL 18: shipyard-cmake and comments should pass"; exit 1; }
-printf '\n## Conformance deviations\n- shipyard-cmake-only:build/t.sh: exercising the deviation path\n' >> "$work/p18b/INGREDIENTS.md"
+printf '\n- shipyard-cmake-only:build/t.sh: exercising the deviation path\n' >> "$work/p18b/INGREDIENTS.md"
 (cd "$work/p18b" && sh "$S" >/dev/null) || { echo "FAIL 18: a declared shipyard-cmake-only deviation should pass"; exit 1; }
 
 # spec: SKILL.md "Check 18" -- the shapes a whole-org survey turned up that are NOT an invocation.

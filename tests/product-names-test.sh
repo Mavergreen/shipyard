@@ -43,6 +43,12 @@ sh "$S" identifier legacysupport >/dev/null 2>&1 \
 [ "$(sh "$S" identifier icu)" = dev.mavergreen.icu ] || fail "icu is identified dev.mavergreen.icu"
 [ "$(sh "$S" feed icu)" = https://github.com/Mavergreen/icu/releases/latest/download/icu.xml ] \
   || fail "icu's feed is icu.xml on its repo's latest release"
+[ "$(sh "$S" identifier cmake)" = dev.mavergreen.cmake ] || fail "cmake is identified dev.mavergreen.cmake"
+[ "$(sh "$S" repo cmake)" = cmake ] || fail "cmake lives in the cmake repo"
+[ "$(sh "$S" feed cmake)" = https://github.com/Mavergreen/cmake/releases/latest/download/cmake.xml ] \
+  || fail "cmake's feed is cmake.xml on its repo's latest release"
+[ "$(sh "$S" updater-bundle-id cmake)" = dev.mavergreen.cmake.updater ] \
+  || fail "cmake's updater bundle id is its identifier plus .updater"
 for q in repo updater-bundle-id agent-label updater-app feed; do
   sh "$S" "$q" no-such-product >/dev/null 2>&1 && fail "$q of an unregistered name must exit non-zero"
 done

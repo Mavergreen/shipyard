@@ -6,7 +6,7 @@ relabel, since the version is baked into the pkg filename, pkgbuild --version an
 and rebuilds. So an existing tag refuses the publish, with one exception: a run started by a pushed tag always
 finds its own tag. The exception holds only when the run's ref is this version's tag and the tag names the
 commit being published (an annotated tag's peeled commit is read too). It serves only the legacy tags:
-triggers still in existing repos, and goes with them (QUEUE #26). If the remote's tags cannot be read at all,
+triggers still in existing repos, and goes with them when they are removed family-wide. If the remote's tags cannot be read at all,
 the publish is refused rather than guessed.
 
 ## Incident

@@ -22,7 +22,11 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/family-conventions.XXXXXX")"; trap 'rm -rf "$
 #       baseline calls release-notes.sh and hands the publisher the very path it was given as
 #       --out; a fixture that still hand-waved `--notes-file "$NOTES"` would fail 14 in thirty
 #       unrelated cases.
-mkrepo() {  # $1 = dir
+# spec: SKILL.md "Family conventions" check 29 -- the baseline's publish job needs a 10.9
+#       acceptance job, so a case that makes it build a .pkg still passes; both come before build,
+#       so a case appending steps appends them to build. "novm" leaves both out, for check 29's
+#       own cases.
+mkrepo() {  # $1 = dir, $2 = novm (optional)
   mkdir -p "$1/.github/workflows" "$1/tests"
   cat > "$1/.github/workflows/release.yml" <<'YML'
 name: release
@@ -37,6 +41,19 @@ concurrency:
   group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+YML
+  [ "${2:-}" = novm ] || cat >> "$1/.github/workflows/release.yml" <<'YML'
+  vm-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Mavergreen/mavericks-vm@v1
+  publish:
+    needs: [vm-test]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo published
+YML
+  cat >> "$1/.github/workflows/release.yml" <<'YML'
   build:
     steps:
       - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
@@ -47,7 +64,11 @@ jobs:
       - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
       - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
 YML
-  printf '# Build ingredients\n' > "$1/INGREDIENTS.md"
+  # spec: SKILL.md "Family conventions" check 35 -- these fixtures build pkgs with the system packager on
+  #       purpose, so the baseline declares build/package.sh; a case adds its own deviations beneath this
+  #       heading, and tests/check-family-conventions-7-test.sh, which tests check 35 itself, replaces
+  #       the whole file with a bare INGREDIENTS.md.
+  printf '# Build ingredients\n\n## Conformance deviations\n\n- packager:build/package.sh: fixtures build pkgs with the system packager\n' > "$1/INGREDIENTS.md"
   printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$1/.github/renovate.json"
   printf '#!/bin/sh\nexit 0\n' > "$1/tests/a-test.sh"
   # spec: scripts/check-family-conventions.sh -- a compliant repo commits UPSTREAM_VERSION and
@@ -61,6 +82,16 @@ YML
   (cd "$1" && git init -q && git add -A) >/dev/null 2>&1
 }
 mkrepo "$work/ok"
+
+# spec: scripts/check-family-conventions.sh checks 21, 23 and 29 -- a repo that builds a .pkg
+#       satisfies 21 and 23 here and is left without the 10.9 acceptance job check 29 asks for.
+pkrepo() {  # $1 = dir
+  mkrepo "$1" novm
+  printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$1/build/package.sh"
+  printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$1/build/package.sh"
+  printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n' >> "$1/.github/workflows/release.yml"
+  (cd "$1" && git add -A) >/dev/null 2>&1
+}
 
 # spec: SKILL.md "Family conventions" check 12 -- sign_and_appcast.sh writes <feed-dir>/<product>.xml
 #       itself, so a call that omits --product or --feed-dir, or redirects its stdout, is the retired

@@ -14,7 +14,7 @@ install-macho-readers.sh for llvm-lipo and llvm-strings, which Xcode does not sh
 ## Limits
 Command position follows shipyard-cmake-only's rule; a brew behind a prefix other than sudo, env, command or
 time is not seen. It names a prefix only as text, so a script that merely excludes /opt/homebrew from a
-search path (build-cmake.sh) is a use, and declared as one.
+search path is a use, and declared as one.
 
 ## Deviating
 Write "- brew:<path>: <reason>. Revisit when <exit>." The exit names the family product or facility that

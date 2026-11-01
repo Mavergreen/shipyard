@@ -9,8 +9,8 @@
 #          time. Every check in the family so far has verified that artifacts AGREE with each other;
 #          none exercised what the installer DOES on a machine that already has the previous version.
 #          This gate closes that gap for relocation + version-skip. PackageInfo is a plain XML file
-#          in the pkg, read with bsdtar on every host (lib/pkg-read.sh), so the gate needs neither
-#          pkgutil nor a Mac.
+#          in the pkg, expanded with stevedore on every host (fetch_stevedore.sh), so the gate needs
+#          neither pkgutil nor a Mac.
 # platform: for every component PackageInfo inside the .pkg, asserts (both verified empirically
 #           against real pkgbuild output, 2026-07-31 -- pkgbuild encodes these differently than one
 #           might guess):
@@ -55,13 +55,22 @@ count_bundles() {  # $1=PackageInfo  $2=element
     END { print c + 0 }'
 }
 
+checked=""
 for pkg in "$@"; do
   [ -f "$pkg" ] || { chk_fail pkg-in-place "$rule" "$pkg does not exist" "pass the built .pkg's path"; continue; }
+  if [ -z "$checked" ]; then
+    STEVEDORE="$(sh "$SELF/fetch_stevedore.sh" 2>/dev/null)" || {
+      _fs_why="$(sh "$SELF/fetch_stevedore.sh" 2>&1 >/dev/null | tail -1)"
+      chk_fail pkg-in-place "$rule" "stevedore, which reads the pkgs, cannot be fetched ($_fs_why), so no bundle can be checked" \
+        "run sh \"\$SHIPYARD_SCRIPTS/fetch_stevedore.sh\" and fix what it says, or unset a STEVEDORE that names no stevedore"
+      break
+    }
+    checked=1
+  fi
   x="$(mktemp -d "${TMPDIR:-/tmp}/pkg-inplace.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-  rc=0; af_extract "$pkg" "$x" || rc=$?
-  if [ "$rc" -ne 0 ]; then
-    chk_fail pkg-in-place "$rule" "$pkg cannot be read, so its bundles cannot be checked$([ "$rc" -ne 2 ] || echo ' (no bsdtar found)')" \
-      "install libarchive-tools or set BSDTAR to bsdtar's path, and make sure the pkg is a readable xar"
+  if ! "$STEVEDORE" expand "$pkg" "$x/e" >/dev/null 2>&1; then
+    chk_fail pkg-in-place "$rule" "$pkg cannot be expanded by stevedore, so its bundles cannot be checked" \
+      "make sure the pkg is a readable xar, as stevedore writes one"
     af_rm "$x"; continue
   fi
   found=0
@@ -79,7 +88,7 @@ for pkg in "$@"; do
       chk_fail pkg-in-place "$rule" "$pkg: $u bundle(s) under <bundle-version> -- BundleIsVersionChecked is ON" "$fix"
     fi
   done
-  [ "$found" -eq 1 ] || chk_fail pkg-in-place "$rule" "$pkg: no PackageInfo found" "build the pkg with pkgbuild, which writes one"
+  [ "$found" -eq 1 ] || chk_fail pkg-in-place "$rule" "$pkg: no PackageInfo found" "build the component with build_component_pkg.sh, which writes one"
   af_rm "$x"
 done
 

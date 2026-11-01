@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- pkgutil
+# platform: host-agnostic
 #   usage: fetch_product_pkg.sh [--asset NAME] SHORT VERSION DEST
 #          One component of a pinned Mavergreen release's .pkg, for a build that consumes another family
 #          product (librecaulk.a out of Recaulk's pkg, say). SHORT is a short name in the registry
@@ -11,10 +11,13 @@
 #          mavericks_fetch.sh's shipyard_fetch_verified against the release's SHA256SUMS, which is fetched
 #          afresh on every call; an asset SHA256SUMS does not list fails. The component is picked by its
 #          PackageInfo identifier, never by position (a product archive lists dev.mavergreen.base first).
-#          DEST is REPLACED by its usr/local/mavergreen/SHORT tree, extracted beside DEST and swapped in.
+#          DEST is REPLACED by its usr/local/mavergreen/SHORT tree, extracted beside DEST and swapped in,
+#          unless DEST.stamp says DEST already holds this very pkg's tree: then DEST is kept, since a
+#          parallel build may be running a compiler out of it. Calls for one DEST take turns through the
+#          lock directory DEST.lock, waiting up to SHIPYARD_LOCK_WAIT seconds (default 900) for it.
 #          Prints DEST on stdout; progress goes to stderr. Exit 1 on a failed fetch, checksum or
 #          extraction, 2 on a usage error or a registry that cannot answer. MAVERGREEN_RELEASES replaces
-#          https://github.com (the tests serve a file:// tree). Runs on 10.9: pkgutil --expand only.
+#          https://github.com (the tests serve a file:// tree).
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 usage() { echo "usage: fetch_product_pkg.sh [--asset NAME] SHORT VERSION DEST" >&2; exit 2; }
@@ -39,10 +42,11 @@ CACHE="${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/$REPO/$VERS
 
 mkdir -p "$CACHE" "$(dirname "$DEST")"
 DEST="$(cd "$(dirname "$DEST")" && pwd -P)/$(basename "$DEST")"
-tmp=""; old=""
+tmp=""; old=""; locked=""
 cleanup() {
   if [ -n "$old" ] && [ -e "$old/dest" ] && [ ! -e "$DEST" ]; then mv "$old/dest" "$DEST"; fi
   rm -rf ${tmp:+"$tmp"} ${old:+"$old"}
+  [ -z "$locked" ] || rmdir "$DEST.lock" 2>/dev/null || :
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -55,10 +59,24 @@ case "$SHA" in
   *[!0-9a-f]*|'') echo "fetch_product_pkg: $ASSET is not listed (once) in $BASE/SHA256SUMS" >&2; exit 1 ;;
 esac
 [ "${#SHA}" -eq 64 ] || { echo "fetch_product_pkg: $ASSET is not listed (once) in $BASE/SHA256SUMS" >&2; exit 1; }
+waited=0
+until mkdir "$DEST.lock" 2>/dev/null; do
+  [ "$waited" -lt "${SHIPYARD_LOCK_WAIT:-900}" ] || {
+    echo "fetch_product_pkg: $DEST.lock is still held after ${waited}s; remove it if no fetch of $DEST is running" >&2; exit 1; }
+  sleep 1; waited=$((waited + 1))
+done
+locked=1
+stamp="$ID $VERSION $SHA"
+if [ -d "$DEST" ] && [ "$(cat "$DEST.stamp" 2>/dev/null || :)" = "$stamp" ]; then
+  echo "$ID $VERSION already extracted: $DEST" >&2
+  printf '%s\n' "$DEST"; exit 0
+fi
+rm -f "$DEST.stamp"
 shipyard_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET" || {
   echo "fetch_product_pkg: could not fetch and verify $BASE/$ASSET" >&2; exit 1; }
 
-pkgutil --expand "$CACHE/$ASSET" "$tmp/expanded" >&2 || {
+STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || { echo "fetch_product_pkg: no stevedore to expand the pkg with" >&2; exit 1; }
+"$STEVEDORE" expand "$CACHE/$ASSET" "$tmp/expanded" >&2 || {
   echo "fetch_product_pkg: could not expand $CACHE/$ASSET" >&2; exit 1; }
 matches="$(grep -l "identifier=\"$ID\"" "$tmp"/expanded/*/PackageInfo 2>/dev/null || true)"
 n="$(printf '%s\n' "$matches" | grep -c . || true)"
@@ -72,5 +90,6 @@ tree="$tmp/payload/usr/local/mavergreen/$SHORT"
 [ -d "$tree" ] || { echo "fetch_product_pkg: $ID installs no usr/local/mavergreen/$SHORT" >&2; exit 1; }
 if [ -e "$DEST" ] || [ -L "$DEST" ]; then old="$(mktemp -d "$DEST.old.XXXXXX")"; mv "$DEST" "$old/dest"; fi
 mv "$tree" "$DEST" || { echo "fetch_product_pkg: could not move the tree to $DEST" >&2; exit 1; }
+printf '%s\n' "$stamp" > "$DEST.stamp"
 echo "$ID $VERSION extracted: $DEST" >&2
 printf '%s\n' "$DEST"

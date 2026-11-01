@@ -21,7 +21,8 @@ shipyard-check it reports itself not run instead. Plain shipyard-check never sel
 workflow calls it after the build, or under --only tree-clean, and under shipyard-check it never consumes the
 --record manifest, so a mid-pipeline check leaves it for the post-build call. It
 reports at the level of paths. It warns, with exit 0, when an allowlist entry names something nothing wrote
-("prune it"); QUEUE #19 records that this warning is false on every run of shipyard's own ci.yml.
+("prune it"); that warning is false on every run of shipyard's own ci.yml, whose jobs write neither
+VERSION nor dist/.
 
 ## Deviating
 No deviation is read from INGREDIENTS.md. In-tree writes a repo genuinely needs go in a tracked .mavericks-intree

@@ -14,7 +14,7 @@ signal-desktop's Signal 8.26.0 sat green and unmerged for a month with nothing a
 
 ## Limits
 It reads the setting for every repo of the org that has a release.yml. It needs an admin gh credential, and
-refuses to run without one rather than pass. QUEUE #38 records a related gap, not covered: a required check
+refuses to run without one rather than pass. A related gap is not covered: a required check
 that can be skipped counts as passed.
 
 ## Deviating

@@ -1,8 +1,8 @@
 shipyard-cmake-only: no plain cmake, ctest or cpack at command position.
 
 ## Why
-MavericksShipyardConfig.cmake refuses any other cmake at configure time, by name. This finds the call on
-the pull request instead of in the release. Workflows and committed *.sh outside tests/ are scanned;
+The launchers use the pinned cmake product, and on macOS a foreign or too-old cmake is refused at
+configure time. This finds the call on the pull request instead of in the release. Workflows and committed *.sh outside tests/ are scanned;
 tests/ is excluded because fixtures quote the command on purpose. The fix is shipyard-cmake,
 shipyard-ctest and shipyard-cpack, which the mavergreen helper links into /usr/local/mavergreen/bin.
 

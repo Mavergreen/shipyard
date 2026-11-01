@@ -5,7 +5,7 @@ The family works toward no outside package manager, and every use is counted as 
 check matches the commands pkgin, pkg_add and bmake at command position, and the prefixes /opt/pkg and
 /usr/pkg, on a non-comment line of tracked shell scripts outside tests/ and of every workflow and
 composite-action run: block. A binary built against the host's pkgsrc libraries loads them from
-/opt/pkg at run time (QUEUE #66).
+/opt/pkg at run time, and the compat guard does not see where its load commands point.
 
 ## Incident
 None recorded. The rule is the maintainer's decision of 2026-10-14.

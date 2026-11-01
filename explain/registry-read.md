@@ -11,8 +11,9 @@ None recorded.
 
 ## Limits
 It is a text match on tracked files, written so that its own message cannot spell the full path or the
-gate would flag itself. A registry path built from pieces at run time is not seen. QUEUE #12 records two
-blind spots found in it.
+gate would flag itself. A registry path built from pieces at run time is not seen. Two blind spots were
+found in it: a locator reading $HOME/.local/share/cmake/... is not matched, and tests/ is skipped, so a
+locator there is never reported.
 
 ## Deviating
 Write "- registry-read:<path>: <reason>" for one tracked file. A good reason says why that file must read

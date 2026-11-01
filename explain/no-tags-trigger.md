@@ -5,11 +5,10 @@ Tags are retired as a release input: a workflow_dispatch covers every case a tag
 (gh workflow run release.yml --ref <any ref>). A new repo adds no tags: trigger, and an existing one removes
 it. Only a tags: or tags-ignore: key under push: is a trigger; a dispatch input named tags is not. The
 exception in assert_tag_publishable.sh for the tag that triggered the run serves only the legacy triggers and
-goes when the last one does (QUEUE #26).
+goes when the last one does, once the legacy tags: triggers are removed family-wide.
 
 ## Incident
-None recorded. On 2026-09-26 twelve repos still carried push: tags: ['*-mavericks.*'] in release.yml (QUEUE
-#26), the legacy state this check ends.
+None recorded. On 2026-09-26 twelve repos still carried push: tags: ['*-mavericks.*'] in release.yml, the legacy state this check ends.
 
 ## Limits
 It needs workflows that parse (workflow-yaml names the place) and python3. It reads the parsed on: key, so a

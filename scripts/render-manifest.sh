@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- PlistBuddy reads back and plutil lints the manifest it writes
+# platform: host-agnostic -- stevedore lints and reads back the manifest it writes
 #   usage: render-manifest.sh --stage ROOT --product P --name N --version V [--group G] [--line L]
 #            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]... [--has-updater]
 #          Writes ROOT/usr/local/mavergreen/P/mavergreen.plist. Run it LAST: `outside` is read from
@@ -9,7 +9,6 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
-PB=/usr/libexec/PlistBuddy
 ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; HASUPD=""; EXCL=""; REPL=""; GEN=""
 nl='
 '
@@ -92,9 +91,10 @@ PLIST_HEADER
     | while IFS= read -r o; do printf '    <string>%s</string>\n' "$(xesc "$o")"; done
   printf '  </array>\n</dict>\n</plist>\n'
 } > "$M"
-plutil -lint "$M" >/dev/null || { echo "render-manifest: $M failed plutil -lint after writing" >&2; exit 1; }
+STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
+"$STEVEDORE" plist xml1 "$M" >/dev/null || { echo "render-manifest: $M is not a valid plist after writing" >&2; exit 1; }
 verify() {
-  _got="$("$PB" -c "Print :$1" "$M" 2>/dev/null)" || { echo "render-manifest: could not read back :$1 after writing $M" >&2; exit 1; }
+  _got="$("$STEVEDORE" plist get "$M" "$1" 2>/dev/null)" || { echo "render-manifest: could not read back :$1 after writing $M" >&2; exit 1; }
   [ "$_got" = "$2" ] || { echo "render-manifest: :$1 did not round-trip through $M" >&2; exit 1; }
 }
 verify identifier "$ID"

@@ -1,6 +1,6 @@
-# platform: macOS-only -- pkgbuild and productbuild build the fixtures
+# platform: host-agnostic -- build_component_pkg.sh and set_install_floor.sh build the fixtures with stevedore
 # Fixtures for the Sparkle-key checks (tests/lib/ is not itself run: run-repo-tests.sh takes top-level
-# tests only). Real .pkg files, built with the same pkgbuild/productbuild the products use.
+# tests only). Real .pkg files, built with the seams that build the products.
 
 # mkpkg OUT [KEY FEED [APP]] ... -- a product archive whose payload holds one updater app per
 # KEY FEED APP triple, under "Library/Application Support/Mavergreen/" (the space is on purpose:
@@ -28,9 +28,13 @@ mkpkg() {
 EOF
     shift 3
   done
-  pkgbuild --root "$root" --identifier dev.mavergreen.test --version 1 --install-location / \
-    "$out.component.pkg" >/dev/null
-  productbuild --package "$out.component.pkg" "$out" >/dev/null
+  local scripts="$BATS_TEST_DIRNAME/../scripts"
+  SOURCE_DATE_EPOCH=1700000000 sh "$scripts/build_component_pkg.sh" --root "$root" --identifier dev.mavergreen.test \
+    --version 1 --install-location / --out "$out.component.pkg" >/dev/null 2>&1 \
+    || { echo "build_component_pkg.sh failed: no fixture" >&2; return 1; }
+  SOURCE_DATE_EPOCH=1700000000 sh "$scripts/set_install_floor.sh" --identifier dev.mavergreen.test --title Test \
+    --component "$out.component.pkg" --out "$out" >/dev/null 2>&1 \
+    || { echo "set_install_floor.sh failed: no fixture" >&2; return 1; }
   rm -f "$out.component.pkg"
 }
 

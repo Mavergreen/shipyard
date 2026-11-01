@@ -114,9 +114,19 @@ else
   printf '## %s %s for Mavericks (%s)\n' "$PRODUCT" "$UP" "$VER" > "$tmp"
 fi
 
+# spec: SKILL.md "Release notes" -- committed prose
+#       publishes only once a human has marked it edited; the mark never reaches readers.
+MARK='<!-- edited by a human -->'
 notes="$MAVERICKS_ROOT/release-notes/${TAG}.md"
 if [ -f "$notes" ] && [ -s "$notes" ]; then
-  printf '\n' >> "$tmp"; cat "$notes" >> "$tmp"
+  awk -v m="$MARK" '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l == m) f = 1 } END { exit !f }' "$notes" \
+    || die "$notes has no line '$MARK'. Committed prose publishes only after a human has edited it: once you have, add that line to the file. An agent never adds it."
+  awk -v m="$MARK" '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l != m) print }' "$notes" > "$tmp.prose" \
+    || die "could not read $notes"
+  if [ -s "$tmp.prose" ]; then
+    printf '\n' >> "$tmp"; cat "$tmp.prose" >> "$tmp"
+  fi
+  rm -f "$tmp.prose"
 fi
 
 printf '\n### What changed\n' >> "$tmp"
@@ -153,10 +163,18 @@ if [ -n "$CALLER" ]; then
     || die "ingredient-pins.sh failed reading the pins $CALLER watches; a repackage caller whose pins cannot be read must not ship notes that call it packaging-only"
   [ -n "$PINS" ] || die "$CALLER calls repackage-on-ingredient-bump.yml but ingredient-pins.sh found no pins in it (check its 'paths:' list and own-upstream-paths)"
 fi
+# spec: tests/release-notes-test.sh "r3new"/"r1d" -- this repo's owner/repo names its own compare
+#       view; with neither source, a link is left out rather than guessed.
+SLUG="${GITHUB_REPOSITORY:-}"
+if [ -z "$SLUG" ]; then
+  short="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
+  if own="$(sh "$SELF/product-name.sh" repo "$short" 2>/dev/null)"; then SLUG="Mavergreen/$own"; fi
+fi
+
 INGREDIENTS=""
 if [ -n "$PREV" ] && [ -n "$PINS" ]; then
   # shellcheck disable=SC2086  # PINS is a deliberate list of paths
-  INGREDIENTS="$(sh "$SELF/ingredient-notes.sh" "$PREV" $PINS)" \
+  INGREDIENTS="$(sh "$SELF/ingredient-notes.sh" ${SLUG:+--repo "$SLUG" --tag "$TAG"} "$PREV" $PINS)" \
     || die "cannot read the ingredient pins that moved since $PREV; a repackage that cannot say what moved must not ship"
 fi
 
@@ -172,8 +190,49 @@ if [ -n "$PREV" ] && [ "$SELF_UPSTREAM" = no ]; then
     || die "cannot read which of our patches changed since $PREV; a release that cannot say whether it changed our patches must not ship"
 fi
 
+# spec: tests/release-notes-test.sh "r3*" -- a self-upstream release says why it was cut, as a
+#       port's does: an ingredient-only YYYYMMDD.N repackage that read "Release of <product>" looked
+#       like new code. The compare names the tags, since shipyard's v1.0.209 is version 1.0.209.
 if [ "$SELF_UPSTREAM" = yes ]; then
-  printf -- '- Release of %s %s.\n' "$PRODUCT" "$VER" >> "$tmp"
+  date_of() {
+    case "$1" in
+      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].*[0-9]) printf '%s' "${1%%.*}" ;;
+    esac
+  }
+  if [ -z "$PREV" ] && [ -z "$(git tag --list)" ]; then
+    # spec: tests/release-notes-test.sh "m4" -- "First release" is a claim; a checkout that only
+    #       lacks its tags must not make it. N > 1 on a date says earlier releases exist, and in CI
+    #       the repo's own releases say so for any scheme.
+    unfetched="cannot see this repo's earlier release tags, so \"First release\" may be false (fetch tags: fetch-depth: 0)"
+    case "$VER" in
+      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].1) ;;
+      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].*[0-9]) die "$VER is not its date's first release, but this $unfetched" ;;
+    esac
+    if [ "${GITHUB_ACTIONS:-}" = true ] && [ -n "$SLUG" ]; then
+      # spec: tests/release-notes-test.sh "m4" -- a gh that cannot list (no GH_TOKEN on the step)
+      #       proves nothing either way, so it warns and trusts the checkout.
+      if released="$(gh release list --repo "$SLUG" --limit 1 --json tagName --jq '.[0].tagName // empty' 2>/dev/null)"; then
+        [ -z "$released" ] || die "$SLUG has released $released, but this $unfetched"
+      else
+        echo "release-notes: warning: gh cannot list $SLUG's releases (is GH_TOKEN set on this step?), so a first release is taken on the checkout's word" >&2
+      fi
+    fi
+  fi
+  if [ -z "$PREV" ]; then
+    printf -- '- First release of %s %s.\n' "$PRODUCT" "$VER" >> "$tmp"
+  elif [ -n "$(date_of "$VER")" ] && [ "$(date_of "$VER")" = "$(date_of "$PREV")" ]; then
+    if [ -n "$INGREDIENTS" ]; then
+      printf -- '- Rebuilt because build ingredients moved (below); no change to %s itself.\n' "$PRODUCT" >> "$tmp"
+    else
+      printf -- '- Repackage of %s %s; packaging changes only.\n' "$PRODUCT" "$(date_of "$VER")" >> "$tmp"
+    fi
+  else
+    prevver="$PREV"
+    [ "$TAG" != "v$VER" ] || prevver="${PREV#v}"
+    printf -- '- New release of %s %s (was %s).\n' "$PRODUCT" "$VER" "$prevver" >> "$tmp"
+    [ -z "$SLUG" ] \
+      || printf -- '  [Changes since %s](https://github.com/%s/compare/%s...%s)\n' "$PREV" "$SLUG" "$PREV" "$TAG" >> "$tmp"
+  fi
 else
   set +e
   URL="$(sh "$SELF/upstream-notes.sh" --url-only "$VER")"; urc=$?
@@ -251,7 +310,12 @@ if [ -s "$footer_tmp" ]; then
   cat "$footer_tmp" >> "$tmp"
 fi
 
-if ! sh "$SELF/check-release-notes.sh" "$tmp" "$VER" >/dev/null; then
+if ! shape="$(sh "$SELF/check-release-notes.sh" "$tmp" "$VER" 2>&1 >/dev/null)"; then
+  printf '%s\n' "$shape" >&2
+  # spec: tests/release-notes-test.sh "bare" -- a moved pin with no link source is the repo's to fix.
+  case "$shape" in
+    *'unlinked:'*) die "a moved build ingredient says nothing about where its change is described (see the complaint above); the fix is in this repo: a Renovate manager, a REPO=, or an unlinked: declaration" ;;
+  esac
   if [ -f "$notes" ] && [ -s "$notes" ]; then
     die "the generated body failed the family shape check (see the complaint above); likely cause: the committed prose at $notes"
   else

@@ -31,7 +31,7 @@ first_is "$out" stage-product \
 mkrepo "$work/pkc"; printf '#!/bin/sh\npkgbuild --root stage out.pkg\n' > "$work/pkc/build/package.sh"
 printf '      # - run: shipyard-check --dist dist\n' >> "$work/pkc/.github/workflows/release.yml"
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) && { echo "FAIL: a commented-out conformance call must not count as wired"; exit 1; }
-printf '\n## Conformance deviations\n\n- artifact-checks-wired: ships a disk image, not a Mavergreen pkg\n- stage-product: ships a disk image, not a Mavergreen pkg\n- registered: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
+printf '\n- artifact-checks-wired: ships a disk image, not a Mavergreen pkg\n- stage-product: ships a disk image, not a Mavergreen pkg\n- registered: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: declared artifact-checks-wired, stage-product and registered deviations should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
 mkrepo "$work/pks"; printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$work/pks/.github/workflows/release.yml"
 out="$(cd "$work/pks" && git add -A && sh "$S" 2>&1 || true)"
@@ -92,7 +92,7 @@ printf '#!/bin/sh\narch -x86_64 ./host-tool\n' > "$work/rosetta/build/cross.sh"
 (cd "$work/rosetta" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/rosetta" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call must fail"; exit 1; }
 first_is "$out" rosetta || { echo "FAIL should be a rosetta failure: $out"; exit 1; }
-printf '\n## Conformance deviations\n\n- rosetta:build/cross.sh: the cross build runs a host tool under Rosetta; reconsider when an arm64 host tool exists, and at the latest before macOS 28\n' >> "$work/rosetta/INGREDIENTS.md"
+printf '\n- rosetta:build/cross.sh: the cross build runs a host tool under Rosetta; reconsider when an arm64 host tool exists, and at the latest before macOS 28\n' >> "$work/rosetta/INGREDIENTS.md"
 (cd "$work/rosetta" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse it: $(cd "$work/rosetta" && sh "$S" 2>&1)"; exit 1; }
 
@@ -118,7 +118,7 @@ printf '#!/bin/sh\narch -x86_64 ./product --version\n' > "$work/rosettat/tests/r
 (cd "$work/rosettat" && git add -A) >/dev/null 2>&1
 (cd "$work/rosettat" && sh "$S" >/dev/null 2>&1) \
   && { echo "FAIL: check 25: a call under tests/ must fail undeclared: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
-printf '\n## Conformance deviations\n\n- rosetta:tests/rosetta-smoke.sh: best-effort smoke that runs the shipped x86_64 product under Rosetta when present, SKIPping (77) otherwise; reconsider when an arm64 test box exists, and at the latest before macOS 28\n' >> "$work/rosettat/INGREDIENTS.md"
+printf '\n- rosetta:tests/rosetta-smoke.sh: best-effort smoke that runs the shipped x86_64 product under Rosetta when present, SKIPping (77) otherwise; reconsider when an arm64 test box exists, and at the latest before macOS 28\n' >> "$work/rosettat/INGREDIENTS.md"
 (cd "$work/rosettat" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:tests/rosetta-smoke.sh deviation should excuse it: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
 
@@ -145,7 +145,7 @@ printf 'jobs:\n  build:\n    steps:\n      - run: |\n          %s %s ./cross-too
 (cd "$work/rosettayml" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/rosettayml" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call inside a workflow run: block must fail"; exit 1; }
 first_is "$out" rosetta || { echo "FAIL should be a rosetta failure: $out"; exit 1; }
-printf '\n## Conformance deviations\n\n- rosetta:.github/workflows/x.yml: the release job cross-builds a host tool under Rosetta\n' >> "$work/rosettayml/INGREDIENTS.md"
+printf '\n- rosetta:.github/workflows/x.yml: the release job cross-builds a host tool under Rosetta\n' >> "$work/rosettayml/INGREDIENTS.md"
 (cd "$work/rosettayml" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:.github/workflows/x.yml deviation should excuse the workflow hit: $(cd "$work/rosettayml" && sh "$S" 2>&1)"; exit 1; }
 
@@ -156,7 +156,7 @@ printf '#!/bin/sh\nsoftwareupdate --install-rosetta --agree-to-license\n' > "$wo
 (cd "$work/rosettainstall" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/rosettainstall" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared softwareupdate Rosetta-install call must fail"; exit 1; }
 first_is "$out" rosetta || { echo "FAIL should be a rosetta failure: $out"; exit 1; }
-printf '\n## Conformance deviations\n\n- rosetta:build/prep.sh: installs Rosetta so a later step can run x86_64 tools\n' >> "$work/rosettainstall/INGREDIENTS.md"
+printf '\n- rosetta:build/prep.sh: installs Rosetta so a later step can run x86_64 tools\n' >> "$work/rosettainstall/INGREDIENTS.md"
 (cd "$work/rosettainstall" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse softwareupdate --install-rosetta: $(cd "$work/rosettainstall" && sh "$S" 2>&1)"; exit 1; }
 
@@ -187,14 +187,14 @@ mkrepo "$work/rp-untracked"; printf '{}\n' > "$work/rp-untracked/renovate.json"
 (cd "$work/rp-untracked" && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 26: an UNTRACKED renovate.json is not the repo's and must not fail: $(cd "$work/rp-untracked" && sh "$S" 2>&1)"; exit 1; }
 
-printf '\n## Conformance deviations\n\n- renovate-path:renovate.json: legacy consumer config read by an external bot; move before the next release\n' >> "$work/rp-renovate_json/INGREDIENTS.md"
+printf '\n- renovate-path:renovate.json: legacy consumer config read by an external bot; move before the next release\n' >> "$work/rp-renovate_json/INGREDIENTS.md"
 (cd "$work/rp-renovate_json" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 26: a declared renovate-path:renovate.json deviation should excuse it: $(cd "$work/rp-renovate_json" && sh "$S" 2>&1)"; exit 1; }
 (cd "$work/rp-renovate_json5" && git add -A && sh "$S" >/dev/null 2>&1) \
   && { echo "FAIL: check 26: a deviation for renovate.json must not excuse renovate.json5"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 27 -- .superpowers/ and .idea/ are ignored, and nothing is
-#       tracked under .superpowers/, docs/superpowers/ or .idea/. The baseline (mkrepo) is the positive control.
+#       tracked under .superpowers/, docs/superpowers/ or .idea/, no backlog file is tracked, and no tracked line cites a queue entry by number. The baseline (mkrepo) is the positive control.
 for form in '.superpowers/' '/.superpowers/' '.superpowers' '/.superpowers'; do
   d="$work/sp-ok$(printf '%s' "$form" | tr -c 'A-Za-z' _)"; mkrepo "$d"
   printf '/VERSION\n%s\n.idea/\n' "$form" > "$d/.gitignore"
@@ -227,11 +227,79 @@ for dir in .superpowers docs/superpowers .idea; do
   first_is "$out" superpowers-ignored || { echo "FAIL: check 27 should be a superpowers-ignored failure for $dir: $out"; exit 1; }
 done
 
+for f in BACKLOG.md docs/TODO.md notes/queue.txt Backlog; do
+  d="$work/bl-$(printf '%s' "$f" | tr -c 'A-Za-z' _)"; mkrepo "$d"
+  mkdir -p "$(dirname "$d/$f")"; printf 'x\n' > "$d/$f"
+  (cd "$d" && git add "$f") >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a tracked $f must fail"; exit 1; }
+  printf '%s\n' "$out" | grep -q "$f is a tracked backlog" || { echo "FAIL: check 27 should name the tracked $f: $out"; exit 1; }
+done
+mkrepo "$work/bl-near"; mkdir -p "$work/bl-near/tests"
+printf 'x\n' > "$work/bl-near/tests/backlog_test.sh"; printf 'x\n' > "$work/bl-near/QUEUES.md"
+(cd "$work/bl-near" && git add -A && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 27: backlog_test.sh and QUEUES.md are not backlogs: $(cd "$work/bl-near" && sh "$S" 2>&1)"; exit 1; }
+mkrepo "$work/bl-untracked"; printf 'x\n' > "$work/bl-untracked/BACKLOG.md"
+(cd "$work/bl-untracked" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 27: an untracked BACKLOG.md must pass"; exit 1; }
+
+q="QUEUE"; b="BACKLOG"
+for cite in "$q #12" "$q.md #3" "shipyard $b #30" "$q#7"; do
+  d="$work/ci-$(printf '%s' "$cite" | tr -c 'A-Za-z0-9' _)"; mkrepo "$d"
+  printf '# wait for %s before this\n' "$cite" > "$d/notes.sh"
+  (cd "$d" && git add notes.sh) >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a tracked line citing '$cite' must fail"; exit 1; }
+  printf '%s\n' "$out" | grep -q "notes.sh:1 cites a queue entry" || { echo "FAIL: check 27 should name notes.sh:1 for '$cite': $out"; exit 1; }
+done
+for wrap in md sh; do
+  d="$work/ci-wrap-$wrap"; mkrepo "$d"
+  case $wrap in
+    md) printf 'a fetcher (shipyard %s\n#52), never by hand\n' "$q" > "$d/notes.$wrap" ;;
+    sh) printf '# a fetcher (shipyard %s\n#   #52), never by hand\necho\n' "$b" > "$d/notes.$wrap" ;;
+  esac
+  (cd "$d" && git add "notes.$wrap") >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a citation wrapped across lines in notes.$wrap must fail"; exit 1; }
+  printf '%s\n' "$out" | grep -q "notes.$wrap:1 cites a queue entry" || { echo "FAIL: check 27 should name notes.$wrap:1: $out"; exit 1; }
+done
+mkrepo "$work/ci-near"
+printf '# the run queue #ofjobs, a %s of work, TODO #4, the %s\n# #ofthem\n' "$b" "$q" > "$work/ci-near/notes.sh"
+(cd "$work/ci-near" && git add notes.sh && sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: check 27: lowercase queue, a bare $b and TODO #n cite no queue entry: $(cd "$work/ci-near" && sh "$S" 2>&1)"; exit 1; }
+
 mkrepo "$work/sp-untracked"; mkdir -p "$work/sp-untracked/.idea"; printf 'x\n' > "$work/sp-untracked/.idea/misc.xml"
 (cd "$work/sp-untracked" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 27: an untracked, ignored .idea/ must pass"; exit 1; }
 
 mkrepo "$work/sp-nogit"; rm -rf "$work/sp-nogit/.git"
 out="$(cd "$work/sp-nogit" && sh "$S" 2>&1)" && { echo "FAIL: check 27: outside a git checkout must fail (cannot verify)"; exit 1; }
 first_is "$out" tracked-files || { echo "FAIL should be a tracked-files failure: $out"; exit 1; }
+
+# spec: SKILL.md "Family conventions" check 28 -- a fetch that takes whatever is newest, rather than a
+#       pinned version, fails unless an unpinned:<path> deviation declares it. The sample lines are
+#       joined through %s at printf time so this file's own source spells none of the forms it tests.
+_g="gh"; _r="release"; _l="latest"
+unpinned() {  # $1 = name, $2 = file, $3 = line: undeclared must fail naming unpinned; declared must pass
+  d="$work/unp-$1"; mkrepo "$d"; mkdir -p "$(dirname "$d/$2")"
+  printf '%s\n' "$3" > "$d/$2"
+  (cd "$d" && git add -A) >/dev/null 2>&1
+  out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 28: $1 must fail undeclared: $3"; exit 1; }
+  printf '%s\n' "$out" | grep -q "unpinned:$2" || { echo "FAIL: check 28 should name unpinned:$2 for $1: $out"; exit 1; }
+  printf '\n- unpinned:%s: a canary of the newest release on purpose; reconsider if it ever gates a release\n' "$2" >> "$d/INGREDIENTS.md"
+  (cd "$d" && git add -A && sh "$S" >/dev/null 2>&1) \
+    || { echo "FAIL: check 28: a declared unpinned:$2 should excuse $1: $(cd "$d" && sh "$S" 2>&1)"; exit 1; }
+}
+unpinned download build/fetch.sh "$(printf '%s %s download -R Mavergreen/x --pattern "*.pkg"' "$_g" "$_r")"
+unpinned view build/fetch.sh "$(printf 'lb="$(%s %s view -R Mavergreen/x --json tagName --jq .tagName)"' "$_g" "$_r")"
+unpinned redirect build/fetch.sh "$(printf 'shipyard_curl -fsSL -o /dev/null -w "%%{url_effective}" https://github.com/Mavergreen/x/releases/%s' "$_l")"
+unpinned api build/fetch.sh "$(printf 't="$(%s api repos/Mavergreen/x/releases/%s --jq .tag_name)"' "$_g" "$_l")"
+unpinned npm tests/e2e.sh "$(printf 'npm install -g some-tool@%s' "$_l")"
+unpinned image docker/Dockerfile "$(printf 'FROM alpine:%s' "$_l")"
+pinned() {  # $1 = name, $2 = line: must pass undeclared
+  d="$work/pin-$1"; mkrepo "$d"; printf '%s\n' "$2" > "$d/build/fetch.sh"
+  (cd "$d" && git add -A && sh "$S" >/dev/null 2>&1) \
+    || { echo "FAIL: check 28: $1 is pinned or no fetch, and must pass: $(cd "$d" && sh "$S" 2>&1)"; exit 1; }
+}
+pinned tagged "$(printf '%s %s download "$v" -R Mavergreen/x --pattern "*.pkg"' "$_g" "$_r")"
+pinned own-view "$(printf 'b="$(%s %s view --json body --jq .body)"' "$_g" "$_r")"
+pinned feed-url "$(printf 'feed=https://github.com/Mavergreen/x/releases/%s/download/x.xml' "$_l")"
+pinned comment "$(printf '# was: %s %s download -R Mavergreen/x' "$_g" "$_r")"
+pinned npm-word "$(printf 'for spec in npm npm@%s corepack; do wrap "$spec"; done' "$_l")"
 
 echo "PASS: check-family-conventions-4"

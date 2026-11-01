@@ -1,0 +1,83 @@
+name: Ingredients settled
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "pr: judge the pull request that triggered this run. sweep: judge every open same-repo renovate/* pull request, and mark every other open pull request, forks included, not checked."
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  statuses: write
+  pull-requests: read
+
+jobs:
+  settled:
+    if: inputs.mode == 'sweep' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: Mavergreen/shipyard/.github/actions/install@v1
+
+      - name: Judge this pull request
+        if: inputs.mode == 'pr'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -u
+          rc=0
+          out="$(sh "$SHIPYARD_SCRIPTS/ingredients-settled.sh" --repo "$REPO" --base "$BASE" --head "$HEAD" --labels "$LABELS" --branch "$BRANCH")" || rc=$?
+          echo "$out"
+          case "$rc" in 0) state=success ;; 1) state=pending ;; *) state=failure ;; esac
+          desc="$(printf '%s\n' "$out" | grep -v '^::' | head -n 1 | python3 -c "import sys; sys.stdout.write(sys.stdin.buffer.read().decode('utf-8', 'replace').rstrip('\\n')[:140])")"
+          [ -n "$desc" ] || desc="ingredients-settled exited $rc with no reason"
+          gh api "repos/$REPO/statuses/$HEAD" -f state="$state" -f context=ingredients-settled -f description="$desc"
+
+      - name: Judge every open renovate pull request
+        if: inputs.mode == 'sweep'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -u
+          failed=0
+          gh pr list --repo "$REPO" --state open --limit 200 \
+            --json number,headRefName,headRefOid,baseRefOid,isCrossRepository,labels > prs.json || exit 1
+          jq -r '.[] | select(.isCrossRepository == false and (.headRefName | startswith("renovate/")))
+                 | [.number, .headRefName, .headRefOid, .baseRefOid, ([.labels[].name] | join(","))] | @tsv' prs.json > prs.tsv || exit 1
+          tab="$(printf '\t')"
+          while IFS="$tab" read -r number branch head base labels; do
+            echo "::group::PR #$number"
+            rc=0
+            out="$(sh "$SHIPYARD_SCRIPTS/ingredients-settled.sh" --repo "$REPO" --base "$base" --head "$head" --labels "$labels" --branch "$branch" </dev/null)" || rc=$?
+            echo "$out"
+            case "$rc" in 0) state=success ;; 1) state=pending ;; *) state=failure ;; esac
+            desc="$(printf '%s\n' "$out" | grep -v '^::' | head -n 1 | python3 -c "import sys; sys.stdout.write(sys.stdin.buffer.read().decode('utf-8', 'replace').rstrip('\\n')[:140])")"
+            [ -n "$desc" ] || desc="ingredients-settled exited $rc with no reason"
+            gh api "repos/$REPO/statuses/$head" -f state="$state" -f context=ingredients-settled -f description="$desc" </dev/null || failed=1
+            echo "::endgroup::"
+          done < prs.tsv
+          jq -r '.[] | select((.isCrossRepository == false and (.headRefName | startswith("renovate/"))) | not) | [.number, .headRefOid] | @tsv' prs.json > others.tsv || exit 1
+          while IFS="$tab" read -r number head; do
+            gh api "repos/$REPO/statuses/$head" -f state=success -f context=ingredients-settled -f description="not a Renovate PR; not checked" </dev/null || failed=1
+          done < others.tsv
+          exit "$failed"
+
+      - name: Say so when the check could not run
+        if: failure() && inputs.mode == 'pr'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/$REPO/statuses/$HEAD" -f state=failure -f context=ingredients-settled -f description="ingredients-settled could not run; see the workflow log"

@@ -9,7 +9,7 @@ tracked shell scripts outside tests/ and in every workflow and composite-action 
 None recorded. The rule is the maintainer's decision of 2026-10-14.
 
 ## Limits
-A script that only names /opt/local to keep it out of CMake's search (build-cmake.sh) is a use as far as the
+A script that only names /opt/local to keep it out of CMake's search is a use as far as the
 check goes, and is declared as one. A port invoked behind a prefix other than sudo, env, command or time is
 not seen.
 

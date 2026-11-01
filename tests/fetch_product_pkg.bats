@@ -1,14 +1,20 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- pkgbuild and productbuild make the fixture pkg
+# platform: host-agnostic -- stevedore builds the fixtures and fetch_product_pkg.sh reads them
 
 mkcomp() {  # mkcomp IDENTIFIER ROOT OUT
-  pkgbuild --quiet --root "$2" --identifier "$1" --version 1.0 --install-location / "$3"
+  sh "$BATS_TEST_DIRNAME/../scripts/build_component_pkg.sh" --root "$2" --identifier "$1" --version 1.0 \
+    --install-location / --out "$3" > /dev/null 2>&1
 }
 
 setup() {
   HELPER="$BATS_TEST_DIRNAME/../scripts/fetch_product_pkg.sh"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch_product_pkg_test.XXXXXX")" && pwd)"
   printf 'widget dev.mavergreen.widget widget-repo\n' > "$WORK/product-names"
+  export SOURCE_DATE_EPOCH=1700000000
+  if [ -z "${STEVEDORE:-}" ]; then
+    STEVEDORE="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")" || { echo "fetch_stevedore.sh failed" >&2; return 1; }
+  fi
+  export STEVEDORE
   export MAVERGREEN_PRODUCT_NAMES="$WORK/product-names"
   export MAVERGREEN_RELEASES="file://$WORK/rel" MAVERGREEN_PKG_CACHE="$WORK/cache"
   REL="$WORK/rel/Mavergreen/widget-repo/releases/download/1.0"
@@ -24,7 +30,18 @@ teardown() { rm -rf "$WORK"; }
 serve() {  # serve ASSET [PRODUCT_IDENTIFIER]: build the archive (base first) and list it in SHA256SUMS
   mkcomp dev.mavergreen.base "$WORK/base" "$WORK/base.pkg"
   mkcomp "${2:-dev.mavergreen.widget}" "$WORK/prod" "$WORK/prod.pkg"
-  productbuild --quiet --package "$WORK/base.pkg" --package "$WORK/prod.pkg" "$REL/$1"
+  cat > "$WORK/dist.xml" <<DIST
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+  <pkg-ref id="dev.mavergreen.base" version="1.0">base.pkg</pkg-ref>
+  <pkg-ref id="${2:-dev.mavergreen.widget}" version="1.0">prod.pkg</pkg-ref>
+  <choices-outline><line choice="dev.mavergreen.base"/><line choice="${2:-dev.mavergreen.widget}"/></choices-outline>
+  <choice id="dev.mavergreen.base"><pkg-ref id="dev.mavergreen.base"/></choice>
+  <choice id="${2:-dev.mavergreen.widget}"><pkg-ref id="${2:-dev.mavergreen.widget}"/></choice>
+</installer-gui-script>
+DIST
+  "$STEVEDORE" product --distribution "$WORK/dist.xml" --package "$WORK/base.pkg" --package "$WORK/prod.pkg" \
+    --mtime 1700000000 --out "$REL/$1" > /dev/null
   ( cd "$REL" && shasum -a 256 "$1" > SHA256SUMS )
 }
 
@@ -46,15 +63,51 @@ serve() {  # serve ASSET [PRODUCT_IDENTIFIER]: build the archive (base first) an
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
 }
 
-@test "a second call replaces DEST afresh from the cached pkg" {
+@test "a second call for the same pkg keeps DEST in place, so a build using it is not pulled from under" {
   serve widget-1.0.pkg
   run sh "$HELPER" widget 1.0 "$DEST"; [ "$status" -eq 0 ]
-  echo stray > "$DEST/stray"
+  echo kept > "$DEST/marker"
   rm "$REL/widget-1.0.pkg"
+  run sh "$HELPER" widget 1.0 "$DEST"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$DEST/marker")" = kept ]
+}
+
+@test "a tree with no record of its pkg, or another release's, is replaced afresh" {
+  serve widget-1.0.pkg
+  mkdir -p "$DEST"; echo stray > "$DEST/stray"
   run sh "$HELPER" widget 1.0 "$DEST"
   [ "$status" -eq 0 ]
   [ ! -e "$DEST/stray" ]
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
+  echo stray > "$DEST/stray"
+  printf 'X' >> "$WORK/prod/usr/local/mavergreen/widget/lib/libwidget.a"
+  REL="$WORK/rel/Mavergreen/widget-repo/releases/download/2.0"; mkdir -p "$REL"
+  serve widget-2.0.pkg
+  run sh "$HELPER" widget 2.0 "$DEST"
+  [ "$status" -eq 0 ]
+  [ ! -e "$DEST/stray" ]
+  [ "$(cat "$DEST/lib/libwidget.a")" = WX ]
+}
+
+@test "concurrent calls for the same pkg and DEST all succeed, with one whole tree" {
+  serve widget-1.0.pkg
+  for i in 1 2 3 4; do ( sh "$HELPER" widget 1.0 "$DEST" > "$WORK/out$i" 2> "$WORK/err$i"; echo $? > "$WORK/rc$i" ) & done
+  wait
+  for i in 1 2 3 4; do
+    [ "$(cat "$WORK/rc$i")" = 0 ] || { cat "$WORK/err$i"; false; }
+    [ "$(cat "$WORK/out$i")" = "$DEST" ]
+  done
+  [ "$(cat "$DEST/lib/libwidget.a")" = W ]
+  [ -z "$(ls -d "$DEST".tmp.* "$DEST".old.* "$DEST".lock 2>/dev/null)" ]
+}
+
+@test "a lock nobody releases fails after SHIPYARD_LOCK_WAIT seconds, naming it" {
+  serve widget-1.0.pkg
+  mkdir -p "$DEST.lock"
+  SHIPYARD_LOCK_WAIT=1 run sh "$HELPER" widget 1.0 "$DEST"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"$DEST.lock"* ]] || false
 }
 
 @test "a pkg whose SHA-256 does not match fails 1 and leaves no cached pkg" {

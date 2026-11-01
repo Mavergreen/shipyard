@@ -15,9 +15,9 @@ trap 'rm -rf "$w"' EXIT
 rc=0
 sh "$SELF/deviations.sh" . > "$w/parsed" 2> "$w/err" || rc=$?
 if [ "$rc" -ne 0 ]; then
-  chk_fail deviation-complete "INGREDIENTS.md declares a conformance deviation with no reason" \
-    "an exception without one is indistinguishable from drift" \
-    "give every '- <check>[:<glob>]:' entry its reason on the same line"
+  chk_fail deviation-complete "INGREDIENTS.md declares a conformance deviation that deviations.sh refuses" \
+    "an exception without a reason, or with a scope its check cannot honour, is indistinguishable from drift; deviations.sh says which, below" \
+    "give every '- <check>[:<glob>]:' entry its reason on the same line, and fix any scope deviations.sh names"
   cat "$w/err" >&2
 fi
 
@@ -54,6 +54,7 @@ while read -r key glob _reason; do
       "drop the glob: write \"- comments: <reason>\""
     continue
   fi
+  case "$key" in on-target|macos-runner) continue ;; esac
   [ "$(awk -F'\t' -v k="$key" '$1 == k { print $2 }' "$SHIPYARD_CHECK_REGISTRY")" = checkout ] || continue
   hit=0
   while IFS= read -r f; do

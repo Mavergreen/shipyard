@@ -130,10 +130,11 @@ function(mavericks_add_updater_app)
   # Give the comparator a numeric-only build version by turning "-mavericks." into ".", e.g.
   # 1.102.0-mavericks.4 -> 1.102.0.4. That orders correctly on BOTH axes (upstream and N), and an already
   # installed "-mavericks.N" host still sees a numeric appcast as newer (Sparkle ranks a number above the
-  # "-mavericks" string), so existing installs self-migrate. Must match scripts/gen_appcast.sh.
+  # "-mavericks" string), so existing installs self-migrate. Must match comparison_key() in scripts/lib/vercmp.sh.
   # Also normalize an OpenSSH-portable-style "pN" patch to ".N" (9.9p2 -> 9.9.2), order-preserving, so a
   # non-dotted-numeric upstream still yields an orderable CFBundleVersion.
   string(REPLACE "-mavericks." "." MAVERICKS_BUILD_VERSION "${A_VERSION}")
+  string(REPLACE "-mavergreen." "." MAVERICKS_BUILD_VERSION "${MAVERICKS_BUILD_VERSION}")
   string(REGEX REPLACE "([0-9])p([0-9])" "\\1.\\2" MAVERICKS_BUILD_VERSION "${MAVERICKS_BUILD_VERSION}")  # comparison (CFBundleVersion)
   set(MAVERICKS_AUTO_CHECK      "${A_AUTO_CHECK}")                 # plist: true|false
   set(MAVERICKS_LOG_PREFIX      "${A_LOG_PREFIX}")
@@ -169,6 +170,31 @@ function(mavericks_add_updater_app)
 
   add_executable(${A_NAME} "${CMAKE_BINARY_DIR}/${A_NAME}-main.m")
   target_compile_options(${A_NAME} PRIVATE -fobjc-arc)
+  if(CMAKE_OBJC_COMPILER_ID STREQUAL "Clang")
+    if(NOT CMAKE_OBJC_COMPILER_VERSION MATCHES "^22\\.")
+      message(FATAL_ERROR
+        "mavericks_add_updater_app(${A_NAME}): the updater builds with clang22, the family's LLVM 22, but "
+        "this configure's OBJC compiler is Clang ${CMAKE_OBJC_COMPILER_VERSION} (${CMAKE_OBJC_COMPILER}).")
+    endif()
+    target_compile_options(${A_NAME} PRIVATE --no-default-config)
+    target_link_options(${A_NAME} PRIVATE --no-default-config -fuse-ld=lld)
+    list(LENGTH CMAKE_OSX_ARCHITECTURES _narch)
+    if(_narch EQUAL 1 AND CMAKE_OSX_DEPLOYMENT_TARGET)
+      set(_target "${CMAKE_OSX_ARCHITECTURES}-apple-macos${CMAKE_OSX_DEPLOYMENT_TARGET}")
+      if(CMAKE_OBJC_COMPILER_TARGET AND NOT CMAKE_OBJC_COMPILER_TARGET STREQUAL _target)
+        message(FATAL_ERROR
+          "mavericks_add_updater_app(${A_NAME}): CMAKE_OBJC_COMPILER_TARGET is '${CMAKE_OBJC_COMPILER_TARGET}', "
+          "but this configure's arch and deployment target make the updater's target ${_target}.")
+      endif()
+      target_compile_options(${A_NAME} PRIVATE "--target=${_target}")
+      target_link_options(${A_NAME} PRIVATE "--target=${_target}")
+    endif()
+  else()
+    message(WARNING
+      "mavericks_add_updater_app(${A_NAME}): built with ${CMAKE_OBJC_COMPILER_ID} (${CMAKE_OBJC_COMPILER}). "
+      "The updater builds with clang22 on every host; configure with -DCMAKE_OBJC_COMPILER=<clang22>/bin/clang "
+      "(SKILL.md \"Sparkle updater\").")
+  endif()
   target_include_directories(${A_NAME} PRIVATE "${MAVERICKS_SHARED_DIR}/updater")  # relaunch_decision.h
   target_link_libraries(${A_NAME} PRIVATE
     "-F${A_SPARKLE_FRAMEWORK}/.." "-framework Sparkle" "-framework Cocoa"

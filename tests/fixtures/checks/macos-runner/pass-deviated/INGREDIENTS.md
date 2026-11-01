@@ -1,0 +1,5 @@
+# Build ingredients
+
+## Conformance deviations
+
+- macos-runner:ci.yml:mac: the job runs Apple clang. Revisit when clang22 builds it on Linux.

@@ -1,21 +1,21 @@
 #!/bin/sh
-# platform: host-agnostic
+# platform: host-agnostic -- Mach-O payloads need LIPO, OTOOL and NM off macOS (macho-slices.sh, macho-cxxabi.sh)
 #   usage: artifact-facts.sh <dist-dir> <version> [repo-root]
 #          Emits the fact stream check-artifact-conformance.sh consumes, by inspecting a built dist/
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
-#          payload and shipped tarball.
-#          Reads pkgs with bsdtar and plists with plist-facts.py, and Mach-O with LLVM's readers
-#          (lib/macho-tools.sh), so it runs the same on 10.9, modern macOS and Linux.
+#          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each.
+# platform: runs at PACKAGE TIME, on any host that has the artifacts: stevedore reads the pkgs and
+#           plists, and LLVM's readers (lib/macho-tools.sh) the Mach-O, on 10.9, modern macOS and Linux.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
 #       reads a repo in seconds and gates every PR.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
+. "$SELF/lib/mach-nm.sh"; NM="$(shipyard_mach_nm)"; export NM
 . "$SELF/deviation-reason.sh"
 . "$SELF/registry-lookup.sh"
-. "$SELF/lib/py.sh"
 . "$SELF/lib/pkg-read.sh"
 dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"
@@ -43,30 +43,51 @@ printf 'expected %s\n' "$version"
 #       every launchd job's Label (launchd). Paths are relative to "/" and carry spaces as %20, since
 #       the stream is whitespace-delimited and "Application Support" is in nearly every product.
 enc() { af_enc; }
-# spec: scripts/lib/plist-facts.py -- a plist is read once into _pl, as "<key-path><TAB><value>" lines;
-#       one that cannot be read aborts the stream naming the file, since a fact read from half a
-#       plist is a fact about nothing. plist_val answers one key-path from it, empty when absent.
-plist_load() {  # $1 = plist file, $2 = its name for the operator. Non-zero when unreadable (why in _pf_why).
-  _pf_err="$(mktemp "${TMPDIR:-/tmp}/plist-err.XXXXXX")"
-  if _pl="$(chk_py "$SELF/lib/plist-facts.py" "$1" 2>"$_pf_err")"; then
-    rm -f "$_pf_err"; return 0
-  fi
-  _pf_why="cannot read the plist $2: $(tr '\n' ' ' < "$_pf_err")"
-  rm -f "$_pf_err"; return 1
+cxxabi_tmp=""
+cxxabi_allowlist() {  # the allow-list, fetched at most once per run, into $cxxabi_tmp/allow as "<name> <visible|hidden>". Non-zero, the reason in _mf_why, when unavailable.
+  [ ! -f "$cxxabi_tmp/allow" ] || return 0
+  _al="$(sh "$SELF/cxxabi-allowlist.sh" 2>"$cxxabi_tmp/err")" || {
+    _mf_why="cxxabi allow-list unavailable: $(sed -n 's/^cxxabi-allowlist: //p' "$cxxabi_tmp/err" | tail -1)"; return 1; }
+  printf '%s\n' "$_al" | awk '$1 == "__ZTVN10__cxxabiv119__pointer_type_infoE" || $1 == "__ZTVN10__cxxabiv129__pointer_to_member_type_infoE" { $2 = "hidden" } 1' \
+    > "$cxxabi_tmp/allow"
 }
-plist_val() { printf '%s\n' "$_pl" | awk -F'\t' -v k="$1" '$1 == k { print $2; exit }'; }
-plist_list() { printf '%s\n' "$_pl" | awk -F'\t' -v k="$1" 'index($1, k ":") == 1 { print $2 }'; }
+cxxabi_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded). Non-zero, the reason in _mf_why, on abort.
+  if [ -z "$cxxabi_tmp" ]; then
+    cxxabi_tmp="$(mktemp -d "${TMPDIR:-/tmp}/cxxabi-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+    trap 'rm -rf "$cxxabi_tmp"' EXIT
+  fi
+  command -v "$NM" >/dev/null 2>&1 \
+    || { _mf_why="NM: $NM not found; set NM to a Mach-O nm such as clang22's llvm-nm"; return 1; }
+  _cx="$(sh "$SELF/macho-cxxabi.sh" "$2" 2>"$cxxabi_tmp/err")" || {
+    _mf_why="cannot read the C++ runtime symbols of $1:$3 (macho-cxxabi.sh exit $?): $(sed -n 's/^macho-cxxabi: //p' "$cxxabi_tmp/err" | head -1 | sed 's/ could not read .*//')"; return 1; }
+  case "$_cx" in
+    *" defines "*)
+      cxxabi_allowlist || return 1
+      printf '%s\n' "$_cx" | awk -v art="$1" -v p="$3" '
+        NR == FNR { a[$1] = $2; next }
+        $2 == "defines" && !(($3 in a) && (a[$3] == "visible" || a[$3] == $4)) { print "cxxabi-defines", art, p, $1, $3, $4 }' \
+        "$cxxabi_tmp/allow" - ;;
+  esac
+  printf '%s\n' "$_cx" | while read -r _ca _ck _cv; do
+    [ "$_ck" = loads ] || continue
+    case "$_cv" in
+      /usr/lib/libc++abi.dylib|*/libcxx22/*/libc++abi.1.dylib|@*/libc++abi.1.dylib) : ;;
+      *) printf 'cxxabi-loads %s %s %s %s\n' "$1" "$3" "$_ca" "$(printf '%s' "$_cv" | enc)" ;;
+    esac
+  done
+}
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- one fact per
 #       Mach-O slice of every shipped file, read by the ONE parser (macho-slices.sh). A file with an
 #       unambiguous Mach-O magic that cannot be read aborts the stream rather than vanishing from it;
 #       "cafebabe" (and its 64-bit-offset twin "cafebabf") is also a Java class file's magic and
 #       "!<arch>" any ar archive's, so those are Mach-O only if lipo can read them.
-macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded, may be empty). Non-zero on abort, with why in _mf_why.
+macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded, may be empty). Non-zero on abort, the reason in _mf_why when known.
   # platform: the file list is captured to a temp file and the loop below reads it via "< $_ml",
   #           not piped in -- a `while` fed by a pipe is the LAST stage of that pipeline, which runs
   #           in a subshell on both dash and bash (no lastpipe by default), so a `return` inside it
   #           only exits the subshell and this function would silently keep going and return 0. A
   #           redirected-in loop has no such subshell, so `return` here really does abort the caller.
+  _mf_why=""
   _ml="$(mktemp "${TMPDIR:-/tmp}/macho-facts-list.XXXXXX")"   # template: 10.9 BSD mktemp requires one
   _mferr="$_ml.err"
   ( cd "$2" && find . -type f ) | sed 's|^\./||' > "$_ml"
@@ -90,18 +111,24 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
     printf '%s\n' "$_sl" | while read -r _a _ft _mn _sd; do
       printf 'macho %s %s %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_ft" "$_mn" "$_sd" "$_sha"
     done
+    cxxabi_facts "$1" "$2/$_mf" "$_p" || { rm -f "$_ml" "$_mferr"; return 1; }
   done < "$_ml"
   rm -f "$_ml" "$_mferr"
 }
 payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read, or the registry cannot answer (why in _pf_why).
   _pf_why=""
-  for _pl_f in $(find "$2" -name Payload -type f | sed 's/ /%20/g'); do
-    _pl_f="$(printf '%s' "$_pl_f" | sed 's/%20/ /g')"
+  for _pl in $(find "$2" -name Payload -type f | sed 's/ /%20/g'); do
+    _pl="$(printf '%s' "$_pl" | sed 's/%20/ /g')"
+    _dir="${_pl%/Payload}"
     # platform: a payload's paths are relative to its component's install-location, not to "/".
-    # spec: scripts/lib/pkg-read.sh -- bsdtar reads the gzip'd cpio itself, and a failed read is a
-    #       failure here rather than an empty (and therefore "clean") payload.
-    af_unpack_payload "$_pl_f" || { _pf_why="cannot read the payload of $1"; return 1; }
-    _root="$AF_ROOT"; _loc="$AF_LOC"
+    _loc="$(sed -n '/<pkg-info/ s/.*[[:space:]]install-location="\([^"]*\)".*/\1/p' "$_dir/PackageInfo" 2>/dev/null | head -1)"
+    _loc="${_loc:-/}"; _loc="${_loc#/}"; _loc="${_loc%/}"; [ -z "$_loc" ] || _loc="$_loc/"
+    _root="$_dir.root"; mkdir -p "$_root"
+    # platform: pkgbuild writes a gzip'd cpio archive; captured to a file, not piped, so a failed
+    #           decompress is a failure here rather than an empty (and therefore "clean") payload.
+    gzip -dc "$_pl" > "$_dir.cpio" 2>/dev/null || return 1
+    ( cd "$_root" && cpio -id < "$_dir.cpio" 2>/dev/null ) || return 1
+    rm -f "$_dir.cpio"
     macho_facts "$1" "$_root" "$(printf '%s' "$_loc" | enc)" || { _pf_why="$_mf_why"; return 1; }
     ( cd "$_root" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | enc \
       | awk -v pkg="$1" -v loc="$(printf '%s' "$_loc" | enc)" '{ print "installs " pkg " " loc $0 }'
@@ -109,24 +136,23 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
         -o -name '*.plugin' -o -name '*.framework' -o -name '*.appex' -o -name '*.xpc' \) ) | sed 's|^\./||' \
       | awk '{ n = split($0, c, "/"); nested = 0
                for (i = 1; i < n; i++) if (c[i] ~ /\.(app|prefPane|kext|bundle|plugin|framework|appex|xpc)$/) nested = 1
-               if (!nested) print }' > "$_pl_f.bundles"
-    while IFS= read -r _bd; do
-      _id=none; _feed=""
-      for _ip in Contents/Info.plist Resources/Info.plist Info.plist; do
-        [ -f "$_root/$_bd/$_ip" ] || continue
-        plist_load "$_root/$_bd/$_ip" "$1:$_loc$_bd/$_ip" || return 1
-        _id="$(plist_val CFBundleIdentifier)"; _feed="$(plist_val SUFeedURL)"; break
-      done
-      printf 'bundle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" "$(printf '%s' "$_bd" | enc)" "${_id:-none}"
-      [ -z "$_feed" ] || printf 'sparkle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" \
-        "$(printf '%s' "$_bd" | enc)" "$(printf '%s' "$_feed" | tr -s '[:space:]' '_')"
-    done < "$_pl_f.bundles"
+               if (!nested) print }' \
+      | while IFS= read -r _bd; do
+          _id=none; _feed=""
+          for _ip in Contents/Info.plist Resources/Info.plist Info.plist; do
+            [ -f "$_root/$_bd/$_ip" ] || continue
+            _id="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" CFBundleIdentifier 2>/dev/null || echo none)"
+            _feed="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" SUFeedURL 2>/dev/null || true)"; break
+          done
+          printf 'bundle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" "$(printf '%s' "$_bd" | enc)" "${_id:-none}"
+          [ -z "$_feed" ] || printf 'sparkle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" \
+            "$(printf '%s' "$_bd" | enc)" "$(printf '%s' "$_feed" | tr -s '[:space:]' '_')"
+        done
     for _ld in Library/LaunchAgents Library/LaunchDaemons; do
       [ -z "$_loc" ] && [ -d "$_root/$_ld" ] || continue
       for _lp in "$_root/$_ld"/*.plist; do
         [ -f "$_lp" ] || continue
-        plist_load "$_lp" "$1:$_ld/${_lp##*/}" || return 1
-        _lab="$(plist_val Label)"
+        _lab="$("$STEVEDORE" plist get "$_lp" Label 2>/dev/null || echo none)"
         printf 'launchd %s %s/%s %s\n' "$1" "$_ld" "$(basename "$_lp" | enc)" "${_lab:-none}"
       done
     done
@@ -138,8 +164,8 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     for _mf in "$_root"/usr/local/mavergreen/*/mavergreen.plist; do
       [ -f "$_mf" ] || continue
       _dir="$(basename "$(dirname "$_mf")" | enc)"
-      plist_load "$_mf" "$1:usr/local/mavergreen/${_dir}/mavergreen.plist" || return 1
-      _mp="$(plist_val product)"; _mi="$(plist_val identifier)"
+      _mp="$("$STEVEDORE" plist get "$_mf" product 2>/dev/null)" || _mp=""
+      _mi="$("$STEVEDORE" plist get "$_mf" identifier 2>/dev/null)" || _mi=""
       _reg=""; _repo=""; _dv=""
       for _q in identifier repo updater-bundle-id agent-label updater-app feed; do
         _rc=0; registry_lookup "$_q" "$_mp" || _rc=$?
@@ -153,19 +179,21 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
         esac
       done
       _dv="${_dv# }"
-      _ml="$(plist_val line)"
-      _ma="$(plist_val appcast)"
+      _ml="$("$STEVEDORE" plist get "$_mf" line 2>/dev/null)" || _ml=""
+      _ma="$("$STEVEDORE" plist get "$_mf" appcast 2>/dev/null)" || _ma=""
       _mp="$(printf '%s' "${_mp:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest %s %s %s %s\n' "$1" "$_mp" "$(printf '%s' "${_mi:-none}" | tr -s '[:space:]' '_')" "$_dir"
       printf 'registered %s %s %s\n' "$_mp" "$(printf '%s' "${_reg:-none}" | tr -s '[:space:]' '_')" "${_repo:-none}"
       printf 'manifest-line %s %s\n' "$1" "$(printf '%s' "${_ml:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest-appcast %s %s\n' "$1" "$(printf '%s' "${_ma:-none}" | tr -s '[:space:]' '_')"
       [ -z "$_dv" ] || printf 'derived %s %s\n' "$_mp" "$_dv"
-      plist_list outside | while IFS= read -r _o; do
-        printf 'manifest-outside %s %s\n' "$1" "$(printf '%s' "$_o" | enc)"
+      _k=0
+      while _o="$("$STEVEDORE" plist get "$_mf" "outside:$_k" 2>/dev/null)"; do
+        printf 'manifest-outside %s %s\n' "$1" "$(printf '%s' "$_o" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
       done
-      plist_list generated | while IFS= read -r _g; do
-        printf 'manifest-generated %s %s\n' "$1" "$(printf '%s' "$_g" | enc)"
+      _k=0
+      while _g="$("$STEVEDORE" plist get "$_mf" "generated:$_k" 2>/dev/null)"; do
+        printf 'manifest-generated %s %s\n' "$1" "$(printf '%s' "$_g" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
       done
     done
   done
@@ -193,13 +221,11 @@ for f in "$dist"/*; do
 
   case "$b" in
     *.pkg)
-      # spec: scripts/lib/pkg-read.sh -- reading what the .pkg actually declares is the point; a
-      #       filename is a claim, not a fact. A host with no bsdtar cannot say, which aborts the
-      #       stream rather than reading every pkg as unreadable.
+      # platform: stevedore expand is how to read what the .pkg actually declares; a filename is a
+      #           claim, not a fact.
+      [ -n "${stevedore_checked:-}" ] || { STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" && stevedore_checked=1; } || abort "cannot fetch stevedore to read $b"
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-      mkdir "$x/x"
-      af_bsdtar >/dev/null 2>&1 || { rm -rf "$x"; abort "cannot read $b: no bsdtar found -- install libarchive-tools, or set BSDTAR to its path"; }
-      if af_extract "$f" "$x/x"; then
+      if "$STEVEDORE" expand "$f" "$x/x" >/dev/null 2>&1; then
         if [ -f "$x/x/Distribution" ]; then
           # platform: a product archive: version, floor and identity all live in Distribution. The
           #           version and identity are the product's, not those of the dev.mavergreen.base
@@ -241,7 +267,7 @@ for f in "$dist"/*; do
       ;;
     *.tar.gz|*.tgz|*.tar.xz|*.tar.bz2)
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-      af_extract "$f" "$x" || { af_rm "$x"; abort "cannot extract $b"; }
+      tar -xf "$f" -C "$x" 2>/dev/null || { af_rm "$x"; abort "cannot extract $b"; }
       macho_facts "$b" "$x" "" || { af_rm "$x"; abort "${_mf_why:-cannot read a Mach-O in $b}"; }
       af_rm "$x"
       ;;

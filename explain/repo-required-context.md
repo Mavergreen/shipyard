@@ -15,7 +15,7 @@ Signal 8.26.0 sat green and unmerged for a month.
 
 ## Limits
 It checks that main requires some context; it does not check that the context is the right job, or that the
-job runs on every pull request. QUEUE #38: GitHub treats a skipped required check as passed, so a required
+job runs on every pull request. GitHub treats a skipped required check as passed, so a required
 job that is skipped on some commits can let auto-merge fire early.
 
 ## Deviating

@@ -1,32 +1,23 @@
 #!/bin/sh
-# platform: macOS-only -- pkgbuild, productbuild and pkgutil build and read the archive
+# platform: host-agnostic
 set -eu
+SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
 here="$(cd "$(dirname "$0")" && pwd)"
-command -v productbuild >/dev/null 2>&1 || { echo "no productbuild -- skipping"; exit 77; }
 w="$(mktemp -d "${TMPDIR:-/tmp}/floor-base.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
 mkdir -p "$w/root/usr/local/mavergreen/x" "$w/c"; echo x > "$w/root/usr/local/mavergreen/x/f"
-pkgbuild --quiet --root "$w/root" --identifier dev.mavergreen.x --version 1.0 --install-location / "$w/c/x.pkg"
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed -- the pkg block is the only gate for this seam, so it cannot be skipped"
+"$SD" component --root "$w/root" --identifier dev.mavergreen.x --version 1.0 --install-location / --mtime "$SOURCE_DATE_EPOCH" --out "$w/c/x.pkg"
 sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
   --out "$w/out.pkg" --base-version 1.0.9 >/dev/null 2>&1 || fail "the archive must build"
-pkgutil --expand "$w/out.pkg" "$w/x"
+"$SD" expand "$w/out.pkg" "$w/x"
 [ -d "$w/x/mavergreen-base.pkg" ] || fail "the archive carries the base component"
 first="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$w/x/Distribution" | grep -v '^default$' | head -1)"
 [ "$first" = dev.mavergreen.base ] || fail "the base component is listed first, so its postinstall installs or upgrades the helper before the product's postinstall runs it: got $first"
 grep -q 'os-version min="10.9.5"' "$w/x/Distribution" || fail "the floor is still enforced"
 
-real_pb="$(command -v productbuild)"; mkdir -p "$w/pbwrap"
-{
-  printf '#!/bin/sh\nprev=""\nfor a in "$@"; do\n'
-  printf '  if [ "$prev" = --distribution ]; then cp "$a" "%s"; fi\n  prev="$a"\ndone\n' "$w/dist-as-written.xml"
-  printf 'exec "%s" "$@"\n' "$real_pb"
-} > "$w/pbwrap/productbuild"
-chmod +x "$w/pbwrap/productbuild"
-PATH="$w/pbwrap:$PATH" sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X \
-  --component "$w/c/x.pkg" --out "$w/out-w.pkg" --base-version 1.0.9 >/dev/null 2>&1 || fail "the archive must build through the wrapper"
-[ -f "$w/dist-as-written.xml" ] || fail "the test must capture the distribution set_install_floor.sh writes, or it proves nothing"
-awk '{ n += gsub(/<line choice=/, "&"); if (gsub(/<line choice=/, "&") > 1) bad = 1 } END { exit !(n == 3 && !bad) }' "$w/dist-as-written.xml" \
-  || fail "the distribution as written carries one <line choice=...> per line, so a line-oriented parse never depends on productbuild reformatting it: $(grep -n 'line choice' "$w/dist-as-written.xml")"
+awk '{ n += gsub(/<line choice=/, "&"); if (gsub(/<line choice=/, "&") > 1) bad = 1 } END { exit !(n == 3 && !bad) }' "$w/x/Distribution" \
+  || fail "the Distribution carries one <line choice=...> per line, so a line-oriented parse never depends on the packager reformatting it: $(grep -n 'line choice' "$w/x/Distribution")"
 
 rc=0
 sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.base --title Base --component "$w/c/x.pkg" \
@@ -38,14 +29,14 @@ mkdir -p "$w/res"; printf '<html><body>restart to finish</body></html>\n' > "$w/
 sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
   --out "$w/out-c.pkg" --base-version 1.0.9 --resources "$w/res" --conclusion Conclusion.html >/dev/null 2>&1 \
   || fail "an archive with a conclusion pane must build"
-pkgutil --expand "$w/out-c.pkg" "$w/xc"
+"$SD" expand "$w/out-c.pkg" "$w/xc"
 grep -q '<conclusion file="Conclusion.html"' "$w/xc/Distribution" \
   || fail "--conclusion names the pane in the Distribution -- the only surface Installer shows after the scripts run"
 [ -f "$w/xc/Resources/Conclusion.html" ] || fail "the conclusion file ships in the archive's Resources"
 rc=0
 sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
   --out "$w/out-c2.pkg" --conclusion Conclusion.html >/dev/null 2>&1 || rc=$?
-[ "$rc" -eq 2 ] || fail "--conclusion without --resources is a usage error (exit 2) -- productbuild would have nowhere to find the file; got $rc"
+[ "$rc" -eq 2 ] || fail "--conclusion without --resources is a usage error (exit 2) -- the Distribution would name a file nothing ships; got $rc"
 
 rc=0
 sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" \
@@ -82,5 +73,17 @@ sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title
   --out "$w/out-c8.pkg" --resources "$w/res" --conclusion NoSuchFile.html >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] || fail "--conclusion naming a file absent from --resources is a usage error (exit 2), not a silently-broken pane; got $rc"
 [ ! -e "$w/out-c8.pkg" ] || fail "a refused --conclusion for a missing file must not write an output pkg"
+
+(umask 077; TMPDIR="$w/tmpa"; mkdir -p "$TMPDIR"; export TMPDIR; sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" --out "$w/seam-a.pkg" --base-version 1.0.9 >/dev/null 2>&1) || fail "the archive must build under umask 077"
+(umask 022; TMPDIR="$w/tmpb-with-a-longer-name"; mkdir -p "$TMPDIR"; export TMPDIR; sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" --out "$w/seam-b.pkg" --base-version 1.0.9 >/dev/null 2>&1) || fail "the archive must build under umask 022"
+cmp "$w/seam-a.pkg" "$w/seam-b.pkg" || fail "seam output ignores umask and TMPDIR"
+
+mkdir -p "$w/res2"; cp "$w/res/Conclusion.html" "$w/res2/Conclusion.html"
+for t in a b; do
+  case $t in a) um=077;; b) um=022;; esac
+  mkdir -p "$w/rtmp$t-xx"
+  (umask $um; TMPDIR="$w/rtmp$t-xx"; export TMPDIR; sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --component "$w/c/x.pkg" --out "$w/rseam-$t.pkg" --base-version 1.0.9 --resources "$w/res2" --conclusion Conclusion.html >/dev/null 2>&1) || fail "the archive with a conclusion must build under umask $um"
+done
+cmp "$w/rseam-a.pkg" "$w/rseam-b.pkg" || fail "seam output with --resources and a conclusion ignores umask and TMPDIR"
 
 echo "PASS: set-install-floor-base"

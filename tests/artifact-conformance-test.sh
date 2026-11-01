@@ -42,6 +42,7 @@ $M x86_64 EXECUTE 10.9 10.9 aa"
 no "an x86_64 slice linked against the runner's SDK" "sdk-pin" "$GOOD
 $M x86_64 EXECUTE 10.9 26.5 aa"
 ok "a pinned arm64 slice" "$GOOD
+deviation arm64:usr/local/go/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
 $M arm64 EXECUTE 11.0 11.3 aa"
 no "an arm64 slice on the runner's SDK" "sdk-pin" "$GOOD
 $M arm64 EXECUTE 11.0 26.5 aa"
@@ -61,6 +62,149 @@ macho p.pkg usr/local/go/src/runtime/race/race_darwin.syso x86_64 OBJECT 10.12 1
 no "and only those" "sdk-pin" "$GOOD
 deviation sdk-pin:usr/local/go/src/* Go's own race-detector and testdata objects, shipped verbatim in src/
 macho p.pkg usr/local/go/bin/go x86_64 EXECUTE 10.9 26.5 aa"
+
+# spec: SKILL.md "Family conventions" check 37 -- a pkg's arm64 slice is a declared deviation,
+#       '- arm64:<glob>: <reason>' matched against the install path; a Sparkle updater's slices are
+#       exempt, and a repo grandfathered as modern-smoke is warned rather than failed.
+T='macho golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go'
+U='sparkle golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
+macho golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa'
+no "an undeclared arm64 tool slice" "arm64|golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
+$T x86_64 EXECUTE 10.9 10.9 aa
+$T arm64 EXECUTE 11.0 11.3 aa"
+ok "a declared arm64 tool slice" "$GOOD
+deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
+$T x86_64 EXECUTE 10.9 10.9 aa
+$T arm64 EXECUTE 11.0 11.3 aa"
+no "a declaration covers only the install paths its glob names" "arm64|golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
+deviation arm64:build/build.sh a source path names nothing the pkg installs
+$T arm64 EXECUTE 11.0 11.3 aa"
+no "a declaration of another check does not cover it" "arm64|with an arm64 slice" "$GOOD
+deviation sdk-pin:usr/local/mavergreen/go126/bin/* not an arm64 declaration
+$T arm64 EXECUTE 11.0 11.3 aa"
+ok "an updater-only arm64 slice needs no declaration" "$GOOD
+$U"
+ok "artifact-facts reports a payload's Mach-O before its bundles" "$GOOD
+$(printf '%s\n' "$U" | sed -n 2p)
+$(printf '%s\n' "$U" | sed -n 1p)"
+no "the updater exemption is the updater's bundle, not a path beside it" "arm64|with an arm64 slice" "$GOOD
+$U
+macho golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app-helper/tool arm64 EXECUTE 11.0 11.3 aa"
+no "another pkg's updater exempts nothing here" "arm64|with an arm64 slice" "$GOOD
+pkg other-1.26.5-mavericks.5.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
+sparkle other-1.26.5-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
+macho golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa"
+R='manifest golang-1.26.5-native-mavericks.5.pkg go126 dev.mavergreen.golang.go126 go126
+registered go126 dev.mavergreen.golang.go126 golang-126
+derived go126 dev.mavergreen.golang.go126.updater dev.mavergreen.golang.go126-updatecheck Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml'
+_ro="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "$R" "$U" | sh "$S" 2>&1)" || :
+printf '%s\n' "$_ro" | grep -q 'with an arm64 slice' && { echo "FAIL: the registry's updater is exempt: $_ro"; exit 1; }
+printf '%s\n' "$_ro" | grep -q 'arm64: 0 declared, 0 undeclared' && { echo "FAIL: the arm64 summary prints only when there is something to count: $_ro"; exit 1; }
+has "a product with a registered updater exempts only that bundle" arm64 "$GOOD
+$R
+sparkle golang-1.26.5-native-mavericks.5.pkg Applications/Vendor.app https://vendor.example/appcast.xml
+macho golang-1.26.5-native-mavericks.5.pkg Applications/Vendor.app/Contents/MacOS/Vendor arm64 EXECUTE 11.0 11.3 aa"
+ok "an x86_64-only pkg needs no declaration" "$GOOD
+$T x86_64 EXECUTE 10.9 10.9 aa"
+ok "a shipped tarball is not a pkg" "$GOOD
+macho tools.tar.gz bin/go arm64 EXECUTE 11.0 11.3 aa"
+has "arm64e is an arm64 slice" arm64 "$GOOD
+$T arm64e EXECUTE 11.0 11.3 aa"
+
+_gfs="$(mktemp -d "${TMPDIR:-/tmp}/conformance-gf.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+cp -R "$here/../scripts" "$_gfs/scripts"
+printf 'modern-smoke golang-126 release.yml:modern-smoke\n' > "$_gfs/scripts/conventions-grandfathered"
+_gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-126" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
+  || { echo "FAIL: a grandfathered repo's undeclared arm64 slice warns, never fails: $_gfo"; exit 1; }
+printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: arm64: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go' \
+  || { echo "FAIL: a grandfathered repo's undeclared arm64 slice is reported as a ::warning:: naming it: $_gfo"; exit 1; }
+_gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-127" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
+  && { echo "FAIL: another repo's modern-smoke line excuses nothing here: $_gfo"; exit 1; }
+printf 'macos-runner golang-126 release.yml:modern-smoke\n' > "$_gfs/scripts/conventions-grandfathered"
+_gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-126" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
+  && { echo "FAIL: another check's grandfathered line excuses nothing here: $_gfo"; exit 1; }
+rm -rf "$_gfs"
+
+X='macho golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
+C='golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go'
+no "a program defining ___cxa_throw fails" "cxxabi|golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines C++ runtime machinery beyond Recaulk's back-fills: ___cxa_throw" "$GOOD
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+no "the failure says how to declare it" "cxxabi|declare '- cxxabi:usr/local/mavergreen/go126/bin/go: <reason>; exit: " "$GOOD
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+_cxf="$GOOD
+$X"
+for _i in 1 2 3 4 5 6 7; do _cxf="$_cxf
+cxxabi-defines $C x86_64 ___cxa_s$_i visible"; done
+_cxo="$(printf '%s\nend-of-facts\n' "$_cxf" | sh "$S" 2>&1)" && { echo "FAIL: seven definitions fail"; exit 1; }
+printf '%s\n' "$_cxo" | grep -q 'beyond Recaulk.s back-fills: ___cxa_s1 ___cxa_s2 ___cxa_s3 ___cxa_s4 ___cxa_s5 and 2 more' \
+  || { echo "FAIL: a cxxabi failure names the first five symbols, then a count: $_cxo"; exit 1; }
+[ "$(printf '%s\n' "$_cxo" | grep -c 'which defines')" = 1 ] \
+  || { echo "FAIL: a cxxabi failure is reported once per artifact path: $_cxo"; exit 1; }
+no "a hidden definition is a second runtime too" "cxxabi|beyond Recaulk's back-fills: ___cxa_throw(hidden) ___gxx_personality_v0(hidden) -- one process gets one C++ runtime, hidden or not" "$GOOD
+$X
+cxxabi-defines $C x86_64 ___cxa_throw hidden
+cxxabi-defines $C x86_64 ___gxx_personality_v0 hidden"
+_cxf="$GOOD
+$X"
+for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22; do _cxf="$_cxf
+cxxabi-defines p.pkg usr/local/mavergreen/go126/bin/t$_i x86_64 ___cxa_throw visible"; done
+_cxo="$(printf '%s\nend-of-facts\n' "$_cxf" | sh "$S" 2>&1)" && { echo "FAIL: 22 violating files fail"; exit 1; }
+[ "$(printf '%s\n' "$_cxo" | grep -c 'which defines')" = 20 ] && printf '%s\n' "$_cxo" | grep -q 'cxxabi: and 2 more files' \
+  || { echo "FAIL: cxxabi failures are capped at 20 files, then a count: $_cxo"; exit 1; }
+ok "a declared path passes" "$GOOD
+deviation cxxabi:usr/local/mavergreen/go126/bin/* Go's cgo runtime links its own libc++abi; exit: when it links libcxx22
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+no "a cxxabi declaration covers only the paths its glob names" "cxxabi|golang" "$GOOD
+deviation cxxabi:usr/local/mavergreen/go126/lib/* another path; exit: never
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+no "another check's declaration does not cover cxxabi" "cxxabi|golang" "$GOOD
+deviation sdk-pin:usr/local/mavergreen/go126/bin/* not a cxxabi declaration
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+no "a definition in one slice of a fat binary fails" "cxxabi|go (arm64), which defines" "$GOOD
+deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain
+$X
+macho $C arm64 EXECUTE 11.0 11.3 aa
+cxxabi-defines $C arm64 ___cxa_throw visible"
+no "loading a second libc++abi fails" "cxxabi|golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which loads /opt/vendor/lib/libc++abi.1.dylib" "$GOOD
+$X
+cxxabi-loads $C x86_64 /opt/vendor/lib/libc++abi.1.dylib"
+no "a load path with a space is decoded" "cxxabi|which loads @rpath/Vendor Runtime/libc++abi.dylib" "$GOOD
+$X
+cxxabi-loads $C x86_64 @rpath/Vendor%20Runtime/libc++abi.dylib"
+ok "a declared load passes" "$GOOD
+deviation cxxabi:usr/local/mavergreen/go126/* vendored; exit: when upstream links libcxx22
+$X
+cxxabi-loads $C x86_64 @rpath/libc++abi.dylib"
+
+_gfs="$(mktemp -d "${TMPDIR:-/tmp}/conformance-gf.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+cp -R "$here/../scripts" "$_gfs/scripts"
+gfrun() {  # $1 = the grandfathered file's one line, $2 = the repository; the facts are on stdin
+  printf '%s\n' "$1" > "$_gfs/scripts/conventions-grandfathered"
+  { printf '%s\nrepository Mavergreen/%s\n%s\n' "$GOOD" "$2" "$X"; cat; printf 'end-of-facts\n'; } | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1
+}
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw hidden\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
+  || { echo "FAIL: a grandfathered repo's violation warns and passes: $_gfo"; exit 1; }
+printf '%s\n' "$_gfo" | grep -q "^::warning::conformance: cxxabi: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines .*(grandfathered: cxxabi golang-126 usr/local/mavergreen/go126/bin/go)$" \
+  || { echo "FAIL: a grandfathered cxxabi violation is a ::warning:: naming its line: $_gfo"; exit 1; }
+_gfo="$(printf 'cxxabi-loads %s x86_64 /opt/vendor/lib/libc++abi.1.dylib\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
+  || { echo "FAIL: a grandfathered repo's second libc++abi load warns and passes: $_gfo"; exit 1; }
+printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: cxxabi: .*which loads /opt/vendor/lib/libc++abi.1.dylib' \
+  || { echo "FAIL: a grandfathered load is a ::warning::: $_gfo"; exit 1; }
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'cxxabi golang-127 usr/local/mavergreen/go126/bin/go' golang-126)" \
+  && { echo "FAIL: another repo's cxxabi line excuses nothing here: $_gfo"; exit 1; }
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/gofmt' golang-126)" \
+  && { echo "FAIL: another path's cxxabi line excuses nothing here: $_gfo"; exit 1; }
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'modern-smoke golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
+  && { echo "FAIL: another check's grandfathered line excuses nothing here: $_gfo"; exit 1; }
+_gfo="$(printf '%s\n%s\nrepository Mavergreen/golang-126\nmacho p.pkg usr/local/mavergreen/go126/bin/a%%20b x86_64 EXECUTE 10.9 10.9 aa\ncxxabi-defines p.pkg usr/local/mavergreen/go126/bin/a%%20b x86_64 ___cxa_throw visible\nend-of-facts\n' "$GOOD" "$X" \
+  | { printf 'cxxabi golang-126 usr/local/mavergreen/go126/bin/a%%20b\n' > "$_gfs/scripts/conventions-grandfathered"; sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1; })" \
+  || { echo "FAIL: a grandfathered path keeps its %20 encoding, one field per line: $_gfo"; exit 1; }
+rm -rf "$_gfs"
 
 no "pkg version disagrees with the tag" "version" 'expected 1.26.5-mavericks.5
 pkg p.pkg 1.26.5-mavericks.4 10.9.5 dev.mavergreen.golang.go126
@@ -588,7 +732,7 @@ A real body.
 
 - Fixed a thing
 NOTES
-# platform: a text file with a .pkg name would be reported `unreadable` by pkgutil and fail for
+# platform: a text file with a .pkg name would be reported `unreadable` by stevedore and fail for
 #           a reason this fixture is not about, so it uses a .tgz instead. What it proves is
 #           that a COMPLETE run reaches the sentinel and the checker accepts it -- the pkg
 #           records have their own fixtures above. A real (if trivial) tarball, not a text file
@@ -1094,41 +1238,49 @@ repository someone/golang-126"
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
 #       top-level bundle, a symlink, and a path with a space are each a way to report the wrong thing.
-# spec: scripts/lib/plist-facts.py -- a plist that cannot be read (a truncated manifest here) aborts the
-#       stream, naming the file, and the checker fails artifact-facts: a fact read from half a plist
-#       is a fact about nothing.
-_tp="$(mktemp -d "${TMPDIR:-/tmp}/af-truncated-plist.XXXXXX")"
-mkdir -p "$_tp/dist"
-cp "$here/fixtures/checks/artifact-facts/fail/dist/ed25519-1.0.0-mavericks.1.pkg" "$_tp/dist/"
-_tp_facts="$(sh "$AF" "$_tp/dist" 1.0.0-mavericks.1 "$_tp" 2>/dev/null)" \
-  && { rm -rf "$_tp"; echo "FAIL: a pkg with a truncated manifest plist must abort, not succeed; got: $_tp_facts"; exit 1; }
-printf '%s\n' "$_tp_facts" | grep -q '^abort cannot read the plist .*mavergreen.plist' \
-  || { rm -rf "$_tp"; echo "FAIL: the abort should name the truncated mavergreen.plist; got: $_tp_facts"; exit 1; }
-printf '%s\n' "$_tp_facts" | grep -qx 'end-of-facts' \
-  && { rm -rf "$_tp"; echo "FAIL: an aborted stream must not also carry end-of-facts"; exit 1; }
-_tp_out="$(printf '%s\n' "$_tp_facts" | sh "$S" 2>&1 >/dev/null)" \
-  && { rm -rf "$_tp"; echo "FAIL: the checker must not pass an aborted stream"; exit 1; }
-case "$_tp_out" in "artifact-facts: "*) ;; *) rm -rf "$_tp"; echo "FAIL: the checker's first line should start with 'artifact-facts: ', got: $_tp_out"; exit 1 ;; esac
-rm -rf "$_tp"
-
-# spec: scripts/lib/pkg-read.sh -- a bsdtar that cannot run is named, not read as "every pkg is unreadable".
-_bt="$(mktemp -d "${TMPDIR:-/tmp}/af-bsdtar.XXXXXX")"
-mkdir -p "$_bt/dist"
-cp "$here/fixtures/checks/artifact-facts/pass/dist/ed25519-1.0.0-mavericks.1.pkg" "$_bt/dist/"
-_bt_facts="$(BSDTAR=/nonexistent/bsdtar sh "$AF" "$_bt/dist" 1.0.0-mavericks.1 "$_bt" 2>/dev/null)" \
-  && { rm -rf "$_bt"; echo "FAIL: with no usable bsdtar the stream must abort; got: $_bt_facts"; exit 1; }
-printf '%s\n' "$_bt_facts" | grep -q '^abort cannot read .*pkg: no bsdtar found' \
-  || { rm -rf "$_bt"; echo "FAIL: the abort should say no bsdtar was found; got: $_bt_facts"; exit 1; }
-rm -rf "$_bt"
-
-PK="$here/fixtures/pkgs"
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed -- the real-pkg block is the only gate for artifact-facts reading a pkg, so it cannot be skipped"; exit 1; }
+export STEVEDORE="$SD"
 {
   _pk="$(mktemp -d "${TMPDIR:-/tmp}/conformance-pkg.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-  mkdir -p "$_pk/dist" "$_pk/archive"
-  for _n in x y z; do cp "$PK/$_n-component.pkg" "$_pk/dist/$_n-1.0.0-mavericks.1.pkg"; done
-  cp "$PK/x-tools.tar.gz" "$_pk/dist/x-tools.tar.gz"
-  cp "$PK/x-archive.pkg" "$_pk/archive/x-1.0.0-mavericks.1.pkg"
+  _st="$_pk/stage"; _ap="$_st/Library/Application Support/Mavergreen/x-updater.app/Contents"
+  mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/usr/local/mavergreen/x/bin" "$_pk/dist" "$_pk/comp" "$_pk/archive"
+  _plist() { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>%s</key><string>%s</string></dict></plist>\n' "$1" "$2" > "$3"; }
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.x.updater</string><key>SUFeedURL</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string></dict></plist>\n' > "$_ap/Info.plist"
+  _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
+  _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
+  echo x > "$_st/usr/local/mavergreen/x/bin/x"; ln -s bin/x "$_st/usr/local/mavergreen/x/link"
+  _macho=""
+  if [ "$(uname -s)" = Darwin ] && command -v cc >/dev/null 2>&1 && command -v lipo >/dev/null 2>&1; then
+    _macho=1
+    printf 'int main(void){return 0;}\n' > "$_pk/h.c"
+    # platform: the runner's SDK would make this fixture fail the sdk-pin rule the archive assertion below now enforces; clang honours SDKROOT
+    SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/usr/local/mavergreen/x/bin/hello"
+    ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
+  fi
+  cat > "$_st/usr/local/mavergreen/x/mavergreen.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>product</key><string>x</string>
+<key>identifier</key><string>dev.mavergreen.x</string>
+<key>outside</key><array>
+<string>Library/Application Support/Mavergreen/x-updater.app</string>
+<string>Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist</string>
+</array>
+<key>generated</key><array><string>Applications/Linux X.app</string></array>
+<key>appcast</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string>
+</dict></plist>
+PLIST
   printf 'x dev.mavergreen.x x\n' > "$_pk/product-names"
+  "$SD" component --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
+    --mtime 1700000000 --out "$_pk/dist/x-1.0.0-mavericks.1.pkg"
+  "$SD" component --root "$_st/usr/local/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
+    --install-location /usr/local/y --mtime 1700000000 --out "$_pk/dist/y-1.0.0-mavericks.1.pkg"
+  "$SD" component --root "$_st" --identifier dev.mavergreen.z --version 1.0.0-mavericks.1 --install-location /opt/z \
+    --mtime 1700000000 --out "$_pk/dist/z-1.0.0-mavericks.1.pkg"
+  cp "$_pk/dist/x-1.0.0-mavericks.1.pkg" "$_pk/comp/x-component.pkg"
+  sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --base-version 1.0.9 \
+    --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavericks.1.pkg" >/dev/null 2>&1 \
+    || { echo "FAIL: set_install_floor.sh could not build the archive this fixture reads"; exit 1; }
   _f="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
   printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"
   _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavericks.1.pkg" | tr -d ' ')"
@@ -1172,10 +1324,12 @@ PK="$here/fixtures/pkgs"
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
+  if [ -n "$_macho" ]; then
   printf '%s\n' "$_f" | grep -qE '^macho x-1\.0\.0-mavericks\.1\.pkg usr/local/mavergreen/x/bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
     || { echo "FAIL: a Mach-O in a pkg payload must yield a macho fact -- got: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -qE '^macho x-tools\.tar\.gz bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
     || { echo "FAIL: a Mach-O in a shipped tarball must yield a macho fact -- got: $_f"; exit 1; }
+  fi
   printf '%s\n' "$_f" | grep -q '^macho .* usr/local/mavergreen/x/bin/x ' \
     && { echo "FAIL: a non-Mach-O file must not yield a macho fact: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q 'org.sparkle-project' \
@@ -1197,6 +1351,18 @@ PK="$here/fixtures/pkgs"
     || { echo "FAIL: an archive set_install_floor.sh built from a laid-out stage must pass conformance: $_ca"; exit 1; }
   _cr="$(printf '%s\n' "$_fr" | sh "$S" 2>&1)" \
     || { echo "FAIL: a build that signs nothing passes conformance once stand-in-feeds.sh has staged its feed: $_cr"; exit 1; }
+
+  _un="$(mktemp -d "${TMPDIR:-/tmp}/conformance-unreadable.XXXXXX")"; echo "not a pkg" > "$_un/bad.pkg"
+  mkdir "$_un/root"; echo x > "$_un/root/f"
+  "$SD" component --root "$_un/root" --identifier dev.mavergreen.ok --version 1 --install-location / --mtime 1700000000 --out "$_un/good.pkg" >/dev/null \
+    || { echo "FAIL: stevedore could not build the positive-control pkg"; exit 1; }
+  rm -rf "$_un/root"
+  _fu="$(sh "$AF" "$_un" 1.0.0-mavericks.1 "$_un")" && _ur=0 || _ur=$?
+  rm -rf "$_un"
+  [ "$_ur" -eq 0 ] && printf "%s\n" "$_fu" | grep -qxF "pkg bad.pkg unreadable none none" \
+    && printf "%s\n" "$_fu" | grep -qxF end-of-facts && ! printf "%s\n" "$_fu" | grep -q "^abort" \
+    && printf "%s\n" "$_fu" | grep -q "^pkg good.pkg 1 none dev.mavergreen.ok$" \
+    || { echo "FAIL: unreadable pkg is a fact, not an abort: $_fu"; exit 1; }
 }
 
 echo "PASS: artifact-conformance"

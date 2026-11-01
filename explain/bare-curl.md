@@ -18,11 +18,11 @@ fetch-rust-src.sh and fetch-stage0-onbox.sh, and fd's and rg's fetch-rust.sh).
 ## Limits
 Command position follows shipyard-cmake-only's rule, with "{", "!" and the shell keywords added; a curl
 behind a wrapper other than sudo, env, command or time is not seen. A workflow that does not parse is
-reported. Prose and comments do not trip it. The helper itself is QUEUE #58's.
+reported. Prose and comments do not trip it. The helper itself, shipyard_curl, is one shared fetcher that retries transient failures.
 
 ## Deviating
 Write "- bare-curl:<path>: <reason>. Revisit when <exit>." for one tracked file. A good reason says what the
 script needs that shipyard_curl does not give (it probes the live HTTP status, or runs before the library can be
 sourced), and the exit is the change that lets it use shipyard_curl.
 
-New in the flag day (QUEUE #58)
+New in the flag day (the shared retrying fetcher, designed 2026-10-14 from rust-link-backfill)

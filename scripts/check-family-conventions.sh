@@ -525,6 +525,23 @@ DEVS="$(sh "$SELF/deviations.sh" . 2>/dev/null || true)"
 printf '%s\n' "$DEVS" | shipyard_deviation_facts > "$tmp/devfacts"
 SHIPYARD_CHECK_DEVIATION_FACTS="$tmp/devfacts"
 deviated() { chk_deviated "$1" "$2" >/dev/null; }
+# spec: scripts/conventions-grandfathered -- "<check> <repo> <job|path>" lines naming what predates a
+#       check, so moving @v1 reddens no repo. The repo is $GITHUB_REPOSITORY's name (as in check 24),
+#       else the last path component of origin's URL, https or ssh, so a local run through
+#       $SHIPYARD_SCRIPTS agrees with CI.
+REPO_NAME=""
+if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+  REPO_NAME="${GITHUB_REPOSITORY#*/}"
+elif _url="$(git config --get remote.origin.url 2>/dev/null)"; then
+  _url="${_url%/}"; _url="${_url%.git}"; REPO_NAME="${_url##*[/:]}"
+fi
+grandfathered() {  # $1 = check id, $2 = job or path
+  [ -n "$REPO_NAME" ] && [ -f "$SELF/conventions-grandfathered" ] \
+    && grep -qxF "$1 $REPO_NAME $2" "$SELF/conventions-grandfathered"
+}
+excused() {  # $1 = check id, $2 = job or path: a declared deviation or a grandfathered line covers it
+  deviated "$1" "$2" || grandfathered "$1" "$2"
+}
 
 # spec: SKILL.md "Family conventions" check 16 -- nothing tracked may read the CMake user package
 #       registry. tests/ is excluded for the same reason check 18 excludes it: a test that asserts the
@@ -543,7 +560,7 @@ while IFS= read -r f; do
   deviated registry-read "$f" && continue
   chk_fail registry-read "$f reads the CMake user package registry (the ~/.cmake export(PACKAGE) tree)" \
     "nothing writes it any more" \
-    "source msc.sh (it asks shipyard-cmake and exports SHIPYARD_SCRIPTS), or use \$SHIPYARD_SCRIPTS in CI"
+    "source msc.sh (it asks the shipyard-cmake launcher and exports SHIPYARD_SCRIPTS), or use \$SHIPYARD_SCRIPTS in CI"
 done < "$tmp/l532"
 
 # spec: SKILL.md "Family conventions" check 26 -- a family repo's Renovate config is
@@ -664,7 +681,7 @@ awk -F"$TAB" '{
 while IFS="$TAB" read -r f line; do
   deviated shipyard-cmake-only "$f" && continue
   chk_fail shipyard-cmake-only "$f runs plain cmake/ctest/cpack: $(printf '%s' "$line" | sed 's/^[[:space:]]*//' | cut -c1-70)" \
-    "MavericksShipyardConfig.cmake refuses any other cmake" \
+    "the launchers use the pinned cmake product, and macOS refuses foreign or too-old cmakes" \
     "use shipyard-cmake / shipyard-ctest / shipyard-cpack"
 done < "$cmdhits"
 
@@ -696,13 +713,20 @@ fi
 # spec: SKILL.md "Family conventions" check 21 -- a repo that builds a .pkg must run artifact
 #       conformance, or nothing checks what its pkg installs: the identity and install-path rules
 #       ("Install layout and identity") live in check-artifact-conformance.sh, and a product that
-#       never calls it is exempt from all of them by omission. Tests are excluded: fixtures build
-#       throwaway pkgs on purpose.
+#       never calls it is exempt from all of them by omission. tests/ and test/ are excluded:
+#       fixtures build throwaway pkgs on purpose.
 chk_ran artifact-checks-wired
-builds_pkg=""
-for f in $(grep -E "$SRC_RX" "$TF" | grep -v '^tests/' || true); do
-  grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' && { builds_pkg="$f"; break; }
+_stv_call='(^|[^A-Za-z0-9_.-])stevedore[[:space:]]+(component|product)([[:space:]]|$)'
+_stv_call="$_stv_call"'|(^|[;&|`]|[$]\(|[[:space:]]then|[[:space:]]do|^[[:space:]]*-?[[:space:]]*run:)[[:space:]]*((/bin/)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]+)?"?[^[:space:]=]*(build_component_pkg|set_install_floor)\.sh'
+builds_pkg=""; stv_pkg=""
+for f in $(grep -E "$SRC_RX" "$TF" | grep -Ev '^tests?/' || true); do
+  body="$(grep -v '^[[:space:]]*#' "$f" 2>/dev/null || true)"
+  printf '%s\n' "$body" | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' && { builds_pkg="$f"; break; }
+  [ -z "$stv_pkg" ] || continue
+  printf '%s\n' "$body" | grep -qE "$_stv_call" \
+    && ! grandfathered artifact-checks-wired "$f" && stv_pkg="$f"
 done
+[ -n "$builds_pkg" ] || [ -z "$stv_pkg" ] || builds_pkg="$stv_pkg via stevedore"
 [ -n "$builds_pkg" ] || ! ci_mentions 'sign_and_appcast' || builds_pkg="a signing workflow"
 if [ -n "$builds_pkg" ] && ! ci_mentions 'shipyard-check[^#]*--dist' && ! deviated artifact-checks-wired "$REL"; then
   chk_fail artifact-checks-wired "this repo builds a .pkg ($builds_pkg) but no workflow runs shipyard-check --dist" \
@@ -795,6 +819,203 @@ while IFS= read -r f; do
     "declare what runs translated, why it can't be native yet, and when to reconsider under INGREDIENTS.md's ## Conformance deviations as '- rosetta:$f: <reason>' (see the conventions skill, 'Rosetta')"
 done < "$tmp/l775"
 
+# spec: SKILL.md "Family conventions" check 28 -- what a build or test fetches is pinned, in a file
+#       Renovate bumps, so a newer release elsewhere changes nothing here without a commit. A fetch of
+#       whatever is newest needs a declared unpinned:<path> deviation. A feed URL or an install hint
+#       that names a newest-release URL fetches nothing, so only a fetch command's line counts. Like
+#       check 25, no pattern below may spell a form it matches contiguously, or the gate is its own
+#       first offender. shipyard's own check fixtures are excluded, as rosetta and vendored exclude them.
+chk_ran unpinned
+_unp='(^|[^A-Za-z0-9_.-])gh[[:space:]]+release[[:space:]]+download([[:space:]]+-|[[:space:]]*$)'
+_unp="$_unp"'|(^|[^A-Za-z0-9_.-])gh[[:space:]]+release[[:space:]]+view[[:space:]]+(-R|--repo|-[^|;]*[[:space:]](-R|--repo))'
+_unp="$_unp"'|(curl|wget|shipyard_curl)[[:space:]][^|;]*/releases/lates[t]'
+_unp="$_unp"'|(^|[^A-Za-z0-9_.-])gh[[:space:]]+api[[:space:]]+[^[:space:]]*/releases/lates[t]'
+_unp="$_unp"'|((npm|pnpm|yarn|bun)[[:space:]]+(install|i|add|exec|x|dlx)|npx|go[[:space:]]+(install|run|get)|pipx[[:space:]]+(install|run)|cargo[[:space:]]+install|uvx)[[:space:]][^|;]*@lates[t]([^A-Za-z0-9_.-]|$)'
+_unp="$_unp"'|(FROM|image:|docker[[:space:]]+(pull|run))[[:space:]]+[^[:space:]]+:lates[t]([^A-Za-z0-9_.-]|$)'
+grep -E "$SRC_BATS_RX"'|(^|/)Dockerfile[^/]*$' "$TF" | grep -v '^tests/fixtures/checks/' > "$tmp/l28" || :
+while IFS= read -r f; do
+  hit="$(grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
+    | sed 's/[[:space:]]#.*$//' \
+    | grep -E "$_unp" \
+    | head -1 | sed 's/^[[:space:]]*//' | cut -c1-90)"
+  [ -n "$hit" ] || continue
+  deviated unpinned "$f" && continue
+  chk_fail unpinned "$f fetches whatever release is newest instead of a pinned version: $hit" \
+    "a newer release elsewhere changes what this build gets, with no commit here to say so" \
+    "pin the version in a file a Renovate manager tracks and fetch that one, or declare '- unpinned:$f: <why it must be the newest, and when to reconsider>' under INGREDIENTS.md's ## Conformance deviations"
+done < "$tmp/l28"
+
+# spec: SKILL.md "Family conventions" check 29, and "Acceptance on real 10.9" -- a pkg-building
+#       repo's release.yml has a job whose steps use Mavergreen/mavericks-vm, and its publish job
+#       needs that job directly; a job calling a LOCAL reusable workflow that does is that job. Only
+#       an unscoped on-target deviation stands in for the job; a scoped one declares a gap in the
+#       job's coverage. A workflow that does not parse is workflow-yaml's.
+if rel_ran on-target && [ -n "$builds_pkg" ] && ! printf '%s\n' "$DEVS" | grep -q '^on-target \* ' \
+   && [ "$PY_OK" -eq 1 ]; then
+  rc=0
+  chk_py /dev/stdin "$REL" > "$tmp/c29" <<'PY' || rc=$?
+import sys, yaml
+try:
+    wf = yaml.safe_load(open(sys.argv[1])) or {}
+except Exception:
+    sys.exit(0)
+jobs = wf.get("jobs") if isinstance(wf, dict) else None
+jobs = {str(k): v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
+def runs_vm(job):
+    return any(isinstance(st, dict) and isinstance(st.get("uses"), str)
+               and st["uses"].lower().startswith("mavergreen/mavericks-vm@")
+               for st in (job.get("steps") or []))
+def on_vm(job):
+    if runs_vm(job):
+        return True
+    u = job.get("uses")
+    if not isinstance(u, str) or not u.startswith("./.github/workflows/"):
+        return False
+    try:
+        called = yaml.safe_load(open(u[2:])) or {}
+    except Exception:
+        return False
+    cj = called.get("jobs") if isinstance(called, dict) else None
+    return isinstance(cj, dict) and any(isinstance(b, dict) and runs_vm(b) for b in cj.values())
+vm = [j for j, b in jobs.items() if on_vm(b)]
+pubs = [j for j, b in jobs.items() if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]]
+if not pubs and "publish" in jobs:
+    pubs = ["publish"]
+if not vm:
+    print("novm")
+elif not pubs:
+    print("nopub %s" % ",".join(vm))
+else:
+    for p in pubs:
+        needs = jobs[p].get("needs") or []
+        needs = [needs] if isinstance(needs, str) else [str(n) for n in needs]
+        if not any(v in needs for v in vm):
+            print("unneeded %s %s" % (p, ",".join(vm)))
+PY
+  [ "$rc" -eq 0 ] || py_crashed on-target
+  _decl="or, where no 10.9 acceptance job exists yet, declare '- on-target: <why, and its exit>' under INGREDIENTS.md's ## Conformance deviations"
+  while read -r _k _a _b; do
+    case "$_k" in
+      novm) chk_fail on-target "this repo builds a .pkg ($builds_pkg) but no job in $REL installs and runs the pkg on real 10.9 (Mavergreen/mavericks-vm)" \
+              "it can publish a pkg nobody has installed on the platform it targets" \
+              "add a job to $REL that installs the run's own pkg in the 10.9 guest with Mavergreen/mavericks-vm@v1 and runs the product and its tests, and add it to publish's needs: -- a job in another workflow file counts only when a release.yml job calls that file as ./.github/workflows/<file>.yml, since publish can only need jobs in its own workflow; $_decl" ;;
+      nopub) chk_fail on-target "$REL has no publish job that needs its 10.9 acceptance job ($_a)" \
+               "no job calls publish-release.yml or is named publish" \
+               "publish through Mavergreen/shipyard/.github/workflows/publish-release.yml@v1 in a job whose needs: include $_a" ;;
+      unneeded) chk_fail on-target "$REL's publish job ($_a) does not need its 10.9 acceptance job ($_b)" \
+                  "a release can publish before, or without, the pkg passing on real 10.9" \
+                  "add one of ($_b) to $_a's needs:" ;;
+    esac
+  done < "$tmp/c29"
+fi
+
+# spec: SKILL.md "Family conventions" check 35 -- a pkg is built by stevedore, which runs on any host;
+#       a direct call to the system packager ties the build to a macOS runner. tests/ and test/ build
+#       throwaway pkgs on purpose, as in check 21.
+chk_ran packager
+grep -E "$SRC_RX" "$TF" | grep -Ev '^tests?/' > "$tmp/l35" || :
+while IFS= read -r f; do
+  grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qE '(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|$)' || continue
+  excused packager "$f" && continue
+  chk_fail packager "$f builds a pkg with the system packager directly" \
+    "only a macOS host has it, so the build is tied to a scarce macOS runner" \
+    "build it with stevedore's component and product commands, or declare '- packager:$f: <why it must, and its exit>' under INGREDIENTS.md's ## Conformance deviations"
+done < "$tmp/l35"
+
+# spec: SKILL.md "Family conventions" check 36 -- a job on a macos-* runner needs a declared reason:
+#       those runners are scarce. A runs-on of ${{ matrix.X }} is read through the job's matrix.
+chk_ran macos-runner
+if [ -n "$CI_FILES" ] && [ "$PY_OK" -eq 1 ]; then
+  rc=0
+  # shellcheck disable=SC2086  # CI_FILES is a deliberate word-split list of paths
+  chk_py /dev/stdin $CI_FILES > "$tmp/c36" <<'PY' || rc=$?
+import json, os, re, sys, yaml
+seen = set()
+for path in sys.argv[1:]:
+    try:
+        wf = yaml.safe_load(open(path)) or {}
+    except Exception:
+        continue
+    jobs = wf.get("jobs") if isinstance(wf, dict) else None
+    if not isinstance(jobs, dict):
+        continue
+    for name, job in jobs.items():
+        key = "%s:%s" % (os.path.basename(path), name)
+        if not isinstance(job, dict) or key in seen:
+            continue
+        runs = json.dumps(job.get("runs-on", ""))
+        if "matrix" in runs:
+            runs += json.dumps((job.get("strategy") or {}).get("matrix", ""))
+        if re.search(r"macos-", runs, re.I):
+            seen.add(key)
+            print(key)
+PY
+  [ "$rc" -eq 0 ] || py_crashed macos-runner
+  while IFS= read -r _j; do
+    [ -n "$_j" ] || continue
+    excused macos-runner "$_j" && continue
+    chk_fail macos-runner "$_j runs on a macos-* runner, with no declared reason" \
+      "those runners are scarce" \
+      "move the job to Linux (stevedore builds pkgs there), or declare '- macos-runner:$_j: <why it needs macOS, and its exit>' under INGREDIENTS.md's ## Conformance deviations"
+  done < "$tmp/c36"
+fi
+
+# spec: SKILL.md "Family conventions" check 37 -- an arm64 slice is a declared deviation, and what
+#       declares one runs it: release.yml has a modern-smoke job on a macos-* runner that publish
+#       needs exactly when INGREDIENTS.md declares '- arm64:<glob>: <reason>'. Conformance holds
+#       the pkg to the declaration (the arm64 id).
+if rel_ran modern-smoke && ! grandfathered modern-smoke release.yml:modern-smoke && [ "$PY_OK" -eq 1 ]; then
+  rc=0
+  chk_py /dev/stdin "$REL" > "$tmp/c37" <<'PY' || rc=$?
+import json, re, sys, yaml
+try:
+    wf = yaml.safe_load(open(sys.argv[1])) or {}
+except Exception:
+    sys.exit(0)
+jobs = wf.get("jobs") if isinstance(wf, dict) else None
+jobs = {str(k): v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
+job = jobs.get("modern-smoke")
+if job is None:
+    sys.exit(0)
+print("job")
+runs = json.dumps(job.get("runs-on", ""))
+if "matrix" in runs:
+    runs += json.dumps((job.get("strategy") or {}).get("matrix", ""))
+if not re.search(r"macos-", runs, re.I):
+    print("offmac")
+pubs = [j for j, b in jobs.items() if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]]
+if not pubs and "publish" in jobs:
+    pubs = ["publish"]
+for p in pubs or ["publish"]:
+    needs = jobs.get(p, {}).get("needs") or []
+    needs = [needs] if isinstance(needs, str) else [str(n) for n in needs]
+    if "modern-smoke" not in needs:
+        print("unneeded %s" % p)
+PY
+  [ "$rc" -eq 0 ] || py_crashed modern-smoke
+  _decl37="$(printf '%s\n' "$DEVS" | awk '$1 == "arm64" { print $2; exit }')"
+  _job37=no; grep -qx job "$tmp/c37" && _job37=yes
+  if [ -n "$_decl37" ] && [ "$_job37" = no ]; then
+    chk_fail modern-smoke "INGREDIENTS.md declares an arm64 slice, but release.yml has no modern-smoke job" \
+      "nothing runs the arm64 slice before it ships" \
+      "add a job named modern-smoke to $REL, on a macos-* runner, that installs the run's own pkg and runs its arm64 slice, and add it to publish's needs:"
+  elif [ -z "$_decl37" ] && [ "$_job37" = yes ]; then
+    chk_fail modern-smoke "release.yml has a modern-smoke job, but INGREDIENTS.md declares no arm64 slice" \
+      "an arm64 slice ships only with a reason" \
+      "declare '- arm64:<install-path glob>: <who runs it on Apple Silicon, and why>' under INGREDIENTS.md's ## Conformance deviations, or remove the job and ship x86_64 only"
+  elif [ "$_job37" = yes ]; then
+    grep -qx offmac "$tmp/c37" \
+      && chk_fail modern-smoke "the modern-smoke job does not run on a macos-* runner" \
+           "an arm64 slice runs only on Apple Silicon" \
+           "give the modern-smoke job in $REL runs-on: macos-<version>"
+    for _p in $(sed -n 's/^unneeded //p' "$tmp/c37"); do
+      chk_fail modern-smoke "publish does not need the modern-smoke job ($_p)" \
+        "a release can ship an arm64 slice nothing ran" \
+        "add modern-smoke to $_p's needs: in $REL"
+    done
+  fi
+fi
+
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
 #       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
 #       ignored AND nothing may be tracked under them or under docs/superpowers/. Needs the tracked
@@ -814,6 +1035,34 @@ if [ "$HAVE_TRACKED" -eq 1 ]; then
         "git rm -r --cached $_d (the files stay on disk), and make sure .gitignore ignores it"
     fi
   done
+fi
+
+# spec: SKILL.md "Family conventions" check 27 -- a repo's backlog is QUEUE.md under the gitignored
+#       .superpowers/, so no backlog file is tracked anywhere, and no tracked line cites one of its
+#       entries by number, on one line or split across a line break. Needs the tracked list, like
+#       check 7; shipyard's own check fixtures are excluded, as rosetta and vendored exclude them.
+chk_ran no-tracked-backlog
+chk_ran no-queue-citation
+if [ "$HAVE_TRACKED" -eq 1 ]; then
+  grep -Ev '^(\.superpowers|tests/fixtures/checks)/' "$TF" | grep -iE '(^|/)(backlog|queue|todo)(\.(md|markdown|txt))?$' > "$tmp/backlogs" || :
+  while IFS= read -r _f; do
+    chk_fail no-tracked-backlog "$_f is a tracked backlog" \
+      "a repo's backlog is QUEUE.md under the gitignored .superpowers/, and is never committed" \
+      "move its entries into QUEUE.md under .superpowers/, git rm $_f, and write inline the reason any tracked file cited one of its entries for"
+  done < "$tmp/backlogs"
+  grep -v '^tests/fixtures/checks/' "$TF" > "$tmp/l27" || :
+  tr '\n' '\0' < "$tmp/l27" | xargs -0 grep -nIE '(BACKLOG|QUEUE)([.]md)? ?#[0-9]' /dev/null 2>/dev/null | cut -d: -f1-2 > "$tmp/cites" || :
+  tr '\n' '\0' < "$tmp/l27" | xargs -0 grep -lIE '(BACKLOG|QUEUE)([.]md)?[[:space:]]*$' /dev/null 2>/dev/null > "$tmp/wrapped" || :
+  while IFS= read -r _f; do
+    awk -v f="$_f" 'held && /^[[:space:]]*((#|\/\/|[*]|--|;)[[:space:]]*)?#[0-9]/ { print f ":" (NR - 1) }
+                    { held = /(BACKLOG|QUEUE)([.]md)?[[:space:]]*$/ }' "$_f"
+  done < "$tmp/wrapped" >> "$tmp/cites"
+  while IFS= read -r _c; do
+    [ -n "$_c" ] || continue
+    chk_fail no-queue-citation "$_c cites a queue entry by number" \
+      "no reader of a tracked file can look it up" \
+      "write the reason itself on that line, where a reader without the queue can use it"
+  done < "$tmp/cites"
 fi
 
 # spec: SKILL.md "The `ignoreTests` policy" -- Renovate's automerge waits on a CI status check, so
@@ -1157,7 +1406,7 @@ if [ "$HAVE_TRACKED" -eq 1 ]; then
 fi
 
 # spec: SKILL.md, the `docs-no-sudo` row of the checks table -- family tools elevate themselves
-#       (QUEUE #63), so no user-facing doc or message tells anyone to run sudo. Doc files: README*,
+#       (the maintainer's ruling, 2026-10-14), so no user-facing doc or message tells anyone to run sudo. Doc files: README*,
 #       *.md except release-notes/**, SKILL.md and design, decision and plan
 #       records (docs/decisions/**, docs/adr/**, docs/plans/**, docs/superpowers/**), man/** and *.[1-9], pkg resources. Messages: echo or
 #       printf text, and heredoc text, in tracked shell scripts outside tests/. An executed sudo is code,

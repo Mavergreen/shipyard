@@ -45,7 +45,7 @@ if(SHIPYARD_BUILD_UPDATER)
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "MavShipyardUpdater"
     CONFIRM_TITLE "Mavericks Shipyard updated"
-    CONFIRM_BODY "Mavericks Shipyard and shipyard-cmake in /usr/local/mavergreen/shipyard were updated."
+    CONFIRM_BODY "Mavericks Shipyard in /usr/local/mavergreen/shipyard was updated."
     RELAUNCH_MARKER "/tmp/.mavericks-shipyard-updater-relaunched"
     ALLOW_GENERIC
     # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification. shipyard has no UI.
@@ -56,19 +56,52 @@ endif()
 # installs itself as a find_package() config package so consumers can just:
 #   find_package(MavericksShipyard REQUIRED)
 #   include(Mavericks)
-# instead of vendoring a submodule. Consumers find this package through
-# shipyard-cmake (it lives in the same prefix as this install) -- there is no
-# user package registry to write. `cmake --install` here is for developing
-# shipyard itself: point shipyard-cmake at the result with
-# -DCMAKE_PREFIX_PATH=<that prefix>.
+# instead of vendoring a submodule.
+# spec: 2026-10-09 C4 -- consumers find this package through bin/shipyard-cmake, which runs the cmake
+#       product in the sibling prefix with this prefix on CMAKE_PREFIX_PATH. To develop shipyard,
+#       install it into a prefix of your own and configure with CMAKE_PREFIX_PATH=<that prefix>
+#       shipyard-cmake; the launcher appends, so the dev copy is found first.
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 set(_dest "${CMAKE_INSTALL_DATADIR}/cmake/MavericksShipyard")
 
+# spec: 2026-10-09 C5 -- the config refuses a cmake below the Kitware part of shipyard's cmake pin.
+#       -DSHIPYARD_CMAKE_MIN sets another for one configure, so a fixture can pair shipyard with the
+#       host's cmake; it is dropped from the cache so that a later configure reads the pin again.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS components/cmake/version)
+if(DEFINED CACHE{SHIPYARD_CMAKE_MIN})
+  set(_shipyard_cmake_min "$CACHE{SHIPYARD_CMAKE_MIN}")
+  unset(SHIPYARD_CMAKE_MIN CACHE)
+else()
+  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/components/cmake/version" _shipyard_cmake_min LIMIT_COUNT 1)
+  string(REGEX REPLACE "-mavericks\\.[0-9]+$" "" _shipyard_cmake_min "${_shipyard_cmake_min}")
+endif()
+# spec: MavericksShipyardConfig.cmake -- a minimum that is not a version reads as a checkout's
+#       placeholder there, and every consumer would then fail on a missing components/cmake/version.
+if(NOT _shipyard_cmake_min MATCHES "^[0-9]+(\\.[0-9]+)*$")
+  message(FATAL_ERROR "shipyard's cmake minimum is '${_shipyard_cmake_min}', not a version: "
+    "components/cmake/version must hold X.Y.Z-mavericks.N, and -DSHIPYARD_CMAKE_MIN must be X.Y.Z")
+endif()
+set(SHIPYARD_CMAKE_MIN "${_shipyard_cmake_min}")
+configure_file(MavericksShipyardConfig.cmake "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake" @ONLY)
+
+# spec: 2026-10-09 C4 -- the launchers, plus bin/{cmake,ctest,cpack} linked to them so a build
+#       directory configured before the cmake product existed still regenerates; the pkg keeps those
+#       three out of the link farm. Revisit at the flag day: the move to /opt breaks those build
+#       directories anyway.
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/compat")
+foreach(_tool cmake ctest cpack)
+  install(PROGRAMS scripts/shipyard-launcher.sh DESTINATION bin RENAME "shipyard-${_tool}")
+  file(CREATE_LINK "shipyard-${_tool}" "${CMAKE_CURRENT_BINARY_DIR}/compat/${_tool}" SYMBOLIC)
+  install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/compat/${_tool}" DESTINATION bin)
+endforeach()
+file(CREATE_LINK "../${_dest}/scripts/shipyard-check" "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-check" SYMBOLIC)
+install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-check" DESTINATION bin)
+
 install(FILES
-  MavericksShipyardConfig.cmake
+  "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake"
   Mavericks.cmake
   MavericksMode.cmake
   RequireAppleClang.cmake
@@ -78,6 +111,7 @@ install(FILES
   MavericksSparkle.cmake
   MavericksVersion.cmake
   MavericksDecisions.cmake
+  default.json
   DESTINATION "${_dest}")
 
 # platform: CMake expands a preset's ${fileDir} against the file of the preset being CONFIGURED, not
@@ -169,6 +203,6 @@ add_test(NAME stage-updater
 add_test(NAME sign-and-appcast
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/sign_and_appcast.sh ${CMAKE_CURRENT_SOURCE_DIR})
 
-# Prove the Renovate preset is valid and includes the mavericks-legacysupport customManager.
+# Prove the Renovate preset is valid and carries the shared Recaulk manager.
 add_test(NAME renovate-preset
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/renovate_preset.sh)

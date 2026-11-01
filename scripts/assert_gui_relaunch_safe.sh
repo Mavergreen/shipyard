@@ -58,7 +58,7 @@ if [ "$#" -eq 0 ] && [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
       mkdir -p "$sc.d"
       if ! af_extract "$sc" "$sc.d"; then
         chk_fail gui-relaunch-safe "$rule" "a Scripts archive of ${pkg##*/} cannot be read, so its postinstall cannot be checked" \
-          "rebuild the pkg with pkgbuild --scripts"
+          "rebuild the pkg with build_component_pkg.sh --scripts"
         continue
       fi
       comp="${sc#"$x"/}"; comp="${comp%Scripts}"; comp="${comp%/}"

@@ -11,18 +11,18 @@ docs/superpowers/**), man pages, pkg resources, and echo, printf or heredoc text
 tests/. An executed sudo in a script is code and passes.
 
 ## Incident
-2026-10-14 (QUEUE #63): clang-22 22.1.8-mavericks.1 documented sudo longboat install 10.9 in its
-INGREDIENTS.md, and QUEUE #45 said the same. The maintainer agreed the line that day: docs never prescribe
+2026-10-14: clang-22 22.1.8-mavericks.1 documented sudo longboat install 10.9 in its
+INGREDIENTS.md, and a queued note about clang-22's Longboat SDK said the same. The maintainer agreed the line that day: docs never prescribe
 sudo, and the tools elevate per step.
 
 ## Limits
 It is a text match on the word sudo; it cannot tell a doc that warns against sudo from one that prescribes it.
 Scripts are scanned for the quoted argument of echo and printf and for heredoc bodies; prose assembled any
-other way is not seen. QUEUE #63's runtime policy (shipyard_root_policy, shipyard_sudo) is a separate piece.
+other way is not seen. The runtime policy for root (shipyard_root_policy, shipyard_sudo: elevate per step, refuse only a person's sudo <tool>) is a separate piece.
 
 ## Deviating
 Write "- docs-no-sudo:<path>: <reason, naming the exit>". A good reason says what root step no family
 command can do yet, or which tool has not adopted shipyard_root_begin, and when that ends. shipyard's own entry for
 README.md names the Engine's mavergreen install and uninstall as its exit.
 
-New in the flag day (QUEUE #63)
+New in the flag day (the maintainer's ruling via clang-22, 2026-10-14)

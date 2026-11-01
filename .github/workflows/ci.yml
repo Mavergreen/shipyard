@@ -13,7 +13,7 @@ concurrency:
 jobs:
   test:
     runs-on: macos-26   # the CMake modules gate on Apple clang; Linux cannot exercise them
-    timeout-minutes: 90     # source-build mode builds CMake twice on a cache miss
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
         with:
@@ -42,13 +42,15 @@ jobs:
           for t in llvm-otool llvm-lipo llvm-nm llvm-strings; do echo "xcrun -f $t: $(xcrun -f $t 2>&1)"; done
           command -v brew >/dev/null 2>&1 && { brew list llvm >/dev/null 2>&1 && echo "brew llvm: present" || echo "brew llvm: absent"; } || echo "no brew"
 
-      - id: cm
-        uses: ./.github/actions/shipyard-cmake
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavergreen-clang22
+          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
+
       - name: Install mavericks-shipyard (self, source-build) -- and bats, so the *.bats suites below can run
         uses: ./.github/actions/install
         with:
           source: build
-          cmake-tree: ${{ steps.cm.outputs.tree }}
 
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
@@ -68,7 +70,12 @@ jobs:
         run: sh scripts/assert-tree-clean.sh
 
   linux:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/linux-host.yml
+    secrets:
+      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   # spec: tests/on-target-job-test.sh -- the flag-day P1 ruling R5: this job runs every check on Mac OS X
   #       10.9. The guest has no python3 of its own, so it installs the python-315 release python-315.pin
@@ -107,14 +114,12 @@ jobs:
             SHIPYARD_CHECK_DIR="$PWD/scripts" sh -c '. "$SHIPYARD_CHECK_DIR/lib/py.sh"; p="$(chk_python3)"; echo "python3: $p"; "$p" --version'
             sh tests/check-fixtures-run.sh --jobs 2
 
-  # spec: R-P1-17 -- this job builds (or restores) the universal shipyard-cmake and publishes it as a
-  #       run artifact so it can be run on a real 10.9 box, the only proof the x86_64 slice works
-  #       there; and it REHEARSES release.yml's whole packaging path. release.yml runs only on a push
-  #       to main, so the packaging and install-smoke steps below would otherwise first execute during
-  #       the flag-day push -- the one push that must not be a rehearsal.
-  shipyard-cmake:
+  # spec: R-P1-17 -- this job REHEARSES release.yml's whole packaging path. release.yml runs only on a
+  #       push to main, so the packaging and install-smoke steps below would otherwise first execute
+  #       during a push that is already publishing.
+  package:
     runs-on: macos-26
-    timeout-minutes: 90     # a cache miss builds CMake twice
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
         with:
@@ -131,48 +136,28 @@ jobs:
       - name: LLVM's Mach-O readers
         run: sh scripts/install-macho-readers.sh
 
-      - id: cm
-        uses: ./.github/actions/shipyard-cmake
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavergreen-clang22
+          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
+
       - name: Install mavericks-shipyard (self, source-build)
         uses: ./.github/actions/install
         with:
           source: build
-          cmake-tree: ${{ steps.cm.outputs.tree }}
 
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
-
-      # spec: scripts/package-pkg.sh -- $SHIPYARD_CMAKE_TREE, never the prefix install@v1 assembled:
-      #       that prefix has shipyard installed into it, and this artifact is the bare CMake tree a
-      #       10.9 box can unpack and run.
-      - name: Pack the tree
-        run: tar -czf "$RUNNER_TEMP/shipyard-cmake-tree.tar.gz" -C "$SHIPYARD_CMAKE_TREE" .
-      - uses: actions/upload-artifact@v7
-        with:
-          name: shipyard-cmake-tree
-          path: ${{ runner.temp }}/shipyard-cmake-tree.tar.gz
 
       # spec: .github/workflows/release.yml -- the same two-arch build and merge it does, stated in
       #       full on its copy of this step.
       - name: Build the universal updater
         run: |
           set -eu
-          for a in "x86_64 10.9" "arm64 11.0"; do
-            set -- $a
-            shipyard-cmake -S . -B "$RUNNER_TEMP/upd-$1" -DSHIPYARD_BUILD_UPDATER=ON \
-              -DMAVERICKS_ALLOW_GENERIC_ICON=ON -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
-              -DCMAKE_OSX_ARCHITECTURES="$1" -DCMAKE_OSX_DEPLOYMENT_TARGET="$2" \
-              -DCMAKE_TOOLCHAIN_FILE="$PWD/MavericksToolchain.cmake"
-            shipyard-cmake --build "$RUNNER_TEMP/upd-$1"
-          done
-          sh scripts/lipo-merge-tree.sh \
-            --a "$RUNNER_TEMP/upd-x86_64/shipyard-updater.app" \
-            --b "$RUNNER_TEMP/upd-arm64/shipyard-updater.app" \
-            --out "$RUNNER_TEMP/shipyard-updater.app" \
-            --require-archs "x86_64 arm64"
+          sh tests/lib/build-updater.sh --arch x86_64 --arch arm64 --out "$RUNNER_TEMP/shipyard-updater.app"
           # spec: R-P1-22 -- NOT re-signed; release.yml's copy of this step states it in full.
           exe="$RUNNER_TEMP/shipyard-updater.app/Contents/MacOS/shipyard-updater"
-          archs="$(lipo -info "$exe" | sed -n 's/.*: //p')"
+          archs="$(${LIPO:-lipo} -info "$exe" | sed -n 's/.*: //p')"
           case " $archs " in *" x86_64 "*) ;; *) echo "::error::the merged updater has no x86_64 slice: $archs"; exit 1;; esac
           case " $archs " in *" arm64 "*) ;; *) echo "::error::the merged updater has no arm64 slice: $archs"; exit 1;; esac
           echo "merged updater: $archs"
@@ -190,7 +175,6 @@ jobs:
           DESTDIR="$RUNNER_TEMP/payload-stage" shipyard-cmake --install "$RUNNER_TEMP/payload-build" \
             --prefix /usr/local/mavergreen/shipyard
           sh scripts/package-pkg.sh \
-            --cmake-tree "$SHIPYARD_CMAKE_TREE" \
             --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
             --app "$RUNNER_TEMP/shipyard-updater.app" \
             --version "$v" \
@@ -237,14 +221,21 @@ jobs:
           set -eu
           bad=0
           sudo installer -pkg "$RUNNER_TEMP"/dist/mavericks-shipyard-*.pkg -target / || bad=1
-          want="$(sed -n 's/^CMAKE_VERSION=//p' cmake.pin)"
-          sh scripts/assert-installed-shipyard.sh --cmake-version "$want" --root / || bad=1
+          sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root / || bad=1
           /usr/local/bin/mavergreen check || bad=1
           if [ "$bad" -ne 0 ]; then
             echo "---- /var/log/install.log, the pkg's scripts ----"
             sudo grep -E 'preinstall|postinstall|mavericks-shipyard|mavergreen' /var/log/install.log | tail -n 100 || true
           fi
           [ "$bad" -eq 0 ] || exit 1
+
+      # spec: scripts/assert-installed-shipyard.sh -- retain the exact smoke-tested pkg for rehearsal on developer Macs.
+      - name: Save the rehearsed package
+        uses: actions/upload-artifact@v7
+        with:
+          name: shipyard-rehearsal-pkg
+          path: ${{ runner.temp }}/dist/*.pkg
+          if-no-files-found: error
 
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh

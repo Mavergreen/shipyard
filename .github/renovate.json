@@ -4,21 +4,19 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "shipyard-cmake's CMake (cmake.pin). No hash to move: build-cmake.sh verifies the tarball against Kitware's own published SHA-256 file, and CI builds it, so a bump is gated on green like any other.",
-      "managerFilePatterns": ["/^cmake\\.pin$/"],
-      "matchStrings": ["CMAKE_VERSION=(?<currentValue>\\S+)"],
-      "depNameTemplate": "cmake",
-      "packageNameTemplate": "Kitware/CMake",
+      "description": "The cmake product shipyard's launchers run and its pkg requires (components/cmake/version). install@v1 installs this release, verified against its SHA256SUMS; a bump releases shipyard on green.",
+      "managerFilePatterns": ["/^components/cmake/version$/"],
+      "matchStrings": ["^(?<currentValue>\\S+)\\s*$"],
+      "depNameTemplate": "Mavergreen/cmake",
       "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.+)$"
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
     },
     {
       "customType": "regex",
-      "description": "The family toolchain that compiles shipyard-cmake's x86_64/10.9 half (mavericks-clang.pin). CI verifies the pkg against the release's SHA256SUMS; a bump rebuilds shipyard-cmake on green.",
-      "managerFilePatterns": ["/^mavericks-clang\\.pin$/"],
-      "matchStrings": ["MAVERICKS_CLANG_VERSION=(?<currentValue>\\S+)"],
-      "depNameTemplate": "mavericks-clang",
-      "packageNameTemplate": "Mavergreen/clang-22",
+      "description": "The clang22 that builds shipyard's Sparkle updater on every host (components/clang22/version). scripts/fetch_clang22.sh verifies its Linux archive against components/clang22/linux-sha256 and its pkgs against the release's SHA256SUMS.",
+      "managerFilePatterns": ["/^components/clang22/version$/"],
+      "matchStrings": ["^(?<currentValue>\\S+)\\s*$"],
+      "depNameTemplate": "Mavergreen/clang-22",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
     },
@@ -31,6 +29,62 @@
       "packageNameTemplate": "Mavergreen/python-315",
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The ed25519-sign that signs every family release (scripts/ed25519.pin). sign_and_appcast.sh verifies the pkg against the release's SHA256SUMS.",
+      "managerFilePatterns": ["/^scripts/ed25519\\.pin$/"],
+      "matchStrings": ["ED25519_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "ed25519",
+      "packageNameTemplate": "Mavergreen/ed25519",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{8})-mavericks\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The Recaulk whose librecaulk.a defines the C++ runtime machinery the conformance rule allows (scripts/recaulk.pin). cxxabi-allowlist.sh verifies the pkg against the release's SHA256SUMS.",
+      "managerFilePatterns": ["/^scripts/recaulk\\.pin$/"],
+      "matchStrings": ["RECAULK_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "recaulk",
+      "packageNameTemplate": "Mavergreen/recaulk",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The stevedore packager (scripts/stevedore.pin). fetch_stevedore.sh verifies the asset against the release's SHA256SUMS.",
+      "managerFilePatterns": ["/^scripts/stevedore\\.pin$/"],
+      "matchStrings": ["STEVEDORE_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "stevedore",
+      "packageNameTemplate": "Mavergreen/stevedore",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The Renovate release that validates default.json in CI (scripts/renovate.pin, run by linux-host.yml). Pinned so the check does not move without a commit.",
+      "managerFilePatterns": ["/^scripts/renovate\\.pin$/"],
+      "matchStrings": ["RENOVATE_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "renovate",
+      "datasourceTemplate": "npm"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Renovate moves components/clang22/version but cannot write the Linux archive's digest beside it, so the Linux job fails on the bump until components/clang22/linux-sha256 names the new release's archive.",
+      "matchDepNames": ["Mavergreen/clang-22"],
+      "prBodyNotes": ["Before this can merge, replace components/clang22/linux-sha256 with the `clang22-<version>-linux-x86_64.tar.gz` line of the new release's SHA256SUMS: `gh release download <version> -R Mavergreen/clang-22 -p SHA256SUMS -O - | grep linux-x86_64.tar.gz > components/clang22/linux-sha256`."]
+    },
+    {
+      "description": "The renovate pin moves at most monthly: each bump costs macOS runner time in shipyard's CI and then its release, and the validator gains nothing from tracking Renovate's every release.",
+      "matchDepNames": ["renovate"],
+      "schedule": ["on the first day of the month"]
+    },
+    {
+      "description": "linux-host.yml's setup-node runs Renovate's own config validator, whose package requires node ^24.11.0, so node stays on 24 until a renovate pin needs another major.",
+      "matchFileNames": [".github/workflows/linux-host.yml"],
+      "matchDepNames": ["node"],
+      "allowedVersions": "24"
     }
   ]
 }

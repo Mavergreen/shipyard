@@ -1,11 +1,18 @@
 #!/bin/sh
-# platform: macOS-only -- PlistBuddy reads the manifest stage_product.sh renders
+# platform: macOS-only -- the generated preinstall runs here, and its PlistBuddy text reads the target volume's manifests
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/stage_product.sh"
-[ -x /usr/libexec/PlistBuddy ] || { echo "no PlistBuddy -- skipping"; exit 77; }
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed"; exit 1; }; export STEVEDORE="$SD"
+[ -x /usr/libexec/PlistBuddy ] || { echo "no PlistBuddy for the generated preinstall to run under -- skipping"; exit 77; }
 w="$(mktemp -d "${TMPDIR:-/tmp}/stage-product.XXXXXX")"; trap 'chmod -R u+w "$w" 2>/dev/null; rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
+xplist() {
+  _xf="$1"; shift
+  { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>\n'
+    while [ "$#" -ge 2 ]; do printf '<key>%s</key><string>%s</string>\n' "$1" "$2"; shift 2; done
+    printf '</dict></plist>\n'; } > "$_xf"
+}
 run_with_timeout() {
   _secs="$1"; _rcfile="$2"; shift 2
   "$@" >/dev/null 2>&1 &
@@ -32,7 +39,7 @@ sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out
 [ -f "$st/usr/local/mavergreen/openssh/mavergreen.plist" ] || fail "the manifest is rendered"
 sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-gen" \
   --generated "Applications/Linux X.app" || fail "stage_product must accept --generated"
-[ "$(/usr/libexec/PlistBuddy -c 'Print :generated:0' "$st/usr/local/mavergreen/openssh/mavergreen.plist")" = "Applications/Linux X.app" ] \
+[ "$("$SD" plist get "$st/usr/local/mavergreen/openssh/mavergreen.plist" generated:0)" = "Applications/Linux X.app" ] \
   || fail "stage_product passes --generated through to the manifest"
 
 sh -n "$w/scr/preinstall" || fail "generated preinstall must be valid sh"
@@ -61,7 +68,7 @@ sh "$S" --stage "$so" --product swift-runtime --name "Swift Runtime" --version 1
   || fail "a product whose every file lives where the OS dictates still stages, so its manifest can find them"
 [ -f "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist" ] \
   || fail "an outside-only product's manifest sits at its tree root, where the helper and conformance look"
-/usr/libexec/PlistBuddy -c 'Print :outside:0' "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist" 2>/dev/null \
+"$SD" plist get "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist" outside:0 2>/dev/null \
   | grep -qx usr/lib/swift/libswiftCore.dylib \
   || fail "an outside-only product's manifest lists its files in outside, so uninstall removes them"
 grep -q 'rm -rf "$ROOT/usr/local/mavergreen/openssh"' "$w/scr/preinstall" \
@@ -71,9 +78,7 @@ APP="$w/openssh-updater.app"
 mkdir -p "$APP/Contents/MacOS"
 printf '#!/bin/sh\n' > "$APP/Contents/MacOS/openssh-updater"
 chmod +x "$APP/Contents/MacOS/openssh-updater"
-/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string dev.mavergreen.openssh.updater" \
-  -c "Add :SUFeedURL string https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml" \
-  "$APP/Contents/Info.plist" >/dev/null
+xplist "$APP/Contents/Info.plist" CFBundleIdentifier dev.mavergreen.openssh.updater SUFeedURL https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml
 SCRU="$w/scr-updater"
 sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$SCRU" --updater-app "$APP" \
   || fail "stage_product with --updater-app must succeed"
@@ -81,9 +86,9 @@ sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out
   || fail "the updater lands where the registry puts openssh's"
 [ -f "$st/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" ] \
   || fail "the update-check job carries the registry's label for openssh"
-[ "$(/usr/libexec/PlistBuddy -c 'Print :appcast' "$st/usr/local/mavergreen/openssh/mavergreen.plist")" = https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml ] \
+[ "$("$SD" plist get "$st/usr/local/mavergreen/openssh/mavergreen.plist" appcast)" = https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml ] \
   || fail "a product that stages an updater names the registry's feed in its manifest"
-[ -z "$(/usr/libexec/PlistBuddy -c 'Print :appcast' "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist")" ] \
+[ -z "$("$SD" plist get "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist" appcast)" ] \
   || fail "a product with no updater has no feed, so its manifest's appcast is empty -- never a URL that 404s"
 sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-hu" --has-updater 2>/dev/null \
   && fail "--has-updater is stage_product's to pass, never a caller's"
@@ -94,9 +99,7 @@ for f in --appcast --app-dir --agent-label; do
 done
 WRONG="$w/wrong/openssh-updater.app"; mkdir -p "$WRONG/Contents/MacOS"
 printf '#!/bin/sh\n' > "$WRONG/Contents/MacOS/openssh-updater"
-/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string dev.mavergreen.OpenSSHUpdater" \
-  -c "Add :SUFeedURL string https://github.com/Mavergreen/openssh/releases/latest/download/appcast.xml" \
-  "$WRONG/Contents/Info.plist" >/dev/null
+xplist "$WRONG/Contents/Info.plist" CFBundleIdentifier dev.mavergreen.OpenSSHUpdater SUFeedURL https://github.com/Mavergreen/openssh/releases/latest/download/appcast.xml
 sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-wrong" \
   --updater-app "$WRONG" 2>"$w/err" \
   && fail "an updater built with another bundle id or feed than the registry's must be refused -- the app and its stage would disagree"
@@ -112,11 +115,10 @@ MAVERGREEN_PRODUCT_NAMES="$w/badrepo-names" sh "$S" --stage "$st" --product open
   && fail "a registry row with a malformed repo must refuse staging an updater"
 grep -q "cannot look up openssh in shipyard's registry" "$w/err" \
   || fail "the feed lookup's failure is reported, not silent: [$(cat "$w/err")]"
-ol() { _i=0; while _v="$(/usr/libexec/PlistBuddy -c "Print :outside:$_i" "$1" 2>/dev/null)"; do echo "$_v"; _i=$((_i + 1)); done; }
+ol() { _i=0; while _v="$("$SD" plist get "$1" "outside:$_i" 2>/dev/null)"; do echo "$_v"; _i=$((_i + 1)); done; }
 for s in go126 go127; do
   a="$w/lines/$s-updater.app"; mkdir -p "$a/Contents/MacOS"; printf '#!/bin/sh\n' > "$a/Contents/MacOS/$s-updater"
-  /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $(sh "$here/../scripts/product-name.sh" updater-bundle-id "$s")" \
-    -c "Add :SUFeedURL string $(sh "$here/../scripts/product-name.sh" feed "$s")" "$a/Contents/Info.plist" >/dev/null
+  xplist "$a/Contents/Info.plist" CFBundleIdentifier "$(sh "$here/../scripts/product-name.sh" updater-bundle-id "$s")" SUFeedURL "$(sh "$here/../scripts/product-name.sh" feed "$s")"
   sl="$w/stage-$s"; mkdir -p "$sl/usr/local/mavergreen/$s/bin"; echo go > "$sl/usr/local/mavergreen/$s/bin/go"
   sh "$S" --stage "$sl" --product "$s" --name Go --version 1 --group go --line "${s#go}" \
     --scripts-out "$w/scr-$s" --updater-app "$a" || fail "staging $s with its own updater must succeed"
@@ -158,7 +160,8 @@ grep -q '^launchctl bootstrap gui/501 ' "$alog" \
 
 fake="$w/fake"; mkdir -p "$fake"
 cp "$S" "$fake/stage_product.sh"
-cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$fake/"
+cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$here/../scripts/fetch_stevedore.sh" "$here/../scripts/stevedore.pin" "$fake/"
+mkdir -p "$fake/lib"; cp "$here/../scripts/lib/vercmp.sh" "$fake/lib/"
 RM_LOG="$w/rm.log"; export RM_LOG
 cat > "$fake/render-manifest.sh" <<'EOF'
 #!/bin/sh
@@ -262,8 +265,7 @@ Vup="$w/volup"; MGup="$Vup/usr/local/mavergreen"; mkdir -p "$Vup/usr/local/bin" 
 sed 's/@MAVERGREEN_VERSION@/9.9/' "$here/../scripts/mavergreen.sh" > "$Vup/usr/local/bin/mavergreen"; chmod +x "$Vup/usr/local/bin/mavergreen"
 cp -R "$stg/usr/local/mavergreen/go126" "$MGup/"
 echo go > "$MGup/go127/bin/go"
-/usr/libexec/PlistBuddy -c "Add :product string go127" -c "Add :group string go" -c "Add :line string 127" \
-  -c "Add :identifier string dev.mavergreen.go127" -c "Add :version string 1" "$MGup/go127/mavergreen.plist" >/dev/null
+xplist "$MGup/go127/mavergreen.plist" product go127 group go line 127 identifier dev.mavergreen.go127 version 1
 sh "$Vup/usr/local/bin/mavergreen" --root "$Vup" link go126; sh "$Vup/usr/local/bin/mavergreen" --root "$Vup" link go127
 [ "$(cat "$MGup/var/mavergreen/selections/go")" = go126 ] || fail "fixture: the first member linked is selected"
 sh "$w/scr-go/preinstall" /x.pkg "$Vup/" "$Vup/" || fail "the selected member's upgrade preinstall must succeed"
@@ -379,12 +381,13 @@ mkvol() {
   ln -s "$_v.out/linked" "$_v/Library/Linked"; ln -s "$_v.out/escape.app" "$_v/Library/Symlinked.app"
 }
 V4="$w/vol-bundles"; mkvol "$V4"; M4="$V4/usr/local/mavergreen/openssh/mavergreen.plist"
-_i=0; /usr/libexec/PlistBuddy -c 'Add :outside array' "$M4" >/dev/null
+{ printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>outside</key><array>\n'
 for o in "Library/Application Support/Mavergreen/openssh-updater.app" "Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" \
   Library/NotABundle ../vol-bundles.out/escape.app "$V4.out/escape.app" Library/Linked/x.app Library/Symlinked.app \
   usr/local/mavergreen/other/x.app "Library/./Application Support/Mavergreen/other-updater.app" "Library/Missing.app"; do
-  /usr/libexec/PlistBuddy -c "Add :outside:$_i string $o" "$M4" >/dev/null; _i=$((_i + 1))
+  printf '<string>%s</string>\n' "$o"
 done
+printf '</array></dict></plist>\n'; } > "$M4"
 sh "$w/scr-bundle/preinstall" /x.pkg "$V4/" "$V4/" 2>"$w/err" || fail "a preinstall that clears the installed bundles must succeed: $(cat "$w/err")"
 [ "$(cat "$V4/bundlehook.log")" = saw-old-bundle ] \
   || fail "the product's preinstall hook runs before its bundles are cleared, so it can unload a kext first"
@@ -452,5 +455,104 @@ rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --sc
   --requires porthole 2>"$w/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "staging with --requires naming the product itself must exit 2, got $rc"
 grep -q porthole "$w/err" || fail "the refusal names the self-requirement: $(cat "$w/err")"
+
+reqvol() {
+  _rv="$1"; shift
+  mkdir -p "$_rv/usr/local/mavergreen/porthole/bin" "$_rv/usr/local/bin"
+  echo old > "$_rv/usr/local/mavergreen/porthole/bin/porthole"
+  printf '#!/bin/sh\necho called "$@" >> "%s"\n' "$mglog" > "$_rv/usr/local/bin/mavergreen"
+  chmod +x "$_rv/usr/local/bin/mavergreen"
+  while [ $# -ge 2 ]; do
+    mkdir -p "$_rv/usr/local/mavergreen/$1"
+    _rvp="$_rv/usr/local/mavergreen/$1/mavergreen.plist"
+    if [ "$2" = - ]; then
+      xplist "$_rvp" name x
+    else
+      xplist "$_rvp" version "$2"
+    fi
+    shift 2
+  done
+}
+SCRM="$w/scr-porthole-min"
+sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRM" \
+  --requires 'container-tools>=20261019.1' \
+  || fail "staging porthole with --requires container-tools>=20261019.1 must succeed"
+sh -n "$SCRM/preinstall" || fail "generated preinstall with a minimum must be valid sh"
+sh "$here/../scripts/check-shell-portability.sh" "$SCRM/preinstall" >/dev/null \
+  || fail "generated preinstall with a minimum must pass check-shell-portability.sh"
+grep -q mavergreen_vercmp "$SCRP/preinstall" && fail "a preinstall with no minimum carries no comparator"
+for v in 20261019.1 20261019.2; do
+  V="$w/vol-min-$v"; reqvol "$V" container-tools "$v"
+  sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
+    || fail "preinstall proceeds when the required product is at $v (minimum 20261019.1): $(cat "$w/err")"
+  [ ! -s "$w/err" ] || fail "a met minimum ($v) prints nothing: $(cat "$w/err")"
+done
+V="$w/vol min old"; : > "$mglog"; reqvol "$V" container-tools 20261018.9
+rc=0; sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "preinstall must exit 1 when the required product is older than the minimum, got $rc"
+[ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again." ] \
+  || fail "the refusal names the requirement, its minimum and the installed version: $(cat "$w/err")"
+[ -f "$V/usr/local/mavergreen/porthole/bin/porthole" ] \
+  || fail "an unmet minimum must leave the existing installed tree untouched"
+[ ! -s "$mglog" ] || fail "an unmet minimum is checked before mavergreen unlink runs: $(cat "$mglog")"
+V="$w/vol min ok"; reqvol "$V" container-tools 20261019.1
+sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
+  || fail "a volume path containing a space must work with a minimum: $(cat "$w/err")"
+for v in - 1.0-rc1 dict; do
+  V="$w/vol-min-unorderable$v"
+  case "$v" in
+    -) reqvol "$V" container-tools -; shown=none ;;
+    dict) reqvol "$V" container-tools -; shown='Dict {'
+      printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>version</key><dict><key>a</key><string>1</string></dict></dict></plist>\n' > "$V/usr/local/mavergreen/container-tools/mavergreen.plist" ;;
+    *) reqvol "$V" container-tools "$v"; shown="$v" ;;
+  esac
+  rc=0; sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
+  [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when the installed version ($v) cannot be compared, got $rc"
+  [ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer, but its installed version ($shown) cannot be compared: https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again." ] \
+    || fail "the refusal says the installed version ($v) cannot be compared: $(cat "$w/err")"
+  [ -f "$V/usr/local/mavergreen/porthole/bin/porthole" ] \
+    || fail "an uncomparable installed version ($v) must leave the existing installed tree untouched"
+done
+
+SCRM2="$w/scr-porthole-min2"
+sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRM2" \
+  --requires 'container-tools>=20261019.1' --requires 'openssh>=9.9p2' \
+  || fail "staging porthole with two minimums must succeed"
+[ "$(grep -c '^mavergreen_vercmp()' "$SCRM2/preinstall")" -eq 1 ] \
+  || fail "the comparator is inlined once, however many minimums there are"
+V="$w/vol-min-one-unmet"; reqvol "$V" container-tools 20261019.1 openssh 9.9p1
+rc=0; sh "$SCRM2/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "preinstall must exit 1 when one of two minimums is unmet, got $rc"
+[ "$(cat "$w/err")" = "Porthole needs openssh 9.9p2 or newer (installed: 9.9p1): https://github.com/Mavergreen/openssh/releases/latest -- update it, then run this installer again." ] \
+  || fail "only the unmet minimum (openssh) is named: $(cat "$w/err")"
+V="$w/vol-min-both-unmet"; reqvol "$V" container-tools 20261018.9 openssh 9.9p1
+rc=0; sh "$SCRM2/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "preinstall must exit 1 when both minimums are unmet, got $rc"
+[ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again.
+Porthole needs openssh 9.9p2 or newer (installed: 9.9p1): https://github.com/Mavergreen/openssh/releases/latest -- update it, then run this installer again." ] \
+  || fail "both unmet minimums must be named: $(cat "$w/err")"
+
+V="$w/vol-nomin-any"; reqvol "$V" container-tools 1.0-rc1
+sh "$SCRP/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
+  || fail "--requires with no minimum passes with any installed version: $(cat "$w/err")"
+
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed"
+for u in 077 022; do
+  mkdir -p "$w/um$u/usr/local/mavergreen/openssh/bin"; echo ssh > "$w/um$u/usr/local/mavergreen/openssh/bin/ssh"
+  (umask $u; sh "$S" --stage "$w/um$u" --product openssh --name OpenSSH --version 1 --scripts-out "$w/umscr$u") >/dev/null 2>&1 || fail "stage_product must run under umask $u"
+  SOURCE_DATE_EPOCH=1700000000 "$SD" component --root "$w/um$u" --scripts "$w/umscr$u" --identifier dev.mavergreen.openssh --version 1 --install-location / --mtime 1700000000 --out "$w/um$u.pkg" || fail "component must build under umask $u"
+done
+cmp "$w/um077.pkg" "$w/um022.pkg" || fail "stage_product output ignores umask"
+
+for bad in 'container-tools>=' 'container-tools>=1.0-rc1' 'container-tools>=abc' '>=20261019.1'; do
+  rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-badmin" \
+    --requires "$bad" 2>"$w/err" || rc=$?
+  [ "$rc" -eq 2 ] || fail "staging with --requires $bad must exit 2, got $rc"
+  case "$bad" in
+    '>='*) want="stage_product: --requires $bad names no product" ;;
+    *) want="stage_product: --requires $bad: '${bad#*>=}' is not an orderable version (see scripts/lib/vercmp.sh)" ;;
+  esac
+  [ "$(cat "$w/err")" = "$want" ] || fail "the refusal names the value $bad: $(cat "$w/err")"
+done
 
 echo "PASS: stage-product"

@@ -320,8 +320,9 @@ first_is "$out" release-notes-generated || { echo "FAIL should be a release-note
 # spec: scripts/check-family-conventions.sh -- 1password, ed25519, signal-desktop and swift-toolchain pass no --notes-file at all: they
 #       stage no appcast from the notes. The subset loop is then empty, which is correct and not
 #       a gap.
-mkrepo "$work/g8"
-grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/g8/.github/workflows/release.yml"
+mkrepo "$work/g8" novm
+grep -v 'notes-file' "$work/g8/.github/workflows/release.yml" > "$work/g8/release.yml"
+mv "$work/g8/release.yml" "$work/g8/.github/workflows/release.yml"
 cat >> "$work/g8/.github/workflows/release.yml" <<'YML'
   publish:
     uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1

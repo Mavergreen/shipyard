@@ -38,6 +38,10 @@ set -- $(shipyard_sdk_pin arm64)
 set -- $(shipyard_sdk_pin x86_64)
 [ "$2" = fcf88ce8ff0dd3248b97f4eb81c7909f2cc786725de277f4d05a2b935cc49de0 ] || { echo "FAIL: x86_64 pin sha: $2"; exit 1; }
 if shipyard_sdk_pin i386 >/dev/null; then echo "FAIL: i386 has no pin"; exit 1; fi
+[ "$(shipyard_sdk_settings_json x86_64)" = '{"CanonicalName":"macosx10.9","MaximumDeploymentTarget":"10.9","Version":"10.9"}' ] \
+  || { echo "FAIL: x86_64 SDKSettings.json: $(shipyard_sdk_settings_json x86_64 2>&1)"; exit 1; }
+if shipyard_sdk_settings_json arm64 >/dev/null; then echo "FAIL: the 11.3 SDK ships its own SDKSettings.json"; exit 1; fi
+if shipyard_sdk_settings_json i386 >/dev/null; then echo "FAIL: i386 has no pin"; exit 1; fi
 
 shipyard_sdk_exempt_sha256 4ea4718635b69a7746078674aba2af31249d20e3155010bd06f1e9d5487c94b2 || { echo "FAIL: Sparkle fileop is exempt"; exit 1; }
 if shipyard_sdk_exempt_sha256 0000000000000000000000000000000000000000000000000000000000000000; then echo "FAIL: arbitrary bytes are not exempt"; exit 1; fi

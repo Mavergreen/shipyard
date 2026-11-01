@@ -25,6 +25,8 @@
 #            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
 #            asset         <file> <bytes>                         one per file that will be published
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
+#            cxxabi-defines <artifact> <path> <arch> <symbol> <visible|hidden>  one per C++ runtime symbol a slice defines beyond Recaulk's back-fills
+#            cxxabi-loads  <artifact> <path> <arch> <load-path>   one per libc++abi a slice loads other than /usr/lib's or libcxx22's (%20-encoded)
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
 #            appcast-notes <appcast-file> [<sha256>]               digest of the appcast's <description> CDATA
 #            deviation     <check> <reason...>                    a declared, reasoned departure
@@ -93,10 +95,10 @@ kind_ran() {  # $1 = the fact kind the ids read, $2 = what it is called, then th
 }
 chk_ran version-scheme
 if has pkg || has appcast; then chk_ran version; else chk_notrun version "no .pkg or appcast in this release"; fi
-kind_ran pkg .pkg floor identifier bundle-id launchd-label manifest base line install-path feed updater repository
+kind_ran pkg .pkg floor identifier bundle-id launchd-label manifest base line install-path feed updater repository arm64
 kind_ran appcast appcast enclosure length enclosure-url notes
 kind_ran build-info "build record" variant-build-info
-kind_ran macho Mach-O sdk-pin
+kind_ran macho Mach-O sdk-pin cxxabi
 
 rule_of() {
   case "$1" in
@@ -119,6 +121,8 @@ rule_of() {
     notes) echo "an appcast's description is the release body" ;;
     variant-build-info) echo "variants of one release agree about what they were built from" ;;
     sdk-pin) echo "every shipped Mach-O slice records its arch's pinned minos and SDK" ;;
+    arm64) echo "a pkg ships an arm64 slice only where INGREDIENTS.md declares its install path arm64" ;;
+    cxxabi) echo "one process gets one C++ runtime: no shipped Mach-O defines libc++abi's machinery or loads another libc++abi" ;;
   esac
 }
 fix_of() {
@@ -142,6 +146,8 @@ fix_of() {
     notes) echo "generate the appcast from the same RELEASE_NOTES.md the Release body is built from" ;;
     variant-build-info) echo "build every variant from the same pins, or declare '- variant-build-info: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
     sdk-pin) echo "link against the pinned SDK (scripts/fetch_sdk.sh), or declare '- sdk-pin:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    arm64) echo "build that path x86_64 only, or declare '- arm64:<install-path glob>: <who runs it on Apple Silicon, and why>' under '## Conformance deviations' in INGREDIENTS.md, with a modern-smoke job in release.yml that runs it" ;;
+    cxxabi) echo "link the family's runtime (libcxx22), or declare '- cxxabi:<glob>: <reason>; exit: <how it goes away>' under '## Conformance deviations' in INGREDIENTS.md" ;;
   esac
 }
 
@@ -517,6 +523,94 @@ while read -r kind file path arch ft mn sd sha; do
   why="$(shipyard_sdk_rule "$arch" "$ft" "$mn" "$sd")" \
     || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")"
 done < "$facts"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Family conventions" check 37 --
+#       a pkg ships x86_64 unless INGREDIENTS.md declares '- arm64:<glob>: <reason>' for the install
+#       path; a Sparkle updater's slices are exempt, and where the registry derives the product's
+#       updater, only that bundle's. A repo grandfathered as modern-smoke is warned.
+arm_gf=no
+[ -n "$repository" ] && [ -f "$SELF/conventions-grandfathered" ] \
+  && grep -qxF "modern-smoke ${repository#*/} release.yml:modern-smoke" "$SELF/conventions-grandfathered" && arm_gf=yes
+awk '$1 == "pkg" { pkg[$2] = 1 }
+     $1 == "manifest" { prod[$2] = $3 }
+     $1 == "derived" { app[$2] = $5 }
+     $1 == "sparkle" { spk[$2 "\t" $3] = 1 }
+     $1 == "macho" && $4 ~ /^arm64e?$/ { arm[$2 "\t" $3] = 1 }
+     END {
+       for (k in spk) {
+         split(k, u, "\t"); p = prod[u[1]]
+         if (p != "" && (p in app) && app[p] != u[2]) continue
+         upd[u[1] "\t" u[2] "/"] = 1
+       }
+       for (a in arm) {
+         split(a, m, "\t"); if (!(m[1] in pkg)) continue
+         exempt = 0
+         for (k in upd) { split(k, u, "\t"); if (u[1] == m[1] && index(m[2], u[2]) == 1) exempt = 1 }
+         if (!exempt) print m[1], m[2]
+       } }' "$facts" | sort -u > "$tmp/arm64"
+arm_declared=0; arm_undeclared=0
+while read -r file path; do
+  if [ -n "$(deviation_reason arm64 "$(dec "$path")")" ]; then arm_declared=$((arm_declared + 1)); continue; fi
+  arm_undeclared=$((arm_undeclared + 1))
+  [ "$arm_undeclared" -le 20 ] || continue
+  msg="$file installs $(dec "$path") with an arm64 slice, and no '- arm64:<glob>: <reason>' under INGREDIENTS.md's ## Conformance deviations matches that install path"
+  if [ "$arm_gf" = yes ]; then
+    echo "::warning::conformance: arm64: $msg (grandfathered: modern-smoke ${repository#*/})"
+  else
+    chk_fail arm64 "$(rule_of arm64)" "$msg" "$(fix_of arm64)"
+  fi
+done < "$tmp/arm64"
+if [ "$arm_undeclared" -gt 20 ]; then
+  if [ "$arm_gf" = yes ]; then echo "::warning::conformance: arm64: and $((arm_undeclared - 20)) more undeclared arm64 files"
+  else echo "conformance: arm64: and $((arm_undeclared - 20)) more undeclared arm64 files" >&2; fi
+fi
+[ "$arm_declared" -eq 0 ] && [ "$arm_undeclared" -eq 0 ] \
+  || echo "conformance: arm64: $arm_declared declared, $arm_undeclared undeclared non-updater arm64 files in pkgs"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact conformance" -- one C++
+#       runtime per process; '- cxxabi:<glob>: <reason>' excuses a path, and a path grandfathered as cxxabi
+#       for this repo is warned.
+awk 'function add(list, v) { return index(" " list " ", " " v " ") ? list : (list == "" ? v : list " " v) }
+     $1 == "cxxabi-defines" || $1 == "cxxabi-loads" {
+       k = $2 " " $3; if (!(k in seen)) { o[++m] = k; seen[k] = 1; da[k] = ""; la[k] = ""; n[k] = 0; s[k] = ""; l[k] = "" }
+       if ($1 == "cxxabi-loads") { la[k] = add(la[k], $4); l[k] = add(l[k], $5); next }
+       da[k] = add(da[k], $4)
+       sym = $5 ($6 == "hidden" ? "(hidden)" : "")
+       if ((k SUBSEP sym) in d) next
+       d[k, sym] = 1; if (++n[k] <= 5) s[k] = s[k] " " sym
+     }
+     END { for (i = 1; i <= m; i++) { k = o[i]
+             f = (da[k] == "" ? "-" : da[k]); g = (la[k] == "" ? "-" : la[k]); h = (l[k] == "" ? "-" : l[k])
+             gsub(/ /, ",", f); gsub(/ /, ",", g); gsub(/ /, ",", h)
+             print k, f, g, n[k], h s[k] } }' "$facts" > "$tmp/cxxabi"
+cxx_report() {  # $1 = message; a grandfathered path ($gf) warns, anything else fails cxxabi
+  if [ -n "$gf" ]; then echo "::warning::conformance: cxxabi: $1 (grandfathered: $gf)"
+  else chk_fail cxxabi "$(rule_of cxxabi)" "$1" "$how"; fi
+}
+cxx_fail=0
+while read -r file path darches larches n loads syms; do
+  p="$(dec "$path")"
+  gf=""
+  if [ -z "$(deviation_reason cxxabi "$p")" ]; then
+    [ -n "$repository" ] && [ -f "$SELF/conventions-grandfathered" ] \
+      && grep -qxF "cxxabi ${repository#*/} $path" "$SELF/conventions-grandfathered" && gf="cxxabi ${repository#*/} $path"
+    if [ -z "$gf" ]; then cxx_fail=$((cxx_fail + 1)); [ "$cxx_fail" -le 20 ] || { chk_status=1; continue; }; fi
+  else
+    echo "conformance: cxxabi: DECLARED DEVIATION ($p) -- $(deviation_reason cxxabi "$p")"
+    continue
+  fi
+  how="link the family's runtime (libcxx22), or declare '- cxxabi:$p: <reason>; exit: <how it goes away>' under INGREDIENTS.md's ## Conformance deviations"
+  if [ "$n" -gt 0 ]; then
+    more=""; [ "$n" -le 5 ] || more=" and $((n - 5)) more"
+    cxx_report "$file installs $p ($darches), which defines C++ runtime machinery beyond Recaulk's back-fills: $syms$more -- one process gets one C++ runtime, hidden or not"
+  fi
+  if [ "$loads" != - ]; then
+    cxx_report "$file installs $p ($larches), which loads $(dec "$(printf '%s' "$loads" | sed 's/,/, /g')") -- a process may load only /usr/lib/libc++abi.dylib or libcxx22's libc++abi.1.dylib"
+  fi
+done < "$tmp/cxxabi"
+[ "$cxx_fail" -le 20 ] || echo "conformance: cxxabi: and $((cxx_fail - 20)) more files with a second C++ runtime" >&2
+nmacho="$(grep -c '^macho ' "$facts" || :)"
+[ "$nmacho" -eq 0 ] || echo "conformance: cxxabi: checked $nmacho Mach-O slices"
 
 [ "$chk_status" -ne 0 ] || echo "conformance: ok — $expected"
 exit "$chk_status"

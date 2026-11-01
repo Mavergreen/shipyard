@@ -13,13 +13,13 @@ LIPO, NM, STRINGS; LLVM's tools by default, never Apple's).
 
 ## Incident
 2026-09-13: an openssh patch called launch_activate_socket(), a 10.10-era function undeclared in the 10.9
-SDK; it compiled and linked, and the guard reported clean (QUEUE #2). That symbol genuinely exists in the 10.9
+SDK; it compiled and linked, and the guard reported clean. That symbol genuinely exists in the 10.9
 SDK, so even the proposed allowlist would not catch it.
 
 ## Limits
 A denylist must predict which future API someone will call; swift-runtime widened its own for that reason.
-QUEUE #2 proposes an allowlist derived from the libraries a product links, taken from the frozen 10.9 SDK. It
-catches "does not exist", not "exists but is unavailable here". It reads the x86_64 slice. QUEUE #66: it does
+A proposal replaces it with an allowlist derived from the libraries a product links, taken from the frozen 10.9 SDK. It
+catches "does not exist", not "exists but is unavailable here". It reads the x86_64 slice. It does
 not check where a binary's load commands point, so a binary that loads host libraries (a pkgsrc liblzma) passed.
 
 ## Deviating

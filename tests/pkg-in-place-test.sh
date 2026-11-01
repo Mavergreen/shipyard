@@ -31,8 +31,8 @@ cp "$fx/fail/dist/$PKG" "$w/dist/"
 out="$(SHIPYARD_CHECK_DIST="$w/dist" sh "$G" 2>&1)" && { echo "FAIL under --dist the dist's pkgs are checked"; exit 1; }
 first_is "$out" "--dist"
 
-out="$(BSDTAR=/nonexistent/bsdtar sh "$G" "$fx/pass/dist/$PKG" 2>&1)" && { echo "FAIL with no usable bsdtar the gate must fail, not pass"; exit 1; }
-first_is "$out" "no bsdtar"
-printf '%s\n' "$out" | grep -q 'no bsdtar found' || { echo "FAIL the failure should say no bsdtar was found: $out"; exit 1; }
+out="$(STEVEDORE=/nonexistent/stevedore sh "$G" "$fx/pass/dist/$PKG" 2>&1)" && { echo "FAIL with no usable stevedore the gate must fail, not pass"; exit 1; }
+first_is "$out" "no stevedore"
+printf '%s\n' "$out" | grep -q 'stevedore, which reads the pkgs, cannot be fetched' || { echo "FAIL the failure should say stevedore cannot be fetched: $out"; exit 1; }
 
 echo "PASS: pkg-in-place"

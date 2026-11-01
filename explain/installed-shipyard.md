@@ -1,9 +1,10 @@
 installed-shipyard: an installed shipyard is what we meant to ship.
 
 ## Why
-Asserts that shipyard-cmake runs and is the CMake in cmake.pin; that it is ours (universal, with
-shipyard-ctest, shipyard-cpack and shipyard-check beside it on the default PATH); that a probe under a
-stripped environment resolves shipyard inside shipyard-cmake's own prefix; that the installed updater is
+Asserts that the cmake product beside shipyard is the CMake in components/cmake/version and universal;
+that the farm's shipyard-cmake, shipyard-ctest, shipyard-cpack and shipyard-check are executable on the
+default PATH, and shipyard-check runs from there; that a probe under a stripped environment finds shipyard
+through shipyard-cmake; that the installed updater is
 universal; that nothing is left in /usr/local/bin from the old layout; that an installed mavergreen helper
 passes its own check; and that any other cmake is refused, by name. --root defaults to "/" (a real install);
 a fixture root makes it unit-testable. It is shipyard's own check, run in its install smoke.

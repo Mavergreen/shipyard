@@ -28,13 +28,13 @@ done
 work="$(mktemp -d "${TMPDIR:-/tmp}/lipo-merge-tree.XXXXXX")"
 trap 'rm -rf "$work" "$OUT"' EXIT
 
-is_macho() { lipo -info "$1" >/dev/null 2>&1; }
+is_macho() { ${LIPO:-lipo} -info "$1" >/dev/null 2>&1; }
 allowed() { printf '%s\n' "$ALLOW" | grep -Fqx -- "$1"; }
 # platform: lipo -info includes the PATH ("Non-fat file: path/to/bin/tool is architecture: x86_64",
 #           "Architectures in the fat file: path/to/bin/tool are: i386 x86_64"), so match exact
 #           space-delimited tokens from the arch list after the last ": " and never the file path.
 has_arch() {
-  archs="$(lipo -info "$1" 2>/dev/null | sed 's/.*: //')"
+  archs="$(${LIPO:-lipo} -info "$1" 2>/dev/null | sed 's/.*: //')"
   case " $archs " in *" $2 "*) return 0;; esac; return 1
 }
 
@@ -57,7 +57,7 @@ while IFS= read -r rel; do
   fi
   cmp -s "$fa" "$fb" && continue
   if is_macho "$fa" && is_macho "$fb"; then
-    rm -f "$fo"; lipo -create "$fa" "$fb" -output "$fo"
+    rm -f "$fo"; ${LIPO:-lipo} -create "$fa" "$fb" -output "$fo"
   elif allowed "$rel"; then
     echo "lipo-merge-tree: $rel differs (declared); keeping the --a copy" >&2
   else

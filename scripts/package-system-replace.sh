@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- pkgbuild builds the component
+# platform: host-agnostic
 #   usage: package-system-replace.sh --product P --title T --version V --out PKG [--base-version V]
 #          package-system-replace.sh --emit-postinstall FILE --product P
 #          The optional second pkg of a product whose manifest declares `replaces`: installing it
@@ -9,6 +9,7 @@
 #       that isn't 10.9; this script's own job is just wrapping that call as a payload-free
 #       component behind set_install_floor.sh's base-first product archive.
 set -eu
+umask 022
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
 P=""; TITLE=""; VER=""; OUT=""; BASEVER=""; EMIT=""
@@ -43,7 +44,10 @@ if [ -n "$EMIT" ]; then emit "$EMIT"; exit 0; fi
 [ -n "$TITLE" ] && [ -n "$VER" ] && [ -n "$OUT" ] || { echo "package-system-replace: need --title --version --out" >&2; exit 2; }
 W="$(mktemp -d "${TMPDIR:-/tmp}/system-replace.XXXXXX")"; trap 'rm -rf "$W"' EXIT
 mkdir -p "$W/root" "$W/scripts" "$W/c" "$(dirname "$OUT")"; emit "$W/scripts/postinstall"
-pkgbuild --quiet --nopayload --scripts "$W/scripts" --identifier "$ID.system-replace" --version "$VER" "$W/c/system-replace.pkg"
+EPOCH="$(sh "$SELF/source-date-epoch.sh")"
+STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
+"$STEVEDORE" component --nopayload --scripts "$W/scripts" --identifier "$ID.system-replace" --version "$VER" \
+  --install-location / --mtime "$EPOCH" --out "$W/c/system-replace.pkg" >&2
 set -- --identifier "$ID.system-replace" --title "$TITLE" --component "$W/c/system-replace.pkg" --out "$OUT" --require-scripts --host-arch x86_64,arm64
 [ -z "$BASEVER" ] || set -- "$@" --base-version "$BASEVER"
 sh "$SELF/set_install_floor.sh" "$@" >&2

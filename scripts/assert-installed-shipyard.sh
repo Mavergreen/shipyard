@@ -1,14 +1,15 @@
 #!/bin/sh
 # platform: macOS-only -- lipo checks the installed universal binaries
 #   usage: assert-installed-shipyard.sh --cmake-version V [--root DIR]
-#          Asserts that an INSTALLED mavericks-shipyard is what we meant to ship: shipyard-cmake runs
-#          and is the CMake in cmake.pin; it is OURS (universal, with shipyard-ctest and
-#          shipyard-cpack and shipyard-check beside it on the default PATH); a probe under a stripped environment
-#          resolves shipyard inside shipyard-cmake's own prefix; the installed updater is universal;
-#          nothing is left in /usr/local/bin from the old layout; an installed mavergreen helper
-#          passes its own check; and any other cmake is refused, by name. --root defaults to "/" (a
-#          real install); a fixture root makes this unit-testable. Exit 0 clean, 1 on a failed
-#          assertion, 2 on a usage error.
+#          Asserts that an INSTALLED mavericks-shipyard is what we meant to ship: the cmake product
+#          beside it is the CMake in components/cmake/version and universal; the farm's
+#          shipyard-cmake, shipyard-ctest, shipyard-cpack and shipyard-check are executable on the
+#          default PATH, and shipyard-check runs from there; a probe under a stripped environment
+#          finds shipyard through shipyard-cmake; the installed updater is universal; nothing is
+#          left in /usr/local/bin from the old layout; an installed mavergreen helper passes its own
+#          check; and any other cmake is refused, by name. --root defaults to "/" (a real install); a
+#          fixture root makes this unit-testable. Exit 0 clean, 1 on a failed assertion, 2 on a
+#          usage error.
 # spec: R-P1-17 -- these assertions used to live inline in release.yml's install smoke, the one step
 #       that runs ONLY on a push to main, which left them unrunnable until the very push that must
 #       not be a rehearsal. release.yml, ci.yml and tests/assert-installed-shipyard-test.sh now share
@@ -32,6 +33,7 @@ R="${ROOT%/}"
 FARM="$R/usr/local/mavergreen/bin"
 CM="$FARM/shipyard-cmake"
 PREFIX="$R/usr/local/mavergreen/shipyard"
+PRODUCT="$R/usr/local/mavergreen/cmake/bin/cmake"
 CFGDIR="$PREFIX/share/cmake/MavericksShipyard"
 EXE="$R/Library/Application Support/Mavergreen/shipyard-updater.app/Contents/MacOS/shipyard-updater"
 
@@ -48,12 +50,18 @@ printf '%s\n' \
   'message(STATUS "DIR=${MavericksShipyard_DIR}")' \
   > "$W/probe/CMakeLists.txt"
 
-if [ -x "$CM" ]; then
-  if ! "$CM" --version > "$W/version.txt" 2>&1; then
-    fail "shipyard-cmake ($CM) does not run: $(cat "$W/version.txt")"
+if [ -x "$PRODUCT" ]; then
+  if ! "$PRODUCT" --version > "$W/version.txt" 2>&1; then
+    fail "the cmake product ($PRODUCT) does not run: $(cat "$W/version.txt")"
   elif ! grep -q "cmake version $WANT" "$W/version.txt"; then
-    fail "shipyard-cmake is not CMake $WANT: $(head -1 "$W/version.txt")"
+    fail "the cmake product is not CMake $WANT: $(head -1 "$W/version.txt")"
   fi
+else
+  fail "no executable cmake product at $PRODUCT -- shipyard's launchers run it, and install@v1 installs it first"
+fi
+if [ -x "$CM" ]; then
+  "$CM" --version > "$W/launcher.txt" 2>&1 \
+    || fail "shipyard-cmake ($CM) does not run: $(cat "$W/launcher.txt")"
 else
   fail "no executable shipyard-cmake at $CM"
 fi
@@ -74,15 +82,16 @@ fi
 if [ -f "$R/usr/local/bin/mavergreen" ]; then
   sh "$R/usr/local/bin/mavergreen" --root "$ROOT" check || fail "mavergreen check failed"
 fi
-if [ -x "$CM" ]; then
-  cmarchs="$(lipo -info "$CM" 2>&1 || true)"
+# spec: 2026-10-09 C4 -- shipyard-cmake is a launcher script, so the slices are the cmake product's.
+if [ -x "$PRODUCT" ]; then
+  cmarchs="$(lipo -info "$PRODUCT" 2>&1 || true)"
   case "$cmarchs" in
     *x86_64*) ;;
-    *) fail "shipyard-cmake has no x86_64 slice, so it cannot run on 10.9: $cmarchs" ;;
+    *) fail "the cmake product has no x86_64 slice, so it cannot run on 10.9: $cmarchs" ;;
   esac
   case "$cmarchs" in
     *arm64*) ;;
-    *) fail "shipyard-cmake has no arm64 slice, so it cannot run on Apple Silicon: $cmarchs" ;;
+    *) fail "the cmake product has no arm64 slice, so it cannot run on Apple Silicon: $cmarchs" ;;
   esac
 fi
 
@@ -113,12 +122,19 @@ else
 fi
 
 other="$(command -v cmake 2>/dev/null || true)"
-case "$other" in
-  "$PREFIX"/*) other="" ;;   # shipyard's own, reached under another name: not a foreign cmake
-esac
+# spec: 2026-10-09 C5 -- the config accepts the cmake product, so a cmake on PATH that resolves under
+#       /usr/local/mavergreen/ (the product, or shipyard's compatibility link to its launcher) is ours.
+# platform: 10.9 has no realpath and no readlink -f, so links are followed one at a time.
+_o="$other"
+while [ -n "$_o" ]; do
+  case "$_o" in "$R"/usr/local/mavergreen/*) other=""; break ;; esac
+  [ -L "$_o" ] || break
+  _l="$(readlink "$_o")"
+  case "$_l" in /*) _o="$_l" ;; *) _o="${_o%/*}/$_l" ;; esac
+done
 if [ -n "$other" ]; then
   if "$other" -S "$W/probe" -B "$W/other" -DMavericksShipyard_DIR="$CFGDIR" > "$W/other.log" 2>&1; then
-    fail "$other configured against shipyard; every cmake but shipyard's must be refused"
+    fail "$other configured against shipyard; every cmake but the cmake product must be refused"
   fi
   grep -q 'shipyard-cmake' "$W/other.log" \
     || fail "the refusal does not name shipyard-cmake, so it does not say what to run instead: $(cat "$W/other.log")"
@@ -129,4 +145,4 @@ else
 fi
 
 [ "$bad" -eq 0 ] || exit 1
-echo "installed shipyard: shipyard-cmake $WANT finds shipyard in $CFGDIR; updater universal; $refusal"
+echo "installed shipyard: shipyard-cmake runs CMake $WANT and finds shipyard in $CFGDIR; updater universal; $refusal"

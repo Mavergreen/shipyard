@@ -437,4 +437,55 @@ else
   echo "no perl -- skipping the process-group SIGINT pre-uninstall hook test" >&2
 fi
 
+mkproduct sdk109 sdk109 "" SDKs/MacOSX10.9.sdk/usr/include/stdio.h share/doc
+mkproduct clang22 clang22 "" bin/clang22
+mkdir -p "$T/clang22/lib/clang/toolchains/t"
+ln -s ../../../../../sdk109/SDKs "$T/clang22/lib/clang/toolchains/t/SDKs"
+rc=0; PATH="$stub:$PATH" mg uninstall sdk109 2>"$w/err" >"$w/out" || rc=$?
+[ "$rc" -eq 1 ] || fail "uninstall refuses (exit 1) while another product links in through a relative link: rc=$rc"
+[ -f "$T/sdk109/mavergreen.plist" ] && [ -f "$T/sdk109/SDKs/MacOSX10.9.sdk/usr/include/stdio.h" ] \
+  || fail "a refused uninstall removes nothing"
+cat "$w/err" "$w/out" > "$w/both"
+grep -qx 'sudo mavergreen uninstall clang22' "$w/both" || fail "the refusal names the dependent as a sudo line: $(cat "$w/both")"
+
+rm "$T/clang22/lib/clang/toolchains/t/SDKs"
+ln -s "$T/sdk109/SDKs" "$T/clang22/lib/clang/toolchains/t/SDKs"
+rc=0; PATH="$stub:$PATH" mg uninstall sdk109 2>"$w/err" >"$w/out" || rc=$?
+[ "$rc" -eq 1 ] || fail "uninstall refuses while another product links in through an absolute link: rc=$rc"
+[ -f "$T/sdk109/mavergreen.plist" ] || fail "an absolute-link refusal removes nothing"
+
+rm "$T/clang22/lib/clang/toolchains/t/SDKs"
+ln -s ../../../../../sdk109/SDKs/missing "$T/clang22/lib/clang/toolchains/t/SDKs"
+rc=0; PATH="$stub:$PATH" mg uninstall sdk109 2>/dev/null >/dev/null || rc=$?
+[ "$rc" -eq 1 ] || fail "a link whose target is missing but would resolve into the product still counts: rc=$rc"
+
+rm "$T/clang22/lib/clang/toolchains/t/SDKs"
+ln -s ../../../../../sdk109/SDKs "$T/clang22/lib/clang/toolchains/t/SDKs"
+mkproduct tool2 tool2 "" bin/tool2
+ln -s ../../sdk109/share "$T/tool2/bin/share"
+mkproduct unrelated unrelated "" bin/u
+ln -s u "$T/unrelated/bin/u2"
+ln -s /nonexistent/elsewhere "$T/unrelated/bin/u3"
+rc=0; PATH="$stub:$PATH" mg uninstall sdk109 2>"$w/err" >"$w/out" || rc=$?
+cat "$w/err" "$w/out" > "$w/both"
+[ "$(grep -c '^sudo mavergreen uninstall ' "$w/both")" -eq 2 ] \
+  || fail "one sudo line per dependent product, however many links: $(cat "$w/both")"
+grep -qx 'sudo mavergreen uninstall clang22' "$w/both" && grep -qx 'sudo mavergreen uninstall tool2' "$w/both" \
+  || fail "every dependent is named: $(cat "$w/both")"
+grep -q 'unrelated' "$w/both" && fail "a product whose links point elsewhere is not a dependent"
+[ -d "$T/sdk109" ] && [ -d "$T/clang22" ] && [ -d "$T/tool2" ] || fail "a multi-dependent refusal removes nothing"
+
+PATH="$stub:$PATH" mg uninstall clang22 || fail "a product nothing links into uninstalls"
+PATH="$stub:$PATH" mg uninstall tool2 || fail "a product nothing links into uninstalls"
+rc=0; PATH="$stub:$PATH" mg uninstall sdk109 2>"$w/err" || rc=$?
+[ "$rc" -eq 0 ] || fail "uninstall proceeds once the dependents are gone: $(cat "$w/err")"
+[ ! -e "$T/sdk109" ] || fail "the product is removed once nothing links into it"
+
+mkproduct selfie selfie "" bin/s lib/a
+ln -s ../lib/a "$T/selfie/bin/rel"
+ln -s "$T/selfie/lib/a" "$T/selfie/bin/abs"
+rc=0; PATH="$stub:$PATH" mg uninstall selfie 2>"$w/err" || rc=$?
+[ "$rc" -eq 0 ] || fail "links inside the product's own tree never block its uninstall: $(cat "$w/err")"
+[ ! -e "$T/selfie" ] || fail "a product with only its own links is removed"
+
 echo "PASS: mavergreen-helper"

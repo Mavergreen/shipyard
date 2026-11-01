@@ -58,13 +58,23 @@ sh "$S" --emit-postinstall "$w/inject4" --product 'ab cd' 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "a disallowed character past position 2 ('ab cd') must be refused by the shape check, exit 2; a space cannot be represented as a single field in the two-column registry format, so this name is refused unregistered too, but exit 2 (not 1) still proves the SHAPE check, not the registry lookup, is what caught it (got $rc)"
 [ ! -e "$w/inject4" ] || fail "a refused product name must not emit a postinstall (ab cd)"
 
-if command -v productbuild >/dev/null 2>&1; then
-  sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavericks.5 --out "$w/r.pkg" --base-version 1.0.9 >/dev/null 2>&1 \
-    || fail "the pkg must build"
-  # platform: guarded macOS-only call -- the enclosing `if command -v productbuild` skips this block without it
-  pkgutil --expand "$w/r.pkg" "$w/x"
-  grep -q 'id="dev.mavergreen.openssh.system-replace"' "$w/x/Distribution" || fail "the component is <identifier>.system-replace"
-  grep -q 'dev.mavergreen.base' "$w/x/Distribution" || fail "it carries the base like every product archive"
-fi
+SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
+SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed -- the pkg block is the only gate for this seam, so it cannot be skipped"
+sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavericks.5 --out "$w/r.pkg" --base-version 1.0.9 >/dev/null 2>&1 \
+  || fail "the pkg must build"
+"$SD" expand "$w/r.pkg" "$w/x"
+grep -q 'id="dev.mavergreen.openssh.system-replace"' "$w/x/Distribution" || fail "the component is <identifier>.system-replace"
+grep -q 'dev.mavergreen.base' "$w/x/Distribution" || fail "it carries the base like every product archive"
+ls "$w/x/system-replace.pkg" >/dev/null 2>&1 || fail "the expanded archive carries system-replace.pkg"
+[ ! -e "$w/x/system-replace.pkg/Payload" ] || fail "the system-replace pkg has no payload member"
+[ -f "$w/x/system-replace.pkg/PackageInfo" ] || fail "the expanded system-replace component has a PackageInfo"
+! grep -q "<payload" "$w/x/system-replace.pkg/PackageInfo" || fail "the system-replace component declares a payload, so it would install files"
+[ ! -e "$w/x/system-replace.pkg/Bom" ] || fail "the system-replace component carries a Bom, so it would install files"
+for t in a b; do
+  case $t in a) um=077;; b) um=022;; esac
+  mkdir -p "$w/tmp$t-xx"
+  (umask $um; TMPDIR="$w/tmp$t-xx"; export TMPDIR; sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavericks.5 --out "$w/seam-$t.pkg" --base-version 1.0.9 >/dev/null 2>&1) || fail "the pkg must build under umask $um"
+done
+cmp "$w/seam-a.pkg" "$w/seam-b.pkg" || fail "seam output ignores umask and TMPDIR"
 
 echo "PASS: package-system-replace"
