@@ -45,6 +45,12 @@
       "description": "The renovate pin moves at most monthly: each bump costs macOS runner time in shipyard's CI and then its release, and the validator gains nothing from tracking Renovate's every release.",
       "matchDepNames": ["renovate"],
       "schedule": ["on the first day of the month"]
+    },
+    {
+      "description": "linux-host.yml's setup-node runs Renovate's own config validator, whose package requires node ^24.11.0, so node stays on 24 until a renovate pin needs another major.",
+      "matchFileNames": [".github/workflows/linux-host.yml"],
+      "matchDepNames": ["node"],
+      "allowedVersions": "24"
     }
   ]
 }
