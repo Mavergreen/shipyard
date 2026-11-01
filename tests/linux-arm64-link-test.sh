@@ -22,7 +22,7 @@ cmake -S "$T/project" -B "$T/build" \
   -DCMAKE_C_COMPILER="$LLVM/bin/clang" -DCMAKE_C_COMPILER_TARGET=arm64-apple-macos11.0 \
   -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld --ld-path=$LLVM/bin/ld64.lld"
 cmake --build "$T/build"
-archs="$("$LLVM/bin/llvm-lipo" -info "$T/build/hello" | sed -n 's/.*: //p')"
+archs="$("$LLVM/bin/llvm-lipo" -info "$T/build/hello" | sed -n 's/.*: //p' | sed 's/[[:space:]]*$//')"
 [ "$archs" = arm64 ] || { echo "FAIL: Linux arm64 configure must link a Mach-O of arch arm64 (the toolchain file kept x86_64?), got '$archs'"; exit 1; }
 "$LLVM/bin/llvm-otool" -l "$T/build/hello" | grep -q 'minos 11.0' \
   || { echo 'FAIL: the arm64 slice must record minos 11.0 (deployment target not pinned per arch)'; exit 1; }

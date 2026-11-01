@@ -31,4 +31,25 @@ CMAKE
 export TEST_SDK="$T/SDK with spaces"
 TEST_ARCH=x86_64 TEST_FLOOR=10.9 cmake -S "$T/project" -B "$T/build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake"
 TEST_ARCH=arm64 TEST_FLOOR=11.0 cmake -S "$T/project" -B "$T/arm" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=arm64
-echo 'PASS: Linux cross configuration selects the arch, its floor and the pinned SDK path'
+mkdir -p "$T/llvm/bin" "$T/tools"
+for t in clang llvm-install-name-tool llvm-ar llvm-ranlib llvm-strip llvm-nm; do
+  printf '#!/bin/sh\n' > "$T/llvm/bin/$t"; chmod 755 "$T/llvm/bin/$t"
+done
+cat > "$T/tools/CMakeLists.txt" <<'CMAKE'
+cmake_minimum_required(VERSION 3.16)
+project(host_tools NONE)
+foreach(pair INSTALL_NAME_TOOL=llvm-install-name-tool AR=llvm-ar RANLIB=llvm-ranlib STRIP=llvm-strip NM=llvm-nm)
+  string(REPLACE "=" ";" pair "${pair}")
+  list(GET pair 0 var)
+  list(GET pair 1 tool)
+  get_filename_component(have "${CMAKE_${var}}" REALPATH)
+  get_filename_component(want "$ENV{TEST_LLVM}/bin/${tool}" REALPATH)
+  if(NOT have STREQUAL want)
+    message(FATAL_ERROR "CMAKE_${var} is '${CMAKE_${var}}', not the compiler's own ${tool}: a Linux host has no "
+      "install_name_tool, and its ar, ranlib, strip and nm are binutils', which do not write Mach-O")
+  endif()
+endforeach()
+CMAKE
+TEST_LLVM="$T/llvm" cmake -S "$T/tools" -B "$T/tools-build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake" \
+  -DCMAKE_OBJC_COMPILER="$T/llvm/bin/clang"
+echo "PASS: Linux cross configuration selects the arch, its floor, the pinned SDK path and the compiler's Mach-O tools"
