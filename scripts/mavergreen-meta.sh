@@ -44,11 +44,13 @@ mg_lines() {
 
 mg_pin_ref() {
   _mg_p="$(mg_value "$1/PIN")" || return 1
+  case "$_mg_p" in *@*) ;; *) return 1;; esac
   printf '%s\n' "${_mg_p%%@*}"
 }
 
 mg_pin_commit() {
   _mg_p="$(mg_value "$1/PIN")" || return 1
+  case "$_mg_p" in *@*) ;; *) return 1;; esac
   printf '%s\n' "${_mg_p#*@}"
 }
 
@@ -68,7 +70,13 @@ mg_upstream_kind() {
 mg_renovate() {
   _mg_f="$(mg_dir)/$1"
   [ -f "$_mg_f" ] || return 1
-  _mg_r="$(sed -n '2{s/^# renovate: *//p;q;}' "$_mg_f" | tr -d '\r')"
-  [ -n "$_mg_r" ] || return 1
-  printf '%s\n' "$_mg_r" | tr ' ' '\n'
+  _mg_r=
+  { IFS= read -r _mg_r && IFS= read -r _mg_r || _mg_r=; } < "$_mg_f" || :
+  _mg_r="${_mg_r%"$(printf '\r')"}"
+  case "$_mg_r" in '# renovate:'*) _mg_r="${_mg_r#'# renovate:'}";; *) return 1;; esac
+  case "$-" in *f*) _mg_nf=1;; *) _mg_nf=; set -f;; esac
+  set -- $_mg_r
+  [ -n "$_mg_nf" ] || set +f
+  [ "$#" -gt 0 ] || return 1
+  printf '%s\n' "$@"
 }

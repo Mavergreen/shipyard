@@ -76,4 +76,15 @@ depName=golang/go"
 if out="$(mg_renovate identifier)"; then fail "mg_renovate with no line 2 must fail"; fi
 eq "no line 2 output" "$out" ""
 
+printf 'v\n# renovate:   datasource=x    extractVersion=^v(.*)$  \r\n' > "$m/spaced"
+eq "mg_renovate squeezes repeated spaces, never globs" "$(mg_renovate spaced)" "datasource=x
+extractVersion=^v(.*)$"
+printf 'v\n# renovate:   \n' > "$m/emptyrenovate"
+if mg_renovate emptyrenovate >/dev/null; then fail "a renovate line with no words must fail"; fi
+mkdir "$m/ingredients/nopin"; printf 'nothing\n' > "$m/ingredients/nopin/PIN"
+if out="$(mg_pin_ref ingredients/nopin)"; then fail "pin ref without @ must fail"; fi
+eq "pin ref no-@ output" "$out" ""
+if out="$(mg_pin_commit ingredients/nopin)"; then fail "pin commit without @ must fail"; fi
+eq "pin commit no-@ output" "$out" ""
+
 echo "mavergreen-meta-test: ok"
