@@ -3,7 +3,7 @@
 #   usage: assert-installed-shipyard.sh --cmake-version V [--root DIR]
 #          Asserts that an INSTALLED mavericks-shipyard is what we meant to ship: the cmake product
 #          beside it is the CMake in components/cmake/version and universal; the farm's
-#          shipyard-cmake, shipyard-ctest, shipyard-cpack and shipyard-check are executable on the
+#          shipyard-cmake, shipyard-ctest, shipyard-cpack, shipyard-check and shipyard-scripts are executable on the
 #          default PATH, and shipyard-check runs from there; a probe under a stripped environment
 #          finds shipyard through shipyard-cmake; the installed updater is universal; nothing is
 #          left in /usr/local/bin from the old layout; an installed mavergreen helper passes its own
@@ -66,9 +66,9 @@ else
   fail "no executable shipyard-cmake at $CM"
 fi
 
-for c in shipyard-cmake shipyard-ctest shipyard-cpack shipyard-check; do
+for c in shipyard-cmake shipyard-ctest shipyard-cpack shipyard-check shipyard-scripts; do
   [ -x "$FARM/$c" ] \
-    || fail "no executable $FARM/$c -- the pkg exports all four through the link farm on the default PATH"
+    || fail "no executable $FARM/$c -- the pkg exports all five through the link farm on the default PATH"
 done
 if [ -x "$FARM/shipyard-check" ]; then
   "$FARM/shipyard-check" --explain tests-run-in-ci >/dev/null 2>"$W/check.log" \

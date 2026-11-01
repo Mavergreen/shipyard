@@ -4,7 +4,7 @@
 #          Packages shipyard as ONE prefix -- /usr/local/mavergreen/shipyard holding shipyard itself
 #          (share/cmake/MavericksShipyard), the launchers bin/shipyard-{cmake,ctest,cpack} into the
 #          cmake product, and bin/{cmake,ctest,cpack} linked to them -- plus one universal updater and
-#          the dev.mavergreen.base component. The mavergreen helper exports the three shipyard-* names
+#          the dev.mavergreen.base component. The mavergreen helper exports the shipyard-* names
 #          into /usr/local/mavergreen/bin, never the bare cmake/ctest/cpack; nothing is installed into
 #          /usr/local/bin. The install scripts come from stage_product.sh, and its preinstall refuses
 #          a box without the cmake product at components/cmake/version. The updater is a stopgap

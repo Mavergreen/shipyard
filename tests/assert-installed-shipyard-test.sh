@@ -121,7 +121,7 @@ check "a cmake product with no arm64 slice fails (it could not run on Apple Sili
   assert --cmake-version "$ver"
 lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
 
-for c in shipyard-ctest shipyard-cpack shipyard-check; do
+for c in shipyard-ctest shipyard-cpack shipyard-check shipyard-scripts; do
   mv "$farm/$c" "$w/cmd-aside"
   check "a missing $c fails (both workflows and every consumer run it by name)" 1 "no executable .*$c" \
     assert --cmake-version "$ver"
