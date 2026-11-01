@@ -13,13 +13,13 @@ SH
 cat > "$T/project/CMakeLists.txt" <<'CMAKE'
 cmake_minimum_required(VERSION 3.16)
 project(host_contract NONE)
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-  message(FATAL_ERROR "Linux configure did not select Darwin/x86_64")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR NOT CMAKE_SYSTEM_PROCESSOR STREQUAL "$ENV{TEST_ARCH}")
+  message(FATAL_ERROR "Linux configure did not select Darwin/$ENV{TEST_ARCH}")
 endif()
 if(NOT CMAKE_CROSSCOMPILING)
   message(FATAL_ERROR "must not execute target probes as Linux programs")
 endif()
-if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "10.9")
+if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "$ENV{TEST_FLOOR}")
   message(FATAL_ERROR "incorrect floor")
 endif()
 get_filename_component(actual_sdk "${CMAKE_OSX_SYSROOT}" REALPATH)
@@ -29,9 +29,6 @@ if(NOT actual_sdk STREQUAL expected_sdk)
 endif()
 CMAKE
 export TEST_SDK="$T/SDK with spaces"
-cmake -S "$T/project" -B "$T/build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake"
-if cmake -S "$T/project" -B "$T/arm" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=arm64 > "$T/arm.log" 2>&1; then
-  echo 'FAIL: accepted unsupported Linux arm64 target'; exit 1
-fi
-grep -q 'Linux.*x86_64' "$T/arm.log"
-echo 'PASS: Linux cross configuration, pinned SDK path and unsupported target refusal'
+TEST_ARCH=x86_64 TEST_FLOOR=10.9 cmake -S "$T/project" -B "$T/build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake"
+TEST_ARCH=arm64 TEST_FLOOR=11.0 cmake -S "$T/project" -B "$T/arm" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=arm64
+echo 'PASS: Linux cross configuration selects the arch, its floor and the pinned SDK path'

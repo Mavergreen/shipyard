@@ -209,7 +209,8 @@ curl, and either shasum or sha256sum. Override `MAVERGREEN_TAR_CACHE` to choose 
 local-disk cache; no root installation is required.
 
 A Linux build targeting Mavericks uses `MavericksToolchain.cmake` with explicit
-Linux-native clang22 compiler and LLVM tool paths. It selects Darwin/x86_64, the
-pinned 10.9 SDK and deployment target before compiler detection. Use host-native
+Linux-native clang22 compiler and LLVM tool paths. It selects Darwin and the
+configured arch (x86_64 against the pinned 10.9 SDK, arm64 against the pinned 11.3 SDK with
+deployment target 11.0) before compiler detection. Use host-native
 CMake and build tools. Target executables must be tested on Mavericks, not run as
 Linux configure probes. Apple SDK bytes remain separately fetched by `fetch_sdk.sh`.

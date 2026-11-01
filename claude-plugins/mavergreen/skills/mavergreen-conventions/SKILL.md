@@ -1670,6 +1670,9 @@ compiler itself passes `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch 
 ships `fetch_sdk.sh` (in a toolchain's `libexec/`, e.g.) ships `sdk-pins.sh` and `mavericks_fetch.sh`
 beside it; without `sdk-pins.sh` it exits 2 naming the missing file.
 `include(Mavericks)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
+Linux cross-builds both arches: the toolchain file selects Darwin and the configured arch, and the
+compiler is clang22's Linux archive with `ld64.lld` (`--target=arm64-apple-macos11.0 -fuse-ld=lld
+--ld-path=<clang22>/bin/ld64.lld` for arm64).
 Native mode (on the 10.9 box, x86_64 only) pins too, because Xcode 6.1+ defaults to the 10.10 SDK
 there: the toolchain file uses the same fetched pin and never asks xcrun, so a native build is the
 same with or without the Command Line Tools (vision area 18 A; swift-gg found the old xcrun probe
