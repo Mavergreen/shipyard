@@ -79,8 +79,9 @@ while read -r repo; do
     echo "gen-conventions-grandfathered: cannot read what Mavergreen/$repo $tag shipped: $(cat "$tmp/err")" >&2; exit 1
   fi
   grep '^deviation ' "$tmp/facts" > "$tmp/devs" || :
+  shipyard_deviations - < "$tmp/devs" > /dev/null
   awk '$1 == "cxxabi-defines" || $1 == "cxxabi-loads" { print $3 }' "$tmp/facts" | LC_ALL=C sort -u | while read -r p; do
-    [ -n "$(shipyard_deviation_reason "$tmp/devs" cxxabi "$(printf '%s' "$p" | sed -e 's/%20/ /g' -e 's/%25/%/g')")" ] \
+    shipyard_deviated cxxabi "$(printf '%s' "$p" | sed -e 's/%20/ /g' -e 's/%25/%/g')" > /dev/null \
       || echo "cxxabi $repo $p"
   done
   if sh "$tmp/scripts/check-artifact-conformance.sh" < "$tmp/facts" 2>&1 >/dev/null | grep -q '^arm64: .* with an arm64 slice'; then

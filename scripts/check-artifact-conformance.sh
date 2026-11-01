@@ -81,8 +81,8 @@ if ! grep -q '^end-of-facts$' "$facts"; then
 fi
 
 grep '^deviation ' "$facts" > "$tmp/devs" || true
-# spec: scripts/deviation-reason.sh -- the ONE matcher, shared with assert_binary_compatible.sh.
-deviation_reason() { shipyard_deviation_reason "$tmp/devs" "$@"; }  # $1 = check, $2 = subject (optional)
+shipyard_deviations - < "$tmp/devs" > /dev/null
+deviation_reason() { shipyard_deviated "$@" || :; }  # $1 = check, $2 = subject (optional)
 
 # spec: scripts/check-ids.tsv -- every id this script evaluates; a deviation declared under the name
 #       a check had before it had an id (scheme, ingredients) still excuses it.

@@ -21,6 +21,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # MAVERICKS_ROOT
+. "$SELF/deviation-reason.sh"
 
 TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""
 while [ $# -gt 0 ]; do
@@ -261,7 +262,8 @@ else
       fi
       ;;
     4)  # no hook -- allowed ONLY where the repo declares why
-      grep -q 'No upstream release notes: *[^ ]' "$MAVERICKS_ROOT/INGREDIENTS.md" 2>/dev/null \
+      shipyard_deviations "$MAVERICKS_ROOT" >/dev/null 2>&1 || :
+      shipyard_deviated upstream-notes >/dev/null \
         || die "$VER ships a new upstream but this repo has no build/upstream-release-notes-url.sh, and INGREDIENTS.md does not say why (add the hook, or a line 'No upstream release notes: <reason>')"
       printf -- '- New upstream: %s %s.\n' "$PRODUCT" "$UP" >> "$tmp"
       ;;

@@ -25,10 +25,10 @@ alt="$(tr '\n' '|' < "$REASONS" | sed 's/|$//')"
 #       "- comments: <reason>", which switches the check off REPO-WIDE; the "<check>:<glob>" scoping
 #       that check-artifact-conformance.sh honours is rejected here, not swallowed into the reason.
 if [ "$#" -eq 0 ] && [ -f INGREDIENTS.md ]; then
-  devscope="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
-    | sed -n 's/^- *comments *:\([^ :][^ :]*\).*$/\1/p' | head -1)"
-  deviation="$(sed -n '/^## Conformance deviations/,/^## /p' INGREDIENTS.md \
-    | sed -n 's/^- *comments *: *\(..*\)$/\1/p' | head -1)"
+  . "$SELF/deviation-reason.sh"
+  shipyard_deviations . >/dev/null 2>&1 || :
+  devscope="$(printf '%s\n' "$SHIPYARD_DEVIATION_FACTS" | sed -n 's/^deviation comments:\([^ ]*\) .*$/\1/p' | head -1)"
+  deviation="$(shipyard_deviated comments || true)"
   if [ -n "$devscope" ]; then
     chk_fail comments "INGREDIENTS.md scopes the comments deviation to \"$devscope\"" \
       "check 15's deviation is repo-wide and a glob is not honoured here" \

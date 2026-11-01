@@ -18,7 +18,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # ver_cmp()
-
+. "$SELF/deviation-reason.sh"
 usage() { echo "usage: self-upstream-version.sh [--root DIR] [--ref REV]" >&2; exit 2; }
 
 ROOT="."; REF="HEAD"
@@ -61,14 +61,13 @@ if ! sh "$SELF/declared-state.sh" "$ROOT" > "$work/decl" 2>"$work/err"; then
 fi
 cut -f2 "$work/decl" | sed 's/:.*//; s/^/:(exclude,literal)/' >> "$work/exclude"
 
-if ! sh "$SELF/deviations.sh" "$ROOT" > "$work/devs" 2>"$work/err"; then
+if ! shipyard_deviations "$ROOT" > "$work/devs" 2>"$work/err"; then
   cat "$work/err" >&2
   echo "self-upstream-version: $ROOT/INGREDIENTS.md declares a conformance deviation that deviations.sh refuses (it says why, above)" >&2
   exit 2
 fi
-while read -r check glob _; do
-  [ "$check" = self-upstream-exclude ] || continue
-  printf ':(exclude,glob)%s\n' "$glob" >> "$work/exclude"
+while read -r kind spec _; do
+  case "$spec" in self-upstream-exclude:*) printf ':(exclude,glob)%s\n' "${spec#*:}" >> "$work/exclude" ;; esac
 done < "$work/devs"
 
 set -- .

@@ -211,8 +211,8 @@ if [ -f "$root/INGREDIENTS.md" ]; then
   # platform: not a pipeline -- deviations.sh exits 1 on an entry with no reason, and a pipeline
   #           reports the `while`'s status instead, turning "this declaration is malformed" into
   #           "there are no deviations".
-  _devs="$(sh "$SELF/deviations.sh" "$root")" || exit 1
-  printf '%s\n' "$_devs" | shipyard_deviation_facts
+  _devs="$(shipyard_deviations "$root")" || exit 1
+  printf '%s\n' "$_devs"
 fi
 
 for f in "$dist"/*; do

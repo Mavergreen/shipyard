@@ -68,14 +68,7 @@ chk_ignored() {  # $1 = the calling id, $2 = a path; 0 ignored, 1 not, 2 git can
   return 2
 }
 
-chk_deviated() {
-  _cd_facts="${SHIPYARD_CHECK_DEVIATION_FACTS:-}"
-  [ -n "$_cd_facts" ] && [ -f "$_cd_facts" ] || return 1
-  . "$SHIPYARD_CHECK_DIR/deviation-reason.sh"
-  _cd_reason="$(shipyard_deviation_reason "$_cd_facts" "$1" "${2:-}")"
-  [ -n "$_cd_reason" ] || return 1
-  printf '%s\n' "$_cd_reason"
-}
+chk_deviated() { . "$SHIPYARD_CHECK_DIR/deviation-reason.sh"; shipyard_deviated "$@"; }
 
 chk_shell_scripts() {
   while IFS= read -r _ss_f; do

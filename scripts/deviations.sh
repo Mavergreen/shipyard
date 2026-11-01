@@ -10,6 +10,7 @@
 set -eu
 root="${1:-.}"
 [ -f "$root/INGREDIENTS.md" ] || exit 0
+rc=0
 sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
   /^- *[a-z][a-z0-9_-]*(:[^ :]*)? *:/ {
     line = $0; sub(/^- */, "", line)
@@ -84,4 +85,6 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
     if (rest == "") { print "deviations.sh: \"" check "\" declares no reason" > "/dev/stderr"; bad = 1; next }
     print check " " glob " " rest
   }
-  END { exit bad }'
+  END { exit bad }' || rc=$?
+sed -n 's/^.*No upstream release notes: *\([^ ].*\)$/upstream-notes * \1/p' "$root/INGREDIENTS.md" | head -1
+exit "$rc"

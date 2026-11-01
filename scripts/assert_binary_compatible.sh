@@ -119,9 +119,8 @@ devs_root="${MAVERICKS_DEVIATIONS_ROOT:-${SHIPYARD_CHECK_REPO:-.}}"
 # platform: not a pipeline -- deviations.sh exits 1 on a malformed entry, and a pipeline would report
 #           shipyard_deviation_facts' status instead, turning "this declaration is malformed" into "there
 #           are no deviations".
-_devs="$(sh "$SELF/deviations.sh" "$devs_root" 2>&1)" \
-  || cannot_measure deviation-complete "$devs_root/INGREDIENTS.md declares a malformed conformance deviation: $_devs"
-printf '%s\n' "$_devs" | shipyard_deviation_facts > "$work/devs"
+shipyard_deviations "$devs_root" > /dev/null 2> "$work/devs.err" \
+  || cannot_measure deviation-complete "$devs_root/INGREDIENTS.md declares a malformed conformance deviation: $(cat "$work/devs.err")"
 
 # platform: nm -m lines look like "<addr|spaces> (undefined) [weak] external _sym (from libX)"; nm
 #           -u loses the weak flag, so nm -m is parsed instead (the undefined NAME set is identical).
@@ -136,7 +135,7 @@ shipyard_undefs() {
 
 checked=0; excused=0
 guard_fail() {  # $1 = id, $2 = the path deviations match, $3 = why; a deviation for $1 covering $2 excuses it
-  _gf="$(shipyard_deviation_reason "$work/devs" "$1" "$2")"
+  _gf="$(shipyard_deviated "$1" "$2" || true)"
   if [ -n "$_gf" ]; then
     echo "compat guard: $2 is excused from $1: $_gf"; excused=$((excused+1))
   else

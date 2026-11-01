@@ -10,6 +10,8 @@ SHIPYARD_SCRIPTS="$SELF"
 . "$SELF/registry-lookup.sh"
 . "$SELF/lib/py.sh"
 . "$SELF/deviation-reason.sh"
+shipyard_deviations . >/dev/null 2>&1 || :
+deviated() { shipyard_deviated "$1" "${2:-}" >/dev/null; }
 REL=".github/workflows/release.yml"
 rel_ran() {
   if [ -f "$REL" ]; then chk_ran "$1"; return 0; fi
@@ -347,7 +349,7 @@ for d in build scripts; do
   if tracked "$d/upstream-release-notes-url.sh"; then hook_tracked=yes; fi
   if [ -f "$d/upstream-release-notes-url.sh" ]; then hook_present=yes; fi
 done
-if rel_ran upstream-notes && [ "$hook_tracked" = no ] && ! grep -q 'No upstream release notes: *[^ ]' INGREDIENTS.md 2>/dev/null; then
+if rel_ran upstream-notes && [ "$hook_tracked" = no ] && ! deviated upstream-notes; then
   if [ "$hook_present" = yes ]; then
     chk_fail upstream-notes "upstream-release-notes-url.sh exists but is not committed" \
       "a .gitignore'd build/ drops it silently, and CI's fresh checkout never sees it" \
@@ -521,10 +523,6 @@ delegate comments check-comments.sh \
 
 # spec: scripts/deviations.sh -- ONE parser for the "## Conformance deviations" grammar, shared with
 #       check-artifact-conformance.sh; an incomplete entry is reported once, by check-deviations.sh.
-DEVS="$(sh "$SELF/deviations.sh" . 2>/dev/null || true)"
-printf '%s\n' "$DEVS" | shipyard_deviation_facts > "$tmp/devfacts"
-SHIPYARD_CHECK_DEVIATION_FACTS="$tmp/devfacts"
-deviated() { chk_deviated "$1" "$2" >/dev/null; }
 # spec: scripts/conventions-grandfathered -- "<check> <repo> <job|path>" lines naming what predates a
 #       check, so moving @v1 reddens no repo. The repo is $GITHUB_REPOSITORY's name (as in check 24),
 #       else the last path component of origin's URL, https or ssh, so a local run through
@@ -850,7 +848,7 @@ done < "$tmp/l28"
 #       needs that job directly; a job calling a LOCAL reusable workflow that does is that job. Only
 #       an unscoped on-target deviation stands in for the job; a scoped one declares a gap in the
 #       job's coverage. A workflow that does not parse is workflow-yaml's.
-if rel_ran on-target && [ -n "$builds_pkg" ] && ! printf '%s\n' "$DEVS" | grep -q '^on-target \* ' \
+if rel_ran on-target && [ -n "$builds_pkg" ] && ! deviated on-target \
    && [ "$PY_OK" -eq 1 ]; then
   rc=0
   chk_py /dev/stdin "$REL" > "$tmp/c29" <<'PY' || rc=$?
@@ -993,7 +991,7 @@ for p in pubs or ["publish"]:
         print("unneeded %s" % p)
 PY
   [ "$rc" -eq 0 ] || py_crashed modern-smoke
-  _decl37="$(printf '%s\n' "$DEVS" | awk '$1 == "arm64" { print $2; exit }')"
+  _decl37="$(shipyard_deviations . 2>/dev/null | sed -n 's/^deviation arm64:\([^ ]*\) .*$/\1/p' | head -1)"
   _job37=no; grep -qx job "$tmp/c37" && _job37=yes
   if [ -n "$_decl37" ] && [ "$_job37" = no ]; then
     chk_fail modern-smoke "INGREDIENTS.md declares an arm64 slice, but release.yml has no modern-smoke job" \

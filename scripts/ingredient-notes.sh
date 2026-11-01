@@ -53,8 +53,7 @@ bullets="$tmp/bullets"
 #       already earned the section.
 derived="$tmp/derived"
 : > "$derived"
-devs="$(sh "$SELF/deviations.sh" .)"
-printf '%s\n' "$devs" | shipyard_deviation_facts > "$tmp/devfacts"
+shipyard_deviations . > /dev/null
 
 pin_name() {
   case "$1" in
@@ -117,7 +116,7 @@ source_of() {  # path KEY-or-empty old-or-empty new-or-empty -> "linked <suffix>
 }
 
 declared() {  # path KEY-or-empty
-  why="$(shipyard_deviation_reason "$tmp/devfacts" unlinked "$1${2:+:$2}")"
+  why="$(shipyard_deviated unlinked "$1${2:+:$2}" || true)"
   [ -z "$why" ] || printf ' (no change notes: %s)' "$why"
 }
 
