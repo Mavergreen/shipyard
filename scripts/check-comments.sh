@@ -27,7 +27,7 @@ alt="$(tr '\n' '|' < "$REASONS" | sed 's/|$//')"
 if [ "$#" -eq 0 ] && [ -f INGREDIENTS.md ]; then
   . "$SELF/deviation-reason.sh"
   shipyard_deviations . >/dev/null 2>&1 || :
-  devscope="$(printf '%s\n' "$SHIPYARD_DEVIATION_FACTS" | sed -n 's/^deviation comments:\([^ ]*\) .*$/\1/p' | head -1)"
+  devscope="$(shipyard_deviation_scopes comments | grep -vx '\*' | head -1 || true)"
   deviation="$(shipyard_deviated comments || true)"
   if [ -n "$devscope" ]; then
     chk_fail comments "INGREDIENTS.md scopes the comments deviation to \"$devscope\"" \

@@ -80,8 +80,7 @@ if ! grep -q '^end-of-facts$' "$facts"; then
   exit 1
 fi
 
-grep '^deviation ' "$facts" > "$tmp/devs" || true
-shipyard_deviations - < "$tmp/devs" > /dev/null
+shipyard_deviations - < "$facts" > /dev/null
 deviation_reason() { shipyard_deviated "$@" || :; }  # $1 = check, $2 = subject (optional)
 
 # spec: scripts/check-ids.tsv -- every id this script evaluates; a deviation declared under the name
@@ -177,7 +176,7 @@ fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (option
   #       fail here, the same way its sibling above (the completion sentinel) refuses to let any
   #       deviation excuse it -- a switch-off with no reason attached is indistinguishable from a
   #       check nobody wrote.
-  if grep -q "^deviation ${_id}\$" "$facts" || grep -q "^deviation ${_c}\$" "$facts"; then
+  if shipyard_deviation_scopes "$_id" | grep -qx '\*' || shipyard_deviation_scopes "$_c" | grep -qx '\*'; then
     chk_fail "$_id" "$(rule_of "$_id")" "a '${_c}' deviation is declared with no reason, which excuses nothing" \
       "state why in INGREDIENTS.md ('- ${_c}: <reason>'), or fix the artifact"
     return 0

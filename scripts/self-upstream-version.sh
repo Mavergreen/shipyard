@@ -66,9 +66,9 @@ if ! shipyard_deviations "$ROOT" > "$work/devs" 2>"$work/err"; then
   echo "self-upstream-version: $ROOT/INGREDIENTS.md declares a conformance deviation that deviations.sh refuses (it says why, above)" >&2
   exit 2
 fi
-while read -r kind spec _; do
-  case "$spec" in self-upstream-exclude:*) printf ':(exclude,glob)%s\n' "${spec#*:}" >> "$work/exclude" ;; esac
-done < "$work/devs"
+shipyard_deviation_scopes self-upstream-exclude | while IFS= read -r glob; do
+  printf ':(exclude,glob)%s\n' "$glob" >> "$work/exclude"
+done
 
 set -- .
 while IFS= read -r spec; do set -- "$@" "$spec"; done < "$work/exclude"

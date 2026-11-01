@@ -7,7 +7,8 @@
 #                                                        with its refusals on stderr
 #          shipyard_deviated <check> [<subject>]         prints the reason the loaded deviations give to excuse
 #                                                        <check> for <subject>, or returns 1
-#          Under that pair, the matcher:
+#          shipyard_deviation_scopes <check>             prints that check's scopes, one per line, * for unscoped
+#          Under those, the matcher:
 #          shipyard_deviation_facts                      stdin: deviations.sh's "<check> <glob or *> <reason>"
 #                                                        lines; stdout: one fact line per deviation,
 #                                                        "deviation <check> <reason>" when unscoped,
@@ -58,7 +59,7 @@ shipyard_deviations() {  # $1 = a repo root or its INGREDIENTS.md, or "-" for fa
   _sd_root="${1:-.}"
   _sd_rc=0; _sd_err=""
   case "$_sd_root" in
-    -) _sd_facts="$(cat)" ;;
+    -) _sd_facts="$(grep '^deviation ' || true)" ;;
     *)
       case "$_sd_root" in *INGREDIENTS.md) _sd_root="$(dirname "$_sd_root")" ;; esac
       if [ "${SHIPYARD_DEVIATION_ROOT:-}" = "$_sd_root" ] && [ -n "${SHIPYARD_DEVIATION_RC+x}" ]; then
@@ -81,4 +82,10 @@ shipyard_deviated() {  # $1 = check, $2 = the subject it concerns (optional)
   _sdd_reason="$(printf '%s\n' "$SHIPYARD_DEVIATION_FACTS" | _shipyard_deviation_match "$1" "${2:-}")"
   [ -n "$_sdd_reason" ] || return 1
   printf '%s\n' "$_sdd_reason"
+}
+
+shipyard_deviation_scopes() {  # $1 = check; one scope per line, * for an unscoped deviation
+  [ -n "${SHIPYARD_DEVIATION_RC+x}" ] || shipyard_deviations . >/dev/null 2>&1 || :
+  printf '%s\n' "$SHIPYARD_DEVIATION_FACTS" \
+    | sed -n -e "s/^deviation ${1}\$/*/p" -e "s/^deviation ${1} .*\$/*/p" -e "s/^deviation ${1}:\([^ ]*\).*\$/\1/p"
 }

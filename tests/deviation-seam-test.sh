@@ -24,6 +24,14 @@ runs="$(grep -rnE '(^|[;&|(]|[[:space:]])sh +[^|;&]*deviations\.sh' "$root/scrip
 [ -z "$runs" ] || fail "deviations.sh is run outside the seam:
 $runs"
 
+facts="$(grep -rnE '(^|["'"'"'])deviation ' "$root/scripts" \
+  | grep -v "^$root/scripts/deviation-reason.sh:" \
+  | grep -v "^$root/scripts/deviations.sh:" \
+  | grep -v "^$root/scripts/check-deviations.sh:" \
+  | grep -vE '^[^:]*:[0-9]+:[[:space:]]*#' || true)"
+[ -z "$facts" ] || fail "a script reads the deviation fact encoding itself:
+$facts"
+
 SELF="$root/scripts"
 . "$SELF/deviation-reason.sh"
 
@@ -60,6 +68,9 @@ is "swept later" comments
 is "upstream keeps none" upstream-notes
 is "runs translated" rosetta tools/x.sh
 is "" rosetta other/x.sh
+[ "$(shipyard_deviation_scopes rosetta)" = "tools/*.sh" ] || fail "scopes lists a scoped glob"
+[ "$(shipyard_deviation_scopes comments)" = "*" ] || fail "scopes lists * for an unscoped deviation"
+[ -z "$(shipyard_deviation_scopes nothing)" ] || fail "scopes lists nothing for an undeclared check"
 is "" rosetta
 is "wants the newest" unpinned Dockerfile
 

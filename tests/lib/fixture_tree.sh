@@ -1,6 +1,4 @@
 # platform: host-agnostic
-# fixture_tree FIXTURES_DIR FIXTURE DEST: DEST becomes FIXTURE laid over FIXTURES_DIR/_base, minus the
-# paths FIXTURE's DELETE lists (its other config files, like FILES, stay).
 fixture_tree() {
   mkdir -p "$3"
   cp -R "$1/_base/." "$3/"

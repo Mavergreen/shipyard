@@ -78,8 +78,7 @@ while read -r repo; do
   if grep -q '^abort ' "$tmp/facts" || ! grep -qx 'end-of-facts' "$tmp/facts"; then
     echo "gen-conventions-grandfathered: cannot read what Mavergreen/$repo $tag shipped: $(cat "$tmp/err")" >&2; exit 1
   fi
-  grep '^deviation ' "$tmp/facts" > "$tmp/devs" || :
-  shipyard_deviations - < "$tmp/devs" > /dev/null
+  shipyard_deviations - < "$tmp/facts" > /dev/null
   awk '$1 == "cxxabi-defines" || $1 == "cxxabi-loads" { print $3 }' "$tmp/facts" | LC_ALL=C sort -u | while read -r p; do
     shipyard_deviated cxxabi "$(printf '%s' "$p" | sed -e 's/%20/ /g' -e 's/%25/%/g')" > /dev/null \
       || echo "cxxabi $repo $p"

@@ -991,7 +991,7 @@ for p in pubs or ["publish"]:
         print("unneeded %s" % p)
 PY
   [ "$rc" -eq 0 ] || py_crashed modern-smoke
-  _decl37="$(shipyard_deviations . 2>/dev/null | sed -n 's/^deviation arm64:\([^ ]*\) .*$/\1/p' | head -1)"
+  _decl37="$(shipyard_deviation_scopes arm64 | head -1)"
   _job37=no; grep -qx job "$tmp/c37" && _job37=yes
   if [ -n "$_decl37" ] && [ "$_job37" = no ]; then
     chk_fail modern-smoke "INGREDIENTS.md declares an arm64 slice, but release.yml has no modern-smoke job" \
