@@ -53,44 +53,10 @@ printf '\n- registry-read:build/x.sh: a shim that leaves with the flag day\n' >>
 mkrepo "$work/r16ok"
 printf '#!/bin/sh\ngrep -q "cmake/packages" out && { echo "the registry came back"; exit 1; }\n' \
   > "$work/r16ok/tests/registry-gone-test.sh"
-printf '#!/bin/sh\n# We used to read "$HOME/.cmake/packages/MavericksShipyard"; msc.sh replaced it.\nexit 0\n' \
+printf '#!/bin/sh\n# We used to read "$HOME/.cmake/packages/MavericksShipyard"; shipyard-scripts replaced it.\nexit 0\n' \
   > "$work/r16ok/build/history.sh"
 (cd "$work/r16ok" && git add -A) >/dev/null 2>&1
 (cd "$work/r16ok" && sh "$S" >/dev/null) || { echo "FAIL 16: a test asserting the registry is gone, and a comment about it, should pass"; exit 1; }
-
-# spec: SKILL.md "Family conventions" check 17 -- a product's msc.sh is shipyard's canonical
-#       template, byte for byte.
-mkrepo "$work/m17"; cp "$here/../scripts/templates/msc.sh" "$work/m17/build/msc.sh"
-(cd "$work/m17" && git add -A) >/dev/null 2>&1
-(cd "$work/m17" && sh "$S" >/dev/null) || { echo "FAIL 17: the canonical msc.sh should pass"; exit 1; }
-echo '# a local tweak' >> "$work/m17/build/msc.sh"
-if out="$(cd "$work/m17" && sh "$S" 2>&1)"; then echo "FAIL 17: a drifted msc.sh should fail"; exit 1; fi
-first_is "$out" msc-template || { echo "FAIL should be a msc-template failure: $out"; exit 1; }
-printf '\n- msc-template:build/msc.sh: exercising the deviation path\n' >> "$work/m17/INGREDIENTS.md"
-(cd "$work/m17" && sh "$S" >/dev/null) || { echo "FAIL 17: a declared msc-template deviation should pass"; exit 1; }
-
-# spec: SKILL.md "Family conventions" check 17 -- only TRACKED copies count, the rule 7c/7d already
-#       apply: an untracked build/msc.sh in a worktree is not what the repo ships, and failing on it
-#       would make the gate unrunnable for the person mid-way through fixing it.
-mkrepo "$work/m17u"
-printf '# a drifted scratch copy nobody committed\n' > "$work/m17u/build/msc.sh"
-(cd "$work/m17u" && sh "$S" >/dev/null) || { echo "FAIL 17: an UNTRACKED msc.sh must not fail the gate"; exit 1; }
-(cd "$work/m17u" && git add -A) >/dev/null 2>&1
-if (cd "$work/m17u" && sh "$S" >/dev/null 2>&1); then echo "FAIL 17: ...but once committed it counts"; exit 1; fi
-
-# platform: `cmp -s` against a nonexistent file is "different", so a template that MOVED would redden
-#           all fifteen repos at once with the real cause nowhere in the message. A missing template
-#           must name itself instead.
-mkrepo "$work/m17t"; cp "$here/../scripts/templates/msc.sh" "$work/m17t/build/msc.sh"
-(cd "$work/m17t" && git add -A) >/dev/null 2>&1
-fake="$work/fakeshipyard"; mkdir -p "$fake"
-for g in "$here"/../scripts/*.sh "$here"/../scripts/check-ids.tsv; do cp "$g" "$fake/"; done
-cp -R "$here/../scripts/lib" "$here/../scripts/vendor" "$fake/"
-mkdir -p "$fake/templates"   # ...but no msc.sh in it
-out="$(cd "$work/m17t" && sh "$fake/check-family-conventions.sh" 2>&1 || true)"
-first_is "$out" msc-template || { echo "FAIL should be a msc-template failure: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'is not shipyard' \
-  && { echo "FAIL 17: a missing template must NOT be reported as the repo's msc.sh being wrong"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 18 -- configure, test and package with
 #       shipyard-cmake/ctest/cpack, in workflows and in committed build scripts.

@@ -83,7 +83,7 @@ vc() { r="$(mavergreen_vercmp "$1" "$2")" && s=0 || s=$?; echo "$s:$r"; }
 [ "$(vc abc 1)" = 2: ]                                    || { echo "FAIL vercmp: abc must be status 2"; exit 1; }
 
 # spec: scripts/lib.sh -- consumer repos source it with their OWN $SELF (a build/ dir) and SHIPYARD /
-#       SHIPYARD_SCRIPTS set by msc.sh; it must find lib/vercmp.sh from those, and fail loudly otherwise.
+#       SHIPYARD_SCRIPTS set from shipyard-scripts; it must find lib/vercmp.sh from those, and fail loudly otherwise.
 S="$here/../scripts"
 chk() { [ "$(env "$@" sh -c '. "$L" && mavergreen_vercmp 1.0.1 1.0' 2>&1)" = 1 ]; }
 L="$S/lib.sh"; export L

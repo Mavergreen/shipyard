@@ -21,7 +21,6 @@ release-notes-generated	checkout	scripts/check-family-conventions.sh	gate 14	P1
 comments	checkout	scripts/check-comments.sh	gate 15	P1
 registry-read	checkout	scripts/check-family-conventions.sh	gate 16	P1
 renovate-path	checkout	scripts/check-family-conventions.sh	gate 26	P1
-msc-template	checkout	scripts/check-family-conventions.sh	gate 17	P2
 shipyard-cmake-only	checkout	scripts/check-family-conventions.sh	gate 18	P1
 tree-clean-wired	checkout	scripts/check-family-conventions.sh	gate 19	P1
 artifact-checks-wired	checkout	scripts/check-family-conventions.sh	gate 21	P1

@@ -76,7 +76,7 @@ require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-sep
 #       the payload is a gate rather than a description: a stray shipyard-cmake-tree.tar.gz once
 #       shipped a copy of the whole payload inside the payload, and nothing complained.
 require_only --shipyard-prefix "$SPREFIX" "bin share"
-require_only --shipyard-prefix "$SPREFIX/bin" "cmake ctest cpack shipyard-cmake shipyard-ctest shipyard-cpack shipyard-check"
+require_only --shipyard-prefix "$SPREFIX/bin" "cmake ctest cpack shipyard-cmake shipyard-ctest shipyard-cpack shipyard-check shipyard-scripts"
 # spec: 2026-10-09 C4 -- the compatibility links keep a build directory configured before the cmake
 #       product regenerating, so each must name its launcher.
 for c in cmake ctest cpack; do

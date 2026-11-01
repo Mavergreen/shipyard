@@ -43,7 +43,7 @@ for pair in 'product-layout:stage-product' 'artifact-conformance:artifact-checks
   case_ "r-${pair%%:*}" "- ${pair%%:*}: because"
   fails "r-${pair%%:*}" deviation-known-check "now \`${pair#*:}\`"
 done
-for k in sparkle-updater release-assets python3; do
+for k in msc-template sparkle-updater release-assets python3; do
   case_ "r-$k" "- $k: because"
   fails "r-$k" deviation-known-check 'delete the line'
 done

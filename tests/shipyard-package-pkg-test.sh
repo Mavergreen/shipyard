@@ -20,6 +20,10 @@ for c in cmake ctest cpack; do
 done
 grep -q 'file(CREATE_LINK "\.\./\${_dest}/scripts/shipyard-check" "\${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-check" SYMBOLIC)' "$root/CMakeLists.txt" \
   || { echo "FAIL: shipyard's cmake --install must make bin/shipyard-check a RELATIVE link into shipyard's own scripts, so the farm exports the one command CI and developers share"; exit 1; }
+grep -q 'file(CREATE_LINK "\.\./\${_dest}/scripts/shipyard-scripts" "\${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-scripts" SYMBOLIC)' "$root/CMakeLists.txt" \
+  || { echo "FAIL: shipyard's cmake --install must make bin/shipyard-scripts a RELATIVE link into shipyard's own scripts"; exit 1; }
+code | grep -q 'require_only --shipyard-prefix "\$SPREFIX/bin" "[^"]* shipyard-scripts' \
+  || { echo "FAIL: package-pkg.sh must accept bin/shipyard-scripts in the payload"; exit 1; }
 code | grep -q 'require_only --shipyard-prefix "\$SPREFIX/bin" "[^"]* shipyard-check' \
   || { echo "FAIL: package-pkg.sh must accept bin/shipyard-check in the payload"; exit 1; }
 code | grep -q -- '--exclude bin/shipyard-check' \

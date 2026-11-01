@@ -52,16 +52,6 @@ pin_value() {
   sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1 | sed 's/^"//; s/"$//' | tr -d '[:space:]'
 }
 
-# spec: SKILL.md "shipyard: consume its facilities, never hand-roll them" -- never a hard-coded
-#       prefix, never a vendored copy.
-msc_scripts() {
-  if [ -n "${MAVERICKS_SCRIPTS:-}" ]; then printf '%s\n' "$MAVERICKS_SCRIPTS"; return 0; fi
-  if [ -n "${SHIPYARD_SCRIPTS:-}" ] && [ -d "$SHIPYARD_SCRIPTS" ]; then printf '%s\n' "$SHIPYARD_SCRIPTS"; return 0; fi
-  echo "msc_scripts: SHIPYARD_SCRIPTS is not set -- source the product's msc.sh first (it asks shipyard-cmake)," >&2
-  echo "  or set MAVERICKS_SCRIPTS" >&2
-  return 1
-}
-
 # spec: tests/version-lib-test.sh -- lib/vercmp.sh is found via $SELF, $SHIPYARD or $SHIPYARD_SCRIPTS:
 #       a sourced file cannot learn its own path in POSIX sh.
 _lib_vercmp=""

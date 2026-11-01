@@ -1,8 +1,0 @@
-.github/renovate.json
-.github/workflows/release.yml
-.gitignore
-INGREDIENTS.md
-UPSTREAM_VERSION
-build/msc.sh
-build/upstream-release-notes-url.sh
-tests/a-test.sh

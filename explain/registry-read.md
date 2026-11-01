@@ -3,7 +3,7 @@ registry-read: nothing tracked reads the CMake user package registry.
 ## Why
 shipyard now lives in shipyard-cmake's own prefix, and nothing writes ~/.cmake/packages any more. A script
 that reads it reads a file that is no longer there, and reads it silently, resolving to an empty path
-rather than failing. The fix is to source build/msc.sh, which asks shipyard-cmake where the scripts are, or
+rather than failing. The fix is to run shipyard-scripts, which asks shipyard-cmake where the scripts are, or
 to use $SHIPYARD_SCRIPTS in CI.
 
 ## Incident

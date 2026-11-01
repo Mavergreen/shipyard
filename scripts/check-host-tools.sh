@@ -5,11 +5,8 @@
 #          every file git tracks as executable but a compiled one (no "#!", and a NUL byte), and
 #          every file whose first line is "#!".
 #          scripts/vendor/yaml/ is skipped -- it is third-party code we do not get to edit.
-#          scripts/templates/ is skipped -- msc.sh there is compared byte for byte by check 17,
-#          and base-postinstall.sh is a template build-base-component.sh renders, never run as itself --
-#          and so is any tracked script that is byte-identical to
-#          $SELF/templates/<its basename>: that is a consumer's copy of one, and check 17 owns it
-#          too. Each script must declare its host in its header (host-of.sh), and
+#          scripts/templates/ is skipped -- base-postinstall.sh is a template build-base-component.sh
+#          renders, never run as itself. Each script must declare its host in its header (host-of.sh), and
 #          a host-agnostic one may not run a macOS-only tool (host-tools.awk) unless the comment
 #          line directly above the call says "# platform: guarded macOS-only call -- <the guard>".
 #          A repo where no script declares a host has not adopted the split, and host-tools is not
@@ -45,13 +42,6 @@ while IFS="$TAB" read -r meta p; do
   case "$p" in scripts/templates/*|scripts/vendor/yaml/*|tests/fixtures/checks/*) continue ;; esac
   # platform: a file deleted in the worktree but not yet from the index is still listed
   [ -f "$p" ] || continue
-  # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md check 22 -- a
-  #       consumer's byte-for-byte copy of a shipyard template (check 17's build/msc.sh, e.g.) is
-  #       that template's problem to declare, not this one's: declaring in the copy breaks check
-  #       17 against the template, and declaring in the template breaks check 17 for every OTHER
-  #       consumer's copy.
-  tmpl="$SELF/templates/$(basename "$p")"
-  [ -f "$tmpl" ] && cmp -s "$p" "$tmpl" && continue
   case "$p" in
     *.sh|*.bats|*.bash|*.py) ;;
     *) case "$meta" in

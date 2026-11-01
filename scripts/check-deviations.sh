@@ -27,6 +27,7 @@ retired_fix() {
     artifact-conformance) echo "now \`artifact-checks-wired\`" ;;
     scheme) echo "now \`version-scheme\`" ;;
     ingredients) echo "now \`variant-build-info\`" ;;
+    msc-template) echo "now the \`shipyard-scripts\` command; delete the line" ;;
     sparkle-updater|release-assets|python3) echo "no check reads this; delete the line" ;;
     *) return 1 ;;
   esac

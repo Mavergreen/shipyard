@@ -1,6 +1,6 @@
 # platform: host-agnostic
 # spec: R-P1-21 -- shared by the three tests that build a fixture <root>/{shipyard,cmake} pair
-#       (shipyard-cmake-refusal, msc-template, assert-installed-shipyard); tests/lib/ is not itself
+#       (shipyard-cmake-refusal, shipyard-scripts, assert-installed-shipyard); tests/lib/ is not itself
 #       run, since run-repo-tests.sh takes top-level tests only.
 # platform: Homebrew's CMAKE_ROOT is <prefix>/share/cmake -- the very path shipyard installs into --
 #           and is itself a SYMLINK, while BSD `cp -R` copies a symlink AS a symlink: the fixture's

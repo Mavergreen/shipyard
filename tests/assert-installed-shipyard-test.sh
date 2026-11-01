@@ -57,6 +57,7 @@ for c in cmake ctest cpack; do
   ln -s "../shipyard/bin/shipyard-$c" "$farm/shipyard-$c"
 done
 ln -s ../shipyard/bin/shipyard-check "$farm/shipyard-check"
+ln -s ../shipyard/bin/shipyard-scripts "$farm/shipyard-scripts"
 # platform: keep this output. Sent to /dev/null, a failure here killed the script under set -e
 #           having said NOTHING, and a real macos-26 run could only report "exit 1" -- hiding the
 #           read-only-CMAKE_ROOT cause for a whole round.

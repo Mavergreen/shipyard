@@ -99,6 +99,8 @@ foreach(_tool cmake ctest cpack)
 endforeach()
 file(CREATE_LINK "../${_dest}/scripts/shipyard-check" "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-check" SYMBOLIC)
 install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-check" DESTINATION bin)
+file(CREATE_LINK "../${_dest}/scripts/shipyard-scripts" "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-scripts" SYMBOLIC)
+install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-scripts" DESTINATION bin)
 
 install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake"

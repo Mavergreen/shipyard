@@ -1,1 +1,2 @@
 tests/mavergreen-meta-test.sh
+tests/shipyard-scripts-test.sh

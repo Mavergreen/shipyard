@@ -558,7 +558,7 @@ while IFS= read -r f; do
   deviated registry-read "$f" && continue
   chk_fail registry-read "$f reads the CMake user package registry (the ~/.cmake export(PACKAGE) tree)" \
     "nothing writes it any more" \
-    "source msc.sh (it asks the shipyard-cmake launcher and exports SHIPYARD_SCRIPTS), or use \$SHIPYARD_SCRIPTS in CI"
+    "run shipyard-scripts (it asks the shipyard-cmake launcher where the scripts are), or use \$SHIPYARD_SCRIPTS in CI"
 done < "$tmp/l532"
 
 # spec: SKILL.md "Family conventions" check 26 -- a family repo's Renovate config is
@@ -577,31 +577,6 @@ for f in renovate.json renovate.json5 .renovaterc .renovaterc.json .renovaterc.j
     "the Renovate checks (4, 4b, 13) never read $f" \
     "git mv $f .github/renovate.json (merge into the existing .github/renovate.json instead if there is one), or declare '- renovate-path:$f: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 done
-
-# spec: SKILL.md "Family conventions" check 17 -- a product's msc.sh must equal shipyard's canonical
-#       template byte for byte. TRACKED copies only, the same rule checks 7c/7d apply: an untracked
-#       build/msc.sh in a developer's worktree is not what the repo ships, and failing on it would
-#       make the gate unrunnable for exactly the person mid-way through fixing it.
-chk_ran msc-template
-_tmpl="$SELF/templates/msc.sh"
-if [ ! -f "$_tmpl" ]; then
-  # platform: `cmp -s` with a missing operand is "different", so comparing against a template that
-  #           MOVED would tell all fifteen repos at once that their msc.sh is not canonical, with the
-  #           one true cause nowhere in the message. Name the template instead.
-  chk_fail msc-template "cannot find shipyard's canonical msc.sh at $_tmpl" \
-    "the shipyard checkout is incomplete, or the template moved" \
-    "check out the whole repo (family-conventions.yml does); if the template moved, this check must move with it"
-else
-  for f in build/msc.sh msc.sh; do
-    tracked "$f" || continue
-    deviated msc-template "$f" && continue
-    cmp -s "$f" "$_tmpl" && continue
-    _diff="$(diff "$_tmpl" "$f" 2>/dev/null | head -6 | tr '\n' ';' | sed 's/;$//')"
-    chk_fail msc-template "$f is not shipyard's canonical msc.sh" \
-      "the template is the one source and a product's copy never differs from it; the first differences: $_diff" \
-      "copy it from shipyard: cp \"\$SHIPYARD_SCRIPTS/templates/msc.sh\" $f   (never edit your copy -- change the template)"
-  done
-fi
 
 # spec: SKILL.md "Family conventions" check 18 -- configure, test and package with shipyard-cmake /
 #       shipyard-ctest / shipyard-cpack. It reads lines, not shell syntax; SKILL.md's "Check 18" notes
