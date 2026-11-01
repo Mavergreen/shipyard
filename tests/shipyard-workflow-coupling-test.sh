@@ -83,7 +83,7 @@ def has(cs, pat): return any(re.search(pat, c) for c in cs)
 # with the failure caught, so the installer log can be dumped before the step dies -- and `|| true` in
 # place of `|| bad=1` turns the whole smoke into decoration while every other assertion stays green
 # (R-P1-20). A pattern that stops at the command name cannot see that.
-for pat, what in ((r"^sh scripts/lipo-merge-tree\.sh ", "merge the two updater builds (scripts/lipo-merge-tree.sh)"),
+for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 ", "build the universal updater with clang22 (tests/lib/build-updater.sh)"),
                   (r"^sh scripts/package-pkg\.sh ", "build the pkg (scripts/package-pkg.sh)"),
                   (r"^sh scripts/assert_pkg_installs_in_place\.sh ", "gate the pkg (scripts/assert_pkg_installs_in_place.sh)"),
                   (r"^sudo installer -pkg .* \|\| bad=1$", "install the pkg on the runner, recording failure (sudo installer ... || bad=1)"),
@@ -145,6 +145,23 @@ for name in ("ci.yml", "release.yml"):
                 bad.append("%s job %s still runs ./.github/actions/shipyard-cmake" % (name, job))
             if "cmake-tree" in (step.get("with") or {}):
                 bad.append("%s job %s still passes cmake-tree to install@v1" % (name, job))
+for name in ("ci.yml", "release.yml"):
+    d = yaml.safe_load(open(os.path.join(wf, name)))
+    for job, spec in (d.get("jobs") or {}).items():
+        if not str(spec.get("runs-on", "")).startswith("macos-"):
+            continue
+        steps = spec.get("steps") or []
+        fetching = [i for i, st in enumerate(steps)
+                    if re.search(r"(^|\n)\s*sh (tests/lib/build-updater|scripts/run-repo-tests)\.sh\b", str(st.get("run", "")))]
+        if not fetching:
+            continue
+        cached = [i for i, st in enumerate(steps) if str(st.get("uses", "")).startswith("actions/cache@")
+                  and str((st.get("with") or {}).get("path", "")).strip() == "~/Library/Caches/mavergreen-clang22"
+                  and "hashFiles('components/clang22/version')" in str((st.get("with") or {}).get("key", ""))]
+        if not cached or cached[0] > fetching[0]:
+            bad.append("%s job %s fetches clang22 (the ~2 GB clang22-cross, unpacked) with no actions/cache of "
+                       "~/Library/Caches/mavergreen-clang22 keyed on hashFiles('components/clang22/version') "
+                       "before it, so every run on a scarce macOS runner downloads and expands it again" % (name, job))
 if os.path.exists(os.path.join(wf, "..", "actions", "shipyard-cmake")):
     bad.append(".github/actions/shipyard-cmake still exists")
 

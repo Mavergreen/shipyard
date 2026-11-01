@@ -2,15 +2,13 @@
 # platform: host-agnostic
 #   usage: linux-arm64-link-test.sh
 #          Linux arm64 configure links Mach-O arm64: a one-file C project, configured through
-#          MavericksToolchain.cmake with clang22's Linux archive and the pinned 11.3 SDK, is an
-#          arm64 Mach-O whose minos is 11.0. Fetches both over the network.
+#          MavericksToolchain.cmake with the pinned clang22's Linux archive (components/clang22) and the
+#          pinned 11.3 SDK, is an arm64 Mach-O whose minos is 11.0. Fetches both over the network.
 set -eu
 [ "$(uname -s)" = Linux ] || { echo 'SKIP: Linux arm64 cross-link'; exit 77; }
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CLANG22_VERSION="${CLANG22_VERSION:-22.1.8-mavericks.12}"
-CLANG22_SHA256="${CLANG22_SHA256:-82d3fdab2d5868d1bc9452dcc95962d6615d05945731781683a1b9363c3b5ebd}"
 T="$(mktemp -d "${TMPDIR:-/tmp}/linux-arm64.XXXXXX")"; trap 'rm -rf "$T"' EXIT
-LLVM="$(sh "$ROOT/scripts/fetch_product_tar.sh" clang22 "$CLANG22_VERSION" "$CLANG22_SHA256" "$T/clang22")"
+LLVM="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT/components/clang22")"
 SDK="$(sh "$ROOT/scripts/fetch_sdk.sh" --arch arm64)"
 mkdir -p "$T/project"
 cat > "$T/project/CMakeLists.txt" <<'CMAKE'

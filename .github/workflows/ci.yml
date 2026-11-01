@@ -25,6 +25,11 @@ jobs:
           path: ~/Library/Caches/mavericks-sdk
           key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavergreen-clang22
+          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
+
       - name: Install mavericks-shipyard (self, source-build) -- and bats, so the *.bats suites below can run
         uses: ./.github/actions/install
         with:
@@ -45,7 +50,12 @@ jobs:
         run: sh scripts/assert-tree-clean.sh
 
   linux:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/linux-host.yml
+    secrets:
+      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   # spec: R-P1-17 -- this job REHEARSES release.yml's whole packaging path. release.yml runs only on a
   #       push to main, so the packaging and install-smoke steps below would otherwise first execute
@@ -64,6 +74,11 @@ jobs:
           path: ~/Library/Caches/mavericks-sdk
           key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavergreen-clang22
+          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
+
       - name: Install mavericks-shipyard (self, source-build)
         uses: ./.github/actions/install
         with:
@@ -77,19 +92,7 @@ jobs:
       - name: Build the universal updater
         run: |
           set -eu
-          for a in "x86_64 10.9" "arm64 11.0"; do
-            set -- $a
-            shipyard-cmake -S . -B "$RUNNER_TEMP/upd-$1" -DSHIPYARD_BUILD_UPDATER=ON \
-              -DMAVERICKS_ALLOW_GENERIC_ICON=ON -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
-              -DCMAKE_OSX_ARCHITECTURES="$1" -DCMAKE_OSX_DEPLOYMENT_TARGET="$2" \
-              -DCMAKE_TOOLCHAIN_FILE="$PWD/MavericksToolchain.cmake"
-            shipyard-cmake --build "$RUNNER_TEMP/upd-$1"
-          done
-          sh scripts/lipo-merge-tree.sh \
-            --a "$RUNNER_TEMP/upd-x86_64/shipyard-updater.app" \
-            --b "$RUNNER_TEMP/upd-arm64/shipyard-updater.app" \
-            --out "$RUNNER_TEMP/shipyard-updater.app" \
-            --require-archs "x86_64 arm64"
+          sh tests/lib/build-updater.sh --arch x86_64 --arch arm64 --out "$RUNNER_TEMP/shipyard-updater.app"
           # spec: R-P1-22 -- NOT re-signed; release.yml's copy of this step states it in full.
           exe="$RUNNER_TEMP/shipyard-updater.app/Contents/MacOS/shipyard-updater"
           archs="$(${LIPO:-lipo} -info "$exe" | sed -n 's/.*: //p')"

@@ -30,6 +30,11 @@ jobs:
           path: ~/Library/Caches/mavericks-sdk
           key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
+      - uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/mavergreen-clang22
+          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
+
       # spec: R-P1-19 -- shipyard cannot install a RELEASED shipyard to test the one it is about to
       #       release, so it installs itself in source-build mode, beside the pinned cmake product.
       - name: Install mavericks-shipyard (self, source-build)
@@ -70,22 +75,7 @@ jobs:
       - name: Build the universal updater
         run: |
           set -eu
-          # platform: CMAKE_OSX_ARCHITECTURES and the deployment target are directory-scoped, so this
-          #           needs two configures, not two targets -- and arm64 has no 10.9. /usr/bin/clang
-          #           pins the Apple toolchain regardless of what else the runner image puts on PATH.
-          for a in "x86_64 10.9" "arm64 11.0"; do
-            set -- $a
-            shipyard-cmake -S . -B "$RUNNER_TEMP/upd-$1" -DSHIPYARD_BUILD_UPDATER=ON \
-              -DMAVERICKS_ALLOW_GENERIC_ICON=ON -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
-              -DCMAKE_OSX_ARCHITECTURES="$1" -DCMAKE_OSX_DEPLOYMENT_TARGET="$2" \
-              -DCMAKE_TOOLCHAIN_FILE="$PWD/MavericksToolchain.cmake"
-            shipyard-cmake --build "$RUNNER_TEMP/upd-$1"
-          done
-          sh scripts/lipo-merge-tree.sh \
-            --a "$RUNNER_TEMP/upd-x86_64/shipyard-updater.app" \
-            --b "$RUNNER_TEMP/upd-arm64/shipyard-updater.app" \
-            --out "$RUNNER_TEMP/shipyard-updater.app" \
-            --require-archs "x86_64 arm64"
+          sh tests/lib/build-updater.sh --arch x86_64 --arch arm64 --out "$RUNNER_TEMP/shipyard-updater.app"
           # spec: R-P1-22 -- NOT re-signed. Nothing in shipyard's build signs this app, so the merge
           #       breaks no bundle seal; `lipo -create` copies each slice byte for byte, so the ad-hoc
           #       signature ld puts on the arm64 slice -- which Apple Silicon requires to run it at
@@ -196,7 +186,12 @@ jobs:
   # spec: .github/workflows/linux-host.yml -- a release whose host-agnostic half is broken on Linux
   #       breaks every consumer's ubuntu-latest job the moment @v1 moves, so it does not publish.
   linux:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/linux-host.yml
+    secrets:
+      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   publish:
     needs: [build, linux, scan]

@@ -78,23 +78,10 @@ elif "cmake-tree" in (inst[0].get("with") or {}):
 if any(str(s.get("uses", "")) == "./.github/actions/shipyard-cmake" for s in build_steps):
     bad.append("the build job still runs ./.github/actions/shipyard-cmake; shipyard builds no CMake now")
 
-# One universal updater: configured per arch at its own floor (the loop supplies $1/$2), built, merged.
-need(r'^for a in "x86_64 10\.9" "arm64 11\.0"; do$',
-     "the updater must be built for exactly x86_64/10.9 and arm64/11.0")
-need(r'^shipyard-cmake -S \. -B "?\$RUNNER_TEMP/upd-\$1"? .*-DSHIPYARD_BUILD_UPDATER=ON\b.*'
-     r'-DCMAKE_OSX_ARCHITECTURES="?\$1"? -DCMAKE_OSX_DEPLOYMENT_TARGET="?\$2"?.*-DCMAKE_TOOLCHAIN_FILE="?\$PWD/MavericksToolchain\.cmake"?',
-     "no per-arch shipyard-cmake configure of the updater "
-     "(-DCMAKE_OSX_ARCHITECTURES/-DCMAKE_OSX_DEPLOYMENT_TARGET/-DCMAKE_TOOLCHAIN_FILE=$PWD/MavericksToolchain.cmake)")
-need(r'^shipyard-cmake --build "?\$RUNNER_TEMP/upd-\$1"?$', "the per-arch updater builds are never built")
-need(r"^sh scripts/lipo-merge-tree\.sh .*--require-archs \"x86_64 arm64\"$",
-     "the two updater builds are never merged with lipo-merge-tree.sh --require-archs \"x86_64 arm64\"")
-# ...and merged STRICTLY. updater/Info.plist.in fixes LSMinimumSystemVersion at the family's floor
-# instead of deriving it per build, so the two plists are byte-identical and the flag is not needed;
-# passing it anyway would let a real future divergence through silently, which is the opposite of what
-# that file's comment promises. If they ever do differ, fix the plist, not this line.
-if find(r"^sh scripts/lipo-merge-tree\.sh .*--allow-differ"):
-    bad.append("the updater merge passes --allow-differ; nothing in updater/Info.plist.in is "
-               "arch-dependent, so a difference there is a defect to fix, not one to declare")
+need(r'^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 --out "?\$RUNNER_TEMP/shipyard-updater\.app"?$',
+     "the updater must be built for x86_64 and arm64 by tests/lib/build-updater.sh, with clang22")
+if find(r"CMAKE_OBJC_COMPILER=/usr/bin/clang"):
+    bad.append("release.yml still builds an updater with /usr/bin/clang; it builds with clang22 on every host")
 # ...and the result is asserted, not assumed. The merge is NOT followed by a re-sign: lipo copies each
 # slice byte for byte, so the ad-hoc signature ld gives the arm64 slice -- all Apple Silicon needs to
 # run it -- survives, and nothing in shipyard's build seals this bundle for a re-seal to restore.
@@ -378,4 +365,13 @@ for f in "$here/../.github/actions/install/action.yml" "$here/../.github/workflo
     echo "FAIL: ${f##*/} still names cmake-tree or the shipyard-cmake action"; exit 1
   fi
 done
+bu="$here/lib/build-updater.sh"
+merge="$(grep -v '^[[:space:]]*#' "$bu" | awk '/\\$/ { sub(/\\$/, ""); printf "%s", $0; next } { print }' | grep 'lipo-merge-tree\.sh' || :)"
+case "$merge" in
+  *'--require-archs "x86_64 arm64"'*) ;;
+  *) echo "FAIL: tests/lib/build-updater.sh never merges the two updaters with lipo-merge-tree.sh --require-archs \"x86_64 arm64\""; exit 1 ;;
+esac
+case "$merge" in
+  *--allow-differ*) echo "FAIL: tests/lib/build-updater.sh merges with --allow-differ; nothing in updater/Info.plist.in is arch-dependent, so a difference there is a defect to fix, not one to declare"; exit 1 ;;
+esac
 echo "PASS: shipyard-release-workflow"

@@ -13,6 +13,15 @@
     },
     {
       "customType": "regex",
+      "description": "The clang22 that builds shipyard's Sparkle updater on every host (components/clang22/version). scripts/fetch_clang22.sh verifies its Linux archive against components/clang22/linux-sha256 and its pkgs against the release's SHA256SUMS.",
+      "managerFilePatterns": ["/^components/clang22/version$/"],
+      "matchStrings": ["^(?<currentValue>\\S+)\\s*$"],
+      "depNameTemplate": "Mavergreen/clang-22",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
       "description": "The ed25519-sign that signs every family release (scripts/ed25519.pin). sign_and_appcast.sh verifies the pkg against the release's SHA256SUMS.",
       "managerFilePatterns": ["/^scripts/ed25519\\.pin$/"],
       "matchStrings": ["ED25519_VERSION=(?<currentValue>\\S+)"],
@@ -41,6 +50,11 @@
     }
   ],
   "packageRules": [
+    {
+      "description": "Renovate moves components/clang22/version but cannot write the Linux archive's digest beside it, so the Linux job fails on the bump until components/clang22/linux-sha256 names the new release's archive.",
+      "matchDepNames": ["Mavergreen/clang-22"],
+      "prBodyNotes": ["Before this can merge, replace components/clang22/linux-sha256 with the `clang22-<version>-linux-x86_64.tar.gz` line of the new release's SHA256SUMS: `gh release download <version> -R Mavergreen/clang-22 -p SHA256SUMS -O - | grep linux-x86_64.tar.gz > components/clang22/linux-sha256`."]
+    },
     {
       "description": "The renovate pin moves at most monthly: each bump costs macOS runner time in shipyard's CI and then its release, and the validator gains nothing from tracking Renovate's every release.",
       "matchDepNames": ["renovate"],

@@ -179,7 +179,7 @@ updaters, signing, or compat checks:**
 |---|---|---|
 | `mavericks_build_mode` · `MavericksMode` · `mavericks_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
 | `mavericks_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
-| `RequireAppleClang` | enforces Apple `/usr/bin/clang` (cgo/ObjC) | assuming the toolchain |
+| `RequireAppleClang` | enforces Apple `/usr/bin/clang` (cgo/ObjC), except for the Sparkle updater, which builds with clang22 | assuming the toolchain |
 | `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set) | a bespoke compat check |
 | `mavericks_add_updater_app` · `MavericksSparkle` · `stage_updater.sh` | builds/stages the Sparkle updater (self-fetches the framework) | wiring Sparkle by hand |
 | `build_component_pkg.sh` · `set_install_floor.sh` | builds a component `.pkg`; stamps the 10.9.5 install floor on a product `.pkg` (see "Seam hosts", below) | `pkgbuild`, `productbuild`, editing the pkg Distribution |
@@ -1539,6 +1539,34 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   updater its pkgs install, and `release-assets.sh` refuses the retired name. A product with no updater
   has no feed, and its manifest's `appcast` is empty. Conformance's `updater` and `feed` checks hold
   what ships to all of it.
+- **The updater builds with clang22 on every host, Linux and Mac alike, through the same function.**
+  Pin clang22 in `components/clang22/version` (a Renovate `github-releases` manager on
+  `Mavergreen/clang-22`), with its Linux archive's line of that release's `SHA256SUMS` in
+  `components/clang22/linux-sha256`. `CL="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" components/clang22)"`
+  prints the toolchain root for this host, fetched, verified and cached:
+  - Linux: the pinned `linux-x86_64` archive.
+  - A Mac: the `clang22-cross` pkg, through stevedore.
+  - Mac OS X 10.9: the native `clang22` pkg, since the cross pkg does not run there and 10.9 has no
+    AArch64 backend, so x86_64 only.
+  - Either Mac: an installed `clang22-cross` (`clang22` on 10.9) at the pinned release.
+  An updater-only configure sets `MAVERICKS_REQUIRE_APPLECLANG OFF` before `include(Mavericks)`. The
+  AppleClang gate is per configure, not per target, and it stays for every other caller. Configure once
+  per arch through `MavericksToolchain.cmake` with:
+  ```sh
+  -DCMAKE_OBJC_COMPILER="$CL/bin/clang" -DCMAKE_OBJC_COMPILER_TARGET=<arch>-apple-macos<floor>
+  -DCMAKE_OBJC_FLAGS=--no-default-config -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
+  ```
+  x86_64 is at 10.9 and arm64 at 11.0. CMake's own compiler checks need these flags on Linux. Merge the
+  two apps with `lipo-merge-tree.sh` under `LIPO="$CL/bin/llvm-lipo"`, and give the compat guard
+  clang22's `OTOOL`, `LIPO`, `NM` and `STRINGS` off macOS. shipyard's own updater is built this way by
+  `tests/lib/build-updater.sh`, in `release.yml`, in `ci.yml` and on Linux.
+
+  `mavericks_add_updater_app` gives the updater `--no-default-config` (clang22's `clang.cfg` would add
+  Recaulk and libc++ to it) and `-fuse-ld=lld`. Given one arch and a deployment target, it also gives it
+  `--target=<arch>-apple-macos<floor>`. So the updater's compile and link lines are the same on every
+  host. The function refuses any other LLVM clang, and a compiler target that disagrees with the
+  configure's arch and floor. An updater still configured with AppleClang builds as before, with a
+  warning naming this rule, until its product moves to clang22.
 - `mavericks_add_updater_app()` self-fetches the Sparkle framework at configure time; signing/appcast use
   the shared `sign_and_appcast.sh`. **The signer is per-host, and signing may run on Linux.** With no
   `--signer` it takes `ed25519-sign` and `ed25519-verify` from the ed25519 release `ed25519.pin` names,

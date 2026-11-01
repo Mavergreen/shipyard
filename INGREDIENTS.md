@@ -3,7 +3,7 @@
 Everything baked into what shipyard ships, and how a change to it reaches a release. shipyard no longer
 compiles CMake: `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` are launchers into the
 Mavergreen cmake product, which shipyard pins and its pkg requires. The only thing shipyard compiles is
-its Sparkle updater app, alongside the CMake modules and shell scripts it has always shipped.
+its Sparkle updater app, with clang22, alongside the CMake modules and shell scripts it has always shipped.
 
 This repo is consumed through a **moving** tag. Fifteen repos pin `@v1`, so anything merged here reaches
 all of them within minutes — which is why the version is derived from the commit count (see
@@ -16,6 +16,7 @@ all of them within minutes — which is why the version is derived from the comm
 | GitHub Actions (`actions/checkout@v7`, `actions/download-artifact@v8`, `actions/setup-python@v7`, `actions/upload-artifact@v7`, `softprops/action-gh-release@v3`) | `.github/workflows/*.yml` | ✅ native `github-actions` manager | automerges on green (`ship-if-green`), and the merge itself cuts the next shipyard version |
 | `bats` (shell test driver) | installed by `.github/actions/install` from the platform package manager | ✅ tracked by the package manager, not pinned here | a new bats reaches CI on its next run; the suites are version-agnostic |
 | cmake 4.4.4-mavericks.1 (the Mavergreen cmake product; role `shipped`, which the launchers run) | `components/cmake/version` | ✅ Renovate customManager (github-releases Mavergreen/cmake, `-mavericks.N` compared) | the pkg's preinstall `requires` cmake at or above the pin; `install@v1` installs that release (SHA256SUMS-verified) before shipyard; a bump runs shipyard's full CI against it and the merge releases shipyard |
+| clang22 22.1.8-mavericks.12 (the family's LLVM 22, which compiles and links shipyard's Sparkle updater on every host) | `components/clang22/version`, and its Linux archive's SHA-256 in `components/clang22/linux-sha256` | ✅ Renovate customManager (github-releases Mavergreen/clang-22, `-mavericks.N` compared); the digest beside it is written by hand from the release's SHA256SUMS (the bump PR says how) | `scripts/fetch_clang22.sh` fetches that release (the Linux archive against the pinned digest, a pkg against its release's SHA256SUMS, or the installed one at that version); a bump rebuilds the updater in shipyard's full CI and the merge releases shipyard |
 | stevedore 20261027.1 (the Mavergreen packager that writes and reads family pkgs) | `scripts/stevedore.pin` | ✅ Renovate customManager (github-releases Mavergreen/stevedore) | `scripts/fetch_stevedore.sh` fetches that release (SHA256SUMS-verified, `--version` checked); a bump runs shipyard's full CI against it and the merge releases shipyard |
 | shipyard's own version | `UPSTREAM_VERSION` (the **line**) + `git rev-list --count` | n/a — first-party | every push to `main` cuts `<line>.<count>`; `@v1` moves to it |
 
@@ -65,4 +66,4 @@ one line):
 - unpinned:scripts/cut-release.sh: it reads a repo's newest release tag before and after the run it dispatched, to report what that run published; it fetches nothing and builds nothing. Reconsider if it ever downloads an asset.
 - unpinned:scripts/audit-release-sdks.sh: the SDK-pinning acceptance audit exists to judge what each repo has shipped most recently, so it downloads each repo's newest release (verified against its SHA256SUMS). It builds and signs nothing. Reconsider if it is ever wired into a release path.
 - unpinned:scripts/gen-conventions-grandfathered.sh: it grandfathers the arm64 slices each repo ships today, so it reads each repo's newest release and downloads its pkgs to inspect them. It builds, signs and publishes nothing. Reconsider if it is ever wired into a release path.
-- on-target: no 10.9 acceptance job yet -- release.yml installs the pkg only on its Apple Silicon runner ("Install smoke"), though the pkg declares a 10.9.5 floor. Exit: a vm-test job in release.yml that installs the run's own mavericks-shipyard pkg in the 10.9 guest, runs its host-agnostic tests there, and that publish needs.
+- on-target:pkg-install: the 10.9 job (linux-host.yml's on-target-updater, which release.yml's publish needs through its linux job) launches the Linux-built updater check-only in the guest; it does not install the run's mavericks-shipyard pkg, which is built on macOS, nor run the host-agnostic tests there. Exit: install the run's own pkg in that guest, run its tests there, and keep the launch.
