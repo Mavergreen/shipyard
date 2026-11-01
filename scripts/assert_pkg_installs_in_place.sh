@@ -30,7 +30,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
-. "$SELF/lib/pkg-read.sh"
+. "$SELF/lib/pkg-tree.sh"
 if [ "$#" -eq 0 ] && [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
   for _p in "$SHIPYARD_CHECK_DIST"/*.pkg; do
     [ -f "$_p" ] || continue
@@ -55,20 +55,16 @@ count_bundles() {  # $1=PackageInfo  $2=element
     END { print c + 0 }'
 }
 
-checked=""
 for pkg in "$@"; do
   [ -f "$pkg" ] || { chk_fail pkg-in-place "$rule" "$pkg does not exist" "pass the built .pkg's path"; continue; }
-  if [ -z "$checked" ]; then
-    STEVEDORE="$(sh "$SELF/fetch_stevedore.sh" 2>/dev/null)" || {
-      _fs_why="$(sh "$SELF/fetch_stevedore.sh" 2>&1 >/dev/null | tail -1)"
-      chk_fail pkg-in-place "$rule" "stevedore, which reads the pkgs, cannot be fetched ($_fs_why), so no bundle can be checked" \
-        "run sh \"\$SHIPYARD_SCRIPTS/fetch_stevedore.sh\" and fix what it says, or unset a STEVEDORE that names no stevedore"
-      break
-    }
-    checked=1
-  fi
   x="$(mktemp -d "${TMPDIR:-/tmp}/pkg-inplace.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-  if ! "$STEVEDORE" expand "$pkg" "$x/e" >/dev/null 2>&1; then
+  rc=0; af_pkg_tree "$pkg" "$x" || rc=$?
+  if [ "$rc" -eq 3 ]; then
+    chk_fail pkg-in-place "$rule" "$AF_WHY, so no bundle can be checked" \
+      "run sh \"\$SHIPYARD_SCRIPTS/fetch_stevedore.sh\" and fix what it says, or unset a STEVEDORE that names no stevedore"
+    af_rm "$x"; break
+  fi
+  if [ "$rc" -ne 0 ]; then
     chk_fail pkg-in-place "$rule" "$pkg cannot be expanded by stevedore, so its bundles cannot be checked" \
       "make sure the pkg is a readable xar, as stevedore writes one"
     af_rm "$x"; continue
@@ -76,7 +72,7 @@ for pkg in "$@"; do
   found=0
   # platform: a product archive nests one or more component.pkg dirs; a bare component pkg has
   #           PackageInfo at the top. find covers both.
-  for pi in $(find "$x" -name PackageInfo | sed 's/ /%20/g'); do
+  for pi in $(find "$AF_TREE" -name "*.root" -prune -o -name PackageInfo -print | sed 's/ /%20/g'); do
     pi="$(printf '%s' "$pi" | sed 's/%20/ /g')"
     found=1
     r="$(count_bundles "$pi" relocate)"

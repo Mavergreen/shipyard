@@ -6,7 +6,7 @@
 #          guard closed; a class file is skipped. Exits 77 without LLVM's Mach-O readers.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
-. "$here/scripts/lib/pkg-read.sh"
+. "$here/scripts/lib/pkg-tree.sh"
 . "$here/scripts/lib/macho-tools.sh"
 t="$(mktemp -d "${TMPDIR:-/tmp}/fat-macho-test.XXXXXX")"; trap 'rm -rf "$t"' EXIT
 unset SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG SHIPYARD_CHECK_NOTRUNLOG SHIPYARD_CHECK_SELECTED SHIPYARD_CHECK_DIST
@@ -31,18 +31,16 @@ rc=0; sh "$here/scripts/macho-slices.sh" "$t/fat" >/dev/null 2>&1 || rc=$?
 rc=0; sh "$here/scripts/macho-slices.sh" "$t/Fake.class" >/dev/null 2>&1 || rc=$?
 [ "$rc" = 1 ] || fail "M13: a class file is not Mach-O (1), got $rc"
 
-if af_bsdtar >/dev/null 2>&1; then
-  for k in fat Fake.class; do
-    rm -rf "$t/root" "$t/dist"; mkdir -p "$t/root/lib" "$t/dist"; cp "$t/$k" "$t/root/lib/$k"
-    (cd "$t/root" && tar czf "$t/dist/demo-1.0.0-mavericks.1.tar.gz" lib)
-    rc=0; (cd "$t" && SHIPYARD_CHECK_DIST="$t/dist" sh "$here/scripts/assert_binary_compatible.sh") > "$t/out" 2>&1 || rc=$?
-    if [ "$k" = fat ]; then
-      [ "$rc" = 1 ] && grep -q 'CANNOT MEASURE' "$t/out" || fail "M13: the guard fails closed on a fat Mach-O lipo cannot read, got $rc: $(cat "$t/out")"
-    else
-      [ "$rc" = 0 ] || fail "M13: the guard skips a class file, got $rc: $(cat "$t/out")"
-    fi
-  done
-fi
+for k in fat Fake.class; do
+  rm -rf "$t/root" "$t/dist"; mkdir -p "$t/root/lib" "$t/dist"; cp "$t/$k" "$t/root/lib/$k"
+  (cd "$t/root" && tar czf "$t/dist/demo-1.0.0-mavericks.1.tar.gz" lib)
+  rc=0; (cd "$t" && SHIPYARD_CHECK_DIST="$t/dist" sh "$here/scripts/assert_binary_compatible.sh") > "$t/out" 2>&1 || rc=$?
+  if [ "$k" = fat ]; then
+    [ "$rc" = 1 ] && grep -q 'CANNOT MEASURE' "$t/out" || fail "M13: the guard fails closed on a fat Mach-O lipo cannot read, got $rc: $(cat "$t/out")"
+  else
+    [ "$rc" = 0 ] || fail "M13: the guard skips a class file, got $rc: $(cat "$t/out")"
+  fi
+done
 
 [ "$bad" -eq 0 ] || exit 1
 echo "PASS fat-macho"

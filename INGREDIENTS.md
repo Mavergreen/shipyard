@@ -67,7 +67,7 @@ one line):
 - brew:scripts/install-macho-readers.sh: the fallback for llvm-lipo and llvm-strings, which Xcode does not ship. Revisit when every job that runs the compat guard has clang22 installed (vision area 14).
 - brew:.github/workflows/ci.yml: the step that records what the Mach-O readers resolved to asks brew whether llvm is present. Revisit with brew:scripts/install-macho-readers.sh, whose fallback it reports on.
 - brew:.github/actions/install/action.yml: bats-core, where no family bats exists. Revisit when a family product or the runner image supplies bats.
-- apt:.github/workflows/linux-host.yml: the Linux CI job installs llvm and libarchive-tools. Revisit when area 14's pinned LLVM tarball supplies the readers and bsdtar comes from a family Linux tarball or the job's image.
+- apt:.github/workflows/linux-host.yml: the Linux CI job installs llvm. Revisit when area 14's pinned LLVM tarball supplies the readers.
 - apt:.github/actions/install/action.yml: bats-core on a Linux runner, where no family bats exists. Revisit when a family product or the runner image supplies bats.
 - host:linux: bash32-parse needs a bash 3.2 /bin/sh and Linux has none. Revisit when the Apple-shells collection (bash 3.2 and the other shells Apple ships) has a Linux tarball.
 - vendored:scripts/vendor/yaml/**: PyYAML is vendored because python-315's phase 1 has no ssl, so pip cannot fetch it on 10.9, and the checks keep their Python. Revisit when python-315 ships ssl and pip works (its phase 2); then delete the vendored copy and the checks import a pip-installed PyYAML (/opt/mavergreen/bin/python3 -m pip install --user pyyaml).

@@ -4,8 +4,12 @@
 #          mach_tool OTOOL|LIPO|NM|STRINGS   leaves the variable set and exported, to the reader the
 #                                            caller named or else LLVM's, and returns 0. When none is found
 #                                            it says which variable to set and returns 1.
-#          SHIPYARD_MACHO_DIRS, when set, replaces the two family directories searched after
-#          clang-22's own (a test seam: the tests set it empty to mean "nowhere").
+#          SHIPYARD_MACHO_DIRS, when set, replaces the family directories searched after
+#          clang-22's own (a test seam: the tests set it empty to mean "nowhere"). The default is
+#          /opt/mavergreen/clang22/bin and clang22/bin and clang22-cross/bin under SHIPYARD_MG_PREFIX
+#          (default /usr/local/mavergreen); a SHIPYARD_MG_PREFIX that is set is searched either way.
+#          NM alone also tries, before all of those, the llvm-nm beside the llvm-otool or llvm-lipo the
+#          caller chose as OTOOL or LIPO, and after all of them a bare nm.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the Mach-O
 #       readers are LLVM's on every host, so one binary reads the same on 10.9, modern macOS and
 #       Linux. They are looked for next to clang-22 on PATH, then in the family prefix, then from xcrun on macOS, then as a
@@ -23,8 +27,18 @@ mach_tool() {
   eval "_mt_cur=\${$1:-}"
   [ -z "$_mt_cur" ] || return 0
   _mt_found=""
+  if [ "$_mt" = nm ]; then
+    for _mt_r in "${OTOOL:-}" "${LIPO:-}"; do
+      case "$_mt_r" in
+        */llvm-otool|*/llvm-lipo)
+          if [ -x "${_mt_r%/*}/llvm-nm" ]; then _mt_found="${_mt_r%/*}/llvm-nm"; break; fi ;;
+      esac
+    done
+  fi
   _mt_clang="$(command -v clang-22 2>/dev/null || true)"
-  for _mt_dir in "${_mt_clang%/*}" ${SHIPYARD_MACHO_DIRS-/opt/mavergreen/clang22/bin /usr/local/mavergreen/clang22/bin}; do
+  _mt_pfx="${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}"
+  for _mt_dir in "${_mt_clang%/*}" ${SHIPYARD_MACHO_DIRS-/opt/mavergreen/clang22/bin $_mt_pfx/clang22/bin $_mt_pfx/clang22-cross/bin} ${SHIPYARD_MG_PREFIX:+$_mt_pfx/clang22/bin $_mt_pfx/clang22-cross/bin}; do
+    [ -z "$_mt_found" ] || break
     [ -n "$_mt_dir" ] || continue
     if [ -x "$_mt_dir/llvm-$_mt" ]; then _mt_found="$_mt_dir/llvm-$_mt"; break; fi
   done
@@ -44,6 +58,7 @@ mach_tool() {
     done
   fi
   [ -n "$_mt_found" ] || _mt_found="$(command -v "llvm-$_mt" 2>/dev/null || true)"
+  if [ -z "$_mt_found" ] && [ "$_mt" = nm ]; then _mt_found="$(command -v nm 2>/dev/null || true)"; fi
   if [ -z "$_mt_found" ]; then
     echo "macho-tools: no llvm-$_mt found next to clang-22, in /opt/mavergreen/clang22/bin, in /usr/local/mavergreen/clang22/bin, from xcrun or on PATH -- set $1 to its path" >&2
     return 1

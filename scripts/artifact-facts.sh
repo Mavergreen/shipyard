@@ -13,11 +13,12 @@
 #       reads a repo in seconds and gates every PR.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
-. "$SELF/lib/macho-tools.sh"; mach_tool NM 2>/dev/null || :
-. "$SELF/lib/mach-nm.sh"; NM="$(shipyard_mach_nm)"; export NM
+. "$SELF/lib/macho-tools.sh"
+mach_tool LIPO 2>/dev/null || :; mach_tool OTOOL 2>/dev/null || :
+mach_tool NM 2>/dev/null || NM=nm; export NM
 . "$SELF/deviation-reason.sh"
 . "$SELF/registry-lookup.sh"
-. "$SELF/lib/pkg-read.sh"
+. "$SELF/lib/pkg-tree.sh"
 dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"
 root="${3:-$(pwd)}"
@@ -118,18 +119,12 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
 }
 payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read, or the registry cannot answer (why in _pf_why).
   _pf_why=""
-  for _pl in $(find "$2" -name Payload -type f | sed 's/ /%20/g'); do
+  for _pl in $(find "$2" -name "*.root" -prune -o -name Payload -type f -print | sed 's/ /%20/g'); do
     _pl="$(printf '%s' "$_pl" | sed 's/%20/ /g')"
-    _dir="${_pl%/Payload}"
+    [ -s "$_pl" ] || return 1
     # platform: a payload's paths are relative to its component's install-location, not to "/".
-    _loc="$(sed -n '/<pkg-info/ s/.*[[:space:]]install-location="\([^"]*\)".*/\1/p' "$_dir/PackageInfo" 2>/dev/null | head -1)"
-    _loc="${_loc:-/}"; _loc="${_loc#/}"; _loc="${_loc%/}"; [ -z "$_loc" ] || _loc="$_loc/"
-    _root="$_dir.root"; mkdir -p "$_root"
-    # platform: pkgbuild writes a gzip'd cpio archive; captured to a file, not piped, so a failed
-    #           decompress is a failure here rather than an empty (and therefore "clean") payload.
-    gzip -dc "$_pl" > "$_dir.cpio" 2>/dev/null || return 1
-    ( cd "$_root" && cpio -id < "$_dir.cpio" 2>/dev/null ) || return 1
-    rm -f "$_dir.cpio"
+    af_unpack_payload "$_pl" || return 1
+    _loc="$AF_LOC"; _root="$AF_ROOT"
     macho_facts "$1" "$_root" "$(printf '%s' "$_loc" | enc)" || { _pf_why="$_mf_why"; return 1; }
     ( cd "$_root" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | enc \
       | awk -v pkg="$1" -v loc="$(printf '%s' "$_loc" | enc)" '{ print "installs " pkg " " loc $0 }'
@@ -224,19 +219,20 @@ for f in "$dist"/*; do
     *.pkg)
       # platform: stevedore expand is how to read what the .pkg actually declares; a filename is a
       #           claim, not a fact.
-      [ -n "${stevedore_checked:-}" ] || { STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" && stevedore_checked=1; } || abort "cannot fetch stevedore to read $b"
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-      if "$STEVEDORE" expand "$f" "$x/x" >/dev/null 2>&1; then
-        if [ -f "$x/x/Distribution" ]; then
+      _tr=0; af_pkg_tree "$f" "$x" || _tr=$?
+      [ "$_tr" -ne 3 ] || { af_rm "$x"; abort "cannot fetch stevedore to read $b"; }
+      if [ "$_tr" -eq 0 ]; then
+        if [ -f "$AF_TREE/Distribution" ]; then
           # platform: a product archive: version, floor and identity all live in Distribution. The
           #           version and identity are the product's, not those of the dev.mavergreen.base
           #           component set_install_floor.sh lists ahead of it; its choice ids are the pkg
           #           identifiers, in install order.
-          nb="$(sed -n '/<pkg-ref[^>]*version=/p' "$x/x/Distribution" | grep -v 'id="dev\.mavergreen\.base"' || true)"
+          nb="$(sed -n '/<pkg-ref[^>]*version=/p' "$AF_TREE/Distribution" | grep -v 'id="dev\.mavergreen\.base"' || true)"
           ver="$(printf '%s\n' "$nb" | sed -n 's/.*<pkg-ref[^>]*version="\([^"]*\)".*/\1/p' | head -1)"
-          floor="$(sed -n 's/.*<os-version[^>]*min="\([^"]*\)".*/\1/p' "$x/x/Distribution" | head -1)"
+          floor="$(sed -n 's/.*<os-version[^>]*min="\([^"]*\)".*/\1/p' "$AF_TREE/Distribution" | head -1)"
           ident="$(printf '%s\n' "$nb" | sed -n 's/.*<pkg-ref[^>]*id="\([^"]*\)".*/\1/p' | head -1)"
-          comps="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$x/x/Distribution" | grep -v '^default$' || true)"
+          comps="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$AF_TREE/Distribution" | grep -v '^default$' || true)"
         else
           # platform: a component package: PackageInfo carries version and identity, and there is NO
           #           floor to read -- that is structural, not a defect (the checker requires an
@@ -245,8 +241,8 @@ for f in "$dist"/*; do
           #           <?xml version="1.0"?> would match first without the element restriction, and
           #           generator-version="InstallCmds-864.1 (25E246)" (embedded space) would shift
           #           every later field without the space anchor.
-          ver="$(sed -n '/<pkg-info/ s/.*[[:space:]]version="\([^"]*\)".*/\1/p' "$x/x/PackageInfo" 2>/dev/null | head -1)"
-          ident="$(sed -n '/<pkg-info/ s/.*[[:space:]]identifier="\([^"]*\)".*/\1/p' "$x/x/PackageInfo" 2>/dev/null | head -1)"
+          ver="$(sed -n '/<pkg-info/ s/.*[[:space:]]version="\([^"]*\)".*/\1/p' "$AF_TREE/PackageInfo" 2>/dev/null | head -1)"
+          ident="$(sed -n '/<pkg-info/ s/.*[[:space:]]identifier="\([^"]*\)".*/\1/p' "$AF_TREE/PackageInfo" 2>/dev/null | head -1)"
           floor=""
           comps="$ident"
         fi
@@ -260,7 +256,7 @@ for f in "$dist"/*; do
         printf '%s\n' "$comps" | while IFS= read -r c; do
           [ -z "$c" ] || printf 'component %s %s\n' "$b" "$(printf '%s' "$c" | tr -s '[:space:]' '_')"
         done
-        payload_facts "$b" "$x/x" || { af_rm "$x"; abort "${_pf_why:-cannot read the payload of $b}"; }
+        payload_facts "$b" "$AF_TREE" || { af_rm "$x"; abort "${_pf_why:-cannot read the payload of $b}"; }
       else
         printf 'pkg %s unreadable none none\n' "$b"
       fi

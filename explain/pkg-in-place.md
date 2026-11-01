@@ -9,7 +9,7 @@ already has the previous version. The check reads PackageInfo from each componen
 appear under the relocate element or under bundle-version. Both were verified against real pkgbuild output on
 2026-07-31: the pkg-info root's relocatable="false" attribute is a red herring (pkgbuild emits it even for a
 relocatable component); the membership of the relocate element is the operative signal. It reads PackageInfo
-with bsdtar on every host, so it needs neither pkgutil nor a Mac.
+with stevedore on every host, so it needs neither pkgutil nor a Mac.
 
 ## Incident
 None recorded. The script's header says only that the gate keeps a regression from "being discovered live on

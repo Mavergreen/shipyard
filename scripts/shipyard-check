@@ -76,7 +76,7 @@ done
 
 tab="$(printf '\t')"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-check.XXXXXX")"
-trap 'rm -rf "$tmp"' EXIT
+trap 'chmod -R u+rwX "$tmp" 2>/dev/null; rm -rf "$tmp"' EXIT
 id=; mode=; script=
 while IFS="$tab" read -r id mode script _old _fate; do
   [ "$mode" != key ] || continue
@@ -101,6 +101,7 @@ SHIPYARD_CHECK_RUNLOG="$tmp/ran"; SHIPYARD_CHECK_FAILLOG="$tmp/failed"; SHIPYARD
 SHIPYARD_CHECK_SELECTED="$(printf '%s\n' "$selected" | cut -d' ' -f1 | tr '\n' ' ')"
 export SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG SHIPYARD_CHECK_NOTRUNLOG SHIPYARD_CHECK_SELECTED
 [ -z "$dist" ] || SHIPYARD_CHECK_DIST="$dist"; export SHIPYARD_CHECK_DIST
+[ -z "$dist" ] || SHIPYARD_CHECK_PKGS="$tmp/pkgs"; export SHIPYARD_CHECK_PKGS
 
 reported() { cat "$SHIPYARD_CHECK_RUNLOG" "$SHIPYARD_CHECK_NOTRUNLOG" "$SHIPYARD_CHECK_FAILLOG" | grep -qxF -- "$1"; }
 scripts="$(printf '%s\n' "$selected" | cut -d' ' -f2 | awk '!seen[$0]++')"

@@ -9,9 +9,9 @@
 #          Exit 0; 1 if FILE is not Mach-O; 2 on a usage error; 4 if a reader is missing or failed.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/lib/macho-tools.sh"; mach_tool NM 2>/dev/null || :
+. "$SELF/lib/macho-tools.sh"
 mach_tool LIPO 2>/dev/null || :; mach_tool OTOOL 2>/dev/null || :
-. "$SELF/lib/mach-nm.sh"; NM="$(shipyard_mach_nm)"; export NM
+mach_tool NM 2>/dev/null || NM=nm; export NM
 [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "usage: macho-cxxabi.sh FILE" >&2; exit 2; }
 f="$1"
 _tmp="${TMPDIR:-/tmp}"

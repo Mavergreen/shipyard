@@ -17,7 +17,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
-. "$SELF/lib/pkg-read.sh"
+. "$SELF/lib/pkg-tree.sh"
 chk_ran gui-relaunch-safe
 
 rule="a postinstall that relaunches a GUI app also stops the old instance"
@@ -47,22 +47,23 @@ if [ "$#" -eq 0 ] && [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
   for pkg in "$SHIPYARD_CHECK_DIST"/*.pkg; do
     [ -f "$pkg" ] || continue
     n=$((n + 1)); x="$tmp/$n"; mkdir -p "$x"
-    rc=0; af_extract "$pkg" "$x" || rc=$?
+    rc=0; af_pkg_tree "$pkg" "$x" || rc=$?
     if [ "$rc" -ne 0 ]; then
-      chk_fail gui-relaunch-safe "$rule" "${pkg##*/} cannot be read, so its postinstall cannot be checked$([ "$rc" -ne 2 ] || echo ' (no bsdtar found)')" \
-        "install libarchive-tools or set BSDTAR to bsdtar's path, and make sure the pkg is a readable xar"
+      chk_fail gui-relaunch-safe "$rule" "${pkg##*/} cannot be read, so its postinstall cannot be checked$([ "$rc" -ne 3 ] || echo " ($AF_WHY)")" \
+        "make sure the pkg is a readable xar, as stevedore writes one, and that stevedore can be fetched"
       continue
     fi
-    for sc in $(find "$x" -name Scripts -type f | sed 's/ /%20/g'); do
+    for sc in $(find "$AF_TREE" -name "*.root" -prune -o -name Scripts -print | sed 's/ /%20/g'); do
       sc="$(printf '%s' "$sc" | sed 's/%20/ /g')"
-      mkdir -p "$sc.d"
-      if ! af_extract "$sc" "$sc.d"; then
+      sd="$sc"
+      [ -d "$sc" ] || { sd="$x/scripts.d/${sc#"$AF_TREE"/}"; mkdir -p "$sd"; }
+      if [ ! -d "$sc" ] && ! af_unpack_scripts "$sc" "$sd"; then
         chk_fail gui-relaunch-safe "$rule" "a Scripts archive of ${pkg##*/} cannot be read, so its postinstall cannot be checked" \
           "rebuild the pkg with build_component_pkg.sh --scripts"
         continue
       fi
-      comp="${sc#"$x"/}"; comp="${comp%Scripts}"; comp="${comp%/}"
-      for pi in "$sc.d"/postinstall; do
+      comp="${sc#"$AF_TREE"/}"; comp="${comp%Scripts}"; comp="${comp%/}"
+      for pi in "$sd"/postinstall; do
         [ -f "$pi" ] || continue
         seen=$((seen + 1))
         lint "$pi" "${pkg##*/}${comp:+:$comp}/postinstall"

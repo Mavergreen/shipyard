@@ -60,8 +60,8 @@ for name, job in jobs.items():
     if perms != {"contents": "read"}:
         bad.append("linux-host.yml job %s must declare permissions: {contents: read}, got %r" % (name, perms))
     c = cmds(job)
-    if not any(l.startswith("sudo apt-get install") and " llvm" in l and "libarchive-tools" in l for l in c):
-        bad.append("linux-host.yml job %s never installs llvm and libarchive-tools, so the artifact suites would skip" % name)
+    if not any(l.startswith("sudo apt-get install") and " llvm" in l and "libarchive-tools" not in l for l in c):
+        bad.append("linux-host.yml job %s never installs llvm, so the artifact suites would skip" % name)
     if not any("/usr/lib/llvm-" in l and "GITHUB_PATH" in l for l in c):
         bad.append("linux-host.yml job %s never puts /usr/lib/llvm-*/bin on PATH, where Ubuntu keeps llvm-otool and llvm-lipo" % name)
     if "sh scripts/run-repo-tests.sh --strict-host" not in c:

@@ -5,7 +5,7 @@
 #          "-" where a slice records no version load command (a kext), "?" for a missing field. A static
 #          archive yields one line per distinct pair across its members. Exit 0 with lines; 1 if FILE is
 #          not Mach-O; 2 on a usage error; 4 if a reader (LIPO or OTOOL) is missing or failed on a file
-#          the other reader already read, or LIPO failed on a fat Mach-O header (lib/pkg-read.sh's
+#          the other reader already read, or LIPO failed on a fat Mach-O header (lib/pkg-tree.sh's
 #          af_fat_macho), which a caller must not mistake for 1. The readers are LLVM's
 #          (lib/macho-tools.sh), so this reads the same on 10.9, modern macOS and Linux.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the ONE parser
@@ -13,7 +13,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib/macho-tools.sh"
-. "$SELF/lib/pkg-read.sh"
+. "$SELF/lib/pkg-tree.sh"
 [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "usage: macho-slices.sh FILE" >&2; exit 2; }
 f="$1"
 _tmp="${TMPDIR:-/tmp}"

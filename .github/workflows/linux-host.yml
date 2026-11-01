@@ -27,14 +27,14 @@ jobs:
       - name: Install mavericks-shipyard (the Linux path)
         uses: ./.github/actions/install
 
-      # spec: scripts/lib/macho-tools.sh, scripts/lib/pkg-read.sh -- the artifact checks read pkgs with
-      #       bsdtar and Mach-O with LLVM's readers on every host, so the suites that run them run here
+      # spec: scripts/lib/macho-tools.sh, scripts/lib/pkg-tree.sh -- the artifact checks read pkgs with
+      #       stevedore and Mach-O with LLVM's readers on every host, so the suites that run them run here
       #       for real: under --strict-host a skip is a failure. Ubuntu keeps LLVM's unsuffixed tools in
       #       /usr/lib/llvm-N/bin, which is not on PATH.
-      - name: Install the artifact tools (bsdtar, LLVM's readers)
+      - name: Install the artifact tools (LLVM's readers)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libarchive-tools llvm
+          sudo apt-get install -y llvm
           ls -d /usr/lib/llvm-*/bin | sort -V | tail -n 1 >> "$GITHUB_PATH"
 
       - name: Record the pre-build tree

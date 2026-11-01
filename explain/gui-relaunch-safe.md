@@ -15,8 +15,8 @@ the queue record no date or product for it.
 
 ## Limits
 It is a presence lint: it sees that a stop call exists, not that it runs before the relaunch or targets the
-right process. A relaunch spelled some other way is not recognised. It needs bsdtar to read the pkg's
-Scripts archive.
+right process. A relaunch spelled some other way is not recognised. It needs stevedore to read the pkg and
+gzip and cpio to read its Scripts archive.
 
 ## Deviating
 No deviation is read for this id. Call shipyard_stop_gui_instance before the relaunch, or pkill or unload the old

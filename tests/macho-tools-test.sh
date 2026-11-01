@@ -33,11 +33,36 @@ got="$(resolve "$w/bare" "" NM)"
 [ "$got" = "$w/bare/llvm-nm" ] || { echo "FAIL an unsuffixed llvm-nm on PATH is found last: got $got"; exit 1; }
 
 mk "$w/apple" otool lipo nm strings
-for v in OTOOL LIPO NM STRINGS; do
+for v in OTOOL LIPO STRINGS; do
   rc=0; err="$(resolve "$w/apple" "" $v 2>&1)" || rc=$?
   [ "$rc" -ne 0 ] || { echo "FAIL Apple's tools are never a fallback for $v: got $err"; exit 1; }
   case "$err" in *"set $v to its path"*) ;; *) echo "FAIL the failure should name the variable $v: $err"; exit 1 ;; esac
 done
+
+# spec: scripts/lib/macho-tools.sh -- NM resolves as the retired separate nm reader did: an explicit NM, else the
+#       llvm-nm beside the llvm-otool or llvm-lipo the caller chose, else an installed clang22's or
+#       clang22-cross's (SHIPYARD_MG_PREFIX, default /usr/local/mavergreen), else a bare nm.
+nm_resolve() {  # $1 = env assignments, run with OTOOL LIPO NM unset and nothing on PATH but stubs
+  env -u OTOOL -u LIPO -u NM -u STRINGS PATH="$w/apple" SHIPYARD_MACHO_DIRS="" "$@" /bin/sh -c ". '$LIB'; mach_tool NM && printf '%s\n' \"\$NM\""
+}
+mk "$w/llvm/bin" llvm-nm llvm-otool llvm-lipo
+mk "$w/empty" keep
+got="$(env -u OTOOL -u LIPO PATH="$w/apple" NM=/my/nm OTOOL="$w/llvm/bin/llvm-otool" /bin/sh -c ". '$LIB'; mach_tool NM && printf '%s\n' \"\$NM\"")"
+[ "$got" = /my/nm ] || { echo "FAIL an explicit NM wins: got $got"; exit 1; }
+got="$(nm_resolve OTOOL="$w/llvm/bin/llvm-otool" SHIPYARD_MG_PREFIX="$w/empty")"
+[ "$got" = "$w/llvm/bin/llvm-nm" ] || { echo "FAIL NM unset: the llvm-nm beside OTOOL's llvm-otool: got $got"; exit 1; }
+got="$(nm_resolve LIPO="$w/llvm/bin/llvm-lipo" SHIPYARD_MG_PREFIX="$w/empty")"
+[ "$got" = "$w/llvm/bin/llvm-nm" ] || { echo "FAIL NM unset: the llvm-nm beside LIPO's llvm-lipo: got $got"; exit 1; }
+mk "$w/mg/clang22/bin" llvm-nm
+got="$(env -u OTOOL -u LIPO -u NM PATH="$w/apple" SHIPYARD_MACHO_DIRS= SHIPYARD_MG_PREFIX="$w/mg" /bin/sh -c ". '$LIB'; mach_tool NM && printf '%s\n' \"\$NM\"")"
+[ "$got" = "$w/mg/clang22/bin/llvm-nm" ] || { echo "FAIL NM unset, no llvm readers chosen: an installed clang22's llvm-nm: got $got"; exit 1; }
+mk "$w/mgx/clang22-cross/bin" llvm-nm
+got="$(env -u OTOOL -u LIPO -u NM PATH="$w/apple" SHIPYARD_MACHO_DIRS= SHIPYARD_MG_PREFIX="$w/mgx" /bin/sh -c ". '$LIB'; mach_tool NM && printf '%s\n' \"\$NM\"")"
+[ "$got" = "$w/mgx/clang22-cross/bin/llvm-nm" ] || { echo "FAIL NM unset: an installed clang22-cross's llvm-nm: got $got"; exit 1; }
+got="$(nm_resolve SHIPYARD_MG_PREFIX="$w/empty")"
+[ "$got" = "$w/apple/nm" ] || { echo "FAIL last resort for NM: a bare nm on PATH: got $got"; exit 1; }
+rc=0; env -u NM -u OTOOL -u LIPO PATH="$w/empty" SHIPYARD_MACHO_DIRS= SHIPYARD_MG_PREFIX="$w/empty" /bin/sh -c ". '$LIB'; mach_tool NM" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 1 ] || { echo "FAIL no nm at all is a failure (1), got $rc"; exit 1; }
 
 got="$(env OTOOL=/my/otool PATH="$w/clangbin" /bin/sh -c ". '$LIB'; mach_tool OTOOL && printf '%s\n' \"\$OTOOL\"")"
 [ "$got" = /my/otool ] || { echo "FAIL a reader the caller named is kept: got $got"; exit 1; }

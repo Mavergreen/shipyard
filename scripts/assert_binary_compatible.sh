@@ -51,7 +51,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/sdk-pins.sh"
 . "$SELF/deviation-reason.sh"
 . "$SELF/lib/macho-tools.sh"
-. "$SELF/lib/pkg-read.sh"
+. "$SELF/lib/pkg-tree.sh"
 
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/compat-guard.XXXXXX")"; trap 'af_rm "$work"' EXIT
@@ -223,8 +223,9 @@ elif [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
     n=$((n + 1)); x="$work/x$n"; mkdir -p "$x"
     case "${f##*/}" in
       *.pkg)
-        af_extract "$f" "$x" || cannot_measure compat-archs "${f##*/} cannot be read (bsdtar failed or was not found -- install libarchive-tools, or set BSDTAR to its path)"
-        for pl in $(find "$x" -name Payload -type f | sed 's/ /%20/g'); do
+        rc=0; af_pkg_tree "$f" "$x" || rc=$?
+        [ "$rc" -eq 0 ] || cannot_measure compat-archs "${f##*/} cannot be read$([ "$rc" -ne 3 ] || echo " ($AF_WHY)")"
+        for pl in $(find "$AF_TREE" -name "*.root" -prune -o -name Payload -type f -print | sed 's/ /%20/g'); do
           pl="$(printf '%s' "$pl" | sed 's/%20/ /g')"
           af_unpack_payload "$pl" || cannot_measure compat-archs "a payload of ${f##*/} cannot be read"
           ( cd "$AF_ROOT" && find . -type f ) | sed 's|^\./||' | while IFS= read -r rel; do

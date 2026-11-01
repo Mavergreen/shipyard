@@ -10,8 +10,9 @@
 #          missing, the archive cannot be fetched or read, or it defines no machinery.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/lib/macho-tools.sh"; mach_tool NM 2>/dev/null || :
-. "$SELF/lib/mach-nm.sh"; NM="$(shipyard_mach_nm)"; export NM
+. "$SELF/lib/macho-tools.sh"
+mach_tool LIPO 2>/dev/null || :; mach_tool OTOOL 2>/dev/null || :
+mach_tool NM 2>/dev/null || NM=nm; export NM
 die() { echo "cxxabi-allowlist: $*" >&2; exit 1; }
 [ $# -le 1 ] || { echo "usage: cxxabi-allowlist.sh [ARCHIVE]" >&2; exit 2; }
 command -v "$NM" >/dev/null 2>&1 || die "$NM (not found); set NM to a Mach-O nm such as clang22's llvm-nm"
