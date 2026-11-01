@@ -10,6 +10,7 @@
 #          missing, the archive cannot be fetched or read, or it defines no machinery.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/lib/macho-tools.sh"; mach_tool NM 2>/dev/null || :
 . "$SELF/lib/mach-nm.sh"; NM="$(shipyard_mach_nm)"; export NM
 die() { echo "cxxabi-allowlist: $*" >&2; exit 1; }
 [ $# -le 1 ] || { echo "usage: cxxabi-allowlist.sh [ARCHIVE]" >&2; exit 2; }

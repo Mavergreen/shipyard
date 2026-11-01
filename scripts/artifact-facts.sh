@@ -13,6 +13,7 @@
 #       reads a repo in seconds and gates every PR.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
+. "$SELF/lib/macho-tools.sh"; mach_tool NM 2>/dev/null || :
 . "$SELF/lib/mach-nm.sh"; NM="$(shipyard_mach_nm)"; export NM
 . "$SELF/deviation-reason.sh"
 . "$SELF/registry-lookup.sh"
