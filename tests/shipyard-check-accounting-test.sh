@@ -9,6 +9,7 @@ set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
 sc="$here/scripts/shipyard-check"
 fx="$here/tests/fixtures/checks"
+. "$here/tests/lib/fixture_tree.sh"
 t="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-check-accounting-test.XXXXXX")"; trap 'rm -rf "$t"' EXIT
 unset SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG SHIPYARD_CHECK_NOTRUNLOG SHIPYARD_CHECK_SELECTED \
   SHIPYARD_CHECK_DIST SHIPYARD_CHECK_REPO SHIPYARD_CHECK_VERSION SHIPYARD_CHECK_FILES GITHUB_REPOSITORY
@@ -40,7 +41,7 @@ for id in comments host-tools ingredient-pins; do
   grep -q "^$id: not run: " "$t/out" || fail "M3: $id, with nothing to check, says it did not run"
 done
 
-c="$t/clean"; mkdir "$c"; cp -R "$fx/release-concurrency/pass-no-release/." "$c/"
+c="$t/clean"; fixture_tree "$fx" "$fx/release-concurrency/pass-no-release" "$c"
 rc=0; (cd "$c" && SHIPYARD_CHECK_FILES="$c/FILES" sh "$sc" --only release-concurrency bare-curl brew vendored) > "$t/out" 2>&1 || rc=$?
 [ "$rc" = 0 ] || fail "C1: a clean repo with no release.yml passes, got $rc: $(cat "$t/out")"
 [ "$(tail -n 1 "$t/out")" = "shipyard-check: 3 checks, 0 failed, 1 not run" ] || fail "C1: the release rule is counted as not run: $(tail -n 1 "$t/out")"
@@ -61,7 +62,7 @@ if sh -c '. "$1"; mach_tool OTOOL && mach_tool LIPO' sh "$here/scripts/lib/macho
     || fail "M3: a dist with no appcast reports the appcast checks not run, got $rc: $(tail -n 1 "$t/out")"
 fi
 
-v="$t/vi"; mkdir "$v"; cp -R "$fx/version-ignored/fail/." "$v/"
+v="$t/vi"; fixture_tree "$fx" "$fx/version-ignored/fail" "$v"
 rc=0; (cd "$v" && SHIPYARD_CHECK_FILES="$v/FILES" sh "$sc" --only release-concurrency) > "$t/out" 2>&1 || rc=$?
 [ "$rc" = 0 ] || fail "I2: --only release-concurrency passes a repo whose only fault is version-ignored, got $rc"
 grep -q '^version-ignored' "$t/out" && fail "I2: --only release-concurrency prints no version-ignored failure"

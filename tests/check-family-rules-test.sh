@@ -8,6 +8,7 @@ set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
 S="$here/scripts/check-family-conventions.sh"
 fx="$here/tests/fixtures/checks"
+. "$here/tests/lib/fixture_tree.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/check-family-rules-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL $1"; exit 1; }
 unset GITHUB_REPOSITORY
@@ -28,7 +29,7 @@ only_fails() {  # $1 = what ran, $2 = the one id that may fail
 
 fresh() {  # $1 = name; a copy of the baseline pass tree to edit in place
   rm -rf "$w/$1"; mkdir "$w/$1"
-  (cd "$fx/pr-trigger/pass" && tar cf - .) | (cd "$w/$1" && tar xf -)
+  fixture_tree "$fx" "$fx/pr-trigger/pass" "$w/$1"
 }
 wf=".github/workflows/release.yml"
 seton() {  # $1 = name, $2 = the new on: block, \n-separated

@@ -10,6 +10,7 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 lib="$here/scripts/check-lib.sh"
 sc="$here/scripts/shipyard-check"
 fx="$here/tests/fixtures/checks"
+. "$here/tests/lib/fixture_tree.sh"
 t="$(mktemp -d "${TMPDIR:-/tmp}/check-lib-git-test.XXXXXX")"; trap 'rm -rf "$t"' EXIT
 unset SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG SHIPYARD_CHECK_NOTRUNLOG SHIPYARD_CHECK_SELECTED \
   SHIPYARD_CHECK_DIST SHIPYARD_CHECK_FILES GITHUB_REPOSITORY
@@ -38,7 +39,7 @@ rc=0; (SHIPYARD_CHECK_SELECTED="bare-curl" SHIPYARD_PYTHON3="$t/no-such-python" 
 mkdir "$t/nogit"; printf '#!/bin/sh\necho "git: hidden" >&2\nexit 127\n' > "$t/nogit/git"; chmod +x "$t/nogit/git"
 for id in version-sh-tracked build-dirs-ignored user-presets-ignored; do
   for kind in pass fail; do
-    c="$t/$id-$kind"; mkdir "$c"; cp -R "$fx/$id/$kind/." "$c/"
+    c="$t/$id-$kind"; fixture_tree "$fx" "$fx/$id/$kind" "$c"
     rc=0; (cd "$c" && PATH="$t/nogit:$PATH" SHIPYARD_CHECK_FILES="$c/FILES" sh "$sc" --only "$id") > "$t/out" 2>&1 || rc=$?
     [ "$rc" = 0 ] || fail "I3: $id/$kind without git is not a false failure, got $rc: $(cat "$t/out")"
     grep -q "^$id: not run: git cannot say" "$t/out" || fail "I3: $id/$kind without git says it did not run: $(cat "$t/out")"

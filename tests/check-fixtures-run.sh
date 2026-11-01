@@ -10,8 +10,9 @@
 #          install helps, so it is counted apart). --no-git hides git (the fixtures that need it skip), which is how
 #          a host without git runs them: it proves the rest need none. Zero fixtures is a failure. --jobs N runs N fixtures at once
 #          (default: the CPU count, at most 8).
-#          A fixture is a copy of its directory, and these files configure the run (they are not in
-#          the copy):
+#          A fixture is a copy of tests/fixtures/checks/_base/ with the fixture's directory laid over it,
+#          minus the paths its DELETE file lists; these files configure the run (they are not in the copy):
+#            DELETE paths of _base/ this fixture lacks, one per line (empty parent directories go too)
 #            ENV    VAR=value lines exported for the run ($FIXTURE is the copy; a bare NAME is NAME=$FIXTURE)
 #            FILES  the tracked-file list: SHIPYARD_CHECK_FILES, or git's index when NEEDS says git
 #            NEEDS  what the fixture cannot run without, one per line: a tool (git also makes the copy a git
@@ -28,7 +29,7 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
-fx="$here/fixtures/checks"
+fx="${SHIPYARD_FIXTURES_DIR:-$here/fixtures/checks}"
 reg="$root/scripts/check-ids.tsv"
 . "$root/scripts/lib/macho-tools.sh"
 
@@ -106,8 +107,16 @@ make_repo() {  # $1 = fixture dir, $2 = the copy: a git repo holding FILES (or e
 run_fixture() {  # $1 = id, $2 = mode, $3 = fixture dir, $4 = scratch dir; sets $rc, output in $4/out
   _id="$1"; _mode="$2"; d="$3"; s="$4"
   rm -rf "$s/copy"; mkdir "$s/copy"
+  (cd "$fx/_base" && tar cf - .) | (cd "$s/copy" && tar xf -)
   (cd "$d" && tar cf - .) | (cd "$s/copy" && tar xf -)
-  for m in ENV FILES NEEDS ALSO ARGS TAGS RUN AFTER; do rm -rf "${s:?}/copy/$m"; done
+  for m in ENV FILES NEEDS ALSO ARGS TAGS RUN AFTER DELETE; do rm -rf "${s:?}/copy/$m"; done
+  if [ -f "$d/DELETE" ]; then
+    while IFS= read -r p; do
+      [ -n "$p" ] || continue
+      rm -rf "${s:?}/copy/$p"
+      (cd "$s/copy" && rmdir -p "$(dirname "$p")" 2>/dev/null) || true
+    done < "$d/DELETE"
+  fi
   c="$s/copy"
   usegit=0
   [ ! -f "$d/TAGS" ] && [ ! -f "$d/RUN" ] || usegit=1
@@ -201,6 +210,7 @@ check_one() {  # $1 = scratch dir, $2 = "<id> <name>"; prints FAIL or SKIP lines
 : > "$w/list"
 for idd in "$fx"/*/; do
   id="$(basename "$idd")"
+  [ "$id" != _base ] || continue
   if [ -n "$want" ]; then case " $want " in *" $id "*) ;; *) continue ;; esac; fi
   n=0
   for d in "$idd"*/; do
