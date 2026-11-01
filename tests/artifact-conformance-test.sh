@@ -174,6 +174,31 @@ deviation cxxabi:usr/local/mavergreen/go126/* vendored; exit: when upstream link
 $X
 cxxabi-loads $C x86_64 @rpath/libc++abi.dylib"
 
+_gfs="$(mktemp -d "${TMPDIR:-/tmp}/conformance-gf.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+cp -R "$here/../scripts" "$_gfs/scripts"
+gfrun() {  # $1 = the grandfathered file's one line, $2 = the repository; the facts are on stdin
+  printf '%s\n' "$1" > "$_gfs/scripts/conventions-grandfathered"
+  { printf '%s\nrepository Mavergreen/%s\n%s\n' "$GOOD" "$2" "$X"; cat; printf 'end-of-facts\n'; } | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1
+}
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw hidden\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
+  || { echo "FAIL: a grandfathered repo's violation warns and passes: $_gfo"; exit 1; }
+printf '%s\n' "$_gfo" | grep -q "^::warning::conformance: cxxabi: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines .*(grandfathered: cxxabi golang-126 usr/local/mavergreen/go126/bin/go)$" \
+  || { echo "FAIL: a grandfathered cxxabi violation is a ::warning:: naming its line: $_gfo"; exit 1; }
+_gfo="$(printf 'cxxabi-loads %s x86_64 /opt/vendor/lib/libc++abi.1.dylib\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
+  || { echo "FAIL: a grandfathered repo's second libc++abi load warns and passes: $_gfo"; exit 1; }
+printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: cxxabi: .*which loads /opt/vendor/lib/libc++abi.1.dylib' \
+  || { echo "FAIL: a grandfathered load is a ::warning::: $_gfo"; exit 1; }
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'cxxabi golang-127 usr/local/mavergreen/go126/bin/go' golang-126)" \
+  && { echo "FAIL: another repo's cxxabi line excuses nothing here: $_gfo"; exit 1; }
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/gofmt' golang-126)" \
+  && { echo "FAIL: another path's cxxabi line excuses nothing here: $_gfo"; exit 1; }
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'modern-smoke golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
+  && { echo "FAIL: another check's grandfathered line excuses nothing here: $_gfo"; exit 1; }
+_gfo="$(printf '%s\n%s\nrepository Mavergreen/golang-126\nmacho p.pkg usr/local/mavergreen/go126/bin/a%%20b x86_64 EXECUTE 10.9 10.9 aa\ncxxabi-defines p.pkg usr/local/mavergreen/go126/bin/a%%20b x86_64 ___cxa_throw visible\nend-of-facts\n' "$GOOD" "$X" \
+  | { printf 'cxxabi golang-126 usr/local/mavergreen/go126/bin/a%%20b\n' > "$_gfs/scripts/conventions-grandfathered"; sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1; })" \
+  || { echo "FAIL: a grandfathered path keeps its %20 encoding, one field per line: $_gfo"; exit 1; }
+rm -rf "$_gfs"
+
 no "pkg version disagrees with the tag" "version" 'expected 1.26.5-mavericks.5
 pkg p.pkg 1.26.5-mavericks.4 10.9.5 dev.mavergreen.golang.go126
 asset p.pkg 10'

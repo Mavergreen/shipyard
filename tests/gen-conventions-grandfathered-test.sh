@@ -40,17 +40,37 @@ cat > "$work/bin/otool" <<'SH'
 [ "$1" = -hv ] || exit 0
 printf '%s:\nMach header\n      magic cputype cpusubtype  caps    filetype ncmds sizeofcmds      flags\nMH_MAGIC_64   ARM64        ALL  0x00     EXECUTE     0          0 0x00000000\n' "$2"
 SH
-chmod +x "$work/bin/lipo" "$work/bin/otool"
-LIPO="$work/bin/lipo"; OTOOL="$work/bin/otool"; export LIPO OTOOL
+cat > "$work/bin/nm" <<'SH'
+#!/bin/sh
+case "$2" in
+  */throws) printf '0000000100000f50 (__TEXT,__text) external ___cxa_throw\n' ;;
+  */librecaulk.a) printf '0000000000000000 (__TEXT,__text) external ___cxa_uncaught_exceptions\n' ;;
+esac
+SH
+chmod +x "$work/bin/lipo" "$work/bin/otool" "$work/bin/nm"
+LIPO="$work/bin/lipo"; OTOOL="$work/bin/otool"; NM="$work/bin/nm"; export LIPO OTOOL NM
 STEVEDORE="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed -- the generator reads each repo's released pkgs with it"; exit 1; }
 export STEVEDORE
 chmod +x "$work/bin/gh"
+# spec: scripts/cxxabi-allowlist.sh -- the allow-list is read from the pinned Recaulk's librecaulk.a, served
+#       here from a file:// release tree so the generator's cxxabi facts need no network.
+rv="$(sed -n 's/^RECAULK_VERSION=//p' "$here/../scripts/recaulk.pin")"
+rr="$work/rel/Mavergreen/recaulk/releases/download/$rv"; mkdir -p "$rr" "$work/rc/usr/local/mavergreen/recaulk/lib"
+printf '!<arch>\n' > "$work/rc/usr/local/mavergreen/recaulk/lib/librecaulk.a"
+"$STEVEDORE" component --root "$work/rc" --identifier dev.mavergreen.recaulk --version "$rv" --install-location / \
+  --mtime 1700000000 --out "$work/rc.pkg" >/dev/null || { echo "FAIL: stevedore could not build the Recaulk fixture component"; exit 1; }
+printf '<?xml version="1.0" encoding="utf-8"?>\n<installer-gui-script minSpecVersion="1">\n  <pkg-ref id="dev.mavergreen.recaulk" version="%s">rc.pkg</pkg-ref>\n  <choices-outline><line choice="r"/></choices-outline>\n  <choice id="r"><pkg-ref id="dev.mavergreen.recaulk"/></choice>\n</installer-gui-script>\n' "$rv" > "$work/rc.xml"
+"$STEVEDORE" product --distribution "$work/rc.xml" --package "$work/rc.pkg" --mtime 1700000000 --out "$rr/recaulk-$rv.pkg" >/dev/null \
+  || { echo "FAIL: stevedore could not build the Recaulk fixture pkg"; exit 1; }
+(cd "$rr" && shasum -a 256 "recaulk-$rv.pkg" > SHA256SUMS)
+MAVERGREEN_RELEASES="file://$work/rel"; MAVERGREEN_PKG_CACHE="$work/cache"; export MAVERGREEN_RELEASES MAVERGREEN_PKG_CACHE
 PATH="$work/bin:$PATH"; export PATH
 FAKE_REPOS="$work/repos"; FAKE_SRC="$work/src"; export FAKE_REPOS FAKE_SRC
 
 mksrc() {  # $1 = name, $2 = yes: has a release workflow that calls the gate and runs on macos, $3 = decl: declares an arm64 slice
   d="$work/src/$1"; mkdir -p "$d"
   [ "${3:-}" != decl ] || printf '# Build ingredients\n\n## Conformance deviations\n\n- arm64:usr/local/mavergreen/%s/bin/*: developers on Apple Silicon run it\n' "$1" > "$d/INGREDIENTS.md"
+  [ "${3:-}" != cxxdecl ] || printf '# Build ingredients\n\n## Conformance deviations\n\n- cxxabi:usr/local/mavergreen/%s/bin/*: upstream vendors its runtime; exit: when it links libcxx22\n' "$1" > "$d/INGREDIENTS.md"
   if [ "$2" = yes ]; then
     mkdir -p "$d/.github/workflows"
     printf '# calls family-conventions.yml\nname: release\non: push\njobs:\n  build:\n    runs-on: macos-14\n    steps:\n      - run: true\n' > "$d/.github/workflows/release.yml"
@@ -63,10 +83,10 @@ mksrc() {  # $1 = name, $2 = yes: has a release workflow that calls the gate and
 #       static finding, and the latest release's pkgs read by artifact-facts.sh and the conformance
 #       checker, since a repo that ships an undeclared arm64 slice and has no modern-smoke job passes
 #       the static half.
-mkrel() {  # $1 = name, $2 = tool|updater|none: where the pkg's arm64 Mach-O is
+mkrel() {  # $1 = name, $2 = tool|throws|updater|none: where the pkg's arm64 Mach-O is (throws: one that defines ___cxa_throw)
   r="$work/src/$1.release"; st="$work/stage-$1"; mkdir -p "$r" "$st"; printf 'v1\n' > "$r/.tag"
   case "$2" in
-    tool) mkdir -p "$st/usr/local/mavergreen/$1/bin"; m="$st/usr/local/mavergreen/$1/bin/tool" ;;
+    tool|throws) mkdir -p "$st/usr/local/mavergreen/$1/bin"; m="$st/usr/local/mavergreen/$1/bin/$2" ;;
     updater)
       a="$st/Library/Application Support/Mavergreen/$1-updater.app/Contents"; mkdir -p "$a/MacOS"
       printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.%s.updater</string><key>SUFeedURL</key><string>https://github.com/Mavergreen/%s/releases/latest/download/%s.xml</string></dict></plist>\n' "$1" "$1" "$1" > "$a/Info.plist"
@@ -81,17 +101,26 @@ mksrc alpha yes; mksrc bravo no; mksrc charlie yes
 mksrc delta yes; mkrel delta tool
 mksrc echo yes decl; mkrel echo none
 mksrc foxtrot yes; mkrel foxtrot updater
-printf 'alpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\n' > "$work/repos"
+# spec: scripts/gen-conventions-grandfathered.sh -- cxxabi is found in the latest release's pkgs, one
+#       line per undeclared path; a cxxabi:<glob> declaration keeps a path off the list.
+mksrc golf yes; mkrel golf throws
+mksrc hotel yes cxxdecl; mkrel hotel throws
+printf '.github\nalpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\ngolf\nhotel\n' > "$work/repos"
 
 out="$(sh "$G" "$work/clones" 2>"$work/err")" || { echo "FAIL: generator failed: $(cat "$work/err")"; exit 1; }
-want='macos-runner alpha release.yml:build
+want='cxxabi golf usr/local/mavergreen/golf/bin/throws
+macos-runner alpha release.yml:build
 macos-runner charlie release.yml:build
 macos-runner delta release.yml:build
 macos-runner echo release.yml:build
 macos-runner foxtrot release.yml:build
+macos-runner golf release.yml:build
+macos-runner hotel release.yml:build
 modern-smoke delta release.yml:modern-smoke
-modern-smoke echo release.yml:modern-smoke'
-[ "$out" = "$want" ] || { echo "FAIL: a repo with no workflows must not swallow the repos after it; delta ships an undeclared arm64 tool, echo declares one with no job, foxtrot's arm64 is its updater's: got [$out]"; exit 1; }
+modern-smoke echo release.yml:modern-smoke
+modern-smoke golf release.yml:modern-smoke
+modern-smoke hotel release.yml:modern-smoke'
+[ "$out" = "$want" ] || { echo "FAIL: a repo with no workflows must not swallow the repos after it; delta ships an undeclared arm64 tool, echo declares one with no job, foxtrot's arm64 is its updater's; the generator lists golf, whose latest release defines ___cxa_throw, and not hotel, which declares it: got [$out]"; exit 1; }
 [ -f "$work/clones/.gen-conventions-grandfathered" ] || { echo "FAIL: the generator must mark the directory it owns"; exit 1; }
 
 out="$(sh "$G" "$work/clones" 2>"$work/err")" || { echo "FAIL: a rerun in an owned directory must refresh: $(cat "$work/err")"; exit 1; }

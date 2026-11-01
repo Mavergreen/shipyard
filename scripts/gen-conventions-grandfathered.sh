@@ -8,10 +8,12 @@
 #          reference family-conventions.yml (the repos this gate runs in, registered or not), runs a
 #          copy of this gate WITHOUT the grandfathered file in each, and prints what the checks that
 #          consult it (packager, macos-runner, artifact-conformance, modern-smoke) find, as sorted
-#          "<check> <repo> <job|path>" lines. shipyard itself is read from this working tree.
-#          modern-smoke is also found in what each repo last shipped: the latest release's pkgs,
+#          "<check> <repo> <job|path>" lines. shipyard itself is read from this working tree,
+#          and the org's .github profile repo is skipped.
+#          modern-smoke and cxxabi are also found in what each repo last shipped: the latest release's pkgs,
 #          downloaded into <clones-dir>/.releases/<repo>/<tag> (kept until the tag moves), read by
-#          artifact-facts.sh and that copy of check-artifact-conformance.sh. A release that cannot
+#          artifact-facts.sh and that copy of check-artifact-conformance.sh; cxxabi is one line per
+#          installed path (%20-encoded) with a cxxabi fact and no cxxabi:<glob> declaration. A release that cannot
 #          be read fails the run; a repo with no release, or none carrying a pkg, ships nothing.
 #          Needs gh, a python3 with PyYAML first on PATH, and lipo, otool and nm (or LIPO, OTOOL and NM).
 set -eu
@@ -26,8 +28,10 @@ fi
 mkdir -p "$clones"; : > "$clones/$sentinel"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/gen-grandfathered.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT
 cp -R "$SELF" "$tmp/scripts"; rm -f "$tmp/scripts/conventions-grandfathered"
+. "$tmp/scripts/deviation-reason.sh"
 { echo shipyard; gh repo list Mavergreen --no-archived --limit 500 --json name -q '.[].name' </dev/null; } | sort -u > "$tmp/repos"
 while read -r repo; do
+  [ "$repo" != .github ] || continue
   case "$repo" in ''|.*|*[!A-Za-z0-9._-]*) echo "gen-conventions-grandfathered: refusing the repo name '$repo'" >&2; exit 2 ;; esac
   if [ "$repo" = shipyard ]; then dir="$ROOT"; else
     dir="$clones/$repo"
@@ -74,6 +78,11 @@ while read -r repo; do
   if grep -q '^abort ' "$tmp/facts" || ! grep -qx 'end-of-facts' "$tmp/facts"; then
     echo "gen-conventions-grandfathered: cannot read what Mavergreen/$repo $tag shipped: $(cat "$tmp/err")" >&2; exit 1
   fi
+  grep '^deviation ' "$tmp/facts" > "$tmp/devs" || :
+  awk '$1 == "cxxabi-defines" || $1 == "cxxabi-loads" { print $3 }' "$tmp/facts" | LC_ALL=C sort -u | while read -r p; do
+    [ -n "$(shipyard_deviation_reason "$tmp/devs" cxxabi "$(printf '%s' "$p" | sed -e 's/%20/ /g' -e 's/%25/%/g')")" ] \
+      || echo "cxxabi $repo $p"
+  done
   if sh "$tmp/scripts/check-artifact-conformance.sh" < "$tmp/facts" 2>&1 >/dev/null | grep -q '^conformance: arm64: .* with an arm64 slice'; then
     echo "modern-smoke $repo release.yml:modern-smoke"
   fi

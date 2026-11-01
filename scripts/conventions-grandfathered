@@ -1,3 +1,5 @@
+cxxabi clang-22 usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib
+cxxabi recaulk usr/local/mavergreen/recaulk/lib/librecaulk-cxxabi-exports.a
 macos-runner 1password release.yml:build
 macos-runner avxemu release.yml:build
 macos-runner ca-certs aquatransport-roots.yml:watch

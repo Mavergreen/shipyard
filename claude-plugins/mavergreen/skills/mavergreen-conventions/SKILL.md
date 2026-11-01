@@ -1751,7 +1751,9 @@ things: strip those members from the archive, rebuild it against the family runt
 `- cxxabi:<path>: <reason>; exit: <how it goes away>`. The link will not tell you: codex-cli shipped
 two runtimes in 0.161.0-mavericks.1, and the only signal was an accidental duplicate symbol against
 Recaulk, which clang-22 22.1.8-mavericks.12 removed by linking Recaulk last. Artifact conformance's
-runtime rule, once it lands, is what will catch it.
+`cxxabi` check ("One C++ runtime per process", under "Artifact conformance") catches such a binary
+in a pkg it reads, unless the binary is stripped. It does not read a binary fetched from another
+release at build time, which is how codex-cli's two-runtime `codex-code-mode-host` arrives.
 - Sparkle 1.27.3 is exempt **by content**: `sdk-pins.sh` lists the sha256 of its three Mach-O files, so
   only the exact pinned bytes pass.
 
@@ -1921,7 +1923,7 @@ disagree is incoherent however it was built.
 |---|---|
 | Itself | `.pkg` / appcast / tag versions match; the enclosure names a published asset at its real length, and points into THIS release |
 | Neighbours | every `.pkg` of one release agrees on the version; **variants agree about their ingredients** |
-| Siblings | version scheme `<upstream>-mavericks.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a product archive declares the 10.9.5 floor; every shipped Mach-O slice records its arch's pinned SDK (see "SDK pinning") |
+| Siblings | version scheme `<upstream>-mavericks.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a product archive declares the 10.9.5 floor; every shipped Mach-O slice records its arch's pinned SDK (see "SDK pinning"); no shipped Mach-O carries or loads a second C++ runtime (below) |
 
 **This constrains outputs, not methods.** Products here build in genuinely different ways — a Go
 toolchain, a boot2docker iso, libswiftCore, an openssh — and making those look alike would buy
@@ -1976,6 +1978,32 @@ Beyond the gate and the artifact checker, `ingredient-notes.sh` reads `unlinked:
 may end in `:KEY` (uppercase, as the pin's assignment spells it), because a release-notes link
 belongs to a pin, the file plus its KEY; `deviations.sh` refuses a `:KEY` on any other kind, where it
 could never match and would excuse nothing in silence, and refuses an `unlinked` with no scope or `*`.
+
+**One C++ runtime per process (`cxxabi`).** Two copies of libc++abi in one process each keep their own
+exception and type-info state, so a throw that crosses from one to the other is not caught, or
+terminates. `artifact-facts.sh` reads every shipped Mach-O, archives member by member, with
+`macho-cxxabi.sh`, and emits two facts: `cxxabi-defines <artifact> <path> <arch> <symbol>
+<visible|hidden>` for each C++ runtime symbol (`scripts/cxxabi-machinery.txt`) a slice defines beyond the
+allow-list, and `cxxabi-loads <artifact> <path> <arch> <load path>` for each libc++abi it loads other
+than `/usr/lib/libc++abi.dylib` or libcxx22's `libc++abi.1.dylib`. Conformance fails either, once per
+path. Hidden definitions count: codex-cli's `bin/codex-code-mode-host` carried a whole libc++abi as
+private externals, and it is still a second runtime.
+
+- **The allow-list is what the pinned Recaulk defines.** `cxxabi-allowlist.sh` reads `lib/librecaulk.a`
+  of the release `scripts/recaulk.pin` names (Renovate bumps it), so a back-fill Recaulk adds is allowed
+  the day the pin moves. It is fetched only when a slice defines machinery. The two pointer-catch
+  vtables (`__ZTVN10__cxxabiv119__pointer_type_infoE`, `__ZTVN10__cxxabiv129__pointer_to_member_type_infoE`)
+  are allowed only hidden, as `librecaulk.a` links them; a visible one is a runtime's, which only libcxx22's
+  `libc++abi.1.dylib` may define, by declaration.
+- **A deliberate copy is declared**, scoped to the installed path:
+  `- cxxabi:<glob>: <reason>; exit: <how it goes away>`. The failure message prints the line to add.
+- **Grandfathered paths warn.** A `cxxabi <repo> <path>` line in `scripts/conventions-grandfathered`
+  (the path as the facts spell it, spaces as `%20`) turns that path's failure into a `::warning::` for
+  that repo, known from `$GITHUB_REPOSITORY` (see "Grandfathered findings", below). Linking libcxx22, or
+  declaring the copy, retires the line.
+- **Revisit** if Recaulk starts exporting the pointer-catch vtables visibly from the programs it links
+  (each such program then fails until declared), or if a product needs a second runtime that no
+  path-scoped declaration can describe.
 
 **A truncated fact stream fails.** The two scripts run as a pipeline
 (`artifact-facts.sh dist "$v" | check-artifact-conformance.sh`); a pipeline's exit status is its LAST
@@ -2535,20 +2563,23 @@ pointing back into the row below — so this table, not the script, is where a c
 | **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or a glob of only `*`, `?` and `/` is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
 
 **Grandfathered findings.** `scripts/conventions-grandfathered` holds one `<check> <repo> <job|path>` line per
-finding that predates checks 21 (widened), 35, 36 and 37, under the check names `artifact-conformance`,
-`packager`, `macos-runner` and `modern-smoke`; a line, like a declared deviation, excuses its finding. A
+finding that predates checks 21 (widened), 35, 36 and 37 and conformance's `cxxabi`, under the check names `artifact-conformance`,
+`packager`, `macos-runner`, `modern-smoke` and `cxxabi`; a line, like a declared deviation, excuses its finding. A
+`cxxabi` line is keyed per installed path (`cxxabi <repo> <path>`, spaces as `%20`), so a new path with a
+second runtime in a grandfathered repo still fails. A
 `modern-smoke` line is keyed per repo (`modern-smoke <repo> release.yml:modern-smoke`): it skips check 37's
 job check, and conformance warns about that repo's undeclared arm64 slices instead of failing them.
 Conformance knows the repo only from `$GITHUB_REPOSITORY`, so a local conformance run without it fails a
-grandfathered repo's slices rather than warning. A repo is its
+grandfathered repo's slices and paths rather than warning. A repo is its
 `$GITHUB_REPOSITORY`, else the name in `origin`'s URL (https or ssh), so a local run agrees with CI. It exists so moving `@v1` turns no repo red without a push per repo; converting a
 runner or a packager call deletes that repo's line. `tests/check-family-conventions-7-test.sh` asserts it
 is sorted, free of duplicates and well-formed (the repo set is every org repo whose workflows call `family-conventions.yml`, registered or not), and pins each check's line count as a
 ceiling that may only go down. Regenerate with `sh scripts/gen-conventions-grandfathered.sh <clones-dir> > scripts/conventions-grandfathered`
 (an empty or new `<clones-dir>`, which it marks and owns; it lists the org's repos with `gh`, clones or refreshes each, keeps those calling `family-conventions.yml`, runs the gate
-without the file in each). For `modern-smoke` it also downloads each repo's latest release's pkgs into
+without the file in each). For `modern-smoke` and `cxxabi` it also downloads each repo's latest release's pkgs into
 `<clones-dir>/.releases/` and runs `artifact-facts.sh` and conformance on them, since a repo that ships an
-undeclared arm64 slice and has no `modern-smoke` job passes the gate; that needs `lipo`, `otool` and `nm`
+undeclared arm64 slice and has no `modern-smoke` job passes the gate, and `cxxabi` is found only in what
+shipped (each undeclared path with a `cxxabi-*` fact); that needs `lipo`, `otool` and `nm`
 (or `LIPO`, `OTOOL` and `NM`), and a release it cannot read fails the run. A new check that needs the
 treatment adds its name to that script, the test and this paragraph.
 

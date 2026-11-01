@@ -463,6 +463,9 @@ fi
 [ "$arm_declared" -eq 0 ] && [ "$arm_undeclared" -eq 0 ] \
   || echo "conformance: arm64: $arm_declared declared, $arm_undeclared undeclared non-updater arm64 files in pkgs"
 
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact conformance" -- one C++
+#       runtime per process; '- cxxabi:<glob>: <reason>' excuses a path, and a path grandfathered as cxxabi
+#       for this repo is warned.
 awk 'function add(list, v) { return index(" " list " ", " " v " ") ? list : (list == "" ? v : list " " v) }
      $1 == "cxxabi-defines" || $1 == "cxxabi-loads" {
        k = $2 " " $3; if (!(k in seen)) { o[++m] = k; seen[k] = 1; da[k] = ""; la[k] = ""; n[k] = 0; s[k] = ""; l[k] = "" }
@@ -476,19 +479,25 @@ awk 'function add(list, v) { return index(" " list " ", " " v " ") ? list : (lis
              f = (da[k] == "" ? "-" : da[k]); g = (la[k] == "" ? "-" : la[k]); h = (l[k] == "" ? "-" : l[k])
              gsub(/ /, ",", f); gsub(/ /, ",", g); gsub(/ /, ",", h)
              print k, f, g, n[k], h s[k] } }' "$facts" > "$tmp/cxxabi"
+cxx_report() {  # $1 = message; a grandfathered path ($gf) warns, anything else goes through fail()
+  if [ -n "$gf" ]; then echo "::warning::conformance: cxxabi: $1 (grandfathered: $gf)"; else fail cxxabi "$1" "$p"; fi
+}
 cxx_fail=0
 while read -r file path darches larches n loads syms; do
   p="$(dec "$path")"
+  gf=""
   if [ -z "$(deviation_reason cxxabi "$p")" ]; then
-    cxx_fail=$((cxx_fail + 1)); [ "$cxx_fail" -le 20 ] || { status=1; continue; }
+    [ -n "$repository" ] && [ -f "$SELF/conventions-grandfathered" ] \
+      && grep -qxF "cxxabi ${repository#*/} $path" "$SELF/conventions-grandfathered" && gf="cxxabi ${repository#*/} $path"
+    if [ -z "$gf" ]; then cxx_fail=$((cxx_fail + 1)); [ "$cxx_fail" -le 20 ] || { status=1; continue; }; fi
   fi
   how="link the family's runtime (libcxx22), or declare '- cxxabi:$p: <reason>; exit: <how it goes away>' under INGREDIENTS.md's ## Conformance deviations"
   if [ "$n" -gt 0 ]; then
     more=""; [ "$n" -le 5 ] || more=" and $((n - 5)) more"
-    fail cxxabi "$file installs $p ($darches), which defines C++ runtime machinery beyond Recaulk's back-fills: $syms$more -- one process gets one C++ runtime, hidden or not; $how" "$p"
+    cxx_report "$file installs $p ($darches), which defines C++ runtime machinery beyond Recaulk's back-fills: $syms$more -- one process gets one C++ runtime, hidden or not; $how"
   fi
   if [ "$loads" != - ]; then
-    fail cxxabi "$file installs $p ($larches), which loads $(dec "$(printf '%s' "$loads" | sed 's/,/, /g')") -- a process may load only /usr/lib/libc++abi.dylib or libcxx22's libc++abi.1.dylib; $how" "$p"
+    cxx_report "$file installs $p ($larches), which loads $(dec "$(printf '%s' "$loads" | sed 's/,/, /g')") -- a process may load only /usr/lib/libc++abi.dylib or libcxx22's libc++abi.1.dylib; $how"
   fi
 done < "$tmp/cxxabi"
 [ "$cxx_fail" -le 20 ] || echo "conformance: cxxabi: and $((cxx_fail - 20)) more files with a second C++ runtime" >&2
