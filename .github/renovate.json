@@ -32,6 +32,16 @@
     },
     {
       "customType": "regex",
+      "description": "The Recaulk whose librecaulk.a defines the C++ runtime machinery the conformance rule allows (scripts/recaulk.pin). cxxabi-allowlist.sh verifies the pkg against the release's SHA256SUMS.",
+      "managerFilePatterns": ["/^scripts/recaulk\\.pin$/"],
+      "matchStrings": ["RECAULK_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "recaulk",
+      "packageNameTemplate": "Mavergreen/recaulk",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
       "description": "The stevedore packager (scripts/stevedore.pin). fetch_stevedore.sh verifies the asset against the release's SHA256SUMS.",
       "managerFilePatterns": ["/^scripts/stevedore\\.pin$/"],
       "matchStrings": ["STEVEDORE_VERSION=(?<currentValue>\\S+)"],

@@ -1,0 +1,2 @@
+# The Recaulk whose librecaulk.a defines the C++ runtime machinery the conformance rule allows (cxxabi-allowlist.sh). Renovate bumps it (github-releases Mavergreen/recaulk).
+RECAULK_VERSION=20261025.5
