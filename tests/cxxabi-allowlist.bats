@@ -43,15 +43,23 @@ DIST
   export TMPDIR="$WORK"
 }
 
-@test "allow-list is the archive's exported machinery" {
+@test "allow-list is the archive's machinery, with its visibility" {
   run sh "$ROOT/scripts/cxxabi-allowlist.sh" "$WORK/fixture.a"
   [ "$status" -eq 0 ]
-  [ "$output" = "$(printf '%s\n' __ZTISt9exception ___cxa_uncaught_exceptions | LC_ALL=C sort)" ] || false
+  [ "$output" = "$(printf '%s\n' '__ZTISt9exception visible' '___cxa_uncaught_exceptions visible' | LC_ALL=C sort)" ] || false
 }
 
 @test "the machinery pattern is one line" {
   [ "$(wc -l < "$ROOT/scripts/cxxabi-machinery.txt" | tr -d ' ')" = 1 ]
   [ "$(printf '___cxa_throw\n_foo\n__Unwind_Resume\n' | grep -E -f "$ROOT/scripts/cxxabi-machinery.txt" | wc -l | tr -d ' ')" = 2 ]
+}
+
+@test "a private external is on the allow-list as hidden" {
+  printf '\t.globl ___cxa_uncaught_exceptions\n___cxa_uncaught_exceptions:\n\tret\n\t.private_extern __ZTVN10__cxxabiv119__pointer_type_infoE\n\t.globl __ZTVN10__cxxabiv119__pointer_type_infoE\n\t.data\n__ZTVN10__cxxabiv119__pointer_type_infoE:\n\t.quad 0\n' > "$WORK/p.s"
+  ( cd "$WORK" && cc -c p.s && ar rcs private.a p.o ) > /dev/null 2>&1
+  run sh "$ROOT/scripts/cxxabi-allowlist.sh" "$WORK/private.a"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf '%s\n' '__ZTVN10__cxxabiv119__pointer_type_infoE hidden' '___cxa_uncaught_exceptions visible' | LC_ALL=C sort)" ] || false
 }
 
 @test "no allow-list, no pass" {
@@ -81,7 +89,7 @@ DIST
   pkg_release
   run sh -c "sh '$ROOT/scripts/cxxabi-allowlist.sh' 2>/dev/null"
   [ "$status" -eq 0 ]
-  [ "$output" = "$(printf '%s\n' __ZTISt9exception ___cxa_uncaught_exceptions | LC_ALL=C sort)" ] || false
+  [ "$output" = "$(printf '%s\n' '__ZTISt9exception visible' '___cxa_uncaught_exceptions visible' | LC_ALL=C sort)" ] || false
 }
 
 @test "the pinned fetch is verified" {

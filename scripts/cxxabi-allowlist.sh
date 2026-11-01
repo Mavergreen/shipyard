@@ -1,12 +1,13 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: [NM=<nm>] cxxabi-allowlist.sh [ARCHIVE]
-#          Prints the C++ runtime machinery names the pinned Recaulk defines, sorted with LC_ALL=C, one per
-#          line: the external symbols ARCHIVE defines that match scripts/cxxabi-machinery.txt. With no
-#          ARCHIVE it reads lib/librecaulk.a of the Recaulk release scripts/recaulk.pin names, through
-#          fetch_product_pkg.sh. NM is the Mach-O symbol reader (default nm; on a host without Apple's,
-#          clang22's llvm-nm). Exit 1, printing nothing, when NM is missing, the archive cannot be
-#          fetched or read, or it defines no machinery.
+#   usage: [NM=<nm>] [LIPO=<lipo>] [OTOOL=<otool>] cxxabi-allowlist.sh [ARCHIVE]
+#          Prints the C++ runtime machinery the pinned Recaulk defines, one "<name> <visible|hidden>" per
+#          line, sorted with LC_ALL=C: each symbol ARCHIVE defines that matches scripts/cxxabi-machinery.txt,
+#          read by macho-cxxabi.sh, visible when any member exports it. With no ARCHIVE it reads
+#          lib/librecaulk.a of the Recaulk release scripts/recaulk.pin names, through fetch_product_pkg.sh and
+#          shipyard's own registry, whatever $MAVERGREEN_PRODUCT_NAMES says. NM is the Mach-O symbol reader
+#          (default nm; on a host without Apple's, clang22's llvm-nm). Exit 1, printing nothing, when NM is
+#          missing, the archive cannot be fetched or read, or it defines no machinery.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "cxxabi-allowlist: $*" >&2; exit 1; }
@@ -19,11 +20,12 @@ if [ $# -eq 1 ]; then
 else
   version="$(sed -n 's/^RECAULK_VERSION=//p' "$SELF/recaulk.pin")"
   [ -n "$version" ] || die "$SELF/recaulk.pin names no RECAULK_VERSION"
-  sh "$SELF/fetch_product_pkg.sh" recaulk "$version" "$t/recaulk" > /dev/null || die "could not fetch recaulk $version"
+  MAVERGREEN_PRODUCT_NAMES="$SELF/product-names" sh "$SELF/fetch_product_pkg.sh" recaulk "$version" "$t/recaulk" > /dev/null || die "could not fetch recaulk $version"
   archive="$t/recaulk/lib/librecaulk.a"
 fi
 [ -f "$archive" ] || die "no archive at $archive"
-"${NM:-nm}" -gU "$archive" > "$t/nm" 2>"$t/err" || { cat "$t/err" >&2; die "${NM:-nm} could not read $archive"; }
-awk 'NF == 3 && $2 != "U" && $2 != "u" { print $3 }' "$t/nm" | grep -E -f "$SELF/cxxabi-machinery.txt" | LC_ALL=C sort -u > "$t/names" || :
+sh "$SELF/macho-cxxabi.sh" "$archive" > "$t/cx" 2>"$t/err" \
+  || { cat "$t/err" >&2; why="$(sed -n 's/^macho-cxxabi: //p' "$t/err" | head -1)"; die "${why:-$archive is not Mach-O}"; }
+awk '$2 == "defines" { if (v[$3] != "visible") v[$3] = $4 } END { for (n in v) print n, v[n] }' "$t/cx" | LC_ALL=C sort > "$t/names"
 [ -s "$t/names" ] || die "$archive defines no C++ runtime machinery"
 cat "$t/names"

@@ -13,7 +13,7 @@
 #          downloaded into <clones-dir>/.releases/<repo>/<tag> (kept until the tag moves), read by
 #          artifact-facts.sh and that copy of check-artifact-conformance.sh. A release that cannot
 #          be read fails the run; a repo with no release, or none carrying a pkg, ships nothing.
-#          Needs gh, a python3 with PyYAML first on PATH, and lipo and otool (or LIPO and OTOOL).
+#          Needs gh, a python3 with PyYAML first on PATH, and lipo, otool and nm (or LIPO, OTOOL and NM).
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SELF/.." && pwd)"

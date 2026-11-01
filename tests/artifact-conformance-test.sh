@@ -118,6 +118,62 @@ _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golan
   && { echo "FAIL: another check's grandfathered line excuses nothing here: $_gfo"; exit 1; }
 rm -rf "$_gfs"
 
+X='macho golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
+C='golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go'
+no "a program defining ___cxa_throw fails" "cxxabi: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines C++ runtime machinery beyond Recaulk's back-fills: ___cxa_throw" "$GOOD
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+no "the failure says how to declare it" "declare '- cxxabi:usr/local/mavergreen/go126/bin/go: <reason>; exit: " "$GOOD
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+_cxf="$GOOD
+$X"
+for _i in 1 2 3 4 5 6 7; do _cxf="$_cxf
+cxxabi-defines $C x86_64 ___cxa_s$_i visible"; done
+_cxo="$(printf '%s\nend-of-facts\n' "$_cxf" | sh "$S" 2>&1)" && { echo "FAIL: seven definitions fail"; exit 1; }
+printf '%s\n' "$_cxo" | grep -q 'beyond Recaulk.s back-fills: ___cxa_s1 ___cxa_s2 ___cxa_s3 ___cxa_s4 ___cxa_s5 and 2 more' \
+  || { echo "FAIL: a cxxabi failure names the first five symbols, then a count: $_cxo"; exit 1; }
+[ "$(printf '%s\n' "$_cxo" | grep -c 'which defines')" = 1 ] \
+  || { echo "FAIL: a cxxabi failure is reported once per artifact path: $_cxo"; exit 1; }
+no "a hidden definition is a second runtime too" "beyond Recaulk's back-fills: ___cxa_throw(hidden) ___gxx_personality_v0(hidden) -- one process gets one C++ runtime, hidden or not" "$GOOD
+$X
+cxxabi-defines $C x86_64 ___cxa_throw hidden
+cxxabi-defines $C x86_64 ___gxx_personality_v0 hidden"
+_cxf="$GOOD
+$X"
+for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22; do _cxf="$_cxf
+cxxabi-defines p.pkg usr/local/mavergreen/go126/bin/t$_i x86_64 ___cxa_throw visible"; done
+_cxo="$(printf '%s\nend-of-facts\n' "$_cxf" | sh "$S" 2>&1)" && { echo "FAIL: 22 violating files fail"; exit 1; }
+[ "$(printf '%s\n' "$_cxo" | grep -c 'which defines')" = 20 ] && printf '%s\n' "$_cxo" | grep -q 'cxxabi: and 2 more files' \
+  || { echo "FAIL: cxxabi failures are capped at 20 files, then a count: $_cxo"; exit 1; }
+ok "a declared path passes" "$GOOD
+deviation cxxabi:usr/local/mavergreen/go126/bin/* Go's cgo runtime links its own libc++abi; exit: when it links libcxx22
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+no "a cxxabi declaration covers only the paths its glob names" "cxxabi: golang" "$GOOD
+deviation cxxabi:usr/local/mavergreen/go126/lib/* another path; exit: never
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+no "another check's declaration does not cover cxxabi" "cxxabi: golang" "$GOOD
+deviation sdk-pin:usr/local/mavergreen/go126/bin/* not a cxxabi declaration
+$X
+cxxabi-defines $C x86_64 ___cxa_throw visible"
+no "a definition in one slice of a fat binary fails" "go (arm64), which defines" "$GOOD
+deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain
+$X
+macho $C arm64 EXECUTE 11.0 11.3 aa
+cxxabi-defines $C arm64 ___cxa_throw visible"
+no "loading a second libc++abi fails" "cxxabi: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which loads /opt/vendor/lib/libc++abi.1.dylib" "$GOOD
+$X
+cxxabi-loads $C x86_64 /opt/vendor/lib/libc++abi.1.dylib"
+no "a load path with a space is decoded" "which loads @rpath/Vendor Runtime/libc++abi.dylib" "$GOOD
+$X
+cxxabi-loads $C x86_64 @rpath/Vendor%20Runtime/libc++abi.dylib"
+ok "a declared load passes" "$GOOD
+deviation cxxabi:usr/local/mavergreen/go126/* vendored; exit: when upstream links libcxx22
+$X
+cxxabi-loads $C x86_64 @rpath/libc++abi.dylib"
+
 no "pkg version disagrees with the tag" "version" 'expected 1.26.5-mavericks.5
 pkg p.pkg 1.26.5-mavericks.4 10.9.5 dev.mavergreen.golang.go126
 asset p.pkg 10'

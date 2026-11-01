@@ -1,11 +1,11 @@
 #!/bin/sh
-# platform: host-agnostic -- Mach-O payloads need LIPO and OTOOL off macOS (macho-slices.sh)
+# platform: host-agnostic -- Mach-O payloads need LIPO, OTOOL and NM off macOS (macho-slices.sh, macho-cxxabi.sh)
 #   usage: artifact-facts.sh <dist-dir> <version> [repo-root]
 #          Emits the fact stream check-artifact-conformance.sh consumes, by inspecting a built dist/
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
-#          payload and shipped tarball.
+#          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each.
 # platform: runs at PACKAGE TIME, on any host that has the artifacts; stevedore reads the pkgs and plists.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
@@ -45,12 +45,46 @@ enc() { sed -e 's/%/%25/g' -e 's/ /%20/g'; }
 #       unambiguous Mach-O magic that cannot be read aborts the stream rather than vanishing from it;
 #       "cafebabe" (and its 64-bit-offset twin "cafebabf") is also a Java class file's magic and
 #       "!<arch>" any ar archive's, so those are Mach-O only if lipo can read them.
-macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded, may be empty). Non-zero on abort.
+cxxabi_tmp=""
+cxxabi_allowlist() {  # the allow-list, fetched at most once per run, into $cxxabi_tmp/allow as "<name> <visible|hidden>". Non-zero, the reason in _mf_why, when unavailable.
+  [ ! -f "$cxxabi_tmp/allow" ] || return 0
+  _al="$(sh "$SELF/cxxabi-allowlist.sh" 2>"$cxxabi_tmp/err")" || {
+    _mf_why="cxxabi allow-list unavailable: $(sed -n 's/^cxxabi-allowlist: //p' "$cxxabi_tmp/err" | tail -1)"; return 1; }
+  printf '%s\n' "$_al" | awk '$1 == "__ZTVN10__cxxabiv119__pointer_type_infoE" || $1 == "__ZTVN10__cxxabiv129__pointer_to_member_type_infoE" { $2 = "hidden" } 1' \
+    > "$cxxabi_tmp/allow"
+}
+cxxabi_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded). Non-zero, the reason in _mf_why, on abort.
+  if [ -z "$cxxabi_tmp" ]; then
+    cxxabi_tmp="$(mktemp -d "${TMPDIR:-/tmp}/cxxabi-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+    trap 'rm -rf "$cxxabi_tmp"' EXIT
+  fi
+  command -v "${NM:-nm}" >/dev/null 2>&1 \
+    || { _mf_why="NM: ${NM:-nm} not found; set NM to a Mach-O nm such as clang22's llvm-nm"; return 1; }
+  _cx="$(sh "$SELF/macho-cxxabi.sh" "$2" 2>"$cxxabi_tmp/err")" || {
+    _mf_why="cannot read the C++ runtime symbols of $1:$3 (macho-cxxabi.sh exit $?): $(sed -n 's/^macho-cxxabi: //p' "$cxxabi_tmp/err" | head -1 | sed 's/ could not read .*//')"; return 1; }
+  case "$_cx" in
+    *" defines "*)
+      cxxabi_allowlist || return 1
+      printf '%s\n' "$_cx" | awk -v art="$1" -v p="$3" '
+        NR == FNR { a[$1] = $2; next }
+        $2 == "defines" && !(($3 in a) && (a[$3] == "visible" || a[$3] == $4)) { print "cxxabi-defines", art, p, $1, $3, $4 }' \
+        "$cxxabi_tmp/allow" - ;;
+  esac
+  printf '%s\n' "$_cx" | while read -r _ca _ck _cv; do
+    [ "$_ck" = loads ] || continue
+    case "$_cv" in
+      /usr/lib/libc++abi.dylib|*/libcxx22/*/libc++abi.1.dylib|@*/libc++abi.1.dylib) : ;;
+      *) printf 'cxxabi-loads %s %s %s %s\n' "$1" "$3" "$_ca" "$(printf '%s' "$_cv" | enc)" ;;
+    esac
+  done
+}
+macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded, may be empty). Non-zero on abort, the reason in _mf_why when known.
   # platform: the file list is captured to a temp file and the loop below reads it via "< $_ml",
   #           not piped in -- a `while` fed by a pipe is the LAST stage of that pipeline, which runs
   #           in a subshell on both dash and bash (no lastpipe by default), so a `return` inside it
   #           only exits the subshell and this function would silently keep going and return 0. A
   #           redirected-in loop has no such subshell, so `return` here really does abort the caller.
+  _mf_why=""
   _ml="$(mktemp "${TMPDIR:-/tmp}/macho-facts-list.XXXXXX")"   # template: 10.9 BSD mktemp requires one
   ( cd "$2" && find . -type f ) | sed 's|^\./||' > "$_ml"
   while IFS= read -r _mf; do
@@ -73,6 +107,7 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
     printf '%s\n' "$_sl" | while read -r _a _ft _mn _sd; do
       printf 'macho %s %s %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_ft" "$_mn" "$_sd" "$_sha"
     done
+    cxxabi_facts "$1" "$2/$_mf" "$_p" || { rm -f "$_ml"; return 1; }
   done < "$_ml"
   rm -f "$_ml"
 }
@@ -90,7 +125,7 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     gzip -dc "$_pl" > "$_dir.cpio" 2>/dev/null || return 1
     ( cd "$_root" && cpio -id < "$_dir.cpio" 2>/dev/null ) || return 1
     rm -f "$_dir.cpio"
-    macho_facts "$1" "$_root" "$(printf '%s' "$_loc" | enc)" || return 1
+    macho_facts "$1" "$_root" "$(printf '%s' "$_loc" | enc)" || { _pf_why="$_mf_why"; return 1; }
     ( cd "$_root" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | enc \
       | awk -v pkg="$1" -v loc="$(printf '%s' "$_loc" | enc)" '{ print "installs " pkg " " loc $0 }'
     ( cd "$_root" && find . -type d \( -name '*.app' -o -name '*.prefPane' -o -name '*.kext' -o -name '*.bundle' \
@@ -229,7 +264,7 @@ for f in "$dist"/*; do
     *.tar.gz|*.tgz|*.tar.xz|*.tar.bz2)
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
       tar -xf "$f" -C "$x" 2>/dev/null || { rm -rf "$x"; abort "cannot extract $b"; }
-      macho_facts "$b" "$x" "" || { rm -rf "$x"; abort "cannot read a Mach-O in $b"; }
+      macho_facts "$b" "$x" "" || { rm -rf "$x"; abort "${_mf_why:-cannot read a Mach-O in $b}"; }
       rm -rf "$x"
       ;;
     RELEASE_NOTES.md)

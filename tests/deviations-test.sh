@@ -98,4 +98,11 @@ for line in '- arm64: every path' '- arm64:*: every path' '- arm64:*/*: every pa
 done
 printf '## Conformance deviations\n- arm64:usr/local/mavergreen/cmake/*: developers on Apple Silicon run it\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'arm64 usr/local/mavergreen/cmake/\* developers on Apple Silicon run it' || { echo "FAIL: an install-path glob is an arm64 scope"; exit 1; }
+for line in '- cxxabi: a bare cxxabi deviation; exit: never' '- cxxabi:*: every path; exit: never' '- cxxabi:*/*: every path; exit: never' '- cxxabi:**: every path; exit: never'; do
+  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
+  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: a bare cxxabi deviation is refused: [$line] got: $out"; exit 1; fi
+  printf '%s\n' "$out" | grep -q 'cxxabi:<install-path glob>' || { echo "FAIL: refusing [$line] names the form: $out"; exit 1; }
+done
+printf '## Conformance deviations\n- cxxabi:usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib: the family runtime; exit: none, it is the runtime\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'cxxabi usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib the family runtime; exit: none, it is the runtime' || { echo "FAIL: an install-path glob is a cxxabi scope; got: $(sh "$S" "$w" 2>&1)"; exit 1; }
 echo "PASS: deviations"

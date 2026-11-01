@@ -72,6 +72,10 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       print "deviations.sh: \"arm64\" names the install paths it covers: \"- arm64:<install-path glob>: <reason>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
       bad = 1; next
     }
+    if (check == "cxxabi" && (!scoped || glob ~ /^[*?\/]+$/)) {
+      print "deviations.sh: \"cxxabi\" names the install paths it covers: \"- cxxabi:<install-path glob>: <reason>; exit: <how it goes away>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
+      bad = 1; next
+    }
     if (check == "packager" && (!scoped || glob ~ /[*?[]/)) {
       print "deviations.sh: \"packager\" names one path: \"- packager:<path>: <reason, exit>\", never a wildcard" > "/dev/stderr"
       bad = 1; next

@@ -199,7 +199,7 @@ directory's repo (saying on stderr which one), else the seam fails (`source-date
 without the Command Line Tools has no git, so a caller there sets `SOURCE_DATE_EPOCH`; one that runs a seam
 from outside the product repo sets `SOURCE_DATE_EPOCH` or `MAVERICKS_ROOT`. `MAVERICKS_ROOT` must be exported to reach the seams; a bare shell variable does not. As root (euid 0, so `sudo` too)
 `fetch_stevedore.sh` caches in root's own home (from the passwd entry, not the caller's `$HOME`) unless `STEVEDORE_CACHE` is given. Reading a Mach-O
-off macOS takes `LIPO` and `OTOOL` overrides (`macho-slices.sh`). The seams fetch stevedore over the
+off macOS takes `LIPO`, `OTOOL` and `NM` overrides (`macho-slices.sh`, `macho-cxxabi.sh`). The seams fetch stevedore over the
 network on first use, cached, unless `STEVEDORE` names a binary of the pinned version;
 `STEVEDORE_RELEASES` and `STEVEDORE_CACHE` replace its source and cache, and the product's
 `MAVERGREEN_RELEASES` and `MAVERGREEN_PKG_CACHE` never reach it.
@@ -1901,6 +1901,17 @@ the audit can stop inferring the check name from the job.
 The conventions gate constrains the REPO. `check-artifact-conformance.sh` constrains what comes OUT,
 and runs at package time — before publish, where the artifacts exist.
 
+**It runs on any host.** It reads Mach-O through `LIPO`, `OTOOL` and `NM` (default `lipo`, `otool`
+and `nm`). Off macOS, and on a 10.9 box without the Command Line Tools, export clang22's, and the
+stream aborts naming whichever is missing:
+
+```sh
+CL="$(sh build/fetch-clang22.sh)"
+export LIPO="$CL/bin/llvm-lipo" OTOOL="$CL/bin/llvm-otool" NM="$CL/bin/llvm-nm"
+facts="$(sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" "$DIST" "$VER")"
+printf '%s\n' "$facts" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"
+```
+
 It exists because every piece was already checked in isolation — the compat guard reads binaries,
 `set_install_floor` stamps a floor, `sign_and_appcast` signs, `publish-release` checksums — and
 **nothing asserted they agree with each other**. A release whose `.pkg`, appcast, checksums and tag
@@ -2537,8 +2548,8 @@ ceiling that may only go down. Regenerate with `sh scripts/gen-conventions-grand
 (an empty or new `<clones-dir>`, which it marks and owns; it lists the org's repos with `gh`, clones or refreshes each, keeps those calling `family-conventions.yml`, runs the gate
 without the file in each). For `modern-smoke` it also downloads each repo's latest release's pkgs into
 `<clones-dir>/.releases/` and runs `artifact-facts.sh` and conformance on them, since a repo that ships an
-undeclared arm64 slice and has no `modern-smoke` job passes the gate; that needs `lipo` and `otool` (or
-`LIPO` and `OTOOL`), and a release it cannot read fails the run. A new check that needs the
+undeclared arm64 slice and has no `modern-smoke` job passes the gate; that needs `lipo`, `otool` and `nm`
+(or `LIPO`, `OTOOL` and `NM`), and a release it cannot read fails the run. A new check that needs the
 treatment adds its name to that script, the test and this paragraph.
 
 **The required gate (checks 30-34, not landed yet; adopted per repo).** Branch protection requires one check
