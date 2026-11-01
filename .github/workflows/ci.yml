@@ -113,14 +113,6 @@ jobs:
             sudo -n installer -pkg python-315-pkg/*.pkg -target /
             SHIPYARD_CHECK_DIR="$PWD/scripts" sh -c '. "$SHIPYARD_CHECK_DIR/lib/py.sh"; p="$(chk_python3)"; echo "python3: $p"; "$p" --version'
             sh tests/check-fixtures-run.sh --jobs 2
-      - name: Host-agnostic tests on Mac OS X 10.9
-        uses: Mavergreen/mavericks-vm@v1
-        with:
-          image-key: ${{ secrets.MAVERICKS_VM_KEY }}
-          copyback: false
-          debug-on-error: true
-          run: |
-            set -eu
             while IFS= read -r t; do
               [ -n "$t" ] || continue
               echo "== $t"
