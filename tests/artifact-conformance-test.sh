@@ -130,7 +130,7 @@ C='golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go'
 no "a program defining ___cxa_throw fails" "cxxabi|golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines C++ runtime machinery beyond Recaulk's back-fills: ___cxa_throw" "$GOOD
 $X
 cxxabi-defines $C x86_64 ___cxa_throw visible"
-no "the failure says how to declare it" "cxxabi|declare '- cxxabi:usr/local/mavergreen/go126/bin/go: <reason>; exit: " "$GOOD
+no "the failure says how to declare it" "cxxabi|declare .mavergreen/deviations/cxxabi/<label>/ (scope usr/local/mavergreen/go126/bin/go, a reason, a revisit)" "$GOOD
 $X
 cxxabi-defines $C x86_64 ___cxa_throw visible"
 _cxf="$GOOD

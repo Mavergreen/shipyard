@@ -8,3 +8,9 @@ tests/a-test.sh
 scripts/vendor/yaml/__init__.py
 scripts/vendor/pyyaml.pin
 scripts/vendor/other/x.py
+.mavergreen/deviations/vendored/pyyaml-pin/reason
+.mavergreen/deviations/vendored/pyyaml-pin/revisit
+.mavergreen/deviations/vendored/pyyaml-pin/scope
+.mavergreen/deviations/vendored/pyyaml/reason
+.mavergreen/deviations/vendored/pyyaml/revisit
+.mavergreen/deviations/vendored/pyyaml/scope

@@ -1,6 +1,0 @@
-.github/renovate.json
-.github/workflows/release.yml
-.gitignore
-UPSTREAM_VERSION
-build/upstream-release-notes-url.sh
-tests/a-test.sh

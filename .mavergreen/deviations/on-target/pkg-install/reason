@@ -1,0 +1,1 @@
+the 10.9 job (linux-host.yml's on-target-updater, which release.yml's publish needs through its linux job) launches the Linux-built updater check-only in the guest; it does not install the run's mavericks-shipyard pkg, which is built on macOS, nor run the host-agnostic tests there.

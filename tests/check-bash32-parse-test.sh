@@ -10,6 +10,7 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 S="$here/scripts/check-bash32-parse.sh"
 fx="$here/tests/fixtures/checks/bash32-parse"
 w="$(mktemp -d "${TMPDIR:-/tmp}/check-bash32-parse-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
+. "$here/tests/lib/deviation_tree.sh"
 fail() { echo "FAIL $1"; exit 1; }
 unset SHIPYARD_BASH32_SH SHIPYARD_BASH32_BASH
 
@@ -62,12 +63,12 @@ done
 grep -q 'accepts the construct' "$w/out" && fail "a missing shell is not a canary result"
 
 mkdir -p "$w/dev"; cp "$fx/pass/FILES" "$w/dev/FILES"; mkdir -p "$w/dev/build"; cp "$fx/pass/build/good.sh" "$w/dev/build/"
-printf '# x\n\n## Conformance deviations\n\n- host:%s: no bash 3.2 here. Revisit when the Apple shells ship.\n' "$host" > "$w/dev/INGREDIENTS.md"
+deviation "$w/dev" host this "$host" 'no bash 3.2 here. Revisit when the Apple shells ship.'
 run "$w/dev" "$w/dashlike" || fail "a host deviation excuses a host that cannot measure: $(cat "$w/out")"
 grep -q "^bash32-parse: not run: skipped by deviation (host:$host)" "$w/out" || fail "the skip is printed: $(cat "$w/out")"
-printf '# x\n\n## Conformance deviations\n\n- host:no-such-os: nowhere\n' > "$w/dev/INGREDIENTS.md"
+rm -r "$w/dev/.mavergreen"; deviation "$w/dev" host other no-such-os 'nowhere'
 if run "$w/dev" "$w/dashlike"; then fail "a deviation for another host excuses nothing"; fi
-printf '# x\n\n## Conformance deviations\n\n- host:%s: no bash 3.2 here. Revisit when the Apple shells ship.\n' "$host" > "$w/dev/INGREDIENTS.md"
+rm -r "$w/dev/.mavergreen"; deviation "$w/dev" host this "$host" 'no bash 3.2 here. Revisit when the Apple shells ship.'
 run "$w/dev" "$w/fake32" "$w/fakebash32" || fail "a host that can measure still measures: $(cat "$w/out")"
 grep -q 'skipped by deviation' "$w/out" && fail "a host that can measure is not excused"
 
@@ -81,7 +82,7 @@ fi
 grep -q "^bash32-parse: the tracked-file list couldn't be read" "$w/out" || fail "an unreadable list fails bash32-parse itself: $(cat "$w/out")"
 
 mkdir -p "$w/exc/build"; cp "$fx/fail/build/bad.sh" "$w/exc/build/"; printf 'build/bad.sh\n' > "$w/exc/FILES"
-printf '# x\n\n## Conformance deviations\n\n- bash32-parse:build/bad.sh: it is a polyglot. Revisit when it is split.\n' > "$w/exc/INGREDIENTS.md"
+deviation "$w/exc" bash32-parse polyglot build/bad.sh 'it is a polyglot. Revisit when it is split.'
 run "$w/exc" "$w/fake32" "$w/fakebash32" || fail "a path deviation excuses a script: $(cat "$w/out")"
 grep -q '1 excused by deviation' "$w/out" || fail "the excused count is printed: $(cat "$w/out")"
 

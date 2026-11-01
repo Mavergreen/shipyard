@@ -304,15 +304,19 @@ rc=0
 dev="$w/dev"; mkdir -p "$dev/scripts"
 printf 'platform\nspec\n' > "$dev/comment-reasons"
 printf '#!/bin/sh\n# untagged\nexit 0\n' > "$dev/scripts/x.sh"
-printf '## Conformance deviations\n\n- comments: vendored verbatim from upstream\n' > "$dev/INGREDIENTS.md"
+. "$here/lib/deviation_tree.sh"
+deviation "$dev" comments upstream '*' 'vendored verbatim from upstream'
 ( cd "$dev" && git init -q . && git add -A ) >/dev/null 2>&1
 ( cd "$dev" && sh "$S" > "$w/dev.out" 2>&1 ) \
   || { echo "FAIL deviation: a repo-wide comments deviation must switch the check off: $(cat "$w/dev.out")"; exit 1; }
-printf '## Conformance deviations\n\n- comments:vendor/* vendored\n' > "$dev/INGREDIENTS.md"
-( cd "$dev" && git add -A && sh "$S" 2> "$w/dev.err" > /dev/null ) \
-  && { echo "FAIL deviation: a scoped comments deviation must be rejected"; exit 1; }
-[ "$(sed -n 1p "$w/dev.err" | cut -d: -f1)" = comments ] \
-  || { echo "FAIL deviation: the rejection must open with its id: $(cat "$w/dev.err")"; exit 1; }
+rm -rf "$dev/.mavergreen"; mkdir -p "$dev/vendor"
+printf '#!/bin/sh\n# untagged upstream\nexit 0\n' > "$dev/vendor/up.sh"
+deviation "$dev" comments vendor 'vendor/*' 'vendored verbatim'
+( cd "$dev" && git add -A && sh "$S" > "$w/dev.out" 2>&1 ) \
+  && { echo "FAIL deviation: a scoped comments deviation excuses only what it matches: $(cat "$w/dev.out")"; exit 1; }
+grep -q 'scripts/x.sh:2:' "$w/dev.out" || { echo "FAIL deviation: the file outside the scope is still checked: $(cat "$w/dev.out")"; exit 1; }
+grep -q 'vendor/up.sh:' "$w/dev.out" && { echo "FAIL deviation: the file inside the scope is excused: $(cat "$w/dev.out")"; exit 1; }
+grep -q 'DECLARED DEVIATION (vendor/up.sh) -- vendored verbatim' "$w/dev.out" || { echo "FAIL deviation: an excused file is named: $(cat "$w/dev.out")"; exit 1; }
 
 amprepo="$w/repo & co"
 mkdir -p "$amprepo/scripts"

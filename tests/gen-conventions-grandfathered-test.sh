@@ -2,6 +2,7 @@
 # platform: host-agnostic
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib/deviation_tree.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/gen-gf-test.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 python3 -c 'import yaml' 2>/dev/null || { echo "SKIP: needs a python3 with PyYAML"; exit 77; }
 
@@ -69,8 +70,8 @@ FAKE_REPOS="$work/repos"; FAKE_SRC="$work/src"; export FAKE_REPOS FAKE_SRC
 
 mksrc() {  # $1 = name, $2 = yes: has a release workflow that calls the gate and runs on macos, $3 = decl: declares an arm64 slice
   d="$work/src/$1"; mkdir -p "$d"
-  [ "${3:-}" != decl ] || printf '# Build ingredients\n\n## Conformance deviations\n\n- arm64:usr/local/mavergreen/%s/bin/*: developers on Apple Silicon run it\n' "$1" > "$d/INGREDIENTS.md"
-  [ "${3:-}" != cxxdecl ] || printf '# Build ingredients\n\n## Conformance deviations\n\n- cxxabi:usr/local/mavergreen/%s/bin/*: upstream vendors its runtime; exit: when it links libcxx22\n' "$1" > "$d/INGREDIENTS.md"
+  [ "${3:-}" != decl ] || deviation "$d" arm64 bin "usr/local/mavergreen/$1/bin/*" 'developers on Apple Silicon run it'
+  [ "${3:-}" != cxxdecl ] || deviation "$d" cxxabi bin "usr/local/mavergreen/$1/bin/*" 'upstream vendors its runtime; exit: when it links libcxx22'
   if [ "$2" = yes ]; then
     mkdir -p "$d/.github/workflows"
     printf '# calls family-conventions.yml\nname: release\non: push\njobs:\n  build:\n    runs-on: macos-14\n    steps:\n      - run: true\n' > "$d/.github/workflows/release.yml"

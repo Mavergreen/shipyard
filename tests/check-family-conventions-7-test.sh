@@ -20,7 +20,7 @@ passes() {  # $1 = label, $2 = dir
 }
 add() { (cd "$1" && git add -A) >/dev/null 2>&1; }
 
-mkrepo7() { mkrepo "$@"; printf '# Build ingredients\n' > "$1/INGREDIENTS.md"; }
+mkrepo7() { mkrepo "$@"; rm -r "$1/.mavergreen"; }
 conf='      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist'
 stage='sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr'
 pkok() {  # $1 = dir, $2 = the build script's packaging line, $3 = its path (default build/package.sh)
@@ -40,7 +40,7 @@ pkok "$work/pk-product" 'productbuild --package w.pkg out.pkg'
 fails "check 35: a direct productbuild call" "$work/pk-product" 'packager: build/package.sh'
 
 pkok "$work/pk-dev" "$PKG"
-printf '\n## Conformance deviations\n\n- packager:build/package.sh: the oracle compares against the system tool, exit when stevedore is the oracle\n' >> "$work/pk-dev/INGREDIENTS.md"
+deviation "$work/pk-dev" packager package 'build/package.sh' 'the oracle compares against the system tool, exit when stevedore is the oracle'
 add "$work/pk-dev"
 passes "check 35: a packager deviation" "$work/pk-dev"
 
@@ -145,7 +145,7 @@ passes "check 36: ubuntu" "$work/mac-ubuntu"
 mac dev '    runs-on: macos-14
     steps:
       - run: true'
-printf '\n## Conformance deviations\n\n- macos-runner:ci.yml:mac: the 10.9 guest needs a macOS host, exit when a Linux host runs it\n' >> "$work/mac-dev/INGREDIENTS.md"
+deviation "$work/mac-dev" macos-runner ci.yml-mac 'ci.yml:mac' 'the 10.9 guest needs a macOS host, exit when a Linux host runs it'
 add "$work/mac-dev"
 passes "check 36: a macos-runner deviation" "$work/mac-dev"
 
@@ -170,18 +170,18 @@ passes "check 36: both workflows' jobs grandfathered" "$work/mac-scalar"
 grandfather
 rm "$work/mac-scalar/.github/workflows/other.yml"; add "$work/mac-scalar"
 
-refused() {  # $1 = dir, $2 = the deviation line, $3 = the phrase the refusal must carry
-  printf '\n## Conformance deviations\n\n%s\n' "$2" >> "$1/INGREDIENTS.md"; add "$1"
-  out="$(cd "$1" && sh "$sc/check-deviations.sh" 2>&1)" && { echo "FAIL: wildcard deviation [$2] must be refused"; exit 1; }
-  printf '%s\n' "$out" | grep -q -- "$3" || { echo "FAIL: [$2] should be refused with '$3': $out"; exit 1; }
+refused() {  # $1 = dir, $2 = check, $3 = scope, $4 = the phrase the refusal must carry
+  deviation "$1" "$2" wild "$3" 'every one'; add "$1"
+  out="$(cd "$1" && sh "$sc/check-deviations.sh" 2>&1)" && { echo "FAIL: wildcard deviation [$2 $3] must be refused"; exit 1; }
+  printf '%s\n' "$out" | grep -q -- "$4" || { echo "FAIL: [$2 $3] should be refused with '$4': $out"; exit 1; }
 }
-for dev in '- macos-runner: every job' '- macos-runner:*: every job' '- macos-runner:ci.yml:*: every job' '- macos-runner:*:mac: every file'; do
-  rm -rf "$work/mac-wild"; cp -R "$work/mac-scalar" "$work/mac-wild"; printf '# Build ingredients\n' > "$work/mac-wild/INGREDIENTS.md"
-  refused "$work/mac-wild" "$dev" 'deviations.sh'
+for scope in '*' 'ci.yml:*' '*:mac'; do
+  rm -rf "$work/mac-wild"; cp -R "$work/mac-scalar" "$work/mac-wild"; rm -rf "$work/mac-wild/.mavergreen"
+  refused "$work/mac-wild" macos-runner "$scope" 'deviations.sh'
 done
-for dev in '- packager: every path' '- packager:*: every path' '- packager:build/*: every path'; do
-  rm -rf "$work/pk-wild"; cp -R "$work/pk-plain" "$work/pk-wild"; printf '# Build ingredients\n' > "$work/pk-wild/INGREDIENTS.md"
-  refused "$work/pk-wild" "$dev" 'deviations.sh'
+for scope in '*' 'build/*'; do
+  rm -rf "$work/pk-wild"; cp -R "$work/pk-plain" "$work/pk-wild"; rm -rf "$work/pk-wild/.mavergreen"
+  refused "$work/pk-wild" packager "$scope" 'deviations.sh'
 done
 
 # spec: SKILL.md "Family conventions" check 36 -- a run without GITHUB_REPOSITORY (a developer's
@@ -196,14 +196,12 @@ done
 grandfather
 
 # spec: SKILL.md "Family conventions" check 37 -- release.yml has a job named modern-smoke, on a
-#       macos-* runner, that publish needs, exactly when INGREDIENTS.md declares an arm64:<glob>
+#       macos-* runner, that publish needs, exactly when .mavergreen/deviations/arm64/ holds a
 #       deviation; a repo grandfathered as modern-smoke skips the check.
 ms() {  # $1 = label, $2 = decl|nodecl, $3 = runs-on (empty: no job), $4 = needed|unneeded
   d="$work/ms-$1"; mkrepo7 "$d"
-  { printf '\n## Conformance deviations\n\n'
-    [ "$2" = decl ] && printf -- '- arm64:usr/local/mavergreen/w/bin/*: developers on Apple Silicon run w to build Mavericks artifacts\n'
-    printf -- '- macos-runner:release.yml:modern-smoke: the arm64 slice runs only on Apple Silicon, exit when a Linux host can run it\n'
-  } >> "$d/INGREDIENTS.md"
+  [ "$2" != decl ] || deviation "$d" arm64 w-bin 'usr/local/mavergreen/w/bin/*' 'developers on Apple Silicon run w to build Mavericks artifacts'
+  deviation "$d" macos-runner modern-smoke 'release.yml:modern-smoke' 'the arm64 slice runs only on Apple Silicon, exit when a Linux host can run it'
   if [ -n "$3" ]; then
     printf '  modern-smoke:\n    runs-on: %s\n    steps:\n      - run: true\n' "$3" >> "$d/.github/workflows/release.yml"
     if [ "$4" = needed ]; then
@@ -221,13 +219,13 @@ passes "check 37: a declaration and a modern-smoke job publish needs" "$work/ms-
 ms list decl '[self-hosted, macos-15]' needed
 passes "check 37: a runs-on list naming macos-*" "$work/ms-list"
 ms nojob decl '' ''
-fails "check 37: a declaration with no modern-smoke job" "$work/ms-nojob" 'modern-smoke: INGREDIENTS.md declares an arm64 slice, but release.yml has no modern-smoke job'
+fails "check 37: a declaration with no modern-smoke job" "$work/ms-nojob" 'modern-smoke: .mavergreen/deviations/arm64/ declares an arm64 slice, but release.yml has no modern-smoke job'
 ms linux decl ubuntu-latest needed
 fails "check 37: a modern-smoke job off macOS" "$work/ms-linux" 'modern-smoke: the modern-smoke job does not run on a macos-\* runner'
 ms unneeded decl macos-26 unneeded
 fails "check 37: a modern-smoke job publish does not need" "$work/ms-unneeded" 'modern-smoke: publish does not need the modern-smoke job'
 ms nodecl nodecl macos-26 needed
-fails "check 37: a modern-smoke job with no declaration" "$work/ms-nodecl" 'modern-smoke: release.yml has a modern-smoke job, but INGREDIENTS.md declares no arm64 slice'
+fails "check 37: a modern-smoke job with no declaration" "$work/ms-nodecl" 'modern-smoke: release.yml has a modern-smoke job, but .mavergreen/deviations/arm64/ declares no arm64 slice'
 out="$(gate "$work/ms-nojob")" || :
 printf '%s\n' "$out" | grep -q 'declares no arm64 slice' && { echo "FAIL: check 37: each direction has its own message: $out"; exit 1; }
 out="$(gate "$work/ms-nodecl")" || :

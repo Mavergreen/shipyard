@@ -511,18 +511,14 @@ fi
 #       # spec:); delegates to check-comments.sh so the family's rule and shipyard's own scanner
 #       cannot drift apart. Opt-in falls out of check-comments.sh itself: it exits 0 with no
 #       comment-reasons file, so a consumer inherits this check through @v1 but not its failure,
-#       until it sweeps its own tree and adds one. A swept repo that still wants ONE declared
-#       exception states it under INGREDIENTS.md "## Conformance deviations" as
-#       "- comments: <reason>", and that switches the check off REPO-WIDE. The "<check>:<glob>"
-#       scoping that check-artifact-conformance.sh honours is NOT honoured here and is rejected
-#       rather than swallowed as part of the reason.
+#       until it sweeps its own tree and adds one.
 delegate comments check-comments.sh \
   "a comment cites no reason" \
   "every comment says why it is there, and the lines below are the ones that do not" \
   "cite one: # platform: <a fact about the platform or a tool>, or # spec: <a locatable pointer>"
 
-# spec: scripts/deviations.sh -- ONE parser for the "## Conformance deviations" grammar, shared with
-#       check-artifact-conformance.sh; an incomplete entry is reported once, by check-deviations.sh.
+# spec: scripts/deviations.sh -- ONE reader of .mavergreen/deviations/, shared with
+#       check-artifact-conformance.sh; an incomplete deviation is reported once, by check-deviations.sh.
 # spec: scripts/conventions-grandfathered -- "<check> <repo> <job|path>" lines naming what predates a
 #       check, so moving @v1 reddens no repo. The repo is $GITHUB_REPOSITORY's name (as in check 24),
 #       else the last path component of origin's URL, https or ssh, so a local run through
@@ -575,7 +571,7 @@ for f in renovate.json renovate.json5 .renovaterc .renovaterc.json .renovaterc.j
   deviated renovate-path "$f" && continue
   chk_fail renovate-path "$f is a tracked Renovate config, and the family's is .github/renovate.json only" \
     "the Renovate checks (4, 4b, 13) never read $f" \
-    "git mv $f .github/renovate.json (merge into the existing .github/renovate.json instead if there is one), or declare '- renovate-path:$f: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+    "git mv $f .github/renovate.json (merge into the existing .github/renovate.json instead if there is one), or declare .mavergreen/deviations/renovate-path/<label>/ (scope $f, a reason, a revisit)"
 done
 
 # spec: SKILL.md "Family conventions" check 18 -- configure, test and package with shipyard-cmake /
@@ -704,7 +700,7 @@ done
 if [ -n "$builds_pkg" ] && ! ci_mentions 'shipyard-check[^#]*--dist' && ! deviated artifact-checks-wired "$REL"; then
   chk_fail artifact-checks-wired "this repo builds a .pkg ($builds_pkg) but no workflow runs shipyard-check --dist" \
     "nothing checks what it installs or under which identity" \
-    "run shipyard-check --dist <dir> at package time, with SHIPYARD_CHECK_VERSION set (see the conventions skill, 'Artifact conformance'), or declare '- artifact-checks-wired: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+    "run shipyard-check --dist <dir> at package time, with SHIPYARD_CHECK_VERSION set (see the conventions skill, 'Artifact conformance'), or declare .mavergreen/deviations/artifact-checks-wired/<label>/ (scope *, a reason, a revisit)"
 fi
 
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
@@ -750,7 +746,7 @@ if [ -n "$builds_pkg" ] && ! deviated stage-product "$REL"; then
   done < "$tmp/l741"
   [ -n "$staged" ] || chk_fail stage-product "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh" \
                          "its install scripts and manifest are hand-rolled" \
-                         "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare '- stage-product: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+                         "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare .mavergreen/deviations/stage-product/<label>/ (scope *, a reason, a revisit)"
 fi
 
 # spec: SKILL.md "Family conventions" check 24 -- every feed URL and updater identity is derived from
@@ -789,7 +785,7 @@ while IFS= read -r f; do
   deviated rosetta "$f" && continue
   chk_fail rosetta "$f depends on Rosetta translation, with no declared rosetta:<path> deviation covering it: $hit" \
     "the family is retiring Rosetta, so an undeclared use is swept before macOS 28 removes it" \
-    "declare what runs translated, why it can't be native yet, and when to reconsider under INGREDIENTS.md's ## Conformance deviations as '- rosetta:$f: <reason>' (see the conventions skill, 'Rosetta')"
+    "declare what runs translated and why it can't be native yet as .mavergreen/deviations/rosetta/<label>/ (scope $f, a reason, a revisit saying when to reconsider; see the conventions skill, 'Rosetta')"
 done < "$tmp/l775"
 
 # spec: SKILL.md "Family conventions" check 28 -- what a build or test fetches is pinned, in a file
@@ -815,7 +811,7 @@ while IFS= read -r f; do
   deviated unpinned "$f" && continue
   chk_fail unpinned "$f fetches whatever release is newest instead of a pinned version: $hit" \
     "a newer release elsewhere changes what this build gets, with no commit here to say so" \
-    "pin the version in a file a Renovate manager tracks and fetch that one, or declare '- unpinned:$f: <why it must be the newest, and when to reconsider>' under INGREDIENTS.md's ## Conformance deviations"
+    "pin the version in a file a Renovate manager tracks and fetch that one, or declare .mavergreen/deviations/unpinned/<label>/ (scope $f, a reason, a revisit)"
 done < "$tmp/l28"
 
 # spec: SKILL.md "Family conventions" check 29, and "Acceptance on real 10.9" -- a pkg-building
@@ -866,7 +862,7 @@ else:
             print("unneeded %s %s" % (p, ",".join(vm)))
 PY
   [ "$rc" -eq 0 ] || py_crashed on-target
-  _decl="or, where no 10.9 acceptance job exists yet, declare '- on-target: <why, and its exit>' under INGREDIENTS.md's ## Conformance deviations"
+  _decl="or, where no 10.9 acceptance job exists yet, declare .mavergreen/deviations/on-target/<label>/ (scope *, a reason, a revisit)"
   while read -r _k _a _b; do
     case "$_k" in
       novm) chk_fail on-target "this repo builds a .pkg ($builds_pkg) but no job in $REL installs and runs the pkg on real 10.9 (Mavergreen/mavericks-vm)" \
@@ -892,7 +888,7 @@ while IFS= read -r f; do
   excused packager "$f" && continue
   chk_fail packager "$f builds a pkg with the system packager directly" \
     "only a macOS host has it, so the build is tied to a scarce macOS runner" \
-    "build it with stevedore's component and product commands, or declare '- packager:$f: <why it must, and its exit>' under INGREDIENTS.md's ## Conformance deviations"
+    "build it with stevedore's component and product commands, or declare .mavergreen/deviations/packager/<label>/ (scope $f, a reason, a revisit)"
 done < "$tmp/l35"
 
 # spec: SKILL.md "Family conventions" check 36 -- a job on a macos-* runner needs a declared reason:
@@ -929,13 +925,13 @@ PY
     excused macos-runner "$_j" && continue
     chk_fail macos-runner "$_j runs on a macos-* runner, with no declared reason" \
       "those runners are scarce" \
-      "move the job to Linux (stevedore builds pkgs there), or declare '- macos-runner:$_j: <why it needs macOS, and its exit>' under INGREDIENTS.md's ## Conformance deviations"
+      "move the job to Linux (stevedore builds pkgs there), or declare .mavergreen/deviations/macos-runner/<label>/ (scope $_j, a reason, a revisit)"
   done < "$tmp/c36"
 fi
 
 # spec: SKILL.md "Family conventions" check 37 -- an arm64 slice is a declared deviation, and what
 #       declares one runs it: release.yml has a modern-smoke job on a macos-* runner that publish
-#       needs exactly when INGREDIENTS.md declares '- arm64:<glob>: <reason>'. Conformance holds
+#       needs exactly when .mavergreen/deviations/arm64/ declares a deviation. Conformance holds
 #       the pkg to the declaration (the arm64 id).
 if rel_ran modern-smoke && ! grandfathered modern-smoke release.yml:modern-smoke && [ "$PY_OK" -eq 1 ]; then
   rc=0
@@ -969,13 +965,13 @@ PY
   _decl37="$(shipyard_deviation_scopes arm64 | head -1)"
   _job37=no; grep -qx job "$tmp/c37" && _job37=yes
   if [ -n "$_decl37" ] && [ "$_job37" = no ]; then
-    chk_fail modern-smoke "INGREDIENTS.md declares an arm64 slice, but release.yml has no modern-smoke job" \
+    chk_fail modern-smoke ".mavergreen/deviations/arm64/ declares an arm64 slice, but release.yml has no modern-smoke job" \
       "nothing runs the arm64 slice before it ships" \
       "add a job named modern-smoke to $REL, on a macos-* runner, that installs the run's own pkg and runs its arm64 slice, and add it to publish's needs:"
   elif [ -z "$_decl37" ] && [ "$_job37" = yes ]; then
-    chk_fail modern-smoke "release.yml has a modern-smoke job, but INGREDIENTS.md declares no arm64 slice" \
+    chk_fail modern-smoke "release.yml has a modern-smoke job, but .mavergreen/deviations/arm64/ declares no arm64 slice" \
       "an arm64 slice ships only with a reason" \
-      "declare '- arm64:<install-path glob>: <who runs it on Apple Silicon, and why>' under INGREDIENTS.md's ## Conformance deviations, or remove the job and ship x86_64 only"
+      "declare .mavergreen/deviations/arm64/<label>/ (scope <install-path glob>, a reason saying who runs it on Apple Silicon and why, a revisit), or remove the job and ship x86_64 only"
   elif [ "$_job37" = yes ]; then
     grep -qx offmac "$tmp/c37" \
       && chk_fail modern-smoke "the modern-smoke job does not run on a macos-* runner" \
@@ -1344,7 +1340,7 @@ while IFS="$TAB" read -r _id f line; do
     bare-curl)
       chk_fail bare-curl "$f runs curl directly: $_l" \
         "a bare curl does not retry a transient failure, and one connection reset cost a two-hour rerun" \
-        "use shipyard_curl (scripts/mavericks_fetch.sh), or declare '- bare-curl:$f: <reason>. Revisit when <exit>.' under ## Conformance deviations" ;;
+        "use shipyard_curl (scripts/mavericks_fetch.sh), or declare .mavergreen/deviations/bare-curl/<label>/ (scope $f, a reason, a revisit)" ;;
     *)
       case "$_id" in
         brew) _mgr="Homebrew, Linuxbrew or Tigerbrew" ;;
@@ -1354,7 +1350,7 @@ while IFS="$TAB" read -r _id f line; do
       esac
       chk_fail "$_id" "$f uses $_mgr: $_l" \
         "the family works toward no outside package manager, and each use is counted as a declared deviation" \
-        "replace it with the family product or facility that supplies the tool, or declare '- $_id:$f: <reason>. Revisit when <exit>.' under ## Conformance deviations" ;;
+        "replace it with the family product or facility that supplies the tool, or declare .mavergreen/deviations/$_id/<label>/ (scope $f, a reason, a revisit)" ;;
   esac
 done < "$pmhits"
 
@@ -1374,7 +1370,7 @@ if [ "$HAVE_TRACKED" -eq 1 ]; then
     _scope="$_g/**"; [ "$_g" != "$f" ] || _scope="$f"
     chk_fail vendored "$f is tracked under a vendor/ or third_party/ directory with no vendored deviation" \
       "a vendored copy is code the family does not build, and each one is counted until it is deleted" \
-      "declare '- vendored:$_scope: <reason>. Revisit when <exit>.' under ## Conformance deviations, naming the condition that deletes the copy"
+      "declare .mavergreen/deviations/vendored/<label>/ (scope $_scope, a reason, and a revisit naming the condition that deletes the copy)"
   done < "$tmp/vendored"
 fi
 
@@ -1428,7 +1424,7 @@ while IFS="$TAB" read -r f line; do
   _l="$(printf '%s' "$line" | sed 's/^[[:space:]]*//' | cut -c1-70)"
   chk_fail docs-no-sudo "$f tells the reader to run sudo: $_l" \
     "family tools elevate themselves, and a doc that prescribes sudo teaches a step the tool does for you" \
-    "family tools elevate themselves; write the plain command (for a pkg: \`mavergreen install <file.pkg>\`, or double-click). Docs write the bare \`mavergreen\`, never its path. Or declare '- docs-no-sudo:$f: <reason>. Revisit when <exit>.' under ## Conformance deviations"
+    "family tools elevate themselves; write the plain command (for a pkg: \`mavergreen install <file.pkg>\`, or double-click). Docs write the bare \`mavergreen\`, never its path. Or declare .mavergreen/deviations/docs-no-sudo/<label>/ (scope $f, a reason, a revisit)"
 done < "$tmp/sudohits"
 
 [ "$chk_status" -eq 0 ] && echo "check-family-conventions: ok"

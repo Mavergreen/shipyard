@@ -1,7 +1,7 @@
 # platform: host-agnostic
 #   usage: . deviation-reason.sh     (sourced; $SELF or $SHIPYARD_CHECK_DIR names the scripts directory)
-#          shipyard_deviations [<repo root | INGREDIENTS.md> | -]
-#                                                        loads that repo's deviations (default .; "-" reads fact
+#          shipyard_deviations [<repo root | its INGREDIENTS.md> | -]
+#                                                        loads that repo's .mavergreen/deviations/ (default .; "-" reads fact
 #                                                        lines on stdin) into $SHIPYARD_DEVIATION_FACTS, once per
 #                                                        root, prints them, and returns deviations.sh's status
 #                                                        with its refusals on stderr
@@ -10,7 +10,8 @@
 #          shipyard_deviation_scopes <check>             prints that check's scopes, one per line, * for unscoped
 #          Under those, the matcher:
 #          shipyard_deviation_facts                      stdin: deviations.sh's "<check> <glob or *> <reason>"
-#                                                        lines; stdout: one fact line per deviation,
+#                                                        lines, the glob %-escaped as deviations.sh writes it;
+#                                                        stdout: one fact line per deviation,
 #                                                        "deviation <check> <reason>" when unscoped,
 #                                                        "deviation <check>:<glob> <reason>" when scoped
 #          shipyard_deviation_reason <facts> <check> [<subject>]
@@ -32,6 +33,10 @@ shipyard_deviation_facts() {
   done
 }
 
+_shipyard_deviation_unescape() {
+  sed -e 's/%20/ /g' -e "s/%09/$(printf '\t')/g" -e 's/%25/%/g'
+}
+
 _shipyard_deviation_match() {  # stdin = facts, $1 = check, $2 = the subject it concerns (optional)
   _sdm_facts="$(cat)"
   _mdr="$(printf '%s\n' "$_sdm_facts" | sed -n "s/^deviation ${1} \(..*\)$/\1/p" | head -1)"
@@ -39,6 +44,7 @@ _shipyard_deviation_match() {  # stdin = facts, $1 = check, $2 = the subject it 
     while IFS= read -r _mdr_line; do
       _mdr_rest="${_mdr_line#deviation ${1}:}"
       _mdr_glob="${_mdr_rest%% *}"
+      case "$_mdr_glob" in *%*) _mdr_glob="$(printf '%s\n' "$_mdr_glob" | _shipyard_deviation_unescape)" ;; esac
       _mdr_why="${_mdr_rest#* }"
       [ "$_mdr_why" = "$_mdr_rest" ] && _mdr_why=""      # no space => a glob with no reason, which is not a deviation
       case "$2" in
@@ -87,5 +93,5 @@ shipyard_deviated() {  # $1 = check, $2 = the subject it concerns (optional)
 shipyard_deviation_scopes() {  # $1 = check; one scope per line, * for an unscoped deviation
   [ -n "${SHIPYARD_DEVIATION_RC+x}" ] || shipyard_deviations . >/dev/null 2>&1 || :
   printf '%s\n' "$SHIPYARD_DEVIATION_FACTS" \
-    | sed -n -e "s/^deviation ${1}\$/*/p" -e "s/^deviation ${1} .*\$/*/p" -e "s/^deviation ${1}:\([^ ]*\).*\$/\1/p"
+    | sed -n -e "s/^deviation ${1}\$/*/p" -e "s/^deviation ${1} .*\$/*/p" -e "s/^deviation ${1}:\([^ ]*\).*\$/\1/p" | _shipyard_deviation_unescape
 }

@@ -1,0 +1,4 @@
+build/cross.sh
+.mavergreen/deviations/rosseta/gyp/reason
+.mavergreen/deviations/rosseta/gyp/revisit
+.mavergreen/deviations/rosseta/gyp/scope

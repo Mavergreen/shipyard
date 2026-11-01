@@ -316,7 +316,7 @@ if ! shape="$(sh "$SELF/check-release-notes.sh" "$tmp" "$VER" 2>&1 >/dev/null)";
   printf '%s\n' "$shape" >&2
   # spec: tests/release-notes-test.sh "bare" -- a moved pin with no link source is the repo's to fix.
   case "$shape" in
-    *'unlinked:'*) die "a moved build ingredient says nothing about where its change is described (see the complaint above); the fix is in this repo: a Renovate manager, a REPO=, or an unlinked: declaration" ;;
+    *'deviations/unlinked/'*) die "a moved build ingredient says nothing about where its change is described (see the complaint above); the fix is in this repo: a Renovate manager, a REPO=, or a .mavergreen/deviations/unlinked/ deviation" ;;
   esac
   if [ -f "$notes" ] && [ -s "$notes" ]; then
     die "the generated body failed the family shape check (see the complaint above); likely cause: the committed prose at $notes"

@@ -5,7 +5,7 @@
 #          The family acceptance audit for "SDK pinning": downloads each repo's LATEST release (verified
 #          against its SHA256SUMS; a release without one is audited anyway and said to be UNVERIFIED),
 #          runs artifact-facts.sh over it and applies the sdk-pin rule alone,
-#          honouring the deviations its INGREDIENTS.md declares. One verdict line per repo; exit 1 if any
+#          honouring the deviations its .mavergreen/deviations/ declares. One verdict line per repo; exit 1 if any
 #          repo has an unexcused violation. --dist audits an already-downloaded release against a local
 #          checkout (the test uses it).
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning"
@@ -13,7 +13,7 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/audit-sdks.XXXXXX")"; trap 'rm -rf "$w"' EXIT
-audit_one() {  # $1 = label, $2 = dist dir, $3 = repo root holding INGREDIENTS.md (may lack one)
+audit_one() {  # $1 = label, $2 = dist dir, $3 = repo root holding .mavergreen/deviations/ (may lack one)
   # platform: only the macho, deviation and sentinel facts reach the checker, so the version it is told
   #           is never compared with anything; a fixed well-formed one keeps its scheme check quiet.
   # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the filter
@@ -65,7 +65,12 @@ for r in "$@"; do
     echo "audit: $r has no SHA256SUMS -- audited UNVERIFIED"
   fi
   rm -f "$d/dist/SHA256SUMS"
-  gh api "repos/$r/contents/INGREDIENTS.md" --jq .content 2>/dev/null | base64 --decode > "$d/src/INGREDIENTS.md" 2>/dev/null || rm -f "$d/src/INGREDIENTS.md"
+  gh api "repos/$r/git/trees/HEAD?recursive=1" \
+      --jq '.tree[] | select(.type == "blob" and (.path | startswith(".mavergreen/deviations/"))) | .path' 2>/dev/null \
+    | while IFS= read -r p; do
+        mkdir -p "$d/src/$(dirname "$p")"
+        gh api "repos/$r/contents/$p" --jq .content 2>/dev/null | base64 --decode > "$d/src/$p" 2>/dev/null
+      done || rm -rf "$d/src/.mavergreen"
   audit_one "$r" "$d/dist" "$d/src" || rc=1
 done
 exit "$rc"

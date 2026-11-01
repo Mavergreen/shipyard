@@ -106,18 +106,18 @@ first_is() {  # the first line of $output starts with "$1: "
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the guard
 #       honours the same declared sdk-pin:<glob> exemptions as the package-time rule, read from
-#       $MAVERICKS_DEVIATIONS_ROOT/INGREDIENTS.md, and they excuse the minos/sdk rule only.
-declare_deviation() { printf '## Conformance deviations\n%s\n' "$1" > "$WORK/INGREDIENTS.md"; }
+#       $MAVERICKS_DEVIATIONS_ROOT/.mavergreen/deviations/, and they excuse the minos/sdk rule only.
+declare_deviation() { . "$BATS_TEST_DIRNAME/lib/deviation_tree.sh"; deviation "$WORK" sdk-pin "$1" "$2" "$3"; }
 
 @test "a matching sdk-pin glob excuses the SDK rule, and says so" {
-  declare_deviation '- sdk-pin:*/r265: prebuilt upstream, shipped verbatim'
+  declare_deviation r265 '*/r265' 'prebuilt upstream, shipped verbatim'
   run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
   [ "$status" -eq 0 ]
   [[ "$output" == *"compat guard: $WORK/r265 is excused from sdk-pin: prebuilt upstream, shipped verbatim"* ]] || false
 }
 
 @test "a non-matching sdk-pin glob excuses nothing" {
-  declare_deviation '- sdk-pin:*/other: prebuilt upstream'
+  declare_deviation other '*/other' 'prebuilt upstream'
   run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
   [ "$status" -ne 0 ]
   first_is sdk-pin
@@ -125,7 +125,7 @@ declare_deviation() { printf '## Conformance deviations\n%s\n' "$1" > "$WORK/ING
 }
 
 @test "an sdk-pin glob with no reason fails the guard closed" {
-  declare_deviation '- sdk-pin:*/r265:'
+  declare_deviation r265 '*/r265' ''
   run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
   [ "$status" -ne 0 ]
   first_is deviation-complete
@@ -133,7 +133,7 @@ declare_deviation() { printf '## Conformance deviations\n%s\n' "$1" > "$WORK/ING
 }
 
 @test "an sdk-pin excuse does not excuse an arch outside MAVERICKS_ALLOW_ARCHS" {
-  declare_deviation '- sdk-pin:*/a265: prebuilt upstream'
+  declare_deviation a265 '*/a265' 'prebuilt upstream'
   run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/a265"
   [ "$status" -ne 0 ]
   first_is compat-archs
@@ -240,7 +240,7 @@ mk_readers() {
   run env SHIPYARD_CHECK_DIST="$WORK/dist" sh "$GUARD"
   [ "$status" -ne 0 ]
   first_is sdk-pin
-  declare_deviation '- sdk-pin:tool: built against a newer SDK, shipped verbatim'
+  declare_deviation tool 'tool' 'built against a newer SDK, shipped verbatim'
   run env SHIPYARD_CHECK_DIST="$WORK/dist" MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD"
   [ "$status" -eq 0 ]
   [[ "$output" == *"tool is excused from sdk-pin"* ]] || false

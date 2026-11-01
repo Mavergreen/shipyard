@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: compat-guard-exemptions-test.sh
 #          assert_binary_compatible.sh honours a declared sdk-pin:<glob> deviation, read from
-#          $MAVERICKS_DEVIATIONS_ROOT/INGREDIENTS.md (default: the current directory), for the
+#          $MAVERICKS_DEVIATIONS_ROOT/.mavergreen/deviations/ (default: the current directory), for the
 #          minos/sdk rule ONLY. The Mach-O readers are stubbed: a fixture "binary" is the slice
 #          lines macho-slices.sh would print, so the guard's own logic runs on any host;
 #          tests/compat_guard.bats covers the same cases on real binaries.
@@ -10,7 +10,7 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/guard-exempt-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 mkdir -p "$w/scripts/lib" "$w/bin" "$w/repo" "$w/build/bin"
-for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh check-lib.sh check-ids.tsv lib/macho-tools.sh lib/pkg-tree.sh; do
+for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh mavergreen-meta.sh check-lib.sh check-ids.tsv lib/macho-tools.sh lib/pkg-tree.sh; do
   cp "$here/../scripts/$s" "$w/scripts/$s"
 done
 cat > "$w/scripts/macho-slices.sh" <<'EOF'
@@ -31,7 +31,11 @@ G="$w/scripts/assert_binary_compatible.sh"
 echo 'x86_64 EXECUTE 10.9 26.5' > "$w/build/bin/tool"
 echo 'x86_64 EXECUTE 10.9 10.9' > "$w/build/bin/good"
 echo 'arm64 EXECUTE 11.0 26.5' > "$w/build/bin/armtool"
-ingredients() { printf '## Conformance deviations\n%s\n' "$1" > "$w/repo/INGREDIENTS.md"; }
+. "$here/lib/deviation_tree.sh"
+deviations_are() {  # groups of four: check label scope reason
+  rm -rf "$w/repo/.mavergreen"
+  while [ "$#" -ge 4 ]; do deviation "$w/repo" "$1" "$2" "$3" "$4"; shift 4; done
+}
 
 run() {  # sets rc and out; $root, when set, is MAVERICKS_DEVIATIONS_ROOT, and $cwd where the guard runs
   rc=0
@@ -42,12 +46,12 @@ passes() { run "$@"; [ "$rc" -eq 0 ] || { echo "FAIL ($label): should pass, exit
 fails()  { run "$@"; [ "$rc" -ne 0 ] || { echo "FAIL ($label): should fail:"; echo "$out"; exit 1; }; }
 says()   { printf '%s\n' "$out" | grep -qF -- "$1" || { echo "FAIL ($label): output lacks '$1':"; echo "$out"; exit 1; }; }
 
-label="no INGREDIENTS.md: the rule applies"; root=""; cwd=""
+label="no deviations: the rule applies"; root=""; cwd=""
 fails "$w/build/bin/tool"; says 'sdk 26.5'
 passes "$w/build/bin/good"
 
 label="a matching glob excuses the sdk rule, and says so"; root="$w/repo"
-ingredients '- sdk-pin:*/bin/tool: prebuilt upstream, shipped verbatim'
+deviations_are sdk-pin tool '*/bin/tool' 'prebuilt upstream, shipped verbatim'
 passes "$w/build/bin/tool"
 says "compat guard: $w/build/bin/tool is excused from sdk-pin: prebuilt upstream, shipped verbatim"
 
@@ -59,32 +63,32 @@ label="MAVERICKS_DEVIATIONS_ROOT defaults to the current directory"; root=""; cw
 passes "$w/build/bin/tool"; cwd=""; root="$w/repo"
 
 label="a non-matching glob excuses nothing"
-ingredients '- sdk-pin:*/bin/other: prebuilt upstream'
+deviations_are sdk-pin other '*/bin/other' 'prebuilt upstream'
 fails "$w/build/bin/tool"; says 'sdk 26.5'
 
 label="a deviation for another check excuses nothing"
-ingredients '- install-path:*/bin/tool: somewhere odd'
+deviations_are install-path tool '*/bin/tool' 'somewhere odd'
 fails "$w/build/bin/tool"
 
 label="an unscoped sdk-pin deviation excuses every file"
-ingredients '- sdk-pin: every binary here is prebuilt'
+deviations_are sdk-pin all '*' 'every binary here is prebuilt'
 passes "$w/build/bin/tool"; says 'is excused from sdk-pin: every binary here is prebuilt'
 
 label="a glob with no reason fails the guard closed"
-ingredients '- sdk-pin:*/bin/tool:'
+deviations_are sdk-pin tool '*/bin/tool' ''
 fails "$w/build/bin/tool"
 label="a malformed entry for ANY check fails the guard closed, even for a clean binary"
-ingredients '- scheme:no space after the colon'
+deviations_are version-scheme x '*' 'a reason'; : > "$w/repo/.mavergreen/deviations/version-scheme/x/revisit"
 fails "$w/build/bin/good"
 
 label="an excuse covers only the sdk rule: an arch outside MAVERICKS_ALLOW_ARCHS still fails"
-ingredients '- sdk-pin:*/bin/armtool: prebuilt upstream'
+deviations_are sdk-pin armtool '*/bin/armtool' 'prebuilt upstream'
 fails "$w/build/bin/armtool"; says "arches 'arm64' != 'x86_64'"
 run_arm() { MAVERICKS_ALLOW_ARCHS=arm64; export MAVERICKS_ALLOW_ARCHS; passes "$@"; unset MAVERICKS_ALLOW_ARCHS; }
 label="the same excuse passes once the arch is allowed"; run_arm "$w/build/bin/armtool"
 
 label="an excuse covers only the sdk rule: a post-10.9 import still fails"
-ingredients '- sdk-pin:*/bin/tool: prebuilt upstream'
+deviations_are sdk-pin tool '*/bin/tool' 'prebuilt upstream'
 printf '#!/bin/sh\necho "                 (undefined) external _clock_gettime (from libSystem)"\n' > "$w/bin/nm"
 fails "$w/build/bin/tool"; says '_clock_gettime'
 printf '#!/bin/sh\nexit 0\n' > "$w/bin/nm"
@@ -113,22 +117,23 @@ macho 'x86_64 EXECUTE 10.9 10.9' > "$r/bin/noshim"
 (cd "$w/tree" && tar czf "$w/dist/demo-1.0.0-mavericks.1.tar.gz" usr)
 dist() { rc=0; out="$(cd "$w" && SHIPYARD_CHECK_DIST="$w/dist" MAVERICKS_DEVIATIONS_ROOT="$w/repo" MAVERICKS_REQUIRE_DEFINED_SYMBOLS=_shim sh "$G" 2>&1)" || rc=$?; }
 label="--dist with no deviation: each binary's own allowance is missing"
-ingredients ''
+deviations_are
 dist; [ "$rc" -ne 0 ] || { echo "FAIL ($label): should fail"; echo "$out"; exit 1; }
 for id in compat-selectors compat-archs compat-imports compat-required-defined; do
   says "more: shipyard-check --explain $id"
 done
 label="--dist honours a path-scoped deviation for each compat id"
-ingredients '- compat-selectors:usr/local/mavergreen/demo/bin/demo: it sends labelColor only after respondsToSelector:. Revisit when 10.9 leaves.
-- compat-archs:usr/local/mavergreen/demo/bin/updater: the updater is universal. Revisit when P5 reads arm64.
-- compat-imports:usr/local/mavergreen/demo/bin/weak: weak, NULL-checked. Revisit when the shim lands.
-- compat-required-defined:usr/local/mavergreen/demo/bin/noshim: a helper with no shim. Revisit when it links one.'
+deviations_are \
+  compat-selectors demo usr/local/mavergreen/demo/bin/demo 'it sends labelColor only after respondsToSelector:. Revisit when 10.9 leaves.' \
+  compat-archs updater usr/local/mavergreen/demo/bin/updater 'the updater is universal. Revisit when P5 reads arm64.' \
+  compat-imports weak usr/local/mavergreen/demo/bin/weak 'weak, NULL-checked. Revisit when the shim lands.' \
+  compat-required-defined noshim usr/local/mavergreen/demo/bin/noshim 'a helper with no shim. Revisit when it links one.'
 dist; [ "$rc" -eq 0 ] || { echo "FAIL ($label): should pass, exit $rc:"; echo "$out"; exit 1; }
 for id in compat-selectors compat-archs compat-imports compat-required-defined; do
   says "is excused from $id:"
 done
 label="--dist: a deviation scoped to one binary excuses no other"
-ingredients '- compat-archs:usr/local/mavergreen/demo/bin/demo: wrong file. Revisit never.'
+deviations_are compat-archs demo usr/local/mavergreen/demo/bin/demo 'wrong file. Revisit never.'
 dist; [ "$rc" -ne 0 ] || { echo "FAIL ($label): should fail"; echo "$out"; exit 1; }
 says "usr/local/mavergreen/demo/bin/updater arches"
 echo "PASS: compat-guard-exemptions"

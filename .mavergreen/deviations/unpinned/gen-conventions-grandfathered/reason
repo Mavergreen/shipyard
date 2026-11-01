@@ -1,0 +1,1 @@
+it grandfathers the arm64 slices each repo ships today, so it reads each repo's newest release and downloads its pkgs to inspect them. It builds, signs and publishes nothing.

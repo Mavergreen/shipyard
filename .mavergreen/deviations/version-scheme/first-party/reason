@@ -1,0 +1,2 @@
+shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
+Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance checks that they do.

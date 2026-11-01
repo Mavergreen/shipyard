@@ -1,0 +1,4 @@
+vendor/a.sh
+.mavergreen/deviations/comments/vendored/reason
+.mavergreen/deviations/comments/vendored/revisit
+.mavergreen/deviations/comments/vendored/scope

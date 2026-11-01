@@ -1,0 +1,1 @@
+When python-315 ships ssl and pip works (its phase 2); then delete the vendored copy and the checks import a pip-installed PyYAML (/opt/mavergreen/bin/python3 -m pip install --user pyyaml).

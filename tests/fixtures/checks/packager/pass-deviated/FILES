@@ -6,3 +6,6 @@ UPSTREAM_VERSION
 build/upstream-release-notes-url.sh
 tests/a-test.sh
 build/package.sh
+.mavergreen/deviations/packager/oracle/reason
+.mavergreen/deviations/packager/oracle/revisit
+.mavergreen/deviations/packager/oracle/scope

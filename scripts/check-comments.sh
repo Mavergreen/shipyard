@@ -20,21 +20,11 @@ REASONS="$ROOT/comment-reasons"
 [ -f "$REASONS" ] || { chk_notrun comments "no comment-reasons file, so this repo has not opted in"; exit 0; }
 alt="$(tr '\n' '|' < "$REASONS" | sed 's/|$//')"
 
-# spec: scripts/check-family-conventions.sh check 15 -- a swept repo that still wants ONE declared
-#       exception states it under INGREDIENTS.md "## Conformance deviations" as
-#       "- comments: <reason>", which switches the check off REPO-WIDE; the "<check>:<glob>" scoping
-#       that check-artifact-conformance.sh honours is rejected here, not swallowed into the reason.
-if [ "$#" -eq 0 ] && [ -f INGREDIENTS.md ]; then
+if [ "$#" -eq 0 ]; then
   . "$SELF/deviation-reason.sh"
   shipyard_deviations . >/dev/null 2>&1 || :
-  devscope="$(shipyard_deviation_scopes comments | grep -vx '\*' | head -1 || true)"
   deviation="$(shipyard_deviated comments || true)"
-  if [ -n "$devscope" ]; then
-    chk_fail comments "INGREDIENTS.md scopes the comments deviation to \"$devscope\"" \
-      "check 15's deviation is repo-wide and a glob is not honoured here" \
-      "write \"- comments: <reason>\" (a space after the colon) and accept that it switches comment checking off for the whole repo, or drop the deviation and tag the comments"
-    exit 1
-  fi
+  scoped="$(shipyard_deviation_scopes comments)"
   if [ -n "$deviation" ]; then
     echo "check-comments: DECLARED DEVIATION -- $deviation"
     exit 0
@@ -71,6 +61,10 @@ else
   : > "$listfile"
   grep -E '\.(sh|yml)$' "$rawfile" | grep -v '^tests/fixtures/checks/' > "$selfile" || :
   while IFS= read -r rel; do
+    if [ -n "$scoped" ] && why="$(shipyard_deviated comments "$rel")"; then
+      echo "check-comments: DECLARED DEVIATION ($rel) -- $why"
+      continue
+    fi
     printf '%s/%s\n' "${ROOT%/}" "$rel" >> "$listfile"
   done < "$selfile"
 fi

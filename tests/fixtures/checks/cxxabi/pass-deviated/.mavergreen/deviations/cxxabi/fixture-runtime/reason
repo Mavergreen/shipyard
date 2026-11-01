@@ -1,0 +1,1 @@
+a fixture that defines the C++ runtime on purpose; exit: never, it is a fixture

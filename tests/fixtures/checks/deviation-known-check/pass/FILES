@@ -1,1 +1,4 @@
 build/cross.sh
+.mavergreen/deviations/version-scheme/first-party/reason
+.mavergreen/deviations/version-scheme/first-party/revisit
+.mavergreen/deviations/version-scheme/first-party/scope

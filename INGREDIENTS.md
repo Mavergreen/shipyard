@@ -43,40 +43,8 @@ describe that status quo more slowly -- it is shipyard's declared exception, not
 `check-family-conventions.sh`. Consumers reach both the same way they reach everything else here:
 through the moving `@v1` tag. A consumer adopts the check by sweeping its own tree and committing its
 own `comment-reasons` (one recognised tag per line — `platform`, `spec`); check 15 exits 0, silently, in
-a repo that has not swept yet. A repo that wants one declared exception states it under `## Conformance
-deviations` below (`- comments: <reason>`), the same grammar `check-artifact-conformance.sh` already
-reads. What the two tolerated reasons are, and the test that decides whether a comment is warranted at
-all, is documented in the conventions skill ("Comments cite a reason").
-
-**That grammar has a second reader.** `artifact-facts.sh` also parses this file's `## Conformance
-deviations` section, so a `- comments: <reason>` line surfaces twice — once as a deviation for
-`check-family-conventions.sh`, once as a `deviation comments <reason>` record in the artifact fact
-stream. Harmless, since the conformance checker only consults records for checks it evaluates, but the
-two subsystems share one namespace under one header.
-
-## Conformance deviations
-
-`check-artifact-conformance.sh` holds each release's artifacts to the family's schemes. One of them,
-`version-scheme`, assumes a version of the form `<upstream>-mavericks.N`; shipyard's is not, on purpose.
-Machine-read by `artifact-facts.sh` as `- <check>[:<glob>]: <reason>` (the reason is the rest of that
-one line):
-
-- version-scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
-  Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
-  checks that they do.
-- brew:scripts/install-macho-readers.sh: the fallback for llvm-lipo and llvm-strings, which Xcode does not ship. Revisit when every job that runs the compat guard has clang22 installed (vision area 14).
-- brew:.github/workflows/ci.yml: the step that records what the Mach-O readers resolved to asks brew whether llvm is present. Revisit with brew:scripts/install-macho-readers.sh, whose fallback it reports on.
-- brew:.github/actions/install/action.yml: bats-core, where no family bats exists. Revisit when a family product or the runner image supplies bats.
-- apt:.github/workflows/linux-host.yml: the Linux CI job installs llvm. Revisit when area 14's pinned LLVM tarball supplies the readers.
-- apt:.github/actions/install/action.yml: bats-core on a Linux runner, where no family bats exists. Revisit when a family product or the runner image supplies bats.
-- host:linux: bash32-parse needs a bash 3.2 /bin/sh and Linux has none. Revisit when the Apple-shells collection (bash 3.2 and the other shells Apple ships) has a Linux tarball.
-- vendored:scripts/vendor/yaml/**: PyYAML is vendored because python-315's phase 1 has no ssl, so pip cannot fetch it on 10.9, and the checks keep their Python. Revisit when python-315 ships ssl and pip works (its phase 2); then delete the vendored copy and the checks import a pip-installed PyYAML (/opt/mavergreen/bin/python3 -m pip install --user pyyaml).
-- vendored:scripts/vendor/pyyaml.pin: the pin that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
-- vendored:scripts/vendor/yaml.sha256: the checksum that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
-- vendored:scripts/vendor/sync-pyyaml.sh: the sync script that maintains scripts/vendor/yaml. Revisit with vendored:scripts/vendor/yaml/**; it goes when the copy does.
-- docs-no-sudo:README.md: its install, uninstall and Linux dev-dependency steps are written as root commands; the Engine does not exist yet, so no family command does the first two. Revisit when the Engine's `mavergreen install` and `mavergreen uninstall` ship in the flag day; the dev-dependency line goes with `apt:.github/actions/install/action.yml`.
-- docs-no-sudo:scripts/mavergreen.sh: the helper's uninstall, refusing while other products link into the target, names each one's uninstall as the root command it is today; the helper does not elevate itself. Revisit when the Engine's `mavergreen uninstall` ships in the flag day and elevates per step.
-- unpinned:scripts/cut-release.sh: it reads a repo's newest release tag before and after the run it dispatched, to report what that run published; it fetches nothing and builds nothing. Reconsider if it ever downloads an asset.
-- unpinned:scripts/audit-release-sdks.sh: the SDK-pinning acceptance audit exists to judge what each repo has shipped most recently, so it downloads each repo's newest release (verified against its SHA256SUMS). It builds and signs nothing. Reconsider if it is ever wired into a release path.
-- unpinned:scripts/gen-conventions-grandfathered.sh: it grandfathers the arm64 slices each repo ships today, so it reads each repo's newest release and downloads its pkgs to inspect them. It builds, signs and publishes nothing. Reconsider if it is ever wired into a release path.
-- on-target:pkg-install: the 10.9 job (linux-host.yml's on-target-updater, which release.yml's publish needs through its linux job) launches the Linux-built updater check-only in the guest; it does not install the run's mavericks-shipyard pkg, which is built on macOS, nor run the host-agnostic tests there. Exit: install the run's own pkg in that guest, run its tests there, and keep the launch.
+a repo that has not swept yet. A repo that wants a declared exception states it as
+`.mavergreen/deviations/comments/<label>/` (`scope`, `reason`, `revisit`), the same deviations
+`check-artifact-conformance.sh` reads. What the two tolerated reasons are, and the test that decides
+whether a comment is warranted at all, is documented in the conventions skill ("Comments cite a
+reason").

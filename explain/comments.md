@@ -24,9 +24,9 @@ comment, because finding a # reliably inside a shell line needs a parser. The us
 one nobody can police. It does not read a repo that has no comment-reasons file.
 
 ## Deviating
-The only deviation is repo-wide and takes no glob: "- comments: <reason>". A scoped form such as
-"- comments:vendor/*: ..." fails rather than narrowing it, so a deviation here switches comment checking
-off for the whole repo. A good reason says what makes tagging impossible, and the exit: the sweep that
-will end it. Prefer tagging or deleting the comments.
+Write .mavergreen/deviations/comments/<label>/ with a scope, a reason and a revisit. A scope of * switches
+comment checking off for the whole repo; any other scope excuses only the tracked files it matches, and each
+excused file is named in the output. A good reason says what makes tagging impossible, and the revisit says
+what ends it: usually the sweep that tags them. Prefer tagging or deleting the comments.
 
 Formerly gate check 15

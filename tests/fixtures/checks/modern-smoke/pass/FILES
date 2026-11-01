@@ -5,3 +5,6 @@ INGREDIENTS.md
 UPSTREAM_VERSION
 build/upstream-release-notes-url.sh
 tests/a-test.sh
+.mavergreen/deviations/arm64/w-bin/reason
+.mavergreen/deviations/arm64/w-bin/revisit
+.mavergreen/deviations/arm64/w-bin/scope

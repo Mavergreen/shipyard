@@ -6,7 +6,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 
 # spec: SKILL.md "Family conventions" check 29 -- a repo that builds a .pkg has a job in release.yml
 #       whose steps use Mavergreen/mavericks-vm, and the publish job needs it directly, unless
-#       INGREDIENTS.md declares an unscoped "- on-target: <reason>".
+#       .mavergreen/deviations/on-target/ holds a deviation of scope *.
 vm() {  # $1 = name, $2 = the jobs appended to release.yml
   d="$work/vm-$1"; pkrepo "$d"
   printf '%s\n' "$2" >> "$d/.github/workflows/release.yml"
@@ -82,8 +82,7 @@ vm_fails otherfile "$NOVM"
 
 vm declared "$PUB
     needs: [build]"
-printf '\n- on-target: drives a kext that needs the real trackpad; exit: a VM with USB passthrough\n' \
-  >> "$work/vm-declared/INGREDIENTS.md"
+deviation "$work/vm-declared" on-target trackpad '*' 'drives a kext that needs the real trackpad; exit: a VM with USB passthrough'
 (cd "$work/vm-declared" && git add -A) >/dev/null 2>&1
 vm_passes declared
 
@@ -91,16 +90,14 @@ vm_passes declared
 #       job's coverage; only the unscoped form stands in for the job itself.
 vm scoped "$PUB
     needs: [build]"
-printf '\n- on-target:docker-vm: Fusion cannot nest inside the QEMU guest; exit: a nested-virt runner\n' \
-  >> "$work/vm-scoped/INGREDIENTS.md"
+deviation "$work/vm-scoped" on-target docker-vm 'docker-vm' 'Fusion cannot nest inside the QEMU guest; exit: a nested-virt runner'
 (cd "$work/vm-scoped" && git add -A) >/dev/null 2>&1
 vm_fails scoped "$NOVM"
 
 vm gap "$(printf '%s\n    if: needs.ver.outputs.publish == '"'"'true'"'"'' "$VMJOB" | sed 's/^  vm-test:/  on-mavericks:/')
 $PUB
     needs: [build, on-mavericks]"
-printf '\n- on-target:menubar-gui: the guest has no logged-in GUI session; exit: a guest with one\n' \
-  >> "$work/vm-gap/INGREDIENTS.md"
+deviation "$work/vm-gap" on-target menubar-gui 'menubar-gui' 'the guest has no logged-in GUI session; exit: a guest with one'
 (cd "$work/vm-gap" && git add -A) >/dev/null 2>&1
 vm_passes gap
 
@@ -149,11 +146,11 @@ vm_fails remote "$NOVM"
 #       would read as the bare form and exempt the repo, so it is refused, not honoured.
 vm globpart "$PUB
     needs: [build]"
-printf '\n- on-target:*: everything is a gap\n' >> "$work/vm-globpart/INGREDIENTS.md"
+deviation "$work/vm-globpart" on-target docker 'docker-*' 'every docker part is a gap'
 (cd "$work/vm-globpart" && git add -A) >/dev/null 2>&1
 vm_fails globpart "$NOVM"
-out="$(cd "$work/vm-globpart" && sh "$here/../scripts/check-deviations.sh" 2>&1)" && { echo "FAIL: check 29: on-target:* must be refused"; exit 1; }
-printf '%s\n' "$out" | grep -q 'on-target:<part> is one word' || { echo "FAIL: check 29: on-target:* should be refused as a glob: $out"; exit 1; }
+out="$(cd "$work/vm-globpart" && sh "$here/../scripts/check-deviations.sh" 2>&1)" && { echo "FAIL: check 29: an on-target part of docker-* must be refused"; exit 1; }
+printf '%s\n' "$out" | grep -q 'an on-target part is one word' || { echo "FAIL: check 29: an on-target part of docker-* should be refused as a glob: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh check 21 -- test/ holds fixtures exactly as tests/ does.
 mkrepo "$work/vm-testdir" novm; mkdir -p "$work/vm-testdir/test"

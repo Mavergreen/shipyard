@@ -1,90 +1,111 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: deviations.sh <repo>
-#          Prints the deviations declared in <repo>/INGREDIENTS.md under "## Conformance deviations",
-#          one per line as "<check> <glob or *> <reason>". The grammar is "- <check>[:<glob>]:
-#          <reason>"; unlinked alone may add a KEY, "- unlinked:<glob>[:<KEY>]: <reason>", and must
-#          name a scope. A deviation IS a product fact, so it lives with the other product facts, and
-#          ONE parser keeps every checker reading it alike. Exit 1 if an entry has no reason: an
-#          exception without one is indistinguishable from drift.
+#          Prints the deviations in <repo>/.mavergreen/deviations/<check>/<label>/, one per line as
+#          "<check> <scope> <reason>": scope is line 1 of scope (* for repo-wide), with "%" written
+#          %25, a space %20 and a tab %09 so it stays one column; reason is reason's lines joined
+#          by single spaces. Also prints "upstream-notes * <reason>" for <repo>/INGREDIENTS.md's
+#          "No upstream release notes: <reason>" line. A deviation without a one-line scope, a
+#          reason and a revisit, under a label matching ^[a-z0-9][a-z0-9.-]*$, or with a scope its
+#          check cannot honour, is refused on stderr and the exit is 1: an exception without them
+#          is indistinguishable from drift.
 set -eu
+LC_ALL=C; export LC_ALL
 root="${1:-.}"
-[ -f "$root/INGREDIENTS.md" ] || exit 0
-rc=0
-sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
-  /^- *[a-z][a-z0-9_-]*(:[^ :]*)? *:/ {
-    line = $0; sub(/^- */, "", line)
-    i = index(line, ":"); check = substr(line, 1, i - 1); rest = substr(line, i + 1)
-    glob = "*"; scoped = 0
-    if (rest !~ /^ /) {
-      scoped = 1
-      j = index(rest, ":"); glob = substr(rest, 1, j - 1); rest = substr(rest, j + 1)
-      # spec: tests/deviations-test.sh -- no second colon leaves an EMPTY glob ("- check:reason",
-      #       the same declaration written without the space). It fails SAFE, which is what makes it
-      #       worth rejecting: an exception is written, the file looks like it carries one, and no
-      #       checker honours it -- while every reader that splits on whitespace takes the FIRST WORD
-      #       of the reason as the scope.
-      if (glob == "") {
-        print "deviations.sh: \"" check "\" has an empty glob -- write \"- " check ": <reason>\" or \"- " check ":<glob>: <reason>\"" > "/dev/stderr"
-        bad = 1; next
-      }
-      # spec: tests/deviations-test.sh -- unlinked: scopes a pin, which is a file plus its KEY; on
-      #       any other kind a :KEY could never match a subject, so it would excuse nothing, silently.
-      if (match(rest, /^[A-Z*][A-Z0-9_*]*:/)) {
-        if (check != "unlinked") {
-          print "deviations.sh: \"" check ":" glob ":" substr(rest, 1, RLENGTH - 1) "\" -- only unlinked: takes a :KEY scope" > "/dev/stderr"
-          bad = 1; next
-        }
-        glob = glob ":" substr(rest, 1, RLENGTH - 1); rest = substr(rest, RLENGTH + 1)
-      }
-    }
-    # spec: tests/deviations-test.sh -- an unscoped or "*" unlinked: would switch the release-notes
-    #       link rule off for the whole repo.
-    if (check == "unlinked" && glob == "*") {
-      print "deviations.sh: \"unlinked\" must name the pins it excuses: \"- unlinked:<pin path>[:KEY]: <reason>\"" > "/dev/stderr"
-      bad = 1; next
-    }
-    # spec: tests/deviations-test.sh -- a self-upstream-exclude: of only "*" and "/" would make no
-    #       change own code, so every release would keep the last date.
-    if (check == "self-upstream-exclude" && glob ~ /^[*\/]+$/) {
-      print "deviations.sh: \"self-upstream-exclude\" must name what it excludes: \"- self-upstream-exclude:<glob>: <reason>\"" > "/dev/stderr"
-      bad = 1; next
-    }
-    # spec: SKILL.md "Acceptance on real 10.9" -- on-target:<part> names one gap in what the 10.9 guest
-    #       covers; a glob there would read as the bare on-target, which exempts the repo from
-    #       check 29.
-    if (check == "on-target" && scoped && glob ~ /[*?]|\[/) {
-      print "deviations.sh: \"on-target:" glob "\" -- on-target:<part> is one word naming what stays untested in the guest, never a glob; a bare \"- on-target: <reason>\" is the one that stands in for the job" > "/dev/stderr"
-      bad = 1; next
-    }
-    # spec: SKILL.md "Family conventions" checks 35 and 36 -- a wildcard would excuse every path or job
-    #       at once, which defeats a check meant to be burned down one entry at a time. macos-runner
-    #       is keyed "<workflow file>:<job>", so a job id alone cannot excuse the same id elsewhere.
-    if (check == "macos-runner" && scoped && match(rest, /^[A-Za-z0-9_-]+:/)) {
-      glob = glob ":" substr(rest, 1, RLENGTH - 1); rest = substr(rest, RLENGTH + 1)
-    }
-    if (check == "macos-runner" && (index(glob, "*") || index(glob, "?") || index(glob, "[") || split(glob, jobparts, ":") != 2 || jobparts[1] == "" || jobparts[2] == "")) {
-      print "deviations.sh: \"macos-runner\" names one job: \"- macos-runner:<workflow file>:<job>: <reason, exit>\", never a wildcard" > "/dev/stderr"
-      bad = 1; next
-    }
-    # spec: SKILL.md "Family conventions" check 37 -- arm64 names install paths; a bare form or an
-    #       all-wildcard glob would declare the whole pkg universal.
-    if (check == "arm64" && (!scoped || glob ~ /^[*?\/]+$/)) {
-      print "deviations.sh: \"arm64\" names the install paths it covers: \"- arm64:<install-path glob>: <reason>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
-      bad = 1; next
-    }
-    if (check == "cxxabi" && (!scoped || glob ~ /^[*?\/]+$/)) {
-      print "deviations.sh: \"cxxabi\" names the install paths it covers: \"- cxxabi:<install-path glob>: <reason>; exit: <how it goes away>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
-      bad = 1; next
-    }
-    if (check == "packager" && (!scoped || glob ~ /[*?[]/)) {
-      print "deviations.sh: \"packager\" names one path: \"- packager:<path>: <reason, exit>\", never a wildcard" > "/dev/stderr"
-      bad = 1; next
-    }
-    sub(/^ */, "", rest)
-    if (rest == "") { print "deviations.sh: \"" check "\" declares no reason" > "/dev/stderr"; bad = 1; next }
-    print check " " glob " " rest
-  }
-  END { exit bad }' || rc=$?
-sed -n 's/^.*No upstream release notes: *\([^ ].*\)$/upstream-notes * \1/p' "$root/INGREDIENTS.md" | head -1
-exit "$rc"
+_here="$(cd "$(dirname "$0")" && pwd)"
+. "$_here/mavergreen-meta.sh"
+MAVERGREEN_ROOT="$root"
+base="$(mg_dir)"
+tab="$(printf '\t')"
+bad=0
+
+refuse() { printf 'deviations.sh: deviations/%s: %s\n' "$1" "$2" >&2; bad=1; }
+
+prose() {
+  mg_lines "$1" | awk '{ gsub(/^[ \t]+|[ \t]+$/, ""); if ($0 != "") { printf "%s%s", sep, $0; sep = " " } } END { if (sep != "") print "" }'
+}
+
+wild() { case "$1" in *[*?[]*) return 0 ;; esac; return 1; }
+only() { case "$1" in *[!$2]*) return 1 ;; esac; return 0; }
+
+scope_refusal() {
+  _c="$1"; _s="$2"
+  if [ "$_c" != unlinked ]; then
+    case "$_s" in
+      *:*)
+        _k="${_s##*:}"
+        case "$_k" in
+          [A-Z*]*) if only "$_k" 'A-Z0-9_*'; then echo "the :$_k in scope \"$_s\" is a KEY, and only unlinked takes a :KEY scope"; return 0; fi ;;
+        esac ;;
+    esac
+  fi
+  case "$_c" in
+    unlinked)
+      [ "$_s" != '*' ] || echo "unlinked must name the pins it excuses: a scope of <pin path>[:KEY], never *" ;;
+    self-upstream-exclude)
+      ! only "$_s" '*/' || echo "self-upstream-exclude must name what it excludes, never a scope of nothing but * and /" ;;
+    on-target)
+      if [ "$_s" != '*' ] && wild "$_s"; then
+        echo "an on-target scope of \"$_s\" -- an on-target part is one word naming what stays untested in the guest, never a glob; a scope of * is the one that stands in for the job"
+      fi ;;
+    macos-runner)
+      _f="${_s%%:*}"; _j="${_s#*:}"
+      case "$_j" in *:*) _j="" ;; esac
+      if wild "$_s" || [ "$_f" = "$_s" ] || [ -z "$_f" ] || [ -z "$_j" ]; then
+        echo "macos-runner names one job: a scope of <workflow file>:<job>, never a wildcard"
+      fi ;;
+    arm64|cxxabi)
+      ! only "$_s" '*?/' || echo "$_c names the install paths it covers: a scope of <install-path glob>, never * or a glob of nothing but wildcards" ;;
+    packager)
+      ! wild "$_s" || echo "packager names one path: a scope of <path>, never a wildcard" ;;
+  esac
+  return 0
+}
+
+one() {
+  _id="$1/$2"; _d="deviations/$1/$2"
+  case "$2" in
+    [a-z0-9]*) case "$2" in *[!a-z0-9.-]*) refuse "$_id" "the label \"$2\" does not match ^[a-z0-9][a-z0-9.-]*\$"; return 0 ;; esac ;;
+    *) refuse "$_id" "the label \"$2\" does not match ^[a-z0-9][a-z0-9.-]*\$"; return 0 ;;
+  esac
+  [ -d "$base/$_d" ] || { refuse "$_id" "is not a directory; a deviation is deviations/<check>/<label>/{scope,reason,revisit}"; return 0; }
+  _ok=1; _scope=""
+  if ! mg_has "$_d/scope"; then refuse "$_id" "has no scope; write the glob it covers, or * for repo-wide"; _ok=0
+  else
+    _scope="$(mg_value "$_d/scope")"
+    case "$_scope" in *[!" $tab"]*) ;; *) refuse "$_id" "has an empty scope; write the glob it covers, or * for repo-wide"; _ok=0 ;; esac
+    [ "$(mg_lines "$_d/scope" | wc -l | tr -d ' ')" -le 1 ] || { refuse "$_id" "scope has a second line; a scope is one glob, on line 1"; _ok=0; }
+  fi
+  _reason=""
+  if mg_has "$_d/reason"; then _reason="$(prose "$_d/reason")"; fi
+  [ -n "$_reason" ] || { refuse "$_id" "declares no reason; say why the default does not fit here"; _ok=0; }
+  _revisit=""
+  if mg_has "$_d/revisit"; then _revisit="$(prose "$_d/revisit")"; fi
+  [ -n "$_revisit" ] || { refuse "$_id" "has no revisit; say what evidence would end the deviation"; _ok=0; }
+  [ "$_ok" -eq 1 ] || return 0
+  _why="$(scope_refusal "$1" "$_scope")"
+  [ -z "$_why" ] || { refuse "$_id" "$_why"; return 0; }
+  printf '%s %s %s\n' "$1" "$(printf '%s\n' "$_scope" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e "s/$tab/%09/g")" "$_reason"
+}
+
+while IFS= read -r check; do
+  [ -n "$check" ] || continue
+  case "$check" in
+    [a-z]*) case "$check" in *[!a-z0-9_-]*) refuse "$check" "\"$check\" cannot be a check id"; continue ;; esac ;;
+    *) refuse "$check" "\"$check\" cannot be a check id"; continue ;;
+  esac
+  [ -d "$base/deviations/$check" ] || { refuse "$check" "is not a directory; a deviation is deviations/<check>/<label>/{scope,reason,revisit}"; continue; }
+  while IFS= read -r label; do
+    [ -n "$label" ] || continue
+    one "$check" "$label"
+  done <<EOF
+$(mg_list "deviations/$check")
+EOF
+done <<EOF
+$(mg_list deviations)
+EOF
+
+if [ -f "$root/INGREDIENTS.md" ]; then
+  sed -n 's/^.*No upstream release notes: *\([^ ].*\)$/upstream-notes * \1/p' "$root/INGREDIENTS.md" | head -1
+fi
+exit "$bad"

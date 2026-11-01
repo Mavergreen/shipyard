@@ -6,3 +6,6 @@ UPSTREAM_VERSION
 build/upstream-release-notes-url.sh
 tests/a-test.sh
 .github/workflows/ci.yml
+.mavergreen/deviations/macos-runner/ci-mac/reason
+.mavergreen/deviations/macos-runner/ci-mac/revisit
+.mavergreen/deviations/macos-runner/ci-mac/scope

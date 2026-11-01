@@ -7,3 +7,6 @@ build/upstream-release-notes-url.sh
 tests/a-test.sh
 vendor/zlib/zlib.c
 vendor/other/o.c
+.mavergreen/deviations/vendored/zlib/reason
+.mavergreen/deviations/vendored/zlib/revisit
+.mavergreen/deviations/vendored/zlib/scope

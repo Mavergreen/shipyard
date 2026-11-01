@@ -196,19 +196,13 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
   return 0
 }
 
-# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Conformance
-#       deviations" -- declared under "## Conformance deviations" as "- <check>[:<glob>]: <reason>";
-#       a deviation IS a product fact, so it belongs with the other product facts, not a file of its
-#       own that could disagree with them. ONE parser reads them -- deviations.sh -- because the
-#       conventions gate honours the same declarations, and two regexes for one grammar drift apart
-#       silently.
-if [ -f "$root/INGREDIENTS.md" ]; then
-  # platform: not a pipeline -- deviations.sh exits 1 on an entry with no reason, and a pipeline
-  #           reports the `while`'s status instead, turning "this declaration is malformed" into
-  #           "there are no deviations".
-  _devs="$(shipyard_deviations "$root")" || exit 1
-  printf '%s\n' "$_devs"
-fi
+# spec: scripts/deviations.sh -- ONE reader of .mavergreen/deviations/, because the conventions
+#       gate honours the same declarations, and two readers of one tree drift apart silently.
+# platform: not a pipeline -- deviations.sh exits 1 on a malformed deviation, and a pipeline
+#           reports the `while`'s status instead, turning "this declaration is malformed" into
+#           "there are no deviations".
+_devs="$(shipyard_deviations "$root")" || exit 1
+[ -z "$_devs" ] || printf '%s\n' "$_devs"
 
 for f in "$dist"/*; do
   [ -f "$f" ] || continue

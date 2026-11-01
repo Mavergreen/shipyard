@@ -7,3 +7,9 @@ build/upstream-release-notes-url.sh
 tests/a-test.sh
 vendor/zlib/zlib.c
 third_party/foo/foo.c
+.mavergreen/deviations/vendored/foo/reason
+.mavergreen/deviations/vendored/foo/revisit
+.mavergreen/deviations/vendored/foo/scope
+.mavergreen/deviations/vendored/zlib/reason
+.mavergreen/deviations/vendored/zlib/revisit
+.mavergreen/deviations/vendored/zlib/scope

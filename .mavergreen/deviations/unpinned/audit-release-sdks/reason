@@ -1,0 +1,1 @@
+the SDK-pinning acceptance audit exists to judge what each repo has shipped most recently, so it downloads each repo's newest release (verified against its SHA256SUMS). It builds and signs nothing.

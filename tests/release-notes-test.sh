@@ -8,6 +8,7 @@
 #       generator is one shape for every product, and a fatal error for every gap it cannot fill.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib/deviation_tree.sh"
 S="$here/../scripts/release-notes.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/release-notes.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
@@ -95,12 +96,12 @@ printf 'VERSION=3.9.2\n' > "$r/components/libressl/version"
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
 if out="$(gen "$r" 9.9p2-mavericks.2 2>&1)"; then echo "FAIL bare: a link-less moved pin must not ship"; cat "$r/OUT.md"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'libressl' || { echo "FAIL bare: the complaint must name the pin: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'unlinked:' || { echo "FAIL bare: the complaint must name the fix: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'deviations/unlinked/' || { echo "FAIL bare: the complaint must name the fix: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'bug in release-notes.sh' \
   && { echo "FAIL bare: a pin with no link source is this repo's to fix, not a generator bug: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'the fix is in this repo' \
   || { echo "FAIL bare: the generator must say where the fix goes: $out"; exit 1; }
-printf '# Build ingredients\n\n## Conformance deviations\n\n- unlinked:components/libressl/version:VERSION: a fixture with no notes\n' > "$r/INGREDIENTS.md"
+deviation "$r" unlinked libressl components/libressl/version:VERSION 'a fixture with no notes'
 ( cd "$r" && git add -A && git commit -qm declare )
 gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL bare: a declared reason must let it ship"; exit 1; }
 grep -q '3.8.2 -> 3.9.2 (no change notes: a fixture with no notes)$' "$r/OUT.md" \
@@ -820,7 +821,7 @@ if out="$(cd "$r" && env MAVERICKS_ROOT="$r" GITHUB_REPOSITORY= sh "$S" --tag 9.
     --version 9.9p2-mavericks.2 --product Unregistered --out "$r/OUT.md" 2>&1)"; then
   echo "FAIL r1d: with no repo to name, a bare whole-file bullet is still a violation"; exit 1
 fi
-printf '%s\n' "$out" | grep -q 'unlinked:' || { echo "FAIL r1d: complaint: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'deviations/unlinked/' || { echo "FAIL r1d: complaint: $out"; exit 1; }
 
 # spec: scripts/release-notes.sh -- "First release" is a claim, so a self-upstream checkout that
 #       simply lacks its tags must not make it: YYYYMMDD.N with N > 1 says earlier releases exist, and

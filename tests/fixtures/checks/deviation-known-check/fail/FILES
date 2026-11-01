@@ -1,1 +1,4 @@
 build/cross.sh
+.mavergreen/deviations/product-layout/disk-image/reason
+.mavergreen/deviations/product-layout/disk-image/revisit
+.mavergreen/deviations/product-layout/disk-image/scope

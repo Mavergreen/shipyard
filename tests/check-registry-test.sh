@@ -92,8 +92,8 @@ while IFS="$(printf '\t')" read -r id mode script old fate; do
   done
   section_text "$f" Incident | grep -Eiq 'None recorded\.|[0-9]{4}-[0-9]{2}-[0-9]{2}|undated' \
     || fail "$id: '## Incident' names a dated event, says it is undated, or says 'None recorded.'"
-  section_text "$f" Deviating | grep -Eq "No deviation|- $id[:\"]|- $id\$" \
-    || fail "$id: '## Deviating' gives the '- $id:' line to write, or says 'No deviation is read'"
+  section_text "$f" Deviating | grep -Eq "No deviation|- $id[:\"]|- $id\$|deviations/$id/" \
+    || fail "$id: '## Deviating' names deviations/$id/ (or the old '- $id:' line), or says 'No deviation is read'"
   last="$(awk 'NF { l = $0 } END { print l }' "$f")"
   case "$old" in
     new*|"deviation key"*)

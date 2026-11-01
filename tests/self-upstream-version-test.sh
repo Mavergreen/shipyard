@@ -4,6 +4,7 @@
 #       last changed, never below the last release tag's; an ingredient-only release keeps the date.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib/deviation_tree.sh"
 S="$here/../scripts/self-upstream-version.sh"
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/self-upstream-version-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
@@ -115,11 +116,12 @@ at 2026-10-21T12:00:00Z src/y.c
 want 20261021.1 "own code beside declared state still counts"
 
 fresh deviation
-printf '%s\n' '# Build ingredients' '' '## Conformance deviations' '' \
-  '- self-upstream-exclude:build/vm-acceptance.sh: runs only in CI' \
-  '- self-upstream-exclude:**/*_test.go: tests never ship' > "$R/INGREDIENTS.md"
+deviation "$R" self-upstream-exclude vm-acceptance 'build/vm-acceptance.sh' 'runs only in CI'
+deviation "$R" self-upstream-exclude go-tests '**/*_test.go' 'tests never ship'
 at 2026-10-12T13:00:00Z INGREDIENTS.md
 git -C "$R" tag 20261012.3
+at 2026-10-19T11:00:00Z .mavergreen/deviations/self-upstream-exclude/go-tests/reason
+want 20261012.4 "a deviation is metadata, not own code"
 at 2026-10-19T12:00:00Z build/vm-acceptance.sh
 want 20261012.4 "a self-upstream-exclude path is ingredient-only"
 at 2026-10-19T13:00:00Z pkg/deep/x_test.go x_test.go
@@ -128,13 +130,11 @@ at 2026-10-19T14:00:00Z build/other.sh
 want 20261019.1 "an exclusion covers only what it names: build/other.sh is own code"
 
 fresh no-reason
-printf '%s\n' '# Build ingredients' '' '## Conformance deviations' '' \
-  '- self-upstream-exclude:build/x.sh:' > "$R/INGREDIENTS.md"
+deviation "$R" self-upstream-exclude x 'build/x.sh' ''
 refuses "deviations.sh" "an exclusion with no reason is refused, like every deviation" --root "$R"
 
 fresh unscoped
-printf '%s\n' '# Build ingredients' '' '## Conformance deviations' '' \
-  '- self-upstream-exclude: everything' > "$R/INGREDIENTS.md"
+deviation "$R" self-upstream-exclude x '*' 'everything'
 refuses "self-upstream-exclude" "an unscoped exclusion would make no change own code, so it is refused" --root "$R"
 
 fresh malformed
@@ -207,8 +207,7 @@ _rc=0; got="$(GIT_LITERAL_PATHSPECS=1 sh "$S" --root "$R" 2>"$w/err")" || _rc=$?
 [ "$_rc" = 0 ] && [ "$got" = 20261012.4 ] || { echo "FAIL: GIT_LITERAL_PATHSPECS must not disable the exclusions: exit $_rc, got '$got'"; exit 1; }
 
 fresh starstar
-printf '%s\n' '# Build ingredients' '' '## Conformance deviations' '' \
-  '- self-upstream-exclude:**: everything' > "$R/INGREDIENTS.md"
+deviation "$R" self-upstream-exclude x '**' 'everything'
 refuses "self-upstream-exclude" "an exclusion of only * and / is refused" --root "$R"
 
 echo "PASS: self-upstream-version"

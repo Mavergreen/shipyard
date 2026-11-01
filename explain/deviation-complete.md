@@ -1,23 +1,25 @@
-deviation-complete: every entry under INGREDIENTS.md's Conformance deviations section has a reason.
+deviation-complete: every deviation under .mavergreen/deviations/ is complete, and names a check id.
 
 ## Why
-A deviation is an exception to a check, declared as a product fact. An exception with no reason is
-indistinguishable from drift, so one parser, deviations.sh, reads the section for every checker and refuses
-an entry that has none. It also refuses an empty glob (the "- check:reason" spelling with no space), which
-would otherwise look like an exception while no checker honoured it, and let a reader that splits on
-whitespace take the first word of the reason as the scope. The same refusal applies at package time and at
-build time, so one entry cannot mean two things.
+A deviation is an exception to a check, declared as a product fact in its own directory,
+.mavergreen/deviations/<check>/<label>/, holding scope, reason and revisit. An exception with no reason is
+indistinguishable from drift, and one with no revisit trigger never ends, so one reader, deviations.sh, reads
+the tree for every checker and refuses a deviation that lacks either. It also refuses an empty scope, a scope
+with a second line, a label that does not match ^[a-z0-9][a-z0-9.-]*$, and a scope its check cannot honour
+(an unlinked of *, a macos-runner that is not <workflow file>:<job>, an arm64 of nothing but wildcards, and
+the like). The same refusal applies at package time and at build time, so one deviation cannot mean two
+things. A <check> that is not a registered id excuses nothing, so it fails here too.
 
 ## Incident
 None recorded.
 
 ## Limits
-It checks that a reason is present, not that it is good. The grammar is "- <id>[:<glob>]: <reason>" on one
-line; a line that does not start that way is not an entry and is ignored. Explanatory prose in the section
-must not start with a dash.
+It checks that a reason and a revisit are present, not that they are good. A label that starts with a dot is
+hidden, as any dotfile is, and is not read at all.
 
 ## Deviating
-No deviation is read for this id: an entry with no reason is the failure itself. Write the reason. A good reason says what the exception covers, why
-the rule cannot hold yet, and when it ends ("Revisit when <condition>.").
+No deviation is read for this id: an incomplete deviation is the failure itself. Write the missing file. A
+good reason says what the exception covers and why the rule cannot hold yet; a good revisit says what
+evidence would end it.
 
 Formerly the refusal in deviations.sh

@@ -35,23 +35,14 @@ $facts"
 SELF="$root/scripts"
 . "$SELF/deviation-reason.sh"
 
+. "$here/lib/deviation_tree.sh"
 mkdir "$w/a" "$w/b"
-cat > "$w/a/INGREDIENTS.md" <<'EOT'
-# Build ingredients
-
-No upstream release notes: upstream keeps none
-
-## Conformance deviations
-
-- comments: swept later
-- rosetta:tools/*.sh: runs translated
-- unpinned:Dockerfile: wants the newest
-EOT
-cat > "$w/b/INGREDIENTS.md" <<'EOT'
-## Conformance deviations
-
-- rosetta: everywhere
-EOT
+printf '# Build ingredients\n\nNo upstream release notes: upstream keeps none\n' > "$w/a/INGREDIENTS.md"
+deviation "$w/a" comments later '*' 'swept later'
+deviation "$w/a" rosetta tools 'tools/*.sh' 'runs translated'
+deviation "$w/a" unpinned dockerfile 'Dockerfile' 'wants the newest'
+deviation "$w/a" rosetta spaced 'my tools/*.sh' 'a space is a space'
+deviation "$w/b" rosetta everywhere '*' 'everywhere'
 
 is() {  # $1 = want ("" for none), then shipyard_deviated's arguments
   _want="$1"; shift
@@ -68,19 +59,23 @@ is "swept later" comments
 is "upstream keeps none" upstream-notes
 is "runs translated" rosetta tools/x.sh
 is "" rosetta other/x.sh
-[ "$(shipyard_deviation_scopes rosetta)" = "tools/*.sh" ] || fail "scopes lists a scoped glob"
+[ "$(shipyard_deviation_scopes rosetta)" = "my tools/*.sh
+tools/*.sh" ] || fail "scopes lists each scoped glob, a space and all: $(shipyard_deviation_scopes rosetta)"
+is "a space is a space" rosetta 'my tools/x.sh'
+is "" rosetta 'myXtools/x.sh'
 [ "$(shipyard_deviation_scopes comments)" = "*" ] || fail "scopes lists * for an unscoped deviation"
 [ -z "$(shipyard_deviation_scopes nothing)" ] || fail "scopes lists nothing for an undeclared check"
 is "" rosetta
 is "wants the newest" unpinned Dockerfile
 
-printf '## Conformance deviations\n\n- comments: changed\n' > INGREDIENTS.md
+printf 'changed\n' > .mavergreen/deviations/comments/later/reason
 is "swept later" comments
 
 shipyard_deviations "$w/b" > /dev/null
 is "everywhere" rosetta anything
 is "" comments
 shipyard_deviations "$w/a/INGREDIENTS.md" > /dev/null
+is "upstream keeps none" upstream-notes
 is "changed" comments
 is "" rosetta anything
 
@@ -89,8 +84,8 @@ shipyard_deviations - < "$w/stdin-facts" > /dev/null
 is "no bash 3.2 here" host linux
 is "" comments
 
-printf '## Conformance deviations\n\n- rosetta:\n' > "$w/b/INGREDIENTS.md"
+: > "$w/b/.mavergreen/deviations/rosetta/everywhere/revisit"
 if shipyard_deviations "$w/b" > /dev/null 2> "$w/err"; then fail "a malformed declaration must fail"; fi
-grep -q 'empty glob' "$w/err" || fail "the refusal reaches stderr: $(cat "$w/err")"
+grep -q 'no revisit' "$w/err" || fail "the refusal reaches stderr: $(cat "$w/err")"
 
 echo "PASS deviation-seam-test"

@@ -6,3 +6,6 @@ UPSTREAM_VERSION
 build/upstream-release-notes-url.sh
 tests/a-test.sh
 README.md
+.mavergreen/deviations/docs-no-sudo/readme/reason
+.mavergreen/deviations/docs-no-sudo/readme/revisit
+.mavergreen/deviations/docs-no-sudo/readme/scope

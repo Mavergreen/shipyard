@@ -53,18 +53,21 @@ says '' "$d" floor x.pkg
 says '' "$w/empty" sdk-pin a/b
 
 # spec: scripts/deviation-reason.sh -- shipyard_deviation_facts turns deviations.sh's "<check> <glob or *>
-#       <reason>" into the fact lines the matcher reads; end to end from INGREDIENTS.md, the path
+#       <reason>" into the fact lines the matcher reads; end to end from .mavergreen/deviations/, the path
 #       check-artifact-conformance.sh (via artifact-facts.sh) and assert_binary_compatible.sh both take.
-cat > "$w/INGREDIENTS.md" <<'EOF'
-## Conformance deviations
-- sdk-pin:*/lib/libswiftCore.dylib: the Swift runtime ships prebuilt
-- scheme: shipyard ports nothing
-EOF
-sh "$here/../scripts/deviations.sh" "$w" | shipyard_deviation_facts > "$w/facts"
+. "$here/lib/deviation_tree.sh"
+mkdir "$w/repo"
+deviation "$w/repo" sdk-pin swift-runtime '*/lib/libswiftCore.dylib' 'the Swift runtime ships prebuilt'
+deviation "$w/repo" version-scheme first-party '*' 'shipyard ports nothing'
+deviation "$w/repo" sdk-pin spaced 'Library/My Tool/*' 'a space matches only a space'
+sh "$here/../scripts/deviations.sh" "$w/repo" | shipyard_deviation_facts > "$w/facts"
 grep -qx 'deviation sdk-pin:\*/lib/libswiftCore.dylib the Swift runtime ships prebuilt' "$w/facts" \
   || { echo "FAIL: a scoped entry's fact line; got:"; cat "$w/facts"; exit 1; }
-grep -qx 'deviation scheme shipyard ports nothing' "$w/facts" \
+grep -qx 'deviation version-scheme shipyard ports nothing' "$w/facts" \
   || { echo "FAIL: an unscoped entry's fact line; got:"; cat "$w/facts"; exit 1; }
+says 'a space matches only a space' "$w/facts" sdk-pin 'Library/My Tool/bin/x'
+says '' "$w/facts" sdk-pin 'Library/MyXTool/bin/x'
+says '' "$w/facts" sdk-pin 'Library/My/Tool/bin/x'
 says 'the Swift runtime ships prebuilt' "$w/facts" sdk-pin build/lib/libswiftCore.dylib
 [ -z "$(printf '\n' | shipyard_deviation_facts)" ] || { echo "FAIL: no deviations must yield no facts"; exit 1; }
 echo "PASS: deviation-reason"

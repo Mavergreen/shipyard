@@ -2,6 +2,7 @@
 # platform: host-agnostic
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
+. "$here/lib/deviation_tree.sh"
 S="$here/../scripts/ingredient-notes.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 cd "$work"
@@ -696,18 +697,18 @@ printf '%s\n' "$out" | grep -q 'compare\|](http' \
   && { echo "FAIL per-key: BASE must not borrow the boot2docker git source's link: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'no change notes' \
   && { echo "FAIL per-key: nothing declared BASE unlinked yet: $out"; exit 1; }
-printf '# Build ingredients\n\n## Conformance deviations\n\n- unlinked:components/boot2docker/version: the git source only\n' > INGREDIENTS.md
+deviation . unlinked boot2docker components/boot2docker/version 'the git source only'
 out="$(sh "$S" base components/boot2docker/version)"
 printf '%s\n' "$out" | grep -q 'no change notes' \
   && { echo "FAIL per-key: a file-level declaration must not cover a KEY in it: $out"; exit 1; }
-printf '# Build ingredients\n\n## Conformance deviations\n\n- unlinked:components/boot2docker/version:BASE: a Debian slim image digest refresh publishes no notes\n' > INGREDIENTS.md
+rm -r .mavergreen; deviation . unlinked boot2docker-base components/boot2docker/version:BASE 'a Debian slim image digest refresh publishes no notes'
 out="$(sh "$S" base components/boot2docker/version)"
 printf '%s\n' "$out" | grep -qx -- '- \*\*boot2docker / BASE\*\*: debian:13-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f -> debian:13-slim@sha256:b39326f7b46f62f33bee128a998e0f3fa37f23e75b3bad21e876f5bbf5a5a22a (no change notes: a Debian slim image digest refresh publishes no notes)' \
   || { echo "FAIL per-key: the KEY-qualified unlinked: declaration must give the BASE bullet its reason: $out"; exit 1; }
 cd "$work"; rm -rf "$work19"
 
-# spec: SKILL.md "Release notes" -- a pin with no link source can still say why, in INGREDIENTS.md's
-#       deviations; a scoped glob covers a family of pins (patches, a vendored blob) at once.
+# spec: SKILL.md "Release notes" -- a pin with no link source can still say why, in an unlinked
+#       deviation; a scoped glob covers a family of pins (patches, a vendored blob) at once.
 work20="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes-tes.XXXXXX")"; cd "$work20"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
@@ -715,15 +716,9 @@ mkdir -p components/widget vendor patches
 printf '1.0\n' > components/widget/version
 printf 'line one\n' > vendor/cacert.pem
 printf 'Subject: [PATCH] one\n' > patches/0001-one.patch
-cat > INGREDIENTS.md <<'MD'
-# Build ingredients
-
-## Conformance deviations
-
-- unlinked:components/widget/version: widget publishes no release notes
-- unlinked:vendor/cacert.pem: Mozilla's CA bundle has no per-refresh notes
-- unlinked:patches/*: our own patches; the subject line is the description
-MD
+deviation . unlinked widget components/widget/version 'widget publishes no release notes'
+deviation . unlinked cacert vendor/cacert.pem "Mozilla's CA bundle has no per-refresh notes"
+deviation . unlinked patches 'patches/*' 'our own patches; the subject line is the description'
 git add -A; git commit -qm base; git tag base
 printf '1.1\n' > components/widget/version
 printf 'line one\nline two\n' > vendor/cacert.pem

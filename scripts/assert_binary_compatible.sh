@@ -18,7 +18,7 @@
 #          the check it serves, naming the variable to set.
 #          Knobs:
 #            SHIPYARD_CHECK_DIST               the dist directory, when no binary is named.
-#            MAVERICKS_DEVIATIONS_ROOT         the repo whose INGREDIENTS.md declares the deviations
+#            MAVERICKS_DEVIATIONS_ROOT         the repo whose .mavergreen/deviations/ declares the deviations
 #                                               (default: SHIPYARD_CHECK_REPO, else the current
 #                                               directory; mavericks_assert_binary_compatible passes
 #                                               CMAKE_SOURCE_DIR).
@@ -73,8 +73,8 @@ fix_of() {
     compat-selectors) echo "send the selector only after -respondsToSelector: and list it in MAVERICKS_ALLOW_SELECTORS, or use a 10.9 one" ;;
     compat-archs) echo "build exactly those arches, or set MAVERICKS_ALLOW_ARCHS to the set the binary should hold" ;;
     compat-required-defined) echo "link the shim that defines it into the binary" ;;
-    sdk-pin) echo "link against the pinned SDK (scripts/fetch_sdk.sh), or declare '- sdk-pin:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
-    deviation-complete) echo "give the deviation a reason in INGREDIENTS.md ('- sdk-pin:<glob>: <reason>')" ;;
+    sdk-pin) echo "link against the pinned SDK (scripts/fetch_sdk.sh), or declare .mavergreen/deviations/sdk-pin/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    deviation-complete) echo "give each .mavergreen/deviations/<check>/<label>/ a one-line scope, a reason and a revisit" ;;
   esac
 }
 cannot_measure() {  # $1 = id, $2 = why. Fails closed: nothing after a reader that cannot answer is trustworthy.
@@ -120,7 +120,7 @@ devs_root="${MAVERICKS_DEVIATIONS_ROOT:-${SHIPYARD_CHECK_REPO:-.}}"
 #           shipyard_deviation_facts' status instead, turning "this declaration is malformed" into "there
 #           are no deviations".
 shipyard_deviations "$devs_root" > /dev/null 2> "$work/devs.err" \
-  || cannot_measure deviation-complete "$devs_root/INGREDIENTS.md declares a malformed conformance deviation: $(cat "$work/devs.err")"
+  || cannot_measure deviation-complete "$devs_root/.mavergreen/deviations/ holds a malformed deviation: $(cat "$work/devs.err")"
 
 # platform: nm -m lines look like "<addr|spaces> (undefined) [weak] external _sym (from libX)"; nm
 #           -u loses the weak flag, so nm -m is parsed instead (the undefined NAME set is identical).

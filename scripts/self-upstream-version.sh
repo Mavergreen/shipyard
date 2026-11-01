@@ -7,11 +7,10 @@
 #          REV, if own code never changed), .1. When own code changed since the last tag: that day
 #          .1 if it is later than the tag's date, else the tag's date .N+1. Otherwise the tag's date
 #          .N+1. Own code is every path except UPSTREAM_VERSION, components/*/version,
-#          ingredients/**, .github/**, tests/**, top-level *.md, each file declared-state.sh names,
-#          and each INGREDIENTS.md "## Conformance deviations" entry
-#          "- self-upstream-exclude:<glob>: <reason>", a git pathspec glob (`*` stays within one
-#          directory, `**/` spans any). Exit 2 on a usage error, a non-repo, an unknown REV, a
-#          shallow clone, or an INGREDIENTS.md the parsers refuse.
+#          ingredients/**, .mavergreen/deviations/**, .github/**, tests/**, top-level *.md, each file
+#          declared-state.sh names, and the scope of each .mavergreen/deviations/self-upstream-exclude/
+#          deviation, a git pathspec glob (`*` stays within one directory, `**/` spans any). Exit 2 on
+#          a usage error, a non-repo, an unknown REV, a shallow clone, or metadata the readers refuse.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning" -- the
 #       version only: whether to publish stays with release-state.sh and release-needed.sh.
 # spec: tests/self-upstream-version-test.sh
@@ -50,7 +49,7 @@ rev="$(git -C "$ROOT" rev-parse --verify -q "$REF^{commit}" 2>/dev/null)" || {
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/self-upstream-version.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
-for p in UPSTREAM_VERSION 'components/*/version' 'ingredients/**' '.github/**' 'tests/**' '*.md'; do
+for p in UPSTREAM_VERSION 'components/*/version' 'ingredients/**' '.mavergreen/deviations/**' '.github/**' 'tests/**' '*.md'; do
   printf ':(exclude,glob)%s\n' "$p"
 done > "$work/exclude"
 
@@ -63,7 +62,7 @@ cut -f2 "$work/decl" | sed 's/:.*//; s/^/:(exclude,literal)/' >> "$work/exclude"
 
 if ! shipyard_deviations "$ROOT" > "$work/devs" 2>"$work/err"; then
   cat "$work/err" >&2
-  echo "self-upstream-version: $ROOT/INGREDIENTS.md declares a conformance deviation that deviations.sh refuses (it says why, above)" >&2
+  echo "self-upstream-version: $ROOT/.mavergreen/deviations/ holds a deviation that deviations.sh refuses (it says why, above)" >&2
   exit 2
 fi
 shipyard_deviation_scopes self-upstream-exclude | while IFS= read -r glob; do

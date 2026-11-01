@@ -6,3 +6,6 @@ UPSTREAM_VERSION
 build/upstream-release-notes-url.sh
 tests/a-test.sh
 build/fetch.sh
+.mavergreen/deviations/unpinned/canary/reason
+.mavergreen/deviations/unpinned/canary/revisit
+.mavergreen/deviations/unpinned/canary/scope

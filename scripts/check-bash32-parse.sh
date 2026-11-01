@@ -29,7 +29,7 @@ cant_measure() {
   fi
   chk_fail bash32-parse "can't measure here: $1" \
     "only a bash 3.2 /bin/sh reports bash 3.2's parse errors, so a pass from any other shell would vouch for nothing" \
-    "run this on a host whose /bin/sh is bash 3.2 (10.9 or macOS), or declare '- host:$_host: <reason>. Revisit when <exit>.' under ## Conformance deviations"
+    "run this on a host whose /bin/sh is bash 3.2 (10.9 or macOS), or declare .mavergreen/deviations/host/<label>/ (scope $_host, a reason, a revisit)"
   exit 1
 }
 

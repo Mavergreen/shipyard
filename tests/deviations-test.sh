@@ -1,108 +1,164 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: deviations-test.sh
-#          ONE parser for INGREDIENTS.md's "## Conformance deviations": the artifact checker and the
-#          conventions gate must read a declared exception identically, and a deviation without a
-#          reason is not a declaration.
+#          ONE reader for .mavergreen/deviations/<check>/<label>/{scope,reason,revisit}: the artifact
+#          checker and the conventions gate must read a declared exception identically, and a
+#          deviation without a reason or a revisit trigger is not a declaration.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; S="$here/../scripts/deviations.sh"
+. "$here/lib/deviation_tree.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/dev-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
-cat > "$w/INGREDIENTS.md" <<'EOF'
-# x
-## Conformance deviations
-- scheme: shipyard ports nothing
-- enclosure-url:appcast.xml: the tag carries a v
-- shipyard-cmake-only:build/legacy.sh: runs under the host cmake to bootstrap
-- rosetta:build/cross.sh: gyp's host tools are x86_64 and run under Rosetta
-## Next
-- not-a-deviation: ignored
-EOF
-out="$(sh "$S" "$w")"
-printf '%s\n' "$out" | grep -qx 'scheme \* shipyard ports nothing' || { echo "FAIL: unscoped entry; got:"; echo "$out"; exit 1; }
-printf '%s\n' "$out" | grep -qx 'enclosure-url appcast.xml the tag carries a v' || { echo "FAIL: scoped entry; got:"; echo "$out"; exit 1; }
-printf '%s\n' "$out" | grep -qx 'shipyard-cmake-only build/legacy.sh runs under the host cmake to bootstrap' || { echo "FAIL: path-scoped entry"; exit 1; }
-# spec: SKILL.md "Family conventions" check 25 -- rosetta:<scope> is a deviation key like any
-#       other; this parser accepts any check name, so the family-conventions gate's check 25 can
-#       rely on it without deviations.sh naming rosetta specially.
-printf '%s\n' "$out" | grep -qx 'rosetta build/cross.sh gyp'\''s host tools are x86_64 and run under Rosetta' || { echo "FAIL: rosetta:<path> entry must parse like any other scoped deviation; got:"; echo "$out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'not-a-deviation' && { echo "FAIL: entries outside the section must be ignored"; exit 1; }
-printf '## Conformance deviations\n- scheme:\n' > "$w/INGREDIENTS.md"
-if sh "$S" "$w" >/dev/null 2>&1; then echo "FAIL: an entry without a reason must fail"; exit 1; fi
+r="$w/r"
+fresh() { rm -rf "$r"; mkdir "$r"; }
+fail() { echo "FAIL: $1"; exit 1; }
+has() { printf '%s\n' "$out" | grep -qx -- "$1" || fail "$2; got: $out"; }
+refused() {
+  if out="$(sh "$S" "$r" 2>&1)"; then fail "$2 must be refused; got: $out"; fi
+  printf '%s\n' "$out" | grep -q -- "$1" || fail "$2: the refusal should say '$1': $out"
+  printf '%s\n' "$out" | grep -q '^deviations\.sh: ' || fail "$2: a refusal opens with 'deviations.sh: ': $out"
+}
 
-# spec: scripts/deviations.sh -- "- check:reason", no space after the colon, is the same declaration
-#       written wrong: the grammar reads up to the SECOND colon as a glob, so this yields an EMPTY
-#       glob and the reason's first word silently becomes the scope. It fails safe, which is exactly
-#       what makes it worth rejecting.
-printf '## Conformance deviations\n- scheme:shipyard ports nothing\n' > "$w/INGREDIENTS.md"
-if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: a missing space after the colon must fail; got: $out"; exit 1; fi
-printf '%s\n' "$out" | grep -qi 'glob' || { echo "FAIL: should say what is wrong (an empty glob): $out"; exit 1; }
+fresh
+deviation "$r" version-scheme first-party '*' 'shipyard ports nothing'
+deviation "$r" enclosure-url tag-v 'appcast.xml' 'the tag carries a v'
+deviation "$r" shipyard-cmake-only bootstrap 'build/legacy.sh' 'runs under the host cmake to bootstrap'
+deviation "$r" rosetta gyp 'build/cross.sh' "gyp's host tools are x86_64 and run under Rosetta"
+printf '# x\n\n## Conformance deviations\n\n- not-a-deviation: the old grammar is not read\n' > "$r/INGREDIENTS.md"
+out="$(sh "$S" "$r")"
+has 'version-scheme \* shipyard ports nothing' "a scope of * is unscoped"
+has 'enclosure-url appcast.xml the tag carries a v' "a scoped deviation"
+has 'shipyard-cmake-only build/legacy.sh runs under the host cmake to bootstrap' "a path-scoped deviation"
+has "rosetta build/cross.sh gyp's host tools are x86_64 and run under Rosetta" "rosetta parses like any other check"
+printf '%s\n' "$out" | grep -q 'not-a-deviation' && fail "INGREDIENTS.md's ## Conformance deviations is no longer read"
+[ "$(printf '%s\n' "$out" | wc -l | tr -d ' ')" -eq 4 ] || fail "one line per deviation; got: $out"
 
-# spec: SKILL.md "Acceptance on real 10.9" -- a bare on-target stands in for the 10.9 acceptance job
-#       and parses with scope "*"; on-target:<part> names one gap in the job's coverage and keeps its
-#       part, which is how check 29 tells the two apart.
-printf '## Conformance deviations\n- on-target: no 10.9 acceptance job yet\n- on-target:docker-vm: Fusion cannot nest in QEMU\n' > "$w/INGREDIENTS.md"
-out="$(sh "$S" "$w")"
-printf '%s\n' "$out" | grep -qx 'on-target \* no 10.9 acceptance job yet' || { echo "FAIL: a bare on-target must parse unscoped; got: $out"; exit 1; }
-printf '%s\n' "$out" | grep -qx 'on-target docker-vm Fusion cannot nest in QEMU' || { echo "FAIL: on-target:<part> must keep its part; got: $out"; exit 1; }
-for part in '*' 'docker-*' 'gui?'; do
-  printf '## Conformance deviations\n- on-target:%s: a glob for a part\n' "$part" > "$w/INGREDIENTS.md"
-  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: on-target:$part is a glob and must be refused; got: $out"; exit 1; fi
-  printf '%s\n' "$out" | grep -q 'one word' || { echo "FAIL: refusing on-target:$part should say a part is one word: $out"; exit 1; }
+fresh
+printf '# x\n\nNo upstream release notes: upstream keeps none\n' > "$r/INGREDIENTS.md"
+out="$(sh "$S" "$r")"
+has 'upstream-notes \* upstream keeps none' "INGREDIENTS.md's No upstream release notes line is still an upstream-notes deviation"
+
+fresh
+[ -z "$(sh "$S" "$r")" ] || fail "no .mavergreen/ is no deviations"
+mkdir -p "$r/.mavergreen"
+[ -z "$(sh "$S" "$r")" ] || fail "no deviations/ is no deviations"
+
+fresh
+deviation "$r" rosetta multi 'build/x.sh' 'first line'
+printf 'first line\n  second line\n\nthird\n' > "$r/.mavergreen/deviations/rosetta/multi/reason"
+printf 'when x\nis native\n' > "$r/.mavergreen/deviations/rosetta/multi/revisit"
+out="$(sh "$S" "$r")"
+has 'rosetta build/x.sh first line second line third' "a multi-line reason reads as one line"
+
+fresh
+deviation "$r" rosetta crlf 'build/x.sh' 'a reason'
+printf 'build/x.sh\r\n' > "$r/.mavergreen/deviations/rosetta/crlf/scope"
+printf 'no final newline' > "$r/.mavergreen/deviations/rosetta/crlf/reason"
+out="$(sh "$S" "$r")"
+has 'rosetta build/x.sh no final newline' "a CRLF scope and a reason without a final newline"
+
+fresh
+deviation "$r" rosetta spaced 'build/my tool.sh' 'a path with a space'
+deviation "$r" rosetta percent 'build/100%.sh' 'a path with a percent sign'
+out="$(sh "$S" "$r")"
+has 'rosetta build/100%25.sh a path with a percent sign' "a percent sign in a scope is escaped"
+has 'rosetta build/my%20tool.sh a path with a space' "a space in a scope is escaped, so the scope stays one column"
+
+fresh; deviation "$r" rosetta x 'build/x.sh' ''
+refused 'no reason' "an empty reason"
+fresh; deviation "$r" rosetta x 'build/x.sh' 'r'; rm "$r/.mavergreen/deviations/rosetta/x/reason"
+refused 'no reason' "a missing reason"
+fresh; deviation "$r" rosetta x 'build/x.sh' 'r' ''
+refused 'no revisit' "an empty revisit"
+fresh; deviation "$r" rosetta x 'build/x.sh' 'r'; printf '  \n\n' > "$r/.mavergreen/deviations/rosetta/x/revisit"
+refused 'no revisit' "a blank revisit"
+fresh; deviation "$r" rosetta x 'build/x.sh' 'r'; rm "$r/.mavergreen/deviations/rosetta/x/revisit"
+refused 'no revisit' "a missing revisit"
+fresh; deviation "$r" rosetta x '' 'r'
+refused 'empty scope' "an empty scope"
+fresh; deviation "$r" rosetta x 'build/x.sh' 'r'; rm "$r/.mavergreen/deviations/rosetta/x/scope"
+refused 'no scope' "a missing scope"
+fresh; deviation "$r" rosetta x 'build/x.sh' 'r'; printf 'build/x.sh\nbuild/y.sh\n' > "$r/.mavergreen/deviations/rosetta/x/scope"
+refused 'second line' "a scope with a line 2"
+for label in Upper -dash under_score 'a b'; do
+  fresh; deviation "$r" rosetta "$label" 'build/x.sh' 'r'
+  refused 'label' "the label '$label'"
+done
+fresh; mkdir -p "$r/.mavergreen/deviations/rosetta"; : > "$r/.mavergreen/deviations/rosetta/x"
+refused 'not a directory' "a label that is a file"
+fresh; mkdir -p "$r/.mavergreen/deviations"; : > "$r/.mavergreen/deviations/rosetta"
+refused 'not a directory' "a check that is a file"
+fresh; deviation "$r" Rosetta x 'build/x.sh' 'r'
+refused 'check id' "a check directory that cannot be a check id"
+fresh
+deviation "$r" rosetta bad 'build/x.sh' ''
+deviation "$r" rosetta good 'build/y.sh' 'a reason'
+out="$(sh "$S" "$r" 2>/dev/null)" && fail "one bad deviation fails the run"
+[ "$out" = 'rosetta build/y.sh a reason' ] || fail "the good ones still print; got: $out"
+
+# spec: SKILL.md "Acceptance on real 10.9" -- an on-target of scope * stands in for the 10.9
+#       acceptance job; one of scope <part> names one gap in the job's coverage and keeps its part,
+#       which is how check 29 tells the two apart.
+fresh
+deviation "$r" on-target job '*' 'no 10.9 acceptance job yet'
+deviation "$r" on-target docker-vm 'docker-vm' 'Fusion cannot nest in QEMU'
+out="$(sh "$S" "$r")"
+has 'on-target \* no 10.9 acceptance job yet' "an on-target of scope * is unscoped"
+has 'on-target docker-vm Fusion cannot nest in QEMU' "an on-target part keeps its part"
+for part in 'docker-*' 'gui?' 'a[b]'; do
+  fresh; deviation "$r" on-target x "$part" 'a glob for a part'
+  refused 'one word' "the on-target part $part, a glob,"
 done
 
-printf '## Conformance deviations\n- scheme:a/b.pkg: a real scope\n' > "$w/INGREDIENTS.md"
-sh "$S" "$w" | grep -qx 'scheme a/b.pkg a real scope' || { echo "FAIL: a scoped entry must still parse"; exit 1; }
-# spec: SKILL.md "Release notes" -- unlinked: is scoped to a pin, and a pin is a file plus its KEY,
+# spec: SKILL.md "Release notes" -- unlinked is scoped to a pin, and a pin is a file plus its KEY,
 #       so a scope may end in :KEY (uppercase, as the pin's assignment spells it).
-printf '## Conformance deviations\n- unlinked:components/boot2docker/version:BASE: no notes for a digest refresh\n' > "$w/INGREDIENTS.md"
-sh "$S" "$w" | grep -qx 'unlinked components/boot2docker/version:BASE no notes for a digest refresh' \
-  || { echo "FAIL: a KEY-qualified scope must keep its KEY; got: $(sh "$S" "$w")"; exit 1; }
-# spec: SKILL.md "Conformance deviations" -- only unlinked: scopes a pin, so only it takes a :KEY;
-#       on any other kind the KEY could never match a subject, and would excuse nothing in silence.
-printf '## Conformance deviations\n- rosetta:build/x.sh:FOO: runs translated\n' > "$w/INGREDIENTS.md"
-if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: a :KEY scope on rosetta must fail; got: $out"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'unlinked' || { echo "FAIL: should say only unlinked: takes a :KEY: $out"; exit 1; }
-
-# spec: SKILL.md "Release notes" -- unlinked: excuses named pins; an unscoped or "*" one would switch
-#       the rule off for the whole repo, which is drift, not a declaration.
-for bad in '- unlinked: no notes anywhere' '- unlinked:*: no notes anywhere'; do
-  printf '## Conformance deviations\n%s\n' "$bad" > "$w/INGREDIENTS.md"
-  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: '$bad' must be refused; got: $out"; exit 1; fi
+fresh; deviation "$r" unlinked boot2docker-base 'components/boot2docker/version:BASE' 'no notes for a digest refresh'
+out="$(sh "$S" "$r")"
+has 'unlinked components/boot2docker/version:BASE no notes for a digest refresh' "a KEY-qualified scope keeps its KEY"
+fresh; deviation "$r" unlinked components 'components/*' 'a glob covers every KEY of every file under it'
+out="$(sh "$S" "$r")"
+has 'unlinked components/\* a glob covers every KEY of every file under it' "a file glob is an unlinked scope"
+# spec: SKILL.md "Conformance deviations" -- only unlinked scopes a pin, so only it takes a :KEY;
+#       on any other check the KEY could never match a subject, and would excuse nothing in silence.
+fresh; deviation "$r" rosetta x 'build/x.sh:FOO' 'runs translated'
+refused 'unlinked' "a :KEY scope on rosetta"
+# spec: SKILL.md "Release notes" -- unlinked excuses named pins; a scope of * would switch the rule
+#       off for the whole repo.
+fresh; deviation "$r" unlinked x '*' 'no notes anywhere'
+refused 'unlinked' "an unlinked of scope *"
+# spec: SKILL.md "Versioning" -- a self-upstream-exclude of only "*" and "/" would make no change
+#       own code.
+for scope in '*' '**' '*/**' '/'; do
+  fresh; deviation "$r" self-upstream-exclude x "$scope" 'x'
+  refused 'self-upstream-exclude' "a self-upstream-exclude of $scope"
 done
-# spec: SKILL.md "Versioning" -- a self-upstream-exclude: that names nothing, or only "*" and "/",
-#       would make no change own code.
-for bad in '- self-upstream-exclude: no own code' '- self-upstream-exclude:*: x' '- self-upstream-exclude:**: x' '- self-upstream-exclude:*/**: x'; do
-  printf '## Conformance deviations\n%s\n' "$bad" > "$w/INGREDIENTS.md"
-  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: '$bad' must be refused; got: $out"; exit 1; fi
-  printf '%s\n' "$out" | grep -q 'self-upstream-exclude' || { echo "FAIL: '$bad': the refusal names self-upstream-exclude: $out"; exit 1; }
+# spec: SKILL.md "Family conventions" checks 35 and 36 -- packager names one path and macos-runner
+#       one <workflow file>:<job>; * or a wildcard would excuse everything, so it is refused.
+for scope in '*' 'build/*' 'build/?.sh'; do
+  fresh; deviation "$r" packager x "$scope" 'every path'
+  refused 'packager' "the packager scope $scope"
 done
-printf '## Conformance deviations\n- unlinked:components/*: a glob covers every KEY of every file under it\n' > "$w/INGREDIENTS.md"
-sh "$S" "$w" | grep -qx 'unlinked components/\* a glob covers every KEY of every file under it' \
-  || { echo "FAIL: a file glob is a scope"; exit 1; }
-# spec: SKILL.md "Family conventions" checks 35 and 36 -- packager names one path and macos-runner one
-#       <workflow file>:<job>; a bare form or a wildcard would excuse everything, so it is refused.
-for line in '- packager: every path' '- packager:*: every path' '- packager:build/*: every path' \
-            '- macos-runner: every job' '- macos-runner:*: every job' '- macos-runner:ci.yml:*: every job' \
-            '- macos-runner:ci.yml: no job named' '- macos-runner:build: bare job id'; do
-  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
-  if sh "$S" "$w" >/dev/null 2>&1; then echo "FAIL: [$line] must be refused"; exit 1; fi
+for scope in '*' 'ci.yml:*' 'ci.yml' 'build' 'ci.yml:' ':build' 'a:b:c'; do
+  fresh; deviation "$r" macos-runner x "$scope" 'every job'
+  refused 'macos-runner' "the macos-runner scope $scope"
 done
-printf '## Conformance deviations\n- packager:build/package.sh: oracle; exit when stevedore is it\n- macos-runner:ci.yml:build: needs macOS; exit when Linux\n' > "$w/INGREDIENTS.md"
-sh "$S" "$w" | grep -qx 'packager build/package.sh oracle; exit when stevedore is it' || { echo "FAIL: a named packager path is a scope"; exit 1; }
-sh "$S" "$w" | grep -qx 'macos-runner ci.yml:build needs macOS; exit when Linux' || { echo "FAIL: macos-runner scopes <file>:<job>"; exit 1; }
-# spec: SKILL.md "Family conventions" check 37 -- arm64 names the install paths it covers; a bare
-#       form or a glob of nothing but wildcards would declare the whole pkg universal, so it is refused.
-for line in '- arm64: every path' '- arm64:*: every path' '- arm64:*/*: every path' '- arm64:**: every path' '- arm64:?: every path'; do
-  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
-  if sh "$S" "$w" >/dev/null 2>&1; then echo "FAIL: [$line] must be refused"; exit 1; fi
+fresh
+deviation "$r" packager oracle 'build/package.sh' 'oracle; exit when stevedore is it'
+deviation "$r" macos-runner build 'ci.yml:build' 'needs macOS; exit when Linux'
+out="$(sh "$S" "$r")"
+has 'packager build/package.sh oracle; exit when stevedore is it' "a named packager path is a scope"
+has 'macos-runner ci.yml:build needs macOS; exit when Linux' "macos-runner scopes <file>:<job>"
+# spec: SKILL.md "Family conventions" check 37 -- arm64 and cxxabi name the install paths they
+#       cover; * or a glob of nothing but wildcards would declare the whole pkg, so it is refused.
+for check in arm64 cxxabi; do
+  for scope in '*' '*/*' '**' '?'; do
+    fresh; deviation "$r" "$check" x "$scope" 'every path'
+    refused "$check" "the $check scope $scope"
+  done
 done
-printf '## Conformance deviations\n- arm64:usr/local/mavergreen/cmake/*: developers on Apple Silicon run it\n' > "$w/INGREDIENTS.md"
-sh "$S" "$w" | grep -qx 'arm64 usr/local/mavergreen/cmake/\* developers on Apple Silicon run it' || { echo "FAIL: an install-path glob is an arm64 scope"; exit 1; }
-for line in '- cxxabi: a bare cxxabi deviation; exit: never' '- cxxabi:*: every path; exit: never' '- cxxabi:*/*: every path; exit: never' '- cxxabi:**: every path; exit: never'; do
-  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
-  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: a bare cxxabi deviation is refused: [$line] got: $out"; exit 1; fi
-  printf '%s\n' "$out" | grep -q 'cxxabi:<install-path glob>' || { echo "FAIL: refusing [$line] names the form: $out"; exit 1; }
-done
-printf '## Conformance deviations\n- cxxabi:usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib: the family runtime; exit: none, it is the runtime\n' > "$w/INGREDIENTS.md"
-sh "$S" "$w" | grep -qx 'cxxabi usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib the family runtime; exit: none, it is the runtime' || { echo "FAIL: an install-path glob is a cxxabi scope; got: $(sh "$S" "$w" 2>&1)"; exit 1; }
+fresh
+deviation "$r" arm64 cmake 'usr/local/mavergreen/cmake/*' 'developers on Apple Silicon run it'
+deviation "$r" cxxabi runtime 'usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib' 'the family runtime'
+out="$(sh "$S" "$r")"
+has 'arm64 usr/local/mavergreen/cmake/\* developers on Apple Silicon run it' "an install-path glob is an arm64 scope"
+has 'cxxabi usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib the family runtime' "an install path is a cxxabi scope"
 echo "PASS: deviations"

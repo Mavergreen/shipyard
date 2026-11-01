@@ -6,3 +6,6 @@ UPSTREAM_VERSION
 build/upstream-release-notes-url.sh
 tests/a-test.sh
 build/deps.sh
+.mavergreen/deviations/pkgsrc/deps/reason
+.mavergreen/deviations/pkgsrc/deps/revisit
+.mavergreen/deviations/pkgsrc/deps/scope

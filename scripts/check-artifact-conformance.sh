@@ -4,7 +4,7 @@
 #          artifact-facts.sh dist "$VER" | check-artifact-conformance.sh
 #          Under shipyard-check --dist, SHIPYARD_CHECK_DIST names the dist directory and
 #          SHIPYARD_CHECK_VERSION the release's version, and the facts are produced here
-#          (SHIPYARD_CHECK_REPO names the repo whose INGREDIENTS.md declares deviations; default the
+#          (SHIPYARD_CHECK_REPO names the repo whose .mavergreen/deviations/ declares deviations; default the
 #          current directory). Piped, it reads a fact stream on stdin (see artifact-facts.sh), one
 #          record per line:
 #            expected      <version>                              the version this release claims to be
@@ -120,7 +120,7 @@ rule_of() {
     notes) echo "an appcast's description is the release body" ;;
     variant-build-info) echo "variants of one release agree about what they were built from" ;;
     sdk-pin) echo "every shipped Mach-O slice records its arch's pinned minos and SDK" ;;
-    arm64) echo "a pkg ships an arm64 slice only where INGREDIENTS.md declares its install path arm64" ;;
+    arm64) echo "a pkg ships an arm64 slice only where .mavergreen/deviations/arm64/ declares its install path" ;;
     cxxabi) echo "one process gets one C++ runtime: no shipped Mach-O defines libc++abi's machinery or loads another libc++abi" ;;
   esac
 }
@@ -128,14 +128,14 @@ fix_of() {
   case "$1" in
     version-scheme) echo "version the release <upstream>-mavericks.N, e.g. 1.2.3-mavericks.1" ;;
     version) echo "rebuild the artifact with the release version, or remove the stale one from dist/" ;;
-    floor) echo "wrap the component with set_install_floor.sh (10.9.5), or have the appcast declare sparkle:minimumSystemVersion; or declare '- floor:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
-    identifier) echo "give the pkg an identifier beginning dev.mavergreen., or declare '- identifier:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
-    bundle-id) echo "give the bundle a CFBundleIdentifier beginning dev.mavergreen., or declare '- bundle-id:<its identifier>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
-    launchd-label) echo "name the job dev.mavergreen.<name> and its plist <Label>.plist, or declare '- launchd-label:<its Label>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    floor) echo "wrap the component with set_install_floor.sh (10.9.5), or have the appcast declare sparkle:minimumSystemVersion; or declare .mavergreen/deviations/floor/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    identifier) echo "give the pkg an identifier beginning dev.mavergreen., or declare .mavergreen/deviations/identifier/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    bundle-id) echo "give the bundle a CFBundleIdentifier beginning dev.mavergreen., or declare .mavergreen/deviations/bundle-id/<label>/ (scope <its identifier>, a reason, a revisit)" ;;
+    launchd-label) echo "name the job dev.mavergreen.<name> and its plist <Label>.plist, or declare .mavergreen/deviations/launchd-label/<label>/ (scope <its Label>, a reason, a revisit)" ;;
     manifest) echo "install usr/local/mavergreen/<product>/mavergreen.plist (render-manifest.sh writes it), listing every file outside the product's tree under outside" ;;
     base) echo "build the product archive with set_install_floor.sh, which lists dev.mavergreen.base first" ;;
     line) echo "declare the product's line in its manifest and release it from the repo named for that line, or fix the version" ;;
-    install-path) echo "install under usr/local/mavergreen/<product> (list the exceptions in the manifest's outside), or declare '- install-path:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    install-path) echo "install under usr/local/mavergreen/<product> (list the exceptions in the manifest's outside), or declare .mavergreen/deviations/install-path/<label>/ (scope <glob>, a reason, a revisit)" ;;
     feed) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>), name the feed <product>.xml, and point the manifest's appcast at it" ;;
     updater) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>) and ship its LaunchAgent" ;;
     repository) echo "release the product from the repo scripts/product-names assigns it" ;;
@@ -143,10 +143,10 @@ fix_of() {
     length) echo "regenerate the appcast after the pkg is final, so its length is the pkg's" ;;
     enclosure-url) echo "regenerate the appcast with the release's own tag in the pkg URL" ;;
     notes) echo "generate the appcast from the same RELEASE_NOTES.md the Release body is built from" ;;
-    variant-build-info) echo "build every variant from the same pins, or declare '- variant-build-info: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
-    sdk-pin) echo "link against the pinned SDK (scripts/fetch_sdk.sh), or declare '- sdk-pin:<glob>: <reason>' under '## Conformance deviations' in INGREDIENTS.md" ;;
-    arm64) echo "build that path x86_64 only, or declare '- arm64:<install-path glob>: <who runs it on Apple Silicon, and why>' under '## Conformance deviations' in INGREDIENTS.md, with a modern-smoke job in release.yml that runs it" ;;
-    cxxabi) echo "link the family's runtime (libcxx22), or declare '- cxxabi:<glob>: <reason>; exit: <how it goes away>' under '## Conformance deviations' in INGREDIENTS.md" ;;
+    variant-build-info) echo "build every variant from the same pins, or declare .mavergreen/deviations/variant-build-info/<label>/ (scope *, a reason, a revisit)" ;;
+    sdk-pin) echo "link against the pinned SDK (scripts/fetch_sdk.sh), or declare .mavergreen/deviations/sdk-pin/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    arm64) echo "build that path x86_64 only, or declare .mavergreen/deviations/arm64/<label>/ (scope <install-path glob>, a reason saying who runs it on Apple Silicon and why, a revisit), with a modern-smoke job in release.yml that runs it" ;;
+    cxxabi) echo "link the family's runtime (libcxx22), or declare .mavergreen/deviations/cxxabi/<label>/ (scope <glob>, a reason, a revisit)" ;;
   esac
 }
 
@@ -178,7 +178,7 @@ fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (option
   #       check nobody wrote.
   if shipyard_deviation_scopes "$_id" | grep -qx '\*' || shipyard_deviation_scopes "$_c" | grep -qx '\*'; then
     chk_fail "$_id" "$(rule_of "$_id")" "a '${_c}' deviation is declared with no reason, which excuses nothing" \
-      "state why in INGREDIENTS.md ('- ${_c}: <reason>'), or fix the artifact"
+      "state why in .mavergreen/deviations/${_c}/<label>/ (scope, reason, revisit), or fix the artifact"
     return 0
   fi
   chk_fail "$_id" "$(rule_of "$_id")" "$_msg" "$(fix_of "$_id")"
@@ -524,7 +524,7 @@ while read -r kind file path arch ft mn sd sha; do
 done < "$facts"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Family conventions" check 37 --
-#       a pkg ships x86_64 unless INGREDIENTS.md declares '- arm64:<glob>: <reason>' for the install
+#       a pkg ships x86_64 unless .mavergreen/deviations/arm64/ declares a scope for the install
 #       path; a Sparkle updater's slices are exempt, and where the registry derives the product's
 #       updater, only that bundle's. A repo grandfathered as modern-smoke is warned.
 arm_gf=no
@@ -552,7 +552,7 @@ while read -r file path; do
   if [ -n "$(deviation_reason arm64 "$(dec "$path")")" ]; then arm_declared=$((arm_declared + 1)); continue; fi
   arm_undeclared=$((arm_undeclared + 1))
   [ "$arm_undeclared" -le 20 ] || continue
-  msg="$file installs $(dec "$path") with an arm64 slice, and no '- arm64:<glob>: <reason>' under INGREDIENTS.md's ## Conformance deviations matches that install path"
+  msg="$file installs $(dec "$path") with an arm64 slice, and no .mavergreen/deviations/arm64/ scope matches that install path"
   if [ "$arm_gf" = yes ]; then
     echo "::warning::conformance: arm64: $msg (grandfathered: modern-smoke ${repository#*/})"
   else
@@ -598,7 +598,7 @@ while read -r file path darches larches n loads syms; do
     echo "conformance: cxxabi: DECLARED DEVIATION ($p) -- $(deviation_reason cxxabi "$p")"
     continue
   fi
-  how="link the family's runtime (libcxx22), or declare '- cxxabi:$p: <reason>; exit: <how it goes away>' under INGREDIENTS.md's ## Conformance deviations"
+  how="link the family's runtime (libcxx22), or declare .mavergreen/deviations/cxxabi/<label>/ (scope $p, a reason, a revisit)"
   if [ "$n" -gt 0 ]; then
     more=""; [ "$n" -le 5 ] || more=" and $((n - 5)) more"
     cxx_report "$file installs $p ($darches), which defines C++ runtime machinery beyond Recaulk's back-fills: $syms$more -- one process gets one C++ runtime, hidden or not"

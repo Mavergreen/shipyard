@@ -10,6 +10,7 @@ S="$here/scripts/check-family-conventions.sh"
 fx="$here/tests/fixtures/checks"
 . "$here/tests/lib/fixture_tree.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/check-family-rules-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
+. "$here/tests/lib/deviation_tree.sh"
 fail() { echo "FAIL $1"; exit 1; }
 unset GITHUB_REPOSITORY
 
@@ -80,7 +81,7 @@ fresh devpr
 seton devpr 'on:
   push:
     branches: [main]'
-printf '# x\n\n## Conformance deviations\n\n- pr-trigger: no build to gate\n' > "$w/devpr/INGREDIENTS.md"
+deviation "$w/devpr" pr-trigger no-build '*' 'no build to gate'
 ok devpr
 
 fresh norenovate
@@ -116,7 +117,7 @@ refused vprefix no-hardcoded-version
 fresh hardcoded-dev
 printf '#!/bin/sh\necho "fetching 1.0.0"\n' > "$w/hardcoded-dev/build/fetch.sh"
 printf 'build/fetch.sh\n' >> "$w/hardcoded-dev/FILES"
-printf '# x\n\n## Conformance deviations\n\n- no-hardcoded-version:build/fetch.sh: the pin is the contract\n' > "$w/hardcoded-dev/INGREDIENTS.md"
+deviation "$w/hardcoded-dev" no-hardcoded-version fetch build/fetch.sh 'the pin is the contract'
 ok hardcoded-dev
 
 fresh tests-may-name

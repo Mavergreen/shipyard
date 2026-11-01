@@ -6,6 +6,7 @@
 unset GITHUB_REPOSITORY
 S="$here/../scripts/check-family-conventions.sh"
 SHIPYARD_CHECK_DIR="$here/../scripts"
+. "$here/lib/deviation_tree.sh"
 . "$SHIPYARD_CHECK_DIR/lib/py.sh"
 first_is() {
   case "$(printf '%s\n' "$1" | awk 'prev != "" && /^  fix: / { print prev; exit } { prev = $0 }')" in "$2: "*) return 0 ;; esac
@@ -65,10 +66,10 @@ YML
       - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
 YML
   # spec: SKILL.md "Family conventions" check 35 -- these fixtures build pkgs with the system packager on
-  #       purpose, so the baseline declares build/package.sh; a case adds its own deviations beneath this
-  #       heading, and tests/check-family-conventions-7-test.sh, which tests check 35 itself, replaces
-  #       the whole file with a bare INGREDIENTS.md.
-  printf '# Build ingredients\n\n## Conformance deviations\n\n- packager:build/package.sh: fixtures build pkgs with the system packager\n' > "$1/INGREDIENTS.md"
+  #       purpose, so the baseline declares build/package.sh; tests/check-family-conventions-7-test.sh,
+  #       which tests check 35 itself, removes that deviation.
+  printf '# Build ingredients\n' > "$1/INGREDIENTS.md"
+  deviation "$1" packager system-packager 'build/package.sh' 'fixtures build pkgs with the system packager'
   printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$1/.github/renovate.json"
   printf '#!/bin/sh\nexit 0\n' > "$1/tests/a-test.sh"
   # spec: scripts/check-family-conventions.sh -- a compliant repo commits UPSTREAM_VERSION and

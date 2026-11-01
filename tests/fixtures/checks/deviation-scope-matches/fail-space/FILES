@@ -1,0 +1,4 @@
+build/crossXtool.sh
+.mavergreen/deviations/rosetta/gyp/reason
+.mavergreen/deviations/rosetta/gyp/revisit
+.mavergreen/deviations/rosetta/gyp/scope

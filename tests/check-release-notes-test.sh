@@ -139,7 +139,7 @@ Changed since 20260727-mavericks.36:
 
 - **docker-cli / REF**: v29.9.0 -> v29.9.1
 EOF
-for fix in 'Renovate' 'REPO=' 'unlinked:'; do
+for fix in 'Renovate' 'REPO=' 'deviations/unlinked/'; do
   printf '%s\n' "$out" | grep -q "$fix" || { echo "FAIL: the complaint must name the fix ($fix): $out"; exit 1; }
 done
 

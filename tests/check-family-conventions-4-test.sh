@@ -31,7 +31,7 @@ first_is "$out" stage-product \
 mkrepo "$work/pkc"; printf '#!/bin/sh\npkgbuild --root stage out.pkg\n' > "$work/pkc/build/package.sh"
 printf '      # - run: shipyard-check --dist dist\n' >> "$work/pkc/.github/workflows/release.yml"
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) && { echo "FAIL: a commented-out conformance call must not count as wired"; exit 1; }
-printf '\n- artifact-checks-wired: ships a disk image, not a Mavergreen pkg\n- stage-product: ships a disk image, not a Mavergreen pkg\n- registered: ships a disk image, not a Mavergreen pkg\n' >> "$work/pkc/INGREDIENTS.md"
+deviation "$work/pkc" artifact-checks-wired repo '*' 'ships a disk image, not a Mavergreen pkg'; deviation "$work/pkc" stage-product repo '*' 'ships a disk image, not a Mavergreen pkg'; deviation "$work/pkc" registered repo '*' 'ships a disk image, not a Mavergreen pkg'
 (cd "$work/pkc" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: declared artifact-checks-wired, stage-product and registered deviations should excuse it: $(cd "$work/pkc" && sh "$S" 2>&1)"; exit 1; }
 mkrepo "$work/pks"; printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$work/pks/.github/workflows/release.yml"
 out="$(cd "$work/pks" && git add -A && sh "$S" 2>&1 || true)"
@@ -92,7 +92,7 @@ printf '#!/bin/sh\narch -x86_64 ./host-tool\n' > "$work/rosetta/build/cross.sh"
 (cd "$work/rosetta" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/rosetta" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call must fail"; exit 1; }
 first_is "$out" rosetta || { echo "FAIL should be a rosetta failure: $out"; exit 1; }
-printf '\n- rosetta:build/cross.sh: the cross build runs a host tool under Rosetta; reconsider when an arm64 host tool exists, and at the latest before macOS 28\n' >> "$work/rosetta/INGREDIENTS.md"
+deviation "$work/rosetta" rosetta cross 'build/cross.sh' 'the cross build runs a host tool under Rosetta; reconsider when an arm64 host tool exists, and at the latest before macOS 28'
 (cd "$work/rosetta" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse it: $(cd "$work/rosetta" && sh "$S" 2>&1)"; exit 1; }
 
@@ -118,7 +118,7 @@ printf '#!/bin/sh\narch -x86_64 ./product --version\n' > "$work/rosettat/tests/r
 (cd "$work/rosettat" && git add -A) >/dev/null 2>&1
 (cd "$work/rosettat" && sh "$S" >/dev/null 2>&1) \
   && { echo "FAIL: check 25: a call under tests/ must fail undeclared: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
-printf '\n- rosetta:tests/rosetta-smoke.sh: best-effort smoke that runs the shipped x86_64 product under Rosetta when present, SKIPping (77) otherwise; reconsider when an arm64 test box exists, and at the latest before macOS 28\n' >> "$work/rosettat/INGREDIENTS.md"
+deviation "$work/rosettat" rosetta rosetta-smoke 'tests/rosetta-smoke.sh' 'best-effort smoke that runs the shipped x86_64 product under Rosetta when present, SKIPping (77) otherwise; reconsider when an arm64 test box exists, and at the latest before macOS 28'
 (cd "$work/rosettat" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:tests/rosetta-smoke.sh deviation should excuse it: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
 
@@ -145,7 +145,7 @@ printf 'jobs:\n  build:\n    steps:\n      - run: |\n          %s %s ./cross-too
 (cd "$work/rosettayml" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/rosettayml" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call inside a workflow run: block must fail"; exit 1; }
 first_is "$out" rosetta || { echo "FAIL should be a rosetta failure: $out"; exit 1; }
-printf '\n- rosetta:.github/workflows/x.yml: the release job cross-builds a host tool under Rosetta\n' >> "$work/rosettayml/INGREDIENTS.md"
+deviation "$work/rosettayml" rosetta x '.github/workflows/x.yml' 'the release job cross-builds a host tool under Rosetta'
 (cd "$work/rosettayml" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:.github/workflows/x.yml deviation should excuse the workflow hit: $(cd "$work/rosettayml" && sh "$S" 2>&1)"; exit 1; }
 
@@ -156,7 +156,7 @@ printf '#!/bin/sh\nsoftwareupdate --install-rosetta --agree-to-license\n' > "$wo
 (cd "$work/rosettainstall" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/rosettainstall" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared softwareupdate Rosetta-install call must fail"; exit 1; }
 first_is "$out" rosetta || { echo "FAIL should be a rosetta failure: $out"; exit 1; }
-printf '\n- rosetta:build/prep.sh: installs Rosetta so a later step can run x86_64 tools\n' >> "$work/rosettainstall/INGREDIENTS.md"
+deviation "$work/rosettainstall" rosetta prep 'build/prep.sh' 'installs Rosetta so a later step can run x86_64 tools'
 (cd "$work/rosettainstall" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 25: a declared rosetta:<path> deviation should excuse softwareupdate --install-rosetta: $(cd "$work/rosettainstall" && sh "$S" 2>&1)"; exit 1; }
 
@@ -187,7 +187,7 @@ mkrepo "$work/rp-untracked"; printf '{}\n' > "$work/rp-untracked/renovate.json"
 (cd "$work/rp-untracked" && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 26: an UNTRACKED renovate.json is not the repo's and must not fail: $(cd "$work/rp-untracked" && sh "$S" 2>&1)"; exit 1; }
 
-printf '\n- renovate-path:renovate.json: legacy consumer config read by an external bot; move before the next release\n' >> "$work/rp-renovate_json/INGREDIENTS.md"
+deviation "$work/rp-renovate_json" renovate-path renovate 'renovate.json' 'legacy consumer config read by an external bot; move before the next release'
 (cd "$work/rp-renovate_json" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: check 26: a declared renovate-path:renovate.json deviation should excuse it: $(cd "$work/rp-renovate_json" && sh "$S" 2>&1)"; exit 1; }
 (cd "$work/rp-renovate_json5" && git add -A && sh "$S" >/dev/null 2>&1) \
@@ -280,8 +280,8 @@ unpinned() {  # $1 = name, $2 = file, $3 = line: undeclared must fail naming unp
   printf '%s\n' "$3" > "$d/$2"
   (cd "$d" && git add -A) >/dev/null 2>&1
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 28: $1 must fail undeclared: $3"; exit 1; }
-  printf '%s\n' "$out" | grep -q "unpinned:$2" || { echo "FAIL: check 28 should name unpinned:$2 for $1: $out"; exit 1; }
-  printf '\n- unpinned:%s: a canary of the newest release on purpose; reconsider if it ever gates a release\n' "$2" >> "$d/INGREDIENTS.md"
+  printf '%s\n' "$out" | grep -q "^unpinned: $2" || { echo "FAIL: check 28 should name $2 for $1: $out"; exit 1; }
+  deviation "$d" unpinned canary "$2" 'a canary of the newest release on purpose; reconsider if it ever gates a release'
   (cd "$d" && git add -A && sh "$S" >/dev/null 2>&1) \
     || { echo "FAIL: check 28: a declared unpinned:$2 should excuse $1: $(cd "$d" && sh "$S" 2>&1)"; exit 1; }
 }

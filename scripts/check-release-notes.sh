@@ -89,7 +89,7 @@ awk '
   bare="$(cat "$t" 2>/dev/null || true)"
   pin="$(printf '%s' "$bare" | sed -n 's/^- \*\*\(.*\)\*\*:.*/\1/p')"
   fail "the Build ingredients bullet for ${pin:-<unknown>} says nothing about where its change is described: $bare" \
-    "give that pin a link source -- a Renovate customManager (github-releases or github-tags) that captures it, or a REPO=https://github.com/<owner>/<repo>.git beside its REF/TAG/VERSION -- or declare why it has none under INGREDIENTS.md's ## Conformance deviations as '- unlinked:<pin path>[:KEY]: <reason>'"
+    "give that pin a link source -- a Renovate customManager (github-releases or github-tags) that captures it, or a REPO=https://github.com/<owner>/<repo>.git beside its REF/TAG/VERSION -- or declare why it has none as .mavergreen/deviations/unlinked/<label>/ (scope <pin path>[:KEY], a reason, a revisit)"
 }
 
 echo "check-release-notes: ok — $f is the family shape for $ver"
