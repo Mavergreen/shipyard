@@ -25,11 +25,8 @@ archs="$("$CL/bin/llvm-lipo" -info "$exe" 2>/dev/null | sed -n 's/.*: //p')" || 
 [ -n "$archs" ] || fail "$exe is not Mach-O"
 case " $archs " in *' x86_64 '*) ;; *) fail "the updater has no x86_64 slice: '$archs'" ;; esac
 case " $archs " in *' arm64 '*) ;; *) fail "the updater has no arm64 slice: '$archs'" ;; esac
-for s in x86_64:10.9 arm64:11.0; do
-  a="${s%%:*}"; floor="${s#*:}"
-  "$CL/bin/llvm-otool" -arch "$a" -l "$exe" > "$T/lc-$a"
-  grep -E "(version|minos) $floor\$" "$T/lc-$a" > /dev/null || fail "the $a slice must record minos $floor"
-done
+slices="$(LIPO="$CL/bin/llvm-lipo" OTOOL="$CL/bin/llvm-otool" sh "$ROOT/scripts/macho-slices.sh" "$exe" | cut -d' ' -f1,3 | LC_ALL=C sort | tr '\n' ' ')"
+[ "$slices" = 'arm64 11.0 x86_64 10.9 ' ] || fail "the slices must record minos 11.0 (arm64) and 10.9 (x86_64), got '$slices'"
 fw="$app/Contents/Frameworks/Sparkle.framework"
 [ -d "$fw" ] || fail 'the app embeds no Sparkle.framework'
 sh "$ROOT/scripts/assert_sparkle_pristine.sh" "$fw" "$(sh "$ROOT/scripts/fetch_sparkle_framework.sh")" \
