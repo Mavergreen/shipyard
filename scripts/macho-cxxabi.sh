@@ -21,8 +21,16 @@ reader_died() { echo "macho-cxxabi: $1 could not read $f" >&2; cat "$t/err" >&2;
 for _r in "$NM" "${LIPO:-lipo}" "${OTOOL:-otool}"; do
   command -v "$_r" >/dev/null 2>&1 || reader_died "$_r (not found)"
 done
-info="$("${LIPO:-lipo}" -info "$f" 2>/dev/null)" || exit 1
-archs="$(printf '%s\n' "$info" | sed -n 's/.*: //p' | xargs)"
+# platform: llvm-lipo 18 (Ubuntu's) segfaults on -info of a static archive, so an archive's arch is
+#           read from its members' own headers, as macho-slices.sh reads it.
+if [ "$(head -c 7 "$f")" = '!<arch>' ]; then
+  info=archive
+  "${OTOOL:-otool}" -hv "$f" > "$t/ahv" 2>"$t/err" || reader_died "${OTOOL:-otool} -hv"
+  archs="$(awk '$1 ~ /^MH_MAGIC/ { print tolower($2) }' "$t/ahv" | sort -u | xargs)"
+else
+  info="$("${LIPO:-lipo}" -info "$f" 2>/dev/null)" || exit 1
+  archs="$(printf '%s\n' "$info" | sed -n 's/.*: //p' | xargs)"
+fi
 [ -n "$archs" ] || exit 1
 for a in $archs; do
   s="$f"
