@@ -24,8 +24,7 @@ cmake -S "$T/project" -B "$T/build" \
 cmake --build "$T/build"
 archs="$("$LLVM/bin/llvm-lipo" -info "$T/build/hello" | sed -n 's/.*: //p' | sed 's/[[:space:]]*$//')"
 [ "$archs" = arm64 ] || { echo "FAIL: Linux arm64 configure must link a Mach-O of arch arm64 (the toolchain file kept x86_64?), got '$archs'"; exit 1; }
-"$LLVM/bin/llvm-otool" -l "$T/build/hello" | grep -q 'minos 11.0' \
-  || { echo 'FAIL: the arm64 slice must record minos 11.0 (deployment target not pinned per arch)'; exit 1; }
-"$LLVM/bin/llvm-otool" -l "$T/build/hello" | grep -q 'sdk 11.3' \
-  || { echo 'FAIL: the arm64 slice must record sdk 11.3 (the pinned SDK, not another)'; exit 1; }
+slices="$(LIPO="$LLVM/bin/llvm-lipo" OTOOL="$LLVM/bin/llvm-otool" sh "$ROOT/scripts/macho-slices.sh" "$T/build/hello")"
+[ "$slices" = 'arm64 EXECUTE 11.0 11.3' ] \
+  || { echo "FAIL: the arm64 slice must record minos 11.0 and sdk 11.3 (deployment target and SDK pinned per arch), got '$slices'"; "$LLVM/bin/llvm-otool" -l "$T/build/hello" | grep -A4 -e LC_BUILD_VERSION -e LC_VERSION_MIN; exit 1; }
 echo 'PASS: Linux arm64 configure links Mach-O arm64, minos 11.0, sdk 11.3'
