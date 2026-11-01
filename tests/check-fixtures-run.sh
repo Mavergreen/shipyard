@@ -32,6 +32,7 @@ root="$(cd "$here/.." && pwd)"
 fx="${SHIPYARD_FIXTURES_DIR:-$here/fixtures/checks}"
 reg="$root/scripts/check-ids.tsv"
 . "$root/scripts/lib/macho-tools.sh"
+. "$here/lib/fixture_tree.sh"
 
 strict=0; nogit=0; jobs=""
 while [ $# -gt 0 ]; do
@@ -107,16 +108,8 @@ make_repo() {  # $1 = fixture dir, $2 = the copy: a git repo holding FILES (or e
 run_fixture() {  # $1 = id, $2 = mode, $3 = fixture dir, $4 = scratch dir; sets $rc, output in $4/out
   _id="$1"; _mode="$2"; d="$3"; s="$4"
   rm -rf "$s/copy"; mkdir "$s/copy"
-  (cd "$fx/_base" && tar cf - .) | (cd "$s/copy" && tar xf -)
-  (cd "$d" && tar cf - .) | (cd "$s/copy" && tar xf -)
-  for m in ENV FILES NEEDS ALSO ARGS TAGS RUN AFTER DELETE; do rm -rf "${s:?}/copy/$m"; done
-  if [ -f "$d/DELETE" ]; then
-    while IFS= read -r p; do
-      [ -n "$p" ] || continue
-      rm -rf "${s:?}/copy/$p"
-      (cd "$s/copy" && rmdir -p "$(dirname "$p")" 2>/dev/null) || true
-    done < "$d/DELETE"
-  fi
+  fixture_tree "$fx" "$d" "$s/copy"
+  for m in ENV FILES NEEDS ALSO ARGS TAGS RUN AFTER; do rm -rf "${s:?}/copy/$m"; done
   c="$s/copy"
   usegit=0
   [ ! -f "$d/TAGS" ] && [ ! -f "$d/RUN" ] || usegit=1
