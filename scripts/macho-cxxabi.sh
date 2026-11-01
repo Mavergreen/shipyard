@@ -9,13 +9,14 @@
 #          Exit 0; 1 if FILE is not Mach-O; 2 on a usage error; 4 if a reader is missing or failed.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/lib/mach-nm.sh"; NM="$(shipyard_mach_nm)"; export NM
 [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "usage: macho-cxxabi.sh FILE" >&2; exit 2; }
 f="$1"
 _tmp="${TMPDIR:-/tmp}"
 t="$(mktemp -d "${_tmp%/}/macho-cxxabi.XXXXXX")"; trap 'rm -rf "$t"' EXIT
 reader_died() { echo "macho-cxxabi: $1 could not read $f" >&2; cat "$t/err" >&2; exit 4; }
 : > "$t/err"
-for _r in "${NM:-nm}" "${LIPO:-lipo}" "${OTOOL:-otool}"; do
+for _r in "$NM" "${LIPO:-lipo}" "${OTOOL:-otool}"; do
   command -v "$_r" >/dev/null 2>&1 || reader_died "$_r (not found)"
 done
 info="$("${LIPO:-lipo}" -info "$f" 2>/dev/null)" || exit 1
@@ -24,7 +25,7 @@ archs="$(printf '%s\n' "$info" | sed -n 's/.*: //p' | xargs)"
 for a in $archs; do
   s="$f"
   case "$info" in Architectures*) "${LIPO:-lipo}" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>"$t/err" || reader_died "${LIPO:-lipo} -thin $a"; s="$t/$a" ;; esac
-  "${NM:-nm}" -Um "$s" > "$t/nm" 2>"$t/err" || reader_died "${NM:-nm} -Um"
+  "$NM" -Um "$s" > "$t/nm" 2>"$t/err" || reader_died "$NM -Um"
   awk '/^[0-9a-f ]*\(/ && !/\):$/ {
          n = $0; sub(/ \(for [^)]*\)$/, "", n); sub(/.* /, "", n); sub(/\.eh$/, "", n)
          print n, ((/ external / && !/ private external /) ? "visible" : "hidden") }' "$t/nm" \

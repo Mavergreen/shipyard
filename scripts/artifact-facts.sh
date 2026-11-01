@@ -12,6 +12,7 @@
 #       reads a repo in seconds and gates every PR.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
+. "$SELF/lib/mach-nm.sh"; NM="$(shipyard_mach_nm)"; export NM
 . "$SELF/deviation-reason.sh"
 . "$SELF/registry-lookup.sh"
 dist="${1:?artifact-facts: dist directory required}"
@@ -58,8 +59,8 @@ cxxabi_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded). Non-
     cxxabi_tmp="$(mktemp -d "${TMPDIR:-/tmp}/cxxabi-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
     trap 'rm -rf "$cxxabi_tmp"' EXIT
   fi
-  command -v "${NM:-nm}" >/dev/null 2>&1 \
-    || { _mf_why="NM: ${NM:-nm} not found; set NM to a Mach-O nm such as clang22's llvm-nm"; return 1; }
+  command -v "$NM" >/dev/null 2>&1 \
+    || { _mf_why="NM: $NM not found; set NM to a Mach-O nm such as clang22's llvm-nm"; return 1; }
   _cx="$(sh "$SELF/macho-cxxabi.sh" "$2" 2>"$cxxabi_tmp/err")" || {
     _mf_why="cannot read the C++ runtime symbols of $1:$3 (macho-cxxabi.sh exit $?): $(sed -n 's/^macho-cxxabi: //p' "$cxxabi_tmp/err" | head -1 | sed 's/ could not read .*//')"; return 1; }
   case "$_cx" in
