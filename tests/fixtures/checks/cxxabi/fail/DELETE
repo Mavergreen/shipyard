@@ -2,5 +2,5 @@
 .github/workflows/release.yml
 .gitignore
 UPSTREAM_VERSION
-build/upstream-release-notes-url.sh
+.mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh

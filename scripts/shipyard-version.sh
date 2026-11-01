@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: shipyard-version.sh          (prints FULL=<line>.<count> and TAG=v<line>.<count>)
-#          shipyard's own version -- UPSTREAM_VERSION holds the LINE (major.minor); the patch is the
+#          shipyard's own version -- .mavergreen/upstream/VERSION holds the LINE (major.minor); the patch is the
 #          commit count, so a new commit is necessarily a new version with no discipline to remember.
 #          NOT resolve-version.sh: that hardcodes -mavericks.N, which is for repackaged upstreams, not
 #          for us.
@@ -13,13 +13,14 @@
 # spec: tests/shipyard-version-test.sh
 set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
-[ -f "$root/UPSTREAM_VERSION" ] || { echo "shipyard-version: no $root/UPSTREAM_VERSION" >&2; exit 1; }
-line="$(sed -n '1p' "$root/UPSTREAM_VERSION" | tr -d ' \t')"
+. "$root/scripts/mavergreen-meta.sh"
+MAVERGREEN_ROOT="$root"
+line="$(mg_value upstream/VERSION)" || { echo "shipyard-version: no $root/.mavergreen/upstream/VERSION" >&2; exit 1; }
 
 case "$line" in
-  [0-9]*.[0-9]*.*) echo "shipyard-version: UPSTREAM_VERSION holds the LINE (major.minor), not a full version: $line" >&2; exit 1 ;;
+  [0-9]*.[0-9]*.*) echo "shipyard-version: .mavergreen/upstream/VERSION holds the LINE (major.minor), not a full version: $line" >&2; exit 1 ;;
   [0-9]*.[0-9]*) : ;;
-  *) echo "shipyard-version: UPSTREAM_VERSION is not a major.minor line: $line" >&2; exit 1 ;;
+  *) echo "shipyard-version: .mavergreen/upstream/VERSION is not a major.minor line: $line" >&2; exit 1 ;;
 esac
 
 # platform: `--is-shallow-repository` needs git >= 2.15 (2017); that floor is safe for every runner

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # VERSION (a gitignored build product) wins when present -- release.yml writes it. Otherwise derive
 # from the commit count, so a developer's `cmake --install` from a checkout stamps the REAL version
 # rather than the bare line: an install is a snapshot with no staleness signal of its own, and the
-# number it carries is the only way to tell one apart from another. UPSTREAM_VERSION is the last
+# number it carries is the only way to tell one apart from another. .mavergreen/upstream/VERSION is the last
 # resort, for a tarball with no .git (it yields the line, which is honest about being imprecise).
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
   file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" _MSC_VERSION LIMIT_COUNT 1)
@@ -15,7 +15,7 @@ else()
     string(REGEX MATCH "FULL=([^\n]*)" _MSC_VERSION_MATCH "${_MSC_VERSION_OUT}")
     set(_MSC_VERSION "${CMAKE_MATCH_1}")
   else()
-    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/UPSTREAM_VERSION" _MSC_VERSION LIMIT_COUNT 1)
+    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/.mavergreen/upstream/VERSION" _MSC_VERSION LIMIT_COUNT 1)
   endif()
 endif()
 project(MavericksShipyard VERSION ${_MSC_VERSION} LANGUAGES NONE)

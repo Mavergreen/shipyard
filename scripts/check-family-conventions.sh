@@ -10,6 +10,7 @@ SHIPYARD_SCRIPTS="$SELF"
 . "$SELF/registry-lookup.sh"
 . "$SELF/lib/py.sh"
 . "$SELF/deviation-reason.sh"
+. "$SELF/mavergreen-meta.sh"
 shipyard_deviations . >/dev/null 2>&1 || :
 deviated() { shipyard_deviated "$1" "${2:-}" >/dev/null; }
 REL=".github/workflows/release.yml"
@@ -156,20 +157,12 @@ PY
 fi
 
 # spec: SKILL.md "Family conventions" check 7 -- VERSION is a build product, never committed (an
-#       untracked one in the tree is fine); something must also be able to SUPPLY the upstream
-#       version (a committed UPSTREAM_VERSION, or a derive script).
+#       untracked one in the tree is fine).
 chk_ran no-tracked-version
 if [ "$HAVE_TRACKED" -eq 1 ] && tracked VERSION; then
   chk_fail no-tracked-version "VERSION is committed" \
     "it is a build product, and the committed copy goes stale while tags move on" \
-    "git rm --cached VERSION; add /VERSION to .gitignore; commit UPSTREAM_VERSION instead"
-fi
-
-if rel_ran upstream-version && [ ! -f UPSTREAM_VERSION ] \
-   && [ -z "$(ls build/derive-upstream-version.sh scripts/derive-upstream-version.sh 2>/dev/null || true)" ]; then
-  chk_fail upstream-version "no UPSTREAM_VERSION and nothing to derive one" \
-    "the version cannot be computed" \
-    "commit UPSTREAM_VERSION (bare x.y.z or a date), or add build/derive-upstream-version.sh"
+    "git rm --cached VERSION; add /VERSION to .gitignore; commit .mavergreen/upstream/VERSION instead"
 fi
 
 # spec: SKILL.md "Family conventions" check 7b -- lines/ is the RETIRED per-line directory shape
@@ -184,7 +177,7 @@ chk_ran no-lines-dir
 if [ "$HAVE_TRACKED" -eq 1 ] && tracked_under lines; then
   chk_fail no-lines-dir "lines/ exists" \
     "that per-line directory shape is retired; each upstream line is its own repo now" \
-    "move this line's UPSTREAM_VERSION and patches/ to the repo root (see SKILL.md \"Multiple upstream lines\"); a NEW line belongs in a NEW repo, never a new lines/<id>/ here"
+    "move this line's upstream version and patches/ to the repo root (see SKILL.md \"Multiple upstream lines\"); a NEW line belongs in a NEW repo, never a new lines/<id>/ here"
 fi
 
 # spec: SKILL.md "Family conventions" check 7c -- build/version.sh (and its wrapper siblings) must
@@ -342,22 +335,18 @@ delegate shell-portability check-shell-portability.sh \
   "apply the fix line printed under each hit below" quiet
 
 # spec: SKILL.md "Family conventions" check 11 -- a release shipping a new upstream must link
-#       upstream's own notes: a committed build/ or scripts/upstream-release-notes-url.sh, or
-#       INGREDIENTS.md saying why there is nothing to link.
-hook_tracked=no; hook_present=no
-for d in build scripts; do
-  if tracked "$d/upstream-release-notes-url.sh"; then hook_tracked=yes; fi
-  if [ -f "$d/upstream-release-notes-url.sh" ]; then hook_present=yes; fi
-done
-if rel_ran upstream-notes && [ "$hook_tracked" = no ] && ! deviated upstream-notes; then
-  if [ "$hook_present" = yes ]; then
-    chk_fail upstream-notes "upstream-release-notes-url.sh exists but is not committed" \
-      "a .gitignore'd build/ drops it silently, and CI's fresh checkout never sees it" \
-      "git add -f it (and ignore only build OUTPUT dirs, never build/ itself)"
+#       upstream's own notes: a committed .mavergreen/hooks/upstream-release-notes-url, or a
+#       deviations/upstream-notes/ saying why there is nothing to link.
+NOTES_HOOK=.mavergreen/hooks/upstream-release-notes-url
+if rel_ran upstream-notes && ! tracked "$NOTES_HOOK" && ! deviated upstream-notes; then
+  if [ -f "$NOTES_HOOK" ]; then
+    chk_fail upstream-notes "$NOTES_HOOK exists but is not committed" \
+      "CI's fresh checkout never sees it" \
+      "git add it"
   else
     chk_fail upstream-notes "a release shipping a new upstream cannot link upstream's notes" \
-      "there is no committed build/upstream-release-notes-url.sh, and INGREDIENTS.md does not say why" \
-      "add the hook (usually one printf -- see the conventions skill, 'A new upstream links upstream's own notes'), or a line 'No upstream release notes: <reason>' in INGREDIENTS.md"
+      "there is no committed $NOTES_HOOK, and no .mavergreen/deviations/upstream-notes/ says why" \
+      "add the hook (usually one printf -- see the conventions skill, 'A new upstream links upstream's own notes'), or .mavergreen/deviations/upstream-notes/<label>/ with scope *, reason and revisit"
   fi
 fi
 
@@ -1110,11 +1099,11 @@ fi
 
 # spec: SKILL.md "Versioning" -- a hardcoded upstream version in the build machinery fails its own
 #       CI on the next Renovate bump and blocks the automerge, so build/, packaging/, the workflows
-#       and CMakeLists.txt read UPSTREAM_VERSION. The match is the whole dotted version: 12.3 is not
-#       found inside 112.34, ABC12.3 or 12.3.1, and v12.3 is. tests/ may name it; a test that does so reads the file.
+#       and CMakeLists.txt read .mavergreen/upstream/VERSION. The match is the whole dotted version:
+#       12.3 is not found inside 112.34, ABC12.3 or 12.3.1, and v12.3 is. tests/ may name it; a test
+#       that does so reads the file.
 chk_ran no-hardcoded-version
-if [ "$HAVE_TRACKED" -eq 1 ] && [ -f UPSTREAM_VERSION ]; then
-  _uv="$(sed -n '1{s/[[:space:]]//g;p;}' UPSTREAM_VERSION)"
+if [ "$HAVE_TRACKED" -eq 1 ] && _uv="$(MAVERGREEN_ROOT=. mg_value upstream/VERSION)"; then
   case "$_uv" in
     ''|*[!0-9A-Za-z._-]*) ;;
     *.*|?????*)
@@ -1126,8 +1115,8 @@ if [ "$HAVE_TRACKED" -eq 1 ] && [ -f UPSTREAM_VERSION ]; then
         [ -n "$_hit" ] || continue
         deviated no-hardcoded-version "$f" && continue
         chk_fail no-hardcoded-version "$f names the upstream version $_uv ($_hit)" \
-          "a Renovate bump changes UPSTREAM_VERSION and this file keeps the old one, failing the bump's own CI" \
-          "read UPSTREAM_VERSION instead of spelling the version out"
+          "a Renovate bump changes .mavergreen/upstream/VERSION and this file keeps the old one, failing the bump's own CI" \
+          "read .mavergreen/upstream/VERSION instead of spelling the version out"
       done < "$tmp/hcfiles" ;;
   esac
 fi
@@ -1228,23 +1217,6 @@ if rel_ran permissions-contents-read && ! deviated permissions-contents-read "$R
     || chk_fail permissions-contents-read "$REL has no top-level permissions: with contents: read" \
          "without it every job holds the repository default token, which can write" \
          "add a top-level permissions: block with contents: read, and give only the publishing job contents: write"
-fi
-
-# spec: SKILL.md "Versioning" -- UPSTREAM_VERSION is one bare version on one line: no leading v, no
-#       spaces, no second line. What the version looks like (x.y.z, a date) is the product's.
-chk_ran upstream-version-bare
-if [ -f UPSTREAM_VERSION ] && ! deviated upstream-version-bare UPSTREAM_VERSION; then
-  _uvn="$(grep -c '[^[:space:]]' UPSTREAM_VERSION || true)"
-  _uv1="$(head -1 UPSTREAM_VERSION | tr -d '\r')"
-  _bad=""
-  [ "$_uvn" -eq 1 ] || _bad="it holds $_uvn non-blank lines"
-  case "$_uv1" in
-    v[0-9]*|V[0-9]*) _bad="${_bad:-it starts with a v}" ;;
-    *[[:space:]]*) _bad="${_bad:-it has whitespace around or inside the version}" ;;
-  esac
-  [ -z "$_bad" ] || chk_fail upstream-version-bare "UPSTREAM_VERSION is not a bare version: $_bad" \
-    "version.sh and the release tag build on it, and a v or a stray space ends up in the tag" \
-    "make the file one line holding just the version, with no v and no spaces"
 fi
 
 # spec: SKILL.md "Versioning" -- /VERSION is a build product, so it is ignored as well as untracked

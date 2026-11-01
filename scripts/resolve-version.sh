@@ -11,7 +11,7 @@
 #       VERSION) impossible to satisfy.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/lib.sh"          # MAVERICKS_ROOT, upstream_version()
+. "$SELF/lib.sh"          # MAVERICKS_ROOT, mg_dir
 
 mode="${1:-auto}"
 vfile="$MAVERICKS_ROOT/VERSION"
@@ -23,10 +23,9 @@ if [ -f "$vfile" ]; then
   exit 0
 fi
 
-upfile="${MAVERICKS_UPSTREAM_FILE:-$MAVERICKS_ROOT/UPSTREAM_VERSION}"
-[ -f "$upfile" ] || {
-  echo "resolve-version: no VERSION and no UPSTREAM_VERSION ($upfile)" >&2
-  echo "  UPSTREAM_VERSION is the committed input; VERSION is derived from it plus the shipped tags." >&2
+[ -d "$(mg_dir)/upstream" ] || {
+  echo "resolve-version: no VERSION and no $(mg_dir)/upstream/" >&2
+  echo "  .mavergreen/upstream/ is the committed input; VERSION is derived from it plus the shipped tags." >&2
   exit 1
 }
 

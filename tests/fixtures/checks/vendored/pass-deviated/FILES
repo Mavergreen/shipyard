@@ -3,7 +3,7 @@
 .gitignore
 INGREDIENTS.md
 UPSTREAM_VERSION
-build/upstream-release-notes-url.sh
+.mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh
 vendor/zlib/zlib.c
 third_party/foo/foo.c

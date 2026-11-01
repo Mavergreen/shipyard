@@ -2,5 +2,5 @@
 .github/workflows/release.yml
 .gitignore
 INGREDIENTS.md
-UPSTREAM_VERSION
 tests/a-test.sh
+build/upstream-release-notes-url.sh

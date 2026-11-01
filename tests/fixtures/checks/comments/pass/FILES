@@ -3,7 +3,7 @@
 .gitignore
 INGREDIENTS.md
 UPSTREAM_VERSION
-build/upstream-release-notes-url.sh
+.mavergreen/hooks/upstream-release-notes-url
 comment-reasons
 scripts/x.sh
 tests/a-test.sh

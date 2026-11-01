@@ -264,11 +264,11 @@ else
     4)  # no hook -- allowed ONLY where the repo declares why
       shipyard_deviations "$MAVERICKS_ROOT" >/dev/null 2>&1 || :
       shipyard_deviated upstream-notes >/dev/null \
-        || die "$VER ships a new upstream but this repo has no build/upstream-release-notes-url.sh, and INGREDIENTS.md does not say why (add the hook, or a line 'No upstream release notes: <reason>')"
+        || die "$VER ships a new upstream but this repo has no .mavergreen/hooks/upstream-release-notes-url, and no .mavergreen/deviations/upstream-notes/ says why (add the hook, or that deviation)"
       printf -- '- New upstream: %s %s.\n' "$PRODUCT" "$UP" >> "$tmp"
       ;;
     *)  # a hook that failed, or printed something that is not one URL
-      die "$VER ships a new upstream but upstream-release-notes-url.sh did not print exactly one URL for $UP (run it by hand to see why)"
+      die "$VER ships a new upstream but .mavergreen/hooks/upstream-release-notes-url did not print exactly one URL for $UP (run it by hand to see why)"
       ;;
   esac
 fi

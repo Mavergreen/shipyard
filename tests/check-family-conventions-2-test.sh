@@ -18,24 +18,22 @@ printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|--
 (cd "$work/r3" && sh "$S" >/dev/null) || { echo "FAIL declared-untrackable should pass"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- a release shipping a new upstream links upstream's notes: the repo commits the hook that
-#       says where, or says in INGREDIENTS.md why there is nothing to link.
-mkrepo "$work/u1"; (cd "$work/u1" && git rm -q --cached build/upstream-release-notes-url.sh && rm -r build)
+#       says where, or a deviations/upstream-notes/ says why there is nothing to link.
+mkrepo "$work/u1"; (cd "$work/u1" && git rm -q --cached .mavergreen/hooks/upstream-release-notes-url && rm .mavergreen/hooks/upstream-release-notes-url)
 if out="$(cd "$work/u1" && sh "$S" 2>&1)"; then echo "FAIL no hook and no reason should fail"; exit 1; fi
 first_is "$out" upstream-notes || { echo "FAIL should be an upstream-notes failure: $out"; exit 1; }
-printf '# Build ingredients\n\nNo upstream release notes: this repo is its own upstream.\n' > "$work/u1/INGREDIENTS.md"
-(cd "$work/u1" && sh "$S" >/dev/null) || { echo "FAIL: the declaration, with a reason (a self-upstream repo; a bundle), is the other way to comply -- should pass"; exit 1; }
-printf '# Build ingredients\n\nNo upstream release notes:\n' > "$work/u1/INGREDIENTS.md"
-if (cd "$work/u1" && sh "$S" >/dev/null 2>&1); then echo "FAIL: an empty reason is not a reason -- a reasonless declaration should fail"; exit 1; fi
-mkrepo "$work/u2"; (cd "$work/u2" && mkdir scripts && git mv build/upstream-release-notes-url.sh scripts/)
-[ -f "$work/u2/scripts/upstream-release-notes-url.sh" ] && [ ! -e "$work/u2/build/upstream-release-notes-url.sh" ] \
-  || { echo "FAIL fixture: hook did not move to scripts/"; exit 1; }
-(cd "$work/u2" && sh "$S" >/dev/null) || { echo "FAIL: the swift repos keep their scripts, and so the hook, in scripts/ -- a hook there should pass"; exit 1; }
-# spec: scripts/check-family-conventions.sh -- a hook that exists but is not committed is the trap: a .gitignore'd build/ drops it
-#       without a word (macports-legacy-support ignores build/ wholesale), and CI's fresh
-#       checkout never sees it.
-mkrepo "$work/u3"; (cd "$work/u3" && git rm -q --cached build/upstream-release-notes-url.sh && printf 'build/\n' >> .gitignore)
+deviation "$work/u1" upstream-notes own '*' 'this repo is its own upstream.'
+(cd "$work/u1" && sh "$S" >/dev/null) || { echo "FAIL: the deviation, with a reason (a self-upstream repo; a bundle), is the other way to comply -- should pass"; exit 1; }
+: > "$work/u1/.mavergreen/deviations/upstream-notes/own/reason"
+if (cd "$work/u1" && sh "$S" >/dev/null 2>&1); then echo "FAIL: an empty reason is not a reason -- a reasonless deviation should fail"; exit 1; fi
+mkrepo "$work/u2"; (cd "$work/u2" && mkdir -p build && git mv .mavergreen/hooks/upstream-release-notes-url build/upstream-release-notes-url.sh)
+if out="$(cd "$work/u2" && sh "$S" 2>&1)"; then echo "FAIL: build/upstream-release-notes-url.sh is no longer read, so a hook only there should fail"; exit 1; fi
+first_is "$out" upstream-notes || { echo "FAIL should be an upstream-notes failure: $out"; exit 1; }
+# spec: scripts/check-family-conventions.sh -- a hook that exists but is not committed is the trap: CI's fresh checkout never sees it.
+mkrepo "$work/u3"; (cd "$work/u3" && git rm -q --cached .mavergreen/hooks/upstream-release-notes-url)
 if out="$(cd "$work/u3" && sh "$S" 2>&1)"; then echo "FAIL an uncommitted hook should fail"; exit 1; fi
 first_is "$out" upstream-notes || { echo "FAIL should be an upstream-notes failure: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'exists but is not committed' || { echo "FAIL: the uncommitted hook is named as uncommitted: $out"; exit 1; }
 
 # spec: a workflow that signs must call scan-for-key.yml -- publish-release.yml refuses a signed
 #       release without its record, and a missing job should fail a PR here, not a release there.

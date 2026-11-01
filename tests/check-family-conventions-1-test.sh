@@ -150,8 +150,8 @@ printf 'name: CI\njobs:\n  build:\n    steps:\n      - run: shipyard-ctest --pre
 # spec: SKILL.md "Versioning" -- VERSION must not be committed. The shipped state lives in tags; a
 #       committed VERSION is a second answer to "what version is this?", and it drifts --
 #       container-tools built -mavericks.14 from a file that still said .2, which also made its
-#       tag-triggered publish path (tag must equal VERSION) unsatisfiable. UPSTREAM_VERSION is the
-#       committed input; VERSION is derived from it plus the tags.
+#       tag-triggered publish path (tag must equal VERSION) unsatisfiable. .mavergreen/upstream/ is
+#       the committed input; VERSION is derived from it plus the tags.
 mkrepo "$work/v1"
 (cd "$work/v1" && sh "$S" >/dev/null) || { echo "FAIL derived-version repo should pass"; exit 1; }
 
@@ -165,23 +165,10 @@ mkrepo "$work/v3"
 printf '1.0.0-mavericks.3\n' > "$work/v3/VERSION"
 (cd "$work/v3" && sh "$S" >/dev/null) || { echo "FAIL: an untracked VERSION (a build product sitting in the tree) is FINE -- that is the normal state after any local build, and failing on it would make the gate unrunnable on a developer's machine: should pass"; exit 1; }
 
-mkrepo "$work/v4"; rm "$work/v4/UPSTREAM_VERSION"
-if out="$(cd "$work/v4" && sh "$S" 2>&1)"; then echo "FAIL: no upstream input at all means nothing can derive a version, so it should say so rather than let CI discover it -- should fail"; exit 1; fi
-first_is "$out" upstream-version || { echo "FAIL should be an upstream-version failure: $out"; exit 1; }
-
-# spec: scripts/check-family-conventions.sh -- a repo whose upstream is DERIVED from its pin (ed25519: the pinned commit's date;
-#       tailscale: the upstream's own VERSION.txt) has no committed UPSTREAM_VERSION and must
-#       still pass.
-mkrepo "$work/v5"; rm "$work/v5/UPSTREAM_VERSION"
-mkdir -p "$work/v5/build"; printf '#!/bin/sh\n: > UPSTREAM_VERSION\n' > "$work/v5/build/derive-upstream-version.sh"
-(cd "$work/v5" && git add -A) >/dev/null 2>&1
-(cd "$work/v5" && sh "$S" >/dev/null) || { echo "FAIL derived upstream should pass"; exit 1; }
-
 # spec: scripts/check-family-conventions.sh -- check 7b fails a repo with a TRACKED lines/ dir --
 #       golang, nodejs and clang have all migrated off it (2026-09-22), so a reappearing tracked
 #       lines/ means the retired per-line directory shape crept back in, not a legitimate
-#       parallel-lines repo. Keeps its root UPSTREAM_VERSION (from mkrepo) so check 7, just above,
-#       stays satisfied and this fixture isolates 7b's failure.
+#       parallel-lines repo.
 mkrepo "$work/v6"
 mkdir -p "$work/v6/lines/126"; printf '1.26.5\n' > "$work/v6/lines/126/UPSTREAM_VERSION"
 (cd "$work/v6" && git add -A) >/dev/null 2>&1

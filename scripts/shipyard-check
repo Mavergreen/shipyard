@@ -70,6 +70,8 @@ for id in $only; do
   chk_registered "$id" || { echo "shipyard-check: '$id' is not a registered check id" >&2; exit 2; }
   [ "$(awk -F'\t' -v i="$id" '$1 == i { print $2 }' "$reg")" != key ] \
     || { echo "shipyard-check: '$id' is a deviation key, not a check: it excuses checks, and nothing runs under it" >&2; exit 2; }
+  [ "$(awk -F'\t' -v i="$id" '$1 == i { print $2 }' "$reg")" != retired ] \
+    || { echo "shipyard-check: '$id' is retired: shipyard-check --explain $id names what replaced it" >&2; exit 2; }
   [ "$(awk -F'\t' -v i="$id" '$1 == i { print $2 }' "$reg")" != repo-state ] || needs_admin=1
 done
 [ "$needs_admin" -eq 0 ] || chk_gh_admin Mavergreen || exit 2

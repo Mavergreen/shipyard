@@ -4,11 +4,9 @@
 #          Prints the deviations in <repo>/.mavergreen/deviations/<check>/<label>/, one per line as
 #          "<check> <scope> <reason>": scope is line 1 of scope (* for repo-wide), with "%" written
 #          %25, a space %20 and a tab %09 so it stays one column; reason is reason's lines joined
-#          by single spaces. Also prints "upstream-notes * <reason>" for <repo>/INGREDIENTS.md's
-#          "No upstream release notes: <reason>" line. A deviation without a one-line scope, a
-#          reason and a revisit, under a label matching ^[a-z0-9][a-z0-9.-]*$, or with a scope its
-#          check cannot honour, is refused on stderr and the exit is 1: an exception without them
-#          is indistinguishable from drift.
+#          by single spaces. A deviation without a one-line scope, a reason and a revisit, under a
+#          label matching ^[a-z0-9][a-z0-9.-]*$, or with a scope its check cannot honour, is refused
+#          on stderr and the exit is 1: an exception without them is indistinguishable from drift.
 set -eu
 LC_ALL=C; export LC_ALL
 root="${1:-.}"
@@ -105,7 +103,4 @@ done <<EOF
 $(mg_list deviations)
 EOF
 
-if [ -f "$root/INGREDIENTS.md" ]; then
-  sed -n 's/^.*No upstream release notes: *\([^ ].*\)$/upstream-notes * \1/p' "$root/INGREDIENTS.md" | head -1
-fi
 exit "$bad"

@@ -16,7 +16,7 @@ dups="$(printf '%s\n' "$ids" | sort | uniq -d)"
 
 while IFS="$(printf '\t')" read -r id mode script old fate; do
   [ -n "$fate" ] || fail "$id has five columns"
-  case "$mode" in checkout|dist|repo-state|publish|only|build|key) ;; *) fail "$id has a valid mode, got $mode" ;; esac
+  case "$mode" in checkout|dist|repo-state|publish|only|build|key|retired) ;; *) fail "$id has a valid mode, got $mode" ;; esac
   [ -f "$here/$script" ] || fail "$id: script $script exists"
   [ -f "$here/explain/$id.md" ] || fail "$id has explain/$id.md"
 done < "$reg"
@@ -36,6 +36,11 @@ infeasible="update-trusted|tests/assert_update_trusted.bats|it verifies a signed
 installed-shipyard|tests/assert-installed-shipyard-test.sh|it inspects an installed prefix, which its test assembles in a scratch root"
 fx="$here/tests/fixtures/checks"
 while IFS="$(printf '\t')" read -r id mode script old fate; do
+  if [ "$mode" = retired ]; then
+    [ ! -d "$fx/$id" ] || fail "$id is retired, so nothing runs it and it has no fixtures"
+    [ "$fate" != P1 ] || fail "$id is retired, so its fate names the phase that retired it, never P1"
+    continue
+  fi
   [ "$fate" = P1 ] || continue
   if [ "$mode" = key ]; then
     [ ! -d "$fx/$id" ] || fail "$id is a deviation key, which no check runs, so it has no fixtures"

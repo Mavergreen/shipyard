@@ -4,5 +4,5 @@
 INGREDIENTS.md
 UPSTREAM_VERSION
 VERSION
-build/upstream-release-notes-url.sh
+.mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh

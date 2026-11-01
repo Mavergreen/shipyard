@@ -72,14 +72,15 @@ YML
   deviation "$1" packager system-packager 'build/package.sh' 'fixtures build pkgs with the system packager'
   printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$1/.github/renovate.json"
   printf '#!/bin/sh\nexit 0\n' > "$1/tests/a-test.sh"
-  # spec: scripts/check-family-conventions.sh -- a compliant repo commits UPSTREAM_VERSION and
-  #       gitignores VERSION (a build product), and the gate asks git what is tracked -- so the
+  # spec: scripts/check-family-conventions.sh -- a compliant repo commits .mavergreen/upstream/VERSION
+  #       and gitignores VERSION (a build product), and the gate asks git what is tracked -- so the
   #       fixture has to be a real checkout. It also
   #       says where upstream's own release notes live, for a release that ships a new upstream.
-  printf '1.0.0\n' > "$1/UPSTREAM_VERSION"
+  mkdir -p "$1/.mavergreen/upstream" "$1/.mavergreen/hooks" "$1/build"
+  printf '1.0.0\n' > "$1/.mavergreen/upstream/VERSION"
+  printf 'the upstream\n' > "$1/.mavergreen/upstream/description"
   printf '/VERSION\n.superpowers/\n.idea/\n' > "$1/.gitignore"
-  mkdir -p "$1/build"
-  printf '#!/bin/sh\nprintf "https://example.com/v%%s\\n" "$1"\n' > "$1/build/upstream-release-notes-url.sh"
+  printf '#!/bin/sh\nprintf "https://example.com/v%%s\\n" "$1"\n' > "$1/.mavergreen/hooks/upstream-release-notes-url"
   (cd "$1" && git init -q && git add -A) >/dev/null 2>&1
 }
 mkrepo "$work/ok"

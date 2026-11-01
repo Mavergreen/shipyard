@@ -5,12 +5,26 @@
 #       git toplevel so a plain `sh build/version.sh` still works from anywhere in a repo.
 : "${MAVERICKS_ROOT:=$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
-# spec: SKILL.md "A release is a declared state, not an event" -- $MAVERICKS_UPSTREAM_FILE overrides
-#       the path; a repo whose upstream is not UPSTREAM_VERSION points elsewhere
-#       (container-tools and tailscale: components/<name>/version), so which file to read is an
-#       input, not a fixed location.
 upstream_version() {
-  tr -d '[:space:]' < "${MAVERICKS_UPSTREAM_FILE:-$MAVERICKS_ROOT/UPSTREAM_VERSION}"
+  if ! _uv_kind="$(mg_upstream_kind)"; then
+    echo "upstream_version: $(mg_dir)/upstream/ needs exactly one of VERSION, COMMIT or PIN" >&2
+    return 1
+  fi
+  if [ "$_uv_kind" = VERSION ]; then
+    mg_value upstream/VERSION
+    return
+  fi
+  _uv_hook="$(mg_dir)/hooks/derive-upstream-version"
+  [ -f "$_uv_hook" ] || {
+    echo "upstream_version: upstream/$_uv_kind is not a version, and there is no $_uv_hook to derive one" >&2
+    return 1
+  }
+  _uv="$(cd "$MAVERICKS_ROOT" && sh "$_uv_hook")" || {
+    echo "upstream_version: $_uv_hook failed" >&2
+    return 1
+  }
+  [ -n "$_uv" ] || { echo "upstream_version: $_uv_hook printed no version" >&2; return 1; }
+  printf '%s\n' "$_uv"
 }
 
 # spec: SKILL.md "A release is a declared state, not an event" -- a marker in another format is NOT
@@ -52,8 +66,8 @@ pin_value() {
   sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1 | sed 's/^"//; s/"$//' | tr -d '[:space:]'
 }
 
-# spec: tests/version-lib-test.sh -- lib/vercmp.sh is found via $SELF, $SHIPYARD or $SHIPYARD_SCRIPTS:
-#       a sourced file cannot learn its own path in POSIX sh.
+# spec: tests/version-lib-test.sh -- lib/vercmp.sh and mavergreen-meta.sh are found via $SELF,
+#       $SHIPYARD or $SHIPYARD_SCRIPTS: a sourced file cannot learn its own path in POSIX sh.
 _lib_vercmp=""
 for _lib_d in "${SELF:-}" "${SHIPYARD:-}" "${SHIPYARD_SCRIPTS:-}"; do
   if [ -n "$_lib_d" ] && [ -f "$_lib_d/lib/vercmp.sh" ]; then _lib_vercmp="$_lib_d/lib/vercmp.sh"; break; fi
@@ -64,4 +78,5 @@ if [ -z "$_lib_vercmp" ]; then
   return 1
 fi
 . "$_lib_vercmp"
+. "$_lib_d/mavergreen-meta.sh"
 unset _lib_vercmp _lib_d

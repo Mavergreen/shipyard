@@ -3,7 +3,7 @@
 .gitignore
 INGREDIENTS.md
 UPSTREAM_VERSION
-build/upstream-release-notes-url.sh
+.mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh
 .mavergreen/deviations/arm64/w-bin/reason
 .mavergreen/deviations/arm64/w-bin/revisit

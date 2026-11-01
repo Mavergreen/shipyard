@@ -4,7 +4,7 @@
 #          Links upstream's own release notes, as a markdown section for the release notes (Sparkle
 #          appcast <description> + GitHub Release body), when this release ships an upstream version
 #          that no earlier release shipped. WHERE upstream publishes notes is per-repo, so the repo
-#          answers it: build/upstream-release-notes-url.sh (or scripts/…) <upstream-version> prints
+#          answers it: .mavergreen/hooks/upstream-release-notes-url <upstream-version> prints
 #          ONE URL.
 #          Default mode prints NOTHING for a repackage, for a repo without the hook, or when the hook
 #          fails -- so callers append unconditionally; it never fails a release. --url-only instead
@@ -19,7 +19,7 @@
 # spec: tests/upstream-notes-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/lib.sh"          # sets MAVERICKS_ROOT if unset
+. "$SELF/lib.sh"          # sets MAVERICKS_ROOT if unset; mg_dir
 
 url_only=no
 if [ "${1:-}" = "--url-only" ]; then url_only=yes; shift; fi
@@ -44,13 +44,8 @@ for t in $tags; do
   [ "$t" = "$ver" ] || bail 3 "$ver is a repackage of $up; no upstream link is due"
 done
 
-hook=""
-for d in build scripts; do
-  if [ -f "$MAVERICKS_ROOT/$d/upstream-release-notes-url.sh" ]; then
-    hook="$MAVERICKS_ROOT/$d/upstream-release-notes-url.sh"; break
-  fi
-done
-[ -n "$hook" ] || bail 4 "no build/ or scripts/upstream-release-notes-url.sh in $MAVERICKS_ROOT"
+hook="$(mg_dir)/hooks/upstream-release-notes-url"
+[ -f "$hook" ] || bail 4 "no $hook"
 
 if ! url="$(cd "$MAVERICKS_ROOT" && sh "$hook" "$up")"; then
   bail 5 "$hook failed for $up; omitting the upstream section"

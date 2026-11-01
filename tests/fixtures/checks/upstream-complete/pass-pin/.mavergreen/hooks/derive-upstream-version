@@ -1,0 +1,4 @@
+#!/bin/sh
+IFS= read -r r < .mavergreen/upstream/PIN
+r="${r%%@*}"
+printf "%s\n" "${r#v}"

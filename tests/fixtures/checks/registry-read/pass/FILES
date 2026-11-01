@@ -4,6 +4,6 @@
 INGREDIENTS.md
 UPSTREAM_VERSION
 build/history.sh
-build/upstream-release-notes-url.sh
+.mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh
 tests/registry-gone-test.sh

@@ -31,6 +31,7 @@ only_fails() {  # $1 = what ran, $2 = the one id that may fail
 fresh() {  # $1 = name; a copy of the baseline pass tree to edit in place
   rm -rf "$w/$1"; mkdir "$w/$1"
   fixture_tree "$fx" "$fx/pr-trigger/pass" "$w/$1"
+  mkdir -p "$w/$1/build"
 }
 wf=".github/workflows/release.yml"
 seton() {  # $1 = name, $2 = the new on: block, \n-separated
@@ -97,19 +98,19 @@ printf '{"description":"github>Mavergreen/shipyard","extends":["config:recommend
 refused sibling renovate-extends-preset
 
 fresh otherversion
-printf '12.3\n' > "$w/otherversion/UPSTREAM_VERSION"
+printf '12.3\n' > "$w/otherversion/.mavergreen/upstream/VERSION"
 printf '#!/bin/sh\necho "node 112.34 and 2.12.30 and ABC12.3 and 12.3.1 are all different"\n' > "$w/otherversion/build/fetch.sh"
 printf 'build/fetch.sh\n' >> "$w/otherversion/FILES"
 ok otherversion
 
 fresh dotted
-printf '12.3\n' > "$w/dotted/UPSTREAM_VERSION"
+printf '12.3\n' > "$w/dotted/.mavergreen/upstream/VERSION"
 printf '#!/bin/sh\necho "12.3."\n' > "$w/dotted/build/fetch.sh"
 printf 'build/fetch.sh\n' >> "$w/dotted/FILES"
 refused dotted no-hardcoded-version
 
 fresh vprefix
-printf '12.3\n' > "$w/vprefix/UPSTREAM_VERSION"
+printf '12.3\n' > "$w/vprefix/.mavergreen/upstream/VERSION"
 printf '#!/bin/sh\necho "get v12.3 now"\n' > "$w/vprefix/build/fetch.sh"
 printf 'build/fetch.sh\n' >> "$w/vprefix/FILES"
 refused vprefix no-hardcoded-version
@@ -148,13 +149,11 @@ jobs:
 printf '.github/workflows/other.yml\n' >> "$w/ptag/FILES"
 refused ptag no-tags-trigger
 
-fresh vfile
-printf '1.0.0\n\n' > "$w/vfile/UPSTREAM_VERSION"
-ok vfile
-printf '1.0.0\n1.0.1\n' > "$w/vfile/UPSTREAM_VERSION"
-refused vfile upstream-version-bare
-printf '1.0.0 \n' > "$w/vfile/UPSTREAM_VERSION"
-refused vfile upstream-version-bare
+fresh legacyversion
+printf '12.3\n' > "$w/legacyversion/UPSTREAM_VERSION"
+printf '#!/bin/sh\necho "get v12.3 now"\n' > "$w/legacyversion/build/fetch.sh"
+printf 'build/fetch.sh\n' >> "$w/legacyversion/FILES"
+ok legacyversion
 
 fresh vignore
 printf 'VERSION\n.superpowers/\n.idea/\n' > "$w/vignore/.gitignore"
@@ -169,7 +168,7 @@ seton flowclean "on: {push: {branches: [main]}, pull_request: {branches: [main]}
 ok flowclean
 
 fresh spacename
-printf '12.3\n' > "$w/spacename/UPSTREAM_VERSION"
+printf '12.3\n' > "$w/spacename/.mavergreen/upstream/VERSION"
 printf '#!/bin/sh\necho "get v12.3 now"\n' > "$w/spacename/build/my fetch.sh"
 printf 'build/my fetch.sh\n' >> "$w/spacename/FILES"
 refused spacename no-hardcoded-version

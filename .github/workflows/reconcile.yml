@@ -16,18 +16,6 @@ on:
         type: string
         required: false
         default: "local_release=true"
-      upstream-file:
-        description: >-
-          Repo-relative path to the upstream version file, when it is not UPSTREAM_VERSION
-          (container-tools and tailscale: components/<name>/version). Sets
-          $MAVERICKS_UPSTREAM_FILE for the state step, which BOTH
-          scripts there read: version.sh derives the version from it, and release-state.sh refuses
-          (exit 2) to render a declared `upstream` that is not the file version.sh reads. Without
-          this input such a repo cannot use this workflow at all -- it would hard-fail nightly on
-          the first run after adopting it.
-        type: string
-        required: false
-        default: ""
 
 permissions:
   # spec: mavergreen-conventions SKILL.md, "A release is a declared state, not an event" --
@@ -51,20 +39,11 @@ jobs:
 
       - uses: Mavergreen/shipyard/.github/actions/install@v1
 
-      # spec: mavergreen-conventions SKILL.md, "A release is a declared state, not an event" --
-      #       upstream must name the file version.sh reads; this is the reconcile.yml half of that.
-      # spec: tests/reconcile-workflow-test.sh -- a repo whose upstream is a committed pin
-      #       (ca-certs' NSS_TAG) needs build/derive-upstream-version.sh run, with no argument,
-      #       before version.sh, only when the repo tracks that script; version.sh's own failure
-      #       must fail this step, not the sed after it.
+      # spec: tests/reconcile-workflow-test.sh -- version.sh's own failure must fail this step,
+      #       not the sed after it.
       - id: state
-        env:
-          MAVERICKS_UPSTREAM_FILE: ${{ inputs.upstream-file }}
         run: |
           set -eu
-          if git ls-files --error-unmatch build/derive-upstream-version.sh >/dev/null 2>&1; then
-            sh build/derive-upstream-version.sh >/dev/null
-          fi
           digest="$(sh "$SHIPYARD_SCRIPTS/release-state.sh")"
           out="$(sh "$SHIPYARD_SCRIPTS/version.sh" auto)"
           version="$(printf '%s\n' "$out" | sed -n 's/^FULL=//p')"

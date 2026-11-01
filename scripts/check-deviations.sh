@@ -31,6 +31,8 @@ retired_fix() {
     scheme) echo "now \`version-scheme\`" ;;
     ingredients) echo "now \`variant-build-info\`" ;;
     msc-template) echo "now the \`shipyard-scripts\` command; delete the directory" ;;
+    upstream-version) echo "now \`upstream-complete\`, which reads no deviation; delete the directory" ;;
+    upstream-version-bare) echo "now \`value-file-line\`; move the directory to .mavergreen/deviations/value-file-line/" ;;
     sparkle-updater|release-assets|python3) echo "no check reads this; delete the directory" ;;
     *) return 1 ;;
   esac

@@ -35,7 +35,7 @@ printf '%s\n' "$out" | grep -q 'not-a-deviation' && fail "INGREDIENTS.md's ## Co
 fresh
 printf '# x\n\nNo upstream release notes: upstream keeps none\n' > "$r/INGREDIENTS.md"
 out="$(sh "$S" "$r")"
-has 'upstream-notes \* upstream keeps none' "INGREDIENTS.md's No upstream release notes line is still an upstream-notes deviation"
+[ -z "$out" ] || fail "INGREDIENTS.md's No upstream release notes line is no longer read: $out"
 
 fresh
 [ -z "$(sh "$S" "$r")" ] || fail "no .mavergreen/ is no deviations"

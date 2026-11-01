@@ -12,11 +12,11 @@ w="$(mktemp -d "${_tmp%/}/release-state-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 GOLD='v1:sha256:8c5fc85c689b60ccc9a3ed0120fa949e2bd9c0f9a121ac572fa11ba148312be7'
 
 mk() {   # $1 = dir; a minimal product: upstream 1.2.3, one ingredient pin at 4.4.3
-  mkdir -p "$1"
-  printf '1.2.3\n' > "$1/UPSTREAM_VERSION"
+  mkdir -p "$1/.mavergreen/upstream"
+  printf '1.2.3\n' > "$1/.mavergreen/upstream/VERSION"
   printf 'CMAKE_VERSION=4.4.3\nOTHER=ignored\n' > "$1/pins.env"
   printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
-    '- upstream: UPSTREAM_VERSION' '- cmake: pins.env:CMAKE_VERSION' > "$1/INGREDIENTS.md"
+    '- upstream: .mavergreen/upstream/VERSION' '- cmake: pins.env:CMAKE_VERSION' > "$1/INGREDIENTS.md"
 }
 
 mk "$w/a"
@@ -38,19 +38,19 @@ want='v1:sha256:405b7fdda86a03f4ef636aceb3c7c819fe5d93208118cd365a0b962cb37c8004
 
 mk "$w/c"
 printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
-  '- cmake: pins.env:CMAKE_VERSION' '- upstream: UPSTREAM_VERSION' > "$w/c/INGREDIENTS.md"
+  '- cmake: pins.env:CMAKE_VERSION' '- upstream: .mavergreen/upstream/VERSION' > "$w/c/INGREDIENTS.md"
 got="$(sh "$S" --root "$w/c")"
 [ "$got" = "$GOLD" ] || { echo "FAIL: declaration ORDER must not matter, the canonical name is the key: $got"; exit 1; }
 
 mk "$w/d"; mv "$w/d/pins.env" "$w/d/versions.env"
 printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
-  '- upstream: UPSTREAM_VERSION' '- cmake: versions.env:CMAKE_VERSION' > "$w/d/INGREDIENTS.md"
+  '- upstream: .mavergreen/upstream/VERSION' '- cmake: versions.env:CMAKE_VERSION' > "$w/d/INGREDIENTS.md"
 got="$(sh "$S" --root "$w/d")"
 [ "$got" = "$GOLD" ] || { echo "FAIL: renaming the pin FILE must not change the digest -- that is why the name is the key: $got"; exit 1; }
 
-mk "$w/k"; printf '  1.2.3  \n\n' > "$w/k/UPSTREAM_VERSION"
+mk "$w/k"; printf '  1.2.3  \n# renovate: datasource=github-releases depName=x/y\n' > "$w/k/.mavergreen/upstream/VERSION"
 got="$(sh "$S" --root "$w/k")"
-[ "$got" = "$GOLD" ] || { echo "FAIL: surrounding whitespace in a pin file must not be part of the value: $got"; exit 1; }
+[ "$got" = "$GOLD" ] || { echo "FAIL: surrounding whitespace, and a value file's line 2, must not be part of the value: $got"; exit 1; }
 
 mk "$w/e"; rm "$w/e/pins.env"
 if sh "$S" --root "$w/e" >"$w/e.out" 2>&1; then echo "FAIL: a missing pin file is a HARD error, never a silently different digest -- an unrenderable state must not look like a new one and publish -- missing pin file was accepted"; exit 1; fi
@@ -60,7 +60,7 @@ mk "$w/f"; printf 'OTHER=only\n' > "$w/f/pins.env"
 if sh "$S" --root "$w/f" >"$w/f.out" 2>&1; then echo "FAIL: a missing KEY inside an existing file is the same kind of error -- missing key was accepted"; exit 1; fi
 grep -q 'CMAKE_VERSION' "$w/f.out" || { echo "FAIL missing-key error does not name the key"; exit 1; }
 
-mk "$w/l"; : > "$w/l/UPSTREAM_VERSION"
+mk "$w/l"; : > "$w/l/.mavergreen/upstream/VERSION"
 if sh "$S" --root "$w/l" >"$w/l.out" 2>&1; then echo "FAIL: an empty pin file is an error too, not an empty value silently folded into the digest -- empty pin file was accepted"; exit 1; fi
 
 mkdir -p "$w/g"; printf '%s\n' '# Build ingredients' '' 'prose only' > "$w/g/INGREDIENTS.md"
@@ -87,7 +87,7 @@ got="$(sh "$S" --root "$w/m")"
 GIT="git -c user.name=T -c user.email=t@example.com -c commit.gpgsign=false -c init.defaultBranch=main"
 r="$w/r"
 $GIT init -q "$r"
-printf '1.2.3\n' > "$r/UPSTREAM_VERSION"
+mkdir -p "$r/.mavergreen/upstream"; printf '1.2.3\n' > "$r/.mavergreen/upstream/VERSION"
 printf 'CMAKE_VERSION=4.4.3\nOTHER=ignored\n' > "$r/pins.env"
 # spec: INGREDIENTS.md -- the pre-migration past, faithfully: at the tag there is no
 #       "## Declared state" section AT ALL.
@@ -97,7 +97,7 @@ $GIT -C "$r" commit -q -m 'the release that predates this design'
 $GIT -C "$r" tag 1.2.3-mavericks.1
 printf 'CMAKE_VERSION=4.4.4\nOTHER=ignored\n' > "$r/pins.env"
 printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
-  '- upstream: UPSTREAM_VERSION' '- cmake: pins.env:CMAKE_VERSION' > "$r/INGREDIENTS.md"
+  '- upstream: .mavergreen/upstream/VERSION' '- cmake: pins.env:CMAKE_VERSION' > "$r/INGREDIENTS.md"
 $GIT -C "$r" add -A
 $GIT -C "$r" commit -q -m 'declare state, and bump cmake'
 
@@ -118,10 +118,10 @@ rc=0; sh "$S" --root "$r" --ref no-such-tag >"$w/r17" 2>&1 || rc=$?
 [ "$rc" = 2 ] || { echo "FAIL: a revision that does not exist must exit 2, never a digest -- a shallow clone is the realistic way to get here, and a wrong digest recorded onto a release cannot be un-recorded (exit 3 forever): a bogus --ref should exit 2, got $rc"; exit 1; }
 grep -q 'no-such-tag' "$w/r17" || { echo "FAIL the bogus-ref error does not name it"; exit 1; }
 grep -q 'not a revision' "$w/r17" \
-  || { echo "FAIL: it must say the REVISION is the problem, not blame the first declared file -- \"UPSTREAM_VERSION is not in no-such-tag's tree\" sends the reader to the wrong question entirely: a bogus --ref is not reported as a bad revision: $(cat "$w/r17")"; exit 1; }
+  || { echo "FAIL: it must say the REVISION is the problem, not blame the first declared file -- \".mavergreen/upstream/VERSION is not in no-such-tag's tree\" sends the reader to the wrong question entirely: a bogus --ref is not reported as a bad revision: $(cat "$w/r17")"; exit 1; }
 
 printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
-  '- upstream: UPSTREAM_VERSION' '- cmake: pins.env:CMAKE_VERSION' '- later: later.pin' \
+  '- upstream: .mavergreen/upstream/VERSION' '- cmake: pins.env:CMAKE_VERSION' '- later: later.pin' \
   > "$r/INGREDIENTS.md"
 printf '7\n' > "$r/later.pin"
 rc=0; sh "$S" --root "$r" --ref 1.2.3-mavericks.1 >"$w/r18" 2>&1 || rc=$?
@@ -145,7 +145,7 @@ sh "$S" --root "$r" >/dev/null || { echo "FAIL: that same declaration must rende
 #           disagreeing about one state is a dispatch loop -- one says the state is unreleased,
 #           the other publishes it.
 mk "$w/n"
-printf '%s\n' '# Build ingredients' '' '## Declared state' '' '- upstream: UPSTREAM_VERSION' \
+printf '%s\n' '# Build ingredients' '' '## Declared state' '' '- upstream: .mavergreen/upstream/VERSION' \
   '- ab: pins.env:AB' '- a_b: pins.env:A_UNDER_B' '- a-b: pins.env:A_DASH_B' '- a1: pins.env:A_ONE' \
   > "$w/n/INGREDIENTS.md"
 printf 'AB=3\nA_UNDER_B=2\nA_DASH_B=1\nA_ONE=0\n' > "$w/n/pins.env"
@@ -158,80 +158,36 @@ want="$(printf 'a-b=1\na1=0\na_b=2\nab=3\nupstream=1.2.3')"
 byte="$(printf '%s\n' 'ab=3' 'a_b=2' 'a-b=1' 'a1=0' 'upstream=1.2.3' | LC_ALL=C sort)"
 [ "$want" = "$byte" ] || { echo "FAIL the expected rendering is not byte order: '$want' vs '$byte'"; exit 1; }
 
-# spec: the declared `upstream` must name the very file version.sh reads. Nothing else ties them
-#       together: declared-state.sh accepts any path, and lib.sh reads
-#       ${MAVERICKS_UPSTREAM_FILE:-UPSTREAM_VERSION}. A product tracking one file for its digest
-#       while the version came from another would publish N+1 of the PREVIOUS upstream carrying
-#       the NEW upstream's contents, and nothing anywhere would say so.
+# spec: the declared `upstream` must name the very file version.sh reads, .mavergreen/upstream/'s
+#       VERSION, COMMIT or PIN. A product tracking one file for its digest while the version came
+#       from another would publish N+1 of the PREVIOUS upstream carrying the NEW upstream's
+#       contents, and nothing anywhere would say so.
 mk "$w/p"; mkdir -p "$w/p/components/foo"; printf '1.2.3\n' > "$w/p/components/foo/version"
 printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
   '- upstream: components/foo/version' '- cmake: pins.env:CMAKE_VERSION' > "$w/p/INGREDIENTS.md"
 rc=0; sh "$S" --root "$w/p" >"$w/p.out" 2>&1 || rc=$?
 [ "$rc" = 2 ] || { echo "FAIL an upstream version.sh does not read should exit 2, got $rc"; exit 1; }
 grep -q 'components/foo/version' "$w/p.out" || { echo "FAIL the error does not name the declared path"; exit 1; }
-grep -q 'UPSTREAM_VERSION' "$w/p.out" || { echo "FAIL the error does not name the path version.sh reads"; exit 1; }
+grep -q '.mavergreen/upstream/VERSION' "$w/p.out" || { echo "FAIL the error does not name the path version.sh reads"; exit 1; }
+rc=0; MAVERICKS_UPSTREAM_FILE=components/foo/version sh "$S" --root "$w/p" >/dev/null 2>&1 || rc=$?
+[ "$rc" = 2 ] || { echo "FAIL: MAVERICKS_UPSTREAM_FILE is gone, so it reconciles nothing: got $rc"; exit 1; }
 
-got="$(MAVERICKS_UPSTREAM_FILE=components/foo/version sh "$S" --root "$w/p")"
-[ "$got" = "$GOLD" ] || { echo "FAIL: it is the same coupling version.sh has, so the same override must satisfy both (which FILE the upstream lives in is not part of the rendering -- the NAME is) -- MAVERICKS_UPSTREAM_FILE did not reconcile the two: got '$got'"; exit 1; }
-got="$(MAVERICKS_UPSTREAM_FILE="$w/p/components/foo/version" sh "$S" --root "$w/p")"
-[ "$got" = "$GOLD" ] || { echo "FAIL: an absolute override rooted at the repo is the same path, and must be accepted as one -- was read as a different file: got '$got'"; exit 1; }
+mk "$w/pin"; rm "$w/pin/.mavergreen/upstream/VERSION"
+printf 'v1.2.3@0123456789abcdef0123456789abcdef01234567\n# renovate: datasource=git-tags depName=https://example.com/x\n' > "$w/pin/.mavergreen/upstream/PIN"
+printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
+  '- upstream: .mavergreen/upstream/PIN' '- cmake: pins.env:CMAKE_VERSION' > "$w/pin/INGREDIENTS.md"
+got="$(sh "$S" --root "$w/pin" --render)"
+[ "$got" = "$(printf 'cmake=4.4.3\nupstream=v1.2.3@0123456789abcdef0123456789abcdef01234567')" ] \
+  || { echo "FAIL: a PIN upstream is declared as upstream/PIN, and its value is line 1 alone: got '$got'"; exit 1; }
+printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
+  '- upstream: .mavergreen/upstream/VERSION' '- cmake: pins.env:CMAKE_VERSION' > "$w/pin/INGREDIENTS.md"
+rc=0; sh "$S" --root "$w/pin" >"$w/pin.out" 2>&1 || rc=$?
+[ "$rc" = 2 ] && grep -q '.mavergreen/upstream/PIN' "$w/pin.out" \
+  || { echo "FAIL: declaring upstream/VERSION when the upstream is a PIN must exit 2 naming the PIN: $rc $(cat "$w/pin.out")"; exit 1; }
 
-# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "A release is a
-#       declared state, not an event" -- a repo whose upstream is DERIVED (ca-certs' NSS_TAG,
-#       ed25519's UPSTREAM_COMMIT) commits the pin, not version.sh's input, so this is the one
-#       case where 'upstream' and version.sh's input may legitimately differ: only when
-#       build/derive-upstream-version.sh is tracked and its own text names both files.
-mkg() {   # $1 = dir; a derived-pin product: NSS_TAG committed, version.sh reads UPSTREAM_VERSION
-  $GIT init -q "$1"
-  printf '9.9.9\n' > "$1/NSS_TAG"
-  printf '%s\n' '# Build ingredients' '' '## Declared state' '' '- upstream: NSS_TAG' > "$1/INGREDIENTS.md"
-}
-DERIVE_GOLD="v1:sha256:$(printf 'upstream=9.9.9\n' | shasum -a 256 | cut -d' ' -f1)"
-
-q="$w/q"
-mkg "$q"
-mkdir -p "$q/build"
-printf '%s\n' '#!/bin/sh' 'NEW="$(cat NSS_TAG)"' 'printf "%s\n" "$NEW" > UPSTREAM_VERSION' > "$q/build/derive-upstream-version.sh"
-$GIT -C "$q" add -A
-$GIT -C "$q" commit -q -m 'derived pin: NSS_TAG -> UPSTREAM_VERSION'
-got="$(sh "$S" --root "$q")"
-[ "$got" = "$DERIVE_GOLD" ] \
-  || { echo "FAIL: a derived pin with a tracked build/derive-upstream-version.sh naming both files must pass: got '$got', want '$DERIVE_GOLD'"; exit 1; }
-
-qb="$w/qb"
-mkg "$qb"
-$GIT -C "$qb" add -A
-$GIT -C "$qb" commit -q -m 'pin with no derive script'
-rc=0; sh "$S" --root "$qb" >"$w/qb.out" 2>&1 || rc=$?
-[ "$rc" = 2 ] || { echo "FAIL: a derived pin with NO derive script at all must still be refused, got $rc"; exit 1; }
-grep -q 'NSS_TAG' "$w/qb.out" || { echo "FAIL missing-derive-script error does not name the declared path"; exit 1; }
-grep -q 'UPSTREAM_VERSION' "$w/qb.out" || { echo "FAIL missing-derive-script error does not name version.sh's input"; exit 1; }
-grep -q 'derive-upstream-version.sh' "$w/qb.out" || { echo "FAIL missing-derive-script error does not mention the derived-pin escape hatch"; exit 1; }
-
-qc="$w/qc"
-mkg "$qc"
-mkdir -p "$qc/build"
-printf '%s\n' '#!/bin/sh' 'printf "1\n" > UPSTREAM_VERSION' > "$qc/build/derive-upstream-version.sh"
-$GIT -C "$qc" add -A
-$GIT -C "$qc" commit -q -m 'derive script exists but never names the pin'
-rc=0; sh "$S" --root "$qc" >"$w/qc.out" 2>&1 || rc=$?
-[ "$rc" = 2 ] || { echo "FAIL: a derive script that never names the declared pin must be refused, got $rc"; exit 1; }
-grep -q 'NSS_TAG' "$w/qc.out" || { echo "FAIL derive-script-present-but-silent error does not name the declared path"; exit 1; }
-
-qd="$w/qd"
-mkg "$qd"
-mkdir -p "$qd/build"
-printf '%s\n' '#!/bin/sh' 'NEW="$(cat NSS_TAG)"' 'printf "%s\n" "$NEW" > UPSTREAM_VERSION' > "$qd/build/derive-upstream-version.sh"
-$GIT -C "$qd" add -A
-$GIT -C "$qd" commit -q -m 'derived pin, valid derive script'
-$GIT -C "$qd" tag derived-pin-1
-rm "$qd/build/derive-upstream-version.sh"
-$GIT -C "$qd" add -A
-$GIT -C "$qd" commit -q -m 'derive script removed (regression)'
-rc=0; sh "$S" --root "$qd" >"$w/qd-head.out" 2>&1 || rc=$?
-[ "$rc" = 2 ] || { echo "FAIL: HEAD with the derive script removed must refuse, got $rc"; exit 1; }
-got="$(sh "$S" --root "$qd" --ref derived-pin-1)"
-[ "$got" = "$DERIVE_GOLD" ] \
-  || { echo "FAIL: --ref to a revision whose OWN tree has a valid derive script must pass, reading that revision's script rather than the working tree's: got '$got'"; exit 1; }
+mk "$w/none"; rm -r "$w/none/.mavergreen"
+rc=0; sh "$S" --root "$w/none" >"$w/none.out" 2>&1 || rc=$?
+[ "$rc" = 2 ] && grep -q '.mavergreen/upstream/' "$w/none.out" \
+  || { echo "FAIL: no .mavergreen/upstream/ must exit 2 naming it: $rc $(cat "$w/none.out")"; exit 1; }
 
 echo "PASS: release-state"

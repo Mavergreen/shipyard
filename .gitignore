@@ -4,7 +4,7 @@ build*/
 .superpowers/
 docs/
 
-# VERSION is a build product (this is a first-party repo: version = UPSTREAM_VERSION); never committed.
+# VERSION is a build product (this is a first-party repo: version = .mavergreen/upstream/VERSION); never committed.
 /VERSION
 /dist/
 /.idea/

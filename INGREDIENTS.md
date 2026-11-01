@@ -19,10 +19,7 @@ all of them within minutes — which is why the version is derived from the comm
 | clang22 22.1.8-mavericks.12 (the family's LLVM 22, which compiles and links shipyard's Sparkle updater on every host) | `components/clang22/version`, and its Linux archive's SHA-256 in `components/clang22/linux-sha256` | ✅ Renovate customManager (github-releases Mavergreen/clang-22, `-mavericks.N` compared); the digest beside it is written by hand from the release's SHA256SUMS (the bump PR says how) | `scripts/fetch_clang22.sh` fetches that release (the Linux archive against the pinned digest, a pkg against its release's SHA256SUMS, or the installed one at that version); a bump rebuilds the updater in shipyard's full CI and the merge releases shipyard |
 | stevedore 20261027.1 (the Mavergreen packager that writes and reads family pkgs) | `scripts/stevedore.pin` | ✅ Renovate customManager (github-releases Mavergreen/stevedore) | `scripts/fetch_stevedore.sh` fetches that release (SHA256SUMS-verified, `--version` checked); a bump runs shipyard's full CI against it and the merge releases shipyard |
 | PyYAML 6.0.3 (vendored: the checks' YAML reader; role shipped) | `scripts/vendor/pyyaml.pin` (`PYYAML_VERSION` + `PYYAML_SHA256` of the sdist) | ✅ Renovate customManager (pypi PyYAML) | the bump fails CI until `sh scripts/vendor/sync-pyyaml.sh` re-vendors `scripts/vendor/yaml` from the new sdist and rewrites `yaml.sha256` |
-| shipyard's own version | `UPSTREAM_VERSION` (the **line**) + `git rev-list --count` | n/a — first-party | every push to `main` cuts `<line>.<count>`; `@v1` moves to it |
-
-No upstream release notes: shipyard is its own upstream -- it ports nothing, so there are no
-someone-else's notes for a release to link.
+| shipyard's own version | `.mavergreen/upstream/VERSION` (the **line**) + `git rev-list --count` | n/a — first-party | every push to `main` cuts `<line>.<count>`; `@v1` moves to it |
 
 ## Release-doctrine surface
 
@@ -33,7 +30,7 @@ they reach everything else here: through the moving `@v1` tag. What they do and 
 them in is documented in the conventions skill, "A release is a declared state, not an event".
 
 shipyard itself carries no `## Declared state` section. Its version is
-`<UPSTREAM_VERSION>.<commit count>` (see the last row of the table above), so its own state changes
+`<line>.<commit count>`, the line in `.mavergreen/upstream/VERSION` (see the last row of the table above), so its own state changes
 on every push, and every push already publishes by design. Adopting the digest path here would only
 describe that status quo more slowly -- it is shipyard's declared exception, not a pattern to copy.
 

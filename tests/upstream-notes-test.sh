@@ -17,18 +17,13 @@ out="$(sh "$S" 1.1.0-mavericks.1)"
 [ -z "$out" ] || { echo "FAIL: no hook (a repo that has not adopted it, or a self-upstream repo) must produce nothing, successfully: got '$out'"; exit 1; }
 
 mkdir -p build
-printf '#!/bin/sh\nprintf "https://example.com/releases/v%%s\\n" "$1"\n' > build/upstream-release-notes-url.sh
+printf '#!/bin/sh\nprintf "https://example.com/legacy/%%s\\n" "$1"\n' > build/upstream-release-notes-url.sh
+out="$(sh "$S" 1.1.0-mavericks.1)"
+[ -z "$out" ] || { echo "FAIL: build/upstream-release-notes-url.sh is no longer read: got '$out'"; exit 1; }
+rm -r build
 
-mkdir -p scripts
-printf '#!/bin/sh\nprintf "https://example.com/from-scripts/%%s\\n" "$1"\n' > scripts/upstream-release-notes-url.sh
-mv build/upstream-release-notes-url.sh build/hook.keep
-out="$(sh "$S" 1.1.0-mavericks.1)"
-printf '%s\n' "$out" | grep -qF 'https://example.com/from-scripts/1.1.0' \
-  || { echo "FAIL: a repo that keeps its scripts in scripts/ (the swift repos) must find the hook there too: $out"; exit 1; }
-mv build/hook.keep build/upstream-release-notes-url.sh
-out="$(sh "$S" 1.1.0-mavericks.1)"
-printf '%s\n' "$out" | grep -qF 'https://example.com/releases/v1.1.0' || { echo "FAIL build/ should win: $out"; exit 1; }
-rm -r scripts
+mkdir -p .mavergreen/hooks
+printf '#!/bin/sh\nprintf "https://example.com/releases/v%%s\\n" "$1"\n' > .mavergreen/hooks/upstream-release-notes-url
 
 out="$(sh "$S" 1.0.0-mavericks.3)"
 [ -z "$out" ] || { echo "FAIL: a repackage of an upstream already shipped must produce nothing: got '$out'"; exit 1; }
@@ -53,11 +48,11 @@ printf '%s\n' "$out" | grep -qF 'https://example.com/releases/v1.1)' \
 git commit -q --allow-empty -m later     # releases are tagged BEHIND the tip, as in real history
 git clone -q --depth 1 "file://$w" "$w/shallow"
 [ -z "$(git -C "$w/shallow" tag)" ] || { echo "FAIL fixture: shallow clone carried tags"; exit 1; }
-mkdir -p "$w/shallow/build"; cp build/upstream-release-notes-url.sh "$w/shallow/build/"
+mkdir -p "$w/shallow/.mavergreen/hooks"; cp .mavergreen/hooks/upstream-release-notes-url "$w/shallow/.mavergreen/hooks/"
 out="$(MAVERICKS_ROOT="$w/shallow" sh "$S" 1.0.0-mavericks.3 2>"$w/err")"
 [ -z "$out" ] || { echo "FAIL: tags a shallow clone cannot see must not read as \"no earlier release\", or it calls every repackage new: $out"; exit 1; }
 grep -q 'upstream-notes' "$w/err" || { echo "FAIL shallow not warned"; exit 1; }
-mkdir -p "$w/not-a-repo/build"; cp build/upstream-release-notes-url.sh "$w/not-a-repo/build/"
+mkdir -p "$w/not-a-repo/.mavergreen/hooks"; cp .mavergreen/hooks/upstream-release-notes-url "$w/not-a-repo/.mavergreen/hooks/"
 out="$(cd "$w/not-a-repo" && MAVERICKS_ROOT="$w/not-a-repo" GIT_CEILING_DIRECTORIES="$w" \
         sh "$S" 1.0.0-mavericks.3 2>"$w/err")"
 [ -z "$out" ] || { echo "FAIL: a git that refuses the repo lists no tags, which must not read as \"no earlier release\" either: $out"; exit 1; }
@@ -68,17 +63,17 @@ git tag | xargs git tag -d >/dev/null
 out="$(sh "$S" 2.0.0-mavericks.1)"
 printf '%s\n' "$out" | grep -qF 'https://example.com/releases/v2.0.0' || { echo "FAIL: the first release a repo ever cuts ships a new upstream too: $out"; exit 1; }
 
-printf '#!/bin/sh\necho "upstream changelog unreachable" >&2\nexit 3\n' > build/upstream-release-notes-url.sh
+printf '#!/bin/sh\necho "upstream changelog unreachable" >&2\nexit 3\n' > .mavergreen/hooks/upstream-release-notes-url
 out="$(sh "$S" 3.0.0-mavericks.1 2>"$w/err")" || { echo "FAIL: notes are prose -- a failing hook must warn and drop the section, never fail the release"; exit 1; }
 [ -z "$out" ] || { echo "FAIL hook-fail output: $out"; exit 1; }
 grep -q 'unreachable' "$w/err" || { echo "FAIL hook's own stderr swallowed"; cat "$w/err"; exit 1; }
 grep -q 'upstream-notes' "$w/err" || { echo "FAIL no warning of our own"; cat "$w/err"; exit 1; }
 
-printf '#!/bin/sh\necho "see the website"\n' > build/upstream-release-notes-url.sh
+printf '#!/bin/sh\necho "see the website"\n' > .mavergreen/hooks/upstream-release-notes-url
 out="$(sh "$S" 3.0.0-mavericks.1 2>"$w/err")"
 [ -z "$out" ] || { echo "FAIL: a hook that prints something that is not a single URL must also drop the section: $out"; exit 1; }
 grep -q 'upstream-notes' "$w/err" || { echo "FAIL non-url not warned"; exit 1; }
-printf '#!/bin/sh\n:\n' > build/upstream-release-notes-url.sh
+printf '#!/bin/sh\n:\n' > .mavergreen/hooks/upstream-release-notes-url
 out="$(sh "$S" 3.0.0-mavericks.1 2>"$w/err")"
 [ -z "$out" ] || { echo "FAIL: a hook with empty output must also drop the section: $out"; exit 1; }
 grep -q 'upstream-notes' "$w/err" || { echo "FAIL empty not warned"; exit 1; }
@@ -87,10 +82,10 @@ grep -q 'upstream-notes' "$w/err" || { echo "FAIL empty not warned"; exit 1; }
 #       with no link and nothing red, because everything returned 0. --url-only distinguishes
 #       "no link is due" from "the link is broken" so a caller that cares can tell them apart.
 mk_repo_with_hook() {   # $1 = dir, $2 = hook body
-  mkdir -p "$1/build"; ( cd "$1" && git init -q -b main . \
+  mkdir -p "$1/.mavergreen/hooks"; ( cd "$1" && git init -q -b main . \
     && git config user.email t@example.com && git config user.name tester \
     && echo x > f && git add f && git commit -qm base )
-  printf '%s\n' "$2" > "$1/build/upstream-release-notes-url.sh"
+  printf '%s\n' "$2" > "$1/.mavergreen/hooks/upstream-release-notes-url"
 }
 
 u1="$work/u-new"
@@ -108,7 +103,7 @@ out="$(cd "$u1" && MAVERICKS_ROOT="$u1" sh "$S" --url-only 1.2.3-mavericks.2 2>/
 u2="$work/u-nohook"
 mk_repo_with_hook "$u2" '#!/bin/sh
 exit 0'
-rm "$u2/build/upstream-release-notes-url.sh"
+rm "$u2/.mavergreen/hooks/upstream-release-notes-url"
 ( cd "$u2" && git tag 1.2.3-mavericks.1 )
 ( cd "$u2" && MAVERICKS_ROOT="$u2" sh "$S" --url-only 1.2.3-mavericks.1 >/dev/null 2>&1 ) && rc=0 || rc=$?
 [ "$rc" = 4 ] || { echo "FAIL: no hook at all must exit 4: rc=$rc"; exit 1; }
@@ -135,7 +130,7 @@ printf "https://example.com/notes/%s\n" "$1"'
 u4s="$work/u-shallow"
 git clone -q --depth 1 "file://$u4" "$u4s"
 [ -z "$(git -C "$u4s" tag)" ] || { echo "FAIL fixture: shallow clone carried tags"; exit 1; }
-mkdir -p "$u4s/build"; cp "$u4/build/upstream-release-notes-url.sh" "$u4s/build/"
+mkdir -p "$u4s/.mavergreen/hooks"; cp "$u4/.mavergreen/hooks/upstream-release-notes-url" "$u4s/.mavergreen/hooks/"
 
 ( cd "$u4s" && MAVERICKS_ROOT="$u4s" sh "$S" --url-only 1.2.3-mavericks.1 >/dev/null 2>&1 ) && rc=0 || rc=$?
 [ "$rc" = 5 ] || { echo "FAIL --url-only shallow clone: rc=$rc"; exit 1; }

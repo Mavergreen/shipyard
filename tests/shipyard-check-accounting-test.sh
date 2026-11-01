@@ -74,5 +74,12 @@ for id in host linux; do
 done
 sh "$sc" --list | awk -F'\t' '$1 == "linux" || $1 == "host" { print $2 }' | grep -qvx key && fail "I6: linux and host are registered as keys"
 
+for pair in upstream-version:upstream-complete upstream-version-bare:value-file-line; do
+  id="${pair%%:*}"
+  rc=0; sh "$sc" --only "$id" > "$t/out" 2>&1 || rc=$?
+  [ "$rc" = 2 ] && grep -q "'$id' is retired" "$t/out" || fail "R7: --only $id refuses a retired id, got $rc: $(cat "$t/out")"
+  [ "$(sh "$sc" --explain "$id")" = "Retired by P2: replaced by ${pair#*:}." ] || fail "R7: --explain $id names what replaced it"
+done
+
 [ "$bad" -eq 0 ] || exit 1
 echo "PASS shipyard-check-accounting"

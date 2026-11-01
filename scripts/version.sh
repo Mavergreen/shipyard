@@ -5,7 +5,7 @@
 #            auto  (default): new upstream (no tag yet) -> N=1, RELEASE=yes; else current N,
 #                  RELEASE=no.
 #            local          : N = maxExistingN + 1, RELEASE=yes  (an independent repackage).
-#          N resets to 1 automatically whenever UPSTREAM_VERSION changes (a new upstream has no tags
+#          N resets to 1 automatically whenever the upstream version changes (a new upstream has no tags
 #          yet). Tag set comes from `git tag`, or from $MAVERICKS_TAGS (newline-separated) when set
 #          (tests).
 # spec: tests/version-lib-test.sh

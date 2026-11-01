@@ -44,7 +44,7 @@ mkrepo "$work/pkt"; printf '#!/bin/sh\npkgbuild --root x t.pkg\n' > "$work/pkt/t
 #       has not adopted the split and passes (the baseline case, first in
 #       tests/check-family-conventions-1-test.sh); one declared script adopts it.
 mkrepo "$work/host"; printf '#!/bin/sh\n# platform: host-agnostic\notool -L x\n' > "$work/host/tests/a-test.sh"
-printf '#!/bin/sh\n# platform: host-agnostic\nprintf "https://example.com/v%%s\\n" "$1"\n' > "$work/host/build/upstream-release-notes-url.sh"
+printf '#!/bin/sh\n# platform: host-agnostic\nprintf "https://example.com/v%%s\\n" "$1"\n' > "$work/host/.mavergreen/hooks/upstream-release-notes-url"
 (cd "$work/host" && git add -A) >/dev/null 2>&1
 out="$(cd "$work/host" && sh "$S" 2>&1)" && { echo "FAIL: a host-agnostic script running otool should fail check 22"; exit 1; }
 first_is "$out" host-tools || { echo "FAIL: check 22 should be a host-tools failure: $out"; exit 1; }

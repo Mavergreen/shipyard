@@ -15,6 +15,6 @@ mirror that checks the file is also ignored.
 
 ## Deviating
 No deviation is read for this id. Remove it from the index and ignore it:
-git rm --cached VERSION, add /VERSION to .gitignore, and commit UPSTREAM_VERSION instead.
+git rm --cached VERSION, add /VERSION to .gitignore, and commit .mavergreen/upstream/VERSION instead.
 
 Formerly gate check 7 (VERSION)

@@ -1,2 +1,3 @@
 tests/mavergreen-meta-test.sh
 tests/shipyard-scripts-test.sh
+tests/resolve-version-test.sh

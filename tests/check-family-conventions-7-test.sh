@@ -20,7 +20,7 @@ passes() {  # $1 = label, $2 = dir
 }
 add() { (cd "$1" && git add -A) >/dev/null 2>&1; }
 
-mkrepo7() { mkrepo "$@"; rm -r "$1/.mavergreen"; }
+mkrepo7() { mkrepo "$@"; rm -r "$1/.mavergreen/deviations"; }
 conf='      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist'
 stage='sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr'
 pkok() {  # $1 = dir, $2 = the build script's packaging line, $3 = its path (default build/package.sh)

@@ -6,7 +6,7 @@
 #          reachable from REV. With none: the UTC committer day of the newest own-code commit (or of
 #          REV, if own code never changed), .1. When own code changed since the last tag: that day
 #          .1 if it is later than the tag's date, else the tag's date .N+1. Otherwise the tag's date
-#          .N+1. Own code is every path except UPSTREAM_VERSION, components/*/version,
+#          .N+1. Own code is every path except .mavergreen/upstream/**, components/*/version,
 #          ingredients/**, .mavergreen/deviations/**, .github/**, tests/**, top-level *.md, each file
 #          declared-state.sh names, and the scope of each .mavergreen/deviations/self-upstream-exclude/
 #          deviation, a git pathspec glob (`*` stays within one directory, `**/` spans any). Exit 2 on
@@ -49,7 +49,7 @@ rev="$(git -C "$ROOT" rev-parse --verify -q "$REF^{commit}" 2>/dev/null)" || {
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/self-upstream-version.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
-for p in UPSTREAM_VERSION 'components/*/version' 'ingredients/**' '.mavergreen/deviations/**' '.github/**' 'tests/**' '*.md'; do
+for p in '.mavergreen/upstream/**' 'components/*/version' 'ingredients/**' '.mavergreen/deviations/**' '.github/**' 'tests/**' '*.md'; do
   printf ':(exclude,glob)%s\n' "$p"
 done > "$work/exclude"
 

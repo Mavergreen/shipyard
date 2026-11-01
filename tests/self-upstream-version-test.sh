@@ -88,12 +88,17 @@ git -C "$R" tag 20261012.3
 at 2026-10-19T22:30:00-05:00 src/x.c
 want 20261020.1 "the day is the UTC day, neither the committer's offset nor the caller's TZ"
 
-for p in tests/a.sh .github/workflows/x.yml README.md UPSTREAM_VERSION ingredients/foo/product; do
+for p in tests/a.sh .github/workflows/x.yml README.md .mavergreen/upstream/VERSION ingredients/foo/product; do
   fresh "default-$(printf '%s' "$p" | tr '/.' '__')"
   git -C "$R" tag 20261012.3
   at 2026-10-19T12:00:00Z "$p"
   want 20261012.4 "$p is excluded by default, so changing it is ingredient-only"
 done
+
+fresh legacy-upstream
+git -C "$R" tag 20261012.3
+at 2026-10-19T12:00:00Z UPSTREAM_VERSION
+want 20261019.1 "a root UPSTREAM_VERSION is no longer the upstream, so it is own code"
 
 fresh nested-md
 git -C "$R" tag 20261012.3

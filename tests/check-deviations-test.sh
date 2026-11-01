@@ -45,7 +45,8 @@ case_ key host linux linux 'no bash 3.2 here'
 run "$w/key" || fail "a key id is a known check: $(cat "$w/out")"
 
 for pair in 'product-layout:stage-product' 'artifact-conformance:artifact-checks-wired' \
-            'scheme:version-scheme' 'ingredients:variant-build-info'; do
+            'scheme:version-scheme' 'ingredients:variant-build-info' \
+            'upstream-version:upstream-complete' 'upstream-version-bare:value-file-line'; do
   case_ "r-${pair%%:*}" "${pair%%:*}" x '*' because
   fails "r-${pair%%:*}" deviation-known-check "now \`${pair#*:}\`"
 done

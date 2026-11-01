@@ -37,7 +37,7 @@ SELF="$root/scripts"
 
 . "$here/lib/deviation_tree.sh"
 mkdir "$w/a" "$w/b"
-printf '# Build ingredients\n\nNo upstream release notes: upstream keeps none\n' > "$w/a/INGREDIENTS.md"
+deviation "$w/a" upstream-notes none '*' 'upstream keeps none'
 deviation "$w/a" comments later '*' 'swept later'
 deviation "$w/a" rosetta tools 'tools/*.sh' 'runs translated'
 deviation "$w/a" unpinned dockerfile 'Dockerfile' 'wants the newest'

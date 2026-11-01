@@ -5,7 +5,7 @@ ingredients-md	checkout	scripts/check-family-conventions.sh	gate 3	P2
 renovate-no-restated-defaults	checkout	scripts/check-family-conventions.sh	gate 4	P1
 automerge-described	checkout	scripts/check-family-conventions.sh	gate 4b	P1
 no-tracked-version	checkout	scripts/check-family-conventions.sh	gate 7 (VERSION)	P1
-upstream-version	checkout	scripts/check-family-conventions.sh	gate 7 (UPSTREAM_VERSION)	P2
+upstream-version	retired	scripts/check-metadata.sh	gate 7 (UPSTREAM_VERSION)	P2
 tracked-files	checkout	scripts/check-family-conventions.sh	gate 7, 27	P1
 no-lines-dir	checkout	scripts/check-family-conventions.sh	gate 7b	P1
 version-sh-tracked	checkout	scripts/check-family-conventions.sh	gate 7c	P1
@@ -13,7 +13,7 @@ build-dirs-ignored	checkout	scripts/check-family-conventions.sh	gate 7d	P1
 workflow-yaml	checkout	scripts/check-family-conventions.sh	gate 8	P1
 ingredient-tracked	checkout	scripts/check-family-conventions.sh	gate 9	P2
 shell-portability	checkout	scripts/check-shell-portability.sh	gate 10	P1
-upstream-notes	checkout	scripts/check-family-conventions.sh	gate 11	P2
+upstream-notes	checkout	scripts/check-family-conventions.sh	gate 11	P1
 signing-scans-for-key	checkout	scripts/check-family-conventions.sh	gate 12a	P1
 sign-call-shape	checkout	scripts/check-family-conventions.sh	gate 12b	P1
 renovate-suffix-versioning	checkout	scripts/check-family-conventions.sh	gate 13	P1
@@ -81,8 +81,10 @@ no-tags-trigger	checkout	scripts/check-family-conventions.sh	new (hand-rolled in
 no-pull-request-target	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 checkout-drops-credentials	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 permissions-contents-read	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
-upstream-version-bare	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+upstream-version-bare	retired	scripts/check-metadata.sh	new (hand-rolled in product repos)	P2
 version-ignored	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+upstream-complete	checkout	scripts/check-metadata.sh	new (P2: replaces upstream-version)	P1
+value-file-line	checkout	scripts/check-metadata.sh	new (P2: replaces upstream-version-bare)	P1
 renovate-json-valid	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 bare-curl	checkout	scripts/check-family-conventions.sh	new (shared retrying fetcher)	P1
 brew	checkout	scripts/check-family-conventions.sh	new (outside package managers)	P1

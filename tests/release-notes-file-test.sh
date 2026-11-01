@@ -60,10 +60,10 @@ rm -f "$p"
 echo "PASS: release-notes-file (shared)"
 
 w2="$(mktemp -d "${TMPDIR:-/tmp}/rnf-delegate.XXXXXX")"
-mkdir -p "$w2/build"
+mkdir -p "$w2/.mavergreen/hooks" "$w2/.mavergreen/upstream"
 ( cd "$w2" && git init -q -b main . && git config user.email t@example.com && git config user.name tester \
-   && printf '9.9p2\n' > UPSTREAM_VERSION \
-   && printf '#!/bin/sh\nprintf "https://example.com/%%s\\n" "$1"\n' > build/upstream-release-notes-url.sh \
+   && printf '9.9p2\n' > .mavergreen/upstream/VERSION \
+   && printf '#!/bin/sh\nprintf "https://example.com/%%s\\n" "$1"\n' > .mavergreen/hooks/upstream-release-notes-url \
    && git add -A && git commit -qm base && git tag 9.9p2-mavericks.1 )
 p="$(cd "$w2" && MAVERICKS_ROOT="$w2" sh "$here/../scripts/release-notes-file.sh" 9.9p2-mavericks.1 9.9p2-mavericks.1 OpenSSH)"
 [ -s "$p" ] || { echo "FAIL delegate: empty file at '$p'"; exit 1; }
@@ -73,8 +73,8 @@ rm -rf "$w2"
 
 lw="$(mktemp -d "${TMPDIR:-/tmp}/rnf-line.XXXXXX")"
 ( cd "$lw" && git init -q -b main . && git config user.email t@example.com && git config user.name tester \
-    && mkdir -p build && printf '1.26.7\n' > UPSTREAM_VERSION \
-    && printf '#!/bin/sh\nprintf "https://go.dev/doc/devel/release#go%%s\\n" "$1"\n' > build/upstream-release-notes-url.sh \
+    && mkdir -p .mavergreen/hooks .mavergreen/upstream && printf '1.26.7\n' > .mavergreen/upstream/VERSION \
+    && printf '#!/bin/sh\nprintf "https://go.dev/doc/devel/release#go%%s\\n" "$1"\n' > .mavergreen/hooks/upstream-release-notes-url \
     && git add -A && git commit -qm base \
     && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 )
 

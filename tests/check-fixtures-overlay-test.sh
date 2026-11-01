@@ -10,15 +10,14 @@ git --version >/dev/null 2>&1 || { echo "SKIP check-fixtures-overlay-test: needs
 work="$(mktemp -d "${TMPDIR:-/tmp}/fixtures-overlay.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 fx="$work/checks"
 mkdir -p "$fx/_base/lines/126" "$fx/no-lines-dir/pass" "$fx/no-lines-dir/fail" \
-  "$fx/upstream-version-bare/pass" "$fx/upstream-version-bare/fail"
+  "$fx/value-file-line/pass" "$fx/value-file-line/fail/.mavergreen/upstream" "$fx/_base/.mavergreen/upstream"
 : > "$fx/_base/lines/126/UPSTREAM_VERSION"
-echo 1.0.0 > "$fx/_base/UPSTREAM_VERSION"
+echo 1.0.0 > "$fx/_base/.mavergreen/upstream/VERSION"
 printf 'git\n' > "$fx/no-lines-dir/fail/NEEDS"
 printf 'git\n' > "$fx/no-lines-dir/pass/NEEDS"
 printf 'lines/126/UPSTREAM_VERSION\nlines\n' > "$fx/no-lines-dir/pass/DELETE"
-printf 'UPSTREAM_VERSION\n' > "$fx/upstream-version-bare/pass/FILES"
-printf 'UPSTREAM_VERSION\n' > "$fx/upstream-version-bare/fail/FILES"
-echo v1.0.0 > "$fx/upstream-version-bare/fail/UPSTREAM_VERSION"
+printf '.mavergreen/upstream/VERSION\n' > "$fx/value-file-line/pass/FILES"
+echo v1.0.0 > "$fx/value-file-line/fail/.mavergreen/upstream/VERSION"
 mkdir -p "$fx/_base/.github/workflows"; cp "$here/fixtures/checks/_base/.github/workflows/release.yml" "$fx/_base/.github/workflows/release.yml"
 
 out="$(SHIPYARD_FIXTURES_DIR="$fx" sh "$here/check-fixtures-run.sh" --jobs 1 2>&1)" || fail "the overlay fixtures should pass:

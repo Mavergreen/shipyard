@@ -1,1 +1,1 @@
-build/upstream-release-notes-url.sh
+.mavergreen/hooks/upstream-release-notes-url

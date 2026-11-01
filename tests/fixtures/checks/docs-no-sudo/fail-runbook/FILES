@@ -3,6 +3,6 @@
 .gitignore
 INGREDIENTS.md
 UPSTREAM_VERSION
-build/upstream-release-notes-url.sh
+.mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh
 docs/runbooks/recover.md
