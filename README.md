@@ -234,9 +234,6 @@ On a bump:
 - cmake: the pkg's preinstall `requires` cmake at or above the minimum; `install@v1` installs the pinned
   release (SHA256SUMS-verified) before shipyard; a bump runs shipyard's full CI against it and the merge
   releases shipyard.
-- clang22: `scripts/fetch_clang22.sh` fetches that release (the Linux archive against the pinned digest,
-  a pkg against its release's SHA256SUMS, or the installed one at that version); a bump rebuilds the
-  updater in shipyard's full CI and the merge releases shipyard.
 - stevedore: `scripts/fetch_stevedore.sh` fetches that release (SHA256SUMS-verified, `--version`
   checked); a bump runs shipyard's full CI against it and the merge releases shipyard.
 

@@ -131,7 +131,7 @@ if [ -d .mavergreen ]; then
       _v="${_v#"${_v%%[! $TAB]*}"}"
       _v="${_v%"${_v##*[! $TAB]}"}"
       [ -n "$_v" ] || continue
-      if grep -Fq -e "$_v" "$_r"; then
+      if grep -Fqw -e "$_v" "$_r"; then
         chk_fail prose-restates-value "$_r restates \"$_v\", the value of $_f" \
           "the value file is kept current by Renovate and its readers, and the copy in prose is kept current by nothing" \
           "delete \"$_v\" from $_r, and say what is unusual about the value instead"
