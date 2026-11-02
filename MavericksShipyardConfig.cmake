@@ -16,11 +16,11 @@
 # spec: R-P1-23 -- CMAKE_HOST_APPLE, not APPLE: the running cmake is a property of the host, and a
 #       Linux host has no cmake product to demand, so it skips the check.
 # spec: tests/shipyard-cmake-refusal-test.sh -- the install configures the minimum in; a CHECKOUT,
-#       where it is still a placeholder, takes the Kitware part of its own pin.
+#       where it is still a placeholder, takes the Kitware part of its own requires/cmake/min.
 if(CMAKE_HOST_APPLE)
   set(_shipyard_cmake_min "@SHIPYARD_CMAKE_MIN@")
   if(NOT _shipyard_cmake_min MATCHES "^[0-9]")
-    file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/.mavergreen/ingredients/cmake/VERSION" _shipyard_cmake_min LIMIT_COUNT 1)
+    file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/.mavergreen/products/shipyard/requires/cmake/min" _shipyard_cmake_min LIMIT_COUNT 1)
     string(REGEX REPLACE "-mavericks\\..*$" "" _shipyard_cmake_min "${_shipyard_cmake_min}")
   endif()
   get_filename_component(_shipyard_cmake_used "${CMAKE_COMMAND}" REALPATH)

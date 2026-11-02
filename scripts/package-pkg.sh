@@ -7,7 +7,7 @@
 #          the dev.mavergreen.base component. The mavergreen helper exports the shipyard-* names
 #          into /usr/local/mavergreen/bin, never the bare cmake/ctest/cpack; nothing is installed into
 #          /usr/local/bin. The install scripts come from stage_product.sh, and its preinstall refuses
-#          a box without the cmake product at .mavergreen/ingredients/cmake/VERSION. The updater is a stopgap
+#          a box without the cmake product at or above .mavergreen/products/shipyard/requires/cmake/min. The updater is a stopgap
 #          until Mavericks Lineup exists.
 # spec: 2026-10-09 C4 -- shipyard ships no CMake of its own: the launchers run the cmake product
 #       installed beside it, with shipyard on CMAKE_PREFIX_PATH.

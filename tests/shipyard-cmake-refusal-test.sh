@@ -98,19 +98,20 @@ printf '%s' "$out" | grep -q 'CONFIGURED' || { echo "FAIL: the non-Apple host di
 
 # spec: .github/actions/install/action.yml -- its non-macOS path points MavericksShipyard_DIR at the
 #       action's own CHECKOUT, where the config sits at the root rather than under share/cmake and
-#       the minimum comes from .mavergreen/ingredients/cmake/VERSION; copies of it pin this box's cmake and one
-#       above it.
-checkout() {  # $1 = dir  $2 = the pin it carries
-  mkdir -p "$1/.mavergreen/ingredients/cmake"
+#       the minimum comes from .mavergreen/products/shipyard/requires/cmake/min; copies of it hold this box's
+#       cmake and one above it, each with a cmake pin above both, which the minimum never reads.
+checkout() {  # $1 = dir  $2 = the minimum it carries
+  mkdir -p "$1/.mavergreen/ingredients/cmake" "$1/.mavergreen/products/shipyard/requires/cmake"
   cp "$root"/*.cmake "$1/"
-  printf '%s\n# renovate: datasource=github-releases depName=Mavergreen/cmake\n' "$2" > "$1/.mavergreen/ingredients/cmake/VERSION"
+  printf '%s\n' "$2" > "$1/.mavergreen/products/shipyard/requires/cmake/min"
+  printf '%s\n# renovate: datasource=github-releases depName=Mavergreen/cmake\n' "$((${ver%%.*} + 9)).0.0-mavericks.1" > "$1/.mavergreen/ingredients/cmake/VERSION"
 }
 checkout "$w/co" "$ver-mavericks.1"
 checkout "$w/co-above" "$above-mavericks.1"
 out="$(MavericksShipyard_DIR="$w/co" "$sc" -S "$w/c" -B "$w/b4" 2>&1)" \
   || { echo "FAIL: MavericksShipyard_DIR pointed at a shipyard CHECKOUT must configure (that is what install@v1 exports on Linux); got:"; echo "$out"; exit 1; }
 printf '%s' "$out" | grep -q "DIR=$w/co" || { echo "FAIL: expected the checkout's config; got:"; echo "$out"; exit 1; }
-refused "a cmake below a checkout's pin" "$above" \
+refused "a cmake below a checkout's minimum" "$above" \
   env MavericksShipyard_DIR="$w/co-above" "$sc" -S "$w/c" -B "$w/b4a"
 refused "the host cmake run directly against a checkout" "$ver" \
   env MavericksShipyard_DIR="$w/co" "$real" -S "$w/c" -B "$w/b4b"

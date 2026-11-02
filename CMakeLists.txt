@@ -67,22 +67,22 @@ include(CMakePackageConfigHelpers)
 
 set(_dest "${CMAKE_INSTALL_DATADIR}/cmake/MavericksShipyard")
 
-# spec: 2026-10-09 C5 -- the config refuses a cmake below the Kitware part of shipyard's cmake pin.
+# spec: 2026-10-09 C5 -- the config refuses a cmake below the Kitware part of shipyard's cmake minimum.
 #       -DSHIPYARD_CMAKE_MIN sets another for one configure, so a fixture can pair shipyard with the
-#       host's cmake; it is dropped from the cache so that a later configure reads the pin again.
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS .mavergreen/ingredients/cmake/VERSION)
+#       host's cmake; it is dropped from the cache so that a later configure reads the min again.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS .mavergreen/products/shipyard/requires/cmake/min)
 if(DEFINED CACHE{SHIPYARD_CMAKE_MIN})
   set(_shipyard_cmake_min "$CACHE{SHIPYARD_CMAKE_MIN}")
   unset(SHIPYARD_CMAKE_MIN CACHE)
 else()
-  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/.mavergreen/ingredients/cmake/VERSION" _shipyard_cmake_min LIMIT_COUNT 1)
+  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/.mavergreen/products/shipyard/requires/cmake/min" _shipyard_cmake_min LIMIT_COUNT 1)
   string(REGEX REPLACE "-mavericks\\.[0-9]+$" "" _shipyard_cmake_min "${_shipyard_cmake_min}")
 endif()
 # spec: MavericksShipyardConfig.cmake -- a minimum that is not a version reads as a checkout's
-#       placeholder there, and every consumer would then fail on a missing .mavergreen/ingredients/cmake/VERSION.
+#       placeholder there, and every consumer would then fail on a missing .mavergreen/products/shipyard/requires/cmake/min.
 if(NOT _shipyard_cmake_min MATCHES "^[0-9]+(\\.[0-9]+)*$")
   message(FATAL_ERROR "shipyard's cmake minimum is '${_shipyard_cmake_min}', not a version: "
-    ".mavergreen/ingredients/cmake/VERSION must hold X.Y.Z-mavericks.N, and -DSHIPYARD_CMAKE_MIN must be X.Y.Z")
+    ".mavergreen/products/shipyard/requires/cmake/min must hold X.Y.Z-mavericks.N, and -DSHIPYARD_CMAKE_MIN must be X.Y.Z")
 endif()
 set(SHIPYARD_CMAKE_MIN "${_shipyard_cmake_min}")
 configure_file(MavericksShipyardConfig.cmake "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake" @ONLY)
