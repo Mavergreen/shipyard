@@ -81,6 +81,9 @@ eq "mg_renovate squeezes repeated spaces, never globs" "$(mg_renovate spaced)" "
 extractVersion=^v(.*)$"
 printf 'v\n# renovate:   \n' > "$m/emptyrenovate"
 if mg_renovate emptyrenovate >/dev/null; then fail "a renovate line with no words must fail"; fi
+printf '1.0\n# renovate: datasource=github-releases depName=a/b' > "$m/eofline2"
+eq "mg_renovate with no final newline" "$(mg_renovate eofline2)" "datasource=github-releases
+depName=a/b"
 mkdir "$m/ingredients/nopin"; printf 'nothing\n' > "$m/ingredients/nopin/PIN"
 if out="$(mg_pin_ref ingredients/nopin)"; then fail "pin ref without @ must fail"; fi
 eq "pin ref no-@ output" "$out" ""

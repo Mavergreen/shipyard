@@ -77,7 +77,7 @@ mg_renovate() {
   _mg_f="$(mg_dir)/$1"
   [ -f "$_mg_f" ] || return 1
   _mg_r=
-  { IFS= read -r _mg_r && IFS= read -r _mg_r || _mg_r=; } < "$_mg_f" || :
+  { IFS= read -r _mg_r && { IFS= read -r _mg_r || [ -n "$_mg_r" ]; } || _mg_r=; } < "$_mg_f" || :
   _mg_r="${_mg_r%"$(printf '\r')"}"
   case "$_mg_r" in '# renovate:'*) _mg_r="${_mg_r#'# renovate:'}";; *) return 1;; esac
   case "$-" in *f*) _mg_nf=1;; *) _mg_nf=; set -f;; esac
