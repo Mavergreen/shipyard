@@ -42,7 +42,7 @@
         "/^\\.mavergreen/ingredients/pyyaml/VERSION$/"
       ],
       "matchStrings": [
-        "^(?<currentValue>\\S+)\\s*$"
+        "^(?<currentValue>\\S+)"
       ],
       "depNameTemplate": "PyYAML",
       "datasourceTemplate": "pypi"

@@ -368,8 +368,22 @@ if [ -f .github/renovate.json ] && [ "$HAVE_TRACKED" -eq 1 ] && [ "$RJ_OK" -eq 1
   rc=0
   chk_py /dev/stdin .github/renovate.json "$TF" > "$tmp/suffix" <<'PY' || rc=$?
 import fnmatch, json, re, sys
-def js(rx):  # Renovate regexes are JS: (?<name>...) is Python's (?P<name>...); lookbehinds stay as they are
-    return re.sub(r'\(\?<(?![=!])', '(?P<', rx)
+def js(rx):  # Renovate regexes are JS, compiled with g alone: (?<name>...) is Python's (?P<name>...), and $ is the end of the file
+    out, i, cls = [], 0, False
+    while i < len(rx):
+        c = rx[i]
+        if c == '\\':
+            out.append(rx[i:i + 2]); i += 2; continue
+        if cls:
+            cls = c != ']'
+        elif c == '[':
+            cls = True
+        elif c == '$':
+            c = r'\Z'
+        elif rx.startswith('(?<', i) and rx[i + 3:i + 4] not in ('=', '!'):
+            c = '(?P<'; i += 2
+        out.append(c); i += 1
+    return ''.join(out)
 def matcher(pat):
     m = re.fullmatch(r'/(.*)/([a-z]*)', pat)
     if m:
@@ -390,8 +404,10 @@ for mgr in json.load(open(sys.argv[1])).get('customManagers', []):
             text = open(f, encoding='utf-8', errors='replace').read()
         except OSError:
             continue
+        hits = 0
         for ms in mgr.get('matchStrings', []):
-            for m in re.finditer(js(ms), text, re.M):
+            for m in re.finditer(js(ms), text):
+                hits += 1
                 cv = (m.groupdict().get('currentValue') or '').strip()
                 n = re.search(r'-mavericks\.(\d+)$', cv)
                 if not n:
@@ -400,17 +416,25 @@ for mgr in json.load(open(sys.argv[1])).get('customManagers', []):
                 if vm and any(k in compared and v == n.group(1) for k, v in vm.groupdict().items()):
                     continue
                 dep = mgr.get('depNameTemplate') or (m.groupdict().get('depName')) or mgr.get('packageNameTemplate') or '(unnamed)'
-                bad.append('%s = %s (%s)' % (dep, cv, f))
+                bad.append('V\t%s = %s (%s)' % (dep, cv, f))
+        if not hits:
+            bad.append('C\t%s (%s)' % (mgr.get('depNameTemplate') or mgr.get('packageNameTemplate') or '(unnamed)', f))
 for b in bad:
     print(b)
 PY
   if [ "$rc" -ne 0 ]; then
     py_crashed renovate-suffix-versioning
   else
-    while IFS= read -r b; do
-      chk_fail renovate-suffix-versioning "Renovate cannot see new -mavericks.N releases of $b" \
-        "its versioning does not compare N, so every -mavericks.N of one upstream compares equal" \
-        'give that manager "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"'
+    while IFS="$(printf '\t')" read -r k b; do
+      if [ "$k" = C ]; then
+        chk_fail renovate-suffix-versioning "Renovate cannot see new releases of $b: none of its manager's matchStrings captures a currentValue there" \
+          "Renovate compiles matchStrings with the g flag alone, so ^ and \$ are the ends of the whole file, and a line-2 annotation after an anchored value leaves nothing to match" \
+          'match line 1 without an end anchor, as "^(?<currentValue>\\S+)"'
+      else
+        chk_fail renovate-suffix-versioning "Renovate cannot see new -mavericks.N releases of $b" \
+          "its versioning does not compare N, so every -mavericks.N of one upstream compares equal" \
+          'give that manager "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"'
+      fi
     done < "$tmp/suffix"
   fi
 fi
