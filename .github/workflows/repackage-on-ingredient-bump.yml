@@ -6,11 +6,6 @@ name: repackage-on-ingredient-bump
 on:
   workflow_call:
     inputs:
-      own-upstream-paths:
-        description: "Newline/space-separated pin paths whose change means a NEW own upstream (N=1) — skipped here."
-        type: string
-        required: false
-        default: ""
       dispatch-workflow:
         description: "The consumer release workflow to dispatch."
         type: string
@@ -41,7 +36,6 @@ jobs:
       - name: Dispatch a repackage if a build ingredient (not own-upstream) moved
         env:
           GH_TOKEN: ${{ github.token }}
-          OWN_UPSTREAM_PATHS: ${{ inputs.own-upstream-paths }}
           BEFORE: ${{ github.event.before }}
           DISPATCH_WORKFLOW: ${{ inputs.dispatch-workflow }}
           DISPATCH_FIELD: ${{ inputs.dispatch-field }}
@@ -51,9 +45,6 @@ jobs:
           [ -d "$SCR" ] || { echo "::error::SHIPYARD_SCRIPTS unset -- this workflow needs install@v1 first"; exit 1; }
           before="$BEFORE"; case "$before" in ''|0000000000000000000000000000000000000000) before="HEAD~1";; esac
           CHANGED="$(git diff --name-only "$before" HEAD)"; export CHANGED
-          # platform: github.event.before is all-zeros on a first push -- export the RESOLVED rev
-          #           instead, since a path:KEY entry needs to read the file as it was then.
-          BEFORE="$before"; export BEFORE
           out="$(sh "$SCR/repackage-decision.sh")"
           echo "decision: $out"
           case "$out" in SKIP=*) exit 0;; esac

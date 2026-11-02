@@ -1,0 +1,1 @@
+shipyard pins its ingredients but is released by every push to main, which derives its version from the commit count, so a bump merges and releases without a repackage dispatch.

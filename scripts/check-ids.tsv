@@ -111,3 +111,4 @@ cxxabi	dist	scripts/check-artifact-conformance.sh	conformance cxxabi	P1
 repo-public	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh visibility	P1
 repo-requires-on-target	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh on-target	P1
 self-upstream-exclude	key	scripts/self-upstream-version.sh	self-upstream-version.sh self-upstream-exclude	P1
+repackage-wiring	checkout	scripts/check-metadata.sh	new (P2: R15 repackage-caller)	P2

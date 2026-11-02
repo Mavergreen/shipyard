@@ -105,6 +105,30 @@ for _p in upstream $(mg_list ingredients | sed 's|^|ingredients/|'); do
     "write line 1 as <ref>@<the full 40-character lowercase commit the ref names>"
 done
 
+chk_ran repackage-wiring
+: > "$w/callers"
+for _f in .github/workflows/*.yml .github/workflows/*.yaml; do
+  [ -f "$_f" ] || continue
+  grep -v '^[[:space:]]*#' "$_f" | grep -Fq 'repackage-on-ingredient-bump.yml' && echo "$_f" >> "$w/callers"
+done
+if [ -n "$(mg_list ingredients)" ]; then _has_ings=1; else _has_ings=""; fi
+if [ -s "$w/callers" ]; then
+  while IFS= read -r _f; do
+    [ -n "$_has_ings" ] || chk_fail repackage-wiring "$_f calls repackage-on-ingredient-bump.yml but .mavergreen/ingredients/ holds no ingredient" \
+      "there is nothing for it to repackage on, so every push would run a job that can only skip" \
+      "delete $_f, or describe the ingredients under .mavergreen/ingredients/"
+    if grep -v '^[[:space:]]*#' "$_f" | grep -Eq '^[[:space:]]*(paths|paths-ignore|own-upstream-paths):'; then
+      chk_fail repackage-wiring "$_f filters on paths or names own-upstream-paths" \
+        "the decision reads .mavergreen/ and decides from what changed, so a filter either hides a change it needs or repeats what the tree says" \
+        "delete the paths:, paths-ignore: and own-upstream-paths: lines; the caller has no filter"
+    fi
+  done < "$w/callers"
+elif [ -n "$_has_ings" ] && ! shipyard_deviated repackage-wiring >/dev/null; then
+  chk_fail repackage-wiring "the repo has ingredients under .mavergreen/ingredients/ but no workflow calls repackage-on-ingredient-bump.yml" \
+    "a bumped ingredient would change what ships and release nothing" \
+    "add .github/workflows/repackage-on-ingredient-bump.yml calling Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1, with no paths: filter"
+fi
+
 _ings="$(mg_list ingredients)"
 if [ -z "$_ings" ]; then
   for _id in ingredient-complete watch-matches from-parent; do

@@ -1,0 +1,9 @@
+name: repackage
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".mavergreen/**"
+jobs:
+  repackage:
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
