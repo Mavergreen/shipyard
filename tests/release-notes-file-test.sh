@@ -11,7 +11,7 @@ w="$(mktemp -d "${TMPDIR:-/tmp}/release-notes-file-t.XXXXXX")"; trap 'rm -rf "$w
 cd "$w"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
-mkdir -p release-notes
+mkdir -p .mavergreen/release-notes
 printf 'x\n' > UPSTREAM_VERSION
 git add -A; git commit -qm base
 # spec: tests/release-notes-test.sh "m4" -- 20260911.2 and later claim earlier releases, so their tag
@@ -34,15 +34,15 @@ grep -q 'release-notes: wrote' "$w/out.log" \
   && { echo "FAIL: the generator's own progress line must land on the wrapper's STDERR, never mixed into what a caller captures as \$NOTES -- it leaked onto the wrapper's stdout"; exit 1; }
 rm -f "$p"
 
-printf '## Hand-written\n\nProse that must survive.\n<!-- edited by a human -->\n' > release-notes/20260911.2.md
+printf '## Hand-written\n\nProse that must survive.\n<!-- edited by a human -->\n' > .mavergreen/release-notes/20260911.2.md
 git add -A; git commit -qm notes
-before="$(git hash-object release-notes/20260911.2.md)"
+before="$(git hash-object .mavergreen/release-notes/20260911.2.md)"
 p="$(sh "$S" 20260911.2 20260911.2 Porthole 2>/dev/null)"
 case "$p" in */release-notes/*) echo "FAIL: a committed note must be returned as a TEMP copy, never the committed path: $p"; exit 1;; esac
 grep -q 'Hand-written' "$p" || { echo "FAIL prose not preserved"; cat "$p"; exit 1; }
 grep -q 'Prose that must survive' "$p" || { echo "FAIL prose not preserved"; cat "$p"; exit 1; }
-[ "$before" = "$(git hash-object release-notes/20260911.2.md)" ] \
-  || { echo "FAIL: a committed release-notes/<TAG>.md must never be edited in place"; exit 1; }
+[ "$before" = "$(git hash-object .mavergreen/release-notes/20260911.2.md)" ] \
+  || { echo "FAIL: a committed .mavergreen/release-notes/<TAG>.md must never be edited in place"; exit 1; }
 rm -f "$p"
 
 p="$(sh "$S" 20260911.3 20260911.3 'Mavericks Go' 2>/dev/null)"

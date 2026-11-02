@@ -1,323 +1,194 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: ingredient-notes.sh [--repo <owner/repo> --tag <tag>] <prev-tag> [pin-path[:KEY]...]
-#          Describes which build-ingredient pins moved since the previous release, as a markdown
-#          section for the release notes (Sparkle appcast <description> + GitHub Release body).
-#          Prints NOTHING when no pin moved, when there is no previous release, or when no pins were
-#          passed -- so callers can append its output unconditionally. A missing pin path is skipped
-#          with a warning.
-#          A "path:KEY" argument (ingredient-pins.sh's own-upstream-paths key form) excludes just
-#          that KEY from the file's ingredient set -- the file's other keys are still reported
-#          normally.
-#          Shapes, because a pin is not always a bare version string:
-#            single-line file      -> old -> new                  (components/<name>/version)
-#            KEY=VALUE assignments -> one bullet per changed KEY   (versions.sh, pins.env: decided
-#                                                                    by CONTENT, not extension --
-#                                                                    see is_kv_pins())
-#            anything else         -> "updated (N -> M bytes)"     (vendor/cacert.pem and other
-#                                                                    blobs)
-#          Each bullet but a removed or now-computed one ends with where its change is described,
-#          the first source that answers winning: a REF/TAG/VERSION key beside a GitHub REPO= links
-#          the compare of the two refs; the Renovate customManager that owns the pin
-#          (renovate-link.py) links a GitHub release or a github-tags compare; a pin that is a
-#          whole file of this repo links its diff, <repo>/compare/<prev-tag>...<tag>, given --repo
-#          and --tag; an INGREDIENTS.md deviation "- unlinked:<path>[:KEY]: <reason>" gives the reason there is
-#          none. With none of these the bullet is bare, and check-release-notes.sh refuses it. A key
-#          no manager owns that moved beside a linked key of the same file is part of that bump and
-#          gets no bullet of its own.
-#          Needs python3 once the repo has a .github/renovate.json: notes are generated in CI only.
+#   usage: ingredient-notes.sh <prev-tag>
+#          Compares .mavergreen/ingredients/ at <prev-tag> with the working tree, as the release
+#          notes' "### Build ingredients" section: a bullet per changed value file (VERSION, PIN,
+#          COMMIT, REPO, SHA256, any other uppercase file, and from), one per added or removed
+#          ingredient, and one per changed file an ingredient's watch matches. Each changed or added
+#          ingredient's description follows its first bullet. A link comes from the line-2 Renovate
+#          annotation (github-releases, github-tags, git-tags) or else from REPO, and otherwise
+#          there is none. Prints nothing when nothing moved or <prev-tag> is empty, and one line when
+#          <prev-tag> has no .mavergreen/.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/deviation-reason.sh"
+. "$SELF/mavergreen-meta.sh"
 
-REPO_SLUG=""; THIS_TAG=""
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --repo) REPO_SLUG="$2"; shift 2 ;;
-    --tag) THIS_TAG="$2"; shift 2 ;;
-    *) break ;;
-  esac
-done
 prev="${1:-}"
 [ -n "$prev" ] || exit 0
-shift
-[ "$#" -gt 0 ] || exit 0
+git rev-parse -q --verify "$prev^{commit}" >/dev/null \
+  || { echo "ingredient-notes: cannot read $prev, so what moved since it is unknown" >&2; exit 1; }
+MAVERGREEN_ROOT="$(git rev-parse --show-toplevel)"
+if ! git cat-file -e "$prev:.mavergreen" 2>/dev/null; then
+  [ -z "$(mg_list ingredients)" ] \
+    || echo '- Ingredients moved to .mavergreen/; no per-pin changes listed for this release.'
+  exit 0
+fi
+CR="$(printf '\r')"
+I=.mavergreen/ingredients
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/ingredient-notes.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
-bullets="$tmp/bullets"
-: > "$bullets"
-# spec: tests/ingredient-notes-test.sh "A pin that became DERIVED must not be announced as removed"
-#       -- a key that only became derived (still assigned, no longer literal) is real information
-#       but not evidence anything MOVED; collected separately and appended only once a real move
-#       already earned the section.
-derived="$tmp/derived"
-: > "$derived"
-shipyard_deviations . > /dev/null
+: > "$tmp/bullets"
+git -c core.quotepath=off diff --name-only "$prev" -- > "$tmp/changed"
 
-pin_name() {
+first_line() {
+  _l=
+  IFS= read -r _l || :
+  printf '%s' "${_l%"$CR"}"
+}
+is_value() { case "$1" in [A-Z]*|from) return 0 ;; esac; return 1; }
+old_names() { git ls-tree "$prev:$I" 2>/dev/null | awk -F'\t' '$1 ~ / tree / { print $2 }'; }
+old_keys() { git ls-tree "$prev:$I/$1" 2>/dev/null | awk -F'\t' '$1 ~ / blob / { print $2 }'; }
+old_value() { git show "$prev:$I/$1/$2" 2>/dev/null | first_line; }
+new_keys() { for _k in $(mg_list "ingredients/$1"); do [ ! -f "$MAVERGREEN_ROOT/$I/$1/$_k" ] || printf '%s\n' "$_k"; done; }
+
+show() {
   case "$1" in
-    components/*/version) p="${1#components/}"; printf '%s' "${p%/version}" ;;
-    .mavergreen/ingredients/*/*) p="${1#.mavergreen/ingredients/}"; printf '%s / %s' "${p%%/*}" "${p#*/}" ;;
-    *.patch) printf '%s' "${1##*/}" ;;
-    *) printf '%s' "$1" ;;
+    PIN) _c="${2#*@}"; printf '%s@%.12s' "${2%%@*}" "$_c"; return ;;
   esac
-}
-
-# spec: tests/ingredient-notes-test.sh "CRITICAL2" -- components/*/version pin files share one set
-#       of key names (REPO/REF/DIGEST/BASE) across many components, unlike versions.sh/pins.env
-#       (the repo's one and only pin file), so a bullet from this shape is ALWAYS prefixed with the
-#       component name, not only when this run happens to be ambiguous.
-label_prefix_for() {
-  case "$1" in
-    components/*/version) printf '%s / ' "$(pin_name "$1")" ;;
-    .mavergreen/ingredients/*/*) p="${1#.mavergreen/ingredients/}"; printf '%s / ' "${p%%/*}" ;;
-    *) printf '' ;;
-  esac
-}
-
-patch_subject() {
-  sed -n 's/^Subject:[[:space:]]*//p' | sed 's/^\[PATCH[^]]*\][[:space:]]*//' | head -1
-}
-
-# spec: tests/ingredient-notes-test.sh "shorten()" -- a 64-character hash diff tells a reader
-#       nothing; 12 characters identifies which is which.
-shorten() {
-  v="$1"
-  case "$v" in
-    *[!0-9a-fA-F]*) printf '%s' "$v"; return ;;
-  esac
-  if [ "${#v}" -ge 32 ]; then printf '%.12s...' "$v"; else printf '%s' "$v"; fi
-}
-
-# spec: tests/ingredient-notes-test.sh "per-key" -- a link belongs to one pin, the file plus its
-#       KEY: container-tools' boot2docker REPO= names the git source REF pins, never BASE beside it.
-source_of() {  # path KEY-or-empty old-or-empty new-or-empty -> "linked <suffix>", "owned" or "unowned"
   case "$2" in
-    REF|TAG|VERSION)
-      repo="$(assignments < "$1" | sed -n 's/^REPO	//p' | head -1)"
-      repo="${repo%.git}"
-      case "$repo" in
-        https://github.com/*/*)
-          if [ -n "$3" ]; then printf 'linked  ([changes](%s/compare/%s...%s))' "$repo" "$3" "$4"
-          else printf 'linked  ([source](%s/tree/%s))' "$repo" "$4"; fi
-          return ;;
-      esac ;;
+    *[!0-9a-fA-F]*|'') printf '%s' "$2"; return ;;
   esac
-  if [ -n "$4" ] && [ -f .github/renovate.json ]; then
-    command -v python3 >/dev/null 2>&1 \
-      || { echo "ingredient-notes: python3 is needed to read .github/renovate.json's managers" >&2; return 1; }
-    found="$(python3 "$SELF/renovate-link.py" "$SELF/.." "$1" "$2" "$3" "$4")" || return 1
-    case "$found" in
-      '') ;;
-      owned) echo owned; return ;;
-      *) printf 'linked  ([%s](%s))' "${found%%	*}" "${found#*	}"; return ;;
-    esac
-  fi
-  echo unowned
+  if [ "${#2}" -ge 32 ]; then printf '%.12s...' "$2"; else printf '%s' "$2"; fi
 }
 
-declared() {  # path KEY-or-empty
-  why="$(shipyard_deviated unlinked "$1${2:+:$2}" || true)"
-  [ -z "$why" ] || printf ' (no change notes: %s)' "$why"
+github_repo() {
+  _r="${1#https://github.com/}"
+  _r="${_r%.git}"
+  case "$_r" in
+    */*/*|/*|*/|*[!A-Za-z0-9_./-]*) return 1 ;;
+    */*) printf '%s' "$_r" ;;
+    *) return 1 ;;
+  esac
 }
 
-# spec: tests/ingredient-notes-test.sh "I3" -- this repo's own diff describes a whole file of it,
-#       and a KEY in it no manager owns; a KEY a manager owns but cannot link (a docker BASE, a ^v?
-#       template) is not ours to describe, so it needs a declared reason.
-suffix_for() {  # source_of's answer, path, KEY-or-empty
-  case "$1" in
-    'linked '*) printf '%s' "${1#linked }"; return ;;
-    owned) [ -z "$3" ] || { declared "$2" "$3"; return; } ;;
-  esac
-  if [ -n "$REPO_SLUG" ] && [ -n "$THIS_TAG" ]; then
-    printf ' ([diff](https://github.com/%s/compare/%s...%s))' "$REPO_SLUG" "$prev" "$THIS_TAG"
+tag_affix() {
+  _e="$1"
+  case "$_e" in '^'*'(?<version>'*')'*'$') ;; *) return 1 ;; esac
+  _pre="${_e#^}"; _pre="${_pre%%'(?<version>'*}"
+  _post="${_e#*'(?<version>'}"; _post="${_post#*)}"; _post="${_post%\$}"
+  for _x in "$_pre" "$_post"; do
+    case "$(printf '%s' "$_x" | sed 's/\\[./_-]//g')" in *[!A-Za-z0-9_-]*) return 1 ;; esac
+  done
+  PRE="$(printf '%s' "$_pre" | sed 's/\\\(.\)/\1/g')"
+  POST="$(printf '%s' "$_post" | sed 's/\\\(.\)/\1/g')"
+}
+
+compare_link() {
+  if [ -n "$2" ] && [ "$2" != "$3" ]; then
+    printf ' ([changes](https://github.com/%s/compare/%s...%s))' "$1" "$2" "$3"
   else
-    declared "$2" "$3"
+    printf ' ([source](https://github.com/%s/tree/%s))' "$1" "$3"
   fi
 }
 
-link() {  # path KEY-or-empty old-or-empty new-or-empty
-  src="$(source_of "$@")" || return 1
-  suffix_for "$src" "$1" "$2"
-}
-
-bullet() {  # name old new path KEY-or-empty [suffix]
-  if [ "$#" -ge 6 ]; then sfx="$6"; else sfx="$(link "$4" "$5" "$2" "$3")"; fi
-  printf -- '- **%s**: %s -> %s%s\n' "$1" "$(shorten "$2")" "$(shorten "$3")" "$sfx" >> "$bullets"
-}
-
-# spec: tests/ingredient-notes-test.sh "G2"/"CRITICAL1" -- assignments() and assigned_keys() must
-#       parse KEY=VALUE lines identically or they drift on what counts as an assignment; factored
-#       out here once so they can't.
-kv_raw() {
-  sed -n 's/^[[:space:]]*export[[:space:]]\{1,\}//; s/^\([A-Z][A-Z0-9_]*\)=\(.*\)$/\1	\2/p' \
-    | sed 's/[[:space:]]*#.*$//; s/["'"'"']//g; s/[[:space:]]*$//'
-}
-
-# spec: tests/ingredient-notes-test.sh "CRITICAL1" -- the value must hold at least one non-"="
-#       character, or a base64 blob's padding lines ("MK9=") read as bogus one-key "assignments";
-#       an uppercase-only key class narrows but does not close that class by itself. A pin's value
-#       also carries no $ or backtick -- a derivation like GO_VERSION="$(upstream_version)" is a
-#       code change, not a pin move.
-assignments() {
-  kv_raw | grep -v '[$`]' | awk -F'\t' '$2 ~ /[^=]/' || true
-}
-
-# spec: tests/ingredient-notes-test.sh -- assigned_keys() answers "is this key still assigned at
-#       all" (literal or derived), sharing kv_raw()'s value-has-content guard with assignments() so
-#       the two functions cannot drift on what counts as an assignment: swift-runtime's SWIFT_TAG
-#       becoming derived ("swift-${SWIFT_VERSION}-RELEASE") once announced as a removal.
-assigned_keys() {
-  kv_raw | awk -F'\t' '$2 ~ /[^=]/ { print $1 }'
-}
-
-# spec: tests/ingredient-notes-test.sh -- a pin file gets per-key rendering by CONTENT (one real
-#       KEY=VALUE line), never by extension or filename; a genuine blob (patch, vendored binary,
-#       bare version string) has none and falls through to the byte-delta fallback. Defined directly
-#       in terms of assignments() so the two can never drift.
-is_kv_pins() {
-  [ -n "$(assignments < "$1")" ]
-}
-
-# spec: tests/ingredient-notes-test.sh "fold"/"I2" -- a key no manager owns that moved or was added
-#       beside a linked key of the same file is part of that bump (a DIGEST with its REF, sqlite's
-#       SHA256 and YEAR with its VERSION, a new component's REPO and DIGEST with its REF), so its
-#       bullet would restate the linked one. Moving ALONE, as a DIGEST does when upstream re-tags the
-#       same ref, it is news and keeps its bullet. Reads $tmp/old and $tmp/new.
-kv_bullets() {  # path exclkey label-prefix
-  : > "$tmp/moved"
-  while IFS= read -r line; do
-    key="${line%%	*}"; newv="${line#*	}"
-    [ "$key" = "$2" ] && continue
-    oldv="$(grep "^$key	" "$tmp/old" | head -1 | cut -f2- || true)"
-    [ "$oldv" != "$newv" ] || continue
-    src="$(source_of "$1" "$key" "$oldv" "$newv")"
-    printf '%s	%s\n' "$key" "$src" >> "$tmp/moved"
-  done < "$tmp/new"
-  anchored=no
-  if grep -q '	linked ' "$tmp/moved"; then anchored=yes; fi
-  while IFS= read -r line; do
-    key="${line%%	*}"; newv="${line#*	}"
-    src="$(cut -f2- <<EOF
-$line
+renovate_link() {
+  for k in $(new_keys "$1"); do
+    is_value "$k" || continue
+    words="$(mg_renovate "ingredients/$1/$k")" || continue
+    ds=; dep=; ev=
+    while IFS= read -r w; do
+      case "$w" in
+        datasource=*) ds="${w#datasource=}" ;;
+        depName=*) dep="${w#depName=}" ;;
+        extractVersion=*) ev="${w#extractVersion=}" ;;
+      esac
+    done <<EOF
+$words
 EOF
-)"
-    [ "$src" = unowned ] && [ "$anchored" = yes ] && continue
-    newv="$(grep "^$key	" "$tmp/new" | head -1 | cut -f2-)"
-    oldv="$(grep "^$key	" "$tmp/old" | head -1 | cut -f2- || true)"
-    sfx="$(suffix_for "$src" "$1" "$key")"
-    if [ -z "$oldv" ]; then
-      printf -- '- **%s%s**: added (%s)%s\n' "$3" "$key" "$newv" "$sfx" >> "$bullets"
+    repo="$(github_repo "$dep")" || return 1
+    new="$(mg_value "ingredients/$1/$k")"; old="$(old_value "$1" "$k")"
+    if [ "$k" = PIN ]; then
+      new="${new#*@}"; old="${old#*@}"; PRE=; POST=
+    elif [ -n "$ev" ]; then
+      tag_affix "$ev" || return 1
     else
-      bullet "$3$key" "$oldv" "$newv" "$1" "$key" "$sfx"
+      PRE=; POST=
     fi
-  done < "$tmp/moved"
+    case "$ds" in
+      github-releases|github-release-attachments)
+        printf ' ([release notes](https://github.com/%s/releases/tag/%s%s%s))' "$repo" "$PRE" "$new" "$POST" ;;
+      github-tags|git-tags)
+        compare_link "$repo" "${old:+$PRE$old$POST}" "$PRE$new$POST" ;;
+      *) return 1 ;;
+    esac
+    return 0
+  done
+  return 1
 }
 
-for arg in "$@"; do
-  case "$arg" in
-    *:*) path="${arg%%:*}"; exclkey="${arg##*:}" ;;
-    *) path="$arg"; exclkey="" ;;
-  esac
-  if [ ! -f "$path" ]; then
-    echo "ingredient-notes: skipping missing pin $path" >&2
+repo_link() {
+  r="$(mg_value "ingredients/$1/REPO")" || return 1
+  repo="$(github_repo "$r")" || return 1
+  for k in PIN COMMIT VERSION; do
+    new="$(mg_value "ingredients/$1/$k")" || continue
+    old="$(old_value "$1" "$k")"
+    [ "$k" != PIN ] || { new="${new#*@}"; old="${old#*@}"; }
+    compare_link "$repo" "$old" "$new"
+    return 0
+  done
+  printf ' ([source](https://github.com/%s))' "$repo"
+}
+
+link_for() { renovate_link "$1" || repo_link "$1" || :; }
+
+primary() {
+  for k in VERSION PIN COMMIT from; do
+    v="$(mg_value "ingredients/$1/$k")" || continue
+    show "$k" "$v"; return 0
+  done
+  return 1
+}
+
+{ old_names; mg_list ingredients; } | LC_ALL=C sort -u > "$tmp/names"
+while IFS= read -r n; do
+  in_old=no; in_new=no
+  old_names | grep -qxF -- "$n" && in_old=yes
+  [ -d "$MAVERGREEN_ROOT/$I/$n" ] && in_new=yes
+  : > "$tmp/mine"
+  if [ "$in_new" = no ]; then
+    printf -- '- **%s**: removed\n' "$n" >> "$tmp/bullets"
     continue
   fi
-  newsize="$(wc -c < "$path" | tr -d ' ')"
-
-  if ! oldsize="$(git cat-file -s "$prev:$path" 2>/dev/null)"; then
-    case "$path" in
-      *.patch)
-        sub="$(patch_subject < "$path")"
-        sfx="$(link "$path" "" "" "")"
-        if [ -n "$sub" ]; then
-          printf -- '- **%s**: added ("%s")%s\n' "$(pin_name "$path")" "$sub" "$sfx" >> "$bullets"
-        else
-          printf -- '- **%s**: added%s\n' "$(pin_name "$path")" "$sfx" >> "$bullets"
+  lnk="$(link_for "$n")"
+  if [ "$in_old" = no ]; then
+    if v="$(primary "$n")"; then
+      printf -- '- **%s**: added (%s)%s\n' "$n" "$v" "$lnk" >> "$tmp/mine"
+    else
+      printf -- '- **%s**: added%s\n' "$n" "$lnk" >> "$tmp/mine"
+    fi
+  else
+    { old_keys "$n"; new_keys "$n"; } | LC_ALL=C sort -u | while IFS= read -r k; do
+      is_value "$k" || continue
+      if new="$(mg_value "ingredients/$n/$k")"; then has_new=yes; else has_new=no; fi
+      if git cat-file -e "$prev:$I/$n/$k" 2>/dev/null; then
+        old="$(old_value "$n" "$k")"
+        if [ "$has_new" = no ]; then
+          printf -- '- **%s / %s**: removed\n' "$n" "$k"
+        elif [ "$old" != "$new" ]; then
+          printf -- '- **%s / %s**: %s -> %s%s\n' "$n" "$k" "$(show "$k" "$old")" "$(show "$k" "$new")" "$lnk"
         fi
-        ;;
-      *)
-        if is_kv_pins "$path"; then
-          # spec: tests/ingredient-notes-test.sh "a first-time pins.env" -- exclkey (the repo's own
-          #       upstream) is excluded even from a brand-new file; every OTHER key in it is still a
-          #       real, reportable ingredient.
-          : > "$tmp/old"
-          assignments < "$path" | sort > "$tmp/new"
-          kv_bullets "$path" "$exclkey" "$(label_prefix_for "$path")"
-        elif [ "$newsize" -lt 256 ]; then
-          sfx="$(link "$path" "" "" "$(head -1 "$path")")"
-          printf -- '- **%s**: added (%s)%s\n' "$(pin_name "$path")" "$(head -1 "$path")" "$sfx" >> "$bullets"
-        else
-          sfx="$(link "$path" "" "" "")"
-          printf -- '- **%s**: added%s\n' "$(pin_name "$path")" "$sfx" >> "$bullets"
-        fi
-        ;;
-    esac
-    continue
+      elif [ "$has_new" = yes ]; then
+        printf -- '- **%s / %s**: added (%s)%s\n' "$n" "$k" "$(show "$k" "$new")" "$lnk"
+      fi
+    done >> "$tmp/mine"
+    if watch="$(mg_lines "ingredients/$n/watch")"; then
+      printf '%s\n' "$watch" | while IFS= read -r g; do
+        [ -z "$g" ] || mg_glob_hits "$g" "$tmp/changed"
+      done | LC_ALL=C sort -u | while IFS= read -r f; do
+        printf -- '- **%s / watch**: `%s` changed\n' "$n" "$f"
+      done >> "$tmp/mine"
+    fi
   fi
+  [ -s "$tmp/mine" ] || continue
+  sed -n 1p "$tmp/mine" >> "$tmp/bullets"
+  if d="$(mg_value "ingredients/$n/description")" && [ -n "$d" ]; then
+    printf '  %s\n' "$d" >> "$tmp/bullets"
+  fi
+  sed 1d "$tmp/mine" >> "$tmp/bullets"
+done < "$tmp/names"
 
-  [ "$(git rev-parse "$prev:$path")" = "$(git hash-object "$path")" ] && continue
-
-  case "$path" in
-    *.patch)
-      # spec: tests/ingredient-notes-test.sh -- a patch is an ingredient too, but a byte delta says
-      #       nothing about one; report what a reader can act on: what the patch claims to do, and
-      #       how much moved.
-      git show "$prev:$path" > "$tmp/oldpatch"
-      oldsub="$(patch_subject < "$tmp/oldpatch")"
-      newsub="$(patch_subject < "$path")"
-      a="$(diff "$tmp/oldpatch" "$path" | grep -c '^>' || true)"
-      d="$(diff "$tmp/oldpatch" "$path" | grep -c '^<' || true)"
-      sfx="$(link "$path" "" "" "")"
-      if [ -n "$oldsub" ] && [ -n "$newsub" ] && [ "$oldsub" != "$newsub" ]; then
-        printf -- '- **%s**: "%s" -> "%s" (+%s/-%s lines)%s\n' \
-          "$(pin_name "$path")" "$oldsub" "$newsub" "$a" "$d" "$sfx" >> "$bullets"
-      elif [ -n "$newsub" ]; then
-        printf -- '- **%s**: updated ("%s", +%s/-%s lines)%s\n' \
-          "$(pin_name "$path")" "$newsub" "$a" "$d" "$sfx" >> "$bullets"
-      else
-        printf -- '- **%s**: updated (+%s/-%s lines)%s\n' "$(pin_name "$path")" "$a" "$d" "$sfx" >> "$bullets"
-      fi
-      ;;
-    *)
-      if is_kv_pins "$path"; then
-        label_prefix="$(label_prefix_for "$path")"
-        git show "$prev:$path" | assignments | sort > "$tmp/old"
-        assignments < "$path" | sort > "$tmp/new"
-        kv_bullets "$path" "$exclkey" "$label_prefix"
-        # spec: tests/ingredient-notes-test.sh -- a key that stopped being pinned is a real change,
-        #       and walking only the new file would omit it entirely; but it counts as removed only
-        #       if the file stopped ASSIGNING it -- still assigned, just no longer a literal, is
-        #       "derived now" ($derived above), a different and much smaller fact than removal.
-        assigned_keys < "$path" | sort -u > "$tmp/newkeys"
-        while IFS= read -r line; do
-          key="${line%%	*}"; oldv="${line#*	}"
-          [ "$key" = "$exclkey" ] && continue
-          grep -q "^$key	" "$tmp/new" && continue     # still a literal: already handled above
-          if grep -q "^$key\$" "$tmp/newkeys"; then
-            printf -- '- **%s%s**: still used, now computed rather than pinned (was %s)\n' \
-              "$label_prefix" "$key" "$(shorten "$oldv")" >> "$derived"
-          else
-            printf -- '- **%s%s**: removed\n' "$label_prefix" "$key" >> "$bullets"
-          fi
-        done < "$tmp/old"
-      else
-        oldlines="$(git show "$prev:$path" | wc -l | tr -d ' ')"
-        newlines="$(wc -l < "$path" | tr -d ' ')"
-        if [ "$newsize" -lt 256 ] && [ "$oldlines" -le 1 ] && [ "$newlines" -le 1 ]; then
-          bullet "$(pin_name "$path")" "$(git show "$prev:$path" | head -1)" "$(head -1 "$path")" "$path" ""
-        else
-          sfx="$(link "$path" "" "" "")"
-          printf -- '- **%s**: updated (%s -> %s bytes)%s\n' "$path" "$oldsize" "$newsize" "$sfx" >> "$bullets"
-        fi
-      fi
-      ;;
-  esac
-done
-
-if [ -s "$bullets" ]; then
+if [ -s "$tmp/bullets" ]; then
   printf '### Build ingredients\n\nChanged since %s:\n\n' "$prev"
-  cat "$bullets"
-  cat "$derived"
+  cat "$tmp/bullets"
 fi

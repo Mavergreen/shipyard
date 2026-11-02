@@ -107,8 +107,8 @@ fi
 
 tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes.XXXXXX")"
 footer_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-footer.XXXXXX")"
-tracked_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-tracked.XXXXXX")"
-trap 'rm -f "$tmp" "$footer_tmp" "$tracked_tmp"' EXIT
+changed_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-changed.XXXXXX")"
+trap 'rm -f "$tmp" "$footer_tmp" "$changed_tmp"' EXIT
 
 if [ "$SELF_UPSTREAM" = yes ]; then
   printf '## %s %s\n' "$PRODUCT" "$VER" > "$tmp"
@@ -119,7 +119,12 @@ fi
 # spec: SKILL.md "Release notes" -- committed prose
 #       publishes only once a human has marked it edited; the mark never reaches readers.
 MARK='<!-- edited by a human -->'
-notes="$MAVERICKS_ROOT/release-notes/${TAG}.md"
+short="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
+if [ -d "$MAVERICKS_ROOT/.mavergreen/release-notes/$short" ]; then
+  notes="$MAVERICKS_ROOT/.mavergreen/release-notes/$short/${TAG}.md"
+else
+  notes="$MAVERICKS_ROOT/.mavergreen/release-notes/${TAG}.md"
+fi
 if [ -f "$notes" ] && [ -s "$notes" ]; then
   awk -v m="$MARK" '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l == m) f = 1 } END { exit !f }' "$notes" \
     || die "$notes has no line '$MARK'. Committed prose publishes only after a human has edited it: once you have, add that line to the file. An agent never adds it."
@@ -159,51 +164,51 @@ else
   [ "$ncand" -le 1 ] \
     || die "more than one workflow names repackage-on-ingredient-bump.yml and none of them is at the conventional path .github/workflows/repackage-on-ingredient-bump.yml, so which one defines this repo's ingredient pins is ambiguous: $candidates (rename the real caller to the conventional path, or drop the mention from the other)"
 fi
-PINS=""
 if [ -n "$CALLER" ]; then
-  NAMES="$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" sh "$SELF/ingredient-pins.sh")" \
-    || die "ingredient-pins.sh failed reading .mavergreen/ingredients/; a repackage caller whose pins cannot be read must not ship notes that call it packaging-only"
-  [ -n "$NAMES" ] || die "$CALLER calls repackage-on-ingredient-bump.yml but .mavergreen/ingredients/ holds no ingredient"
-  for n in $NAMES; do
-    for k in $(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_list "ingredients/$n"); do
-      case "$k" in [A-Z]*) PINS="${PINS:+$PINS
-}.mavergreen/ingredients/$n/$k" ;; esac
-    done
+  [ -n "$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" sh "$SELF/ingredient-pins.sh")" ] \
+    || die "$CALLER calls repackage-on-ingredient-bump.yml but .mavergreen/ingredients/ holds no ingredient"
+fi
+WATCHED=""
+if [ -n "$PREV" ]; then
+  git -c core.quotepath=off diff --name-only "$PREV" HEAD -- > "$changed_tmp" \
+    || die "git diff against $PREV failed; cannot say which watched files moved"
+  for n in $(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_list ingredients); do
     WATCH="$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_lines "ingredients/$n/watch" 2>/dev/null)" || continue
-    [ -s "$tracked_tmp" ] || git -c core.quotepath=off ls-files > "$tracked_tmp"
     while IFS= read -r g; do
-      [ -z "$g" ] || PINS="${PINS:+$PINS
-}$(mg_glob_hits "$g" "$tracked_tmp")"
+      [ -z "$g" ] || WATCHED="${WATCHED:+$WATCHED
+}$(mg_glob_hits "$g" "$changed_tmp")"
     done <<EOF
 $WATCH
 EOF
   done
-  PINS="$(printf '%s\n' "$PINS" | grep . | LC_ALL=C sort -u)" || :
+  WATCHED="$(printf '%s\n' "$WATCHED" | grep . | LC_ALL=C sort -u)" || :
 fi
 # spec: tests/release-notes-test.sh "r3new"/"r1d" -- this repo's owner/repo names its own compare
 #       view; with neither source, a link is left out rather than guessed.
 SLUG="${GITHUB_REPOSITORY:-}"
 if [ -z "$SLUG" ]; then
-  short="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
   if own="$(sh "$SELF/product-name.sh" repo "$short" 2>/dev/null)"; then SLUG="Mavergreen/$own"; fi
 fi
 
 INGREDIENTS=""
-if [ -n "$PREV" ] && [ -n "$PINS" ]; then
-  # shellcheck disable=SC2086  # PINS is a deliberate list of paths
-  INGREDIENTS="$(sh "$SELF/ingredient-notes.sh" ${SLUG:+--repo "$SLUG" --tag "$TAG"} "$PREV" $PINS)" \
+if [ -n "$PREV" ]; then
+  INGREDIENTS="$(sh "$SELF/ingredient-notes.sh" "$PREV")" \
     || die "cannot read the ingredient pins that moved since $PREV; a repackage that cannot say what moved must not ship"
+  case "$INGREDIENTS" in
+    ''|'### '*) ;;
+    *) INGREDIENTS="$(printf '### Build ingredients\n\n%s' "$INGREDIENTS")" ;;
+  esac
 fi
 
 # spec: tests/release-notes-test.sh "patchadd" -- tailscale 1.102.4-mavericks.7 added
 #       patches/darwin-exit-nodes.patch (exit nodes on macOS) and its notes still said "packaging
 #       changes only": a change to OUR modifications of the upstream source is a behaviour change a
-#       reader is owed. Pins are excluded because ingredient-notes.sh already reports them. A
+#       reader is owed. Watched files are excluded because ingredient-notes.sh already reports them. A
 #       self-upstream product has no upstream to modify, so nothing here applies to it.
 PATCHES=""
 if [ -n "$PREV" ] && [ "$SELF_UPSTREAM" = no ]; then
-  # shellcheck disable=SC2086  # PINS is a deliberate list of paths
-  PATCHES="$(sh "$SELF/patch-notes.sh" "$PREV" $PINS)" \
+  # shellcheck disable=SC2086  # WATCHED is a deliberate list of paths
+  PATCHES="$(sh "$SELF/patch-notes.sh" "$PREV" $WATCHED)" \
     || die "cannot read which of our patches changed since $PREV; a release that cannot say whether it changed our patches must not ship"
 fi
 
@@ -330,10 +335,6 @@ fi
 
 if ! shape="$(sh "$SELF/check-release-notes.sh" "$tmp" "$VER" 2>&1 >/dev/null)"; then
   printf '%s\n' "$shape" >&2
-  # spec: tests/release-notes-test.sh "bare" -- a moved pin with no link source is the repo's to fix.
-  case "$shape" in
-    *'deviations/unlinked/'*) die "a moved build ingredient says nothing about where its change is described (see the complaint above); the fix is in this repo: a Renovate manager, a REPO=, or a .mavergreen/deviations/unlinked/ deviation" ;;
-  esac
   if [ -f "$notes" ] && [ -s "$notes" ]; then
     die "the generated body failed the family shape check (see the complaint above); likely cause: the committed prose at $notes"
   else

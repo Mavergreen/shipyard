@@ -6,8 +6,9 @@
 #          ingredient-notes.sh's "### Build ingredients"). A modification is any *.patch or *.diff at
 #          any depth, or anything under a directory named patches/ or overlays/ at any depth
 #          (golang/openssh/swift-runtime's root patches/, tailscale's overlays/) -- except
-#          release-notes/, which is hand-written prose, and .mavergreen/, which is metadata. An exclude-path (an ingredient pin, in ingredient-pins.sh's
-#          "path" or "path:KEY" form) is left out, since ingredient-notes.sh already reports it.
+#          .mavergreen/, which is metadata and hand-written prose. An exclude-path (a file an
+#          ingredient watches) is left out, since ingredient-notes.sh already
+#          reports it.
 #          Prints NOTHING when nothing matched or there is no previous release, so callers append
 #          unconditionally. Exits non-zero when git cannot diff against <prev-tag>: an empty answer
 #          must always mean "no change", never "could not tell".
@@ -36,7 +37,7 @@ git -c core.quotePath=false diff --no-ext-diff --name-status -M "$prev" HEAD -- 
 
 is_ours() {
   case "$1" in
-    release-notes/*|.mavergreen/*) return 1 ;;
+    .mavergreen/*) return 1 ;;
   esac
   grep -Fqx -- "$1" "$tmp/exclude" && return 1
   case "$1" in

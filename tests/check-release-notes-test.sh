@@ -124,10 +124,7 @@ Some prose first.
 - Repackage.
 EOF
 
-# spec: SKILL.md "Release notes" -- every moved ingredient says where its change is described, or
-#       why nothing does. container-tools 20260727-mavericks.37 shipped "- **docker-cli / REF**:
-#       v29.9.0 -> v29.9.1" and nothing else: a reader had to go and find docker/cli's notes.
-no 20260727-mavericks.37 "an ingredient bullet with no link and no reason" "docker-cli / REF" <<'EOF'
+ok 20260727-mavericks.37 "a bullet of an untracked ingredient, with no link" <<'EOF'
 ## Container Tools 20260727 for Mavericks (20260727-mavericks.37)
 
 ### What changed
@@ -137,40 +134,8 @@ no 20260727-mavericks.37 "an ingredient bullet with no link and no reason" "dock
 
 Changed since 20260727-mavericks.36:
 
-- **docker-cli / REF**: v29.9.0 -> v29.9.1
-EOF
-for fix in 'Renovate' 'REPO=' 'deviations/unlinked/'; do
-  printf '%s\n' "$out" | grep -q "$fix" || { echo "FAIL: the complaint must name the fix ($fix): $out"; exit 1; }
-done
-
-ok 20260727-mavericks.37 "linked, reasoned, removed and now-computed bullets" <<'EOF'
-## Container Tools 20260727 for Mavericks (20260727-mavericks.37)
-
-### What changed
-- Repackage of upstream Container Tools 20260727, rebuilt because build ingredients moved (below).
-
-### Build ingredients
-
-Changed since 20260727-mavericks.36:
-
-- **docker-cli / REF**: v29.9.0 -> v29.9.1 ([changes](https://github.com/docker/cli/compare/v29.9.0...v29.9.1))
-- **boot2docker / BASE**: debian:13-slim@sha256:a -> debian:13-slim@sha256:b (no change notes: a digest refresh publishes none)
-- **GO_SRC_SHA512**: removed
-- **SWIFT_TAG**: still used, now computed rather than pinned (was swift-6.3.3-RELEASE)
-
----
-[All changes since 20260727-mavericks.36](https://github.com/Mavergreen/container-tools/compare/20260727-mavericks.36...20260727-mavericks.37)
-EOF
-
-# spec: scripts/check-release-notes.sh -- only the ingredient section is held to this: a link-less
-#       bullet a human wrote in the committed prose, or under What changed, is not an ingredient.
-ok 9.9p2-mavericks.6 "bare bullets outside the ingredient section" <<'EOF'
-## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)
-
-- a bullet a human wrote
-
-### What changed
-- Repackage of upstream OpenSSH 9.9p2; packaging changes only.
+- **docker-cli / VERSION**: v29.9.0 -> v29.9.1
+  The docker CLI
 EOF
 
 printf '## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.1)\n\nWords.\n<!-- edited by a human -->\n\n### What changed\n\n- a change\n' \

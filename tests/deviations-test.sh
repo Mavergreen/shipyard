@@ -109,22 +109,8 @@ for part in 'docker-*' 'gui?' 'a[b]'; do
   refused 'one word' "the on-target part $part, a glob,"
 done
 
-# spec: SKILL.md "Release notes" -- unlinked is scoped to a pin, and a pin is a file plus its KEY,
-#       so a scope may end in :KEY (uppercase, as the pin's assignment spells it).
-fresh; deviation "$r" unlinked boot2docker-base 'components/boot2docker/version:BASE' 'no notes for a digest refresh'
-out="$(sh "$S" "$r")"
-has 'unlinked components/boot2docker/version:BASE no notes for a digest refresh' "a KEY-qualified scope keeps its KEY"
-fresh; deviation "$r" unlinked components 'components/*' 'a glob covers every KEY of every file under it'
-out="$(sh "$S" "$r")"
-has 'unlinked components/\* a glob covers every KEY of every file under it' "a file glob is an unlinked scope"
-# spec: SKILL.md "Conformance deviations" -- only unlinked scopes a pin, so only it takes a :KEY;
-#       on any other check the KEY could never match a subject, and would excuse nothing in silence.
 fresh; deviation "$r" rosetta x 'build/x.sh:FOO' 'runs translated'
-refused 'unlinked' "a :KEY scope on rosetta"
-# spec: SKILL.md "Release notes" -- unlinked excuses named pins; a scope of * would switch the rule
-#       off for the whole repo.
-fresh; deviation "$r" unlinked x '*' 'no notes anywhere'
-refused 'unlinked' "an unlinked of scope *"
+refused 'never a :KEY' "a :KEY scope on rosetta"
 # spec: SKILL.md "Versioning" -- a self-upstream-exclude of only "*" and "/" would make no change
 #       own code.
 for scope in '*' '**' '*/**' '/'; do

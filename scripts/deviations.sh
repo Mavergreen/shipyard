@@ -28,18 +28,14 @@ only() { case "$1" in *[!$2]*) return 1 ;; esac; return 0; }
 
 scope_refusal() {
   _c="$1"; _s="$2"
-  if [ "$_c" != unlinked ]; then
-    case "$_s" in
-      *:*)
-        _k="${_s##*:}"
-        case "$_k" in
-          [A-Z*]*) if only "$_k" 'A-Z0-9_*'; then echo "the :$_k in scope \"$_s\" is a KEY, and only unlinked takes a :KEY scope"; return 0; fi ;;
-        esac ;;
-    esac
-  fi
+  case "$_s" in
+    *:*)
+      _k="${_s##*:}"
+      case "$_k" in
+        [A-Z*]*) if only "$_k" 'A-Z0-9_*'; then echo "the :$_k in scope \"$_s\" is a KEY, and a scope is a path glob, never a :KEY"; return 0; fi ;;
+      esac ;;
+  esac
   case "$_c" in
-    unlinked)
-      [ "$_s" != '*' ] || echo "unlinked must name the pins it excuses: a scope of <pin path>[:KEY], never *" ;;
     self-upstream-exclude)
       ! only "$_s" '*/' || echo "self-upstream-exclude must name what it excludes, never a scope of nothing but * and /" ;;
     on-target)

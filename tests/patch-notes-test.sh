@@ -10,13 +10,13 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/patch-notes-test.XXXXXX")"; trap 'rm -rf "$wo
 cd "$work"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
-mkdir -p patches overlays boot2docker/patches release-notes src .mavergreen/ingredients/patches
+mkdir -p patches overlays boot2docker/patches .mavergreen/release-notes src .mavergreen/ingredients/patches
 printf 'old\n'   > patches/old.patch
 printf 'keep\n'  > patches/keep.patch
 printf 'a\nb\nc\nd\ne\nf\ng\nh\n' > patches/moveme.patch
 printf 'int x;\n' > overlays/systray_darwin.m
 printf 'b2d\n'   > boot2docker/patches/kernel.config
-printf 'prose\n' > release-notes/1.0-mavericks.1.md
+printf 'prose\n' > .mavergreen/release-notes/1.0-mavericks.1.md
 printf 'code\n'  > src/main.go
 printf 'readme\n' > README.md
 printf 'patches/*.patch\n' > .mavergreen/ingredients/patches/watch
@@ -31,7 +31,7 @@ out="$(sh "$S" "")"
 [ -z "$out" ] || { echo "FAIL no-prev: expected nothing, got '$out'"; exit 1; }
 
 # spec: scripts/patch-notes.sh usage -- prose, ordinary source, and README are not our patches.
-printf 'more prose\n' >> release-notes/1.0-mavericks.1.md
+printf 'more prose\n' >> .mavergreen/release-notes/1.0-mavericks.1.md
 printf 'more\n' >> src/main.go
 printf 'more\n' >> README.md
 printf 'overlays/*\n' >> .mavergreen/ingredients/patches/watch

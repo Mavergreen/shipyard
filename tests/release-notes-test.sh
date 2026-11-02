@@ -12,10 +12,13 @@ here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/release-notes.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/release-notes.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
-mkrepo() {  # a product repo fixture: a git repo with a hook, a pin, and a repackage caller naming that pin. $1 = dir
-  mkdir -p "$1/.mavergreen/hooks" "$1/.mavergreen/ingredients/libressl" "$1/.github/workflows" "$1/release-notes"
+mkrepo() {  # a product repo fixture: a git repo with a hook, an ingredient, and a repackage caller. $1 = dir
+  mkdir -p "$1/.mavergreen/hooks" "$1/.mavergreen/ingredients/libressl" "$1/.github/workflows" "$1/.mavergreen/release-notes"
   ( cd "$1" && git init -q -b main . && git config user.email t@example.com && git config user.name tester )
-  printf '3.8.2\n' > "$1/.mavergreen/ingredients/libressl/VERSION"
+  printf '3.8.2\n%s\n' "$L2" > "$1/.mavergreen/ingredients/libressl/VERSION"
+  printf 'LibreSSL\n' > "$1/.mavergreen/ingredients/libressl/description"
+  printf 'linked\n' > "$1/.mavergreen/ingredients/libressl/role"
+  printf 'the TLS library\n' > "$1/.mavergreen/ingredients/libressl/why"
   cat > "$1/.github/workflows/repackage-on-ingredient-bump.yml" <<'YML'
 on:
   push:
@@ -30,21 +33,11 @@ jobs:
 YML
   printf '#!/bin/sh\nprintf "https://example.com/notes/%%s\\n" "$1"\n' > "$1/.mavergreen/hooks/upstream-release-notes-url"
   printf '9.9p2\n' > "$1/UPSTREAM_VERSION"
-  cat > "$1/.github/renovate.json" <<'JSON'
-{
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["/^.mavergreen/ingredients/libressl/VERSION$/"],
-      "matchStrings": ["^(?<currentValue>\\S+)\\s*$"],
-      "packageNameTemplate": "libressl/portable",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v(?<version>.+)$"
-    }
-  ]
-}
-JSON
   ( cd "$1" && git add -A && git commit -qm base )
+}
+L2='# renovate: datasource=github-releases depName=libressl/portable extractVersion=^v(?<version>.+)$'
+bump() {
+  printf '%s\n%s\n' "$2" "$L2" > "$1/.mavergreen/ingredients/libressl/VERSION"
 }
 
 gen() {  # $1 = repo, $2 = tag/version, rest = extra args
@@ -72,40 +65,24 @@ sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 9.9p2-mavericks.1 >/dev
 #       the baseline it moved from.
 r="$work/ing"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 )
-printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
+bump "$r" 3.9.2
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q 'rebuilt because build ingredients moved' "$r/OUT.md" || { echo "FAIL ing: kind"; cat "$r/OUT.md"; exit 1; }
 grep -q '3.8.2 -> 3.9.2' "$r/OUT.md" || { echo "FAIL ing: pin diff (the openssh pN bug)"; cat "$r/OUT.md"; exit 1; }
-grep -q '3.8.2 -> 3.9.2 (\[release notes\](https://github.com/libressl/portable/releases/tag/v3.9.2))$' "$r/OUT.md" \
+grep -qx -- '- \*\*libressl / VERSION\*\*: 3.8.2 -> 3.9.2 (\[release notes\](https://github.com/libressl/portable/releases/tag/v3.9.2))' "$r/OUT.md" \
   || { echo "FAIL ing: the moved pin must link its change notes"; cat "$r/OUT.md"; exit 1; }
+grep -qx -- '  LibreSSL' "$r/OUT.md" || { echo "FAIL ing: the description sits beside the bullet"; cat "$r/OUT.md"; exit 1; }
 
-# spec: SKILL.md "Release notes" -- a moved pin with no link source and no declared reason cannot
-#       ship: release-notes.sh's self-check is check-release-notes.sh, which refuses the bare bullet.
-#       A KEY a manager owns but cannot link (here a ^v? template, which cannot say which tag exists)
-#       is not this repo's diff to describe, so it is bare.
 r="$work/bare"; mkrepo "$r"
-cat > "$r/.github/renovate.json" <<'JSON'
-{"customManagers": [{"customType": "regex", "managerFilePatterns": ["/^.mavergreen/ingredients/libressl/VERSION$/"],
-  "matchStrings": ["VERSION=(?<currentValue>\\S+)"], "packageNameTemplate": "libressl/portable",
-  "datasourceTemplate": "github-tags", "extractVersionTemplate": "^v?(?<version>.+)$"}]}
-JSON
-printf 'VERSION=3.8.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
-( cd "$r" && git add -A && git commit -qm "no manager" && git tag 9.9p2-mavericks.1 )
-printf 'VERSION=3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
+printf '3.8.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
+printf 'a fixture with no notes\n' > "$r/.mavergreen/ingredients/libressl/untracked"
+( cd "$r" && git add -A && git commit -qm "untracked" && git tag 9.9p2-mavericks.1 )
+printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
-if out="$(gen "$r" 9.9p2-mavericks.2 2>&1)"; then echo "FAIL bare: a link-less moved pin must not ship"; cat "$r/OUT.md"; exit 1; fi
-printf '%s\n' "$out" | grep -q 'libressl' || { echo "FAIL bare: the complaint must name the pin: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'deviations/unlinked/' || { echo "FAIL bare: the complaint must name the fix: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'bug in release-notes.sh' \
-  && { echo "FAIL bare: a pin with no link source is this repo's to fix, not a generator bug: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'the fix is in this repo' \
-  || { echo "FAIL bare: the generator must say where the fix goes: $out"; exit 1; }
-deviation "$r" unlinked libressl .mavergreen/ingredients/libressl/VERSION:VERSION 'a fixture with no notes'
-( cd "$r" && git add -A && git commit -qm declare )
-gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL bare: a declared reason must let it ship"; exit 1; }
-grep -q '3.8.2 -> 3.9.2 (no change notes: a fixture with no notes)$' "$r/OUT.md" \
-  || { echo "FAIL bare: the declared reason must be in the bullet"; cat "$r/OUT.md"; exit 1; }
+gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL bare: an untracked ingredient with no REPO ships without a link"; exit 1; }
+grep -qx -- '- \*\*libressl / VERSION\*\*: 3.8.2 -> 3.9.2' "$r/OUT.md" \
+  || { echo "FAIL bare: the bullet has no link"; cat "$r/OUT.md"; exit 1; }
 grep -q '9.9p2-mavericks.1\.\{0,\}9.9p2-mavericks.2' "$r/OUT.md" \
   || grep -q 'compare/9.9p2-mavericks.1' "$r/OUT.md" || { echo "FAIL ing: compare link"; exit 1; }
 grep -q 'Upstream release notes' "$r/OUT.md" && { echo "FAIL ing: a repackage must not claim a new upstream"; exit 1; }
@@ -122,26 +99,47 @@ grep -q '### Build ingredients' "$r/OUT.md" && { echo "FAIL pkgonly: no pin move
 # spec: scripts/release-notes.sh -- committed prose must be slotted in verbatim, never
 #       rewritten.
 r="$work/prose"; mkrepo "$r"
-printf 'Hand-written paragraph.\n\n- a bullet a human wrote\n<!-- edited by a human -->\n' > "$r/release-notes/9.9p2-mavericks.1.md"
+printf 'Hand-written paragraph.\n\n- a bullet a human wrote\n<!-- edited by a human -->\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
 ( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
 gen "$r" 9.9p2-mavericks.1 >/dev/null
 grep -q 'Hand-written paragraph.' "$r/OUT.md" || { echo "FAIL prose: not included"; exit 1; }
 grep -q '^- a bullet a human wrote$' "$r/OUT.md" || { echo "FAIL prose: mangled"; exit 1; }
 grep -q '^### What changed$' "$r/OUT.md" || { echo "FAIL prose: generated sections dropped"; exit 1; }
 
+r="$work/prose-short"; mkrepo "$r"
+mkdir -p "$r/.mavergreen/release-notes/openssh" "$r/release-notes"
+printf 'Per-product prose.\n<!-- edited by a human -->\n' > "$r/.mavergreen/release-notes/openssh/9.9p2-mavericks.1.md"
+printf 'Repo-wide prose.\n<!-- edited by a human -->\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
+printf 'Legacy prose.\n<!-- edited by a human -->\n' > "$r/release-notes/9.9p2-mavericks.1.md"
+( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
+gen "$r" 9.9p2-mavericks.1 >/dev/null
+grep -q '^Per-product prose\.$' "$r/OUT.md" || { echo "FAIL prose-short: a product tagged separately reads release-notes/<short>/"; cat "$r/OUT.md"; exit 1; }
+grep -q 'Repo-wide prose' "$r/OUT.md" && { echo "FAIL prose-short: only the product's own prose"; cat "$r/OUT.md"; exit 1; }
+grep -q 'Legacy prose' "$r/OUT.md" && { echo "FAIL prose-short: a top-level release-notes/ is not read"; cat "$r/OUT.md"; exit 1; }
+
+r="$work/landing"; mkrepo "$r"
+( cd "$r" && git rm -rq .mavergreen && git commit -qm legacy && git tag 9.9p2-mavericks.1 \
+    && git checkout -q HEAD~1 -- .mavergreen && git commit -qm "the flag day" )
+bump "$r" 3.9.2
+( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL landing: the first release after the move ships"; exit 1; }
+want="$(printf '%s\n' '### Build ingredients' '' '- Ingredients moved to .mavergreen/; no per-pin changes listed for this release.')"
+[ "$(awk '/^### Build ingredients$/{n=3} n>0{print;n--}' "$r/OUT.md")" = "$want" ] \
+  || { echo "FAIL landing: one line under its heading"; cat "$r/OUT.md"; exit 1; }
+
 # spec: SKILL.md "Release notes" -- committed prose
 #       publishes only once a human has added the mark, and readers never see the mark.
 M='<!-- edited by a human -->'
-hp() {  # $1 = case, $2 = printf format of release-notes/9.9p2-mavericks.1.md; leaves $r and $rc
+hp() {  # $1 = case, $2 = printf format of .mavergreen/release-notes/9.9p2-mavericks.1.md; leaves $r and $rc
   r="$work/hp-$1"; mkrepo "$r"
-  printf "$2" > "$r/release-notes/9.9p2-mavericks.1.md"
+  printf "$2" > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
   ( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
   rc=0; gen "$r" 9.9p2-mavericks.1 >/dev/null 2>"$r/ERR" || rc=$?
 }
 hp unmarked 'Some prose.\n'
 [ "$rc" -ne 0 ] || { echo "FAIL unmarked prose is refused"; exit 1; }
 [ ! -e "$r/OUT.md" ] || { echo "FAIL unmarked prose is refused: --out was written"; exit 1; }
-grep -qF "$M" "$r/ERR" && grep -qF 'release-notes/9.9p2-mavericks.1.md' "$r/ERR" \
+grep -qF "$M" "$r/ERR" && grep -qF '.mavergreen/release-notes/9.9p2-mavericks.1.md' "$r/ERR" \
   || { echo "FAIL unmarked prose is refused: the complaint names the file and the line"; cat "$r/ERR"; exit 1; }
 hp marked "Some prose.\n$M\n"
 [ "$rc" -eq 0 ] || { echo "FAIL marked prose ships"; cat "$r/ERR"; exit 1; }
@@ -344,14 +342,6 @@ if gen "$r" 9.9p2-mavericks.1 >/dev/null 2>&1; then
   echo "FAIL nopins: a wired-up caller deriving zero pins should be fatal"; exit 1
 fi
 
-# spec: the path .github/workflows/repackage-on-ingredient-bump.yml is a convention, not a
-#       guarantee: a repo that scaffolded it as a placeholder (or disabled it) has NOT actually
-#       wired itself to repackage on ingredient bumps, even though the file exists there.
-#       Preferring it by existence alone reintroduces a false FATAL on an otherwise legitimate
-#       release -- a repo with a real libressl bump that this half-wired file was never watching
-#       must still ship as "packaging changes only", exactly as it did before the
-#       caller-discovery work started. A scaffolded/half-wired file at the CONVENTIONAL path must
-#       not be trusted by name alone.
 r="$work/unwired"; mkrepo "$r"
 cat > "$r/.github/workflows/repackage-on-ingredient-bump.yml" <<'YML'
 # placeholder -- not yet wired up
@@ -363,8 +353,8 @@ printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL unwired: a half-wired placeholder at the conventional path must not be fatal"; exit 1; }
-grep -q 'packaging changes only' "$r/OUT.md" \
-  || { echo "FAIL unwired: an unwired placeholder must not claim ingredients moved"; cat "$r/OUT.md"; exit 1; }
+grep -q 'rebuilt because build ingredients moved' "$r/OUT.md" \
+  || { echo "FAIL unwired: .mavergreen/ingredients/, not the caller, says what moved"; cat "$r/OUT.md"; exit 1; }
 
 # spec: release.yml sorts before repackage-on-ingredient-bump.yml in glob order, and a comment
 #       naming the caller (a plausible thing to write, e.g. documenting a dispatch trigger) must
@@ -694,7 +684,7 @@ grep -q '^- Changed `patches/fix.patch`$' "$r/OUT.md" || { echo "FAIL patchnewup
 # spec: scripts/patch-notes.sh -- committed prose under release-notes/ is not a modification of
 #       upstream.
 r="$work/patchprose"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 && printf 'Words.\n<!-- edited by a human -->\n' > release-notes/9.9p2-mavericks.2.md \
+( cd "$r" && git tag 9.9p2-mavericks.1 && printf 'Words.\n<!-- edited by a human -->\n' > .mavergreen/release-notes/9.9p2-mavericks.2.md \
     && git add -A && git commit -qm prose && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q '^- Repackage of upstream OpenSSH 9.9p2; packaging changes only\.$' "$r/OUT.md" \
@@ -785,45 +775,19 @@ grep -qx -- '- New release of Shipyard 1.0.209 (was 1.0.208)\.' "$r/OUT.md" \
 grep -qx -- '  \[Changes since v1.0.208\](https://github.com/Mavergreen/shipyard/compare/v1.0.208...v1.0.209)' "$r/OUT.md" \
   || { echo "FAIL r3v: link"; cat "$r/OUT.md"; exit 1; }
 
-# spec: SKILL.md "Release notes" -- a moved pin that is a whole file of this repo (our patch, a
-#       vendored CA bundle) is described by its own diff, so it links this repo's compare view. Its
-#       repo comes from GITHUB_REPOSITORY, else the registry; with neither, nothing is guessed, and the
-#       bullet needs a declared reason like any other.
 r="$work/r1d"; mkrepo "$r"
 mkdir -p "$r/patches" "$r/vendor"
 printf 'Subject: [PATCH] one\n' > "$r/patches/x.patch"; printf 'line one\n' > "$r/vendor/cacert.pem"
 printf 'patches/*.patch\nvendor/cacert.pem\n' > "$r/.mavergreen/ingredients/libressl/watch"
-cat > "$r/.github/workflows/repackage-on-ingredient-bump.yml" <<'YML'
-on:
-  push:
-    branches: [main]
-    paths:
-      - .mavergreen/ingredients/libressl/VERSION
-      - patches/x.patch
-      - vendor/cacert.pem
-jobs:
-  repackage:
-    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
-    with:
-      own-upstream-paths: UPSTREAM_VERSION
-YML
 ( cd "$r" && git add -A && git commit -qm pins && git tag 9.9p2-mavericks.1 )
 printf 'Subject: [PATCH] one\n+x\n' > "$r/patches/x.patch"; printf 'line one\nline two\n' > "$r/vendor/cacert.pem"
-( cd "$r" && git commit -qam "move our own pins" && git tag 9.9p2-mavericks.2 )
-gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL r1d: whole-file pins link the repo's own compare"; exit 1; }
-grep -q '^- \*\*x.patch\*\*: updated (.*) (\[diff\](https://github.com/Mavergreen/mavericks-openssh/compare/9.9p2-mavericks.1...9.9p2-mavericks.2))$' "$r/OUT.md" \
+( cd "$r" && git commit -qam "move watched files" && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL r1d: watched files ship"; exit 1; }
+grep -qx -- '- \*\*libressl / watch\*\*: `patches/x.patch` changed' "$r/OUT.md" \
   || { echo "FAIL r1d: patch"; cat "$r/OUT.md"; exit 1; }
-grep -q '^- \*\*vendor/cacert.pem\*\*: updated (.*) (\[diff\](https://github.com/Mavergreen/mavericks-openssh/compare/9.9p2-mavericks.1...9.9p2-mavericks.2))$' "$r/OUT.md" \
+grep -qx -- '- \*\*libressl / watch\*\*: `vendor/cacert.pem` changed' "$r/OUT.md" \
   || { echo "FAIL r1d: blob"; cat "$r/OUT.md"; exit 1; }
-( cd "$r" && env MAVERICKS_ROOT="$r" GITHUB_REPOSITORY= sh "$S" --tag 9.9p2-mavericks.2 --version 9.9p2-mavericks.2 \
-    --product OpenSSH --out "$r/OUT.md" ) >/dev/null || { echo "FAIL r1d: the registry names the repo"; exit 1; }
-grep -q '^- \*\*x.patch\*\*: .*(\[diff\](https://github.com/Mavergreen/openssh/compare/9.9p2-mavericks.1...9.9p2-mavericks.2))$' "$r/OUT.md" \
-  || { echo "FAIL r1d: registry"; cat "$r/OUT.md"; exit 1; }
-if out="$(cd "$r" && env MAVERICKS_ROOT="$r" GITHUB_REPOSITORY= sh "$S" --tag 9.9p2-mavericks.2 \
-    --version 9.9p2-mavericks.2 --product Unregistered --out "$r/OUT.md" 2>&1)"; then
-  echo "FAIL r1d: with no repo to name, a bare whole-file bullet is still a violation"; exit 1
-fi
-printf '%s\n' "$out" | grep -q 'deviations/unlinked/' || { echo "FAIL r1d: complaint: $out"; exit 1; }
+grep -q '### Our patches' "$r/OUT.md" && { echo "FAIL r1d: a watched patch is reported once, as its ingredient"; cat "$r/OUT.md"; exit 1; }
 
 # spec: scripts/release-notes.sh -- "First release" is a claim, so a self-upstream checkout that
 #       simply lacks its tags must not make it: YYYYMMDD.N with N > 1 says earlier releases exist, and
