@@ -12,7 +12,7 @@ It checks the top-level block only. It does not check that the publishing job de
 caller of a reusable workflow names permissions in several shapes, and a check would encode one of them.
 
 ## Deviating
-Write "- permissions-contents-read: <reason>", or scope it to ".github/workflows/release.yml". A good reason
-says why the default token must stay writable, and the exit.
+Write .mavergreen/deviations/permissions-contents-read/<label>/ with a scope (* for the repo, or .github/workflows/release.yml), a reason and a revisit. A good reason
+says why the default token must stay writable.
 
 New in the flag day (K6, hand-rolled in rust, longboat and rg)

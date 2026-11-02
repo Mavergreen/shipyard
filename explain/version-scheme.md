@@ -16,9 +16,9 @@ Today it is one scheme for every repo, so an own-upstream repo (porthole, shipya
 the names spec's check replaces it. It checks the spelling, not that N follows the previous release.
 
 ## Deviating
-Write "- version-scheme: <reason>" for the whole repo; the check passes no subject, so a glob would not
-match. A good reason names the version scheme the repo uses instead and why it has no upstream to suffix.
-shipyard's own entry says its version is <line>.<commit count>, cut on every push. Exit: the names spec's
+Write .mavergreen/deviations/version-scheme/<label>/ with scope *, for the whole repo (the check passes no subject, so a glob would not
+match), a reason and a revisit. A good reason names the version scheme the repo uses instead and why it has no upstream to suffix.
+shipyard's own says its version is <line>.<commit count>, cut on every push. Revisit: the names spec's
 scheme check.
 
 Formerly the conformance rule scheme

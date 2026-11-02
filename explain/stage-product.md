@@ -19,7 +19,7 @@ or "=" ("$(dirname "$0")"/stage_product.sh); and a call followed directly by ";"
 "$S/stage_product.sh"; fi). Give the call its own line, or a space before the separator.
 
 ## Deviating
-Write "- stage-product: <reason>", for the whole repo. A good reason says why the product cannot be staged
-by the helper, and the exit.
+Write .mavergreen/deviations/stage-product/<label>/ with scope *, for the whole repo, a reason and a revisit. A good reason says why the product cannot be staged
+by the helper.
 
 Formerly gate check 23

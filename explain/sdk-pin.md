@@ -23,11 +23,10 @@ on 10.9 records no version at all, since 10.9's clang writes none into a .o. An 
 SDK rule only; the guard still checks arches and imports.
 
 ## Deviating
-Write "- sdk-pin:<glob>: <reason>". The glob matches the payload path (or the path inside a shipped tarball)
+Write .mavergreen/deviations/sdk-pin/<label>/ with a scope (<glob>), a reason and a revisit. The glob matches the payload path (or the path inside a shipped tarball)
 and cannot contain a space (write "*") or a colon. Write it with a leading "*/", as in
-"- sdk-pin:*/lib/libswiftCore.dylib: <reason>", so one glob matches both the payload path and the staged
-path the guard sees; "*" spans "/". A bare "- sdk-pin: <reason>" excuses every file: use it only if that is
-what you mean. A good reason names a prebuilt third-party file or a build-only file never installed, and its
-exit.
+a scope of */lib/libswiftCore.dylib, so one glob matches both the payload path and the staged
+path the guard sees; "*" spans "/". A scope of * excuses every file: use it only if that is
+what you mean. A good reason names a prebuilt third-party file or a build-only file never installed.
 
 Formerly the conformance rule sdk-pin

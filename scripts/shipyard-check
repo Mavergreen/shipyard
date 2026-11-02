@@ -48,7 +48,7 @@ if [ "$list" -eq 1 ]; then
 fi
 
 if [ -n "$dist" ] && [ -z "${SHIPYARD_CHECK_VERSION:-}" ]; then
-  echo "shipyard-check: --dist needs SHIPYARD_CHECK_VERSION, the release's version (and SHIPYARD_CHECK_REPO, the repo whose INGREDIENTS.md declares deviations)" >&2
+  echo "shipyard-check: --dist needs SHIPYARD_CHECK_VERSION, the release's version (and SHIPYARD_CHECK_REPO, the repo whose .mavergreen/deviations/ declares them)" >&2
   exit 2
 fi
 if [ -n "$dist" ]; then

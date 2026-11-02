@@ -16,9 +16,9 @@ is feed-upgradeable's concern for the appcast, and a pkg that embeds the wrong v
 producer does not read is not seen.
 
 ## Deviating
-Write "- version:<file glob>: <reason>", scoped to the artifact's file name; an unscoped line excuses every
+Write .mavergreen/deviations/version/<label>/ with a scope (<file glob>), a reason and a revisit, scoped to the artifact's file name; a scope of * excuses every
 artifact. Scoping is the point: swift-toolchain republishing swift.org's pkg must not license the
 build-support tarball it does build to drift. A good reason says whose version the artifact carries and why
-it cannot match, with the exit.
+it cannot match.
 
 Formerly the conformance rule version

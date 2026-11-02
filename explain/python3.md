@@ -20,7 +20,7 @@ Stock 10.9 has Python 2 only, so on a bare 10.9 box these checks need the family
 this id goes when that lands.
 
 ## Deviating
-No deviation is read for this id, and the old "- python3:" line in INGREDIENTS.md is read by nothing: delete
+No deviation is read for this id, and a python3 deviation is read by nothing: delete
 it. Install python3 3.9 or newer, or set SHIPYARD_PYTHON3 to the interpreter to use.
 
 New in the flag day (P1; the gate used to skip these checks without it)

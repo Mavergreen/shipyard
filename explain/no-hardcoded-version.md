@@ -20,8 +20,8 @@ escape hatch for fixtures, was proposed and not done). It needs a .mavergreen/up
 dotted version (or at least five characters). A repo whose upstream is derived has no such file.
 
 ## Deviating
-Write "- no-hardcoded-version:<path>: <reason>". A good reason says why the file must name the version (a
-changelog that quotes it, say), and the exit; the usual answer is to read .mavergreen/upstream/VERSION
+Write .mavergreen/deviations/no-hardcoded-version/<label>/ with a scope (<path>), a reason and a revisit. A good reason says why the file must name the version (a
+changelog that quotes it, say); the usual answer is to read .mavergreen/upstream/VERSION
 instead.
 
 New in the flag day (K6, hand-rolled in gh and icu)

@@ -19,8 +19,8 @@ count. It checks where files land, not their contents. A file the OS dictates is
 outside list, so uninstall removes it; manifest holds that half.
 
 ## Deviating
-Write "- install-path:<installed path glob>: <reason>", for example "- install-path:Library/Extensions/*:
-10.9 loads third-party kexts only from here". The glob matches the path in the payload; "*" spans "/" and
-spaces. A good reason names the OS rule that forces the place, and the exit.
+Write .mavergreen/deviations/install-path/<label>/ with a scope (<installed path glob>), a reason and a revisit; for example a scope of Library/Extensions/*
+and the reason "10.9 loads third-party kexts only from here". The glob matches the path in the payload; "*" spans "/" and
+spaces. A good reason names the OS rule that forces the place.
 
 Formerly the conformance rule install-path

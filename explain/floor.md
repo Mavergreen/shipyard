@@ -16,7 +16,7 @@ install anything, so it cannot say that the product really runs at the stated fl
 guard's job and the on-target run's.
 
 ## Deviating
-Write "- floor:<pkg or appcast file glob>: <reason>". A good reason says what the artifact's real minimum is
-and why it differs from 10.9.5, and the exit. A floor below 10.9 (Snow Leopard, maybe Tiger) is a different decision.
+Write .mavergreen/deviations/floor/<label>/ with a scope (<pkg or appcast file glob>), a reason and a revisit. A good reason says what the artifact's real minimum is
+and why it differs from 10.9.5. A floor below 10.9 (Snow Leopard, maybe Tiger) is a different decision.
 
 Formerly the conformance rule floor

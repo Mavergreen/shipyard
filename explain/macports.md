@@ -14,8 +14,8 @@ check goes, and is declared as one. A port invoked behind a prefix other than su
 not seen.
 
 ## Deviating
-Write "- macports:<path>: <reason>. Revisit when <exit>." The exit names the family product or facility that
-replaces the use. shipyard's one entry says it names the prefix only to exclude it, and revisits if the
+Write .mavergreen/deviations/macports/<label>/ with a scope (<path>), a reason and a revisit. The revisit names the family product or facility that
+replaces the use. shipyard's one deviation says it names the prefix only to exclude it, and revisits if the
 exclusion list moves into a shared CMake module.
 
 New in the flag day (the maintainer, 2026-10-14: outside package managers are declared deviations)

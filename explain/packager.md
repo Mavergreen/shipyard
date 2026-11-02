@@ -15,7 +15,6 @@ a variable ("$PKGBUILD") is not seen. A path in scripts/conventions-grandfathere
 until its line is deleted.
 
 ## Deviating
-Write "- packager:<path>: <why it must, and its exit>". The path is one file; deviations.sh refuses a
-wildcard. A good reason names what still needs the system tool (an oracle comparison) and what retires it.
+Write .mavergreen/deviations/packager/<label>/ with a scope (<path>, one file; deviations.sh refuses a wildcard), a reason and a revisit. A good reason names what still needs the system tool (an oracle comparison) and the revisit what retires it.
 
 Formerly gate check 35

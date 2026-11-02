@@ -12,7 +12,6 @@ It compares names with the dist directory's assets, not with what GitHub actuall
 publish-release.yml regenerates SHA256SUMS over what it attaches.
 
 ## Deviating
-Write "- enclosure:<appcast file glob>: <reason>". A good reason says where the enclosure lives instead, and
-the exit.
+Write .mavergreen/deviations/enclosure/<label>/ with a scope (<appcast file glob>), a reason and a revisit. A good reason says where the enclosure lives instead.
 
 Formerly the conformance rule enclosure

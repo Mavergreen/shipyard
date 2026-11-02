@@ -15,8 +15,8 @@ covers. A runs-on built from another expression is read as text. A job in
 scripts/conventions-grandfathered for this repo is excused until its line is deleted.
 
 ## Deviating
-Write "- macos-runner:<workflow file>:<job>: <why it needs macOS, and its exit>" (ci.yml:build). The key
+Write .mavergreen/deviations/macos-runner/<label>/ with a scope (<workflow file>:<job>, as ci.yml:build), a reason (why it needs macOS) and a revisit. The scope
 names one job of one file, so a new build job in another workflow is still caught; deviations.sh refuses a
-wildcard. A good reason says what in the job needs macOS and what would let it move to Linux.
+wildcard. A good reason says what in the job needs macOS and the revisit what would let it move to Linux.
 
 Formerly gate check 36

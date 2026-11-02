@@ -20,7 +20,7 @@ capped, so a pkg with many offenders shows the first and a count. It checks the 
 payload and the registry; the helper's behaviour is tested separately.
 
 ## Deviating
-Write "- manifest:<pkg file glob>: <reason>". Rarely warranted: a hand-rolled pkg that cannot use
+Write .mavergreen/deviations/manifest/<label>/ with a scope (<pkg file glob>), a reason and a revisit. Rarely warranted: a hand-rolled pkg that cannot use
 stage_product.sh says why and when it will. The stage-product check is its repo-side companion.
 
 Formerly the conformance rule manifest

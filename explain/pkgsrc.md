@@ -15,7 +15,7 @@ A script that only names /opt/pkg to keep it out of CMake's search is a use as f
 tests/ tree is not scanned, so a fixture or a test may call it.
 
 ## Deviating
-Write "- pkgsrc:<path>: <reason>. Revisit when <exit>." The exit names the family product or facility that
+Write .mavergreen/deviations/pkgsrc/<label>/ with a scope (<path>), a reason and a revisit. The revisit names the family product or facility that
 replaces the use.
 
 New in the flag day (the maintainer, 2026-10-14: outside package managers are declared deviations)

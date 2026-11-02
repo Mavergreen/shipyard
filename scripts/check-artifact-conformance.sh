@@ -567,7 +567,7 @@ fi
   || echo "conformance: arm64: $arm_declared declared, $arm_undeclared undeclared non-updater arm64 files in pkgs"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact conformance" -- one C++
-#       runtime per process; '- cxxabi:<glob>: <reason>' excuses a path, and a path grandfathered as cxxabi
+#       runtime per process; a cxxabi deviation whose scope is a glob excuses a path, and a path grandfathered as cxxabi
 #       for this repo is warned.
 awk 'function add(list, v) { return index(" " list " ", " " v " ") ? list : (list == "" ? v : list " " v) }
      $1 == "cxxabi-defines" || $1 == "cxxabi-loads" {

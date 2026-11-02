@@ -16,7 +16,7 @@ It reads the order of the components in the Distribution. A product's preinstall
 payload lands, so it can use the helper only if one is already installed; this check does not see that.
 
 ## Deviating
-Write "- base:<pkg file glob>: <reason>". A good reason says why the pkg cannot carry the base, and the
-exit. Rarely warranted; build the archive with set_install_floor.sh.
+Write .mavergreen/deviations/base/<label>/ with a scope (<pkg file glob>), a reason and a revisit. A good reason says why the pkg cannot carry
+the base. Rarely warranted; build the archive with set_install_floor.sh.
 
 Formerly the conformance rule base

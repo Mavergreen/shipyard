@@ -16,10 +16,10 @@ It sees directories by name only. A copy kept under any other name (deps/, lib/)
 check that the exit has happened, only that one is written.
 
 ## Deviating
-Write "- vendored:<glob>: <reason>. Revisit when <exit>." shipyard's own: "vendored:scripts/vendor/yaml/**:
-PyYAML is vendored because python-315's phase 1 has no ssl, so pip cannot fetch it on 10.9 ... Revisit when
-python-315 ships ssl and pip works; then delete the vendored copy." Files that maintain the copy (the pin,
-checksum and sync script) are listed too, each saying it goes when the copy does. A good exit names the
+Write .mavergreen/deviations/vendored/<label>/ with a scope (<glob>), a reason and a revisit. shipyard's own has the scope scripts/vendor/yaml/** and the reason
+"PyYAML is vendored because python-315's phase 1 has no ssl, so pip cannot fetch it on 10.9", revisiting when
+python-315 ships ssl and pip works, when the vendored copy is deleted. Files that maintain the copy (the pin,
+checksum and sync script) are listed too, each saying it goes when the copy does. A good revisit names the
 condition that deletes the copy.
 
 New in the flag day (ruling R11)

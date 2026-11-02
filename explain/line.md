@@ -14,7 +14,7 @@ It derives the line from the registered repo and the version; it does not check 
 that the bare names are selected correctly, which the helper's tests cover.
 
 ## Deviating
-Write "- line:<pkg file glob>: <reason>". A good reason says why the version and the line differ (an
-upstream that renumbered), and the exit.
+Write .mavergreen/deviations/line/<label>/ with a scope (<pkg file glob>), a reason and a revisit. A good reason says why the version and the line differ (an
+upstream that renumbered).
 
 Formerly the conformance rule line

@@ -15,7 +15,7 @@ dpkg without -i, and dpkg-deb, are not matched. A command behind a prefix other 
 time is not seen.
 
 ## Deviating
-Write "- apt:<path>: <reason>. Revisit when <exit>." The exit names the family product or facility that
-replaces the use: shipyard's reads "Revisit when area 14's pinned LLVM tarball supplies the readers."
+Write .mavergreen/deviations/apt/<label>/ with a scope (<path>), a reason and a revisit. The revisit names the family product or facility that
+replaces the use: shipyard's reads "area 14's pinned LLVM tarball supplies the readers."
 
 New in the flag day (the maintainer, 2026-10-14: outside package managers are declared deviations)

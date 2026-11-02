@@ -18,7 +18,7 @@ with no release.yml it reports itself not run, as every rule that reads release.
 rules still run there.
 
 ## Deviating
-No deviation is read for this id; a "- release-concurrency:" line in INGREDIENTS.md excuses nothing.
+No deviation is read for this id; a .mavergreen/deviations/release-concurrency/ directory excuses nothing.
 Add the block instead:
 
   concurrency:

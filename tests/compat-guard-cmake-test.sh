@@ -3,7 +3,7 @@
 #   usage: compat-guard-cmake-test.sh
 #          mavericks_assert_binary_compatible() hands the guard MAVERICKS_DEVIATIONS_ROOT = the
 #          project's CMAKE_SOURCE_DIR. A POST_BUILD command runs in the build tree, so without it the
-#          guard would look there for INGREDIENTS.md and honour no sdk-pin:<glob> exemption at all.
+#          guard would look there for .mavergreen/deviations/ and honour no sdk-pin exemption at all.
 # platform: script mode (cmake -P) sets CMAKE_SOURCE_DIR to the working directory and cannot run
 #           add_custom_command, so the probe stands its own in to record what the module asks for --
 #           no compiler, no project, and it runs wherever cmake does.

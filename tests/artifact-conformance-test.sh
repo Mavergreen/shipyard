@@ -64,7 +64,7 @@ deviation sdk-pin:usr/local/go/src/* Go's own race-detector and testdata objects
 macho p.pkg usr/local/go/bin/go x86_64 EXECUTE 10.9 26.5 aa"
 
 # spec: SKILL.md "Family conventions" check 37 -- a pkg's arm64 slice is a declared deviation,
-#       '- arm64:<glob>: <reason>' matched against the install path; a Sparkle updater's slices are
+#       an arm64 deviation whose scope is a glob, matched against the install path; a Sparkle updater's slices are
 #       exempt, and a repo grandfathered as modern-smoke is warned rather than failed.
 T='macho golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go'
 U='sparkle golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
@@ -640,7 +640,7 @@ abort gen_appcast.sh --render-notes failed for RELEASE_NOTES.md' | sh "$S" 2>&1)
 printf '%s\n' "$_abort_out" | grep -qi 'render-notes failed for RELEASE_NOTES.md' \
   || { echo "FAIL: the checker should surface the abort reason; got: $_abort_out"; exit 1; }
 
-# spec: INGREDIENTS.md -- a deviation must not be able to switch this off. Deviations are
+# spec: SKILL.md "Conformance deviations" -- a deviation must not be able to switch this off. Deviations are
 #       emitted EARLY (before dist/ is walked) so they SURVIVE a truncation -- a product could
 #       otherwise declare its way out of the one check that notices every other check was
 #       skipped.

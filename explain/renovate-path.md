@@ -18,7 +18,7 @@ It lists the paths Renovate accepts (renovate.json, renovate.json5, .renovaterc,
 embedded in package.json is not one of them.
 
 ## Deviating
-Write "- renovate-path:<path>: <reason>" for the one path. A good reason says why the file cannot move
-(a tool that reads it from there), and its exit. Otherwise git mv it to .github/renovate.json.
+Write .mavergreen/deviations/renovate-path/<label>/ with a scope (<path>, the one path), a reason and a revisit. A good reason says why the file cannot move
+(a tool that reads it from there). Otherwise git mv it to .github/renovate.json.
 
 Formerly gate check 26

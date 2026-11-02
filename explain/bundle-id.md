@@ -13,8 +13,8 @@ Nested bundles are skipped on purpose. The identifier is read from the bundle's 
 producer expands the pkg; a bundle whose plist cannot be read fails in artifact-facts, not here.
 
 ## Deviating
-Write "- bundle-id:<the bundle's identifier>: <reason>", scoped to the identifier it excuses and not the pkg
-that ships it. The family's own example: "- bundle-id:as.acidanthera.*: upstream's kext, shipped unmodified
-under upstream's identity". A good reason says why the identity must stay upstream's, and the exit.
+Write .mavergreen/deviations/bundle-id/<label>/ with a scope (<the bundle's identifier>), a reason and a revisit, scoped to the identifier
+it excuses and not the pkg that ships it. The family's own example has the scope as.acidanthera.* and the reason
+"upstream's kext, shipped unmodified under upstream's identity". A good reason says why the identity must stay upstream's.
 
 Formerly the conformance rule bundle-id

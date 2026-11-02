@@ -20,8 +20,8 @@ cross build whose make runs an x86_64 host tool it compiled earlier. Those still
 rely on it alone.
 
 ## Deviating
-Write "- rosetta:<path>: <reason>". A good reason says what runs translated, why it cannot be native yet,
-what it covers if it is a test, and the exit. For a test, the exit is the x86_64 host it moves to when
+Write .mavergreen/deviations/rosetta/<label>/ with a scope (<path>), a reason and a revisit. A good reason says what runs translated, why it cannot be native yet,
+and what it covers if it is a test. For a test, the revisit is the x86_64 host it moves to when
 Rosetta goes (the 10.9 box or an Intel runner), never "made to skip without Rosetta". Revisit when the
 family-wide inventory is empty, or when macOS 28 ships, whichever comes first.
 

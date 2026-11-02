@@ -16,7 +16,7 @@ found in it: a locator reading $HOME/.local/share/cmake/... is not matched, and 
 locator there is never reported.
 
 ## Deviating
-Write "- registry-read:<path>: <reason>" for one tracked file. A good reason says why that file must read
-the registry (a historical document that quotes it, say), and when it stops: "Revisit when <condition>."
+Write .mavergreen/deviations/registry-read/<label>/ with a scope (<path>, one tracked file), a reason and a revisit. A good reason says why that file must read
+the registry (a historical document that quotes it, say), and the revisit says when it stops.
 
 Formerly gate check 16

@@ -7,7 +7,7 @@
 #          for us.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "shipyard: consume
 #       its facilities, never hand-roll them" -- we are our own upstream, consumed through a MOVING
-#       tag (@v1), so the version must change whenever the content does: UPSTREAM_VERSION once sat at
+#       tag (@v1), so the version must change whenever the content does: .mavergreen/upstream/VERSION once sat at
 #       1.0.5 while 13 commits each shipped to fifteen repos through @v1, every one claiming to be
 #       1.0.5.
 # spec: tests/shipyard-version-test.sh

@@ -16,8 +16,6 @@ Only keys present in two or more build-info files are compared, so a key one var
 a disagreement. It trusts what the build wrote down.
 
 ## Deviating
-Write "- variant-build-info: <reason>", for the whole release (the check passes no subject). The old name
-"ingredients" is still read. A good reason says which input legitimately differs between variants, and the
-exit.
+Write .mavergreen/deviations/variant-build-info/<label>/ with scope *, for the whole release (the check passes no subject), a reason and a revisit. A good reason says which input legitimately differs between variants.
 
 Formerly the conformance rule ingredients

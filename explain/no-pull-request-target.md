@@ -13,7 +13,7 @@ It looks for the word on a non-comment line of each workflow, so a mention in a 
 reads workflow files only.
 
 ## Deviating
-Write "- no-pull-request-target:<workflow path>: <reason>". A good reason says what the workflow does with the
-fork's code and how secrets stay out of reach, and the exit.
+Write .mavergreen/deviations/no-pull-request-target/<label>/ with a scope (<workflow path>), a reason and a revisit. A good reason says what the workflow does with the
+fork's code and how secrets stay out of reach.
 
 New in the flag day (K6, hand-rolled in rust, longboat and rg)

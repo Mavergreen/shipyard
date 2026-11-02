@@ -18,7 +18,7 @@ It reads the on: block as text. It accepts pull_request without a branches filte
 (repo-required-context holds that).
 
 ## Deviating
-Write "- pr-trigger: <reason>", or scope it with ".github/workflows/release.yml" as the glob. A good reason
-says why no pull request needs a build here, and the exit; the cleaner answer is "ignoreTests": true.
+Write .mavergreen/deviations/pr-trigger/<label>/ with a scope (* for the repo, or .github/workflows/release.yml as the glob), a reason and a revisit. A good reason
+says why no pull request needs a build here; the cleaner answer is "ignoreTests": true.
 
 New in the flag day (K6, hand-rolled in fd and rg)

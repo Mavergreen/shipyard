@@ -16,7 +16,7 @@ It asks whether a workflow mentions shipyard-check --dist on a non-comment line.
 job runs on a release, that SHIPYARD_CHECK_VERSION is set, or that the dist directory is the right one.
 
 ## Deviating
-Write "- artifact-checks-wired: <reason>", for the whole repo. A good reason says why no artifact check can
-apply (it builds a pkg only as a test fixture), and the exit.
+Write .mavergreen/deviations/artifact-checks-wired/<label>/ with scope *, for the whole repo, a reason (why no artifact check can
+apply: it builds a pkg only as a test fixture) and a revisit.
 
 Formerly gate check 21

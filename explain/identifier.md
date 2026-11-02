@@ -16,7 +16,7 @@ It reads the identifier recorded in each pkg and in its components. It cannot te
 under dev.mavergreen.* is registered to this product, which the manifest check holds.
 
 ## Deviating
-Write "- identifier:<pkg file glob>: <reason>". A good reason says whose identifier the pkg must keep (an
-upstream's, shipped unmodified) and the exit.
+Write .mavergreen/deviations/identifier/<label>/ with a scope (<pkg file glob>), a reason and a revisit. A good reason says whose identifier the pkg must keep (an
+upstream's, shipped unmodified).
 
 Formerly the conformance rule identifier

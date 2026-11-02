@@ -17,7 +17,6 @@ release-notes-generated hold. A notes file staged under a name the facts produce
 reported, not guessed at.
 
 ## Deviating
-Write "- notes:<appcast file glob>: <reason>". A good reason says why the appcast has other words, and the
-exit.
+Write .mavergreen/deviations/notes/<label>/ with a scope (<appcast file glob>), a reason and a revisit. A good reason says why the appcast has other words.
 
 Formerly the conformance rule notes

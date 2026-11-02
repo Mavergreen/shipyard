@@ -22,8 +22,8 @@ that a script parses, not that it behaves; it cannot see runtime differences. A 
 shells is planned so that Linux can measure, and the older floors' shells too.
 
 ## Deviating
-Write "- bash32-parse:<path>: <reason>. Revisit when <exit>." to excuse one script, or
-"- host:<os>: <reason>. Revisit when <exit>." for a host that cannot measure it (see the host id). A good
-reason says why the script must use a construct bash 3.2 refuses, and the exit.
+Write .mavergreen/deviations/bash32-parse/<label>/ with a scope (<path>, one script), a reason and a revisit to excuse one script, or
+a .mavergreen/deviations/host/<label>/ with a scope of <os> for a host that cannot measure it (see the host id). A good
+reason says why the script must use a construct bash 3.2 refuses.
 
 New in the flag day (filed 2026-10-14 from snow-leopard-vm)

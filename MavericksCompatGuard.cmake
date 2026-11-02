@@ -9,7 +9,7 @@ set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-s
 # exactly this configure's arches, that every slice records its arch's pinned minos and SDK
 # (scripts/sdk-pins.sh; SKILL.md "SDK pinning"), and that it is free of post-10.9 undefined
 # imports. Forwards these into the guard's env (baked at configure time):
-#   MAVERICKS_DEVIATIONS_ROOT         CMAKE_SOURCE_DIR, whose INGREDIENTS.md declares any sdk-pin:<glob>
+#   MAVERICKS_DEVIATIONS_ROOT         CMAKE_SOURCE_DIR, whose .mavergreen/deviations/sdk-pin/ declares any
 #                                     exemption (a POST_BUILD command runs in the build tree, where the
 #                                     guard's default -- the current directory -- has none)
 #   MAVERICKS_ALLOW_ARCHS             CMAKE_OSX_ARCHITECTURES, when set (the guard defaults to x86_64)

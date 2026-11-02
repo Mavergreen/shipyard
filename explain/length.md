@@ -13,7 +13,7 @@ It compares the length in the appcast to the size of the file in the dist. A pkg
 (a re-sign) breaks the match again; the check runs at package time.
 
 ## Deviating
-Write "- length:<appcast file glob>: <reason>". A good reason says why the length cannot match (a stand-in
-feed that describes nothing real), and the exit.
+Write .mavergreen/deviations/length/<label>/ with a scope (<appcast file glob>), a reason and a revisit. A good reason says why the length cannot match (a stand-in
+feed that describes nothing real).
 
 Formerly the conformance rule length

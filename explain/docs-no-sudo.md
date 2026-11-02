@@ -21,8 +21,8 @@ Scripts are scanned for the quoted argument of echo and printf and for heredoc b
 other way is not seen. The runtime policy for root (shipyard_root_policy, shipyard_sudo: elevate per step, refuse only a person's sudo <tool>) is a separate piece.
 
 ## Deviating
-Write "- docs-no-sudo:<path>: <reason, naming the exit>". A good reason says what root step no family
-command can do yet, or which tool has not adopted shipyard_root_begin, and when that ends. shipyard's own entry for
-README.md names the Engine's mavergreen install and uninstall as its exit.
+Write .mavergreen/deviations/docs-no-sudo/<label>/ with a scope (<path>), a reason and a revisit. A good reason says what root step no family
+command can do yet, or which tool has not adopted shipyard_root_begin, and the revisit says when that ends. shipyard's own deviation for
+README.md names the Engine's mavergreen install and uninstall as its revisit.
 
 New in the flag day (the maintainer's ruling via clang-22, 2026-10-14)

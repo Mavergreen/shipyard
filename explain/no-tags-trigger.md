@@ -15,7 +15,7 @@ It needs workflows that parse (workflow-yaml names the place) and python3. It re
 trigger written in a form the parser reads as something else is not caught.
 
 ## Deviating
-Write "- no-tags-trigger:<workflow path>: <reason>". A good reason says why the workflow is still tag-driven
-and when it moves to dispatch ("Revisit when <condition>.").
+Write .mavergreen/deviations/no-tags-trigger/<label>/ with a scope (<workflow path>), a reason and a revisit. A good reason says why the workflow is still tag-driven
+and the revisit says when it moves to dispatch.
 
 New in the flag day (K6, hand-rolled in recaulk, ca-certs and longboat)

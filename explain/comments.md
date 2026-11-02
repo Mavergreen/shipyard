@@ -9,7 +9,7 @@ must carry a locatable citation: a path, a filename with an extension, a YYYY-MM
 decision. An unrecognised tag fails, and the answer is to propose a new reason to the maintainer, never to
 invent a tag. The check verifies that a reason is cited, never that it is true.
 
-It is opt-in, by a repo-local comment-reasons file that lists one recognised tag per line, so adopting the
+It is opt-in, by a repo-local .mavergreen/config/comment-reasons file that lists one recognised tag per line, so adopting the
 check is a repo's own sweep and the moving @v1 does not redden fourteen consumers at once.
 
 ## Incident
@@ -21,7 +21,7 @@ stale-marker claim), each confidently wrong and each living in a comment (undate
 ## Limits
 Shebangs, machine directives, # usage: blocks and heredoc bodies are exempt, and so is an inline trailing
 comment, because finding a # reliably inside a shell line needs a parser. The usage-block exemption is the
-one nobody can police. It does not read a repo that has no comment-reasons file.
+one nobody can police. It does not read a repo that has no .mavergreen/config/comment-reasons file.
 
 ## Deviating
 Write .mavergreen/deviations/comments/<label>/ with a scope, a reason and a revisit. A scope of * switches

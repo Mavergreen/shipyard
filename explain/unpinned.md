@@ -18,7 +18,7 @@ newest-release URL without fetching it at build time. A fetch assembled from var
 seen, and the first hit per file is reported.
 
 ## Deviating
-Write "- unpinned:<path>: <why it must be the newest, and when to reconsider>". A good reason says what
+Write .mavergreen/deviations/unpinned/<label>/ with a scope (<path>), a reason (why it must be the newest) and a revisit (when to reconsider). A good reason says what
 the newest release is read for (an audit, a report) and that nothing is built or signed from it.
 
 Formerly gate check 28

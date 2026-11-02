@@ -17,7 +17,7 @@ a call needs a parser. Not seen: a bare subshell, a path (/usr/local/bin/cmake),
 anything behind a prefix command (sudo, env, command, xcrun, time). Configure time still catches each.
 
 ## Deviating
-Write "- shipyard-cmake-only:<path>: <reason>" for a file whose prose must quote the command. Better:
+Write .mavergreen/deviations/shipyard-cmake-only/<label>/ with a scope (<path>), a reason and a revisit, for a file whose prose must quote the command. Better:
 reword it as a # comment. A good reason says what the line is (a usage message) and that no cmake runs.
 
 Formerly gate check 18

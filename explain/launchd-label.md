@@ -15,7 +15,7 @@ It reads the plist's Label as the facts producer expands the payload. A job inst
 script rather than the payload is not seen.
 
 ## Deviating
-Write "- launchd-label:<the Label>: <reason>", scoped to the Label. A good reason says why the Label must be
-upstream's, and the exit.
+Write .mavergreen/deviations/launchd-label/<label>/ with a scope (<the Label>), a reason and a revisit, scoped to the Label. A good reason says why the Label must be
+upstream's.
 
 Formerly the conformance rule launchd-label

@@ -21,8 +21,8 @@ behind a wrapper other than sudo, env, command or time is not seen. A workflow t
 reported. Prose and comments do not trip it. The helper itself, shipyard_curl, is one shared fetcher that retries transient failures.
 
 ## Deviating
-Write "- bare-curl:<path>: <reason>. Revisit when <exit>." for one tracked file. A good reason says what the
+Write .mavergreen/deviations/bare-curl/<label>/ with a scope (<path>, one tracked file), a reason and a revisit. A good reason says what the
 script needs that shipyard_curl does not give (it probes the live HTTP status, or runs before the library can be
-sourced), and the exit is the change that lets it use shipyard_curl.
+sourced), and the revisit is the change that lets it use shipyard_curl.
 
 New in the flag day (the shared retrying fetcher, designed 2026-10-14 from rust-link-backfill)

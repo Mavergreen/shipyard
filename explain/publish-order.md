@@ -17,7 +17,7 @@ It orders mentions, not execution: a step in a job that runs earlier but is name
 out of order, and two steps in parallel jobs are not ordered at all. It checks only release.yml.
 
 ## Deviating
-Write "- publish-order: <reason>", or scope it to ".github/workflows/release.yml". A good reason says what
-runs in an order the rule forbids and why the appcast and Release still carry the same notes, and the exit.
+Write .mavergreen/deviations/publish-order/<label>/ with a scope (* for the repo, or .github/workflows/release.yml), a reason and a revisit. A good reason says what
+runs in an order the rule forbids and why the appcast and Release still carry the same notes.
 
 New in the flag day (K6, hand-rolled in fd and rg)

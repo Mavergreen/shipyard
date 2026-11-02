@@ -14,7 +14,7 @@ that does not parse is reported, not passed) and python3. A job that checks out 
 not seen.
 
 ## Deviating
-Write "- checkout-drops-credentials: <reason>", or scope it to ".github/workflows/release.yml". A good reason
-names the step that needs the token (a push back to the repo) and the exit.
+Write .mavergreen/deviations/checkout-drops-credentials/<label>/ with a scope (* for the repo, or .github/workflows/release.yml), a reason and a revisit. A good reason
+names the step that needs the token (a push back to the repo).
 
 New in the flag day (K6, hand-rolled in rust, longboat and rg)

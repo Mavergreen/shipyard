@@ -15,7 +15,7 @@ settings are compatible with the preset. If the file cannot be parsed, renovate-
 this one stays silent.
 
 ## Deviating
-Write "- renovate-extends-preset: <reason>", or scope it to ".github/renovate.json". A good reason says why
-the repo cannot take the preset's defaults, and the exit.
+Write .mavergreen/deviations/renovate-extends-preset/<label>/ with a scope (* for the repo, or .github/renovate.json), a reason and a revisit. A good reason says why
+the repo cannot take the preset's defaults.
 
 New in the flag day (K6, hand-rolled in ca-certs, ed25519 and recaulk)

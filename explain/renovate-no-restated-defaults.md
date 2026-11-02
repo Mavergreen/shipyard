@@ -16,6 +16,6 @@ and it does not compare packageRules or managers to the preset's. A restated val
 
 ## Deviating
 No deviation is read for this id. Delete the key, or set it to a different value if that is the decision.
-The repo that has no build gates sets "ignoreTests": true and explains why in its INGREDIENTS.md.
+The repo that has no build gates sets "ignoreTests": true.
 
 Formerly gate check 4

@@ -13,7 +13,7 @@ It reads the URL's path for the tag; it does not fetch it. A feed that only carr
 meaningful URL to compare.
 
 ## Deviating
-Write "- enclosure-url:<appcast file glob>: <reason>". A good reason says why the URL is not this
-release's, and the exit.
+Write .mavergreen/deviations/enclosure-url/<label>/ with a scope (<appcast file glob>), a reason and a revisit. A good reason says why the URL is not this
+release's.
 
 Formerly the conformance rule enclosure-url

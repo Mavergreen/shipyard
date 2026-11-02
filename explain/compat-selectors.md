@@ -18,8 +18,7 @@ selector counts. A proposal reads only __TEXT,__objc_methname, so that a binary 
 section has sent no selectors, keeping the reader fail-closed.
 
 ## Deviating
-A "- compat-selectors:<glob>: <reason>. Revisit when <exit>." line in
-INGREDIENTS.md excuses this id for the binaries whose path the glob matches: under shipyard-check --dist, the
+A deviations/compat-selectors/<label>/ with a scope (<glob>), a reason and a revisit excuses this id for the binaries whose path the glob matches: under shipyard-check --dist, the
 path inside the pkg or tarball (usr/local/mavergreen/<product>/...). That is how one binary in a dist keeps
 the allowance its CMake target passes in a knob, since --dist applies one environment to every binary. Add the selector to
 MAVERICKS_ALLOW_SELECTORS, or excuse the binary, only if the code guards it with -respondsToSelector:. A false positive from non-Objective-C data is that proposal's to fix, not an allowance's.

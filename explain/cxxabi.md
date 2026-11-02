@@ -18,7 +18,7 @@ counted. A path in scripts/conventions-grandfathered for this repo, known from $
 warned rather than failed.
 
 ## Deviating
-Write "- cxxabi:<install-path glob>: <reason>; exit: <how it goes away>". The failure prints the line for
-its path. deviations.sh refuses a bare form and a glob of only *, ? and /.
+Write .mavergreen/deviations/cxxabi/<label>/ with a scope (<install-path glob>), a reason and a revisit (how it goes away). The failure prints the
+deviation for its path. deviations.sh refuses a glob of only *, ? and /.
 
 Formerly conformance's cxxabi rule

@@ -28,11 +28,8 @@ on:
 jobs:
   repackage:
     uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
-    with:
-      own-upstream-paths: UPSTREAM_VERSION
 YML
   printf '#!/bin/sh\nprintf "https://example.com/notes/%%s\\n" "$1"\n' > "$1/.mavergreen/hooks/upstream-release-notes-url"
-  printf '9.9p2\n' > "$1/UPSTREAM_VERSION"
   ( cd "$1" && git add -A && git commit -qm base )
 }
 L2='# renovate: datasource=github-releases depName=libressl/portable extractVersion=^v(?<version>.+)$'
@@ -439,8 +436,6 @@ jobs:
   repackage:
     uses: >-
       Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
-    with:
-      own-upstream-paths: UPSTREAM_VERSION
 YML
 ( cd "$r" && git add -A && git commit -qm "folded-scalar caller" && git tag 9.9p2-mavericks.1 )
 printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"

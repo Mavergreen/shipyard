@@ -17,8 +17,8 @@ time is not seen. It names a prefix only as text, so a script that merely exclud
 search path is a use, and declared as one.
 
 ## Deviating
-Write "- brew:<path>: <reason>. Revisit when <exit>." The exit names the family product or facility that
-replaces the use: shipyard's own reads "Revisit when every job that runs the compat guard has clang22
-installed (vision area 14)." A reason that only says the tool is convenient is not an exit.
+Write .mavergreen/deviations/brew/<label>/ with a scope (<path>), a reason and a revisit. The revisit names the family product or facility that
+replaces the use: shipyard's own reads "every job that runs the compat guard has clang22
+installed (vision area 14)." A reason that only says the tool is convenient is not a revisit.
 
 New in the flag day (the maintainer, 2026-10-14: outside package managers are declared deviations)

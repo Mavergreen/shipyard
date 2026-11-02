@@ -19,6 +19,6 @@ assertion runs in a job that builds. Whether the tree stayed clean is the tree-c
 
 ## Deviating
 No deviation is read for this id. Wire both calls. In-tree writes a build genuinely needs are declared in
-the tracked .mavericks-intree allowlist, which is the tree-clean id's business.
+the tracked .mavergreen/intree allowlist, which is the tree-clean id's business.
 
 Formerly gate check 19

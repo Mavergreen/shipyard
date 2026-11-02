@@ -25,7 +25,7 @@ reports at the level of paths. It warns, with exit 0, when an allowlist entry na
 VERSION nor dist/.
 
 ## Deviating
-No deviation is read from INGREDIENTS.md. In-tree writes a repo genuinely needs go in a tracked .mavericks-intree
+No deviation is read from .mavergreen/deviations/. In-tree writes a repo genuinely needs go in a tracked .mavergreen/intree
 file: one entry per line, everything after "#" a comment where the reason belongs. An untracked allowlist is
 ignored, with a warning, because one a build step wrote for itself is not reviewed. An entry ending in "/" is
 a prefix and exempts the whole subtree; an entry without the slash is an exact path, so a directory written

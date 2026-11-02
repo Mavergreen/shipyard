@@ -23,8 +23,7 @@ catches "does not exist", not "exists but is unavailable here". It reads the x86
 not check where a binary's load commands point, so a binary that loads host libraries (a pkgsrc liblzma) passed.
 
 ## Deviating
-A "- compat-imports:<glob>: <reason>. Revisit when <exit>." line in
-INGREDIENTS.md excuses this id for the binaries whose path the glob matches: under shipyard-check --dist, the
+A deviations/compat-imports/<label>/ with a scope (<glob>), a reason and a revisit excuses this id for the binaries whose path the glob matches: under shipyard-check --dist, the
 path inside the pkg or tarball (usr/local/mavergreen/<product>/...). That is how one binary in a dist keeps
 the allowance its CMake target passes in a knob, since --dist applies one environment to every binary. The knobs are per-build
 environment variables (MAVERICKS_POST_10_9_SYMBOLS, MAVERICKS_ALLOW_GUARDED_WEAK) that

@@ -17,7 +17,7 @@ It compares URLs and names; it does not fetch the feed, so a feed that exists bu
 seen until feed-upgradeable and update-trusted at publish time. A Sparkle updater retires with the Engine.
 
 ## Deviating
-Write "- feed:<pkg or feed file glob>: <reason>". A good reason says why this product's feed is not the
-derived one, and the exit.
+Write .mavergreen/deviations/feed/<label>/ with a scope (<pkg or feed file glob>), a reason and a revisit. A good reason says why this product's feed is not the
+derived one.
 
 Formerly the conformance rule feed

@@ -18,8 +18,7 @@ workflow, since publish can only need jobs in its own workflow. It reads that th
 publish, not what it tests in the guest. A workflow that does not parse is workflow-yaml's.
 
 ## Deviating
-Write "- on-target: <reason>" (unscoped) where no 10.9 acceptance job exists yet; a good reason says why
-and its exit. A scoped "- on-target:<part>: <reason>" names one gap in the job's coverage (a GUI session,
-a nested VM) and exempts nothing; <part> is one word, and deviations.sh refuses a glob there.
+Write .mavergreen/deviations/on-target/<label>/ with scope * where no 10.9 acceptance job exists yet, a reason (why) and a revisit. A scope of one word, <part>,
+names one gap in the job's coverage (a GUI session, a nested VM) and exempts nothing; deviations.sh refuses a glob there.
 
 Formerly gate check 29
