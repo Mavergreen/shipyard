@@ -91,8 +91,7 @@ linux_release() {
   pin="$BATS_TEST_DIRNAME/../.mavergreen/ingredients/stevedore/VERSION"
   sed -n 1p "$pin" | grep -qE '^[0-9]{8}\.[0-9]+$'
   sed -n 2p "$pin" | grep -qF '# renovate: datasource=github-releases depName=Mavergreen/stevedore '
-  renovate="$BATS_TEST_DIRNAME/../.github/renovate.json"
-  grep -qF '/^\\.mavergreen/ingredients/stevedore/VERSION$/' "$renovate"
+  grep -qF '"/^\\.mavergreen\\/ingredients\\/[^/]+\\/(VERSION|PIN|COMMIT)$/"' "$BATS_TEST_DIRNAME/../default.json"
 }
 
 @test "as root the default cache is root's own home, not the caller's HOME" {

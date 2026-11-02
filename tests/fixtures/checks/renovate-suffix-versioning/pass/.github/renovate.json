@@ -1,1 +1,0 @@
-{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^build\\.sh$/"],"matchStrings":["TOOLCHAIN_REF=\"(?<currentValue>[^\"]+)\""],"depNameTemplate":"Mavergreen/swift-toolchain","datasourceTemplate":"github-releases","versioningTemplate":"regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"}]}

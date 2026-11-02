@@ -640,8 +640,8 @@ printf '%s\n' "$out" | grep -qx -- '- \*\*libressl\*\*: 3.8.2 -> 3.9.2 (\[releas
   || { echo "FAIL R1b: the prefix extractVersionTemplate strips must be put back, and an owner/repo depName names the repo: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*zstd\*\*: 1.5.6 -> 1.5.7 (\[changes\](https://github.com/facebook/zstd/compare/v1.5.6...v1.5.7))' \
   || { echo "FAIL R1b: a github-tags manager must compare the two tags: $out"; exit 1; }
-printf '%s\n' "$out" | grep -qx -- '- \*\*recaulk\*\*: 20260901.1 -> 20260915.2 (\[release notes\](https://github.com/Mavergreen/recaulk/releases/tag/20260915.2))' \
-  || { echo "FAIL R1b: a pin only shipyard's preset owns must still be linked: $out"; exit 1; }
+printf '%s\n' "$out" | grep -qx -- '- \*\*recaulk\*\*: 20260901.1 -> 20260915.2' \
+  || { echo "FAIL R1b: the preset no longer tracks components/recaulk/version, so its pin is listed with no link: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx -- '- \*\*xz / TAG\*\*: v5.8.3 -> v5.8.4 (\[release notes\](https://github.com/tukaani-project/xz/releases/tag/v5.8.4))' \
   || { echo "FAIL R1b: github-release-attachments is a GitHub release too: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q -- '^- \*\*xz / SHA256\*\*: .*](http' \

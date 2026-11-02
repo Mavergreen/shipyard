@@ -40,5 +40,5 @@ chk_python3() {
 chk_py() {
   _py_script="$1"; shift
   _py_bin="$(chk_python3)" || return 1
-  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SHIPYARD_SCRIPTS/vendor${PYTHONPATH:+:$PYTHONPATH}" "$_py_bin" "$_py_script" "$@"
+  PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$SHIPYARD_SCRIPTS/vendor:$SHIPYARD_SCRIPTS/lib${PYTHONPATH:+:$PYTHONPATH}" "$_py_bin" "$_py_script" "$@"
 }

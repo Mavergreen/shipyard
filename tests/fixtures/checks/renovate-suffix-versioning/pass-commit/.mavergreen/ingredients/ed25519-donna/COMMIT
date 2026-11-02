@@ -1,0 +1,2 @@
+0123456789abcdef0123456789abcdef01234567
+# renovate: datasource=git-refs depName=https://github.com/floodyberry/ed25519-donna

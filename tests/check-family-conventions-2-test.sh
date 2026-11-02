@@ -68,40 +68,31 @@ sa_refused "$work/sa6" "a second call without --feed-dir"
 #       compare equal and the bot proposes nothing: swift-runtime's swift-toolchain pin sat at
 #       6.3.3-mavericks.1 while .4 shipped, with a manager wired and green.
 MMVER='regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavericks\.(?<build>\d+)$'
-mkrepo "$work/mv"   # swift-runtime's shape: an inline pin in a shared file, default versioning
-printf 'TOOLCHAIN_REF="6.3.3-mavericks.1"\n' > "$work/mv/build.sh"
-printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^build\\.sh$/"],"matchStrings":["TOOLCHAIN_REF=\"(?<currentValue>[^\"]+)\""],"depNameTemplate":"Mavergreen/swift-toolchain","datasourceTemplate":"github-releases"}]}' \
-  > "$work/mv/.github/renovate.json"
+mkrepo "$work/mv"
+printf '6.3.3-mavericks.1\n# renovate: datasource=github-releases depName=Mavergreen/swift-toolchain\n' > "$work/mv/.mavergreen/upstream/VERSION"
 (cd "$work/mv" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/mv" && sh "$S" 2>&1)"; then echo "FAIL a -mavericks.N pin with default versioning should fail"; exit 1; fi
 first_is "$out" renovate-suffix-versioning || { echo "FAIL should be a renovate-suffix-versioning failure: $out"; exit 1; }
-# spec: with the family's versioning regex (container-tools/tailscale tracking golang), it must
-#       pass.
-chk_py /dev/stdin "$work/mv/.github/renovate.json" "$MMVER" <<'PY'
-import json, sys
-p = sys.argv[1]; c = json.load(open(p))
-c["customManagers"][0]["versioningTemplate"] = sys.argv[2]
-json.dump(c, open(p, "w"))
-PY
+printf '%s\n' "$out" | grep -q 'Mavergreen/swift-toolchain = 6.3.3-mavericks.1 (.mavergreen/upstream/VERSION)' || { echo "FAIL the failure names the dependency, its pin and its file: $out"; exit 1; }
+printf '6.3.3-mavericks.1\n# renovate: datasource=github-releases depName=Mavergreen/swift-toolchain versioning=%s\n' "$MMVER" > "$work/mv/.mavergreen/upstream/VERSION"
 (cd "$work/mv" && git add -A) >/dev/null 2>&1
 (cd "$work/mv" && sh "$S" >/dev/null) || { echo "FAIL a -mavericks.N pin with the family versioning should pass"; exit 1; }
-# spec: scripts/check-family-conventions.sh -- but a regex that matches the version without capturing N is the same bug, spelled
-#       differently.
 mkrepo "$work/mv2"
-printf '6.3.3-mavericks.1\n' > "$work/mv2/components-version"
-printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^components-version$/"],"matchStrings":["^(?<currentValue>.+?)\\s*$"],"depNameTemplate":"x","datasourceTemplate":"github-releases","versioningTemplate":"regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)"}]}' \
-  > "$work/mv2/.github/renovate.json"
+mkdir -p "$work/mv2/.mavergreen/ingredients/x"
+printf 'v6.3.3-mavericks.1@%s\n# renovate: datasource=git-tags depName=https://example.com/x versioning=regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\n' 0123456789abcdef0123456789abcdef01234567 > "$work/mv2/.mavergreen/ingredients/x/PIN"
 (cd "$work/mv2" && git add -A) >/dev/null 2>&1
-if out="$(cd "$work/mv2" && sh "$S" 2>&1)"; then echo "FAIL versioning that ignores N should fail"; exit 1; fi
+if out="$(cd "$work/mv2" && sh "$S" 2>&1)"; then echo "FAIL versioning that ignores N should fail, on a PIN's ref too"; exit 1; fi
 first_is "$out" renovate-suffix-versioning || { echo "FAIL should be a renovate-suffix-versioning failure: $out"; exit 1; }
-# spec: scripts/check-family-conventions.sh -- and a pin that is NOT a -mavericks.N release needs nothing (openssh's own upstream, tag
-#       form).
 mkrepo "$work/mv3"
-printf 'V_9_9_P2\n' > "$work/mv3/components-version"
-printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^components-version$/"],"matchStrings":["^(?<currentValue>V_[0-9_P]+)\\s*$"],"depNameTemplate":"openssh/openssh-portable","datasourceTemplate":"github-tags"}]}' \
-  > "$work/mv3/.github/renovate.json"
+printf 'V_9_9_P2\n# renovate: datasource=github-tags depName=openssh/openssh-portable\n' > "$work/mv3/.mavergreen/upstream/VERSION"
 (cd "$work/mv3" && git add -A) >/dev/null 2>&1
 (cd "$work/mv3" && sh "$S" >/dev/null) || { echo "FAIL a non-mavericks pin should pass"; exit 1; }
+mkrepo "$work/mv4"
+printf '6.3.3-mavericks.1\n# renovate: datasource=github-releases versioning=%s depName=Mavergreen/swift-toolchain\n' "$MMVER" > "$work/mv4/.mavergreen/upstream/VERSION"
+(cd "$work/mv4" && git add -A) >/dev/null 2>&1
+if out="$(cd "$work/mv4" && sh "$S" 2>&1)"; then echo "FAIL a line 2 the preset's manager cannot read should fail"; exit 1; fi
+first_is "$out" renovate-suffix-versioning || { echo "FAIL should be a renovate-suffix-versioning failure: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'cannot read line 2 of .mavergreen/upstream/VERSION' || { echo "FAIL the failure names the file whose line 2 is unreadable: $out"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 14 -- the release body comes from the shared
 #       generator, and every consumer reads that same file. Before Plan 2 six products published

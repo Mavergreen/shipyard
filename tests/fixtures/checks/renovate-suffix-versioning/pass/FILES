@@ -3,6 +3,8 @@
 .gitignore
 INGREDIENTS.md
 UPSTREAM_VERSION
-build.sh
 .mavergreen/hooks/upstream-release-notes-url
+.mavergreen/upstream/VERSION
+.mavergreen/upstream/description
 tests/a-test.sh
+.mavergreen/ingredients/swift-toolchain/VERSION

@@ -6,7 +6,7 @@
     "Provides config:recommended + automerge. shipyard is a versioned GitHub Action: consumers pin",
     "'uses: Mavergreen/shipyard/...@v1' and Renovate's native github-actions manager tracks it",
     "-- no custom manager needed for it.",
-    "This preset also tracks Recaulk releases for every consumer's components/recaulk/version (github-releases on Mavergreen/recaulk); consumers add no manager of their own.",
+    "This preset tracks every pin in a consumer's .mavergreen/: one manager reads line 1 of the upstream's and each ingredient's VERSION, PIN or COMMIT, and takes what it tracks from line 2, '# renovate: datasource=... depName=...[ versioning=...][ extractVersion=...]'; consumers add no manager of their own.",
     "AUTOMERGE POLICY: if it builds and passes, it ships -- patch, minor AND major alike. ignoreTests",
     "is false, so a green build is the gate, and a consumer must produce a CI status check on Renovate",
     "PRs (a pull_request-triggered build, or push: branches ['**']). A repo with NO build to gate sets",
@@ -26,26 +26,14 @@
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/^components/recaulk/version$/"
+        "/^\\.mavergreen\\/upstream\\/(VERSION|COMMIT|PIN)$/",
+        "/^\\.mavergreen\\/ingredients\\/[^/]+\\/(VERSION|PIN|COMMIT)$/"
       ],
       "matchStrings": [
-        "^(?<currentValue>\\S+)\\s*$"
-      ],
-      "depNameTemplate": "recaulk",
-      "packageNameTemplate": "Mavergreen/recaulk",
-      "datasourceTemplate": "github-releases",
-      "versioningTemplate": "regex:^(?<major>\\d{8})\\.(?<minor>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "managerFilePatterns": [
-        "/^\\.mavergreen/ingredients/pyyaml/VERSION$/"
-      ],
-      "matchStrings": [
-        "^(?<currentValue>\\S+)"
-      ],
-      "depNameTemplate": "PyYAML",
-      "datasourceTemplate": "pypi"
+        "^(?<currentValue>[0-9a-f]{1,39}|[0-9a-f]{41,}|[^@\\s]*[^0-9a-f@\\s][^@\\s]*)\\n# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?[ \\t]*(?:\\n|$)",
+        "^(?<currentValue>[^@\\s]+)@(?<currentDigest>[0-9a-f]{40})\\n# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?[ \\t]*(?:\\n|$)",
+        "^(?<currentDigest>[0-9a-f]{40})\\n# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?(?: extractVersion=(?<extractVersion>\\S+))?[ \\t]*(?:\\n|$)"
+      ]
     }
   ],
   "packageRules": [

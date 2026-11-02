@@ -1,0 +1,20 @@
+name: stuck-bumps
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stuck-bumps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Family bumps open longer than a week
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh scripts/stuck-bumps.sh

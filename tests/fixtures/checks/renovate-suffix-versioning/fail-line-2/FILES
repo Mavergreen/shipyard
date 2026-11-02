@@ -4,5 +4,7 @@
 INGREDIENTS.md
 UPSTREAM_VERSION
 .mavergreen/hooks/upstream-release-notes-url
+.mavergreen/upstream/VERSION
+.mavergreen/upstream/description
 tests/a-test.sh
 .mavergreen/ingredients/swift-toolchain/VERSION

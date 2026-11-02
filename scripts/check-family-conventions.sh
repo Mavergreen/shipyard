@@ -360,80 +360,55 @@ if [ -n "$_bad12" ]; then
     "sh \"\$SHIPYARD_SCRIPTS/sign_and_appcast.sh\" --product <short> --feed-dir dist ... as one command (continue it with a trailing \\), with no > after it"
 fi
 
-# spec: SKILL.md "Family conventions" check 13 -- a Renovate manager whose captured pin ends in
-#       -mavericks.N needs regex versioning that compares N; default versioning coerces it away and
-#       every repackage compares equal (swift-runtime missed three releases this way).
+# spec: SKILL.md "Family conventions" check 13 -- a pin whose line 1 ends in -mavericks.N needs a
+#       line-2 regex versioning that compares N; default versioning coerces it away and every
+#       repackage compares equal (swift-runtime missed three releases this way).
 chk_ran renovate-suffix-versioning
-if [ -f .github/renovate.json ] && [ "$HAVE_TRACKED" -eq 1 ] && [ "$RJ_OK" -eq 1 ]; then
+if [ "$HAVE_TRACKED" -eq 1 ] && [ "$PY_OK" -eq 1 ]; then
   rc=0
-  chk_py /dev/stdin .github/renovate.json "$TF" > "$tmp/suffix" <<'PY' || rc=$?
-import fnmatch, json, re, sys
-def js(rx):  # Renovate regexes are JS, compiled with g alone: (?<name>...) is Python's (?P<name>...), and $ is the end of the file
-    out, i, cls = [], 0, False
-    while i < len(rx):
-        c = rx[i]
-        if c == '\\':
-            out.append(rx[i:i + 2]); i += 2; continue
-        if cls:
-            cls = c != ']'
-        elif c == '[':
-            cls = True
-        elif c == '$':
-            c = r'\Z'
-        elif rx.startswith('(?<', i) and rx[i + 3:i + 4] not in ('=', '!'):
-            c = '(?P<'; i += 2
-        out.append(c); i += 1
-    return ''.join(out)
-def matcher(pat):
-    m = re.fullmatch(r'/(.*)/([a-z]*)', pat)
-    if m:
-        rx = re.compile(js(m.group(1)), re.I if 'i' in m.group(2) else 0)
-        return lambda f: rx.search(f) is not None
-    return lambda f: fnmatch.fnmatch(f, pat)
-# What Renovate sees is what is committed: the tracked list is the second argument
-files = [f for f in open(sys.argv[2]).read().split('\n') if f]
-compared = {'major', 'minor', 'patch', 'build', 'revision'}  # 'prerelease' marks a version unstable
-bad = []
-for mgr in json.load(open(sys.argv[1])).get('customManagers', []):
-    if mgr.get('customType') != 'regex':
+  chk_py /dev/stdin "$TF" > "$tmp/suffix" <<'PY' || rc=$?
+import re, sys
+from renovate_regex import LINE2, js
+pin = re.compile(r'\.mavergreen/(upstream|ingredients/[^/]+)/(VERSION|PIN|COMMIT)')
+compared = {'major', 'minor', 'patch', 'build', 'revision'}
+for f in open(sys.argv[1]).read().split('\n'):
+    if not pin.fullmatch(f):
         continue
-    pats = [matcher(p) for p in mgr.get('managerFilePatterns', [])]
-    vt = mgr.get('versioningTemplate') or ''
-    for f in (f for f in files if any(p(f) for p in pats)):
-        try:
-            text = open(f, encoding='utf-8', errors='replace').read()
-        except OSError:
-            continue
-        hits = 0
-        for ms in mgr.get('matchStrings', []):
-            for m in re.finditer(js(ms), text):
-                hits += 1
-                cv = (m.groupdict().get('currentValue') or '').strip()
-                n = re.search(r'-mavericks\.(\d+)$', cv)
-                if not n:
-                    continue
-                vm = re.match(js(vt[len('regex:'):]), cv) if vt.startswith('regex:') else None
-                if vm and any(k in compared and v == n.group(1) for k, v in vm.groupdict().items()):
-                    continue
-                dep = mgr.get('depNameTemplate') or (m.groupdict().get('depName')) or mgr.get('packageNameTemplate') or '(unnamed)'
-                bad.append('V\t%s = %s (%s)' % (dep, cv, f))
-        if not hits:
-            bad.append('C\t%s (%s)' % (mgr.get('depNameTemplate') or mgr.get('packageNameTemplate') or '(unnamed)', f))
-for b in bad:
-    print(b)
+    try:
+        lines = open(f, encoding='utf-8', errors='replace').read().split('\n')
+    except OSError:
+        continue
+    if len(lines) < 2 or not lines[1].startswith('# renovate:'):
+        continue
+    if not LINE2.fullmatch(lines[1]):
+        print('C\t%s' % f)
+        continue
+    kv = dict(t.split('=', 1) for t in lines[1][len('# renovate:'):].split())
+    kind = f.rsplit('/', 1)[-1]
+    if kind == 'COMMIT':
+        continue
+    cv = lines[0].split('@', 1)[0] if kind == 'PIN' else lines[0]
+    n = re.search(r'-mavericks\.(\d+)$', cv)
+    if not n:
+        continue
+    vt = kv.get('versioning', '')
+    vm = re.match(js(vt[len('regex:'):]), cv) if vt.startswith('regex:') else None
+    if vm and any(k in compared and v == n.group(1) for k, v in vm.groupdict().items()):
+        continue
+    print('V\t%s = %s (%s)' % (kv['depName'], cv, f))
 PY
   if [ "$rc" -ne 0 ]; then
     py_crashed renovate-suffix-versioning
   else
     while IFS="$(printf '\t')" read -r k b; do
       if [ "$k" = C ]; then
-        chk_fail renovate-suffix-versioning "Renovate cannot see new releases of $b: none of its manager's matchStrings captures a currentValue there" \
-          "Renovate compiles matchStrings with the g flag alone, so ^ and \$ are the ends of the whole file, and a line-2 annotation after an anchored value leaves nothing to match" \
-          'match line 1 without an end anchor, as "^(?<currentValue>\\S+)"'
+        chk_fail renovate-suffix-versioning "Renovate cannot read line 2 of $b" \
+          "the preset's manager reads '# renovate: datasource=... depName=...[ versioning=...][ extractVersion=...]' in that order, with no other key, and tracks nothing from any other line 2" \
+          "rewrite line 2 of $b as '# renovate: datasource=<datasource> depName=<name>', then ' versioning=<versioning>' and ' extractVersion=<regex>' where it needs them"
       else
         chk_fail renovate-suffix-versioning "Renovate cannot see new -mavericks.N releases of $b" \
           "its versioning does not compare N, so every -mavericks.N of one upstream compares equal" \
-          'give that manager "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"'
+          'end its line 2 with " versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavericks\.(?<build>\d+)$"'
       fi
     done < "$tmp/suffix"
   fi
@@ -545,7 +520,7 @@ while IFS= read -r f; do
 done < "$tmp/l532"
 
 # spec: SKILL.md "Family conventions" check 26 -- a family repo's Renovate config is
-#       .github/renovate.json and no other path: checks 4, 4b and 13 read only that file, and
+#       .github/renovate.json and no other path: checks 4 and 4b read only that file, and
 #       shipyard's configure step scaffolds it when absent, so a config tracked anywhere else is dead
 #       beside the scaffold and exempts its repo from those checks. These are every other place
 #       Renovate itself looks for a config file (package.json's "renovate" key is not a file and is
@@ -557,7 +532,7 @@ for f in renovate.json renovate.json5 .renovaterc .renovaterc.json .renovaterc.j
   tracked "$f" || continue
   deviated renovate-path "$f" && continue
   chk_fail renovate-path "$f is a tracked Renovate config, and the family's is .github/renovate.json only" \
-    "the Renovate checks (4, 4b, 13) never read $f" \
+    "the Renovate checks (4, 4b) never read $f" \
     "git mv $f .github/renovate.json (merge into the existing .github/renovate.json instead if there is one), or declare .mavergreen/deviations/renovate-path/<label>/ (scope $f, a reason, a revisit)"
 done
 

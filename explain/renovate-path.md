@@ -1,8 +1,8 @@
 renovate-path: the only tracked Renovate config is .github/renovate.json.
 
 ## Why
-The Renovate checks (renovate-no-restated-defaults, automerge-described, renovate-suffix-versioning, and
-the ids that read the preset) read only .github/renovate.json. A config kept at the root, in .gitlab/ or as
+The Renovate checks (renovate-no-restated-defaults, automerge-described, and the ids that read the
+preset) read only .github/renovate.json; renovate-suffix-versioning reads the pins' line 2 instead. A config kept at the root, in .gitlab/ or as
 .renovaterc* exempts its repo from them without anyone deciding it should. shipyard's configure step
 scaffolds .github/renovate.json when it is absent, so a config kept elsewhere also gets a second,
 preset-only config written beside it by the first build; that dirties the tree assert-tree-clean checks,
