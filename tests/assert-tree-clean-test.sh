@@ -51,13 +51,23 @@ kept="$RUNNER_TEMP/mavericks-tree-manifest-$(cd "$work/kept" && git rev-parse --
 [ ! -f "$kept" ] || say "the post-build call, run directly, consumes the manifest"
 
 mkrepo "$work/declared"
-printf 'VERSION  # the build stamps the resolved version\n' > "$work/declared/.mavericks-intree"
-(cd "$work/declared" && git add .mavericks-intree \
+mkdir -p "$work/declared/.mavergreen"
+printf 'VERSION  # the build stamps the resolved version\n' > "$work/declared/.mavergreen/intree"
+(cd "$work/declared" && git add .mavergreen/intree \
    && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
 (cd "$work/declared" && sh "$S" --record) >/dev/null 2>&1
 printf '1.0.0\n' > "$work/declared/VERSION"
 (cd "$work/declared" && sh "$S" >/dev/null 2>&1) \
   || say "a declared in-tree path should pass"
+
+mkrepo "$work/oldname"
+printf 'VERSION  # the build stamps the resolved version\n' > "$work/oldname/.mavericks-intree"
+(cd "$work/oldname" && git add .mavericks-intree \
+   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
+(cd "$work/oldname" && sh "$S" --record) >/dev/null 2>&1
+printf '1.0.0\n' > "$work/oldname/VERSION"
+if (cd "$work/oldname" && sh "$S" >/dev/null 2>&1); then
+  say "a .mavericks-intree is no longer the allowlist: .mavergreen/intree is"; fi
 
 mkrepo "$work/nomanifest"
 mkdir -p "$work/nomanifest/build-native"; : > "$work/nomanifest/build-native/x"
@@ -67,8 +77,9 @@ if (cd "$work/nomanifest" && sh "$S" >/dev/null 2>&1); then
   || say "the fallback should say it did not have a manifest"
 
 mkrepo "$work/stale"
-printf 'NEVER_WRITTEN  # nothing writes this any more\n' > "$work/stale/.mavericks-intree"
-(cd "$work/stale" && git add .mavericks-intree \
+mkdir -p "$work/stale/.mavergreen"
+printf 'NEVER_WRITTEN  # nothing writes this any more\n' > "$work/stale/.mavergreen/intree"
+(cd "$work/stale" && git add .mavergreen/intree \
    && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
 (cd "$work/stale" && sh "$S" --record) >/dev/null 2>&1
 (cd "$work/stale" && sh "$S" 2>&1 | grep -q 'NEVER_WRITTEN') \
@@ -77,8 +88,9 @@ printf 'NEVER_WRITTEN  # nothing writes this any more\n' > "$work/stale/.maveric
   || say "a stale allowlist entry alone should still exit 0"
 
 mkrepo "$work/prefix"
-printf 'VERSION  # the build stamps the resolved version\n' > "$work/prefix/.mavericks-intree"
-(cd "$work/prefix" && git add .mavericks-intree \
+mkdir -p "$work/prefix/.mavergreen"
+printf 'VERSION  # the build stamps the resolved version\n' > "$work/prefix/.mavergreen/intree"
+(cd "$work/prefix" && git add .mavergreen/intree \
    && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
 (cd "$work/prefix" && sh "$S" --record) >/dev/null 2>&1
 printf '1.0.0\n' > "$work/prefix/VERSION"
@@ -142,19 +154,21 @@ if (cd "$work/keyed-b" && sh "$S" >/dev/null 2>&1); then
 
 mkrepo "$work/untracked-allow"
 (cd "$work/untracked-allow" && sh "$S" --record) >/dev/null 2>&1
-printf '.mavericks-intree  # self\nbuild/  # mine\n' > "$work/untracked-allow/.mavericks-intree"
+mkdir -p "$work/untracked-allow/.mavergreen"
+printf '.mavergreen/intree  # self\nbuild/  # mine\n' > "$work/untracked-allow/.mavergreen/intree"
 mkdir -p "$work/untracked-allow/build"; : > "$work/untracked-allow/build/CMakeCache.txt"
 if (cd "$work/untracked-allow" && sh "$S" >/dev/null 2>&1); then
-  say "an uncommitted .mavericks-intree should not be honoured"; fi
+  say "an uncommitted .mavergreen/intree should not be honoured"; fi
 (cd "$work/untracked-allow" && sh "$S" 2>&1 | grep -q 'build/CMakeCache.txt') \
   || say "the uncommitted-allowlist failure should name build/CMakeCache.txt"
 (cd "$work/untracked-allow" && sh "$S" 2>&1 | grep -q 'not tracked by git') \
-  || say "an uncommitted .mavericks-intree should be reported as untracked"
+  || say "an uncommitted .mavergreen/intree should be reported as untracked"
 
 mkrepo "$work/dirallow"
 mkdir -p "$work/dirallow/dist"; : > "$work/dirallow/dist/.gitkeep"
-printf 'dist/  # the build stages the package here\n' > "$work/dirallow/.mavericks-intree"
-(cd "$work/dirallow" && git add .mavericks-intree dist/.gitkeep \
+mkdir -p "$work/dirallow/.mavergreen"
+printf 'dist/  # the build stages the package here\n' > "$work/dirallow/.mavergreen/intree"
+(cd "$work/dirallow" && git add .mavergreen/intree dist/.gitkeep \
    && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
 (cd "$work/dirallow" && sh "$S" --record) >/dev/null 2>&1
 : > "$work/dirallow/dist/thing.pkg"
@@ -163,8 +177,9 @@ printf 'dist/  # the build stages the package here\n' > "$work/dirallow/.maveric
 
 mkrepo "$work/noslash"
 mkdir -p "$work/noslash/dist"; : > "$work/noslash/dist/.gitkeep"
-printf 'dist  # missing the trailing slash\n' > "$work/noslash/.mavericks-intree"
-(cd "$work/noslash" && git add .mavericks-intree dist/.gitkeep \
+mkdir -p "$work/noslash/.mavergreen"
+printf 'dist  # missing the trailing slash\n' > "$work/noslash/.mavergreen/intree"
+(cd "$work/noslash" && git add .mavergreen/intree dist/.gitkeep \
    && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
 (cd "$work/noslash" && sh "$S" --record) >/dev/null 2>&1
 : > "$work/noslash/dist/thing.pkg"

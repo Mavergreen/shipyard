@@ -2,7 +2,5 @@
 .github/workflows/release.yml
 .gitignore
 CMakePresets.json
-INGREDIENTS.md
-UPSTREAM_VERSION
 .mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh

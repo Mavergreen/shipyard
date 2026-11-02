@@ -1,7 +1,6 @@
 .github/renovate.json
 .github/workflows/release.yml
 .gitignore
-INGREDIENTS.md
 .mavergreen/upstream/VERSION
 .mavergreen/upstream/description
 .mavergreen/hooks/upstream-release-notes-url

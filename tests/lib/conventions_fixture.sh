@@ -68,7 +68,6 @@ YML
   # spec: SKILL.md "Family conventions" check 35 -- these fixtures build pkgs with the system packager on
   #       purpose, so the baseline declares build/package.sh; tests/check-family-conventions-7-test.sh,
   #       which tests check 35 itself, removes that deviation.
-  printf '# Build ingredients\n' > "$1/INGREDIENTS.md"
   deviation "$1" packager system-packager 'build/package.sh' 'fixtures build pkgs with the system packager'
   printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$1/.github/renovate.json"
   printf '#!/bin/sh\nexit 0\n' > "$1/tests/a-test.sh"

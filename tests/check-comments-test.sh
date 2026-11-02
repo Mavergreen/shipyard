@@ -279,7 +279,8 @@ grep -q "named.sh:3:" "$w/spacedarg.out" \
 
 spacedrepo="$w/repo with space"
 mkdir -p "$spacedrepo/scripts"
-printf 'platform\nspec\n' > "$spacedrepo/comment-reasons"
+mkdir -p "$spacedrepo/.mavergreen/config"
+printf 'platform\nspec\n' > "$spacedrepo/.mavergreen/config/comment-reasons"
 printf '#!/bin/sh\nx=1\n# untagged in a checkout whose path contains a space\n' > "$spacedrepo/scripts/named.sh"
 ( cd "$spacedrepo" && git init -q . && git add -A ) >/dev/null 2>&1
 rc=0
@@ -291,7 +292,8 @@ grep -q "named.sh:3:" "$w/spacedrepo.out" \
 
 nongit="$w/not a git checkout"
 mkdir -p "$nongit/scripts"
-printf 'platform\nspec\n' > "$nongit/comment-reasons"
+mkdir -p "$nongit/.mavergreen/config"
+printf 'platform\nspec\n' > "$nongit/.mavergreen/config/comment-reasons"
 printf '#!/bin/sh\nx=1\n' > "$nongit/scripts/clean.sh"
 rc=0
 ( cd "$nongit" && sh "$S" ) > "$w/nongit.out" 2>&1 || rc=$?
@@ -302,14 +304,15 @@ rc=0
   || { echo "FAIL nongit: the unreadable listing must be reported as tracked-files: $(cat "$w/nongit.out")"; exit 1; }
 
 dev="$w/dev"; mkdir -p "$dev/scripts"
-printf 'platform\nspec\n' > "$dev/comment-reasons"
+mkdir -p "$dev/.mavergreen/config"
+printf 'platform\nspec\n' > "$dev/.mavergreen/config/comment-reasons"
 printf '#!/bin/sh\n# untagged\nexit 0\n' > "$dev/scripts/x.sh"
 . "$here/lib/deviation_tree.sh"
 deviation "$dev" comments upstream '*' 'vendored verbatim from upstream'
 ( cd "$dev" && git init -q . && git add -A ) >/dev/null 2>&1
 ( cd "$dev" && sh "$S" > "$w/dev.out" 2>&1 ) \
   || { echo "FAIL deviation: a repo-wide comments deviation must switch the check off: $(cat "$w/dev.out")"; exit 1; }
-rm -rf "$dev/.mavergreen"; mkdir -p "$dev/vendor"
+rm -rf "$dev/.mavergreen/deviations"; mkdir -p "$dev/vendor"
 printf '#!/bin/sh\n# untagged upstream\nexit 0\n' > "$dev/vendor/up.sh"
 deviation "$dev" comments vendor 'vendor/*' 'vendored verbatim'
 ( cd "$dev" && git add -A && sh "$S" > "$w/dev.out" 2>&1 ) \
@@ -320,7 +323,8 @@ grep -q 'DECLARED DEVIATION (vendor/up.sh) -- vendored verbatim' "$w/dev.out" ||
 
 amprepo="$w/repo & co"
 mkdir -p "$amprepo/scripts"
-printf 'platform\nspec\n' > "$amprepo/comment-reasons"
+mkdir -p "$amprepo/.mavergreen/config"
+printf 'platform\nspec\n' > "$amprepo/.mavergreen/config/comment-reasons"
 printf '#!/bin/sh\nx=1\n# untagged in a checkout whose path contains an ampersand\n' > "$amprepo/scripts/named.sh"
 ( cd "$amprepo" && git init -q . && git add -A ) >/dev/null 2>&1
 rc=0
@@ -355,5 +359,14 @@ done
 dangling="$( (cd "$here/.." && git ls-files -z '*.sh' '*.yml' | xargs -0 grep -n -E "$dangling_re") || true )"
 [ -z "$dangling" ] \
   || { echo "FAIL dangling-citation: a path into the spec and plan directories is cited on those lines, and the directories are gitignored, so the citation resolves for nobody -- not for the fourteen consumers that receive these scripts through @v1, and not for a fresh clone of shipyard. Cite something tracked (SKILL.md, a test, a script): $dangling"; exit 1; }
+
+printf '#!/bin/sh\n# Note: an untagged comment that opens with a capital\nexit 0\n' > "$w/capital.sh"
+if LC_ALL=en_US.UTF-8 sh "$S" "$w/capital.sh" > "$w/capital.out" 2>&1; then
+  echo "FAIL capital: an untagged comment must fail under en_US.UTF-8 too: $(cat "$w/capital.out")"; exit 1
+fi
+grep -q 'cite a reason' "$w/capital.out" && ! grep -q 'unknown reason' "$w/capital.out" \
+  || { echo "FAIL capital: under en_US.UTF-8, [a-z] must still mean the 26 lowercase letters, so Note: is no tag: $(cat "$w/capital.out")"; exit 1; }
+grep -q '^LC_ALL=C; export LC_ALL$' "$S" \
+  || { echo "FAIL capital: check-comments.sh pins the C locale, so its [a-z] ranges never follow a locale's collation"; exit 1; }
 
 echo "PASS: check-comments"

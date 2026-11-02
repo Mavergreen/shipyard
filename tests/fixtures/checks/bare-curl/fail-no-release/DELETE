@@ -1,5 +1,3 @@
 .github/workflows/release.yml
-INGREDIENTS.md
-UPSTREAM_VERSION
 .mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh

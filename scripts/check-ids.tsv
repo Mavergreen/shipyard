@@ -116,3 +116,6 @@ product-complete	checkout	scripts/check-metadata.sh	new (P2: replaces the produc
 release-has-product	checkout	scripts/check-metadata.sh	new (P2)	P2
 requires-pinned	checkout	scripts/check-metadata.sh	new (P2: dependencies rule R1)	P2
 requires-min	checkout	scripts/check-metadata.sh	new (P2: dependencies rule R2 and decision 3)	P2
+legacy-top-level	checkout	scripts/check-metadata.sh	new (P2: legacy metadata is refused at the top level)	P2
+prose-restates-value	checkout	scripts/check-metadata.sh	new (P2: the metadata spec's M4)	P2
+readme-links-metadata	checkout	scripts/check-metadata.sh	new (P2: the README points at the metadata)	P2

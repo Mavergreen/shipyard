@@ -70,10 +70,10 @@ fi
 #       for this reason: a build step can write an untracked file, and an allowlist the
 #       build wrote for itself is not the reviewed allowlist this is meant to honour.
 allowlist=""
-if [ -f .mavericks-intree ] && git ls-files --error-unmatch .mavericks-intree >/dev/null 2>&1; then
-  allowlist=.mavericks-intree
-elif [ -f .mavericks-intree ]; then
-  echo "assert-tree-clean: .mavericks-intree is not tracked by git, so nothing in it is being honoured -- commit it, or a build step could allowlist its own output" >&2
+if [ -f .mavergreen/intree ] && git ls-files --error-unmatch .mavergreen/intree >/dev/null 2>&1; then
+  allowlist=.mavergreen/intree
+elif [ -f .mavergreen/intree ]; then
+  echo "assert-tree-clean: .mavergreen/intree is not tracked by git, so nothing in it is being honoured -- commit it, or a build step could allowlist its own output" >&2
 fi
 
 patterns() { sed -e 's/#.*//' -e 's/[[:space:]]*$//' "$allowlist"; }
@@ -94,7 +94,7 @@ if [ -n "$allowlist" ]; then
     [ -n "$pat" ] || continue
     case "$pat" in
       */) : ;;
-      *)  [ ! -d "$pat" ] || echo "assert-tree-clean: .mavericks-intree allows '$pat', which is a directory; a bare entry is an exact match and matches nothing inside it -- write it as '$pat/' with the trailing slash" >&2 ;;
+      *)  [ ! -d "$pat" ] || echo "assert-tree-clean: .mavergreen/intree allows '$pat', which is a directory; a bare entry is an exact match and matches nothing inside it -- write it as '$pat/' with the trailing slash" >&2 ;;
     esac
   done
 fi
@@ -144,7 +144,7 @@ done
 if [ -s "$offenders" ]; then
   chk_fail tree-clean "the build changed the source tree" \
     "$(wc -l < "$offenders" | tr -d ' ') path(s) appeared or went missing that nothing declares, checked $mode" \
-    "build outside the tree (\$MAVERICKS_BUILD_ROOT), or declare the path in .mavericks-intree with a reason"
+    "build outside the tree (\$MAVERICKS_BUILD_ROOT), or declare the path in .mavergreen/intree with a reason"
   while IFS= read -r p; do
     report "$p"
   done < "$offenders"
@@ -154,7 +154,7 @@ fi
 if [ -n "$allowlist" ]; then
   patterns | while IFS= read -r pat; do
     [ -n "$pat" ] || continue
-    [ -e "$pat" ] || echo "assert-tree-clean: .mavericks-intree allows '$pat', which nothing wrote -- prune it" >&2
+    [ -e "$pat" ] || echo "assert-tree-clean: .mavergreen/intree allows '$pat', which nothing wrote -- prune it" >&2
   done
 fi
 [ -n "${SHIPYARD_CHECK_RUNLOG:-}" ] || rm -f "$MANIFEST"

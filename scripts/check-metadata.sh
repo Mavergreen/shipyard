@@ -48,20 +48,133 @@ else
   chk_notrun upstream-complete "no $REL, so this is not a product repo and the rule has nothing to hold to"
 fi
 
-chk_ran value-file-line
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/check-metadata.XXXXXX")"
 trap 'rm -rf "$w"' EXIT
+
+_legacy() {
+  chk_fail legacy-top-level "$1 is legacy metadata at the top level: $2" "$3" "$4"
+}
+if chk_selected legacy-top-level; then
+  chk_ran legacy-top-level
+  if chk_tracked_files > "$w/legacy"; then
+    _moved="every reader takes metadata from .mavergreen/ now, so nothing reads it, and it still looks as if something does"
+    _gone="nothing reads it any more, and it still looks as if something does"
+    _lt() { grep -Fqx -e "$1" "$w/legacy"; }
+    _ltd() { grep -q "^$1/" "$w/legacy"; }
+    if _lt INGREDIENTS.md && ! awk '
+        !seen && /^## Declared state[ \t]*$/ { seen = 1; on = 1; next }
+        on && /^##? / { on = 0 }
+        !on && NF { bad = 1 }
+        END { exit !(seen && !bad) }' INGREDIENTS.md 2>/dev/null; then
+      _legacy INGREDIENTS.md "it may hold a ## Declared state section and nothing else, and the rest has a place under .mavergreen/" \
+        "nothing reads it but that section: a ## Conformance deviations line excuses nothing, and no reader checks its table or its prose" \
+        "move each deviation to .mavergreen/deviations/<check>/<label>/ (scope, reason, revisit), each table row to .mavergreen/ingredients/<name>/, a 'No upstream release notes:' line to .mavergreen/deviations/upstream-notes/<label>/, and other prose to an unusual-reason.md beside what it explains or to README.md; then keep only the ## Declared state section, or delete the file"
+    fi
+    if _lt UPSTREAM_VERSION; then
+      _legacy UPSTREAM_VERSION "it belongs in .mavergreen/upstream/VERSION" "$_moved" \
+        "git mv UPSTREAM_VERSION .mavergreen/upstream/VERSION"
+    fi
+    if _lt UPSTREAM_COMMIT; then
+      _legacy UPSTREAM_COMMIT "it belongs in .mavergreen/upstream/COMMIT" "$_moved" \
+        "git mv UPSTREAM_COMMIT .mavergreen/upstream/COMMIT, beside a .mavergreen/hooks/derive-upstream-version that turns it into a version"
+    fi
+    if _lt pins.env; then
+      _legacy pins.env "its pins belong in .mavergreen/ingredients/<name>/" "$_moved" \
+        "move each pin to .mavergreen/ingredients/<name>/ (VERSION, or PIN with its SHA256), the own upstream's to .mavergreen/upstream/VERSION, and settings only the build reads into the build script; then delete pins.env"
+    fi
+    if _lt MANIFEST; then
+      _legacy MANIFEST "it is retired" "$_gone" "git rm MANIFEST"
+    fi
+    if _ltd components; then
+      _legacy components/ "its pins belong in .mavergreen/ingredients/<name>/" "$_moved" \
+        "move each components/<name>/version to .mavergreen/ingredients/<name>/VERSION, and everything else out of components/ (a patch the build applies is then named in that ingredient's watch)"
+    fi
+    if _lt .mavericks-intree; then
+      _legacy .mavericks-intree "it belongs in .mavergreen/intree" "$_moved" \
+        "git mv .mavericks-intree .mavergreen/intree"
+    fi
+    if _lt comment-reasons; then
+      _legacy comment-reasons "it belongs in .mavergreen/config/comment-reasons" "$_moved" \
+        "git mv comment-reasons .mavergreen/config/comment-reasons"
+    fi
+    for _m in msc.sh build/msc.sh; do
+      if _lt "$_m"; then
+        _legacy "$_m" "it is retired" "$_gone" \
+          "git rm $_m, and find shipyard's scripts with SHIPYARD_SCRIPTS=\"\${SHIPYARD_SCRIPTS:-\$(shipyard-scripts)}\""
+      fi
+    done
+    if _ltd release-notes; then
+      _legacy release-notes/ "it belongs in .mavergreen/release-notes/" "$_moved" \
+        "move each release-notes/<tag>.md to .mavergreen/release-notes/<tag>.md (.mavergreen/release-notes/<short>/<tag>.md where products are tagged apart), and delete release-notes/README.md"
+    fi
+  fi
+fi
+
+_value_file() {
+  case "/$1" in
+    */.*|/hooks/*|*/hooks/*|/config/*|/release-notes/*|*.md) return 1 ;;
+  esac
+  case "${1##*/}" in
+    reason|revisit|untracked|tracked-by|role|watch|target|union|intree) return 1 ;;
+  esac
+}
+
+chk_ran prose-restates-value
+if [ -d .mavergreen ]; then
+  find .mavergreen -type f -name unusual-reason.md | LC_ALL=C sort > "$w/reasons"
+  while IFS= read -r _r; do
+    for _f in "${_r%/*}"/*; do
+      [ -f "$_f" ] || continue
+      _value_file "${_f#.mavergreen/}" || continue
+      _v="$(mg_value "${_f#.mavergreen/}")" || continue
+      _v="${_v#"${_v%%[! $TAB]*}"}"
+      _v="${_v%"${_v##*[! $TAB]}"}"
+      [ -n "$_v" ] || continue
+      if grep -Fq -e "$_v" "$_r"; then
+        chk_fail prose-restates-value "$_r restates \"$_v\", the value of $_f" \
+          "the value file is kept current by Renovate and its readers, and the copy in prose is kept current by nothing" \
+          "delete \"$_v\" from $_r, and say what is unusual about the value instead"
+      fi
+    done
+  done < "$w/reasons"
+fi
+
+if [ -d .mavergreen ]; then
+  chk_ran readme-links-metadata
+  if [ ! -f README.md ]; then
+    chk_fail readme-links-metadata "there is no top-level README.md to link to .mavergreen/" \
+      "a reader starts at the README, and the metadata is in a directory a file listing hides" \
+      "add a README.md that links to the metadata, as in [.mavergreen/](.mavergreen/)"
+  elif ! awk '
+      function meta(t) {
+        sub(/^[ \t]+/, "", t); sub(/^</, "", t); sub(/[ \t>].*$/, "", t); sub(/#.*$/, "", t)
+        while (substr(t, 1, 2) == "./") t = substr(t, 3)
+        return t == ".mavergreen" || substr(t, 1, 12) == ".mavergreen/"
+      }
+      {
+        s = $0
+        while (match(s, /\]\([^)]*\)/)) {
+          if (meta(substr(s, RSTART + 2, RLENGTH - 3))) found = 1
+          s = substr(s, RSTART + RLENGTH)
+        }
+        if (match($0, /^ ? ? ?\[.*\]:/) && meta(substr($0, RSTART + RLENGTH))) found = 1
+      }
+      END { exit !found }' README.md; then
+    chk_fail readme-links-metadata "README.md does not link to .mavergreen/" \
+      "a reader starts at the README, and the metadata is in a directory a file listing hides" \
+      "add a link to it, as in [.mavergreen/](.mavergreen/)"
+  fi
+else
+  chk_notrun readme-links-metadata "there is no .mavergreen/ to link to"
+fi
+
+chk_ran value-file-line
 if [ -d .mavergreen ]; then
   find .mavergreen -type f | LC_ALL=C sort > "$w/files"
   while IFS= read -r f; do
     rel="${f#.mavergreen/}"
-    case "/$rel" in
-      */.*|/hooks/*|*/hooks/*|/config/*|/release-notes/*|*.md) continue ;;
-    esac
-    case "${rel##*/}" in
-      reason|revisit|untracked|tracked-by|role|watch|target|union|intree) continue ;;
-    esac
+    _value_file "$rel" || continue
     shipyard_deviated value-file-line "$f" >/dev/null && continue
     bad=""
     if grep -q "$CR" "$f"; then

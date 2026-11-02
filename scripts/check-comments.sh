@@ -9,15 +9,16 @@
 #          stderr. Exit 0 clean, 1 if any violation was found, 2 on a usage
 #          error.
 set -eu
+LC_ALL=C; export LC_ALL
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
 chk_ran comments
 ROOT="$(pwd)"
-REASONS="$ROOT/comment-reasons"
+REASONS="$ROOT/.mavergreen/config/comment-reasons"
 # spec: SKILL.md "Comments cite a reason" -- opt-in via comment-reasons keeps
 #       14 consumer repos green until each has swept; the path is the REPO's, never shipyard's
 #       installed prefix, since consumers run this script from there.
-[ -f "$REASONS" ] || { chk_notrun comments "no comment-reasons file, so this repo has not opted in"; exit 0; }
+[ -f "$REASONS" ] || { chk_notrun comments "no .mavergreen/config/comment-reasons file, so this repo has not opted in"; exit 0; }
 alt="$(tr '\n' '|' < "$REASONS" | sed 's/|$//')"
 
 if [ "$#" -eq 0 ]; then

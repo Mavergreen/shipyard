@@ -392,12 +392,13 @@ printf '%s\n' "$out" | grep -q 'check-family-conventions: ok' \
 
 # spec: SKILL.md "Family conventions" check 15 -- delegates to check-comments.sh, so these
 #       fixtures prove the WIRING, not the scanner (tests/check-comments-test.sh already covers the
-#       scanner's rules in detail). comment-reasons here mirrors this repo's own root file
+#       scanner's rules in detail). comment-reasons here mirrors this repo's own .mavergreen/config file
 #       (platform, spec) so the fixture reasons match what check-comments.sh actually ships with.
 mkrepo "$work/cm1"
 mkdir -p "$work/cm1/scripts"
 printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm1/scripts/x.sh"
-printf 'platform\nspec\n' > "$work/cm1/comment-reasons"
+mkdir -p "$work/cm1/.mavergreen/config"
+printf 'platform\nspec\n' > "$work/cm1/.mavergreen/config/comment-reasons"
 (cd "$work/cm1" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/cm1" && sh "$S" 2>&1)"; then echo "FAIL: an untagged comment, with comment-reasons present, should fail"; exit 1; fi
 first_is "$out" comments || { echo "FAIL should be a comments failure: $out"; exit 1; }
@@ -407,7 +408,8 @@ first_is "$out" comments || { echo "FAIL should be a comments failure: $out"; ex
 mkrepo "$work/cm2"
 mkdir -p "$work/cm2/scripts"
 printf '#!/bin/sh\n# platform: a fact about the platform or a tool\nexit 0\n' > "$work/cm2/scripts/x.sh"
-printf 'platform\nspec\n' > "$work/cm2/comment-reasons"
+mkdir -p "$work/cm2/.mavergreen/config"
+printf 'platform\nspec\n' > "$work/cm2/.mavergreen/config/comment-reasons"
 (cd "$work/cm2" && git add -A) >/dev/null 2>&1
 (cd "$work/cm2" && sh "$S" >/dev/null) || { echo "FAIL: a comment tagged # platform: should pass"; exit 1; }
 

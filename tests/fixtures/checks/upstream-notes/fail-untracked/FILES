@@ -1,5 +1,4 @@
 .github/renovate.json
 .github/workflows/release.yml
 .gitignore
-INGREDIENTS.md
 tests/a-test.sh

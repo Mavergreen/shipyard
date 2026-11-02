@@ -7,8 +7,9 @@ Features: yes. Whatever helps native builds to succeed and cross builds to match
 ## Install (once)
 
 Install the [Mavergreen CMake product](https://github.com/Mavergreen/cmake/releases) first, then
-shipyard. Shipyard's installer checks that CMake meets the release pinned in
-[`components/cmake/version`](components/cmake/version); an absent or older product is refused.
+shipyard. Shipyard's installer checks that CMake meets the minimum in
+[`.mavergreen/products/shipyard/requires/cmake/min`](.mavergreen/products/shipyard/requires/cmake/min);
+an absent or older product is refused.
 For a first install, download both current packages into separate directories:
 
 ```sh
@@ -214,3 +215,47 @@ configured arch (x86_64 against the pinned 10.9 SDK, arm64 against the pinned 11
 deployment target 11.0) before compiler detection. Use host-native
 CMake and build tools. Target executables must be tested on Mavericks, not run as
 Linux configure probes. Apple SDK bytes remain separately fetched by `fetch_sdk.sh`.
+
+## Build ingredients
+
+Everything baked into what shipyard ships, and how a change to it reaches a release, is in
+[`.mavergreen/`](.mavergreen/): one directory per ingredient under `ingredients/`, shipyard's own line
+under `upstream/`, the product under `products/` and each declared deviation under `deviations/`.
+`sh scripts/ingredients-table.sh` prints the ingredients as a table. shipyard no longer compiles CMake:
+`shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` are launchers into the Mavergreen cmake product,
+which shipyard pins and its pkg requires. The only thing shipyard compiles is its Sparkle updater app,
+with clang22, alongside the CMake modules and shell scripts it has always shipped.
+
+On a bump:
+
+- GitHub Actions: automerges on green (`ship-if-green`), and the merge itself cuts the next shipyard
+  version.
+- bats: a new bats reaches CI on its next run; the suites are version-agnostic.
+- cmake: the pkg's preinstall `requires` cmake at or above the minimum; `install@v1` installs the pinned
+  release (SHA256SUMS-verified) before shipyard; a bump runs shipyard's full CI against it and the merge
+  releases shipyard.
+- clang22: `scripts/fetch_clang22.sh` fetches that release (the Linux archive against the pinned digest,
+  a pkg against its release's SHA256SUMS, or the installed one at that version); a bump rebuilds the
+  updater in shipyard's full CI and the merge releases shipyard.
+- stevedore: `scripts/fetch_stevedore.sh` fetches that release (SHA256SUMS-verified, `--version`
+  checked); a bump runs shipyard's full CI against it and the merge releases shipyard.
+
+## Release-doctrine surface
+
+Four more scripts (`scripts/declared-state.sh`, `scripts/release-state.sh`,
+`scripts/release-needed.sh`, `scripts/release-state-record.sh`) and one more reusable workflow
+(`.github/workflows/reconcile.yml`) ship as of this release. Consumers reach all five the same way
+they reach everything else here: through the moving `@v1` tag. What they do and how a product wires
+them in is documented in the conventions skill, "A release is a declared state, not an event".
+
+## Comment-reasons surface
+
+`.mavergreen/config/comment-reasons` and `scripts/check-comments.sh` ship as of this release, run as
+check 15 in `check-family-conventions.sh`. Consumers reach both the same way they reach everything else
+here: through the moving `@v1` tag. A consumer adopts the check by sweeping its own tree and committing
+its own `.mavergreen/config/comment-reasons` (one recognised tag per line — `platform`, `spec`); check 15
+exits 0, silently, in a repo that has not swept yet. A repo that wants a declared exception states it as
+`.mavergreen/deviations/comments/<label>/` (`scope`, `reason`, `revisit`), the same deviations
+`check-artifact-conformance.sh` reads. What the two tolerated reasons are, and the test that decides
+whether a comment is warranted at all, is documented in the conventions skill ("Comments cite a
+reason").
