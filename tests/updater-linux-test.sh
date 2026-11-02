@@ -12,7 +12,7 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 _tmp="${TMPDIR:-/tmp}"
 T="$(mktemp -d "${_tmp%/}/updater-linux.XXXXXX")"; trap 'rm -rf "$T"' EXIT
-CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT/components/clang22")"
+CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT")"
 fail() { echo "FAIL: $*"; exit 1; }
 app="$T/shipyard-updater.app"
 

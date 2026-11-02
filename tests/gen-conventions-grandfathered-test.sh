@@ -10,6 +10,7 @@ python3 -c 'import yaml' 2>/dev/null || { echo "SKIP: needs a python3 with PyYAM
 #       $FAKE_REPOS and clones from a local source repo, so the generator runs offline.
 mkdir -p "$work/bin" "$work/root" "$work/src"
 cp -R "$here/../scripts" "$work/root/scripts"; rm -f "$work/root/scripts/conventions-grandfathered"
+mkdir -p "$work/root/.mavergreen"; cp -R "$here/../.mavergreen/ingredients" "$work/root/.mavergreen/ingredients"
 G="$work/root/scripts/gen-conventions-grandfathered.sh"
 cat > "$work/bin/gh" <<'SH'
 #!/bin/sh
@@ -55,7 +56,7 @@ export STEVEDORE
 chmod +x "$work/bin/gh"
 # spec: scripts/cxxabi-allowlist.sh -- the allow-list is read from the pinned Recaulk's librecaulk.a, served
 #       here from a file:// release tree so the generator's cxxabi facts need no network.
-rv="$(sed -n 's/^RECAULK_VERSION=//p' "$here/../scripts/recaulk.pin")"
+rv="$(sed -n 1p "$here/../.mavergreen/ingredients/recaulk/VERSION")"
 rr="$work/rel/Mavergreen/recaulk/releases/download/$rv"; mkdir -p "$rr" "$work/rc/usr/local/mavergreen/recaulk/lib"
 printf '!<arch>\n' > "$work/rc/usr/local/mavergreen/recaulk/lib/librecaulk.a"
 "$STEVEDORE" component --root "$work/rc" --identifier dev.mavergreen.recaulk --version "$rv" --install-location / \

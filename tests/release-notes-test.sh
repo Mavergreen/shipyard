@@ -13,15 +13,15 @@ S="$here/../scripts/release-notes.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/release-notes.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
 mkrepo() {  # a product repo fixture: a git repo with a hook, a pin, and a repackage caller naming that pin. $1 = dir
-  mkdir -p "$1/.mavergreen/hooks" "$1/components/libressl" "$1/.github/workflows" "$1/release-notes"
+  mkdir -p "$1/.mavergreen/hooks" "$1/.mavergreen/ingredients/libressl" "$1/.github/workflows" "$1/release-notes"
   ( cd "$1" && git init -q -b main . && git config user.email t@example.com && git config user.name tester )
-  printf '3.8.2\n' > "$1/components/libressl/version"
+  printf '3.8.2\n' > "$1/.mavergreen/ingredients/libressl/VERSION"
   cat > "$1/.github/workflows/repackage-on-ingredient-bump.yml" <<'YML'
 on:
   push:
     branches: [main]
     paths:
-      - components/libressl/version
+      - .mavergreen/ingredients/libressl/VERSION
 jobs:
   repackage:
     uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
@@ -35,7 +35,7 @@ YML
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^components/libressl/version$/"],
+      "managerFilePatterns": ["/^.mavergreen/ingredients/libressl/VERSION$/"],
       "matchStrings": ["^(?<currentValue>\\S+)\\s*$"],
       "packageNameTemplate": "libressl/portable",
       "datasourceTemplate": "github-releases",
@@ -72,7 +72,7 @@ sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 9.9p2-mavericks.1 >/dev
 #       the baseline it moved from.
 r="$work/ing"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 )
-printf '3.9.2\n' > "$r/components/libressl/version"
+printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q 'rebuilt because build ingredients moved' "$r/OUT.md" || { echo "FAIL ing: kind"; cat "$r/OUT.md"; exit 1; }
@@ -86,13 +86,13 @@ grep -q '3.8.2 -> 3.9.2 (\[release notes\](https://github.com/libressl/portable/
 #       is not this repo's diff to describe, so it is bare.
 r="$work/bare"; mkrepo "$r"
 cat > "$r/.github/renovate.json" <<'JSON'
-{"customManagers": [{"customType": "regex", "managerFilePatterns": ["/^components/libressl/version$/"],
+{"customManagers": [{"customType": "regex", "managerFilePatterns": ["/^.mavergreen/ingredients/libressl/VERSION$/"],
   "matchStrings": ["VERSION=(?<currentValue>\\S+)"], "packageNameTemplate": "libressl/portable",
   "datasourceTemplate": "github-tags", "extractVersionTemplate": "^v?(?<version>.+)$"}]}
 JSON
-printf 'VERSION=3.8.2\n' > "$r/components/libressl/version"
+printf 'VERSION=3.8.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 ( cd "$r" && git add -A && git commit -qm "no manager" && git tag 9.9p2-mavericks.1 )
-printf 'VERSION=3.9.2\n' > "$r/components/libressl/version"
+printf 'VERSION=3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
 if out="$(gen "$r" 9.9p2-mavericks.2 2>&1)"; then echo "FAIL bare: a link-less moved pin must not ship"; cat "$r/OUT.md"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'libressl' || { echo "FAIL bare: the complaint must name the pin: $out"; exit 1; }
@@ -101,7 +101,7 @@ printf '%s\n' "$out" | grep -q 'bug in release-notes.sh' \
   && { echo "FAIL bare: a pin with no link source is this repo's to fix, not a generator bug: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'the fix is in this repo' \
   || { echo "FAIL bare: the generator must say where the fix goes: $out"; exit 1; }
-deviation "$r" unlinked libressl components/libressl/version:VERSION 'a fixture with no notes'
+deviation "$r" unlinked libressl .mavergreen/ingredients/libressl/VERSION:VERSION 'a fixture with no notes'
 ( cd "$r" && git add -A && git commit -qm declare )
 gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL bare: a declared reason must let it ship"; exit 1; }
 grep -q '3.8.2 -> 3.9.2 (no change notes: a fixture with no notes)$' "$r/OUT.md" \
@@ -314,7 +314,7 @@ for line in "1.26" "1.26.*"; do
     && { echo "FAIL golang ($line): must not pick the newer 1.27.0 line as baseline"; cat "$r/OUT.md"; exit 1; }
 done
 
-# spec: the original openssh bug -- a real ingredient bump (components/libressl/version) reported
+# spec: the original openssh bug -- a real ingredient bump (.mavergreen/ingredients/libressl/VERSION) reported
 #       as "packaging changes only" because the caller was under a name ingredient-pins.sh did not
 #       look for, or its own crash was swallowed. Reproduce both against this script directly, not
 #       just ingredient-pins.sh: an ingredient repackage caller whose pins cannot be derived must
@@ -322,7 +322,7 @@ done
 r="$work/badcaller"; mkrepo "$r"
 mv "$r/.github/workflows/repackage-on-ingredient-bump.yml" "$r/.github/workflows/renovate-repackage.yml"
 ( cd "$r" && git add -A && git commit -qm "rename caller" && git tag 9.9p2-mavericks.1 )
-printf '3.9.2\n' > "$r/components/libressl/version"
+printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL badcaller: should succeed once the caller is discovered by content, not by name"; exit 1; }
@@ -338,7 +338,8 @@ jobs:
   repackage:
     uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
 YML
-( cd "$r" && git add -A && git commit -qm "caller with no paths" && git tag 9.9p2-mavericks.1 )
+rm -rf "$r/.mavergreen/ingredients"
+( cd "$r" && git add -A && git commit -qm "caller with no ingredients" && git tag 9.9p2-mavericks.1 )
 if gen "$r" 9.9p2-mavericks.1 >/dev/null 2>&1; then
   echo "FAIL nopins: a wired-up caller deriving zero pins should be fatal"; exit 1
 fi
@@ -358,7 +359,7 @@ on:
   workflow_dispatch: {}
 YML
 ( cd "$r" && git add -A && git commit -qm "scaffold placeholder caller" && git tag 9.9p2-mavericks.1 )
-printf '3.9.2\n' > "$r/components/libressl/version"
+printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL unwired: a half-wired placeholder at the conventional path must not be fatal"; exit 1; }
@@ -386,7 +387,7 @@ jobs:
     uses: ./.github/workflows/publish-release.yml
 YML
 ( cd "$r" && git add -A && git commit -qm "add release.yml" && git tag 9.9p2-mavericks.1 )
-printf '3.9.2\n' > "$r/components/libressl/version"
+printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 printf 'cmake_minimum_required(VERSION 3.10)\n' > "$r/CMakeLists.txt"
 ( cd "$r" && git add -A && git commit -qm "bump libressl, add CMakeLists" && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
@@ -409,7 +410,7 @@ on:
   push:
     branches: [main]
     paths:
-      - components/libressl/version
+      - .mavergreen/ingredients/libressl/VERSION
 jobs:
   repackage:
     uses: >-
@@ -418,7 +419,7 @@ jobs:
       own-upstream-paths: UPSTREAM_VERSION
 YML
 ( cd "$r" && git add -A && git commit -qm "folded-scalar caller" && git tag 9.9p2-mavericks.1 )
-printf '3.9.2\n' > "$r/components/libressl/version"
+printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL foldedcaller: a folded-scalar 'uses:' is a real call and must not be fatal"; exit 1; }
@@ -450,7 +451,7 @@ jobs:
     uses: ./.github/workflows/publish-release.yml
 YML
 ( cd "$r" && git add -A && git commit -qm "rename caller, add commenting decoy" && git tag 9.9p2-mavericks.1 )
-printf '3.9.2\n' > "$r/components/libressl/version"
+printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 printf 'cmake_minimum_required(VERSION 3.10)\n' > "$r/CMakeLists.txt"
 ( cd "$r" && git add -A && git commit -qm "bump libressl, add CMakeLists" && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
@@ -482,7 +483,7 @@ jobs:
       - run: echo "dispatched by repackage-on-ingredient-bump.yml"
 YML
 ( cd "$r" && git add -A && git commit -qm "rename caller, add mentioning decoy" && git tag 9.9p2-mavericks.1 )
-printf '3.9.2\n' > "$r/components/libressl/version"
+printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"
 printf 'cmake_minimum_required(VERSION 3.10)\n' > "$r/CMakeLists.txt"
 ( cd "$r" && git add -A && git commit -qm "bump libressl, add CMakeLists" && git tag 9.9p2-mavericks.2 )
 if gen "$r" 9.9p2-mavericks.2 >/dev/null 2>&1; then
@@ -503,7 +504,7 @@ printf '%s\n' "$out" | grep -q 'renovate-repackage.yml' \
 #       in the same cut), and nothing else here exercises that combination or its ordering.
 r="$work/combo"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p1-mavericks.1 )                       # baseline: a DIFFERENT upstream (9.9p1)
-printf '3.9.2\n' > "$r/components/libressl/version"            # an ingredient pin moves too
+printf '3.9.2\n' > "$r/.mavergreen/ingredients/libressl/VERSION"            # an ingredient pin moves too
 ( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.1 )  # this cut ships new upstream 9.9p2
 gen "$r" 9.9p2-mavericks.1 >/dev/null
 grep -q 'New upstream: OpenSSH 9.9p2 (was 9.9p1)' "$r/OUT.md" \
@@ -667,7 +668,7 @@ grep -q '^- Renamed `patches/before.patch` to `patches/after.patch`$' "$r/OUT.md
 #       patches section first.
 r="$work/patching"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 && mkdir patches && echo p > patches/fix.patch \
-    && printf '3.9.2\n' > components/libressl/version \
+    && printf '3.9.2\n' > .mavergreen/ingredients/libressl/VERSION \
     && git add -A && git commit -qm "both" && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q '^- Repackage of upstream OpenSSH 9.9p2, rebuilt because build ingredients moved and our patches changed (below)\.$' "$r/OUT.md" \
@@ -741,7 +742,7 @@ grep -qx -- '- First release of Porthole 20260802.1\.' "$r/OUT.md" \
   || { echo "FAIL r3first"; cat "$r/OUT.md"; exit 1; }
 
 r="$work/r3ing"; mkrepo "$r"
-( cd "$r" && git tag 20260802.1 && printf '3.9.2\n' > components/libressl/version \
+( cd "$r" && git tag 20260802.1 && printf '3.9.2\n' > .mavergreen/ingredients/libressl/VERSION \
     && git commit -qam "bump libressl" )
 selfgen "$r" 20260802.2
 grep -qx -- '- Rebuilt because build ingredients moved (below); no change to Porthole itself\.' "$r/OUT.md" \
@@ -791,12 +792,13 @@ grep -qx -- '  \[Changes since v1.0.208\](https://github.com/Mavergreen/shipyard
 r="$work/r1d"; mkrepo "$r"
 mkdir -p "$r/patches" "$r/vendor"
 printf 'Subject: [PATCH] one\n' > "$r/patches/x.patch"; printf 'line one\n' > "$r/vendor/cacert.pem"
+printf 'patches/*.patch\nvendor/cacert.pem\n' > "$r/.mavergreen/ingredients/libressl/watch"
 cat > "$r/.github/workflows/repackage-on-ingredient-bump.yml" <<'YML'
 on:
   push:
     branches: [main]
     paths:
-      - components/libressl/version
+      - .mavergreen/ingredients/libressl/VERSION
       - patches/x.patch
       - vendor/cacert.pem
 jobs:

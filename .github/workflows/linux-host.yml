@@ -70,7 +70,7 @@ jobs:
 
       - name: Renovate's own validator accepts default.json
         run: |
-          . scripts/renovate.pin
+          RENOVATE_VERSION="$(. scripts/mavergreen-meta.sh && mg_value ingredients/renovate/VERSION)"
           npx --yes --package "renovate@$RENOVATE_VERSION" -- renovate-config-validator --strict default.json
 
       - name: The suites must not have written into the source tree

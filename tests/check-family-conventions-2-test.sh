@@ -4,19 +4,6 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib/conventions_fixture.sh"
 
-mkrepo "$work/r2"
-printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| Swift | `build.sh` | ❌ untracked | manual |\n' \
-  > "$work/r2/INGREDIENTS.md"
-if out="$(cd "$work/r2" && sh "$S" 2>&1)"; then echo "FAIL untracked ingredient should fail"; exit 1; fi
-first_is "$out" ingredient-tracked || { echo "FAIL should be an ingredient-tracked failure: $out"; exit 1; }
-
-# spec: scripts/check-family-conventions.sh -- but a genuinely UNTRACKABLE input (no datasource exists -- golang's CA bundle) is allowed
-#       when it says so. The rule is "wire it or explain why you cannot", not "never write ❌".
-mkrepo "$work/r3"
-printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| CA bundle | `vendor/cacert.pem` | ❌ **untrackable — manual refresh** (see below) | watched path |\n' \
-  > "$work/r3/INGREDIENTS.md"
-(cd "$work/r3" && sh "$S" >/dev/null) || { echo "FAIL declared-untrackable should pass"; exit 1; }
-
 # spec: scripts/check-family-conventions.sh -- a release shipping a new upstream links upstream's notes: the repo commits the hook that
 #       says where, or a deviations/upstream-notes/ says why there is nothing to link.
 mkrepo "$work/u1"; (cd "$work/u1" && git rm -q --cached .mavergreen/hooks/upstream-release-notes-url && rm .mavergreen/hooks/upstream-release-notes-url)
@@ -397,19 +384,17 @@ first_is "$out" tests-run-in-ci || { echo "FAIL should be a tests-run-in-ci fail
 #       all its failures at once, and a check 14 that killed the script under set -eu would take
 #       the "ok" guard and any future check 15 with it. So a repo that breaks 14 AND an earlier
 #       check must report both.
-mkrepo "$work/g11"; rm -f "$work/g11/INGREDIENTS.md"
+mkrepo "$work/g11"
 sed 's|--notes-file dist/RELEASE_NOTES\.md|--notes-file release-notes/README.md|' \
-  "$work/ok/.github/workflows/release.yml" > "$work/g11/.github/workflows/release.yml"
+  "$work/ok/.github/workflows/release.yml" | grep -v 'run-repo-tests' > "$work/g11/.github/workflows/release.yml"
 out="$(cd "$work/g11" && sh "$S" 2>&1 || true)"
-has_id "$out" ingredients-md || { echo "FAIL check 3 should still be reported: $out"; exit 1; }
+has_id "$out" tests-run-in-ci || { echo "FAIL check 2 should still be reported: $out"; exit 1; }
 has_id "$out" release-notes-generated || { echo "FAIL check 14 should still be reported: $out"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- a failing run must NOT also print "ok". The success line used to sit mid-script, so
 #       checks appended after it (7, 8, 9) printed "check-family-conventions: ok" and THEN failed
 #       -- the exact "output says it passed while it did not" shape these gates exist to prevent.
-mkrepo "$work/ok2"
-printf '# Build ingredients\n\n| I | P | Renovate | On a bump |\n|---|---|---|---|\n| X | `y` | ❌ untracked | manual |\n' \
-  > "$work/ok2/INGREDIENTS.md"
+mkrepo "$work/ok2"; (cd "$work/ok2" && git rm -q --cached .mavergreen/hooks/upstream-release-notes-url && rm .mavergreen/hooks/upstream-release-notes-url)
 out="$(cd "$work/ok2" && sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'check-family-conventions: ok' \
   && { echo "FAIL a failing run printed ok: $out"; exit 1; }

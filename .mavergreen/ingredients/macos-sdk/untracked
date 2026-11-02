@@ -1,0 +1,1 @@
+No Renovate manager reads the pins inside sdk-pins.sh's functions, and both SDKs are frozen third-party releases: a change is a port decision, not an update

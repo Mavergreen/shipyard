@@ -3,7 +3,7 @@
 
 setup() {
   FETCH="$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh"
-  PIN="$(sed -n 's/^STEVEDORE_VERSION=//p' "$BATS_TEST_DIRNAME/../scripts/stevedore.pin")"
+  PIN="$(sed -n 1p "$BATS_TEST_DIRNAME/../.mavergreen/ingredients/stevedore/VERSION")"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch-stevedore-test.XXXXXX")" && pwd)"
   export STEVEDORE_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_BACKOFF=0
   export XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home" STEVEDORE_EUID=1000
@@ -88,12 +88,11 @@ linux_release() {
 }
 
 @test "pin is a version, never latest" {
-  pin="$BATS_TEST_DIRNAME/../scripts/stevedore.pin"
-  [ "$(grep -c '^STEVEDORE_VERSION=' "$pin")" -eq 1 ]
-  grep -qE '^STEVEDORE_VERSION=[0-9]{8}\.[0-9]+$' "$pin"
+  pin="$BATS_TEST_DIRNAME/../.mavergreen/ingredients/stevedore/VERSION"
+  sed -n 1p "$pin" | grep -qE '^[0-9]{8}\.[0-9]+$'
+  sed -n 2p "$pin" | grep -qF '# renovate: datasource=github-releases depName=Mavergreen/stevedore '
   renovate="$BATS_TEST_DIRNAME/../.github/renovate.json"
-  grep -qF '/^scripts/stevedore\\.pin$/' "$renovate"
-  grep -qF '"STEVEDORE_VERSION=(?<currentValue>' "$renovate"
+  grep -qF '/^\\.mavergreen/ingredients/stevedore/VERSION$/' "$renovate"
 }
 
 @test "as root the default cache is root's own home, not the caller's HOME" {

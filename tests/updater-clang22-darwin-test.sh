@@ -9,7 +9,7 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 _tmp="${TMPDIR:-/tmp}"
 T="$(mktemp -d "${_tmp%/}/updater-darwin.XXXXXX")"; trap 'rm -rf "$T"' EXIT
-CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT/components/clang22")"
+CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT")"
 fail() { echo "FAIL: $*"; exit 1; }
 
 sh "$ROOT/tests/lib/build-updater.sh" --arch x86_64 --out "$T/shipyard-updater.app" > "$T/build.log" 2>&1 \

@@ -1,1 +1,1 @@
-Retired by P2: the metadata checks.
+Retired by P2: replaced by ingredient-complete.

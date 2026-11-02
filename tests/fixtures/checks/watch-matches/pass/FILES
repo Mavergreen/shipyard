@@ -1,0 +1,14 @@
+.github/renovate.json
+.github/workflows/release.yml
+.gitignore
+INGREDIENTS.md
+.mavergreen/upstream/VERSION
+.mavergreen/upstream/description
+.mavergreen/hooks/upstream-release-notes-url
+tests/a-test.sh
+patches/a b/x.patch
+.mavergreen/ingredients/patches/role
+.mavergreen/ingredients/patches/description
+.mavergreen/ingredients/patches/why
+.mavergreen/ingredients/patches/untracked
+.mavergreen/ingredients/patches/watch

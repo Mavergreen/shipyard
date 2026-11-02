@@ -17,7 +17,7 @@ setup() {
 teardown() { rm -rf "$WORK"; }
 
 pkg_release() {  # pkg_release: serve a Recaulk release holding the fixture archive, listed in SHA256SUMS
-  PIN="$(sed -n 's/^RECAULK_VERSION=//p' "$ROOT/scripts/recaulk.pin")"
+  PIN="$(sed -n 1p "$ROOT/.mavergreen/ingredients/recaulk/VERSION")"
   REL="$WORK/rel/Mavergreen/recaulk/releases/download/$PIN"
   STEVEDORE="${STEVEDORE:-$(sh "$ROOT/scripts/fetch_stevedore.sh")}"
   export STEVEDORE SOURCE_DATE_EPOCH=1700000000

@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: fetch_stevedore.sh
-#          Prints the absolute path of the pinned stevedore (scripts/stevedore.pin), whose --version has
+#          Prints the absolute path of the pinned stevedore (.mavergreen/ingredients/stevedore/VERSION), whose --version has
 #          been checked to say "stevedore <pinned version>". An exported STEVEDORE wins, after the same
 #          check, and fails when it names another version. Linux fetches the release's linux-x86_64
 #          tarball, Darwin its .pkg, each verified against the release's SHA256SUMS by
@@ -18,8 +18,9 @@
 #          Runs on 10.9: pkgutil --expand only, never --expand-full.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-V="$(sed -n 's/^STEVEDORE_VERSION=//p' "$SELF/stevedore.pin")"
-case "$V" in ''|latest|*/*|*[!0-9A-Za-z._-]*) echo "fetch_stevedore: $SELF/stevedore.pin names no STEVEDORE_VERSION" >&2; exit 1 ;; esac
+. "$SELF/mavergreen-meta.sh"
+V="$(MAVERGREEN_ROOT="$SELF/.." mg_value ingredients/stevedore/VERSION)" || V=
+case "$V" in ''|latest|*/*|*[!0-9A-Za-z._-]*) echo "fetch_stevedore: $SELF/../.mavergreen/ingredients/stevedore/VERSION names no stevedore release" >&2; exit 1 ;; esac
 
 confirm() {
   [ -x "$1" ] && [ "$("$1" --version 2>/dev/null || :)" = "stevedore $V" ]

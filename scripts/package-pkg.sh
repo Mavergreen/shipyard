@@ -7,7 +7,7 @@
 #          the dev.mavergreen.base component. The mavergreen helper exports the shipyard-* names
 #          into /usr/local/mavergreen/bin, never the bare cmake/ctest/cpack; nothing is installed into
 #          /usr/local/bin. The install scripts come from stage_product.sh, and its preinstall refuses
-#          a box without the cmake product at components/cmake/version. The updater is a stopgap
+#          a box without the cmake product at .mavergreen/ingredients/cmake/VERSION. The updater is a stopgap
 #          until Mavericks Lineup exists.
 # spec: 2026-10-09 C4 -- shipyard ships no CMake of its own: the launchers run the cmake product
 #       installed beside it, with shipyard on CMAKE_PREFIX_PATH.
@@ -22,6 +22,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
+. "$SELF/mavergreen-meta.sh"
 SPREFIX=""; APP=""; VER=""; OUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -46,8 +47,8 @@ APP_NAME="${APP_REL##*/}"
 [ "$(basename "$APP")" = "$APP_NAME" ] \
   || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
 [ -d "$APP" ] || { echo "package-pkg: no such app: $APP" >&2; exit 1; }
-cmake_pin="$(sed -n 1p "$SELF/../components/cmake/version" 2>/dev/null || true)"
-[ -n "$cmake_pin" ] || { echo "package-pkg: no cmake pin in $SELF/../components/cmake/version" >&2; exit 1; }
+cmake_pin="$(MAVERGREEN_ROOT="$SELF/.." mg_value ingredients/cmake/VERSION 2>/dev/null || true)"
+[ -n "$cmake_pin" ] || { echo "package-pkg: no cmake pin in $SELF/../.mavergreen/ingredients/cmake/VERSION" >&2; exit 1; }
 require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-separated
   _flag="$1"; _dir="$2"; _allowed="$3"
   for _e in "$_dir"/* "$_dir"/.*; do

@@ -34,7 +34,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: ~/Library/Caches/mavergreen-clang22
-          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
+          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.mavergreen/ingredients/clang22/VERSION') }}
 
       # spec: R-P1-19 -- shipyard cannot install a RELEASED shipyard to test the one it is about to
       #       release, so it installs itself in source-build mode, beside the pinned cmake product.
@@ -163,7 +163,7 @@ jobs:
           v='${{ steps.ver.outputs.version }}'
           bad=0
           sudo installer -pkg "dist/mavericks-shipyard-$v.pkg" -target / || bad=1
-          sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root / || bad=1
+          sh scripts/assert-installed-shipyard.sh --cmake-version "$(. scripts/mavergreen-meta.sh && mg_value ingredients/cmake/VERSION | sed 's/-mavericks\..*//')" --root / || bad=1
           /usr/local/bin/mavergreen check || bad=1
           if [ "$bad" -ne 0 ]; then
             echo "---- /var/log/install.log, the pkg's scripts ----"
@@ -229,7 +229,7 @@ jobs:
       - name: The release installs as a consumer gets it
         run: |
           set -eu
-          sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root /
+          sh scripts/assert-installed-shipyard.sh --cmake-version "$(. scripts/mavergreen-meta.sh && mg_value ingredients/cmake/VERSION | sed 's/-mavericks\..*//')" --root /
           /usr/local/bin/mavergreen check
           shipyard-cmake --version | head -1
 

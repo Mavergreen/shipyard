@@ -1,6 +1,0 @@
-.github/renovate.json
-.github/workflows/release.yml
-.gitignore
-UPSTREAM_VERSION
-.mavergreen/hooks/upstream-release-notes-url
-tests/a-test.sh

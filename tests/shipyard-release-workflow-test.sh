@@ -145,9 +145,9 @@ else:
     if not has(r'^sudo installer -pkg "?dist/mavericks-shipyard-\$v\.pkg"? -target / \|\| bad=1$'):
         bad.append("the smoke's `sudo installer` does not record its failure (|| bad=1), so a pkg that "
                    "fails to install cannot fail the step")
-    if not has(r'''^sh scripts/assert-installed-shipyard\.sh --cmake-version "\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)" --root / \|\| bad=1$'''):
+    if not has(r'''^sh scripts/assert-installed-shipyard\.sh --cmake-version "\$\(\. scripts/mavergreen-meta\.sh && mg_value ingredients/cmake/VERSION \| sed 's/-mavericks\\\.\.\*//'\)" --root / \|\| bad=1$'''):
         bad.append("the smoke never runs scripts/assert-installed-shipyard.sh against the installed "
-                   "root, with the Kitware part of components/cmake/version and its failure recorded (|| bad=1)")
+                   "root, with the Kitware part of .mavergreen/ingredients/cmake/VERSION and its failure recorded (|| bad=1)")
     if not has(r'^/usr/local/bin/mavergreen check \|\| bad=1$'):
         bad.append("the smoke never runs the installed helper's own check (/usr/local/bin/mavergreen "
                    "check || bad=1), so a pkg whose farm links or manifest are wrong would publish")
@@ -307,8 +307,8 @@ cm_steps = [i for i, st in enumerate(steps)
 cm = cmds(both_modes_mac)
 for pat, why in ((r'^root="\$\(cd "\$GITHUB_ACTION_PATH/\.\./\.\./\.\." && pwd\)"$',
                   "the cmake step never finds the action's own checkout ($GITHUB_ACTION_PATH/../../..)"),
-                 (r'^v="\$\(cat "\$root/components/cmake/version"\)"$',
-                  "install@v1 never reads the cmake pin from its own checkout ($root/components/cmake/version)"),
+                 (r'^v="\$\(\. "\$root/scripts/mavergreen-meta\.sh" && MAVERGREEN_ROOT="\$root" mg_value ingredients/cmake/VERSION\)" \|\| v=$',
+                  "install@v1 never reads the cmake pin from its own checkout ($root/.mavergreen/ingredients/cmake/VERSION)"),
                  # fetch-release-pkg.sh fetches the release's SHA256SUMS and refuses an asset it does not
                  # list once, or whose hash differs, through shipyard_curl's retries.
                  (r'^pkg="\$\(sh "\$root/scripts/fetch-release-pkg\.sh" cmake "\$v" "cmake-\$v\.pkg" "\$d"\)"$',

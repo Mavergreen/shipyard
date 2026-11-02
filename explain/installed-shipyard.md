@@ -1,7 +1,7 @@
 installed-shipyard: an installed shipyard is what we meant to ship.
 
 ## Why
-Asserts that the cmake product beside shipyard is the CMake in components/cmake/version and universal;
+Asserts that the cmake product beside shipyard is the CMake in .mavergreen/ingredients/cmake/VERSION and universal;
 that the farm's shipyard-cmake, shipyard-ctest, shipyard-cpack and shipyard-check are executable on the
 default PATH, and shipyard-check runs from there; that a probe under a stripped environment finds shipyard
 through shipyard-cmake; that the installed updater is

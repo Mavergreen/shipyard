@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: on-target-job-test.sh
 #          ci.yml carries an on-target job that runs the fixtures in the 10.9 guest, with the python-315
-#          release python-315.pin names, verified against its SHA256SUMS, installed there for the checks that need
+#          release .mavergreen/ingredients/python-315/VERSION names, verified against its SHA256SUMS, installed there for the checks that need
 #          python3. Linux and macOS run the same runner, so the fixture count can be compared across hosts.
 # spec: .github/workflows/ci.yml on-target -- the flag-day P1 ruling R5
 set -eu
@@ -14,9 +14,9 @@ job="$(awk '/^  on-target:/ { on = 1; print; next } on && /^  [a-z]/ { exit } on
 [ -n "$job" ] || fail "ci.yml has an on-target job"
 printf '%s\n' "$job" | grep -q '^    if:' && fail "on-target runs: python-315 phase 1 has shipped"
 printf '%s\n' "$job" | grep -q 'SKIPPED' && fail "on-target's name no longer says it is skipped"
-printf '%s\n' "$job" | grep -q 'python-315\.pin' || fail "on-target reads python-315's version from python-315.pin"
+printf '%s\n' "$job" | grep -q 'mg_value ingredients/python-315/VERSION' || fail "on-target reads python-315's version from .mavergreen/ingredients/python-315/VERSION"
 printf '%s\n' "$job" | grep -q 'gh release download "\$v" -R Mavergreen/python-315 .*SHA256SUMS' || fail "on-target fetches the pinned python-315 release and its SHA256SUMS"
-grep -Eq '^PYTHON_315_VERSION=[0-9]+\.[0-9]+\.[0-9]+-mavericks\.[0-9]+$' "$here/python-315.pin" || fail "python-315.pin pins one python-315 release"
+sed -n 1p "$here/.mavergreen/ingredients/python-315/VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-mavericks\.[0-9]+$' || fail ".mavergreen/ingredients/python-315/VERSION pins one python-315 release"
 printf '%s\n' "$job" | grep -q 'sha256sum -c' || fail "on-target verifies the pkg against SHA256SUMS"
 printf '%s\n' "$job" | grep -q 'installer -pkg' || fail "on-target installs python-315 in the guest"
 printf '%s\n' "$job" | grep -q 'uses: Mavergreen/mavericks-vm@v1' || fail "on-target runs in the mavericks-vm guest"

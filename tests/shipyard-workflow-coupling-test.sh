@@ -89,8 +89,8 @@ for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 
                   (r"^sh scripts/package-pkg\.sh ", "build the pkg (scripts/package-pkg.sh)"),
                   (r"^sh scripts/assert_pkg_installs_in_place\.sh ", "gate the pkg (scripts/assert_pkg_installs_in_place.sh)"),
                   (r"^sudo installer -pkg .* \|\| bad=1$", "install the pkg on the runner, recording failure (sudo installer ... || bad=1)"),
-                  (r"^sh scripts/assert-installed-shipyard\.sh --cmake-version \"\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)\" .* \|\| bad=1$",
-                   "assert the install against the Kitware part of components/cmake/version, recording failure "
+                  (r"^sh scripts/assert-installed-shipyard\.sh --cmake-version \"\$\(\. scripts/mavergreen-meta\.sh && mg_value ingredients/cmake/VERSION \| sed 's/-mavericks\\\.\.\*//'\)\" .* \|\| bad=1$",
+                   "assert the install against the Kitware part of .mavergreen/ingredients/cmake/VERSION, recording failure "
                    "(scripts/assert-installed-shipyard.sh ... || bad=1)"),
                   # The merge's own result, asserted rather than assumed: lipo-merge-tree.sh's
                   # --require-archs covers every Mach-O in the tree, and this says out loud that the
@@ -159,10 +159,10 @@ for name in ("ci.yml", "release.yml"):
             continue
         cached = [i for i, st in enumerate(steps) if str(st.get("uses", "")).startswith("actions/cache@")
                   and str((st.get("with") or {}).get("path", "")).strip() == "~/Library/Caches/mavergreen-clang22"
-                  and "hashFiles('components/clang22/version')" in str((st.get("with") or {}).get("key", ""))]
+                  and "hashFiles('.mavergreen/ingredients/clang22/VERSION')" in str((st.get("with") or {}).get("key", ""))]
         if not cached or cached[0] > fetching[0]:
             bad.append("%s job %s fetches clang22 (the ~2 GB clang22-cross, unpacked) with no actions/cache of "
-                       "~/Library/Caches/mavergreen-clang22 keyed on hashFiles('components/clang22/version') "
+                       "~/Library/Caches/mavergreen-clang22 keyed on hashFiles('.mavergreen/ingredients/clang22/VERSION') "
                        "before it, so every run on a scarce macOS runner downloads and expands it again" % (name, job))
 if os.path.exists(os.path.join(wf, "..", "actions", "shipyard-cmake")):
     bad.append(".github/actions/shipyard-cmake still exists")

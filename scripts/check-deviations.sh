@@ -32,6 +32,8 @@ retired_fix() {
     ingredients) echo "now \`variant-build-info\`" ;;
     msc-template) echo "now the \`shipyard-scripts\` command; delete the directory" ;;
     upstream-version) echo "now \`upstream-complete\`, which reads no deviation; delete the directory" ;;
+    ingredients-md|ingredient-tracked) echo "now \`ingredient-complete\`, which reads no deviation; delete the directory" ;;
+    ingredient-pins) echo "now \`watch-matches\`, which reads no deviation; delete the directory" ;;
     upstream-version-bare) echo "now \`value-file-line\`; move the directory to .mavergreen/deviations/value-file-line/" ;;
     sparkle-updater|release-assets|python3) echo "no check reads this; delete the directory" ;;
     *) return 1 ;;
@@ -57,11 +59,7 @@ while IFS= read -r key; do
   [ "$(awk -F'\t' -v k="$key" '$1 == k { print $2 }' "$SHIPYARD_CHECK_REGISTRY")" = checkout ] || continue
   while IFS= read -r glob; do
     [ -n "$glob" ] && [ "$glob" != '*' ] || continue
-    hit=0
-    while IFS= read -r f; do
-      case "$f" in $glob) hit=1; break ;; esac
-    done < "$w/tracked"
-    [ "$hit" -eq 1 ] || chk_fail deviation-scope-matches "the \"$key\" deviation scopes itself to \"$glob\", which matches no tracked file" \
+    [ -n "$(mg_glob_hits "$glob" "$w/tracked")" ] || chk_fail deviation-scope-matches "the \"$key\" deviation scopes itself to \"$glob\", which matches no tracked file" \
       "an exception that covers nothing is stale or mistyped" \
       "correct the scope to match a tracked path, or delete the deviation's directory"
   done <<EOF

@@ -60,7 +60,7 @@ said "self-upstream-version: 20261012.1: no release tag yet"
 
 fresh ingredient
 git -C "$R" tag 20261012.3
-at 2026-10-19T12:00:00Z components/golang/version
+at 2026-10-19T12:00:00Z .mavergreen/ingredients/golang/VERSION
 want 20261012.4 "an ingredient-only change keeps the date and takes .N+1"
 said "self-upstream-version: 20261012.4: no own-code change since 20261012.3; ingredient-only"
 
@@ -88,7 +88,7 @@ git -C "$R" tag 20261012.3
 at 2026-10-19T22:30:00-05:00 src/x.c
 want 20261020.1 "the day is the UTC day, neither the committer's offset nor the caller's TZ"
 
-for p in tests/a.sh .github/workflows/x.yml README.md .mavergreen/upstream/VERSION ingredients/foo/product; do
+for p in tests/a.sh .github/workflows/x.yml README.md .mavergreen/upstream/VERSION .mavergreen/ingredients/foo/product; do
   fresh "default-$(printf '%s' "$p" | tr '/.' '__')"
   git -C "$R" tag 20261012.3
   at 2026-10-19T12:00:00Z "$p"
@@ -148,7 +148,7 @@ refuses "Declared state" "a malformed declared state is refused, never read as n
 
 fresh ref
 git -C "$R" tag 20261012.3
-at 2026-10-15T12:00:00Z components/golang/version
+at 2026-10-15T12:00:00Z .mavergreen/ingredients/golang/VERSION
 old="$(git -C "$R" rev-parse HEAD)"
 at 2026-10-19T12:00:00Z src/x.c
 git -C "$R" tag 20261019.1
@@ -158,15 +158,15 @@ want 20261012.4 "--ref uses only that commit's history and tags" --ref "$old"
 
 fresh numeric
 git -C "$R" tag 20261012.9
-at 2026-10-12T13:00:00Z components/golang/version
+at 2026-10-12T13:00:00Z .mavergreen/ingredients/golang/VERSION
 git -C "$R" tag 20261012.10
-at 2026-10-19T12:00:00Z components/golang/version
+at 2026-10-19T12:00:00Z .mavergreen/ingredients/golang/VERSION
 want 20261012.11 "the last tag is the numerically greatest: .10 beats .9"
 
 fresh foreign-tags
 git -C "$R" tag v1.0
 git -C "$R" tag 20261012-mavericks.1
-at 2026-10-19T12:00:00Z components/golang/version
+at 2026-10-19T12:00:00Z .mavergreen/ingredients/golang/VERSION
 want 20261012.1 "a tag not shaped YYYYMMDD.N is not a release tag"
 said "self-upstream-version: 20261012.1: no release tag yet"
 
@@ -195,14 +195,14 @@ git -C "$R" tag 20261012.2
 git -C "$R" checkout -qb side
 at 2026-10-15T12:00:00Z src/side.c
 git -C "$R" checkout -q -
-at 2026-10-16T12:00:00Z components/golang/version
+at 2026-10-16T12:00:00Z .mavergreen/ingredients/golang/VERSION
 GIT_AUTHOR_DATE=2026-10-19T12:00:00Z GIT_COMMITTER_DATE=2026-10-19T12:00:00Z git -C "$R" merge -q --no-ff -m merge side
 want 20261019.1 "own code merged on the 19th takes the merge's day, not the branch commit's"
 
 fresh zero
 git -C "$R" tag 20261012.3
 git -C "$R" tag 20261012.08
-at 2026-10-19T12:00:00Z components/golang/version
+at 2026-10-19T12:00:00Z .mavergreen/ingredients/golang/VERSION
 want 20261012.4 "a tag whose N has a leading zero is not a release tag"
 
 fresh literal

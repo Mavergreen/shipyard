@@ -10,7 +10,7 @@
 #            --product   the registered short name the pkg ships
 #            --feed-dir  where P.xml is written; nothing is written when the run refuses
 #            --signer    the ed25519-sign binary; OPTIONAL -- defaults to the prebuilt ed25519-sign
-#                        fetched from the ed25519 release ed25519.pin names, verified against its SHA256SUMS:
+#                        fetched from the ed25519 release .mavergreen/ingredients/ed25519/VERSION names, verified against its SHA256SUMS:
 #                        its linux-x86_64 tarball on Linux, its .pkg (read by stevedore) elsewhere.
 #                        ED25519_HOST replaces `uname -s` (test-only)
 #            --verifier  the ed25519-verify binary; OPTIONAL -- defaults to the one beside the signer

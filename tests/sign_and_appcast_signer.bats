@@ -11,7 +11,7 @@ setup() {
   fi
   export STEVEDORE SOURCE_DATE_EPOCH=1700000000
   export MAVERGREEN_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_BACKOFF=0
-  PIN="$(sed -n 's/^ED25519_VERSION=//p' "$ROOT/scripts/ed25519.pin")"
+  PIN="$(sed -n 1p "$ROOT/.mavergreen/ingredients/ed25519/VERSION")"
   REL="$WORK/rel/Mavergreen/ed25519/releases/download/$PIN"
   mkdir -p "$REL" "$WORK/shims"
   printf '#!/bin/sh\necho "$0 $*" >> "%s/forbidden"\nexit 1\n' "$WORK" > "$WORK/shims/pkgutil"

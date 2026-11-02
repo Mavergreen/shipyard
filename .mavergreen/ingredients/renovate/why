@@ -1,0 +1,1 @@
+linux-host.yml validates default.json with this release, so the check moves only with a commit

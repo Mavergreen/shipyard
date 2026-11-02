@@ -4,14 +4,18 @@
 #          Prints, sorted and one per line, every path under scripts/ (relative to it) that the named
 #          files need at run time: themselves and, transitively, every other file under scripts/ whose
 #          path (or a trailing part of it, as in "$SELF/lib/vercmp.sh") a non-comment line of theirs
-#          names. A script copied elsewhere with its closure runs there. Exit 2 on no NAME or a NAME
-#          that is not a file under scripts/.
+#          names, and each file under ../.mavergreen/ingredients/ they name as ingredients/<n>/<file>,
+#          printed as ../.mavergreen/ingredients/<n>/<file>. A script copied elsewhere with its closure,
+#          each path kept relative to the copy of scripts/, runs there. Exit 2 on no NAME or a NAME that
+#          is not a file under scripts/.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 [ "$#" -gt 0 ] || { echo "usage: script-closure.sh NAME..." >&2; exit 2; }
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/script-closure.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 ( cd "$SELF" && find . -type f | sed 's|^\./||' | LC_ALL=C sort ) > "$WORK/all"
+: > "$WORK/meta"
+[ ! -d "$SELF/../.mavergreen/ingredients" ] || ( cd "$SELF/../.mavergreen" && find ingredients -type f | LC_ALL=C sort ) > "$WORK/meta"
 : > "$WORK/todo"
 for n in "$@"; do
   grep -Fxq -- "$n" "$WORK/all" || { echo "script-closure: $n is not a file under $SELF" >&2; exit 2; }
@@ -28,7 +32,9 @@ while [ -s "$WORK/todo" ]; do
   while IFS= read -r f; do
     sed '/^[[:space:]]*#/d' "$SELF/$f" 2>/dev/null | LC_ALL=C tr -c 'A-Za-z0-9_./-' '\n' \
       | awk 'NF { t = $0; sub(/[.-]+$/, "", t); print t; while ((i = index(t, "/")) > 0) { t = substr(t, i + 1); print t } }' \
-      | grep -Fx -f "$WORK/all" >> "$WORK/todo" || :
+      > "$WORK/tokens"
+    grep -Fx -f "$WORK/all" "$WORK/tokens" >> "$WORK/todo" || :
+    [ ! -s "$WORK/meta" ] || grep -Fx -f "$WORK/meta" "$WORK/tokens" | sed 's|^|../.mavergreen/|' >> "$WORK/todo" || :
   done < "$WORK/new"
 done
 cat "$WORK/seen"

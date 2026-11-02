@@ -1,0 +1,2 @@
+20261025.5
+# renovate: datasource=github-releases depName=Mavergreen/recaulk versioning=regex:^(?<major>\d{8})\.(?<build>\d+)$

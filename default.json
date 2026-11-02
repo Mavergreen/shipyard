@@ -39,10 +39,10 @@
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/^scripts/vendor/pyyaml\\.pin$/"
+        "/^\\.mavergreen/ingredients/pyyaml/VERSION$/"
       ],
       "matchStrings": [
-        "^PYYAML_VERSION=(?<currentValue>\\S+)\\s*$"
+        "^(?<currentValue>\\S+)\\s*$"
       ],
       "depNameTemplate": "PyYAML",
       "datasourceTemplate": "pypi"

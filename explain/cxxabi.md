@@ -13,7 +13,7 @@ Undated: codex-cli's bin/codex-code-mode-host carried a whole libc++abi as priva
 runtime even though hidden.
 
 ## Limits
-The allow-list moves with scripts/recaulk.pin. Failures are listed for the first twenty paths, then
+The allow-list moves with .mavergreen/ingredients/recaulk/VERSION. Failures are listed for the first twenty paths, then
 counted. A path in scripts/conventions-grandfathered for this repo, known from $GITHUB_REPOSITORY, is
 warned rather than failed.
 

@@ -3,7 +3,7 @@
 
 setup() {
   FETCH="$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh"
-  PIN="$(sed -n 's/^STEVEDORE_VERSION=//p' "$BATS_TEST_DIRNAME/../scripts/stevedore.pin")"
+  PIN="$(sed -n 1p "$BATS_TEST_DIRNAME/../.mavergreen/ingredients/stevedore/VERSION")"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch-stevedore-test.XXXXXX")" && pwd)"
   export STEVEDORE_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_BACKOFF=0
   export STEVEDORE_CACHE="$WORK/cache" XDG_CACHE_HOME="$WORK/xdg" HOME="$WORK/home" STEVEDORE_EUID=1000

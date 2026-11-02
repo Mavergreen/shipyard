@@ -90,10 +90,6 @@ mkrepo "$work/te"; rm -f "$work/te/tests/a-test.sh"
 grep -v 'run-repo-tests' "$work/ok/.github/workflows/release.yml" > "$work/te/.github/workflows/release.yml"
 (cd "$work/te" && sh "$S" >/dev/null) || { echo "FAIL: a repo with an EMPTY tests dir is fine, should pass"; exit 1; }
 
-mkrepo "$work/i"; rm -f "$work/i/INGREDIENTS.md"
-if out="$(cd "$work/i" && sh "$S" 2>&1)"; then echo "FAIL missing INGREDIENTS.md should fail"; exit 1; fi
-first_is "$out" ingredients-md || { echo "FAIL: should be an ingredients-md failure: $out"; exit 1; }
-
 mkrepo "$work/r"
 printf '{"extends":["github>Mavergreen/shipyard"],"ignoreTests":false}\n' > "$work/r/.github/renovate.json"
 if out="$(cd "$work/r" && sh "$S" 2>&1)"; then echo "FAIL: a Renovate key restating the preset's own value is redundant and should fail"; exit 1; fi
@@ -348,15 +344,5 @@ printf '#!/bin/sh\nd="$(mktemp -d)"\n' > "$work/p1/tool.sh"  # portability-ok: f
 if out="$(cd "$work/p1" && sh "$S" 2>&1)"; then echo "FAIL a 10.9-unportable script should fail the gate"; exit 1; fi
 first_is "$out" shell-portability || { echo "FAIL should be a shell-portability failure: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'tool.sh:2' || { echo "FAIL should name file:line: $out"; exit 1; }
-
-# spec: SKILL.md "Renovate & automerge" -- every build ingredient must be able to auto-update. An
-#       ingredient nobody tracks is one that silently goes stale: swift-runtime's swift-toolchain
-#       pin sat at 6.3.3-mavericks.1 while that repo shipped .3, because updating it meant a human
-#       fetching and pasting two SHA256s. Wiring a Renovate customManager is the doctrine; a
-#       genuine exception (no datasource exists at all) must SAY so.
-mkrepo "$work/r1"
-printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| Go | `x` | ✅ github-releases | repackage |\n' \
-  > "$work/r1/INGREDIENTS.md"
-(cd "$work/r1" && sh "$S" >/dev/null) || { echo "FAIL tracked ingredient should pass"; exit 1; }
 
 echo "PASS: check-family-conventions-1"

@@ -1,0 +1,1 @@
+The version is a literal in MavericksSparkle.cmake's mavericks_fetch_sparkle, and Sparkle 1.x is the last line that supports 10.9, so a bump is a decision, not a routine update

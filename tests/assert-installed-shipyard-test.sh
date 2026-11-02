@@ -140,6 +140,11 @@ check "an updater with no arm64 slice fails" 1 "no arm64 slice" \
   assert --cmake-version "$ver"
 lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
 
+mv "$prefix/share/cmake/MavericksShipyard/.mavergreen" "$w/pins-aside"
+check "an install without shipyard's own pins beside its scripts fails" 1 "read shipyard's own pins" \
+  assert --cmake-version "$ver"
+mv "$w/pins-aside" "$prefix/share/cmake/MavericksShipyard/.mavergreen"
+
 mv "$updir/shipyard-updater" "$w/updater-aside"
 check "a missing updater fails" 1 "no installed updater executable" \
   assert --cmake-version "$ver"

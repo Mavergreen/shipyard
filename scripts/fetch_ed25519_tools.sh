@@ -1,17 +1,18 @@
 #!/bin/sh
 # platform: host-agnostic -- the Linux tarball on Linux, the pkg read with stevedore elsewhere
 #   usage: fetch_ed25519_tools.sh DIR
-#          Fetches the ed25519 release ed25519.pin names, verified against its SHA256SUMS, and unpacks
+#          Fetches the ed25519 release .mavergreen/ingredients/ed25519/VERSION names, verified against its SHA256SUMS, and unpacks
 #          it under DIR. Prints the directory holding ed25519-sign and ed25519-verify (and
 #          ed25519-keygen). ED25519_HOST replaces `uname -s` (test-only).
-# spec: SKILL.md "Family conventions" check 28 -- the signer of every release is pinned in ed25519.pin
+# spec: SKILL.md "Family conventions" check 28 -- the signer of every release is pinned in .mavergreen/ingredients/ed25519/VERSION
 #       and verified against its release's SHA256SUMS, never whatever ed25519 release is newest.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 [ $# -eq 1 ] || { echo "usage: fetch_ed25519_tools.sh DIR" >&2; exit 2; }
 _dl="$1"
-_v="$(sed -n 's/^ED25519_VERSION=//p' "$SELF/ed25519.pin")"
-[ -n "$_v" ] || { echo "fetch_ed25519_tools: $SELF/ed25519.pin names no ED25519_VERSION" >&2; exit 1; }
+. "$SELF/mavergreen-meta.sh"
+_v="$(MAVERGREEN_ROOT="$SELF/.." mg_value ingredients/ed25519/VERSION)" || _v=
+[ -n "$_v" ] || { echo "fetch_ed25519_tools: $SELF/../.mavergreen/ingredients/ed25519/VERSION names no ed25519 release" >&2; exit 1; }
 mkdir -p "$_dl/x"
 if [ "${ED25519_HOST:-$(uname -s)}" = Linux ]; then
   _asset="ed25519-$_v-linux-x86_64.tar.gz"

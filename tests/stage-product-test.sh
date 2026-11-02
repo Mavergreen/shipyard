@@ -158,9 +158,10 @@ PATH="$stubs:$PATH" sh "$w/post-redirected" /x.pkg / / || fail "postinstall to /
 grep -q '^launchctl bootstrap gui/501 ' "$alog" \
   || fail "an install to the boot volume loads the update-check agent into the console user's session: [$(cat "$alog")]"
 
-fake="$w/fake"; mkdir -p "$fake"
+fake="$w/fake/scripts"; mkdir -p "$fake" "$w/fake/.mavergreen/ingredients"
 cp "$S" "$fake/stage_product.sh"
-cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$here/../scripts/fetch_stevedore.sh" "$here/../scripts/stevedore.pin" "$fake/"
+cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$here/../scripts/fetch_stevedore.sh" "$here/../scripts/mavergreen-meta.sh" "$fake/"
+cp -R "$here/../.mavergreen/ingredients/stevedore" "$w/fake/.mavergreen/ingredients/"
 mkdir -p "$fake/lib"; cp "$here/../scripts/lib/vercmp.sh" "$fake/lib/"
 RM_LOG="$w/rm.log"; export RM_LOG
 cat > "$fake/render-manifest.sh" <<'EOF'

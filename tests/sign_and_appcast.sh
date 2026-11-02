@@ -55,8 +55,8 @@ rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/
 
 # spec: SKILL.md "Family conventions" check 28 -- with no --signer, the signer is the pinned ed25519 release,
 #       verified: a release whose SHA256SUMS does not list that release's pkg is refused, by version.
-pin="$(sed -n 's/^ED25519_VERSION=//p' "$ROOT/scripts/ed25519.pin")"
-[ -n "$pin" ] || fail "scripts/ed25519.pin names an ED25519_VERSION"
+pin="$(sed -n 1p "$ROOT/.mavergreen/ingredients/ed25519/VERSION")"
+[ -n "$pin" ] || fail ".mavergreen/ingredients/ed25519/VERSION names an ed25519 release"
 mkdir -p "$T/rel/Mavergreen/ed25519/releases/download/$pin"
 printf 'not the pkg\n' > "$T/rel/Mavergreen/ed25519/releases/download/$pin/ed25519-$pin.pkg"
 : > "$T/rel/Mavergreen/ed25519/releases/download/$pin/SHA256SUMS"

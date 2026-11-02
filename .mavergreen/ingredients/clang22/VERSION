@@ -1,0 +1,2 @@
+22.1.8-mavericks.12
+# renovate: datasource=github-releases depName=Mavergreen/clang-22 versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavericks\.(?<build>\d+)$

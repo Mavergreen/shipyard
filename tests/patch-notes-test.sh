@@ -10,15 +10,16 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/patch-notes-test.XXXXXX")"; trap 'rm -rf "$wo
 cd "$work"
 git init -q -b main .
 git config user.email t@example.com; git config user.name tester
-mkdir -p patches overlays components/boot2docker/patches release-notes src
+mkdir -p patches overlays boot2docker/patches release-notes src .mavergreen/ingredients/patches
 printf 'old\n'   > patches/old.patch
 printf 'keep\n'  > patches/keep.patch
 printf 'a\nb\nc\nd\ne\nf\ng\nh\n' > patches/moveme.patch
 printf 'int x;\n' > overlays/systray_darwin.m
-printf 'b2d\n'   > components/boot2docker/patches/kernel.config
+printf 'b2d\n'   > boot2docker/patches/kernel.config
 printf 'prose\n' > release-notes/1.0-mavericks.1.md
 printf 'code\n'  > src/main.go
 printf 'readme\n' > README.md
+printf 'patches/*.patch\n' > .mavergreen/ingredients/patches/watch
 git add -A; git commit -qm base; git tag 1.0-mavericks.1
 
 # spec: scripts/patch-notes.sh usage -- nothing changed -> nothing printed, so callers append unconditionally (as ingredient-notes).
@@ -33,6 +34,7 @@ out="$(sh "$S" "")"
 printf 'more prose\n' >> release-notes/1.0-mavericks.1.md
 printf 'more\n' >> src/main.go
 printf 'more\n' >> README.md
+printf 'overlays/*\n' >> .mavergreen/ingredients/patches/watch
 git commit -qam "not patches"
 out="$(sh "$S" 1.0-mavericks.1)"
 [ -z "$out" ] || { echo "FAIL non-patch paths: expected nothing, got '$out'"; exit 1; }
@@ -41,7 +43,7 @@ out="$(sh "$S" 1.0-mavericks.1)"
 #       renamed / a *.diff at any depth, sorted by path, rendered like the ingredient section.
 printf 'new\n' > patches/darwin-exit-nodes.patch
 printf 'int y;\n' > overlays/systray_darwin.m
-printf 'b2d2\n' > components/boot2docker/patches/kernel.config
+printf 'b2d2\n' > boot2docker/patches/kernel.config
 mkdir -p src/deep; printf 'd\n' > src/deep/fix.diff
 git rm -q patches/old.patch
 git mv patches/moveme.patch patches/moved.patch
@@ -50,7 +52,7 @@ out="$(sh "$S" 1.0-mavericks.1)"
 want="$(printf '%s\n' '### Our patches' ''; cat <<'EOF'
 Changed since 1.0-mavericks.1:
 
-- Changed `components/boot2docker/patches/kernel.config`
+- Changed `boot2docker/patches/kernel.config`
 - Changed `overlays/systray_darwin.m`
 - Added `patches/darwin-exit-nodes.patch`
 - Renamed `patches/moveme.patch` to `patches/moved.patch`

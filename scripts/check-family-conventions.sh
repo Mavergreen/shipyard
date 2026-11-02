@@ -111,14 +111,6 @@ if [ -d tests ] && [ -n "$(ls tests/*.sh tests/*.bats 2>/dev/null || true)" ]; t
          "add: sh \"\$SHIPYARD_SCRIPTS/run-repo-tests.sh\"   (or ctest, where that is the driver)"
 fi
 
-# spec: SKILL.md "Family conventions" check 3 -- INGREDIENTS.md must exist.
-if rel_ran ingredients-md; then
-  [ -f INGREDIENTS.md ] \
-    || chk_fail ingredients-md "no INGREDIENTS.md" \
-         "the repo's build inputs are undocumented" \
-         "list each input, where it is pinned, its Renovate status, and what a bump does"
-fi
-
 # spec: SKILL.md "Family conventions" check 4 -- no Renovate key may restate a value the shared
 #       preset already sets; the SAME key with a DIFFERENT value stays a legal override.
 chk_ran renovate-no-restated-defaults
@@ -277,24 +269,6 @@ PYEOF
         "correct $p at the place named (a repeated key, a bad indent), then run the gate again"
     done < "$tmp/yamlfail"
   fi
-fi
-
-# spec: SKILL.md "Family conventions" check 9 -- every ❌ ingredient row must say "untrackable" or
-#       wire a Renovate manager; a bare ❌ reads as an oversight, not a decision.
-chk_ran ingredient-tracked
-if [ -f INGREDIENTS.md ]; then
-  while IFS= read -r line; do
-    case "$line" in
-      *❌*)
-        case "$line" in
-          *[Uu]ntrackable*) : ;;   # declared, with a reason nearby
-          *) chk_fail ingredient-tracked "INGREDIENTS.md marks an ingredient as not auto-updating: $(printf '%s' "$line" | cut -c1-60)..." \
-               "a bare ❌ reads as an oversight, not a decision" \
-               "wire a Renovate customManager for it (a pinned hash that blocks the bot can verify against upstream's published SHA256SUMS instead), or mark it **untrackable** and say why" ;;
-        esac
-        ;;
-    esac
-  done < INGREDIENTS.md
 fi
 
 # spec: scripts/check-family-conventions.sh -- the delegating checks (10, 15, 22) run a sibling

@@ -5,9 +5,8 @@
 #          release and HEAD, as a markdown section for the release notes (the same register as
 #          ingredient-notes.sh's "### Build ingredients"). A modification is any *.patch or *.diff at
 #          any depth, or anything under a directory named patches/ or overlays/ at any depth
-#          (golang/openssh/swift-runtime's root patches/, container-tools'
-#          components/boot2docker/patches/, tailscale's overlays/) -- except release-notes/, which
-#          is hand-written prose. An exclude-path (an ingredient pin, in ingredient-pins.sh's
+#          (golang/openssh/swift-runtime's root patches/, tailscale's overlays/) -- except
+#          release-notes/, which is hand-written prose, and .mavergreen/, which is metadata. An exclude-path (an ingredient pin, in ingredient-pins.sh's
 #          "path" or "path:KEY" form) is left out, since ingredient-notes.sh already reports it.
 #          Prints NOTHING when nothing matched or there is no previous release, so callers append
 #          unconditionally. Exits non-zero when git cannot diff against <prev-tag>: an empty answer
@@ -37,7 +36,7 @@ git -c core.quotePath=false diff --no-ext-diff --name-status -M "$prev" HEAD -- 
 
 is_ours() {
   case "$1" in
-    release-notes/*) return 1 ;;
+    release-notes/*|.mavergreen/*) return 1 ;;
   esac
   grep -Fqx -- "$1" "$tmp/exclude" && return 1
   case "$1" in

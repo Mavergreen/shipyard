@@ -1,1 +1,1 @@
-Retired by P2: watch.
+Retired by P2: replaced by watch-matches.

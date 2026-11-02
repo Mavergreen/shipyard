@@ -107,7 +107,8 @@ fi
 
 tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes.XXXXXX")"
 footer_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-footer.XXXXXX")"
-trap 'rm -f "$tmp" "$footer_tmp"' EXIT
+tracked_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-tracked.XXXXXX")"
+trap 'rm -f "$tmp" "$footer_tmp" "$tracked_tmp"' EXIT
 
 if [ "$SELF_UPSTREAM" = yes ]; then
   printf '## %s %s\n' "$PRODUCT" "$VER" > "$tmp"
@@ -160,9 +161,24 @@ else
 fi
 PINS=""
 if [ -n "$CALLER" ]; then
-  PINS="$(sh "$SELF/ingredient-pins.sh" "$CALLER")" \
-    || die "ingredient-pins.sh failed reading the pins $CALLER watches; a repackage caller whose pins cannot be read must not ship notes that call it packaging-only"
-  [ -n "$PINS" ] || die "$CALLER calls repackage-on-ingredient-bump.yml but ingredient-pins.sh found no pins in it (check its 'paths:' list and own-upstream-paths)"
+  NAMES="$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" sh "$SELF/ingredient-pins.sh")" \
+    || die "ingredient-pins.sh failed reading .mavergreen/ingredients/; a repackage caller whose pins cannot be read must not ship notes that call it packaging-only"
+  [ -n "$NAMES" ] || die "$CALLER calls repackage-on-ingredient-bump.yml but .mavergreen/ingredients/ holds no ingredient"
+  for n in $NAMES; do
+    for k in $(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_list "ingredients/$n"); do
+      case "$k" in [A-Z]*) PINS="${PINS:+$PINS
+}.mavergreen/ingredients/$n/$k" ;; esac
+    done
+    WATCH="$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_lines "ingredients/$n/watch" 2>/dev/null)" || continue
+    [ -s "$tracked_tmp" ] || git -c core.quotepath=off ls-files > "$tracked_tmp"
+    while IFS= read -r g; do
+      [ -z "$g" ] || PINS="${PINS:+$PINS
+}$(mg_glob_hits "$g" "$tracked_tmp")"
+    done <<EOF
+$WATCH
+EOF
+  done
+  PINS="$(printf '%s\n' "$PINS" | grep . | LC_ALL=C sort -u)" || :
 fi
 # spec: tests/release-notes-test.sh "r3new"/"r1d" -- this repo's owner/repo names its own compare
 #       view; with neither source, a link is left out rather than guessed.

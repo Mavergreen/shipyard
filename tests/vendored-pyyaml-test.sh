@@ -1,8 +1,8 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: vendored-pyyaml-test.sh
-#          scripts/vendor/yaml is PyYAML's lib/yaml at the version pyyaml.pin names, chk_py prefers
-#          it to any yaml on PYTHONPATH, and INGREDIENTS.md declares the vendoring as a `vendored` deviation carrying its exit.
+#          scripts/vendor/yaml is PyYAML's lib/yaml at the version .mavergreen/ingredients/pyyaml/VERSION names, chk_py prefers
+#          it to any yaml on PYTHONPATH, and a `vendored` deviation carrying its exit declares the vendoring.
 #          Without a network the comparison with the sdist is left out and the offline checks run.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,7 +11,7 @@ trap 'rm -rf "$t"' EXIT
 fail() { echo "FAIL $1"; exit 1; }
 sync="$here/scripts/vendor/sync-pyyaml.sh"
 
-sh "$sync" --verify || fail "the vendored tree matches yaml.sha256 and pyyaml.pin"
+sh "$sync" --verify || fail "the vendored tree matches yaml.sha256 and the pyyaml ingredient"
 online=0
 rc=0; sh "$sync" --check >/dev/null 2>&1 || rc=$?
 case "$rc" in
@@ -20,16 +20,23 @@ case "$rc" in
   *) sh "$sync" --check; fail "the vendored tree matches the pinned sdist" ;;
 esac
 
-cp -R "$here/scripts/vendor" "$t/vendor"
-printf '#' >> "$t/vendor/yaml/__init__.py"
-if sh "$t/vendor/sync-pyyaml.sh" --verify >/dev/null 2>&1; then fail "one changed byte is caught offline"; fi
+copy() {
+  rm -rf "$t/r"; mkdir -p "$t/r/scripts" "$t/r/.mavergreen/ingredients"
+  cp -R "$here/scripts/vendor" "$t/r/scripts/vendor"
+  cp "$here/scripts/mavericks_fetch.sh" "$here/scripts/mavergreen-meta.sh" "$t/r/scripts/"
+  cp -R "$here/.mavergreen/ingredients/pyyaml" "$t/r/.mavergreen/ingredients/pyyaml"
+}
+copy
+sh "$t/r/scripts/vendor/sync-pyyaml.sh" --verify || fail "a copy of the vendored tree and its pin verifies"
+printf '#' >> "$t/r/scripts/vendor/yaml/__init__.py"
+if sh "$t/r/scripts/vendor/sync-pyyaml.sh" --verify >/dev/null 2>&1; then fail "one changed byte is caught offline"; fi
 if [ "$online" -eq 1 ]; then
-  if sh "$t/vendor/sync-pyyaml.sh" --check >/dev/null 2>&1; then fail "one changed byte is caught by --check"; fi
+  if sh "$t/r/scripts/vendor/sync-pyyaml.sh" --check >/dev/null 2>&1; then fail "one changed byte is caught by --check"; fi
 fi
 
-rm -rf "$t/vendor"; cp -R "$here/scripts/vendor" "$t/vendor"
-sed 's/^PYYAML_VERSION=.*/PYYAML_VERSION=0.0.0/' "$here/scripts/vendor/pyyaml.pin" > "$t/vendor/pyyaml.pin"
-if sh "$t/vendor/sync-pyyaml.sh" --verify >/dev/null 2>&1; then fail "a pin bumped without re-vendoring is caught offline"; fi
+copy
+printf '0.0.0\n' > "$t/r/.mavergreen/ingredients/pyyaml/VERSION"
+if sh "$t/r/scripts/vendor/sync-pyyaml.sh" --verify >/dev/null 2>&1; then fail "a pin bumped without re-vendoring is caught offline"; fi
 
 mkdir -p "$t/shadow/yaml"
 printf 'raise ImportError("the vendored yaml must win")\n' > "$t/shadow/yaml/__init__.py"
@@ -41,5 +48,5 @@ got="$(cd "$t" && PYTHONPATH="$t/shadow" SHIPYARD_CHECK_DIR="$here/scripts" SHIP
 dev="$(sh "$here/scripts/deviations.sh" "$here" | grep '^vendored scripts/vendor/yaml/\*\* ')" || fail "shipyard declares a vendored deviation of scope scripts/vendor/yaml/**"
 printf '%s\n' "$dev" | grep -q 'ssl' || fail "the deviation names its reason"
 tr '\n' ' ' < "$here/.mavergreen/deviations/vendored/pyyaml/revisit" | grep -q 'python-315 ships ssl and pip works (its phase 2); then delete the vendored copy and the checks import a pip-installed PyYAML' || fail "the deviation names its exit"
-grep -q '^| PyYAML ' "$here/INGREDIENTS.md" || fail "INGREDIENTS.md has a PyYAML row"
+[ -f "$here/.mavergreen/ingredients/pyyaml/description" ] || fail "the pyyaml ingredient has a description"
 echo "PASS vendored-pyyaml"

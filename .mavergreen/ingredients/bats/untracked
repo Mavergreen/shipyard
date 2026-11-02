@@ -1,0 +1,1 @@
+Nothing pins it: the install action takes the platform package manager's current bats, and the suites are version-agnostic

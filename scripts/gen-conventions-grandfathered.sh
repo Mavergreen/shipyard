@@ -28,6 +28,7 @@ fi
 mkdir -p "$clones"; : > "$clones/$sentinel"
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/gen-grandfathered.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT
 cp -R "$SELF" "$tmp/scripts"; rm -f "$tmp/scripts/conventions-grandfathered"
+mkdir -p "$tmp/.mavergreen"; cp -R "$SELF/../.mavergreen/ingredients" "$tmp/.mavergreen/ingredients"
 . "$tmp/scripts/deviation-reason.sh"
 { echo shipyard; gh repo list Mavergreen --no-archived --limit 500 --json name -q '.[].name' </dev/null; } | sort -u > "$tmp/repos"
 while read -r repo; do

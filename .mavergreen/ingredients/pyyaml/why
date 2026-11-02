@@ -1,0 +1,1 @@
+the checks read YAML with it wherever python3 has no PyYAML of its own

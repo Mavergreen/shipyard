@@ -41,7 +41,7 @@ while IFS="$(printf '\t')" read -r id mode script old fate; do
     [ "$fate" != P1 ] || fail "$id is retired, so its fate names the phase that retired it, never P1"
     continue
   fi
-  [ "$fate" = P1 ] || continue
+  case "$fate" in P1|P2) ;; *) continue ;; esac
   if [ "$mode" = key ]; then
     [ ! -d "$fx/$id" ] || fail "$id is a deviation key, which no check runs, so it has no fixtures"
     continue
@@ -50,11 +50,11 @@ while IFS="$(printf '\t')" read -r id mode script old fate; do
   if [ -d "$1" ]; then
     printf '%s\n' "$infeasible" | cut -d'|' -f1 | grep -qx "$id" && fail "$id has a fail fixture, so it is not infeasible: drop it from the list"
     set -- "$fx/$id"/pass*
-    [ -d "$1" ] || fail "$id (fate P1) has a fail fixture but no tests/fixtures/checks/$id/pass* fixture"
+    [ -d "$1" ] || fail "$id (fate $fate) has a fail fixture but no tests/fixtures/checks/$id/pass* fixture"
     continue
   fi
   row="$(printf '%s\n' "$infeasible" | grep "^$id|" || true)"
-  [ -n "$row" ] || fail "$id (fate P1) has no tests/fixtures/checks/$id/fail* fixture, and is not listed as infeasible with a reason"
+  [ -n "$row" ] || fail "$id (fate $fate) has no tests/fixtures/checks/$id/fail* fixture, and is not listed as infeasible with a reason"
   t="$(printf '%s\n' "$row" | cut -d'|' -f2)"
   [ -f "$here/$t" ] || fail "$id is listed as infeasible and covered by $t, which does not exist"
   grep -q "$id" "$here/$t" || fail "$id is listed as infeasible and covered by $t, which never names $id"
@@ -79,12 +79,12 @@ section_text() {
 }
 while IFS="$(printf '\t')" read -r id mode script old fate; do
   f="$here/explain/$id.md"
-  if [ "$fate" != P1 ]; then
+  if [ "$mode" = retired ] || { [ "$fate" != P1 ] && [ "$fate" != P2 ]; }; then
     [ "$(grep -c '' "$f")" -eq 1 ] || fail "$id (fate $fate) is a one-line stub"
     grep -q "^Retired by $fate" "$f" || fail "$id (fate $fate) says 'Retired by $fate' and nothing else"
     continue
   fi
-  [ "$(grep -c '' "$f")" -gt 8 ] || fail "$id (fate P1) is more than a stub: only a retired id may be one line"
+  [ "$(grep -c '' "$f")" -gt 8 ] || fail "$id (fate $fate) is more than a stub: only a retired id may be one line"
   head -n 1 "$f" | grep -q "^$id: " || fail "$id: explain/$id.md opens with the id and its rule, as '$id: <the rule>.'"
   grep -q '```' "$f" && fail "$id: explanations are prose, with no code fences"
   prev=0

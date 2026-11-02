@@ -20,7 +20,7 @@
 if(CMAKE_HOST_APPLE)
   set(_shipyard_cmake_min "@SHIPYARD_CMAKE_MIN@")
   if(NOT _shipyard_cmake_min MATCHES "^[0-9]")
-    file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/components/cmake/version" _shipyard_cmake_min LIMIT_COUNT 1)
+    file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/.mavergreen/ingredients/cmake/VERSION" _shipyard_cmake_min LIMIT_COUNT 1)
     string(REGEX REPLACE "-mavericks\\..*$" "" _shipyard_cmake_min "${_shipyard_cmake_min}")
   endif()
   get_filename_component(_shipyard_cmake_used "${CMAKE_COMMAND}" REALPATH)

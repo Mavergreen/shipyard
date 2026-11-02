@@ -19,7 +19,7 @@ copy_closure() {
 @test "the closure of build_component_pkg.sh holds the stevedore fetch and its pin" {
   run sh "$CLOSURE" build_component_pkg.sh
   [ "$status" -eq 0 ]
-  for need in build_component_pkg.sh fetch_stevedore.sh stevedore.pin fetch-release-pkg.sh source-date-epoch.sh mavericks_fetch.sh; do
+  for need in build_component_pkg.sh fetch_stevedore.sh ../.mavergreen/ingredients/stevedore/VERSION mavergreen-meta.sh fetch-release-pkg.sh source-date-epoch.sh mavericks_fetch.sh; do
     printf '%s\n' "$output" | grep -qx "$need" || { echo "closure lacks $need: $output"; false; }
   done
 }
@@ -31,9 +31,9 @@ copy_closure() {
 }
 
 @test "several names give the union" {
-  sh "$CLOSURE" source-date-epoch.sh stevedore.pin > "$WORK/out"
-  [ "$(cat "$WORK/out")" = "source-date-epoch.sh
-stevedore.pin" ]
+  sh "$CLOSURE" source-date-epoch.sh mavergreen-meta.sh > "$WORK/out"
+  [ "$(cat "$WORK/out")" = "mavergreen-meta.sh
+source-date-epoch.sh" ]
 }
 
 @test "a name that is not under scripts/ is refused" {
@@ -65,17 +65,18 @@ stevedore.pin" ]
 }
 
 @test "fetch_stevedore.sh runs from a directory holding only its closure" {
-  copy_closure fetch_stevedore.sh "$WORK/only"
-  V="$(sed -n 's/^STEVEDORE_VERSION=//p' "$WORK/only/stevedore.pin")"
+  copy_closure fetch_stevedore.sh "$WORK/only/scripts"
+  V="$(sed -n 1p "$WORK/only/.mavergreen/ingredients/stevedore/VERSION")"
+  [ -n "$V" ]
   printf '#!/bin/sh\necho "stevedore %s"\n' "$V" > "$WORK/stevedore"
   chmod +x "$WORK/stevedore"
-  STEVEDORE="$WORK/stevedore" run sh "$WORK/only/fetch_stevedore.sh"
+  STEVEDORE="$WORK/stevedore" run sh "$WORK/only/scripts/fetch_stevedore.sh"
   [ "$status" -eq 0 ]
   [ "$output" = "$WORK/stevedore" ]
 }
 
 @test "source-date-epoch.sh runs from a directory holding only its closure" {
-  copy_closure source-date-epoch.sh "$WORK/only"
-  SOURCE_DATE_EPOCH=7 run sh "$WORK/only/source-date-epoch.sh"
+  copy_closure source-date-epoch.sh "$WORK/only/scripts"
+  SOURCE_DATE_EPOCH=7 run sh "$WORK/only/scripts/source-date-epoch.sh"
   [ "$output" = 7 ]
 }

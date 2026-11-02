@@ -98,12 +98,12 @@ printf '%s' "$out" | grep -q 'CONFIGURED' || { echo "FAIL: the non-Apple host di
 
 # spec: .github/actions/install/action.yml -- its non-macOS path points MavericksShipyard_DIR at the
 #       action's own CHECKOUT, where the config sits at the root rather than under share/cmake and
-#       the minimum comes from components/cmake/version; copies of it pin this box's cmake and one
+#       the minimum comes from .mavergreen/ingredients/cmake/VERSION; copies of it pin this box's cmake and one
 #       above it.
 checkout() {  # $1 = dir  $2 = the pin it carries
-  mkdir -p "$1/components/cmake"
+  mkdir -p "$1/.mavergreen/ingredients/cmake"
   cp "$root"/*.cmake "$1/"
-  printf '%s\n' "$2" > "$1/components/cmake/version"
+  printf '%s\n# renovate: datasource=github-releases depName=Mavergreen/cmake\n' "$2" > "$1/.mavergreen/ingredients/cmake/VERSION"
 }
 checkout "$w/co" "$ver-mavericks.1"
 checkout "$w/co-above" "$above-mavericks.1"

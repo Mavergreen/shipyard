@@ -87,4 +87,10 @@ eq "pin ref no-@ output" "$out" ""
 if out="$(mg_pin_commit ingredients/nopin)"; then fail "pin commit without @ must fail"; fi
 eq "pin commit no-@ output" "$out" ""
 
+printf 'patches/a b/x.patch\npatches/ab.patch\nsrc/deep/y.patch\nREADME.md' > "$m/../tracked"
+eq "mg_glob_hits: a space is literal" "$(mg_glob_hits 'patches/a b/*' "$m/../tracked")" "patches/a b/x.patch"
+eq "mg_glob_hits: * crosses a /, and a last line with no newline is read" "$(mg_glob_hits '*' "$m/../tracked" | sed -n '$p')" README.md
+eq "mg_glob_hits: * crosses a /" "$(mg_glob_hits 'src/*.patch' "$m/../tracked")" src/deep/y.patch
+eq "mg_glob_hits: no match prints nothing" "$(mg_glob_hits 'nope/*' "$m/../tracked")" ""
+
 echo "mavergreen-meta-test: ok"

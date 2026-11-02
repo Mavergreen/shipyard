@@ -54,6 +54,12 @@ mg_pin_commit() {
   printf '%s\n' "${_mg_p#*@}"
 }
 
+mg_glob_hits() {
+  while IFS= read -r _mg_f || [ -n "$_mg_f" ]; do
+    case "$_mg_f" in $1) printf '%s\n' "$_mg_f" ;; esac
+  done < "$2"
+}
+
 mg_upstream_kind() {
   _mg_k=
   _mg_c=0

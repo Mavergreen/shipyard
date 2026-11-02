@@ -9,14 +9,15 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/../mavericks_fetch.sh"
-pin="$here/pyyaml.pin"
+. "$here/../mavergreen-meta.sh"
+pin=.mavergreen/ingredients/pyyaml
 tree="$here/yaml"
 list="$here/yaml.sha256"
 mode="${1:-sync}"
 case "$mode" in sync|--check|--verify) ;; *) echo "usage: sync-pyyaml.sh [--check | --verify]" >&2; exit 2 ;; esac
 
-PYYAML_VERSION=; PYYAML_SHA256=
-. "$pin"
+PYYAML_VERSION="$(MAVERGREEN_ROOT="$here/../.." mg_value ingredients/pyyaml/VERSION)" || PYYAML_VERSION=
+PYYAML_SHA256="$(MAVERGREEN_ROOT="$here/../.." mg_value ingredients/pyyaml/SHA256)" || PYYAML_SHA256=
 
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1
@@ -42,7 +43,7 @@ verify() {
   }
   have="$(sed -n "s/^__version__ *= *'\(.*\)'.*/\1/p" "$tree/__init__.py")"
   [ "$have" = "$PYYAML_VERSION" ] || {
-    echo "sync-pyyaml: pyyaml.pin says $PYYAML_VERSION, scripts/vendor/yaml is $have -- run: sh scripts/vendor/sync-pyyaml.sh" >&2
+    echo "sync-pyyaml: $pin/VERSION says $PYYAML_VERSION, scripts/vendor/yaml is $have -- run: sh scripts/vendor/sync-pyyaml.sh" >&2
     return 1
   }
 }
@@ -53,7 +54,7 @@ trap 'rm -rf "$work"' EXIT
 extract() {
   shipyard_curl "https://files.pythonhosted.org/packages/source/P/PyYAML/pyyaml-$PYYAML_VERSION.tar.gz" "$work/sdist.tar.gz" || return 2
   [ "$(sha256_of "$work/sdist.tar.gz")" = "$PYYAML_SHA256" ] || {
-    echo "sync-pyyaml: the sdist for $PYYAML_VERSION does not match PYYAML_SHA256 in pyyaml.pin" >&2
+    echo "sync-pyyaml: the sdist for $PYYAML_VERSION does not match $pin/SHA256" >&2
     return 1
   }
   mkdir "$work/src" "$work/out"

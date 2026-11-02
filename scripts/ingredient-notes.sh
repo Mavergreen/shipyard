@@ -58,6 +58,7 @@ shipyard_deviations . > /dev/null
 pin_name() {
   case "$1" in
     components/*/version) p="${1#components/}"; printf '%s' "${p%/version}" ;;
+    .mavergreen/ingredients/*/*) p="${1#.mavergreen/ingredients/}"; printf '%s / %s' "${p%%/*}" "${p#*/}" ;;
     *.patch) printf '%s' "${1##*/}" ;;
     *) printf '%s' "$1" ;;
   esac
@@ -70,6 +71,7 @@ pin_name() {
 label_prefix_for() {
   case "$1" in
     components/*/version) printf '%s / ' "$(pin_name "$1")" ;;
+    .mavergreen/ingredients/*/*) p="${1#.mavergreen/ingredients/}"; printf '%s / ' "${p%%/*}" ;;
     *) printf '' ;;
   esac
 }

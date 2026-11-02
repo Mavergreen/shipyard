@@ -37,7 +37,7 @@ done
 [ "$(sed -n 's/^  more: shipyard-check --explain //p' "$t/out" | sort -u | tr '\n' ' ')" = "apt bare-curl brew docs-no-sudo " ] \
   || fail "C1: exactly the four repo-wide rules fail: $(sed -n 's/^  more: shipyard-check --explain //p' "$t/out" | tr '\n' ' ')"
 grep -q '^shipyard-check: [0-9]* checks, 4 failed, [0-9]* not run$' "$t/out" || fail "C1: the count names the four failures and the rules not run: $(tail -n 1 "$t/out")"
-for id in comments host-tools ingredient-pins; do
+for id in comments host-tools ingredient-complete; do
   grep -q "^$id: not run: " "$t/out" || fail "M3: $id, with nothing to check, says it did not run"
 done
 

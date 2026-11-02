@@ -26,7 +26,7 @@ done
 case "$out" in /*) ;; *) out="$(pwd)/$out" ;; esac
 [ ! -e "$out" ] && [ ! -L "$out" ] || die "$out already exists"
 CMAKE="${CMAKE:-$(command -v shipyard-cmake || echo cmake)}"
-CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT/components/clang22")"
+CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT")"
 LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; STRINGS="$CL/bin/llvm-strings"
 export LIPO OTOOL NM STRINGS
 _tmp="${TMPDIR:-/tmp}"

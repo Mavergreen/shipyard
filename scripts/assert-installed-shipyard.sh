@@ -2,14 +2,14 @@
 # platform: macOS-only -- lipo checks the installed universal binaries
 #   usage: assert-installed-shipyard.sh --cmake-version V [--root DIR]
 #          Asserts that an INSTALLED mavericks-shipyard is what we meant to ship: the cmake product
-#          beside it is the CMake in components/cmake/version and universal; the farm's
+#          beside it is the CMake in .mavergreen/ingredients/cmake/VERSION and universal; the farm's
 #          shipyard-cmake, shipyard-ctest, shipyard-cpack, shipyard-check and shipyard-scripts are executable on the
 #          default PATH, and shipyard-check runs from there; a probe under a stripped environment
-#          finds shipyard through shipyard-cmake; the installed updater is universal; nothing is
-#          left in /usr/local/bin from the old layout; an installed mavergreen helper passes its own
-#          check; and any other cmake is refused, by name. --root defaults to "/" (a real install); a
-#          fixture root makes this unit-testable. Exit 0 clean, 1 on a failed assertion, 2 on a
-#          usage error.
+#          finds shipyard through shipyard-cmake; shipyard's own pins are installed beside its scripts;
+#          the installed updater is universal; nothing is left in /usr/local/bin from the old layout;
+#          an installed mavergreen helper passes its own check; and any other cmake is refused, by
+#          name. --root defaults to "/" (a real install); a fixture root makes this unit-testable.
+#          Exit 0 clean, 1 on a failed assertion, 2 on a usage error.
 # spec: R-P1-17 -- these assertions used to live inline in release.yml's install smoke, the one step
 #       that runs ONLY on a push to main, which left them unrunnable until the very push that must
 #       not be a rehearsal. release.yml, ci.yml and tests/assert-installed-shipyard-test.sh now share
@@ -104,6 +104,9 @@ if [ -x "$CM" ]; then
   grep -q "DIR=$CFGDIR" "$W/own.log" \
     || fail "shipyard-cmake did not find shipyard at $CFGDIR under a stripped environment: $(cat "$W/own.log")"
 fi
+
+[ -f "$CFGDIR/.mavergreen/ingredients/stevedore/VERSION" ] \
+  || fail "no $CFGDIR/.mavergreen/ingredients/stevedore/VERSION: the installed scripts read shipyard's own pins from $CFGDIR/.mavergreen/ingredients/"
 
 # platform: 10.9's lipo has no -archs, so read the slices with lipo -info;
 #           check-shell-portability.sh bans the idiom outright.

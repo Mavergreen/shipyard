@@ -1,0 +1,1 @@
+fetch_stevedore.sh fetches this release for every script that builds or reads a pkg

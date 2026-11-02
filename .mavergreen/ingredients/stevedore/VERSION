@@ -1,0 +1,2 @@
+20261027.1
+# renovate: datasource=github-releases depName=Mavergreen/stevedore versioning=regex:^(?<major>\d{8})\.(?<minor>\d+)$

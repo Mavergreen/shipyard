@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: shipyard-cmake-min-test.sh
 #          The minimum configured into the installed MavericksShipyardConfig.cmake is the Kitware part
-#          of components/cmake/version; -DSHIPYARD_CMAKE_MIN replaces it for one configure only, and a
+#          of .mavergreen/ingredients/cmake/VERSION; -DSHIPYARD_CMAKE_MIN replaces it for one configure only, and a
 #          value that is not a version fails the configure. Exit 0 clean, 1 on failure, 77 with no cmake.
 # spec: 2026-10-09 C5
 set -eu
@@ -12,8 +12,8 @@ _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/shipyard-cmake-min.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fails=0
 fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
-pin="$(sed -n '1s/-mavericks\.[0-9][0-9]*$//p' "$root/components/cmake/version")"
-[ -n "$pin" ] || { echo "FAIL: components/cmake/version is not X.Y.Z-mavericks.N"; exit 1; }
+pin="$(sed -n '1s/-mavericks\.[0-9][0-9]*$//p' "$root/.mavergreen/ingredients/cmake/VERSION")"
+[ -n "$pin" ] || { echo "FAIL: .mavergreen/ingredients/cmake/VERSION is not X.Y.Z-mavericks.N"; exit 1; }
 baked() { sed -n 's/^ *set(_shipyard_cmake_min "\(.*\)")$/\1/p' "$w/b/MavericksShipyardConfig.cmake"; }
 
 "$cm" -S "$root" -B "$w/b" > "$w/c1.log" 2>&1 || { echo "FAIL: shipyard does not configure:"; sed 's/^/    | /' "$w/c1.log"; exit 1; }
@@ -25,8 +25,8 @@ baked() { sed -n 's/^ *set(_shipyard_cmake_min "\(.*\)")$/\1/p' "$w/b/MavericksS
 for bad in "" 4.4.4-mavericks.1 four; do
   rc=0; "$cm" -S "$root" -B "$w/bad" -DSHIPYARD_CMAKE_MIN="$bad" > "$w/bad.log" 2>&1 || rc=$?
   [ "$rc" -ne 0 ] || fail "-DSHIPYARD_CMAKE_MIN='$bad' must fail the configure"
-  grep -qF "'$bad', not a version" "$w/bad.log" && grep -q 'components/cmake/version' "$w/bad.log" \
-    || { fail "-DSHIPYARD_CMAKE_MIN='$bad' must be named, with components/cmake/version:"; sed 's/^/    | /' "$w/bad.log"; }
+  grep -qF "'$bad', not a version" "$w/bad.log" && grep -q '.mavergreen/ingredients/cmake/VERSION' "$w/bad.log" \
+    || { fail "-DSHIPYARD_CMAKE_MIN='$bad' must be named, with .mavergreen/ingredients/cmake/VERSION:"; sed 's/^/    | /' "$w/bad.log"; }
   rm -rf "$w/bad"
 done
 
