@@ -1,9 +1,12 @@
 #!/bin/sh
 # platform: host-agnostic
 set -eu
+LC_ALL=C; export LC_ALL
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
 . "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
+. "$SELF/lib/vercmp.sh"
 . "$SELF/deviation-reason.sh"
 MAVERGREEN_ROOT="$(pwd)"
 shipyard_deviations . >/dev/null 2>&1 || :
@@ -128,6 +131,122 @@ elif [ -n "$_has_ings" ] && ! shipyard_deviated repackage-wiring >/dev/null; the
     "a bumped ingredient would change what ships and release nothing" \
     "add .github/workflows/repackage-on-ingredient-bump.yml calling Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1, with no paths: filter"
 fi
+
+_prods="$(mg_list products)"
+chk_ran release-has-product
+if [ -f "$REL" ] && [ -z "$_prods" ]; then
+  chk_fail release-has-product "the repo has $REL but no product under .mavergreen/products/" \
+    "a release ships products, and their names, identifiers and requirements are read from there" \
+    "add .mavergreen/products/<short name>/noun holding each shipped product's display noun"
+fi
+
+if [ -z "$_prods" ]; then
+  for _id in product-complete requires-pinned requires-min; do
+    chk_notrun "$_id" "there is no product under .mavergreen/products/"
+  done
+else
+  chk_ran product-complete
+  chk_ran requires-pinned
+  chk_ran requires-min
+fi
+for _s in $_prods; do
+  _d="products/$_s"
+  _at=".mavergreen/$_d"
+  if [ ! -d "$(mg_dir)/$_d" ]; then
+    chk_fail product-complete "$_at is not a directory" \
+      "each product is a directory of one value per file" \
+      "make $_at a directory holding at least its noun"
+    continue
+  fi
+  _rc=0; mavergreen_name_ok "$_s" || _rc=$?
+  case "$_rc" in
+    1) chk_fail product-complete "the short name \"$_s\" ($_at) is not lowercase ASCII letters, digits and hyphens, starting with a letter or digit" \
+         "the short name becomes a directory under the prefix and part of the pkg identifier" \
+         "rename $_at to a short name of a-z, 0-9 and -" ;;
+    2) chk_fail product-complete "the short name \"$_s\" ($_at) is reserved by the install layout" \
+         "the prefix already uses $_s for the link farm, var/, the helper or its base component" \
+         "rename $_at to a short name that is not one of: $mavergreen_reserved_names" ;;
+  esac
+  if [ -z "$(mg_value "$_d/noun" 2>/dev/null)" ]; then
+    chk_fail product-complete "$_at has no noun" \
+      "every name the product shows is derived from its display noun" \
+      "add $_at/noun holding the display noun, as in OpenSSH, Go or Porthole"
+  fi
+  if mg_has "$_d/app"; then
+    _v="$(mg_value "$_d/app" 2>/dev/null)" || _v=""
+    case "$_v" in
+      noun|upstream) ;;
+      *) chk_fail product-complete "$_at/app holds \"$_v\", which is neither noun nor upstream" \
+           "it says how the installed .app is named, and nothing names it any other way" \
+           "write noun (the bundle is <noun>.app) or upstream (upstream's own bundle name is kept)" ;;
+    esac
+  fi
+  if mg_has "$_d/edition"; then
+    _v="$(mg_value "$_d/edition" 2>/dev/null)" || _v=""
+    [ "$_v" = system ] || chk_fail product-complete "$_at/edition holds \"$_v\", which is not system" \
+      "system is the one edition the install layout knows" \
+      "write system for a system edition in /usr, or delete $_at/edition for a regular one"
+  fi
+  for _dep in $(mg_list "$_d/requires"); do
+    _r="$_d/requires/$_dep"
+    _rat=".mavergreen/$_r"
+    _kind="$(mg_value "$_r/kind" 2>/dev/null)" || _kind=""
+    case "$_kind" in
+      library|data|service|tool|external) ;;
+      '') chk_fail product-complete "$_rat has no kind" \
+            "the kind says whether the Engine installs the dependency, shares it or leaves it to the user" \
+            "add $_rat/kind holding one of library, data, service, tool or external" ;;
+      *) chk_fail product-complete "$_rat/kind holds \"$_kind\", which is not a kind" \
+           "the kind says whether the Engine installs the dependency, shares it or leaves it to the user, and an unknown one says neither" \
+           "write one of library, data, service, tool or external" ;;
+    esac
+    mg_has "$_r/why" || chk_fail product-complete "$_rat has no why" \
+      "nothing else says what the product does with the dependency" \
+      "add $_rat/why: one line saying what the product does with it"
+    if [ "$_kind" = external ] && ! mg_has "$_r/where"; then
+      chk_fail product-complete "$_rat is external and has no where" \
+        "the Engine never installs an external dependency, so the preinstall can only say where to get it" \
+        "add $_rat/where: one line saying where to get it"
+    fi
+    case "$_kind" in library|data|service|tool) ;; *) continue ;; esac
+    if [ "$_kind" = library ] && ! mg_has "$_r/min"; then
+      chk_fail requires-min "$_rat is a library and has no min" \
+        "a library states its ABI floor, which the preinstall refuses below, rather than defaulting to the build pin" \
+        "add $_rat/min holding the lowest $_dep release the product's binaries load against"
+    fi
+    _i="ingredients/$_dep"
+    if [ ! -d "$(mg_dir)/$_i" ]; then
+      chk_fail requires-pinned "$_rat names no ingredient: there is no .mavergreen/$_i/" \
+        "a $_kind requirement is installed, built and tested at one pin, and only an ingredient holds it" \
+        "add .mavergreen/$_i/ with its pin and a product file holding $_dep"
+      continue
+    fi
+    _prod="$(mg_value "$_i/product" 2>/dev/null)" || _prod=""
+    [ "$_prod" = "$_dep" ] || chk_fail requires-pinned ".mavergreen/$_i/product holds \"$_prod\", not $_dep, which $_rat names" \
+      "the pin must be a release of the product required, or it pins something else" \
+      "write $_dep in .mavergreen/$_i/product"
+    mg_has "$_r/min" || continue
+    _min="$(mg_value "$_r/min" 2>/dev/null)" || _min=""
+    _pin=""
+    if mg_has "$_i/VERSION"; then
+      _pin="$(mg_value "$_i/VERSION")"
+    elif _par="$(mg_value "$_i/from" 2>/dev/null)" && [ -n "$_par" ]; then
+      _pin="$(mg_value "ingredients/$_par/VERSION" 2>/dev/null)" || _pin=""
+    else
+      _pin="$(mg_pin_ref "$_i" 2>/dev/null)" || _pin=""
+    fi
+    _cmp=0; _ord="$(mavergreen_vercmp "$_min" "$_pin")" || _cmp=$?
+    if [ "$_cmp" -ne 0 ]; then
+      chk_fail requires-min "$_rat/min \"$_min\" cannot be ordered against .mavergreen/$_i's pin \"$_pin\"" \
+        "a min the comparator cannot order with the pin might be above it, so it is refused rather than passed unproven" \
+        "write the min, and the pin, as dotted numbers with at most a -mavericks.N or pN suffix"
+    elif [ "$_ord" = 1 ]; then
+      chk_fail requires-min "$_rat/min $_min is above .mavergreen/$_i's pin $_pin" \
+        "the preinstall would refuse the very release the product was built and tested with" \
+        "lower the min to the lowest $_dep release the product works with, at or below $_pin"
+    fi
+  done
+done
 
 _ings="$(mg_list ingredients)"
 if [ -z "$_ings" ]; then

@@ -33,8 +33,8 @@ code | grep -q -- '--cmake-tree' && { echo "FAIL: package-pkg.sh still takes --c
 # spec: 2026-10-09 C4 -- the preinstall refuses a box without the cmake product at shipyard's pin.
 code | grep -q -- '--requires "cmake>=\$' \
   || { echo "FAIL: package-pkg.sh must pass stage_product.sh --requires \"cmake>=<the pin>\", quoted"; exit 1; }
-code | grep -q 'mg_value ingredients/cmake/VERSION' \
-  || { echo "FAIL: the required cmake version must come from .mavergreen/ingredients/cmake/VERSION, shipyard's one pin"; exit 1; }
+code | grep -q 'mg_value products/shipyard/requires/cmake/min' \
+  || { echo "FAIL: the required cmake version must come from .mavergreen/products/shipyard/requires/cmake/min, the lowest cmake shipyard works with"; exit 1; }
 code | grep -q 'PREFIX_DIR="/usr/local/mavergreen/shipyard"' \
   || { echo "FAIL: shipyard installs into /usr/local/mavergreen/shipyard, the one directory its short name owns"; exit 1; }
 code | grep -q 'usr/local/bin' && { echo "FAIL: shipyard installs nothing into /usr/local/bin -- only the base component's helper lives there"; exit 1; }

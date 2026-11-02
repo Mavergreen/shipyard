@@ -162,7 +162,7 @@ fake="$w/fake/scripts"; mkdir -p "$fake" "$w/fake/.mavergreen/ingredients"
 cp "$S" "$fake/stage_product.sh"
 cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$here/../scripts/fetch_stevedore.sh" "$here/../scripts/mavergreen-meta.sh" "$fake/"
 cp -R "$here/../.mavergreen/ingredients/stevedore" "$w/fake/.mavergreen/ingredients/"
-mkdir -p "$fake/lib"; cp "$here/../scripts/lib/vercmp.sh" "$fake/lib/"
+mkdir -p "$fake/lib"; cp "$here/../scripts/lib/vercmp.sh" "$here/../scripts/lib/name-rules.sh" "$fake/lib/"
 RM_LOG="$w/rm.log"; export RM_LOG
 cat > "$fake/render-manifest.sh" <<'EOF'
 #!/bin/sh

@@ -112,3 +112,7 @@ repo-public	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh vis
 repo-requires-on-target	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh on-target	P1
 self-upstream-exclude	key	scripts/self-upstream-version.sh	self-upstream-version.sh self-upstream-exclude	P1
 repackage-wiring	checkout	scripts/check-metadata.sh	new (P2: R15 repackage-caller)	P2
+product-complete	checkout	scripts/check-metadata.sh	new (P2: replaces the product-names row's checks)	P2
+release-has-product	checkout	scripts/check-metadata.sh	new (P2)	P2
+requires-pinned	checkout	scripts/check-metadata.sh	new (P2: dependencies rule R1)	P2
+requires-min	checkout	scripts/check-metadata.sh	new (P2: dependencies rule R2 and decision 3)	P2

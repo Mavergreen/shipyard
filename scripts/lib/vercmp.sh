@@ -21,7 +21,7 @@ comparison_key() {
   printf '%s' "$1" | sed -e 's/-mavericks\./\./' -e 's/-mavergreen\./\./' -e 's/\([0-9]\)p\([0-9]\)/\1.\2/'
 }
 
-# spec: tests/version-lib-test.sh "mavergreen_vercmp" -- status 2, printing nothing, when either key is
+# spec: tests/vercmp-test.sh -- status 2, printing nothing, when either key is
 #       unorderable; a subshell body, so it sets no caller variable.
 mavergreen_vercmp() (
   a="$(comparison_key "$1")"

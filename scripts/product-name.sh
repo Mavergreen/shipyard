@@ -13,20 +13,22 @@ set -eu
 # spec: tests/product-names-test.sh -- a name is lowercase ASCII; a UTF-8 locale can collate [a-z] to
 #       admit uppercase in case patterns and awk ranges, so names are matched in the C locale.
 LC_ALL=C; export LC_ALL
-REG="${MAVERGREEN_PRODUCT_NAMES:-$(cd "$(dirname "$0")" && pwd)/product-names}"
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/lib/name-rules.sh"
+REG="${MAVERGREEN_PRODUCT_NAMES:-$SELF/product-names}"
 [ -f "$REG" ] && [ -r "$REG" ] || { echo "product-name.sh: cannot read the registry $REG" >&2; exit 2; }
 entries() { sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$REG"; }
 usage() {
   echo "usage: product-name.sh identifier|repo|updater-bundle-id|agent-label|updater-app|feed <short-name> | shorts <repo> | check" >&2
   exit 2
 }
-safe_name() {
-  case "$1" in
-    ''|-*|*[!a-z0-9-]*|var|bin|sbin|share|mavergreen|system-replace|base) return 1 ;;
-  esac
+names_ok() {
+  while IFS= read -r _n; do
+    if mavergreen_name_ok "$_n"; then printf '%s\n' "$_n"; fi
+  done
 }
 row_field() {
-  safe_name "$1" || return 1
+  mavergreen_name_ok "$1" || return 1
   _v="$(entries | awk -v n="$1" -v k="$2" '$1 == n { if ($2 != "dev.mavergreen.base") print $k; exit }')"
   [ -n "$_v" ] || return 1
   printf '%s\n' "$_v"
@@ -53,16 +55,25 @@ case "${1:-}" in
   shorts)
     [ $# -eq 2 ] || usage
     case "$2" in ''|-*|*[!a-z0-9-]*) exit 1 ;; esac
-    _s="$(entries | awk -v r="$2" '$3 == r && $2 != "dev.mavergreen.base" && $1 ~ /^[a-z0-9][a-z0-9-]*$/ && $1 !~ /^(var|bin|sbin|share|mavergreen|system-replace|base)$/ { print $1 }')"
+    _s="$(entries | awk -v r="$2" '$3 == r && $2 != "dev.mavergreen.base" { print $1 }' | names_ok)"
     [ -n "$_s" ] || exit 1
     printf '%s\n' "$_s" ;;
   check)
+    _bad=0
+    while IFS= read -r _n; do
+      [ -n "$_n" ] || continue
+      _rc=0; mavergreen_name_ok "$_n" || _rc=$?
+      case "$_rc" in
+        1) echo "product-names: bad short name: $_n" >&2; _bad=1 ;;
+        2) echo "product-names: short name reserved by the install layout: $_n" >&2; _bad=1 ;;
+      esac
+    done <<EOF
+$(entries | awk 'NF == 3 { print $1 }')
+EOF
     entries | awk '
       NF != 3 { print "product-names: not <name> <identifier> <repo>: " $0 > "/dev/stderr"; bad = 1; next }
-      $1 !~ /^[a-z0-9][a-z0-9-]*$/ { print "product-names: bad short name: " $1 > "/dev/stderr"; bad = 1 }
       $2 !~ /^dev\.mavergreen\./ { print "product-names: identifier outside dev.mavergreen.*: " $2 > "/dev/stderr"; bad = 1 }
       $3 !~ /^[a-z0-9][a-z0-9-]*$/ { print "product-names: bad repo name: " $3 > "/dev/stderr"; bad = 1 }
-      $1 ~ /^(var|bin|sbin|share|mavergreen|system-replace|base)$/ { print "product-names: short name reserved by the install layout: " $1 > "/dev/stderr"; bad = 1 }
       $2 == "dev.mavergreen.base" { print "product-names: dev.mavergreen.base is the helper component, not a product: " $1 > "/dev/stderr"; bad = 1 }
       $3 ~ /-[0-9]+$/ {
         p = $3; sub(/-[0-9]+$/, "", p)
@@ -71,6 +82,7 @@ case "${1:-}" in
       ($1 in n) { print "product-names: duplicate short name: " $1 > "/dev/stderr"; bad = 1 }
       ($2 in i) { print "product-names: duplicate identifier: " $2 > "/dev/stderr"; bad = 1 }
       { n[$1] = 1; i[$2] = 1 }
-      END { exit bad }' ;;
+      END { exit bad }' || _bad=1
+    exit "$_bad" ;;
   *) usage ;;
 esac

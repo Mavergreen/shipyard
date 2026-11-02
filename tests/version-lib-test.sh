@@ -101,16 +101,6 @@ grep -q 's/-mavericks\\./\\./' "$here/../scripts/gen_appcast.sh" 2>/dev/null \
 grep -q 'string(REPLACE "-mavergreen\." ' "$here/../MavericksSparkle.cmake" \
   || { echo "FAIL MavericksSparkle.cmake lost its -mavergreen derivation (mirror of comparison_key)"; exit 1; }
 
-vc() { r="$(mavergreen_vercmp "$1" "$2")" && s=0 || s=$?; echo "$s:$r"; }
-[ "$(vc 22.1.8-mavericks.5 22.1.8-mavericks.4)" = 0:1 ]   || { echo "FAIL vercmp: .5 > .4"; exit 1; }
-[ "$(vc 22.1.8-mavericks.10 22.1.8-mavericks.9)" = 0:1 ]  || { echo "FAIL vercmp: .10 > .9"; exit 1; }
-[ "$(vc 20261019.1 20261018.12)" = 0:1 ]                  || { echo "FAIL vercmp: dates"; exit 1; }
-[ "$(vc 9.9p2 9.9p1)" = 0:1 ]                             || { echo "FAIL vercmp: pN"; exit 1; }
-[ "$(vc 22.1.8-mavergreen.1 22.1.8-mavericks.1)" = 0:0 ]  || { echo "FAIL vercmp: mavergreen == mavericks"; exit 1; }
-[ "$(vc 1.0 1.0.0)" = 0:0 ]                               || { echo "FAIL vercmp: trailing zero"; exit 1; }
-[ "$(vc 1.0-rc1 1.0)" = 2: ]                              || { echo "FAIL vercmp: -rc1 must be status 2"; exit 1; }
-[ "$(vc abc 1)" = 2: ]                                    || { echo "FAIL vercmp: abc must be status 2"; exit 1; }
-
 # spec: scripts/lib.sh -- consumer repos source it with their OWN $SELF (a build/ dir) and SHIPYARD /
 #       SHIPYARD_SCRIPTS set from shipyard-scripts; it must find lib/vercmp.sh from those, and fail loudly otherwise.
 S="$here/../scripts"

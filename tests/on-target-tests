@@ -2,3 +2,5 @@ tests/mavergreen-meta-test.sh
 tests/shipyard-scripts-test.sh
 tests/resolve-version-test.sh
 tests/shipyard-pins-test.sh
+tests/vercmp-test.sh
+tests/name-rules-test.sh
