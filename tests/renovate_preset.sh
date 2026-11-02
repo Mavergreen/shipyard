@@ -3,7 +3,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 python3 -m json.tool default.json >/dev/null || { echo "invalid JSON in default.json"; exit 1; }
-PYTHONPATH=scripts/lib python3 - default.json <<'PY'
+PYTHONPATH=scripts/lib python3 -B - default.json <<'PY'
 import json, re, sys
 from renovate_regex import LINE2, js
 c = json.load(open(sys.argv[1]))

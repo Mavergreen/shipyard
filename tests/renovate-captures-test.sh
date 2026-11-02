@@ -7,7 +7,7 @@ cd "$here"
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/renovate-captures.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 git -c core.quotepath=off ls-files > "$w/files" 2>/dev/null || { echo "SKIP: not a git checkout"; exit 77; }
-PYTHONPATH=scripts/lib python3 - "$w/files" .github/renovate.json default.json <<'PY'
+PYTHONPATH=scripts/lib python3 -B - "$w/files" .github/renovate.json default.json <<'PY'
 import json, re, sys
 from renovate_regex import js
 def matcher(pat):
