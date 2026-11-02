@@ -43,6 +43,12 @@ case_ unknown no-such-check x '*' because
 fails unknown deviation-complete 'shipyard-check --list'
 case_ key host linux linux 'no bash 3.2 here'
 run "$w/key" || fail "a key id is a known check: $(cat "$w/out")"
+for k in relocatable newer-macos build-from-mavericks flat-incapable publish-unchanged reproducible; do
+  case_ "k-$k" "$k" clang22 '*' 'it embeds its build prefix'
+  run "$w/k-$k" || fail "$k is a deviation kind the metadata spec names, so the gate accepts it: $(cat "$w/out")"
+done
+case_ k-relocatable-scoped relocatable x clang22 'it embeds its build prefix'
+run "$w/k-relocatable-scoped" || fail "a relocatable deviation is scoped to an ingredient name: $(cat "$w/out")"
 
 for pair in 'product-layout:stage-product' 'artifact-conformance:artifact-checks-wired' \
             'scheme:version-scheme' 'ingredients:variant-build-info' \

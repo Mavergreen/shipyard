@@ -119,3 +119,9 @@ requires-min	checkout	scripts/check-metadata.sh	new (P2: dependencies rule R2 an
 legacy-top-level	checkout	scripts/check-metadata.sh	new (P2: legacy metadata is refused at the top level)	P2
 prose-restates-value	checkout	scripts/check-metadata.sh	new (P2: the metadata spec's M4)	P2
 readme-links-metadata	checkout	scripts/check-metadata.sh	new (P2: the README points at the metadata)	P2
+relocatable	key	scripts/shipyard-provision	deviation key (shipyard-provision: a product that cannot run from a cache)	P2
+newer-macos	key	scripts/check-artifact-conformance.sh	deviation key (architectures: a product that serves newer macOS)	P5
+flat-incapable	key	scripts/check-artifact-conformance.sh	deviation key (architectures: a product that cannot ship a flat pkg)	P5
+build-from-mavericks	key	scripts/check-artifact-conformance.sh	deviation key (reproducible releases: a product that builds on fewer hosts)	P6
+publish-unchanged	key	scripts/check-artifact-conformance.sh	deviation key (reproducible releases: a repo that always publishes)	P6
+reproducible	key	scripts/check-artifact-conformance.sh	deviation key (reproducible releases: a path or repo exempt from the reproduce check)	P6
