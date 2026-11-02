@@ -1321,14 +1321,14 @@ fi
 
 # spec: SKILL.md, the `docs-no-sudo` row of the checks table -- family tools elevate themselves
 #       (the maintainer's ruling, 2026-10-14), so no user-facing doc or message tells anyone to run sudo. Doc files: README*,
-#       *.md except release-notes/**, SKILL.md and design, decision and plan
+#       *.md except .mavergreen/release-notes/**, SKILL.md and design, decision and plan
 #       records (docs/decisions/**, docs/adr/**, docs/plans/**, docs/superpowers/**), man/** and *.[1-9], pkg resources. Messages: echo or
 #       printf text, and heredoc text, in tracked shell scripts outside tests/. An executed sudo is code,
 #       not a doc, so it is not matched.
 chk_ran docs-no-sudo
 : > "$tmp/sudohits"
 if [ "$HAVE_TRACKED" -eq 1 ]; then
-  grep -Ev '^(tests|\.superpowers)/|^release-notes/|^explain/|^docs/(decisions|adr|plans|superpowers)/|(^|/)SKILL\.md$' "$TF" | while IFS= read -r f; do
+  grep -Ev '^(tests|\.superpowers)/|^\.mavergreen/release-notes/|^explain/|^docs/(decisions|adr|plans|superpowers)/|(^|/)SKILL\.md$' "$TF" | while IFS= read -r f; do
     [ -f "$f" ] || continue
     case "$f" in
       README*|*/README*|*.md|man/*|*.[1-9]|scripts/resources/*|*/resources/*.html|*/resources/*.rtf) ;;

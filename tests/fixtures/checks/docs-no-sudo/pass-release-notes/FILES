@@ -3,4 +3,4 @@
 .gitignore
 .mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh
-release-notes/1.0.0.md
+.mavergreen/release-notes/1.0.0.md
