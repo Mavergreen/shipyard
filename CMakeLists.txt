@@ -101,6 +101,8 @@ file(CREATE_LINK "../${_dest}/scripts/shipyard-check" "${CMAKE_CURRENT_BINARY_DI
 install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-check" DESTINATION bin)
 file(CREATE_LINK "../${_dest}/scripts/shipyard-scripts" "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-scripts" SYMBOLIC)
 install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-scripts" DESTINATION bin)
+file(CREATE_LINK "../${_dest}/scripts/shipyard-provision" "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-provision" SYMBOLIC)
+install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-provision" DESTINATION bin)
 
 install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake"

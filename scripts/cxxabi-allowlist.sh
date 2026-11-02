@@ -4,8 +4,8 @@
 #          Prints the C++ runtime machinery the pinned Recaulk defines, one "<name> <visible|hidden>" per
 #          line, sorted with LC_ALL=C: each symbol ARCHIVE defines that matches scripts/cxxabi-machinery.txt,
 #          read by macho-cxxabi.sh, visible when any member exports it. With no ARCHIVE it reads
-#          lib/librecaulk.a of the Recaulk release .mavergreen/ingredients/recaulk/VERSION names, through fetch_product_pkg.sh and
-#          shipyard's own registry, whatever $MAVERGREEN_PRODUCT_NAMES says. NM is the Mach-O symbol reader
+#          lib/librecaulk.a of the Recaulk release .mavergreen/ingredients/recaulk/VERSION names, through
+#          shipyard-provision, which installs nothing even when CI=true. NM is the Mach-O symbol reader
 #          (default nm; on a host without Apple's, clang22's llvm-nm). Exit 1, printing nothing, when NM is
 #          missing, the archive cannot be fetched or read, or it defines no machinery.
 set -eu
@@ -24,8 +24,8 @@ else
   . "$SELF/mavergreen-meta.sh"
   version="$(MAVERGREEN_ROOT="$SELF/.." mg_value ingredients/recaulk/VERSION)" || version=
   [ -n "$version" ] || die "$SELF/../.mavergreen/ingredients/recaulk/VERSION names no Recaulk release"
-  MAVERGREEN_PRODUCT_NAMES="$SELF/product-names" sh "$SELF/fetch_product_pkg.sh" recaulk "$version" "$t/recaulk" > /dev/null || die "could not fetch recaulk $version"
-  archive="$t/recaulk/lib/librecaulk.a"
+  recaulk="$(MAVERGREEN_ROOT="$SELF/.." CI= sh "$SELF/shipyard-provision" --only recaulk --into "$t")" || die "could not fetch recaulk $version"
+  archive="${recaulk#recaulk=}/lib/librecaulk.a"
 fi
 [ -f "$archive" ] || die "no archive at $archive"
 sh "$SELF/macho-cxxabi.sh" "$archive" > "$t/cx" 2>"$t/err" \

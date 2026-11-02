@@ -163,3 +163,30 @@ DIST
   [ "${lines[${#lines[@]}-1]}" = "$WORK/out/rel" ]
   [ "$(cat "$WORK/out/rel/lib/libwidget.a")" = W ]
 }
+
+@test "--repo OWNER/REPO names the release and the registry is not read" {
+  serve widget-1.0.pkg
+  MAVERGREEN_PRODUCT_NAMES="$WORK/no-such-registry" run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$DEST/lib/libwidget.a")" = W ]
+}
+
+@test "--repo picks the component whose identifier ends in .SHORT" {
+  serve widget-1.0.pkg dev.mavergreen.family.widget
+  MAVERGREEN_PRODUCT_NAMES="$WORK/no-such-registry" run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$DEST/lib/libwidget.a")" = W ]
+}
+
+@test "--repo with no component for SHORT fails 1, naming the identifier it wanted" {
+  serve widget-1.0.pkg dev.mavergreen.gadget
+  MAVERGREEN_PRODUCT_NAMES="$WORK/no-such-registry" run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"dev.mavergreen.widget"* ]] || false
+  [ ! -e "$DEST" ]
+}
+
+@test "--repo that is not OWNER/REPO is a usage error" {
+  run sh "$HELPER" --repo widget-repo widget 1.0 "$DEST"
+  [ "$status" -eq 2 ]
+}

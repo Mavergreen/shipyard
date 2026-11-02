@@ -8,7 +8,7 @@ setup() {
     NM=nm
     [ ! -x /usr/local/mavergreen/clang22/bin/llvm-nm ] || NM=/usr/local/mavergreen/clang22/bin/llvm-nm
   fi
-  export NM
+  export NM MAVERGREEN_PREFIX="$WORK/no-prefix"
   command -v cc >/dev/null 2>&1 && command -v ar >/dev/null 2>&1 || skip "no cc and ar"
   printf '\t.globl ___cxa_uncaught_exceptions\n___cxa_uncaught_exceptions:\n\tret\n\t.globl __ZTISt9exception\n\t.data\n__ZTISt9exception:\n\t.quad 0\n' > "$WORK/a.s"
   printf '\t.globl _foo\n_foo:\n\tret\n' > "$WORK/b.s"

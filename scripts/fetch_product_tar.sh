@@ -1,10 +1,12 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: fetch_product_tar.sh SHORT VERSION SHA256 DEST
+#   usage: fetch_product_tar.sh [--repo OWNER/REPO] SHORT VERSION SHA256 DEST
 # spec: README.md "Linux product archives" -- pinned user-owned toolchain caches
 set -eu
-[ $# -eq 4 ] || { echo 'usage: fetch_product_tar.sh SHORT VERSION SHA256 DEST' >&2; exit 2; }
 SELF="$(cd "$(dirname "$0")" && pwd)"
+SLUG=""
+if [ "${1:-}" = --repo ]; then [ $# -ge 2 ] || exit 2; SLUG=$2; shift 2; fi
+[ $# -eq 4 ] || { echo 'usage: fetch_product_tar.sh [--repo OWNER/REPO] SHORT VERSION SHA256 DEST' >&2; exit 2; }
 SHORT=$1; VERSION=$2; SHA=$3; DEST=$4
 for value in "$SHORT" "$VERSION"; do
   case "$value" in ''|.|..|*[!a-zA-Z0-9._-]*) echo "fetch_product_tar: invalid name/version '$value'" >&2; exit 2 ;; esac
@@ -13,10 +15,19 @@ case "$SHA" in ''|*[!0-9a-f]*) echo 'fetch_product_tar: invalid SHA-256' >&2; ex
 [ "${#SHA}" -eq 64 ] || exit 2
 while [ "${DEST%/}" != "$DEST" ]; do DEST=${DEST%/}; done
 case "$DEST" in ''|.|..|/) echo 'fetch_product_tar: unsafe destination' >&2; exit 2 ;; esac
-REPO="$(sh "$SELF/product-name.sh" repo "$SHORT")"
+if [ -n "$SLUG" ]; then
+  case "$SLUG" in
+    */*/*|/*|*/|*[!a-zA-Z0-9._/-]*|*..*) echo "fetch_product_tar: '$SLUG' is not OWNER/REPO" >&2; exit 2 ;;
+    */*) OWNER=${SLUG%%/*}; REPO=${SLUG#*/} ;;
+    *) echo "fetch_product_tar: '$SLUG' is not OWNER/REPO" >&2; exit 2 ;;
+  esac
+else
+  OWNER=Mavergreen
+  REPO="$(sh "$SELF/product-name.sh" repo "$SHORT")"
+fi
 CACHE="${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-tars}/$REPO/$VERSION"
 ASSET="$SHORT-$VERSION-linux-x86_64.tar.gz"
-BASE="${MAVERGREEN_RELEASES:-https://github.com}/Mavergreen/$REPO/releases/download/$VERSION"
+BASE="${MAVERGREEN_RELEASES:-https://github.com}/$OWNER/$REPO/releases/download/$VERSION"
 . "$SELF/mavericks_fetch.sh"
 shipyard_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET"
 mkdir -p "$(dirname "$DEST")"

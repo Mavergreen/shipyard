@@ -22,6 +22,10 @@ grep -q 'file(CREATE_LINK "\.\./\${_dest}/scripts/shipyard-check" "\${CMAKE_CURR
   || { echo "FAIL: shipyard's cmake --install must make bin/shipyard-check a RELATIVE link into shipyard's own scripts, so the farm exports the one command CI and developers share"; exit 1; }
 grep -q 'file(CREATE_LINK "\.\./\${_dest}/scripts/shipyard-scripts" "\${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-scripts" SYMBOLIC)' "$root/CMakeLists.txt" \
   || { echo "FAIL: shipyard's cmake --install must make bin/shipyard-scripts a RELATIVE link into shipyard's own scripts"; exit 1; }
+grep -q 'file(CREATE_LINK "\.\./\${_dest}/scripts/shipyard-provision" "\${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-provision" SYMBOLIC)' "$root/CMakeLists.txt" \
+  || { echo "FAIL: shipyard's cmake --install must make bin/shipyard-provision a RELATIVE link into shipyard's own scripts"; exit 1; }
+code | grep -q 'require_only --shipyard-prefix "\$SPREFIX/bin" "[^"]* shipyard-provision' \
+  || { echo "FAIL: package-pkg.sh must accept bin/shipyard-provision in the payload"; exit 1; }
 code | grep -q 'require_only --shipyard-prefix "\$SPREFIX/bin" "[^"]* shipyard-scripts' \
   || { echo "FAIL: package-pkg.sh must accept bin/shipyard-scripts in the payload"; exit 1; }
 code | grep -q 'require_only --shipyard-prefix "\$SPREFIX/bin" "[^"]* shipyard-check' \

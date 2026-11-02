@@ -1,0 +1,160 @@
+#!/bin/sh
+# platform: host-agnostic
+#   usage: shipyard-provision [--role R[,R...]] [--only NAME...] [--into DIR] [--install] [--env-file FILE]
+#                             [--product P] [--asset A]
+#          For each ingredient of the repo (MAVERGREEN_ROOT, else the git root, else .) that has a
+#          `product`, filtered by --role and --only, prints NAME=<path> to a pinned copy of that
+#          product, and with --env-file writes MAVERGREEN_INGREDIENT_<name>=<path> lines (a name's
+#          non-alphanumerics become _). The copy is, in order: the installed one, when
+#          $MAVERGREEN_PREFIX/<product>/mavergreen.plist (default prefix /usr/local/mavergreen) holds
+#          the pinned version; on Linux, when the ingredient has a LINUX_SHA256, the release's
+#          linux-x86_64 archive (fetch_product_tar.sh); else the pinned release's pkg
+#          <product>-<version>.pkg (fetch_product_pkg.sh), extracted under DIR/<product>-<version>
+#          (default $MAVERGREEN_PKG_CACHE/extracted). A `from` ingredient takes the repo and version of
+#          the ingredient it names. With --install, and always when CI=true, a pkg is installed with
+#          `sudo installer` and the printed path is the installed copy; Linux installs nothing.
+#          An ingredient the repo deviates from as `relocatable` (scope: its name, or *) only works
+#          from its real prefix, so without --install it stops. --product and --asset replace the
+#          product name and the pkg filename, for the one ingredient --only names.
+#          SHIPYARD_PROVISION_OS (Linux or Darwin) replaces uname -s. Exit 1 on a failed fetch or a
+#          stop, 2 on a usage error or a malformed pin.
+set -eu
+LC_ALL=C; export LC_ALL
+self="$0"
+while [ -L "$self" ]; do
+  link="$(readlink "$self")"
+  case "$link" in /*) self="$link" ;; *) self="$(dirname "$self")/$link" ;; esac
+done
+SELF="$(cd "$(dirname "$self")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/deviation-reason.sh"
+
+usage() {
+  echo "usage: shipyard-provision [--role R[,R...]] [--only NAME...] [--into DIR] [--install] [--env-file FILE] [--product P] [--asset A]" >&2
+  exit 2
+}
+die() { echo "shipyard-provision: $*" >&2; exit "${2:-1}"; }
+
+roles=""; only=""; into=""; envfile=""; product_arg=""; asset_arg=""
+install=0
+[ "${CI:-}" != true ] || install=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --role) [ $# -ge 2 ] || usage; roles=$2; shift 2 ;;
+    --into) [ $# -ge 2 ] || usage; into=$2; shift 2 ;;
+    --env-file) [ $# -ge 2 ] || usage; envfile=$2; shift 2 ;;
+    --product) [ $# -ge 2 ] || usage; product_arg=$2; shift 2 ;;
+    --asset) [ $# -ge 2 ] || usage; asset_arg=$2; shift 2 ;;
+    --install) install=1; shift ;;
+    --only)
+      shift
+      [ $# -gt 0 ] || usage
+      while [ $# -gt 0 ]; do
+        case "$1" in -*) break ;; esac
+        only="$only $1"; shift
+      done ;;
+    *) usage ;;
+  esac
+done
+if [ -n "$product_arg$asset_arg" ]; then
+  set -- $only
+  [ $# -eq 1 ] || die "--product and --asset steer one ingredient: name it with --only" 2
+fi
+
+os="${SHIPYARD_PROVISION_OS:-$(uname -s)}"
+prefix="${MAVERGREEN_PREFIX:-/usr/local/mavergreen}"
+if [ -z "${MAVERGREEN_PKG_CACHE:-}" ]; then
+  case "$os" in
+    Darwin) MAVERGREEN_PKG_CACHE="$HOME/Library/Caches/mavergreen-pkgs" ;;
+    *) MAVERGREEN_PKG_CACHE="$HOME/.cache/mavergreen-pkgs" ;;
+  esac
+fi
+export MAVERGREEN_PKG_CACHE
+[ -n "$into" ] || into="$MAVERGREEN_PKG_CACHE/extracted"
+
+root="$(dirname "$(mg_dir)")"
+shipyard_deviations "$root" >/dev/null 2>&1 || :
+
+installed_version() {
+  awk '/<key>version<\/key>/ { getline; sub(/.*<string>/, ""); sub(/<\/string>.*/, ""); print; exit }' "$1/mavergreen.plist" 2>/dev/null
+}
+
+has_role() {
+  [ -n "$roles" ] || return 0
+  _have="$(mg_lines "ingredients/$1/role" 2>/dev/null || :)"
+  for _want in $(printf '%s\n' "$roles" | tr ',' ' '); do
+    printf '%s\n' "$_have" | grep -Fxq -- "$_want" && return 0
+  done
+  return 1
+}
+
+wanted() {
+  [ -n "$only" ] || return 0
+  for _o in $only; do [ "$_o" != "$1" ] || return 0; done
+  return 1
+}
+
+release_value() {
+  _rv="$(mg_value "ingredients/$1/$2")" || die "ingredients/$1/$2 is missing from $(mg_dir)" 2
+  printf '%s\n' "$_rv"
+}
+
+results=""; envlines=""; seen=""
+for name in $(mg_list ingredients); do
+  mg_has "ingredients/$name/product" || continue
+  wanted "$name" || continue
+  has_role "$name" || continue
+  seen="$seen $name"
+  product="${product_arg:-$(release_value "$name" product)}"
+  if mg_has "ingredients/$name/from"; then
+    parent="$(release_value "$name" from)"
+    mg_has "ingredients/$parent/product" || die "ingredients/$name/from names '$parent', which has no product" 2
+  else
+    parent="$name"
+  fi
+  slug="$(release_value "$parent" REPO)"
+  version="$(release_value "$parent" VERSION)"
+  case "$version" in ''|.|..|*[!a-zA-Z0-9._-]*) die "ingredients/$parent/VERSION holds '$version', not a release tag" 2 ;; esac
+  case "$product" in ''|.|..|*[!a-zA-Z0-9._-]*) die "ingredients/$name/product holds '$product', not a product name" 2 ;; esac
+  dest="$into/$product-$version"
+  path=""
+  if [ "$os" != Linux ] && [ "$(installed_version "$prefix/$product")" = "$version" ]; then
+    path="$prefix/$product"
+  else
+    if [ "$install" -eq 0 ] && shipyard_deviated relocatable "$name" >/dev/null; then
+      die "$name only works from its real prefix (deviation relocatable); rerun with --install"
+    fi
+    sha=""
+    if [ "$os" = Linux ]; then sha="$(mg_value "ingredients/$name/LINUX_SHA256" 2>/dev/null || :)"; fi
+    if [ -n "$sha" ]; then
+      case "$sha" in *[!0-9a-f]*) die "ingredients/$name/LINUX_SHA256 holds '$sha', not a SHA-256" 2 ;; esac
+      [ "${#sha}" -eq 64 ] || die "ingredients/$name/LINUX_SHA256 holds '$sha', not a SHA-256" 2
+      path="$(sh "$SELF/fetch_product_tar.sh" --repo "$slug" "$product" "$version" "$sha" "$dest")" \
+        || die "could not fetch and verify $product-$version-linux-x86_64.tar.gz against ingredients/$name/LINUX_SHA256"
+    else
+      asset="${asset_arg:-$product-$version.pkg}"
+      if [ -n "$asset_arg" ]; then
+        path="$(sh "$SELF/fetch_product_pkg.sh" --repo "$slug" --asset "$asset" "$product" "$version" "$dest")"
+      else
+        path="$(sh "$SELF/fetch_product_pkg.sh" --repo "$slug" "$product" "$version" "$dest")"
+      fi || die "could not fetch and verify $asset"
+      if [ "$install" -eq 1 ] && [ "$os" != Linux ]; then
+        # platform: guarded macOS-only call -- the os test above; Linux installs nothing
+        sudo installer -pkg "$MAVERGREEN_PKG_CACHE/${slug#*/}/$version/$asset" -target / >&2 \
+          || die "could not install $asset"
+        path="$prefix/$product"
+      fi
+    fi
+  fi
+  results="$results$name=$path
+"
+  _var="$(printf '%s' "$name" | tr -c 'a-zA-Z0-9\n' '_')"
+  envlines="${envlines}MAVERGREEN_INGREDIENT_$_var=$path
+"
+done
+
+for _o in $only; do
+  case " $seen " in *" $_o "*) ;; *) die "no ingredient named $_o has a product" ;; esac
+done
+printf '%s' "$results"
+if [ -n "$envfile" ]; then printf '%s' "$envlines" > "$envfile"; fi

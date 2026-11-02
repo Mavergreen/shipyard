@@ -58,6 +58,7 @@ for c in cmake ctest cpack; do
 done
 ln -s ../shipyard/bin/shipyard-check "$farm/shipyard-check"
 ln -s ../shipyard/bin/shipyard-scripts "$farm/shipyard-scripts"
+ln -s ../shipyard/bin/shipyard-provision "$farm/shipyard-provision"
 # platform: keep this output. Sent to /dev/null, a failure here killed the script under set -e
 #           having said NOTHING, and a real macos-26 run could only report "exit 1" -- hiding the
 #           read-only-CMAKE_ROOT cause for a whole round.
@@ -121,7 +122,7 @@ check "a cmake product with no arm64 slice fails (it could not run on Apple Sili
   assert --cmake-version "$ver"
 lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
 
-for c in shipyard-ctest shipyard-cpack shipyard-check shipyard-scripts; do
+for c in shipyard-ctest shipyard-cpack shipyard-check shipyard-scripts shipyard-provision; do
   mv "$farm/$c" "$w/cmd-aside"
   check "a missing $c fails (both workflows and every consumer run it by name)" 1 "no executable .*$c" \
     assert --cmake-version "$ver"

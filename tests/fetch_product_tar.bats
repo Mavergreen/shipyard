@@ -79,3 +79,11 @@ PY
   ln -s other "$DEST/bin"
   run sh "$HELPER" widget 1.0 "$SHA" "$DEST"; [ "$status" -ne 0 ]
 }
+@test '--repo OWNER/REPO names the release and the registry is not read' {
+  fixture
+  MAVERGREEN_PRODUCT_NAMES="$WORK/no-such-registry" run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$DEST/bin/tool")" = W ]
+  run sh "$HELPER" --repo widget-repo widget 1.0 "$SHA" "$DEST"
+  [ "$status" -eq 2 ]
+}

@@ -4,3 +4,4 @@ tests/resolve-version-test.sh
 tests/shipyard-pins-test.sh
 tests/vercmp-test.sh
 tests/name-rules-test.sh
+tests/shipyard-provision-on-target-test.sh

@@ -31,12 +31,12 @@ out="$(STEVEDORE="$w/stevedore" sh "$w/inst/scripts/fetch_stevedore.sh")" || fai
 [ "$out" = "$w/stevedore" ] || fail "a copied closure confirms the pinned stevedore, got $out"
 
 C="$(pin clang22)"
-mkdir -p "$w/clang/bin"
-for t in clang ld64.lld llvm-lipo llvm-otool llvm-nm llvm-strings; do printf x > "$w/clang/bin/$t"; chmod 755 "$w/clang/bin/$t"; done
-printf '<plist><dict>\n<key>version</key>\n<string>%s</string>\n</dict></plist>\n' "$C" > "$w/clang/mavergreen.plist"
-out="$(CLANG22_HOST=mac109 CLANG22_INSTALLED="$w/clang" sh "$here/scripts/fetch_clang22.sh" "$here")" \
+mkdir -p "$w/prefix/clang22/bin"
+for t in clang ld64.lld llvm-lipo llvm-otool llvm-nm llvm-strings; do printf x > "$w/prefix/clang22/bin/$t"; chmod 755 "$w/prefix/clang22/bin/$t"; done
+printf '<plist><dict>\n<key>version</key>\n<string>%s</string>\n</dict></plist>\n' "$C" > "$w/prefix/clang22/mavergreen.plist"
+out="$(CLANG22_HOST=mac109 MAVERGREEN_PREFIX="$w/prefix" sh "$here/scripts/fetch_clang22.sh" "$here")" \
   || fail "fetch_clang22.sh reads the clang22 ingredient's VERSION"
-[ "$out" = "$w/clang" ] || fail "fetch_clang22.sh uses the installed clang22 at the pin, got $out"
+[ "$out" = "$w/prefix/clang22" ] || fail "fetch_clang22.sh uses the installed clang22 at the pin, got $out"
 
 E="$(pin ed25519)"
 out="$(ED25519_HOST=Darwin MAVERGREEN_RELEASES="file://$w/rel" sh "$here/scripts/fetch_ed25519_tools.sh" "$w/ed" 2>&1)" \
@@ -44,7 +44,7 @@ out="$(ED25519_HOST=Darwin MAVERGREEN_RELEASES="file://$w/rel" sh "$here/scripts
 printf '%s\n' "$out" | grep -qF "ed25519-$E.pkg" || fail "fetch_ed25519_tools.sh asks for the pinned release's pkg: $out"
 
 R="$(pin recaulk)"
-out="$(NM=true MAVERGREEN_RELEASES="file://$w/rel" MAVERGREEN_PKG_CACHE="$w/cache" sh "$here/scripts/cxxabi-allowlist.sh" 2>&1)" \
+out="$(NM=true MAVERGREEN_PREFIX="$w/prefix" MAVERGREEN_RELEASES="file://$w/rel" MAVERGREEN_PKG_CACHE="$w/cache" sh "$here/scripts/cxxabi-allowlist.sh" 2>&1)" \
   && fail "cxxabi-allowlist.sh finds no pkg in an empty release"
 printf '%s\n' "$out" | grep -qF "recaulk $R" || fail "cxxabi-allowlist.sh fetches the pinned Recaulk: $out"
 
