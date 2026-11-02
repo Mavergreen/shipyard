@@ -120,6 +120,14 @@ _value_file() {
   esac
 }
 
+_renovate_file() {
+  case "$1" in
+    upstream/VERSION|upstream/COMMIT|upstream/PIN) ;;
+    ingredients/*/VERSION|ingredients/*/PIN|ingredients/*/COMMIT) ;;
+    *) return 1 ;;
+  esac
+}
+
 chk_ran prose-restates-value
 if [ -d .mavergreen ]; then
   find .mavergreen -type f -name unusual-reason.md | LC_ALL=C sort > "$w/reasons"
@@ -192,6 +200,7 @@ if [ -d .mavergreen ]; then
           fi
         elif [ "$n" -eq 2 ]; then
           case "$l" in '# renovate:'*) ;; *) bad="${bad:-line 2 is not a '# renovate:' annotation}" ;; esac
+          _renovate_file "$rel" || bad="${bad:-line 2 is on a file the Renovate manager does not read (only VERSION, PIN and COMMIT)}"
         else
           bad="${bad:-it has more than two lines}"
           break
@@ -408,6 +417,7 @@ for _n in $_ings; do
   mg_has "$_d/from" && continue
   _t=""
   for _f in $(mg_list "$_d"); do
+    _renovate_file "$_d/$_f" || continue
     mg_renovate "$_d/$_f" >/dev/null && _t="$_t line-2:$_f"
   done
   mg_has "$_d/untracked" && _t="$_t untracked"

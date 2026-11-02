@@ -13,7 +13,8 @@ it lives. With none, nobody decided; with two, the notes and the table would hav
 None recorded.
 
 ## Limits
-It checks that the files exist and that each role is a known one, not what the description or why say. A
+It checks that the files exist and that each role is a known one, not what the description or why say. Only a
+line 2 on VERSION, PIN or COMMIT counts, as those are the files Renovate's manager reads; value-file-line refuses one elsewhere. A
 from ingredient is tracked through its parent, so the tracking rule skips it; from-parent checks it instead.
 A repo with no ingredient directories reports it not run. pin-well-formed checks a PIN's shape, and
 value-file-line the shape of each value file.

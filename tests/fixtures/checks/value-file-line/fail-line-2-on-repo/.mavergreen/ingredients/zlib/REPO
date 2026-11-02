@@ -1,0 +1,2 @@
+github.com/madler/zlib
+# renovate: datasource=github-releases depName=madler/zlib
