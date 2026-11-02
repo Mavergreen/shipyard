@@ -11,6 +11,8 @@
 #          <prev-tag> has no .mavergreen/. --watched writes the watched paths it reported to <file>,
 #          one per line, so the caller leaves exactly those out of "Our patches".
 set -eu
+# platform: modern macOS collates en_US.UTF-8 so that [A-Z] also matches b-z; 10.9 and Linux do not.
+LC_ALL=C; export LC_ALL
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
 
