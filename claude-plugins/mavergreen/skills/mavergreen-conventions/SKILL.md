@@ -152,9 +152,9 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 - **A product that copies scripts out of shipyard copies their closure.** `sh "$SHIPYARD_SCRIPTS/script-closure.sh" NAME...`
   prints, sorted, every path under `scripts/` the named scripts need at run time (themselves, what they source
   or run beside them, and the pin or data files those read), transitively. Longboat and any other copier asks
-  it instead of keeping its own list, so a helper a script grows later (`fetch_stevedore.sh`, `stevedore.pin`,
+  it instead of keeping its own list, so a helper a script grows later (`fetch_stevedore.sh`,
   `fetch-release-pkg.sh`, `source-date-epoch.sh`) arrives with it. It is a static scan of non-comment lines,
-  so a sibling named through a computed path is missed, and so is a file outside `scripts/` (`../components`, `../updater`).
+  so a sibling named through a computed path is missed, and so is a file outside `scripts/` (`../.mavergreen`, `../updater`).
 
 **Pinning shipyard: `@v1` normally, `@vX.Y.Z` when you need to stand still.** `@v1` is a *moving*
 tag — it advances on every push to shipyard's `main` and reaches every consumer within minutes, which
@@ -192,7 +192,7 @@ updaters, signing, or compat checks:**
 **Seam hosts.** `build_component_pkg.sh`, `set_install_floor.sh`, `build-base-component.sh`,
 `package-system-replace.sh` and the pkg readers (`artifact-facts.sh`, `fetch_product_pkg.sh`)
 run on any host, through stevedore, the C packager that `fetch_stevedore.sh` fetches at the version
-`scripts/stevedore.pin` names. None of them needs `pkgbuild`, `productbuild`, `pkgutil` or `PlistBuddy`, or a
+`.mavergreen/ingredients/stevedore/VERSION` names. None of them needs `pkgbuild`, `productbuild`, `pkgutil` or `PlistBuddy`, or a
 macOS host. A pkg's bytes depend only on the staged tree, the arguments and the mtime. The mtime is
 `SOURCE_DATE_EPOCH`, else the commit time of `$MAVERICKS_ROOT` when that is a git work tree, else the current
 directory's repo (saying on stderr which one), else the seam fails (`source-date-epoch.sh`). A 10.9 box
