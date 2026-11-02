@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: ingredient-notes.sh <prev-tag>
+#   usage: ingredient-notes.sh [--watched <file>] <prev-tag>
 #          Compares .mavergreen/ingredients/ at <prev-tag> with the working tree, as the release
 #          notes' "### Build ingredients" section: a bullet per changed value file (VERSION, PIN,
 #          COMMIT, REPO, SHA256, any other uppercase file, and from), one per added or removed
@@ -8,11 +8,14 @@
 #          ingredient's description follows its first bullet. A link comes from the line-2 Renovate
 #          annotation (github-releases, github-tags, git-tags) or else from REPO, and otherwise
 #          there is none. Prints nothing when nothing moved or <prev-tag> is empty, and one line when
-#          <prev-tag> has no .mavergreen/.
+#          <prev-tag> has no .mavergreen/. --watched writes the watched paths it reported to <file>,
+#          one per line, so the caller leaves exactly those out of "Our patches".
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
 
+watched_out=
+if [ "${1:-}" = --watched ]; then watched_out="$2"; shift 2; : > "$watched_out"; fi
 prev="${1:-}"
 [ -n "$prev" ] || exit 0
 git rev-parse -q --verify "$prev^{commit}" >/dev/null \
@@ -177,6 +180,7 @@ while IFS= read -r n; do
         [ -z "$g" ] || mg_glob_hits "$g" "$tmp/changed"
       done | LC_ALL=C sort -u | while IFS= read -r f; do
         printf -- '- **%s / watch**: `%s` changed\n' "$n" "$f"
+        [ -z "$watched_out" ] || printf '%s\n' "$f" >> "$watched_out"
       done >> "$tmp/mine"
     fi
   fi

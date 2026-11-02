@@ -127,6 +127,40 @@ want="$(printf '%s\n' '### Build ingredients' '' '- Ingredients moved to .maverg
 [ "$(awk '/^### Build ingredients$/{n=3} n>0{print;n--}' "$r/OUT.md")" = "$want" ] \
   || { echo "FAIL landing: one line under its heading"; cat "$r/OUT.md"; exit 1; }
 
+r="$work/landing-watch"; mkrepo "$r"
+mkdir -p "$r/patches"; printf 'Subject: [PATCH] one\n' > "$r/patches/x.patch"
+printf 'patches/*.patch\n' > "$r/.mavergreen/ingredients/libressl/watch"
+( cd "$r" && git add -A && git commit -qm watch && git rm -rq .mavergreen && git commit -qm legacy \
+    && git tag 9.9p2-mavericks.1 && git checkout -q HEAD~1 -- .mavergreen && git commit -qm "the flag day" )
+printf 'Subject: [PATCH] one\n+x\n' > "$r/patches/x.patch"
+( cd "$r" && git commit -qam "change the patch" && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL landing-watch: ships"; exit 1; }
+grep -qx -- '- Changed `patches/x.patch`' "$r/OUT.md" \
+  || { echo "FAIL landing-watch: a watched patch no ingredient bullet reports is one of our patches"; cat "$r/OUT.md"; exit 1; }
+
+r="$work/added-watch"; mkrepo "$r"
+mkdir -p "$r/patches"; printf 'Subject: [PATCH] one\n' > "$r/patches/x.patch"
+( cd "$r" && git add -A && git commit -qm patch && git tag 9.9p2-mavericks.1 )
+mkdir -p "$r/.mavergreen/ingredients/quilt"
+printf 'quilt\n' > "$r/.mavergreen/ingredients/quilt/description"
+printf 'patches/*.patch\n' > "$r/.mavergreen/ingredients/quilt/watch"
+printf 'Subject: [PATCH] one\n+x\n' > "$r/patches/x.patch"
+( cd "$r" && git add -A && git commit -qm "add quilt, change the patch" && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL added-watch: ships"; exit 1; }
+grep -qx -- '- Changed `patches/x.patch`' "$r/OUT.md" \
+  || { echo "FAIL added-watch: a new ingredient gets no watch bullet, so its patch is one of our patches"; cat "$r/OUT.md"; exit 1; }
+
+r="$work/prose-ing"; mkrepo "$r"
+( cd "$r" && git tag 9.9p2-mavericks.1 )
+bump "$r" 3.9.2
+printf 'Why this release matters.\n<!-- edited by a human -->\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.2.md"
+( cd "$r" && git add -A && git commit -qm "bump libressl, with prose" && git tag 9.9p2-mavericks.2 )
+gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL prose-ing: prose and a described ingredient bullet pass the shape check"; exit 1; }
+grep -q '^Why this release matters\.$' "$r/OUT.md" || { echo "FAIL prose-ing: prose"; cat "$r/OUT.md"; exit 1; }
+grep -qx -- '  LibreSSL' "$r/OUT.md" || { echo "FAIL prose-ing: description"; cat "$r/OUT.md"; exit 1; }
+sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 9.9p2-mavericks.2 >/dev/null \
+  || { echo "FAIL prose-ing: shape"; cat "$r/OUT.md"; exit 1; }
+
 # spec: SKILL.md "Release notes" -- committed prose
 #       publishes only once a human has added the mark, and readers never see the mark.
 M='<!-- edited by a human -->'

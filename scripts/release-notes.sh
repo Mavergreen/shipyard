@@ -107,8 +107,8 @@ fi
 
 tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes.XXXXXX")"
 footer_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-footer.XXXXXX")"
-changed_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-changed.XXXXXX")"
-trap 'rm -f "$tmp" "$footer_tmp" "$changed_tmp"' EXIT
+watched_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-watched.XXXXXX")"
+trap 'rm -f "$tmp" "$footer_tmp" "$watched_tmp"' EXIT
 
 if [ "$SELF_UPSTREAM" = yes ]; then
   printf '## %s %s\n' "$PRODUCT" "$VER" > "$tmp"
@@ -168,21 +168,6 @@ if [ -n "$CALLER" ]; then
   [ -n "$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" sh "$SELF/ingredient-pins.sh")" ] \
     || die "$CALLER calls repackage-on-ingredient-bump.yml but .mavergreen/ingredients/ holds no ingredient"
 fi
-WATCHED=""
-if [ -n "$PREV" ]; then
-  git -c core.quotepath=off diff --name-only "$PREV" HEAD -- > "$changed_tmp" \
-    || die "git diff against $PREV failed; cannot say which watched files moved"
-  for n in $(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_list ingredients); do
-    WATCH="$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_lines "ingredients/$n/watch" 2>/dev/null)" || continue
-    while IFS= read -r g; do
-      [ -z "$g" ] || WATCHED="${WATCHED:+$WATCHED
-}$(mg_glob_hits "$g" "$changed_tmp")"
-    done <<EOF
-$WATCH
-EOF
-  done
-  WATCHED="$(printf '%s\n' "$WATCHED" | grep . | LC_ALL=C sort -u)" || :
-fi
 # spec: tests/release-notes-test.sh "r3new"/"r1d" -- this repo's owner/repo names its own compare
 #       view; with neither source, a link is left out rather than guessed.
 SLUG="${GITHUB_REPOSITORY:-}"
@@ -191,13 +176,15 @@ if [ -z "$SLUG" ]; then
 fi
 
 INGREDIENTS=""
+WATCHED=""
 if [ -n "$PREV" ]; then
-  INGREDIENTS="$(sh "$SELF/ingredient-notes.sh" "$PREV")" \
+  INGREDIENTS="$(sh "$SELF/ingredient-notes.sh" --watched "$watched_tmp" "$PREV")" \
     || die "cannot read the ingredient pins that moved since $PREV; a repackage that cannot say what moved must not ship"
   case "$INGREDIENTS" in
     ''|'### '*) ;;
     *) INGREDIENTS="$(printf '### Build ingredients\n\n%s' "$INGREDIENTS")" ;;
   esac
+  WATCHED="$(LC_ALL=C sort -u "$watched_tmp")"
 fi
 
 # spec: tests/release-notes-test.sh "patchadd" -- tailscale 1.102.4-mavericks.7 added

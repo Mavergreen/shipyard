@@ -119,6 +119,8 @@ EOF
 want="$(cat "$work/want")"
 [ "$out" = "$want" ] || { echo "FAIL two trees: got:"; printf '%s\n' "$out"; echo "want:"; printf '%s\n' "$want"; exit 1; }
 printf '%s\n' "$out" | LC_ALL=C grep -q '[^ -~]' && fail "ASCII only, since the notes are embedded in appcast XML: $out"
+sh "$S" --watched "$work/watched" 1.0-mavericks.1 >/dev/null
+[ "$(cat "$work/watched")" = MavericksSparkle.cmake ] || fail "--watched names exactly the watched paths bulleted: $(cat "$work/watched")"
 
 ing libgit REPO https://gitlab.com/libgit2/libgit2.git
 out="$(sh "$S" 1.0-mavericks.1)"
