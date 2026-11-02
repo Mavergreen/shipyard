@@ -73,7 +73,7 @@ export MAVERGREEN_PKG_CACHE
 [ -n "$into" ] || into="$MAVERGREEN_PKG_CACHE/extracted"
 
 root="$(dirname "$(mg_dir)")"
-shipyard_deviations "$root" >/dev/null 2>&1 || :
+shipyard_deviations "$root" >/dev/null || die "cannot read the deviations of $root"
 
 installed_version() {
   awk '/<key>version<\/key>/ { getline; sub(/.*<string>/, ""); sub(/<\/string>.*/, ""); print; exit }' "$1/mavergreen.plist" 2>/dev/null

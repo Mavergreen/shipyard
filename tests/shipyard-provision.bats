@@ -164,3 +164,20 @@ MAVERGREEN_INGREDIENT_python_315=$WORK/into/python315-3.15.0-mavericks.1" ]
   run $P --only cmake --into "$WORK/into"
   [ "$status" -eq 2 ]
 }
+
+@test "a relocatable deviation scoped * stops the run with the exact message" {
+  d="$WORK/repo/.mavergreen/deviations/relocatable/all"; mkdir -p "$d"
+  echo '*' > "$d/scope"; echo 'everything here loads from its real prefix' > "$d/reason"; echo 'when products relocate' > "$d/revisit"
+  run $P --only cmake --into "$WORK/into"
+  [ "$status" -eq 1 ]
+  [ "$output" = "shipyard-provision: cmake only works from its real prefix (deviation relocatable); rerun with --install" ]
+}
+
+@test "a malformed deviations tree fails the run, showing the error, and provisions nothing" {
+  d="$WORK/repo/.mavergreen/deviations/relocatable/cmake"; mkdir -p "$d"
+  echo cmake > "$d/scope"
+  run $P --only cmake --into "$WORK/into"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"deviations/relocatable/cmake"* ]] || false
+  [ ! -s "$STUB_LOG" ]
+}
