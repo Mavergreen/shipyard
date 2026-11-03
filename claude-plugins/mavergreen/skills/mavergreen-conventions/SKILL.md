@@ -140,7 +140,8 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   and the Linux suites (`linux`): `@v1` must never name a version that failed to release, because
   fifteen repos would consume it within minutes of the move. shipyard runs no macOS job and no 10.9 VM
   job: it is unlikely to break on 10.9, and a break is found quickly. Its tests that need a 10.9 box or
-  a modern Mac are listed in `tests/maintainer-tests`, by box, and run by hand.
+  a modern Mac are listed in `tests/maintainer-tests`, by box, and run by hand: after a release that
+  changes the installer, the updater or the 10.9 path, run `sh scripts/maintainer-tests.sh BOX` on each box.
 - **After `install@v1`, use `$SHIPYARD_SCRIPTS`** — the action exports the installed scripts dir.
   **Everywhere else, source `msc.sh`**: copy `$SHIPYARD_SCRIPTS/templates/msc.sh` to your repo's
   `build/msc.sh` and `. build/msc.sh`. It honours `SHIPYARD_SCRIPTS` when CI has set it, and otherwise
