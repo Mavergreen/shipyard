@@ -207,4 +207,7 @@ if bad:
 print("ok: ci.yml rehearses the packaging path release.yml only ever runs while publishing, and "
       "neither builds CMake")
 PY
+mac="$(grep -rnE 'macos-' "$here/../.github" --include='*.yml' --include='*.yaml' | grep -E 'runs-on|os:' || :)"
+[ -z "$mac" ] || { printf '%s\n' "$mac"; echo "FAIL: shipyard runs no job on a macos-* runner; every job above must move to ubuntu or the 10.9 guest"; exit 1; }
+echo "ok: no job in .github runs on a macos-* runner"
 echo "PASS: shipyard-workflow-coupling"

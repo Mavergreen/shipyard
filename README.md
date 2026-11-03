@@ -104,7 +104,7 @@ sh scripts/check-family-conventions.sh          # the gate every product repo ru
 **What you cannot do on Linux** is anything that inspects an Apple artifact: shipyard-cmake, the updater,
 and the `lipo`/`otool` assertions on real Mach-O files. The pkg seams are not on that list: they run on any
 host, through stevedore. There is no Linux shipyard-cmake. On Linux, shipyard's CMake config accepts any
-`cmake`, because there is nothing else to demand. Those suites run in CI's macOS jobs.
+`cmake`, because there is nothing else to demand. Those suites run in the 10.9 guest (`tests/on-target-tests`) or by hand on a modern Mac (`tests/maintainer-tests`).
 
 **How to tell which is which:** every script and test says so in its header, and check 22 enforces it:
 

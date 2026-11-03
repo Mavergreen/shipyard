@@ -1,0 +1,4 @@
+tests/fetch_stevedore_darwin.bats
+tests/updater-clang22-darwin-test.sh
+tests/umbrella-langs.sh
+tests/installed-shipyard-test.sh

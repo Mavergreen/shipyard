@@ -1,3 +1,4 @@
 tests/stage-product-test.sh
 tests/mavergreen-helper-test.sh
 tests/assert-installed-shipyard-test.sh
+tests/installed-updater-launch-test.sh

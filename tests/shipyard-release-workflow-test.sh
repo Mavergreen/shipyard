@@ -204,39 +204,14 @@ else:
 # The key scan stays between build and publish (another session's work; a rewrite must not drop it).
 if "scan-for-key.yml" not in str((jobs.get("scan") or {}).get("uses", "")):
     bad.append("the scan job (./.github/workflows/scan-for-key.yml) is gone")
-# spec: release.yml "canary" -- @v1 moves only after the published release installs through source: release.
-can = jobs.get("canary") or {}
-if "publish" not in (can.get("needs") or []):
-    print("FAIL: a canary job must need publish"); sys.exit(1)
-cst = can.get("steps") or []
-if not any((st.get("uses") or "") == "./.github/actions/install"
-           and "needs.build.outputs.version" in str((st.get("with") or {}).get("release-version", ""))
-           and (st.get("with") or {}).get("source", "release") == "release" for st in cst):
-    print("FAIL: the canary must run ./.github/actions/install with source: release and release-version from needs.build.outputs.version"); sys.exit(1)
-if not any("needs.build.outputs.version" in str((st.get("with") or {}).get("ref", "")) for st in cst if "actions/checkout" in (st.get("uses") or "")):
-    print("FAIL: the canary must check out the release it installs"); sys.exit(1)
-if not any("assert-installed-shipyard.sh" in (st.get("run") or "") for st in cst):
-    print("FAIL: the canary must run assert-installed-shipyard.sh"); sys.exit(1)
-for t in ("tests/fetch_stevedore_darwin.bats", "tests/updater-clang22-darwin-test.sh", "tests/umbrella-langs.sh",
-          "tests/mavergreen-helper-test.sh", "tests/stage-product-test.sh"):
-    if not any(t in (st.get("run") or "") for st in cst):
-        print("FAIL: the canary must run " + t + ", which only a Mac can run"); sys.exit(1)
-# The Linux-built updater's arm64 slice runs nowhere else on Apple Silicon before @v1 moves.
-ccmds = [c for st in cst for c in step_cmds(st)]
-if not any(re.search(r'^sh tests/lib/launch-updater\.sh "/Library/Application Support/Mavergreen/shipyard-updater\.app"$', c) for c in ccmds):
-    bad.append('the canary never launches the INSTALLED updater check-only '
-               '(sh tests/lib/launch-updater.sh "/Library/Application Support/Mavergreen/shipyard-updater.app")')
-if not str(can.get("runs-on", "")).startswith("macos-"):
-    bad.append("the canary must run on a macos-* runner; it is the one place the release meets Apple Silicon")
-if "canary" not in ((jobs.get("major-tag") or {}).get("needs") or []):
-    print("FAIL: major-tag must need canary, so @v1 never names a release that will not install"); sys.exit(1)
+if "canary" in jobs:
+    bad.append("release.yml still has a canary job; shipyard runs no macOS job, and @v1 moves once publish succeeds")
+if sorted((jobs.get("major-tag") or {}).get("needs") or []) != ["build", "publish"]:
+    bad.append("major-tag must need exactly [build, publish], so @v1 never names a release that did not publish")
 if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan", "smoke"]:
     bad.append("publish must need exactly [build, linux, scan, smoke]")
 if "build" not in ((jobs.get("scan") or {}).get("needs") or []):
     bad.append("the scan job must need build, to scan its artifact and logs")
-macos = sorted(jn for jn, job in jobs.items() if "macos-" in str(job.get("runs-on", "")))
-if macos != ["canary"]:
-    bad.append("the canary must be release.yml's only macOS job, not %r" % macos)
 
 # Nothing of the superseded design survives in any command: no user package registry, no second
 # "cross" updater app, no postinstall picking a slice by hw.optional.arm64.
@@ -248,7 +223,7 @@ if bad:
     for b in bad:
         print("FAIL: " + b)
     sys.exit(1)
-print("ok: built and signed on Linux, smoked on 10.9 before publish, the canary the one macOS job")
+print("ok: built and signed on Linux, smoked on 10.9 before publish, @v1 moved after publish")
 PY
 
 # spec: .github/actions/install/action.yml -- the other half of the same design: a consumer gets the
