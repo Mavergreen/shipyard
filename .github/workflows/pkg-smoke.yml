@@ -70,6 +70,7 @@ jobs:
             sudo -n installer -pkg shipyard-pkg/mavericks-shipyard-*.pkg -target / || bad=1
             sh scripts/assert-installed-shipyard.sh --no-slices --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root / || bad=1
             /usr/local/bin/mavergreen check || bad=1
+            export SHIPYARD_ON_TARGET=1
             while IFS= read -r t; do
               [ -n "$t" ] || continue
               echo "== $t"

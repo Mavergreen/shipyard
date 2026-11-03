@@ -80,6 +80,11 @@ else:
                        "10.9's lipo cannot read the arm64 slices, which package checks on Linux")
         if not any(re.search(r"done < tests/on-target-tests$", l) for l in guest):
             bad.append("the guest must run each line of tests/on-target-tests")
+        optin = [i for i, l in enumerate(guest) if l == "export SHIPYARD_ON_TARGET=1"]
+        loop = [i for i, l in enumerate(guest) if l.startswith("while IFS= read -r t")]
+        if not optin or not loop or optin[0] > loop[0]:
+            bad.append("the guest must export SHIPYARD_ON_TARGET=1 before running tests/on-target-tests; "
+                       "tests that act on the installed system run only where it is set")
         # spec: tests/shipyard-workflow-coupling-test.sh R-P1-20 -- each check records its failure and
         #       the script ends on it, so `|| true` in place of `|| bad=1` cannot turn the smoke into decoration.
         for what, pat in (("the cmake install", r"sudo -n installer -pkg cmake-pkg/"),
@@ -104,3 +109,9 @@ if bad:
     sys.exit(1)
 print("ok: ci.yml packages on Linux and smoke-installs on 10.9, cmake first, with no macOS job")
 PY
+
+out="$(env -u SHIPYARD_ON_TARGET sh "$here/installed-updater-launch-test.sh" 2>&1)" && rc=0 || rc=$?
+[ "$rc" -eq 77 ] || { printf '%s\n' "$out"; echo "FAIL: installed-updater-launch-test.sh must exit 77 outside the guest, not $rc"; exit 1; }
+printf '%s\n' "$out" | grep -q 'SHIPYARD_ON_TARGET' \
+  || { printf '%s\n' "$out"; echo "FAIL: installed-updater-launch-test.sh must say it skips for want of SHIPYARD_ON_TARGET=1, so it never launches a developer's installed updater"; exit 1; }
+echo "ok: the installed-updater launch runs only in the guest"
