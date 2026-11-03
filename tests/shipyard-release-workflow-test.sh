@@ -220,6 +220,8 @@ if "source" not in (a.get("inputs") or {}):
     bad.append("install@v1 has no 'source' input (release | build)")
 if "cmake-tree" in (a.get("inputs") or {}):
     bad.append("install@v1 still has a 'cmake-tree' input; source: build installs the cmake product instead")
+if "release-version" in (a.get("inputs") or {}) or "inputs.release-version" in open(sys.argv[1]).read():
+    bad.append("install@v1 still has a 'release-version' input; only the retired release canary passed it")
 steps = (a.get("runs") or {}).get("steps") or []
 
 # R-P1-19. NO local `uses: ./...` may appear in this composite, ever. GitHub resolves such a path

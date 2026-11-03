@@ -2170,7 +2170,7 @@ pass Installer's target volume rather than assuming `/`; with any other root it 
 | `unlink <product>` | removes every farm link into it; never changes a selection |
 | `select <group> [<product>]` | prints the selection, or moves it: the group's bare links swap to that member |
 | `list` | one line per installed product: short name, group, line (`-` for none), version, `selected` |
-| `check` | dangling farm links, links into a directory with no manifest, a manifest whose `product` is not its directory, missing links, system-replace drift — each on stderr, non-zero on any. shipyard's own install smoke runs it |
+| `check` | dangling farm links, links into a directory with no manifest, a manifest whose `product` is not its directory, missing links, system-replace drift — each on stderr, non-zero on any. scripts/assert-installed-shipyard.sh runs it |
 | `uninstall <product>` | below |
 | `system-replace <product>` / `system-restore <product>` | below |
 | `version` | the helper's version |
@@ -2767,7 +2767,7 @@ spells `assert-tree-clean.sh` does not count as having called it.
 
 **Prefer the narrowest entry that works**, and know what a subtree entry costs. shipyard and clang
 both declare `dist/` and both run the bare assertion at the *end* of the build job: packaging,
-signing, appcast and install-smoke therefore all run inside the exempt subtree, and nothing they
+signing and appcast therefore all run inside the exempt subtree, and nothing they
 write there is checked. That is a deliberate trade — asserting last covers more of the job than
 asserting before the first `mkdir` does — but it is a trade, not a freebie. A maintainer who
 declares `build/` "for one file" has handed every later change a repo-wide exemption.

@@ -12,12 +12,6 @@ inputs:
       workflows only -- assemble shipyard from this checkout beside the cmake product.
     required: false
     default: release
-  release-version:
-    description: >
-      shipyard's own release canary only: the exact release (vX.Y.Z) to install in place of the one
-      this action's ref names. Consumers leave it empty.
-    required: false
-    default: ''
 
 runs:
   using: composite
@@ -101,8 +95,7 @@ runs:
         # platform: this action is checked out at github.action_path = <repo>/.github/actions/install;
         #           the repo root (with CMakeLists.txt) is three levels up.
         root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
-        ref='${{ inputs.release-version }}'
-        [ -n "$ref" ] || ref='${{ github.action_ref }}'
+        ref='${{ github.action_ref }}'
         # platform: github.action_ref is EMPTY for a consumer repo calling this action, and on any
         #           re-run -- it broke all 14 consumers at once on 2026-09-16. $root is
         #           <runner>/_actions/Mavergreen/shipyard/<ref>, so its basename is the ref we
@@ -140,8 +133,7 @@ runs:
         #       rejected -- container-tools' two ubuntu-latest jobs need exactly that.
         [ -f "$root/MavericksShipyardConfig.cmake" ] || {
           echo "::error::$root holds no MavericksShipyardConfig.cmake -- find_package(MavericksShipyard) would not resolve on this runner"; exit 1; }
-        ref='${{ inputs.release-version }}'
-        [ -n "$ref" ] || ref='${{ github.action_ref }}'
+        ref='${{ github.action_ref }}'
         ref="${ref:-$(basename "$root")}"
         {
           echo "SHIPYARD_SCRIPTS=$scripts"
