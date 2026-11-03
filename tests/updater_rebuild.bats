@@ -19,7 +19,7 @@ EOF
 }
 
 build_at() {
-  "$CMAKE" -S "$d" -B "$d/b" -DV="$1" $OBJC_ARGS >/dev/null && "$CMAKE" --build "$d/b"
+  objc_cmake -S "$d" -B "$d/b" -DV="$1" >/dev/null && "$CMAKE" --build "$d/b"
 }
 
 key() { grep -A1 "<key>$1</key>" "$d/b/openssh-updater.app/Contents/Info.plist" | sed -n 's|.*<string>\(.*\)</string>.*|\1|p'; }
