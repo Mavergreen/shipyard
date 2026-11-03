@@ -38,6 +38,19 @@ teardown() { rm -rf "$WORK"; }
   [[ "$output" == *"could not fetch"*"SHA256SUMS"* ]] || false
 }
 
+@test "a release with neither the pkg nor SHA256SUMS fails, saying the release has no pkg" {
+  rm "$REL/SHA256SUMS" "$REL/mavericks-shipyard-1.0.9.pkg"
+  run sh "$HELPER" shipyard v1.0.9 mavericks-shipyard-1.0.9.pkg "$WORK/out"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Mavergreen/shipyard v1.0.9 has no mavericks-shipyard-1.0.9.pkg"* ]] || false
+}
+
+@test "a release tag that does not exist fails, saying the release has no pkg" {
+  run sh "$HELPER" shipyard v9.9.9 mavericks-shipyard-9.9.9.pkg "$WORK/out"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Mavergreen/shipyard v9.9.9 has no mavericks-shipyard-9.9.9.pkg"* ]] || false
+}
+
 @test "a usage error exits 2" {
   run sh "$HELPER" shipyard v1.0.9 ../x "$WORK/out"
   [ "$status" -eq 2 ]
