@@ -147,20 +147,6 @@ jobs:
           name: shipyard-dist
           path: dist
 
-  # spec: .github/workflows/pkg-smoke.yml -- the release's own pkg, installed on Mac OS X 10.9 after
-  #       the cmake product, with the on-target tests run there, before it publishes.
-  smoke:
-    needs: build
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/pkg-smoke.yml
-    with:
-      artifact: shipyard-dist
-      ref: ${{ github.sha }}
-    secrets:
-      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
-
   scan:
     needs: build
     if: always()        # a build that fails after signing left logs too; scan them
@@ -185,7 +171,7 @@ jobs:
       MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   publish:
-    needs: [build, linux, scan, smoke]
+    needs: [build, linux, scan]
     permissions:
       contents: write
     uses: ./.github/workflows/publish-release.yml

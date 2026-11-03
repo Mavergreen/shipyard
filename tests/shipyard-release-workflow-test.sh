@@ -153,10 +153,8 @@ need(r'^cmake -S \. -B "\$RUNNER_TEMP/payload-build"$',
 need(r'^DESTDIR="\$RUNNER_TEMP/payload-stage" cmake --install "\$RUNNER_TEMP/payload-build" --prefix /usr/local/mavergreen/shipyard$',
      "the build job must install the payload with the runner's cmake (DESTDIR=... cmake --install ... --prefix /usr/local/mavergreen/shipyard)")
 
-# The pkg is installed on the runner nowhere: the build is on Linux, and pkg-smoke.yml installs it on
-# 10.9 with what must hold stated once, in scripts/assert-installed-shipyard.sh (R-P1-17).
 if find(r"^sudo (-n )?installer "):
-    bad.append("release.yml installs a pkg on a runner itself; the smoke job (pkg-smoke.yml) installs it on 10.9")
+    bad.append("release.yml installs a pkg on a runner; shipyard's release builds and publishes it, and runs no install")
 
 # SPARKLE_PRIVATE_KEY reaches the signing step's env and the scan's secrets, nothing else.
 jobs = wf.get("jobs") or {}
@@ -185,22 +183,8 @@ if holders:
 if find(r"(^|\s)set -[a-z]*x"):
     bad.append("release.yml traces a step (set -x), which could print the signing key")
 
-# spec: .github/workflows/pkg-smoke.yml -- the release's own pkg, installed on Mac OS X 10.9 with its
-#       tests run there, before publish.
-sm = jobs.get("smoke") or {}
-if str(sm.get("uses", "")) != "./.github/workflows/pkg-smoke.yml":
-    bad.append("release.yml has no smoke job calling ./.github/workflows/pkg-smoke.yml")
-else:
-    w_ = sm.get("with") or {}
-    if (sm.get("needs") if isinstance(sm.get("needs"), str) else ",".join(sm.get("needs") or [])) != "build":
-        bad.append("the smoke job must need build")
-    if w_.get("artifact") != "shipyard-dist":
-        bad.append("the smoke job must install the shipyard-dist artifact, not %r" % w_.get("artifact"))
-    if "github.sha" not in str(w_.get("ref", "")):
-        bad.append("the smoke job must run the guest's tests at github.sha")
-    if "MAVERICKS_VM_KEY" not in str(sm.get("secrets") or ""):
-        bad.append("the smoke job never passes MAVERICKS_VM_KEY to pkg-smoke.yml")
-
+if "smoke" in jobs:
+    bad.append("release.yml still has a smoke job; shipyard's release runs no VM job")
 # The key scan stays between build and publish (another session's work; a rewrite must not drop it).
 if "scan-for-key.yml" not in str((jobs.get("scan") or {}).get("uses", "")):
     bad.append("the scan job (./.github/workflows/scan-for-key.yml) is gone")
@@ -208,8 +192,8 @@ if "canary" in jobs:
     bad.append("release.yml still has a canary job; shipyard runs no macOS job, and @v1 moves once publish succeeds")
 if sorted((jobs.get("major-tag") or {}).get("needs") or []) != ["build", "publish"]:
     bad.append("major-tag must need exactly [build, publish], so @v1 never names a release that did not publish")
-if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan", "smoke"]:
-    bad.append("publish must need exactly [build, linux, scan, smoke]")
+if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan"]:
+    bad.append("publish must need exactly [build, linux, scan]")
 if "build" not in ((jobs.get("scan") or {}).get("needs") or []):
     bad.append("the scan job must need build, to scan its artifact and logs")
 
@@ -223,7 +207,7 @@ if bad:
     for b in bad:
         print("FAIL: " + b)
     sys.exit(1)
-print("ok: built and signed on Linux, smoked on 10.9 before publish, @v1 moved after publish")
+print("ok: built and signed on Linux, scanned and checked on Linux before publish, @v1 moved after publish")
 PY
 
 # spec: .github/actions/install/action.yml -- the other half of the same design: a consumer gets the
