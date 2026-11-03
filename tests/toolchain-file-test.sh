@@ -38,6 +38,9 @@ configure() {  # $1 = source dir  $2 = build dir  then more cmake arguments
   "$real" -S "$_src" -B "$_bld" $sysname -DCMAKE_C_COMPILER="$CL/bin/clang" -DCMAKE_C_COMPILER_TARGET=x86_64-apple-macos10.9 \
     -DCMAKE_C_FLAGS=--no-default-config -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld --ld-path=$CL/bin/ld64.lld" "$@"
 }
+# platform: cmake wraps a FATAL_ERROR message to the terminal width, so a long sysroot path splits a
+#           phrase across lines; the log is read as one line.
+says() { tr '\n' ' ' < "$1" | tr -s ' ' | grep -q -e "$2"; }
 mkdir -p "$w/p"
 printf 'cmake_minimum_required(VERSION 3.16)\nproject(p C)\nadd_executable(p p.c)\n' > "$w/p/CMakeLists.txt"
 printf 'int main(void){return 0;}\n' > "$w/p/p.c"
@@ -65,7 +68,7 @@ if [ "$native" -eq 1 ]; then
 else
   rc=0; configure "$w/q" "$w/b3" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF \
     -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_SYSROOT="$other_sdk" > "$w/c3.log" 2>&1 || rc=$?
-  [ "$rc" -ne 0 ] && grep -q 'not the pinned SDK' "$w/c3.log" || { echo "FAIL: include(Mavericks) must refuse the runner's SDK:"; sed 's/^/    | /' "$w/c3.log"; exit 1; }
+  [ "$rc" -ne 0 ] && says "$w/c3.log" 'not the pinned SDK' || { echo "FAIL: include(Mavericks) must refuse the runner's SDK:"; sed 's/^/    | /' "$w/c3.log"; exit 1; }
 fi
 configure "$w/q" "$w/b4" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF \
   -DCMAKE_TOOLCHAIN_FILE="$root/MavericksToolchain.cmake" > "$w/c4.log" 2>&1 \
@@ -84,7 +87,7 @@ else
   rc=0; ( unset CMAKE_OSX_ARCHITECTURES
           configure "$w/q" "$w/b6" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF -DCMAKE_OSX_SYSROOT="$other_sdk" ) \
     > "$w/c6.log" 2>&1 || rc=$?
-  [ "$rc" -ne 0 ] && grep -q 'CMAKE_OSX_ARCHITECTURES is empty' "$w/c6.log" && grep -q 'MavericksToolchain.cmake' "$w/c6.log" \
+  [ "$rc" -ne 0 ] && says "$w/c6.log" 'CMAKE_OSX_ARCHITECTURES is empty' && says "$w/c6.log" 'MavericksToolchain.cmake' \
     || { echo "FAIL: a configure with no arch must be refused with the preset/toolchain-file guidance:"; sed 's/^/    | /' "$w/c6.log"; exit 1; }
 fi
 

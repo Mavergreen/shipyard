@@ -88,11 +88,16 @@ def has(cs, pat): return any(re.search(pat, c) for c in cs)
 # with the failure caught, so the installer log can be dumped before the step dies -- and `|| true` in
 # place of `|| bad=1` turns the whole smoke into decoration while every other assertion stays green
 # (R-P1-20). A pattern that stops at the command name cannot see that.
+# spec: .github/workflows/pkg-smoke.yml -- the guest runs `sudo -n` and `--no-slices`, which only the
+#       ci.yml side may: release.yml installs on the runner and reads the slices.
+ASSERT = r"--cmake-version \"\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)\" .* \|\| bad=1$"
+ci_form = {r"^sudo installer -pkg .* \|\| bad=1$": r"^sudo (-n )?installer -pkg .* \|\| bad=1$",
+           r"^sh scripts/assert-installed-shipyard\.sh " + ASSERT: r"^sh scripts/assert-installed-shipyard\.sh (--no-slices )?" + ASSERT}
 for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 ", "build the universal updater with clang22 (tests/lib/build-updater.sh)"),
                   (r"^sh scripts/package-pkg\.sh ", "build the pkg (scripts/package-pkg.sh)"),
                   (r"^sh scripts/assert_pkg_installs_in_place\.sh ", "gate the pkg (scripts/assert_pkg_installs_in_place.sh)"),
-                  (r"^sudo (-n )?installer -pkg .* \|\| bad=1$", "install the pkg on the runner, recording failure (sudo installer ... || bad=1)"),
-                  (r"^sh scripts/assert-installed-shipyard\.sh (--no-slices )?--cmake-version \"\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)\" .* \|\| bad=1$",
+                  (r"^sudo installer -pkg .* \|\| bad=1$", "install the pkg on the runner, recording failure (sudo installer ... || bad=1)"),
+                  (r"^sh scripts/assert-installed-shipyard\.sh " + ASSERT,
                    "assert the install against the Kitware part of components/cmake/version, recording failure "
                    "(scripts/assert-installed-shipyard.sh ... || bad=1)"),
                   # The merge's own result, asserted rather than assumed: lipo-merge-tree.sh's
@@ -102,7 +107,7 @@ for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 
                    "assert the merged updater carries an arm64 slice")):
     if not has(rel, pat):
         bad.append("release.yml no longer does: %s" % what)
-    elif not has(ci, pat):
+    elif not has(ci, ci_form.get(pat, pat)):
         bad.append("ci.yml does not rehearse release.yml's packaging path: it never runs %s, so that "
                    "step's first real execution would be a push that is already publishing" % what)
 

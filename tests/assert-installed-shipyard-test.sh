@@ -195,25 +195,32 @@ check "shipyard's compatibility cmake on PATH is not probed as foreign" 0 "finds
   assert --cmake-version "$ver"
 rm -f "$stub/cmake"
 
-cp "$root/scripts/mavergreen.sh" "$fx/usr/local/bin/mavergreen"; chmod +x "$fx/usr/local/bin/mavergreen"
-check "an installed helper whose check fails fails the assertion (farm links into a product with no manifest)" 1 "mavergreen check failed" \
-  assert --cmake-version "$ver"
-ms="$w/manifest-stage"; mkdir -p "$ms/usr/local/mavergreen/shipyard"
-sh "$root/scripts/render-manifest.sh" --stage "$ms" --product shipyard --name "Mavericks Shipyard" --version 0.0.0 \
-  --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
-cp "$ms/usr/local/mavergreen/shipyard/mavergreen.plist" "$prefix/mavergreen.plist"
-mkdir -p "$fx/usr/local/mavergreen/var/mavergreen/selections"
-echo shipyard > "$fx/usr/local/mavergreen/var/mavergreen/selections/shipyard"
-mkdir -p "$ms/usr/local/mavergreen/cmake"
-sh "$root/scripts/render-manifest.sh" --stage "$ms" --product cmake --name "CMake for Mavericks" --version 4.4.4-mavericks.1 \
-  --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
-cp "$ms/usr/local/mavergreen/cmake/mavergreen.plist" "$product/mavergreen.plist"
-echo cmake > "$fx/usr/local/mavergreen/var/mavergreen/selections/cmake"
-check "with the helper and the cmake product installed and shipyard linked, a correct install passes mavergreen check too" 0 "finds shipyard in" \
-  assert --cmake-version "$ver"
-
 check "--no-slices runs no lipo" 0 "slices: not checked" \
   env HOME="$run_home" PATH="$nolipo:$PATH" LIPO=false sh "$S" --root "$fx" --cmake-version "$ver" --no-slices
+
+# platform: the helper reads its manifests with /usr/libexec/PlistBuddy (scripts/mavergreen.sh is
+#           macOS-only), so off macOS it cannot pass its own check; pkg-smoke.yml runs it on a real
+#           install in the 10.9 guest.
+if [ -x /usr/libexec/PlistBuddy ]; then
+  cp "$root/scripts/mavergreen.sh" "$fx/usr/local/bin/mavergreen"; chmod +x "$fx/usr/local/bin/mavergreen"
+  check "an installed helper whose check fails fails the assertion (farm links into a product with no manifest)" 1 "mavergreen check failed" \
+    assert --cmake-version "$ver"
+  ms="$w/manifest-stage"; mkdir -p "$ms/usr/local/mavergreen/shipyard"
+  sh "$root/scripts/render-manifest.sh" --stage "$ms" --product shipyard --name "Mavericks Shipyard" --version 0.0.0 \
+    --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
+  cp "$ms/usr/local/mavergreen/shipyard/mavergreen.plist" "$prefix/mavergreen.plist"
+  mkdir -p "$fx/usr/local/mavergreen/var/mavergreen/selections"
+  echo shipyard > "$fx/usr/local/mavergreen/var/mavergreen/selections/shipyard"
+  mkdir -p "$ms/usr/local/mavergreen/cmake"
+  sh "$root/scripts/render-manifest.sh" --stage "$ms" --product cmake --name "CMake for Mavericks" --version 4.4.4-mavericks.1 \
+    --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
+  cp "$ms/usr/local/mavergreen/cmake/mavergreen.plist" "$product/mavergreen.plist"
+  echo cmake > "$fx/usr/local/mavergreen/var/mavergreen/selections/cmake"
+  check "with the helper and the cmake product installed and shipyard linked, a correct install passes mavergreen check too" 0 "finds shipyard in" \
+    assert --cmake-version "$ver"
+else
+  echo "not run here: the installed-helper cases (no /usr/libexec/PlistBuddy)"
+fi
 
 printf 'int main(void){return 0;}\n' > "$w/thin.c"
 "$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -isysroot "$(sh "$root/scripts/fetch_sdk.sh")" \

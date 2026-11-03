@@ -31,7 +31,7 @@ cfg C
 cfg OBJC
 cfg "C OBJC"
 
-if "$CL/bin/llc" --version | grep -q aarch64; then
+if "$CL/bin/clang" -print-targets | grep -q aarch64; then
   d="$T/marr"; mkdir -p "$d"
   cat > "$d/CMakeLists.txt" <<CM
 cmake_minimum_required(VERSION 3.16)

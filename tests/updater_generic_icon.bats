@@ -18,7 +18,7 @@ mavericks_add_updater_app(
 ${3:-}
 EOF
   objc_cmake_args "$SHARED"
-  run "$CMAKE" -S "$d" -B "$d/b" $OBJC_ARGS
+  run env ${MK_REGISTRY:+"MAVERGREEN_PRODUCT_NAMES=$MK_REGISTRY"} "$CMAKE" -S "$d" -B "$d/b" $OBJC_ARGS
 }
 
 @test "add_updater_app: no ICON and no opt-in -> configure FATAL" {
@@ -75,7 +75,7 @@ EOF
 }
 
 @test "add_updater_app: an unreadable registry is refused, naming the product" {
-  MAVERGREEN_PRODUCT_NAMES="${TMPDIR:-/tmp}/no-such-registry.$$" mk openssh "ALLOW_GENERIC"
+  MK_REGISTRY="${TMPDIR:-/tmp}/no-such-registry.$$" mk openssh "ALLOW_GENERIC"
   [ "$status" -ne 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
   [[ "$output" == *"PRODUCT 'openssh'"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
   [[ "$output" == *"cannot read the registry"* ]] || { echo "$output"; rm -rf "$d"; return 1; }

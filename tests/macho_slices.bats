@@ -11,7 +11,7 @@ setup() {
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/macho_slices.XXXXXX")"
   printf 'int main(void){return 0;}\n' > "$WORK/m.c"
   cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 "$WORK/m.c" -o "$WORK/x109"
-  if "$CL/bin/llc" --version | grep -q aarch64; then
+  if "$CL/bin/clang" -print-targets | grep -q aarch64; then
     S11="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh" --arch arm64)"
     cc22 arm64-apple-macos11.0 "$S11" 11.0 11.3 "$WORK/m.c" -o "$WORK/a113"
     "$LIPO" -create "$WORK/x109" "$WORK/a113" -output "$WORK/fat"

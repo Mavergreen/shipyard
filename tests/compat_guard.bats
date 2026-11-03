@@ -14,7 +14,7 @@ setup_file() {
   LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; STRINGS="$CL/bin/llvm-strings"
   S9="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh")"
   S11=""
-  if "$CL/bin/llc" --version | grep -q aarch64; then S11="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh" --arch arm64)"; fi
+  if "$CL/bin/clang" -print-targets | grep -q aarch64; then S11="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh" --arch arm64)"; fi
   FIXTURES="$(mktemp -d "${TMPDIR:-/tmp}/compat_guard_fixtures.XXXXXX")"
   printf 'int main(void){return 0;}\n' > "$FIXTURES/clean.c"
   cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 "$FIXTURES/clean.c" -o "$FIXTURES/clean"

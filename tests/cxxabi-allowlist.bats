@@ -6,7 +6,7 @@ setup() {
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/cxxabi-allowlist-test.XXXXXX")" && pwd)"
   CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT/components/clang22")"
   AR="$CL/bin/llvm-ar"
-  export NM="${NM:-$CL/bin/llvm-nm}"
+  export NM="${NM:-$CL/bin/llvm-nm}" LIPO="${LIPO:-$CL/bin/llvm-lipo}" OTOOL="${OTOOL:-$CL/bin/llvm-otool}"
   printf '\t.globl ___cxa_uncaught_exceptions\n___cxa_uncaught_exceptions:\n\tret\n\t.globl __ZTISt9exception\n\t.data\n__ZTISt9exception:\n\t.quad 0\n' > "$WORK/a.s"
   printf '\t.globl _foo\n_foo:\n\tret\n' > "$WORK/b.s"
   ( cd "$WORK" && asm a.s b.s && "$AR" rcs fixture.a a.o b.o ) > /dev/null 2>&1 || skip "cannot build a Mach-O fixture"

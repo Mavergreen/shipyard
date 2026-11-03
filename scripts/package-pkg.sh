@@ -103,7 +103,9 @@ fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-pkg.XXXXXX")"; trap 'rm -rf "$WORK"' EXIT
 STAGE="$WORK/stage"; SCR="$WORK/scripts"
-mkdir -p "$STAGE$PREFIX_DIR" "$SCR" "$WORK/component" "$(dirname "$OUT")"
+mkdir -p "$STAGE$PREFIX_DIR" "$SCR" "$WORK/component"
+# platform: ubuntu-latest's mkdir says only "mkdir: Already exists", naming no path, so this names it.
+mkdir -p "$(dirname "$OUT")" || { echo "package-pkg: cannot make the --out directory $(dirname "$OUT")" >&2; exit 1; }
 COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
 
 # platform: an NFS or otherwise shared stage sprays AppleDouble "._*" sidecars, which would ship as

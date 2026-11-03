@@ -80,8 +80,17 @@ else:
                        "10.9's lipo cannot read the arm64 slices, which package checks on Linux")
         if not any(re.search(r"done < tests/on-target-tests$", l) for l in guest):
             bad.append("the guest must run each line of tests/on-target-tests")
-        if not any(re.match(r"/usr/local/bin/mavergreen check ", l) for l in guest):
-            bad.append("the guest must run /usr/local/bin/mavergreen check")
+        # spec: tests/shipyard-workflow-coupling-test.sh R-P1-20 -- each check records its failure and
+        #       the script ends on it, so `|| true` in place of `|| bad=1` cannot turn the smoke into decoration.
+        for what, pat in (("the cmake install", r"sudo -n installer -pkg cmake-pkg/"),
+                          ("the shipyard install", r"sudo -n installer -pkg shipyard-pkg/"),
+                          ("the install assertion", r"sh scripts/assert-installed-shipyard\.sh "),
+                          ("/usr/local/bin/mavergreen check", r"/usr/local/bin/mavergreen check "),
+                          ("on-target test", r'sh "\$t" ')):
+            if not any(re.match(pat + r".*\|\| bad=1$", l) for l in guest):
+                bad.append("the guest must record a failed %s with `|| bad=1`" % what)
+        if not guest or guest[-1] != '[ "$bad" -eq 0 ]':
+            bad.append('the guest script must end on [ "$bad" -eq 0 ], or a recorded failure exits 0')
     runs = "\n".join(str(st.get("run", "")) for st in steps)
     if not re.search(r"gh release download .*-R Mavergreen/cmake --pattern '\*\.pkg' --pattern SHA256SUMS", runs):
         bad.append("pkg-smoke.yml must download the pinned cmake release's pkg and SHA256SUMS on the runner")

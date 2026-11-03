@@ -63,7 +63,6 @@ endif()
 #       shipyard-cmake; the launcher appends, so the dev copy is found first.
 
 include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
 
 set(_dest "${CMAKE_INSTALL_DATADIR}/cmake/MavericksShipyard")
 
@@ -151,10 +150,10 @@ install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
 # Sparkle updater templates (configure_file'd per product by MavericksSparkle.cmake).
 install(DIRECTORY updater DESTINATION "${_dest}")
 
-write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfigVersion.cmake"
-  VERSION "${PROJECT_VERSION}"
-  COMPATIBILITY SameMajorVersion)
+# spec: tests/payload-cmake-independent-test.sh -- configured from our own template, not CMake's,
+#       so the payload does not depend on which cmake stages it.
+configure_file(MavericksShipyardConfigVersion.cmake.in
+  "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfigVersion.cmake" @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfigVersion.cmake"
   DESTINATION "${_dest}")
 
