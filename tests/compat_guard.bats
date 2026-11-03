@@ -281,7 +281,7 @@ mk_fat() {
   for d in /usr/bin /bin; do
     for f in "$d"/*; do
       case "${f##*/}" in shasum*) continue ;; esac
-      [ -e "$WORK/noshasum/${f##*/}" ] || ln -s "$f" "$WORK/noshasum/${f##*/}"
+      [ -e "$WORK/noshasum/${f##*/}" ] || [ -L "$WORK/noshasum/${f##*/}" ] || ln -s "$f" "$WORK/noshasum/${f##*/}"
     done
   done
   run env PATH="$WORK/noshasum" sh "$GUARD" "$WORK/clean"
