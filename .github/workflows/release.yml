@@ -221,6 +221,8 @@ jobs:
           bats tests/fetch_stevedore_darwin.bats
           sh tests/updater-clang22-darwin-test.sh
           sh tests/umbrella-langs.sh
+          sh tests/mavergreen-helper-test.sh
+          sh tests/stage-product-test.sh
       # spec: INGREDIENTS.md macos-runner:release.yml:canary -- the Linux-built updater's arm64 slice
       #       runs nowhere else on Apple Silicon before @v1 moves.
       - name: The installed updater launches, check only

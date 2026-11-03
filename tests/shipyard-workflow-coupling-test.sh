@@ -111,7 +111,11 @@ for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 
                   # --require-archs covers every Mach-O in the tree, and this says out loud that the
                   # one binary the whole pkg exists to deliver came out with both slices.
                   (r'^case " \$archs " in \*" arm64 "\*\) ;; \*\) echo "::error::the merged updater has no arm64 slice',
-                   "assert the merged updater carries an arm64 slice")):
+                   "assert the merged updater carries an arm64 slice"),
+                  # The Linux-specific half: clang22's Mach-O tools, and the runner's cmake for the payload.
+                  (r'^echo "LIPO=\$CL/bin/llvm-lipo"$', "export clang22's llvm-lipo as LIPO"),
+                  (r'^cmake -S \. -B "\$RUNNER_TEMP/payload-build"$', "configure the payload with the runner's cmake"),
+                  (r'^DESTDIR=\S+ cmake --install "\$RUNNER_TEMP/payload-build" ', "install the payload with the runner's cmake")):
     if not has(rel, pat):
         bad.append("release.yml no longer does: %s" % what)
     elif not has(ci, pat):
@@ -182,6 +186,17 @@ for name in ("ci.yml", "release.yml"):
             bad.append("%s job %s fetches clang22 (~2 GB, unpacked) with no actions/cache of %s keyed on "
                        "hashFiles('components/clang22/version') before it, so every run downloads and "
                        "expands it again" % (name, job, want))
+# Linux has no shipyard-cmake and install@v1 refuses source: build there.
+for name in ("ci.yml", "release.yml"):
+    d = yaml.safe_load(open(os.path.join(wf, name)))
+    for job, spec in (d.get("jobs") or {}).items():
+        if not str(spec.get("runs-on", "")).startswith("ubuntu-"):
+            continue
+        for step in (spec.get("steps") or []):
+            if re.search(r"(^|[\s;|&(=])shipyard-c(make|test|pack)\b", str(step.get("run") or "")):
+                bad.append("%s job %s runs shipyard-cmake/ctest/cpack on ubuntu, where install@v1 provides none" % (name, job))
+            if str(step.get("uses", "")) == "./.github/actions/install" and (step.get("with") or {}).get("source") == "build":
+                bad.append("%s job %s asks install@v1 for source: build on ubuntu, which it refuses" % (name, job))
 if os.path.exists(os.path.join(wf, "..", "actions", "shipyard-cmake")):
     bad.append(".github/actions/shipyard-cmake still exists")
 

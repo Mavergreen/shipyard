@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- PlistBuddy writes the fixture manifests the helper reads; runs in the 10.9 guest (tests/on-target-tests)
+# platform: macOS-only -- PlistBuddy writes the fixture manifests the helper reads; runs in the 10.9 guest (tests/on-target-tests) and release.yml's canary
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 MG="$here/../scripts/mavergreen.sh"

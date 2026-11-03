@@ -132,16 +132,26 @@ tars = find(r"(^|[\s;|&(])tar\s") + find(r"\.tar\.gz\b")
 if tars:
     bad.append("the release tarball should be gone; the pkg is the asset now: %r" % tars[0])
 
-# GNU binutils cannot read Mach-O, so conformance's slice and SDK checks need clang22's tools, exported
-# to every later step before conformance runs.
-conf = [i for i, s in enumerate(build_steps)
-        if any(re.search(r"^sh scripts/artifact-facts\.sh dist ", c) for c in step_cmds(s))]
-for tool in ("LIPO", "OTOOL", "NM"):
+# GNU binutils cannot read Mach-O and Linux has no lipo, so the updater merge's slice check and
+# conformance's slice and SDK checks need clang22's tools, exported before the first of them.
+def first(pat):
+    return [i for i, s in enumerate(build_steps) if any(re.search(pat, c) for c in step_cmds(s))][:1]
+users = first(r"^sh tests/lib/build-updater\.sh ") + first(r"^sh scripts/artifact-facts\.sh dist ")
+for tool in ("LIPO", "OTOOL", "NM", "STRINGS"):
     exp = [i for i, s in enumerate(build_steps)
            if any(re.search(r'^echo "%s=\$CL/bin/llvm-' % tool, c) for c in step_cmds(s))
            and '>> "$GITHUB_ENV"' in (s.get("run") or "")]
-    if not exp or not conf or exp[0] > conf[0]:
-        bad.append("the build job never exports %s (clang22's llvm tool) to $GITHUB_ENV before artifact conformance" % tool)
+    if len(users) != 2 or not exp or exp[0] > min(users):
+        bad.append("the build job never exports %s (clang22's llvm tool) to $GITHUB_ENV before the updater build and artifact conformance" % tool)
+
+# Linux has no shipyard-cmake: install@v1's Linux path installs no pkg, so the payload is configured
+# and installed with the runner's cmake.
+if any(re.search(r"(^|[\s;|&(=])shipyard-c(make|test|pack)\b", c) for st in build_steps for c in step_cmds(st)):
+    bad.append("the build job runs shipyard-cmake/ctest/cpack, which install@v1's Linux path does not provide")
+need(r'^cmake -S \. -B "\$RUNNER_TEMP/payload-build"$',
+     "the build job must configure the payload with the runner's cmake (cmake -S . -B \"$RUNNER_TEMP/payload-build\")")
+need(r'^DESTDIR="\$RUNNER_TEMP/payload-stage" cmake --install "\$RUNNER_TEMP/payload-build" --prefix /usr/local/mavergreen/shipyard$',
+     "the build job must install the payload with the runner's cmake (DESTDIR=... cmake --install ... --prefix /usr/local/mavergreen/shipyard)")
 
 # The pkg is installed on the runner nowhere: the build is on Linux, and pkg-smoke.yml installs it on
 # 10.9 with what must hold stated once, in scripts/assert-installed-shipyard.sh (R-P1-17).
@@ -156,9 +166,15 @@ for jn, job in jobs.items():
         holders.append("%s (job env)" % jn)
     if jn != "scan" and "SPARKLE_PRIVATE_KEY" in str(job.get("secrets") or ""):
         holders.append("%s (secrets)" % jn)
+    if str(job.get("secrets") or "").strip() == "inherit":
+        holders.append("%s (secrets: inherit)" % jn)
+    if "SPARKLE_PRIVATE_KEY" in str(job.get("with") or ""):
+        holders.append("%s (with)" % jn)
     for st in (job.get("steps") or []):
         if "SPARKLE_PRIVATE_KEY" in (st.get("run") or ""):
             holders.append("%s step %r (run)" % (jn, st.get("name")))
+        if "SPARKLE_PRIVATE_KEY" in str(st.get("with") or ""):
+            holders.append("%s step %r (with)" % (jn, st.get("name")))
         signs = any(re.search(r"^sh scripts/sign_and_appcast\.sh ", c) for c in step_cmds(st))
         if "SPARKLE_PRIVATE_KEY" in str(st.get("env") or "") and not (jn == "build" and signs):
             holders.append("%s step %r (env)" % (jn, st.get("name")))
@@ -201,7 +217,8 @@ if not any("needs.build.outputs.version" in str((st.get("with") or {}).get("ref"
     print("FAIL: the canary must check out the release it installs"); sys.exit(1)
 if not any("assert-installed-shipyard.sh" in (st.get("run") or "") for st in cst):
     print("FAIL: the canary must run assert-installed-shipyard.sh"); sys.exit(1)
-for t in ("tests/fetch_stevedore_darwin.bats", "tests/updater-clang22-darwin-test.sh", "tests/umbrella-langs.sh"):
+for t in ("tests/fetch_stevedore_darwin.bats", "tests/updater-clang22-darwin-test.sh", "tests/umbrella-langs.sh",
+          "tests/mavergreen-helper-test.sh", "tests/stage-product-test.sh"):
     if not any(t in (st.get("run") or "") for st in cst):
         print("FAIL: the canary must run " + t + ", which only a Mac can run"); sys.exit(1)
 # The Linux-built updater's arm64 slice runs nowhere else on Apple Silicon before @v1 moves.
