@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- every case needs Apple clang, and all of them skip without it
+# platform: macOS-only -- the guard it tests is macOS-only and the AppKit selector fixtures need Apple clang; runs in the 10.9 guest (tests/on-target-tests)
 # spec: scripts/assert_binary_compatible.sh -- the unit under test. Builds tiny x86_64/10.9 fixture
 #       Mach-Os with controlled symbols. If the host clang cannot emit an x86_64/10.9 slice, the
 #       arch/min-OS-dependent cases skip, but the symbol logic still runs.

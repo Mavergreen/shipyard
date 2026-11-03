@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- the updater is Objective-C against AppKit
+# platform: host-agnostic
 SHARED="${BATS_TEST_DIRNAME}/.."
+. "$SHARED/tests/lib/objc-cmake-args.sh"
 
 mk() {
   d="$(mktemp -d "${TMPDIR:-/tmp}/updgen.XXXXXX")"
@@ -16,7 +17,8 @@ mavericks_add_updater_app(
   $2)
 ${3:-}
 EOF
-  run cmake -S "$d" -B "$d/b"
+  objc_cmake_args "$SHARED"
+  run "$CMAKE" -S "$d" -B "$d/b" $OBJC_ARGS
 }
 
 @test "add_updater_app: no ICON and no opt-in -> configure FATAL" {

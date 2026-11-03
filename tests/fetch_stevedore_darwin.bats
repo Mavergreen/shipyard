@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- the Darwin branch of fetch_stevedore.sh expands the release pkg with pkgutil, and pkgbuild makes it
+# platform: macOS-only -- the Darwin branch of fetch_stevedore.sh expands the release pkg with pkgutil, and pkgbuild makes it; runs in release.yml's canary
 
 setup() {
   FETCH="$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh"

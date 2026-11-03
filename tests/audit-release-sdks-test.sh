@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- builds a Mach-O fixture with Apple clang and reads it through artifact-facts.sh
+# platform: host-agnostic
 #   usage: audit-release-sdks-test.sh
 #          The audit's verdict over a local dist dir: a pinned tarball passes and names how many
 #          Mach-O slices it checked, the runner's SDK fails naming sdk-pin, and a pkg pkgutil cannot
@@ -10,14 +10,16 @@ here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/audit-release-sdks.sh"
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/audit-sdks-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
-# platform: xcrun vtool arrived with Xcode 11; a 10.9 box (Xcode 6-era Command Line Tools) has none,
-#           and building the fixtures below needs it to stamp an arbitrary recorded SDK version onto
-#           a Mach-O binary (the bad fixture must record an SDK that is not the pin).
-xcrun --find vtool >/dev/null 2>&1 || { echo "SKIP: no vtool (pre-Xcode 11) to stamp the fixtures' recorded SDK"; exit 77; }
+CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/../components/clang22")"
+LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; export LIPO OTOOL NM
+S9="$(sh "$here/../scripts/fetch_sdk.sh")"
 printf 'int main(void){return 0;}\n' > "$w/h.c"
 mkdir -p "$w/good/dist" "$w/bad/dist" "$w/repo" "$w/unreadable/dist"
-cc -arch x86_64 -mmacosx-version-min=10.9 "$w/h.c" -o "$w/h"
-xcrun vtool -set-version-min macos 10.9 10.9 -replace -output "$w/good/h" "$w/h"
+build() {  # $1 = recorded sdk  $2 = output
+  "$CL/bin/clang" --no-default-config -Wno-unused-command-line-argument -fuse-ld=lld --ld-path="$CL/bin/ld64.lld" -target x86_64-apple-macos10.9 -isysroot "$S9" "-Wl,-platform_version,macos,10.9,$1" "$w/h.c" -o "$2"
+}
+build 10.9 "$w/good/h"
+build 26.5 "$w/h"
 ( cd "$w/good" && tar -czf dist/t-1.0.0-mavericks.1.tar.gz h )
 ( cd "$w" && tar -czf bad/dist/t-1.0.0-mavericks.1.tar.gz h )
 out="$(sh "$S" --dist "$w/good/dist" "$w/repo")" || { echo "FAIL: a pinned release must pass the audit"; exit 1; }

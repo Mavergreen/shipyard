@@ -222,6 +222,13 @@ jobs:
           sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root /
           /usr/local/bin/mavergreen check
           shipyard-cmake --version | head -1
+      - name: The macOS-only tests that only a Mac can run
+        run: |
+          set -eu
+          command -v bats >/dev/null 2>&1 || brew install bats-core
+          bats tests/fetch_stevedore_darwin.bats
+          sh tests/updater-clang22-darwin-test.sh
+          sh tests/umbrella-langs.sh
 
   major-tag:
     needs: [build, publish, canary]

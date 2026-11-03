@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- builds the Objective-C updater against AppKit and the pinned Sparkle
+# platform: host-agnostic
 SHARED="${BATS_TEST_DIRNAME}/.."
+. "$SHARED/tests/lib/objc-cmake-args.sh"
 
 setup() {
-  SC="${SHIPYARD_CMAKE:-$(command -v shipyard-cmake 2>/dev/null || true)}"
-  [ -n "$SC" ] || skip "no shipyard-cmake (install the shipyard pkg, or set SHIPYARD_CMAKE)"
+  objc_cmake_args "$SHARED"
   d="$BATS_TEST_TMPDIR/p"
   mkdir -p "$d"
   cat > "$d/CMakeLists.txt" <<EOF
@@ -19,11 +19,10 @@ EOF
 }
 
 build_at() {
-  "$SC" -S "$d" -B "$d/b" -DV="$1" -DCMAKE_OBJC_COMPILER=/usr/bin/clang \
-    -DCMAKE_TOOLCHAIN_FILE="$SHARED/MavericksToolchain.cmake" >/dev/null && "$SC" --build "$d/b"
+  "$CMAKE" -S "$d" -B "$d/b" -DV="$1" $OBJC_ARGS >/dev/null && "$CMAKE" --build "$d/b"
 }
 
-key() { /usr/libexec/PlistBuddy -c "Print :$1" "$d/b/openssh-updater.app/Contents/Info.plist"; }
+key() { grep -A1 "<key>$1</key>" "$d/b/openssh-updater.app/Contents/Info.plist" | sed -n 's|.*<string>\(.*\)</string>.*|\1|p'; }
 
 @test "add_updater_app: a rebuild at a new VERSION in the same build dir gives the app that version" {
   run build_at 9.9p2-mavericks.1

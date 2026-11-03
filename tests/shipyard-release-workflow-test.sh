@@ -176,6 +176,9 @@ if not any("needs.build.outputs.version" in str((st.get("with") or {}).get("ref"
     print("FAIL: the canary must check out the release it installs"); sys.exit(1)
 if not any("assert-installed-shipyard.sh" in (st.get("run") or "") for st in cst):
     print("FAIL: the canary must run assert-installed-shipyard.sh"); sys.exit(1)
+for t in ("tests/fetch_stevedore_darwin.bats", "tests/updater-clang22-darwin-test.sh", "tests/umbrella-langs.sh"):
+    if not any(t in (st.get("run") or "") for st in cst):
+        print("FAIL: the canary must run " + t + ", which only a Mac can run"); sys.exit(1)
 if "canary" not in ((jobs.get("major-tag") or {}).get("needs") or []):
     print("FAIL: major-tag must need canary, so @v1 never names a release that will not install"); sys.exit(1)
 if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan"]:

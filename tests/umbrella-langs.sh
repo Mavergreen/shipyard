@@ -1,13 +1,9 @@
 #!/bin/sh
-# platform: macOS-only -- needs shipyard-cmake, which has no Linux build
+# platform: macOS-only -- include(Mavericks) requires AppleClang, which only a Mac has, and its arm64 case needs a cross-capable Apple clang; runs in release.yml's canary
 set -eu
-SC="${SHIPYARD_CMAKE:-$(command -v shipyard-cmake 2>/dev/null || true)}"
-[ -n "$SC" ] || { echo "SKIP: no shipyard-cmake (install the shipyard pkg, or set SHIPYARD_CMAKE)"; exit 77; }
-# spec: scripts/run-repo-tests.sh -- exit 77 is the family's SKIP idiom, not a failure. Called
-#       bare, as the shared runner does when it globs tests/*.sh, there is nothing to include;
-#       ctest itself always supplies the source dir (see add_test).
-[ "$#" -ge 1 ] || { echo "no source dir given (ctest supplies it) -- skipping" >&2; exit 77; }
-SRC="${1:?usage: umbrella-langs.sh <mavericks-shipyard source dir>}"
+SC="${CMAKE:-$(command -v shipyard-cmake || echo cmake)}"
+command -v "$SC" >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
+SRC="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 T=$(mktemp -d "${TMPDIR:-/tmp}/umbrella-langs.XXXXXX"); trap 'rm -rf "$T"' EXIT
 # platform: /usr/bin/clang is present on 10.9 and modern macOS alike.
 CC=/usr/bin/clang

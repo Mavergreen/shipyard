@@ -1,20 +1,25 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- needs Apple clang, lipo and vtool to build and stamp its fixtures
+# platform: host-agnostic
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning"
 
 setup() {
   S="$BATS_TEST_DIRNAME/../scripts/macho-slices.sh"
-  # platform: vtool arrived with Xcode 11; the 10.9 box (Xcode 6) runs this suite too and has none.
-  xcrun --find vtool >/dev/null 2>&1 || skip "no vtool (pre-Xcode 11) to stamp fixtures"
+  CL="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_clang22.sh" "$BATS_TEST_DIRNAME/../components/clang22")"
+  LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"
+  S9="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh")"
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/macho_slices.XXXXXX")"
   printf 'int main(void){return 0;}\n' > "$WORK/m.c"
-  clang -arch x86_64 -mmacosx-version-min=10.9 "$WORK/m.c" -o "$WORK/x"
-  clang -arch arm64 -mmacosx-version-min=11.0 "$WORK/m.c" -o "$WORK/a"
-  # platform: vtool rewrites the recorded SDK without needing that SDK, so no fixture downloads one.
-  xcrun vtool -set-version-min macos 10.9 10.9 -replace -output "$WORK/x109" "$WORK/x"
-  xcrun vtool -set-build-version macos 11.0 11.3 -tool ld 1000.0 -replace -output "$WORK/a113" "$WORK/a"
-  lipo -create "$WORK/x109" "$WORK/a113" -output "$WORK/fat"
+  cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 "$WORK/m.c" -o "$WORK/x109"
+  S11="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh" --arch arm64)" || S11=""
+  if [ -n "$S11" ] && cc22 arm64-apple-macos11.0 "$S11" 11.0 11.3 "$WORK/m.c" -o "$WORK/a113" 2>/dev/null; then
+    "$LIPO" -create "$WORK/x109" "$WORK/a113" -output "$WORK/fat"
+  fi
 }
+cc22() {  # $1 target  $2 sysroot  $3 minos  $4 sdk  then clang arguments
+  _t="$1"; _r="$2"; _m="$3"; _s="$4"; shift 4
+  "$CL/bin/clang" --no-default-config -Wno-unused-command-line-argument -fuse-ld=lld --ld-path="$CL/bin/ld64.lld" -target "$_t" -isysroot "$_r" "-Wl,-platform_version,macos,$_m,$_s" "$@"
+}
+need_fat() { [ -f "$WORK/fat" ] || skip "this box's clang22 links no arm64 (the 10.9 box's targets x86_64 only)"; }
 teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 
 @test "a thin x86_64 binary: one line, its recorded minos and sdk" {
@@ -24,6 +29,7 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 }
 
 @test "a fat binary: one line per slice, LC_BUILD_VERSION's minos not the linker's version" {
+  need_fat
   run sh "$S" "$WORK/fat"
   [ "$status" -eq 0 ]
   [[ "$output" == *"x86_64 EXECUTE 10.9 10.9"* ]] || false
@@ -32,8 +38,8 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 }
 
 @test "a static archive: members report OBJECT" {
-  clang -arch x86_64 -mmacosx-version-min=10.9 -c "$WORK/m.c" -o "$WORK/m.o"
-  ar rcs "$WORK/libm.a" "$WORK/m.o"
+  cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 -c "$WORK/m.c" -o "$WORK/m.o"
+  "$CL/bin/llvm-ar" rcs "$WORK/libm.a" "$WORK/m.o"
   run sh "$S" "$WORK/libm.a"
   [ "$status" -eq 0 ]
   [[ "$output" == "x86_64 OBJECT 10.9 "* ]] || false
@@ -46,6 +52,7 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 }
 
 @test "LIPO and OTOOL name the readers it runs, with the same answer" {
+  need_fat
   mkdir -p "$WORK/readers"
   for t in lipo otool; do
     printf '#!/bin/sh\necho "%s $1" >> "%s/readers.log"\nexec "%s" "$@"\n' "$t" "$WORK" "$(command -v "$t")" > "$WORK/readers/$t"
@@ -62,7 +69,7 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 }
 
 @test "an OTOOL that fails only for -l fails closed (exit 4), not as a slice with no version" {
-  printf '#!/bin/sh\ncase "$1" in -l) echo "otool: -l broke" >&2; exit 1 ;; esac\nexec "%s" "$@"\n' "$(command -v otool)" > "$WORK/otool-nol"
+  printf '#!/bin/sh\ncase "$1" in -l) echo "otool: -l broke" >&2; exit 1 ;; esac\nexec "%s" "$@"\n' "$OTOOL" > "$WORK/otool-nol"
   chmod +x "$WORK/otool-nol"
   run env OTOOL="$WORK/otool-nol" sh "$S" "$WORK/x109"
   [ "$status" -eq 4 ]
@@ -71,9 +78,10 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 }
 
 @test "an OTOOL that fails only for -hv, on a file LIPO read, fails closed (exit 4)" {
-  printf '#!/bin/sh\ncase "$1" in -hv) echo "otool: -hv broke" >&2; exit 1 ;; esac\nexec "%s" "$@"\n' "$(command -v otool)" > "$WORK/otool-nohv"
+  printf '#!/bin/sh\ncase "$1" in -hv) echo "otool: -hv broke" >&2; exit 1 ;; esac\nexec "%s" "$@"\n' "$OTOOL" > "$WORK/otool-nohv"
   chmod +x "$WORK/otool-nohv"
   for f in x109 fat; do
+    [ -f "$WORK/$f" ] || continue
     run env OTOOL="$WORK/otool-nohv" sh "$S" "$WORK/$f"
     [ "$status" -eq 4 ]
     [[ "$output" == *"-hv could not read"* ]] || false
