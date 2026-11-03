@@ -10,7 +10,7 @@ setup() {
   export MAVERGREEN_PREFIX="$WORK/no-prefix"
   printf '\t.globl ___cxa_uncaught_exceptions\n___cxa_uncaught_exceptions:\n\tret\n\t.globl __ZTISt9exception\n\t.data\n__ZTISt9exception:\n\t.quad 0\n' > "$WORK/a.s"
   printf '\t.globl _foo\n_foo:\n\tret\n' > "$WORK/b.s"
-  ( cd "$WORK" && asm a.s b.s && "$AR" rcs fixture.a a.o b.o ) > /dev/null 2>&1 || skip "cannot build a Mach-O fixture"
+  ( cd "$WORK" && asm a.s b.s && "$AR" rcs fixture.a a.o b.o ) > "$WORK/fixture.log" 2>&1 || { sed "s/^/    | /" "$WORK/fixture.log"; echo "the pinned clang22 could not build the Mach-O fixture"; return 1; }
 }
 asm() { "$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -c "$@"; }
 teardown() { rm -rf "$WORK"; }

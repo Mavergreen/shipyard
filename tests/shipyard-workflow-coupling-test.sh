@@ -330,6 +330,8 @@ else:
         bad.append("required (ci) must run if: always(), or a failed job skips it and a skipped check passes")
     if not str(g.get("runs-on", "")).startswith("ubuntu-"):
         bad.append("required (ci) must run on ubuntu, not %r" % g.get("runs-on"))
+    if g.get("permissions") != {"contents": "read"}:
+        bad.append("required (ci) must grant only contents: read, as linux does, not %r" % g.get("permissions"))
     steps = g.get("steps") or []
     if not any(str(st.get("uses", "")) == "./.github/actions/required-gate"
                and "toJSON(needs)" in str((st.get("with") or {}).get("needs", "")) for st in steps):

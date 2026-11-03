@@ -3,9 +3,8 @@
 #   usage: lipo-merge-tree-test.sh
 #          Two builds of one thing differing ONLY by architecture must merge into one universal tree;
 #          anything else differing must be refused unless the caller declared that path.
-# platform: the merge logic is arch-agnostic, so this needs x86_64 plus any second arch the box's clang22
-#           can make: arm64 where it links one, else on the 10.9 box (whose native clang22 targets x86_64
-#           only and links no i386) an i386 object, which lipo merges as readily as an executable.
+# platform: the merge logic is arch-agnostic, so the second arch is an i386 object, the one every
+#           host's clang22 builds (10.9's native clang22 targets x86_64 only and links no i386).
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/lipo-merge-tree.sh"
@@ -19,12 +18,8 @@ build() {  # $1 = target triple  $2 = sysroot  then clang arguments
 }
 printf 'int main(void){return 0;}\n' > "$w/m.c"
 build x86_64-apple-macos10.9 "$S9" -o "$w/m-x86_64" "$w/m.c" 2>/dev/null || { echo "SKIP: cannot build x86_64 here"; exit 77; }
-ALT=""
-if build arm64-apple-macos11.0 "$(sh "$here/../scripts/fetch_sdk.sh" --arch arm64)" -o "$w/m-alt" "$w/m.c" 2>/dev/null; then ALT=arm64
-elif build i386-apple-macos10.9 "$S9" -c -o "$w/m-alt" "$w/m.c" 2>/dev/null; then ALT=i386
-fi
-[ -n "$ALT" ] || { echo "SKIP: this box can build neither arm64 nor i386 alongside x86_64"; exit 77; }
-echo "lipo-merge-tree: merging x86_64 + $ALT"
+ALT=i386
+build i386-apple-macos10.9 "$S9" -c -o "$w/m-alt" "$w/m.c" || { echo "FAIL: the pinned clang22 cannot build an i386 object"; exit 1; }
 build x86_64h-apple-macos10.9 "$S9" -c -o "$w/m-x86_64h" "$w/m.c" 2>/dev/null || true  # x86_64h is optional for this test; as an object, since lld links it as plain x86_64
 
 mk() {  # $1 = tree  $2 = the Mach-O to put at bin/tool

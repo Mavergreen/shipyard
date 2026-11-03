@@ -247,3 +247,17 @@ mk_readers() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"tool is excused from sdk-pin"* ]] || false
 }
+
+@test "a PATH with no shasum fails the guard closed, naming shasum" {
+  mkdir "$WORK/noshasum"
+  for d in /usr/bin /bin; do
+    for f in "$d"/*; do
+      case "${f##*/}" in shasum*) continue ;; esac
+      [ -e "$WORK/noshasum/${f##*/}" ] || [ -L "$WORK/noshasum/${f##*/}" ] || ln -s "$f" "$WORK/noshasum/${f##*/}"
+    done
+  done
+  run env PATH="$WORK/noshasum" sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 1 ]
+  first_is sdk-pin
+  [[ "$output" == *"CANNOT MEASURE"*"shasum"* ]] || false
+}

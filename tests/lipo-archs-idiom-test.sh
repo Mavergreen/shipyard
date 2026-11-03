@@ -55,4 +55,6 @@ pass "$CL/bin/llvm-lipo" llvm-lipo
 # platform: guarded macOS-only call -- -x /usr/bin/lipo is false on Linux
 if [ -x /usr/bin/lipo ] && /usr/bin/lipo -info "$bin" >/dev/null 2>&1; then
   pass /usr/bin/lipo "system lipo"
+else
+  echo "lipo-archs-idiom: system lipo pass not run (no working /usr/bin/lipo here)"
 fi

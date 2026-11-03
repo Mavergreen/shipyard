@@ -65,7 +65,7 @@ jobs:
           sh tests/lib/build-updater.sh --arch x86_64 --arch arm64 --out "$RUNNER_TEMP/shipyard-updater.app"
           # spec: R-P1-22 -- NOT re-signed; release.yml's copy of this step states it in full.
           exe="$RUNNER_TEMP/shipyard-updater.app/Contents/MacOS/shipyard-updater"
-          archs="$(${LIPO:-lipo} -info "$exe" | sed -n 's/.*: //p')"
+          archs="$("${LIPO:-lipo}" -info "$exe" | sed -n 's/.*: //p')"
           case " $archs " in *" x86_64 "*) ;; *) echo "::error::the merged updater has no x86_64 slice: $archs"; exit 1;; esac
           case " $archs " in *" arm64 "*) ;; *) echo "::error::the merged updater has no arm64 slice: $archs"; exit 1;; esac
           echo "merged updater: $archs"
@@ -180,6 +180,8 @@ jobs:
     name: required (ci)
     if: always()
     needs: [linux, package, tag-push-rehearsal]
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

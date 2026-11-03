@@ -18,7 +18,8 @@ mavericks_add_updater_app(
 ${3:-}
 EOF
   objc_cmake_args "$SHARED"
-  run env ${MK_REGISTRY:+"MAVERGREEN_PRODUCT_NAMES=$MK_REGISTRY"} "$CMAKE" -S "$d" -B "$d/b" $OBJC_ARGS
+  [ -z "${MK_REGISTRY:-}" ] || export MAVERGREEN_PRODUCT_NAMES="$MK_REGISTRY"
+  run objc_cmake -S "$d" -B "$d/b"
 }
 
 @test "add_updater_app: no ICON and no opt-in -> configure FATAL" {

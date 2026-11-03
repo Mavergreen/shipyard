@@ -7,7 +7,7 @@ SRC="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 T=$(mktemp -d "${TMPDIR:-/tmp}/umbrella-langs.XXXXXX"); trap 'rm -rf "$T"' EXIT
 # platform: /usr/bin/clang is present on 10.9 and modern macOS alike.
 CC=/usr/bin/clang
-[ -x "$CC" ] || { echo "SKIP: no Apple clang at $CC"; exit 0; }
+[ -x "$CC" ] || { echo "SKIP: no Apple clang at $CC"; exit 77; }
 
 cfg() { # $1=langs  $2...=extra -D
   langs=$1; shift

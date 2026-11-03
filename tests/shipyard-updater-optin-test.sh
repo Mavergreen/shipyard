@@ -14,7 +14,7 @@ grep -qi "The OBJC compiler identification" "$work/off.log" \
 [ -d "$work/off/CMakeFiles/shipyard-updater.dir" ] \
   && { echo "FAIL: default configure created an updater target, but cmake --install must work on a box with no ObjC compiler at all"; exit 1; }
 
-if "$CMAKE" -S "$root" -B "$work/on" $OBJC_ARGS -DSHIPYARD_BUILD_UPDATER=ON -DMAVERICKS_ALLOW_GENERIC_ICON=ON >"$work/on.log" 2>&1; then
+if objc_cmake -S "$root" -B "$work/on" -DSHIPYARD_BUILD_UPDATER=ON -DMAVERICKS_ALLOW_GENERIC_ICON=ON >"$work/on.log" 2>&1; then
   grep -qi "The OBJC compiler identification" "$work/on.log" \
     || { echo "FAIL: opt-in configure did not enable ObjC"; exit 1; }
 else

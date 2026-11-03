@@ -133,6 +133,8 @@ shipyard_undefs() {
     | awk '{ w = (/ weak /) ? "W" : "H"; print w, $NF }'
 }
 
+command -v shasum >/dev/null 2>&1 \
+  || cannot_measure sdk-pin "no shasum on PATH, so no binary can be matched to a pinned third-party one (on Linux, shasum is perl's)"
 checked=0; excused=0
 guard_fail() {  # $1 = id, $2 = the path deviations match, $3 = why; a deviation for $1 covering $2 excuses it
   _gf="$(shipyard_deviated "$1" "$2" || true)"

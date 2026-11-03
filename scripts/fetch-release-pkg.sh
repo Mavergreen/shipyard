@@ -17,7 +17,19 @@ BASE="${MAVERGREEN_RELEASES:-https://github.com}/Mavergreen/$REPO/releases/downl
 mkdir -p "$DIR"
 sums="$(mktemp "${TMPDIR:-/tmp}/fetch-release-pkg.XXXXXX")"
 trap 'rm -f "$sums"' EXIT
-shipyard_curl "$BASE/SHA256SUMS" "$sums" || { echo "fetch-release-pkg: could not fetch $BASE/SHA256SUMS" >&2; exit 1; }
+missing() {  # $1 = curl's exit from shipyard_curl
+  [ "$1" -eq 37 ] || { [ "$1" -eq 22 ] && [ "$shipyard_curl_http" = 404 ]; }
+}
+rc=0; shipyard_curl "$BASE/SHA256SUMS" "$sums" || rc=$?
+if [ "$rc" -ne 0 ]; then
+  if missing "$rc"; then
+    arc=0; shipyard_curl --quiet "$BASE/$ASSET" "$sums" 2>/dev/null || arc=$?
+    if [ "$arc" -ne 0 ] && missing "$arc"; then
+      echo "fetch-release-pkg: Mavergreen/$REPO $TAG has no $ASSET, and no SHA256SUMS ($BASE)" >&2; exit 1
+    fi
+  fi
+  echo "fetch-release-pkg: could not fetch $BASE/SHA256SUMS" >&2; exit 1
+fi
 sha="$(awk -v f="$ASSET" '$2 == f || $2 == "*" f { print $1 }' "$sums")"
 case "$sha" in
   *[!0-9a-f]*|'') echo "fetch-release-pkg: $ASSET is not listed (once) in $BASE/SHA256SUMS" >&2; exit 1 ;;

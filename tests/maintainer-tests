@@ -10,6 +10,7 @@
 10.9 tests/vercmp-test.sh
 10.9 tests/name-rules-test.sh
 10.9 tests/shipyard-provision-on-target-test.sh
+10.9 tests/compat-guard-native-test.sh
 golden-gate tests/installed-shipyard-test.sh
 golden-gate tests/fetch_stevedore_darwin.bats
 golden-gate tests/updater-clang22-darwin-test.sh
