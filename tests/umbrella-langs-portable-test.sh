@@ -31,6 +31,9 @@ cfg C
 cfg OBJC
 cfg "C OBJC"
 
+# platform: without a toolchain file a Linux host configures for Linux and drops CMAKE_OSX_*, so the
+#           try_compile links with no sysroot; naming Darwin applies the caller's own CMAKE_OSX_SYSROOT.
+sysname=""; [ "$(uname -s)" != Linux ] || sysname=-DCMAKE_SYSTEM_NAME=Darwin
 if "$CL/bin/clang" -print-targets | grep -q aarch64; then
   d="$T/marr"; mkdir -p "$d"
   cat > "$d/CMakeLists.txt" <<CM
@@ -43,7 +46,7 @@ if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR NOT CMAKE_OSX_DEPLOYMENT_TARG
   message(FATAL_ERROR "umbrella changed arch/target to [\${CMAKE_OSX_ARCHITECTURES}]/[\${CMAKE_OSX_DEPLOYMENT_TARGET}]")
 endif()
 CM
-  "$SC" -S "$d" -B "$d/b" $CCARGS -DCMAKE_C_COMPILER_TARGET=arm64-apple-macos12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+  "$SC" -S "$d" -B "$d/b" $sysname $CCARGS -DCMAKE_C_COMPILER_TARGET=arm64-apple-macos12.0 -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
     -DCMAKE_OSX_SYSROOT="$(sh "$SRC/scripts/fetch_sdk.sh" --arch arm64)" >"$T/log" 2>&1 \
     || { echo "FAIL: include(Mavericks) must not touch a project's CMAKE_OSX_*:"; tail -20 "$T/log"; exit 1; }
 fi
