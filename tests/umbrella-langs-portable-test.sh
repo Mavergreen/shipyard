@@ -31,7 +31,7 @@ cfg C
 cfg OBJC
 cfg "C OBJC"
 
-# platform: without a toolchain file a Linux host configures for Linux and drops CMAKE_OSX_*, so the
+# platform: without a toolchain file a Linux host configures for Linux and ignores CMAKE_OSX_*, so the
 #           try_compile links with no sysroot; naming Darwin applies the caller's own CMAKE_OSX_SYSROOT.
 sysname=""; [ "$(uname -s)" != Linux ] || sysname=-DCMAKE_SYSTEM_NAME=Darwin
 if "$CL/bin/clang" -print-targets | grep -q aarch64; then
