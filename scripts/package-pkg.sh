@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- builds the pkg
+# platform: host-agnostic
 #   usage: package-pkg.sh --shipyard-prefix DIR --app APP --version V --out PKG
 #          Packages shipyard as ONE prefix -- /usr/local/mavergreen/shipyard holding shipyard itself
 #          (share/cmake/MavericksShipyard), the launchers bin/shipyard-{cmake,ctest,cpack} into the

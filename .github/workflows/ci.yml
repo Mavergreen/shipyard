@@ -4,51 +4,13 @@ on:
   push:
     branches-ignore: [main]   # spec: tests/shipyard-workflow-coupling-test.sh (only one workflow may run the suite on main)
   pull_request:
-    branches: [main]          # the `test` job here is main's required status check
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
-    runs-on: macos-26   # the CMake modules gate on Apple clang; Linux cannot exercise them
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
-
-      # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
-      - uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/mavericks-sdk
-          key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
-
-      - uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/mavergreen-clang22
-          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
-
-      - name: Install mavericks-shipyard (self, source-build) -- and bats, so the *.bats suites below can run
-        uses: ./.github/actions/install
-        with:
-          source: build
-
-      - name: Record the pre-build tree
-        run: sh scripts/assert-tree-clean.sh --record
-
-      - name: ctest (parameterized suites)
-        run: |
-          shipyard-cmake -S . -B "$RUNNER_TEMP/build"
-          shipyard-ctest --test-dir "$RUNNER_TEMP/build" --output-on-failure
-
-      - name: Standalone test suites
-        run: sh scripts/run-repo-tests.sh
-
-      - name: The build must not have written into the source tree
-        run: sh scripts/assert-tree-clean.sh
-
   linux:
     permissions:
       contents: read
@@ -61,8 +23,8 @@ jobs:
   #       push to main, so the packaging and install-smoke steps below would otherwise first execute
   #       during a push that is already publishing.
   package:
-    runs-on: macos-26
-    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
@@ -76,13 +38,24 @@ jobs:
 
       - uses: actions/cache@v6
         with:
-          path: ~/Library/Caches/mavergreen-clang22
+          path: ~/.cache/mavergreen-clang22
           key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
 
-      - name: Install mavericks-shipyard (self, source-build)
+      - name: Install mavericks-shipyard (the Linux path)
         uses: ./.github/actions/install
-        with:
-          source: build
+
+      # spec: scripts/artifact-facts.sh -- GNU binutils cannot read Mach-O, so the merge, the SDK audit
+      #       and the slice checks read it with clang22's LLVM tools.
+      - name: clang22's Mach-O tools
+        run: |
+          set -eu
+          CL="$(sh scripts/fetch_clang22.sh components/clang22)"
+          {
+            echo "LIPO=$CL/bin/llvm-lipo"
+            echo "OTOOL=$CL/bin/llvm-otool"
+            echo "NM=$CL/bin/llvm-nm"
+            echo "STRINGS=$CL/bin/llvm-strings"
+          } >> "$GITHUB_ENV"
 
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
@@ -106,11 +79,11 @@ jobs:
           v="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"
           echo "rehearsing the pkg for $v"
           mkdir -p "$RUNNER_TEMP/dist"
-          shipyard-cmake -S . -B "$RUNNER_TEMP/payload-build"
+          cmake -S . -B "$RUNNER_TEMP/payload-build"
           # spec: scripts/package-pkg.sh -- the install bakes its prefix into mavericks-presets.json, so
           #       it installs INTO the pkg's prefix, staged under DESTDIR; package-pkg.sh refuses presets
           #       naming any other toolchain file.
-          DESTDIR="$RUNNER_TEMP/payload-stage" shipyard-cmake --install "$RUNNER_TEMP/payload-build" \
+          DESTDIR="$RUNNER_TEMP/payload-stage" cmake --install "$RUNNER_TEMP/payload-build" \
             --prefix /usr/local/mavergreen/shipyard
           sh scripts/package-pkg.sh \
             --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
@@ -132,21 +105,7 @@ jobs:
           cat "$RUNNER_TEMP/sdk-audit.txt"
           grep -q 'Mach-O slices)' "$RUNNER_TEMP/sdk-audit.txt"
 
-      - name: Install smoke (the rehearsed pkg)
-        timeout-minutes: 10
-        run: |
-          set -eu
-          bad=0
-          sudo installer -pkg "$RUNNER_TEMP"/dist/mavericks-shipyard-*.pkg -target / || bad=1
-          sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root / || bad=1
-          /usr/local/bin/mavergreen check || bad=1
-          if [ "$bad" -ne 0 ]; then
-            echo "---- /var/log/install.log, the pkg's scripts ----"
-            sudo grep -E 'preinstall|postinstall|mavericks-shipyard|mavergreen' /var/log/install.log | tail -n 100 || true
-          fi
-          [ "$bad" -eq 0 ] || exit 1
-
-      # spec: scripts/assert-installed-shipyard.sh -- retain the exact smoke-tested pkg for rehearsal on developer Macs.
+      # spec: .github/workflows/pkg-smoke.yml installs this artifact, and it must hold exactly one pkg.
       - name: Save the rehearsed package
         uses: actions/upload-artifact@v7
         with:
@@ -154,5 +113,35 @@ jobs:
           path: ${{ runner.temp }}/dist/*.pkg
           if-no-files-found: error
 
+      # spec: scripts/package-pkg.sh -- its two inputs, as tars that keep modes and links, so the pkg
+      #       can be rebuilt from the same bytes on another host and compared.
+      - name: Tar the packaging inputs
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/inputs"
+          tar -cf "$RUNNER_TEMP/inputs/payload-stage.tar" -C "$RUNNER_TEMP" payload-stage
+          tar -cf "$RUNNER_TEMP/inputs/shipyard-updater.app.tar" -C "$RUNNER_TEMP" shipyard-updater.app
+          sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p' > "$RUNNER_TEMP/inputs/version"
+
+      - name: Save the packaging inputs
+        uses: actions/upload-artifact@v7
+        with:
+          name: shipyard-rehearsal-inputs
+          path: ${{ runner.temp }}/inputs/
+          if-no-files-found: error
+
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
+
+  # spec: .github/workflows/pkg-smoke.yml -- the Linux-built pkg, installed on Mac OS X 10.9.
+  pkg-smoke:
+    needs: package
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/pkg-smoke.yml
+    with:
+      artifact: shipyard-rehearsal-pkg
+      ref: ${{ github.sha }}
+    secrets:
+      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}

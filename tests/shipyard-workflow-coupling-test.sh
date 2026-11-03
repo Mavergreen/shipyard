@@ -64,18 +64,23 @@ wf = sys.argv[1]
 bad = []
 
 # COMMANDS, not the file's text: both files' comments name these scripts, so a substring search over
-# the text stays green after the invocation itself is deleted.
+# the text stays green after the invocation itself is deleted. A mavericks-vm step's guest script is a
+# command too.
 def cmds(name):
     d = yaml.safe_load(open(os.path.join(wf, name)))
     out = []
     for spec in (d.get("jobs") or {}).values():
         for step in (spec.get("steps") or []):
-            lines = [l for l in (step.get("run") or "").splitlines() if not l.lstrip().startswith("#")]
+            run = step.get("run") or ""
+            if str(step.get("uses", "")).startswith("Mavergreen/mavericks-vm@"):
+                run = str((step.get("with") or {}).get("run") or "")
+            lines = [l for l in run.splitlines() if not l.lstrip().startswith("#")]
             joined = re.sub(r"\\\s*\n\s*", " ", "\n".join(lines))
             out += [" ".join(l.split()) for l in joined.splitlines() if l.strip()]
     return out
 
-ci, rel = cmds("ci.yml"), cmds("release.yml")
+# spec: .github/workflows/pkg-smoke.yml -- ci.yml's install smoke runs there, in the 10.9 guest.
+ci, rel = cmds("ci.yml") + cmds("pkg-smoke.yml"), cmds("release.yml")
 def has(cs, pat): return any(re.search(pat, c) for c in cs)
 
 # Each of these is a step release.yml would otherwise run for the first time while publishing.
@@ -86,8 +91,8 @@ def has(cs, pat): return any(re.search(pat, c) for c in cs)
 for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 ", "build the universal updater with clang22 (tests/lib/build-updater.sh)"),
                   (r"^sh scripts/package-pkg\.sh ", "build the pkg (scripts/package-pkg.sh)"),
                   (r"^sh scripts/assert_pkg_installs_in_place\.sh ", "gate the pkg (scripts/assert_pkg_installs_in_place.sh)"),
-                  (r"^sudo installer -pkg .* \|\| bad=1$", "install the pkg on the runner, recording failure (sudo installer ... || bad=1)"),
-                  (r"^sh scripts/assert-installed-shipyard\.sh --cmake-version \"\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)\" .* \|\| bad=1$",
+                  (r"^sudo (-n )?installer -pkg .* \|\| bad=1$", "install the pkg on the runner, recording failure (sudo installer ... || bad=1)"),
+                  (r"^sh scripts/assert-installed-shipyard\.sh (--no-slices )?--cmake-version \"\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)\" .* \|\| bad=1$",
                    "assert the install against the Kitware part of components/cmake/version, recording failure "
                    "(scripts/assert-installed-shipyard.sh ... || bad=1)"),
                   # The merge's own result, asserted rather than assumed: lipo-merge-tree.sh's
@@ -145,23 +150,26 @@ for name in ("ci.yml", "release.yml"):
                 bad.append("%s job %s still runs ./.github/actions/shipyard-cmake" % (name, job))
             if "cmake-tree" in (step.get("with") or {}):
                 bad.append("%s job %s still passes cmake-tree to install@v1" % (name, job))
+cache_dir = {"macos-": "~/Library/Caches/mavergreen-clang22", "ubuntu-": "~/.cache/mavergreen-clang22"}
 for name in ("ci.yml", "release.yml"):
     d = yaml.safe_load(open(os.path.join(wf, name)))
     for job, spec in (d.get("jobs") or {}).items():
-        if not str(spec.get("runs-on", "")).startswith("macos-"):
+        host = [h for h in cache_dir if str(spec.get("runs-on", "")).startswith(h)]
+        if not host:
             continue
+        want = cache_dir[host[0]]
         steps = spec.get("steps") or []
         fetching = [i for i, st in enumerate(steps)
-                    if re.search(r"(^|\n)\s*sh (tests/lib/build-updater|scripts/run-repo-tests)\.sh\b", str(st.get("run", "")))]
+                    if re.search(r"(^|\n|\$\()\s*sh (tests/lib/build-updater|scripts/run-repo-tests|scripts/fetch_clang22)\.sh\b", str(st.get("run", "")))]
         if not fetching:
             continue
         cached = [i for i, st in enumerate(steps) if str(st.get("uses", "")).startswith("actions/cache@")
-                  and str((st.get("with") or {}).get("path", "")).strip() == "~/Library/Caches/mavergreen-clang22"
+                  and str((st.get("with") or {}).get("path", "")).strip() == want
                   and "hashFiles('components/clang22/version')" in str((st.get("with") or {}).get("key", ""))]
         if not cached or cached[0] > fetching[0]:
-            bad.append("%s job %s fetches clang22 (the ~2 GB clang22-cross, unpacked) with no actions/cache of "
-                       "~/Library/Caches/mavergreen-clang22 keyed on hashFiles('components/clang22/version') "
-                       "before it, so every run on a scarce macOS runner downloads and expands it again" % (name, job))
+            bad.append("%s job %s fetches clang22 (~2 GB, unpacked) with no actions/cache of %s keyed on "
+                       "hashFiles('components/clang22/version') before it, so every run downloads and "
+                       "expands it again" % (name, job, want))
 if os.path.exists(os.path.join(wf, "..", "actions", "shipyard-cmake")):
     bad.append(".github/actions/shipyard-cmake still exists")
 
