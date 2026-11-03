@@ -4,8 +4,7 @@
 #          updater builds on Linux: shipyard's universal Sparkle updater, cross-built by clang22 one arch per
 #          configure and merged with llvm-lipo (tests/lib/build-updater.sh), is a Mach-O app with
 #          Contents/MacOS/shipyard-updater, an x86_64 slice recording minos 10.9 and an arm64 slice
-#          recording minos 11.0, and a Sparkle.framework that assert_sparkle_pristine.sh accepts. With
-#          UPDATER_TEST_OUT set it leaves the app there as shipyard-updater-linux.tar, for CI to upload.
+#          recording minos 11.0, and a Sparkle.framework that assert_sparkle_pristine.sh accepts.
 #          Fetches clang22's Linux archive, both SDKs and Sparkle over the network.
 set -eu
 [ "$(uname -s)" = Linux ] || { echo 'SKIP: the Linux updater build'; exit 77; }
@@ -31,8 +30,4 @@ fw="$app/Contents/Frameworks/Sparkle.framework"
 [ -d "$fw" ] || fail 'the app embeds no Sparkle.framework'
 sh "$ROOT/scripts/assert_sparkle_pristine.sh" "$fw" "$(sh "$ROOT/scripts/fetch_sparkle_framework.sh")" \
   || fail 'the embedded Sparkle.framework is not the pinned one, byte for byte and link for link'
-if [ -n "${UPDATER_TEST_OUT:-}" ]; then
-  mkdir -p "$UPDATER_TEST_OUT"
-  tar -cf "$UPDATER_TEST_OUT/shipyard-updater-linux.tar" -C "$T" shipyard-updater.app
-fi
 echo 'PASS: updater builds on Linux: universal Mach-O app, minos 10.9 and 11.0, pristine Sparkle'

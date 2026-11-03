@@ -165,10 +165,7 @@ jobs:
   linux:
     permissions:
       contents: read
-      packages: write
     uses: ./.github/workflows/linux-host.yml
-    secrets:
-      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   publish:
     needs: [build, linux, scan]

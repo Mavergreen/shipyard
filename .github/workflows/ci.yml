@@ -14,10 +14,7 @@ jobs:
   linux:
     permissions:
       contents: read
-      packages: write
     uses: ./.github/workflows/linux-host.yml
-    secrets:
-      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   # spec: R-P1-17 -- this job REHEARSES release.yml's whole packaging path. release.yml runs only on a
   #       push to main, so the packaging steps below would otherwise first execute during a push that
