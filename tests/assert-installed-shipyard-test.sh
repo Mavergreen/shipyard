@@ -196,6 +196,10 @@ check "shipyard's compatibility cmake on PATH is not probed as foreign" 0 "finds
   assert --cmake-version "$ver"
 rm -f "$stub/cmake"
 
+spaced="$w/lipo dir"; mkdir -p "$spaced"; cp "$stub/lipo" "$spaced/lipo"
+check "a LIPO whose path has a space reads both slices" 0 "finds shipyard in" \
+  env HOME="$run_home" PATH="$nolipo:$PATH" LIPO="$spaced/lipo" sh "$S" --root "$fx" --cmake-version "$ver"
+
 check "--no-slices runs no lipo" 0 "slices: not checked" \
   env HOME="$run_home" PATH="$nolipo:$PATH" LIPO=false sh "$S" --root "$fx" --cmake-version "$ver" --no-slices
 

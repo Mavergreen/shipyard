@@ -9,7 +9,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/lipo-merge-tree.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/lipo-merge-override.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 export LMT_LOG="$w/lipo.log"
-cat > "$w/lipo-stub" <<'STUB'
+mkdir -p "$w/lipo dir"
+cat > "$w/lipo dir/lipo-stub" <<'STUB'
 #!/bin/sh
 echo "$*" >> "$LMT_LOG"
 archs_of() { head -1 "$1" | sed 's/^MACHO://'; }
@@ -26,7 +27,7 @@ case "$1" in
   *) echo "lipo-stub: unexpected $*" >&2; exit 2 ;;
 esac
 STUB
-chmod +x "$w/lipo-stub"
+chmod +x "$w/lipo dir/lipo-stub"
 
 mk() {  # $1 = tree  $2 = the archs of the fixture Mach-O at bin/tool
   mkdir -p "$1/bin" "$1/share/x" "$1/App.app/Contents"
@@ -37,11 +38,11 @@ mk() {  # $1 = tree  $2 = the archs of the fixture Mach-O at bin/tool
 mk "$w/a" x86_64; mk "$w/b" arm64
 echo a > "$w/a/App.app/Contents/Info.plist"; echo b > "$w/b/App.app/Contents/Info.plist"
 
-if LIPO="$w/lipo-stub" sh "$S" --a "$w/a" --b "$w/b" --out "$w/o1" >/dev/null 2>&1; then
+if LIPO="$w/lipo dir/lipo-stub" sh "$S" --a "$w/a" --b "$w/b" --out "$w/o1" >/dev/null 2>&1; then
   echo "FAIL: an undeclared difference in a non-Mach-O file must be refused"; exit 1
 fi
 
-LIPO="$w/lipo-stub" sh "$S" --a "$w/a" --b "$w/b" --out "$w/o2" \
+LIPO="$w/lipo dir/lipo-stub" sh "$S" --a "$w/a" --b "$w/b" --out "$w/o2" \
   --allow-differ App.app/Contents/Info.plist --require-archs "arm64 x86_64" >/dev/null \
   || { echo "FAIL: merge through the LIPO override must succeed"; exit 1; }
 [ "$(cat "$w/o2/bin/tool")" = "MACHO:x86_64 arm64" ] \
@@ -49,7 +50,7 @@ LIPO="$w/lipo-stub" sh "$S" --a "$w/a" --b "$w/b" --out "$w/o2" \
 grep -q -- '^-info ' "$LMT_LOG" || { echo "FAIL: -info did not go through LIPO"; exit 1; }
 grep -q -- '^-create ' "$LMT_LOG" || { echo "FAIL: -create did not go through LIPO"; exit 1; }
 
-if LIPO="$w/lipo-stub" sh "$S" --a "$w/a" --b "$w/b" --out "$w/o3" \
+if LIPO="$w/lipo dir/lipo-stub" sh "$S" --a "$w/a" --b "$w/b" --out "$w/o3" \
   --allow-differ App.app/Contents/Info.plist --require-archs "ppc x86_64" >/dev/null 2>&1; then
   echo "FAIL: --require-archs must refuse a missing arch read through LIPO"; exit 1
 fi
