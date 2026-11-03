@@ -1,49 +1,32 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- the guard it tests is macOS-only and the AppKit selector fixtures need Apple clang; runs in the 10.9 guest (tests/on-target-tests)
+# platform: host-agnostic
 # spec: scripts/assert_binary_compatible.sh -- the unit under test. Builds tiny x86_64/10.9 fixture
-#       Mach-Os with controlled symbols. If the host clang cannot emit an x86_64/10.9 slice, the
-#       arch/min-OS-dependent cases skip, but the symbol logic still runs.
+#       Mach-Os with controlled symbols, with clang22 and the pinned SDKs.
+
+cc22() {  # $1 target  $2 sysroot  $3 minos  $4 sdk  then clang arguments
+  _t="$1"; _r="$2"; _m="$3"; _s="$4"; shift 4
+  "$CL/bin/clang" --no-default-config -w -fuse-ld=lld --ld-path="$CL/bin/ld64.lld" -target "$_t" -isysroot "$_r" "-Wl,-platform_version,macos,$_m,$_s" "$@"
+}
 
 setup_file() {
   GUARD="$BATS_TEST_DIRNAME/../scripts/assert_binary_compatible.sh"
+  CL="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_clang22.sh" "$BATS_TEST_DIRNAME/../components/clang22")"
+  LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; STRINGS="$CL/bin/llvm-strings"
+  S9="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh")"
+  S11=""
+  if "$CL/bin/llc" --version | grep -q aarch64; then S11="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh" --arch arm64)"; fi
   FIXTURES="$(mktemp -d "${TMPDIR:-/tmp}/compat_guard_fixtures.XXXXXX")"
-  CC=$(command -v clang || command -v cc)
-  # platform: no vtool (pre-Xcode 11, e.g. the 10.9 box) to restamp fixtures, and that box's
-  #           default SDK may be 10.10 (Xcode 6.1+; MavericksToolchain.cmake pins native mode for
-  #           the same reason) -- so build them against the pinned 10.9 SDK instead; clang honours
-  #           SDKROOT.
-  if ! xcrun --find vtool >/dev/null 2>&1; then
-    SDKROOT="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh")" && export SDKROOT
-  fi
   printf 'int main(void){return 0;}\n' > "$FIXTURES/clean.c"
-  if ! "$CC" -arch x86_64 -mmacosx-version-min=10.9 "$FIXTURES/clean.c" -o "$FIXTURES/clean" 2>/dev/null; then
-    HAVE_X8609=0
-  else
-    HAVE_X8609=1
-  fi
+  cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 "$FIXTURES/clean.c" -o "$FIXTURES/clean"
   printf 'int mav_test_shim(void){return 0;}\nint main(void){return mav_test_shim();}\n' > "$FIXTURES/shim.c"
-  "$CC" -arch x86_64 -mmacosx-version-min=10.9 "$FIXTURES/shim.c" -o "$FIXTURES/shim" 2>/dev/null || true
+  cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 "$FIXTURES/shim.c" -o "$FIXTURES/shim"
   printf 'extern int mav_test_post109(void);\nint main(void){return mav_test_post109();}\n' > "$FIXTURES/leak.c"
-  "$CC" -arch x86_64 -mmacosx-version-min=10.9 -Wl,-undefined,dynamic_lookup "$FIXTURES/leak.c" -o "$FIXTURES/leak" 2>/dev/null || true
-  # platform: ObjC fixtures: a post-10.9 selector (labelColor, 10.10+) vs a 10.9-safe one (blackColor).
-  #           These dispatch via objc_msgSend, so nm can't see them -- the selector scan must catch
-  #           labelColor.
+  cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 -Wl,-undefined,dynamic_lookup "$FIXTURES/leak.c" -o "$FIXTURES/leak"
   printf '#import <AppKit/AppKit.h>\nint main(void){(void)[NSColor labelColor];return 0;}\n' > "$FIXTURES/sel_bad.m"
-  "$CC" -arch x86_64 -mmacosx-version-min=10.9 -framework AppKit "$FIXTURES/sel_bad.m" -o "$FIXTURES/sel_bad" 2>/dev/null || true
+  cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 -framework AppKit "$FIXTURES/sel_bad.m" -o "$FIXTURES/sel_bad"
   printf '#import <AppKit/AppKit.h>\nint main(void){(void)[NSColor blackColor];return 0;}\n' > "$FIXTURES/sel_ok.m"
-  "$CC" -arch x86_64 -mmacosx-version-min=10.9 -framework AppKit "$FIXTURES/sel_ok.m" -o "$FIXTURES/sel_ok" 2>/dev/null || true
-  # platform: vtool rewrites the recorded SDK without needing that SDK; it cannot write in place.
-  # platform: on the 10.9 box there is no vtool -- SDKROOT above already pinned the build to 10.9,
-  #           so no restamping is needed there either.
-  if xcrun --find vtool >/dev/null 2>&1; then
-    for fx in clean shim leak sel_bad sel_ok; do
-      [ -f "$FIXTURES/$fx" ] || continue
-      xcrun vtool -set-version-min macos 10.9 10.9 -replace -output "$FIXTURES/$fx.stamped" "$FIXTURES/$fx" \
-        && mv "$FIXTURES/$fx.stamped" "$FIXTURES/$fx"
-    done
-  fi
-  export FIXTURES HAVE_X8609 CC GUARD
-  [ -z "${SDKROOT:-}" ] || export SDKROOT
+  cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 -framework AppKit "$FIXTURES/sel_ok.m" -o "$FIXTURES/sel_ok"
+  export FIXTURES GUARD CL S9 S11 LIPO OTOOL NM STRINGS
 }
 teardown_file() { rm -rf "$FIXTURES"; }
 
@@ -57,57 +40,49 @@ setup() {
 teardown() { rm -rf "$WORK"; }
 
 @test "clean binary passes" {
-  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
   run sh "$GUARD" "$WORK/clean"
   [ "$status" -eq 0 ]
 }
 
 @test "post-10.9 undefined import is caught via MAVERICKS_POST_10_9_SYMBOLS" {
-  [ -f "$WORK/leak" ] || skip "leak fixture did not build"
   run env MAVERICKS_POST_10_9_SYMBOLS='_mav_test_post109' sh "$GUARD" "$WORK/leak"
   [ "$status" -ne 0 ]
   [[ "$output" == *_mav_test_post109* ]] || false
 }
 
 @test "MAVERICKS_REQUIRE_DEFINED_SYMBOLS passes when the symbol is defined" {
-  [ -f "$WORK/shim" ] || skip "shim fixture did not build"
   run env MAVERICKS_REQUIRE_DEFINED_SYMBOLS='_mav_test_shim' sh "$GUARD" "$WORK/shim"
   [ "$status" -eq 0 ]
 }
 
 @test "MAVERICKS_REQUIRE_DEFINED_SYMBOLS fails when the symbol is absent" {
-  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
   run env MAVERICKS_REQUIRE_DEFINED_SYMBOLS='_mav_test_shim' sh "$GUARD" "$WORK/clean"
   [ "$status" -ne 0 ]
 }
 
 @test "post-10.9 ObjC selector (labelColor) is caught -- nm can't see it" {
-  [ -f "$WORK/sel_bad" ] || skip "sel_bad fixture did not build (no AppKit?)"
   run sh "$GUARD" "$WORK/sel_bad"
   [ "$status" -ne 0 ]
   [[ "$output" == *labelColor* ]] || false
 }
 
 @test "a 10.9-safe selector (blackColor) passes the selector scan" {
-  [ -f "$WORK/sel_ok" ] || skip "sel_ok fixture did not build"
   run sh "$GUARD" "$WORK/sel_ok"
   [ "$status" -eq 0 ]
 }
 
 @test "MAVERICKS_ALLOW_SELECTORS allowlists a respondsToSelector-guarded selector" {
-  [ -f "$WORK/sel_bad" ] || skip "sel_bad fixture did not build"
   run env MAVERICKS_ALLOW_SELECTORS=labelColor sh "$GUARD" "$WORK/sel_bad"
   [ "$status" -eq 0 ]
 }
 
+need_arm64() { [ -n "$S11" ] || skip "this clang22 has no arm64 target (the 10.9 native build is x86_64 only)"; }
+
 mk_stamped() {  # $1 out, $2 arch, $3 minos, $4 sdk
-  # platform: vtool arrived with Xcode 11; the 10.9 box (Xcode 6) runs this suite too and has none.
-  xcrun --find vtool >/dev/null 2>&1 || skip "no vtool (pre-Xcode 11) to stamp fixtures"
   printf 'int main(void){return 0;}\n' > "$WORK/s.c"
-  "$CC" -arch "$2" -mmacosx-version-min="$3" "$WORK/s.c" -o "$WORK/s.$2"
   case "$2" in
-    x86_64) xcrun vtool -set-version-min macos "$3" "$4" -replace -output "$1" "$WORK/s.$2" ;;
-    *)      xcrun vtool -set-build-version macos "$3" "$4" -tool ld 1000.0 -replace -output "$1" "$WORK/s.$2" ;;
+    x86_64) cc22 "x86_64-apple-macos$3" "$S9" "$3" "$4" "$WORK/s.c" -o "$1" ;;
+    *)      need_arm64; cc22 "arm64-apple-macos$3" "$S11" "$3" "$4" "$WORK/s.c" -o "$1" ;;
   esac
 }
 
@@ -144,29 +119,27 @@ mk_stamped() {  # $1 out, $2 arch, $3 minos, $4 sdk
 @test "a universal binary with one bad slice fails and names that slice" {
   mk_stamped "$WORK/p109" x86_64 10.9 10.9
   mk_stamped "$WORK/a265" arm64 11.0 26.5
-  lipo -create "$WORK/p109" "$WORK/a265" -output "$WORK/fatbad"
+  "$LIPO" -create "$WORK/p109" "$WORK/a265" -output "$WORK/fatbad"
   run env MAVERICKS_ALLOW_ARCHS="x86_64 arm64" sh "$GUARD" "$WORK/fatbad"
   [ "$status" -ne 0 ]
   [[ "$output" == *"arm64 records minos 11.0 sdk 26.5"* ]] || false
   mk_stamped "$WORK/a113" arm64 11.0 11.3
-  lipo -create "$WORK/p109" "$WORK/a113" -output "$WORK/fatok"
+  "$LIPO" -create "$WORK/p109" "$WORK/a113" -output "$WORK/fatok"
   run env MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
   [ "$status" -eq 0 ]
 }
 
 @test "post-10.9 imports are still caught in a fat binary's x86_64 slice" {
-  [ -f "$WORK/leak" ] || skip "leak fixture did not build"
-  xcrun --find vtool >/dev/null 2>&1 || skip "no vtool (pre-Xcode 11) to stamp fixtures"
-  xcrun vtool -set-version-min macos 10.9 10.9 -replace -output "$WORK/leak109" "$WORK/leak"
+  need_arm64
   mk_stamped "$WORK/a113" arm64 11.0 11.3
-  lipo -create "$WORK/leak109" "$WORK/a113" -output "$WORK/fatleak"
+  "$LIPO" -create "$WORK/leak" "$WORK/a113" -output "$WORK/fatleak"
   run env MAVERICKS_ALLOW_ARCHS="x86_64 arm64" MAVERICKS_POST_10_9_SYMBOLS='_mav_test_post109' sh "$GUARD" "$WORK/fatleak"
   [ "$status" -ne 0 ]
   [[ "$output" == *_mav_test_post109* ]] || false
 }
 
 @test "a pinned third-party binary passes on its content, and only on its exact bytes" {
-  fw="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sparkle_framework.sh")" || skip "no network to fetch Sparkle"
+  fw="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sparkle_framework.sh")"
   run sh "$GUARD" "$fw/Versions/A/Resources/Autoupdate.app/Contents/MacOS/fileop"
   [ "$status" -eq 0 ]
   cp "$fw/Versions/A/Resources/Autoupdate.app/Contents/MacOS/fileop" "$WORK/fileop"; printf 'x' >> "$WORK/fileop"
@@ -214,17 +187,17 @@ declare_deviation() { printf '## Conformance deviations\n%s\n' "$1" > "$WORK/ING
 }
 
 # spec: scripts/assert_binary_compatible.sh LIPO/NM/STRINGS/OTOOL knobs -- a recording reader for each
-#       knob: logs its name, then runs the host's own tool.
+#       knob: logs its name, then runs clang22's own tool.
 mk_readers() {
   mkdir -p "$WORK/readers"
-  for t in lipo nm otool strings; do
-    printf '#!/bin/sh\necho %s >> "%s/readers.log"\nexec "%s" "$@"\n' "$t" "$WORK" "$(command -v "$t")" > "$WORK/readers/$t"
+  for pair in "lipo:$LIPO" "nm:$NM" "otool:$OTOOL" "strings:$STRINGS"; do
+    t="${pair%%:*}"; real="${pair#*:}"
+    printf '#!/bin/sh\necho %s >> "%s/readers.log"\nexec "%s" "$@"\n' "$t" "$WORK" "$real" > "$WORK/readers/$t"
     chmod +x "$WORK/readers/$t"
   done
 }
 
 @test "LIPO, NM, STRINGS and OTOOL name the readers the guard runs" {
-  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
   mk_readers
   R="$WORK/readers"
   run env LIPO="$R/lipo" NM="$R/nm" STRINGS="$R/strings" OTOOL="$R/otool" sh "$GUARD" "$WORK/clean"
@@ -233,14 +206,12 @@ mk_readers() {
 }
 
 @test "an NM that cannot read the binary fails the guard closed" {
-  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
   run env NM=false sh "$GUARD" "$WORK/clean"
   [ "$status" -eq 4 ]
   [[ "$output" == *"CANNOT MEASURE"*"could not read"* ]] || false
 }
 
 @test "a STRINGS that cannot read the binary fails the guard closed" {
-  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
   run env STRINGS=false sh "$GUARD" "$WORK/clean"
   [ "$status" -eq 4 ]
   [[ "$output" == *"CANNOT MEASURE"*"could not read"* ]] || false
@@ -251,11 +222,10 @@ mk_readers() {
 mk_fat() {
   mk_stamped "$WORK/p109" x86_64 10.9 10.9
   mk_stamped "$WORK/a113" arm64 11.0 11.3
-  lipo -create "$WORK/p109" "$WORK/a113" -output "$WORK/fatok"
+  "$LIPO" -create "$WORK/p109" "$WORK/a113" -output "$WORK/fatok"
 }
 
 @test "LIPO is the reader that thins a fat binary's x86_64 slice" {
-  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
   mk_fat
   mk_readers
   run env LIPO="$WORK/readers/lipo" MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
@@ -263,7 +233,7 @@ mk_fat() {
   [ "$(grep -c '^lipo$' "$WORK/readers.log")" -ge 2 ]
   # spec: scripts/macho-slices.sh -- thins each of the 2 slices first; only the guard's own thin, the
   #       3rd, fails.
-  printf '#!/bin/sh\ncase "$1" in -thin) echo x >> "%s/thins"; [ "$(wc -l < "%s/thins")" -lt 3 ] || { echo "lipo: thin broke" >&2; exit 1; } ;; esac\nexec "%s" "$@"\n' "$WORK" "$WORK" "$(command -v lipo)" > "$WORK/readers/lipo-nothin"
+  printf '#!/bin/sh\ncase "$1" in -thin) echo x >> "%s/thins"; [ "$(wc -l < "%s/thins")" -lt 3 ] || { echo "lipo: thin broke" >&2; exit 1; } ;; esac\nexec "%s" "$@"\n' "$WORK" "$WORK" "$LIPO" > "$WORK/readers/lipo-nothin"
   chmod +x "$WORK/readers/lipo-nothin"
   run env LIPO="$WORK/readers/lipo-nothin" MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
   [ "$status" -eq 4 ]
@@ -272,8 +242,7 @@ mk_fat() {
 }
 
 @test "a plain nm that cannot read the binary fails closed under MAVERICKS_REQUIRE_DEFINED_SYMBOLS" {
-  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
-  printf '#!/bin/sh\ncase "$1" in -m) exec "%s" "$@" ;; esac\necho "plain nm broke" >&2\nexit 1\n' "$(command -v nm)" > "$WORK/nm-plain-broken"
+  printf '#!/bin/sh\ncase "$1" in -m) exec "%s" "$@" ;; esac\necho "plain nm broke" >&2\nexit 1\n' "$NM" > "$WORK/nm-plain-broken"
   chmod +x "$WORK/nm-plain-broken"
   run env NM="$WORK/nm-plain-broken" MAVERICKS_REQUIRE_DEFINED_SYMBOLS=_main sh "$GUARD" "$WORK/clean"
   [ "$status" -eq 4 ]
@@ -282,8 +251,7 @@ mk_fat() {
 }
 
 @test "a reader's warnings stay quiet on success; its error is replayed on failure" {
-  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
-  printf '#!/bin/sh\necho "nm: noisy warning" >&2\nexec "%s" "$@"\n' "$(command -v nm)" > "$WORK/nm-noisy"
+  printf '#!/bin/sh\necho "nm: noisy warning" >&2\nexec "%s" "$@"\n' "$NM" > "$WORK/nm-noisy"
   printf '#!/bin/sh\necho "strings: its own error" >&2\nexit 1\n' > "$WORK/strings-broken"
   chmod +x "$WORK/nm-noisy" "$WORK/strings-broken"
   run env NM="$WORK/nm-noisy" sh "$GUARD" "$WORK/clean"
@@ -295,7 +263,6 @@ mk_fat() {
 }
 
 @test "a LIPO or OTOOL that fails fails closed; a file that is not Mach-O is still just unreadable" {
-  [ "$HAVE_X8609" = 1 ] || skip "host cannot emit x86_64/10.9"
   run env LIPO=/nonexistent/lipo sh "$GUARD" "$WORK/clean"
   [ "$status" -eq 4 ]
   [[ "$output" == *"CANNOT MEASURE"* ]] || false

@@ -6,12 +6,14 @@ setup() {
   S="$BATS_TEST_DIRNAME/../scripts/macho-slices.sh"
   CL="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_clang22.sh" "$BATS_TEST_DIRNAME/../components/clang22")"
   LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"
+  export LIPO OTOOL
   S9="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh")"
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/macho_slices.XXXXXX")"
   printf 'int main(void){return 0;}\n' > "$WORK/m.c"
   cc22 x86_64-apple-macos10.9 "$S9" 10.9 10.9 "$WORK/m.c" -o "$WORK/x109"
-  S11="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh" --arch arm64)" || S11=""
-  if [ -n "$S11" ] && cc22 arm64-apple-macos11.0 "$S11" 11.0 11.3 "$WORK/m.c" -o "$WORK/a113" 2>/dev/null; then
+  if "$CL/bin/llc" --version | grep -q aarch64; then
+    S11="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_sdk.sh" --arch arm64)"
+    cc22 arm64-apple-macos11.0 "$S11" 11.0 11.3 "$WORK/m.c" -o "$WORK/a113"
     "$LIPO" -create "$WORK/x109" "$WORK/a113" -output "$WORK/fat"
   fi
 }
@@ -19,7 +21,7 @@ cc22() {  # $1 target  $2 sysroot  $3 minos  $4 sdk  then clang arguments
   _t="$1"; _r="$2"; _m="$3"; _s="$4"; shift 4
   "$CL/bin/clang" --no-default-config -Wno-unused-command-line-argument -fuse-ld=lld --ld-path="$CL/bin/ld64.lld" -target "$_t" -isysroot "$_r" "-Wl,-platform_version,macos,$_m,$_s" "$@"
 }
-need_fat() { [ -f "$WORK/fat" ] || skip "this box's clang22 links no arm64 (the 10.9 box's targets x86_64 only)"; }
+need_fat() { [ -f "$WORK/fat" ] || skip "this clang22 has no arm64 target (the 10.9 native build is x86_64 only)"; }
 teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 
 @test "a thin x86_64 binary: one line, its recorded minos and sdk" {
@@ -54,8 +56,9 @@ teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 @test "LIPO and OTOOL name the readers it runs, with the same answer" {
   need_fat
   mkdir -p "$WORK/readers"
-  for t in lipo otool; do
-    printf '#!/bin/sh\necho "%s $1" >> "%s/readers.log"\nexec "%s" "$@"\n' "$t" "$WORK" "$(command -v "$t")" > "$WORK/readers/$t"
+  for pair in "lipo:$LIPO" "otool:$OTOOL"; do
+    t="${pair%%:*}"; real="${pair#*:}"
+    printf '#!/bin/sh\necho "%s $1" >> "%s/readers.log"\nexec "%s" "$@"\n' "$t" "$WORK" "$real" > "$WORK/readers/$t"
     chmod +x "$WORK/readers/$t"
   done
   run env LIPO="$WORK/readers/lipo" OTOOL="$WORK/readers/otool" sh "$S" "$WORK/fat"

@@ -100,3 +100,19 @@ build() {
   run sh "$GATE" "$WORK/does-not-exist.pkg"
   [ "$status" -ne 0 ]
 }
+
+@test "gate: a pkg whose bundles are relocatable and version-checked is rejected (this is the shipped-bug shape)" {
+  run build "$WORK/clean.pkg"
+  [ "$status" -eq 0 ]
+  x="$WORK/plain-x"
+  "$STEVEDORE" expand "$WORK/clean.pkg" "$x"
+  id="$(sed -n 's/.*<bundle path="[^"]*" id="\([^"]*\)".*/\1/p' "$x/PackageInfo" | head -1)"
+  [ -n "$id" ]
+  sed "s|<relocate/>|<relocate><bundle id=\"$id\"/></relocate>|; s|<bundle-version/>|<bundle-version><bundle id=\"$id\"/></bundle-version>|" "$x/PackageInfo" > "$x/PackageInfo.new"
+  mv "$x/PackageInfo.new" "$x/PackageInfo"
+  "$STEVEDORE" xar --mtime 1700000000 --out "$WORK/plain.pkg" none Bom "$x/Bom" none Payload "$x/Payload" none PackageInfo "$x/PackageInfo"
+  run sh "$GATE" "$WORK/plain.pkg"
+  [ "$status" -ne 0 ]
+  echo "$output" | grep -q 'BundleIsRelocatable is ON'
+  echo "$output" | grep -q 'BundleIsVersionChecked is ON'
+}

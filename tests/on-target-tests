@@ -1,3 +1,2 @@
 tests/stage-product-test.sh
 tests/mavergreen-helper-test.sh
-tests/compat_guard.bats
