@@ -89,6 +89,7 @@ EOF
 }
 nolipo="$w/nolipo"; mkdir -p "$nolipo"
 printf '#!/bin/sh\nexit 99\n' > "$nolipo/lipo"; chmod +x "$nolipo/lipo"
+unset LIPO
 UNIVERSAL_CMAKE="cmake: architecture x86_64 arm64"
 UNIVERSAL_APP="shipyard-updater: architecture x86_64 arm64"
 assert() {  # remaining args are appended to the script's own
@@ -166,21 +167,22 @@ check "a DANGLING /usr/local/bin/shipyard-cmake (its old prefix removed by hand)
   assert --cmake-version "$ver"
 rm "$fx/usr/local/bin/shipyard-cmake"
 
-cat > "$stub/cmake" <<'STUB'
-#!/bin/sh
-exit 0
-STUB
-chmod +x "$stub/cmake"
-check "a foreign cmake that configures against shipyard fails" 1 "must be refused" \
-  assert --cmake-version "$ver"
-cat > "$stub/cmake" <<'STUB'
-#!/bin/sh
-echo "some unrelated configure error" >&2
-exit 1
-STUB
-chmod +x "$stub/cmake"
-check "a refusal that never names shipyard-cmake fails" 1 "does not name shipyard-cmake" \
-  assert --cmake-version "$ver"
+if [ "$(uname -s)" = Darwin ]; then
+  printf '#!/bin/sh\nexit 0\n' > "$stub/cmake"
+  chmod +x "$stub/cmake"
+  check "a foreign cmake that configures against shipyard fails" 1 "must be refused" \
+    assert --cmake-version "$ver"
+  printf '#!/bin/sh\necho "some unrelated configure error" >&2\nexit 1\n' > "$stub/cmake"
+  chmod +x "$stub/cmake"
+  check "a refusal that never names shipyard-cmake fails" 1 "does not name shipyard-cmake" \
+    assert --cmake-version "$ver"
+  rm -f "$stub/cmake"
+fi
+fakeuname="$w/fakeuname"; mkdir -p "$fakeuname"
+printf '#!/bin/sh\necho Linux\n' > "$fakeuname/uname"; chmod +x "$fakeuname/uname"
+printf '#!/bin/sh\nexit 0\n' > "$stub/cmake"; chmod +x "$stub/cmake"
+check "off Darwin a foreign cmake that is not refused is not probed" 0 "no refusal to check" \
+  env HOME="$run_home" PATH="$fakeuname:$stub:$PATH" sh "$S" --root "$fx" --cmake-version "$ver"
 rm -f "$stub/cmake"
 # spec: 2026-10-09 C5 -- the cmake product is the one cmake the config accepts, so a cmake on PATH
 #       that resolves under the root's /usr/local/mavergreen/ is not foreign, whatever it is called.

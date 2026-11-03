@@ -121,6 +121,9 @@ else
 fi
 
 other="$(command -v cmake 2>/dev/null || true)"
+# platform: MavericksShipyardConfig.cmake refuses a foreign cmake only when CMAKE_HOST_APPLE; a Linux
+#           host has no refusal to check, so the probe runs on Darwin alone.
+[ "$(uname -s)" = Darwin ] || other=""
 # spec: 2026-10-09 C5 -- the config accepts the cmake product, so a cmake on PATH that resolves under
 #       /usr/local/mavergreen/ (the product, or shipyard's compatibility link to its launcher) is ours.
 # platform: 10.9 has no realpath and no readlink -f, so links are followed one at a time.
@@ -138,6 +141,8 @@ if [ -n "$other" ]; then
   grep -q 'shipyard-cmake' "$W/other.log" \
     || fail "the refusal does not name shipyard-cmake, so it does not say what to run instead: $(cat "$W/other.log")"
   refusal="other cmakes refused"
+elif [ "$(uname -s)" != Darwin ]; then
+  refusal="no refusal to check on this host"
 else
   echo "::warning::installed shipyard: no other cmake on PATH to check the refusal against" >&2
   refusal="no other cmake here to check the refusal against"

@@ -76,11 +76,13 @@ configure "$w/q" "$w/b4" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APP
 # platform: this guidance is raised from inside Mavericks.cmake's cross-mode-only backstop too (the
 #           empty-arch branch), so on a native 10.9 host the configure just succeeds instead -- skip
 #           the assertion rather than fail it.
+#           Darwin-Initialize.cmake runs xcrun when no sysroot is set, and Linux has none; naming a sysroot keeps
+#           the configure off xcrun and the empty-arch refusal does not read it.
 if [ "$native" -eq 1 ]; then
   echo "skip (native 10.9 host): the backstop is cross-mode only"
 else
   rc=0; ( unset CMAKE_OSX_ARCHITECTURES
-          configure "$w/q" "$w/b6" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF ) \
+          configure "$w/q" "$w/b6" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF -DCMAKE_OSX_SYSROOT="$other_sdk" ) \
     > "$w/c6.log" 2>&1 || rc=$?
   [ "$rc" -ne 0 ] && grep -q 'CMAKE_OSX_ARCHITECTURES is empty' "$w/c6.log" && grep -q 'MavericksToolchain.cmake' "$w/c6.log" \
     || { echo "FAIL: a configure with no arch must be refused with the preset/toolchain-file guidance:"; sed 's/^/    | /' "$w/c6.log"; exit 1; }
