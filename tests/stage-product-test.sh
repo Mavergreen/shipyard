@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- the generated preinstall runs here, and its PlistBuddy text reads the target volume's manifests; runs in the 10.9 guest (tests/on-target-tests)
+# platform: macOS-only -- the generated preinstall runs here, and its PlistBuddy text reads the target volume's manifests; run by hand on the maintainer's 10.9 box (tests/maintainer-tests)
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/stage_product.sh"

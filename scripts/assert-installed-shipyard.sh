@@ -10,10 +10,9 @@
 #          defaults to "/" (a real install); a fixture root makes this unit-testable. Exit 0 clean, 1
 #          on a failed assertion, 2 on a usage error. --no-slices skips reading the
 #          two universal binaries' slices, for a host that has no lipo that reads Mach-O.
-# spec: R-P1-17 -- these assertions used to live inline in release.yml's install smoke, the one step
-#       that runs ONLY on a push to main, which left them unrunnable until the very push that must
-#       not be a rehearsal. release.yml, ci.yml and tests/assert-installed-shipyard-test.sh now share
-#       this one statement of what an installed shipyard looks like.
+# spec: R-P1-17 -- tests/installed-shipyard-test.sh (a real install) and
+#       tests/assert-installed-shipyard-test.sh (a fixture) share this one statement of what an
+#       installed shipyard looks like.
 set -eu
 
 ROOT="/"; WANT=""; SLICES=1

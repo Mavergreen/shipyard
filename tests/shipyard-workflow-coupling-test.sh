@@ -217,7 +217,7 @@ checks="$(sh "$here/../scripts/required-checks.sh" "$here/..")" || { echo "FAIL:
 printf '%s\n' "$checks" | grep -qx 'required (ci)' || { echo "FAIL: required-checks.sh does not list required (ci): $checks"; exit 1; }
 echo "ok: required (ci) gates every ci.yml job"
 mac="$(grep -rnE 'macos-' "$here/../.github" --include='*.yml' --include='*.yaml' | grep -E 'runs-on|os:' || :)"
-[ -z "$mac" ] || { printf '%s\n' "$mac"; echo "FAIL: shipyard runs no job on a macos-* runner; every job above must move to ubuntu or the 10.9 guest"; exit 1; }
+[ -z "$mac" ] || { printf '%s\n' "$mac"; echo "FAIL: shipyard runs no job on a macos-* runner; every job above must move to ubuntu"; exit 1; }
 echo "ok: no job in .github runs on a macos-* runner"
 vm="$(grep -rnE 'Mavergreen/mavericks-vm@|MAVERICKS_VM_KEY' "$here/../.github" || :)"
 [ -z "$vm" ] || { printf '%s\n' "$vm"; echo "FAIL: shipyard's CI and release run no 10.9 VM job; its on-target tests are in tests/maintainer-tests, run by hand"; exit 1; }

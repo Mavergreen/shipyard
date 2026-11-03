@@ -1,4 +1,8 @@
-tests/fetch_stevedore_darwin.bats
-tests/updater-clang22-darwin-test.sh
-tests/umbrella-langs.sh
-tests/installed-shipyard-test.sh
+10.9 tests/stage-product-test.sh
+10.9 tests/mavergreen-helper-test.sh
+10.9 tests/assert-installed-shipyard-test.sh
+10.9 tests/installed-updater-launch-test.sh
+golden-gate tests/installed-shipyard-test.sh
+golden-gate tests/fetch_stevedore_darwin.bats
+golden-gate tests/updater-clang22-darwin-test.sh
+golden-gate tests/umbrella-langs.sh

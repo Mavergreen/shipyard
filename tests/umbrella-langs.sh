@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- include(Mavericks) requires AppleClang, which only a Mac has, and its arm64 case needs a cross-capable Apple clang; run by hand on the maintainer's Mac (tests/maintainer-tests)
+# platform: macOS-only -- include(Mavericks) requires AppleClang, which only a Mac has, and its arm64 case needs a cross-capable Apple clang; run by hand on Golden Gate (tests/maintainer-tests)
 set -eu
 SC="${CMAKE:-$(command -v shipyard-cmake || echo cmake)}"
 command -v "$SC" >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }

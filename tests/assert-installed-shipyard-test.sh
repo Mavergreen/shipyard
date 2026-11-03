@@ -7,16 +7,15 @@
 #          --no-slices and LIPO are proved with no stub reaching the script, and with a real x86_64
 #          Mach-O built by the pinned clang22. Exit 0 clean, 1 on failure, 77 when there is no cmake
 #          to build a fixture from.
-# spec: R-P1-17 -- scripts/assert-installed-shipyard.sh is the ONE statement release.yml's install
-#       smoke and ci.yml's packaging rehearsal share, and a shared assertion nothing exercises is
-#       worse than an inline one: both callers would go green on a script that stopped asserting.
+# spec: R-P1-17 -- scripts/assert-installed-shipyard.sh is the ONE statement of an installed shipyard,
+#       and tests/installed-shipyard-test.sh runs it on a real install; this fixture keeps it asserting.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 . "$here/lib/cmake_fixture.sh"
 S="$root/scripts/assert-installed-shipyard.sh"
 CL="$(sh "$root/scripts/fetch_clang22.sh" "$root/components/clang22")"
 
-# platform: the 10.9 guest (tests/on-target-tests) has no cmake on PATH, only the cmake product it installed.
+# platform: a 10.9 box without the Command Line Tools has no cmake on PATH, only the cmake product it installed.
 real="$(command -v cmake 2>/dev/null)" || real=/usr/local/mavergreen/cmake/bin/cmake
 [ -x "$real" ] || { echo "SKIP: no cmake to build a fixture prefix from"; exit 77; }
 # platform: macOS sets TMPDIR with a trailing slash. The fixture root is passed as --root and
@@ -201,8 +200,8 @@ check "--no-slices runs no lipo" 0 "slices: not checked" \
   env HOME="$run_home" PATH="$nolipo:$PATH" LIPO=false sh "$S" --root "$fx" --cmake-version "$ver" --no-slices
 
 # platform: the helper reads its manifests with /usr/libexec/PlistBuddy (scripts/mavergreen.sh is
-#           macOS-only), so off macOS it cannot pass its own check; pkg-smoke.yml runs it on a real
-#           install in the 10.9 guest.
+#           macOS-only), so off macOS it cannot pass its own check; tests/installed-shipyard-test.sh
+#           runs it on a real install.
 if [ -x /usr/libexec/PlistBuddy ]; then
   cp "$root/scripts/mavergreen.sh" "$fx/usr/local/bin/mavergreen"; chmod +x "$fx/usr/local/bin/mavergreen"
   check "an installed helper whose check fails fails the assertion (farm links into a product with no manifest)" 1 "mavergreen check failed" \

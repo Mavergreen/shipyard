@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- PlistBuddy writes the fixture manifests the helper reads; runs in the 10.9 guest (tests/on-target-tests)
+# platform: macOS-only -- PlistBuddy writes the fixture manifests the helper reads; run by hand on the maintainer's 10.9 box (tests/maintainer-tests)
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 MG="$here/../scripts/mavergreen.sh"
