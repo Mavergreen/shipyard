@@ -95,6 +95,8 @@ shipyard_undefs() {
     | awk '{ w = (/ weak /) ? "W" : "H"; print w, $NF }'
 }
 
+command -v shasum >/dev/null 2>&1 \
+  || shipyard_die "no shasum on PATH, so no binary can be matched to a pinned third-party one (on Linux, shasum is perl's)"
 fail=0; checked=0; excused=0
 for b in "$@"; do
   [ -f "$b" ] || { echo "compat guard: MISSING $b" >&2; fail=1; continue; }

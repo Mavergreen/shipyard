@@ -275,3 +275,16 @@ mk_fat() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"is not a readable Mach-O"* ]] || false
 }
+
+@test "a PATH with no shasum fails the guard closed, naming shasum" {
+  mkdir "$WORK/noshasum"
+  for d in /usr/bin /bin; do
+    for f in "$d"/*; do
+      case "${f##*/}" in shasum*) continue ;; esac
+      [ -e "$WORK/noshasum/${f##*/}" ] || ln -s "$f" "$WORK/noshasum/${f##*/}"
+    done
+  done
+  run env PATH="$WORK/noshasum" sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"CANNOT MEASURE"*"shasum"* ]] || false
+}
