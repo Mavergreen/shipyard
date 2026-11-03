@@ -15,8 +15,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-26   # the CMake modules gate on Apple clang; Linux cannot exercise them
-    timeout-minutes: 90
+    runs-on: ubuntu-latest   # spec: 2026-10-24 macOS runner exit -- building, packaging, signing and conformance are host-agnostic
+    timeout-minutes: 60
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
@@ -32,15 +32,26 @@ jobs:
 
       - uses: actions/cache@v6
         with:
-          path: ~/Library/Caches/mavergreen-clang22
+          path: ~/.cache/mavergreen-clang22
           key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
 
       # spec: R-P1-19 -- shipyard cannot install a RELEASED shipyard to test the one it is about to
-      #       release, so it installs itself in source-build mode, beside the pinned cmake product.
-      - name: Install mavericks-shipyard (self, source-build)
+      #       release. On Linux, install@v1 by local path hands the job this checkout's shell half.
+      - name: Install mavericks-shipyard (the Linux path)
         uses: ./.github/actions/install
-        with:
-          source: build
+
+      # spec: scripts/artifact-facts.sh -- GNU binutils cannot read Mach-O, so the merge and
+      #       conformance's slice and SDK checks read it with clang22's LLVM tools.
+      - name: clang22's Mach-O tools
+        run: |
+          set -eu
+          CL="$(sh scripts/fetch_clang22.sh components/clang22)"
+          {
+            echo "LIPO=$CL/bin/llvm-lipo"
+            echo "OTOOL=$CL/bin/llvm-otool"
+            echo "NM=$CL/bin/llvm-nm"
+            echo "STRINGS=$CL/bin/llvm-strings"
+          } >> "$GITHUB_ENV"
 
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
@@ -54,17 +65,6 @@ jobs:
           printf '%s\n' "$ver" > VERSION      # a build product; gitignored, read by CMakeLists
           echo "version=$ver" >> "$GITHUB_OUTPUT"
           echo "shipyard $ver"
-
-      - name: ctest (parameterized suites)
-        run: |
-          shipyard-cmake -S . -B "$RUNNER_TEMP/build"
-          shipyard-ctest --test-dir "$RUNNER_TEMP/build" --output-on-failure
-
-      - name: Standalone test suites
-        run: sh scripts/run-repo-tests.sh
-
-      - name: Our own conventions gate
-        run: sh scripts/check-family-conventions.sh
 
       # spec: scripts/lipo-merge-tree.sh -- a deployment floor is per-configure and arm64 has no
       #       10.9, so the updater is built once per arch and merged. Both builds embed Sparkle's fat
@@ -94,11 +94,11 @@ jobs:
           set -eu
           v='${{ steps.ver.outputs.version }}'
           mkdir -p dist
-          shipyard-cmake -S . -B "$RUNNER_TEMP/payload-build"
+          cmake -S . -B "$RUNNER_TEMP/payload-build"
           # spec: scripts/package-pkg.sh -- the install bakes its prefix into mavericks-presets.json, so
           #       it installs INTO the pkg's prefix, staged under DESTDIR; package-pkg.sh refuses presets
           #       naming any other toolchain file.
-          DESTDIR="$RUNNER_TEMP/payload-stage" shipyard-cmake --install "$RUNNER_TEMP/payload-build" \
+          DESTDIR="$RUNNER_TEMP/payload-stage" cmake --install "$RUNNER_TEMP/payload-build" \
             --prefix /usr/local/mavergreen/shipyard
           sh scripts/package-pkg.sh \
             --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
@@ -139,29 +139,6 @@ jobs:
           sh scripts/artifact-facts.sh dist "$v" | sh scripts/check-artifact-conformance.sh
           ls -l dist
 
-      # spec: R-P1-17 -- what must hold of the installed result is stated ONCE, in
-      #       scripts/assert-installed-shipyard.sh, because this step runs only on a push to main:
-      #       its first real execution would otherwise be the flag-day push, the one push that must
-      #       not be a rehearsal. ci.yml builds the same pkg on every branch push, installs it and
-      #       runs that same script, and tests/assert-installed-shipyard-test.sh drives the script
-      #       against a fixture root. What is left here is what only this runner can do: install for
-      #       real on the one Apple Silicon box that sees the pkg before a developer's, and show the
-      #       installer's log when something fails.
-      - name: Install smoke (the pkg, on Apple Silicon)
-        timeout-minutes: 10
-        run: |
-          set -eu
-          v='${{ steps.ver.outputs.version }}'
-          bad=0
-          sudo installer -pkg "dist/mavericks-shipyard-$v.pkg" -target / || bad=1
-          sh scripts/assert-installed-shipyard.sh --cmake-version "$(sed 's/-mavericks\..*//' components/cmake/version)" --root / || bad=1
-          /usr/local/bin/mavergreen check || bad=1
-          if [ "$bad" -ne 0 ]; then
-            echo "---- /var/log/install.log, the pkg's scripts ----"
-            sudo grep -E 'preinstall|postinstall|mavericks-shipyard|mavergreen' /var/log/install.log | tail -n 100 || true
-          fi
-          [ "$bad" -eq 0 ] || exit 1
-
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
 
@@ -169,6 +146,20 @@ jobs:
         with:
           name: shipyard-dist
           path: dist
+
+  # spec: .github/workflows/pkg-smoke.yml -- the release's own pkg, installed on Mac OS X 10.9 after
+  #       the cmake product, with the on-target tests run there, before it publishes.
+  smoke:
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/pkg-smoke.yml
+    with:
+      artifact: shipyard-dist
+      ref: ${{ github.sha }}
+    secrets:
+      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   scan:
     needs: build
@@ -194,7 +185,7 @@ jobs:
       MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   publish:
-    needs: [build, linux, scan]
+    needs: [build, linux, scan, smoke]
     permissions:
       contents: write
     uses: ./.github/workflows/publish-release.yml
@@ -205,6 +196,7 @@ jobs:
 
   # spec: tests/shipyard-release-workflow-test.sh -- every consumer installs through source: release,
   #       which no earlier job runs, so @v1 moves only once the release just published installs that way.
+  #       INGREDIENTS.md's macos-runner:release.yml:canary deviation: shipyard's one macOS job.
   canary:
     needs: [build, publish]
     runs-on: macos-26
@@ -229,6 +221,10 @@ jobs:
           bats tests/fetch_stevedore_darwin.bats
           sh tests/updater-clang22-darwin-test.sh
           sh tests/umbrella-langs.sh
+      # spec: INGREDIENTS.md macos-runner:release.yml:canary -- the Linux-built updater's arm64 slice
+      #       runs nowhere else on Apple Silicon before @v1 moves.
+      - name: The installed updater launches, check only
+        run: sh tests/lib/launch-updater.sh "/Library/Application Support/Mavergreen/shipyard-updater.app"
 
   major-tag:
     needs: [build, publish, canary]

@@ -63,14 +63,20 @@ def need(pattern, why):
     if not find(pattern):
         bad.append(why)
 
-build_steps = wf["jobs"]["build"]["steps"]
+build = wf["jobs"]["build"]
+build_steps = build["steps"]
 
-# shipyard builds with its own cmake: the build job installs itself in source-build mode. It cannot
-# install a RELEASED shipyard to test the commit that is about to become one.
+# spec: 2026-10-24 macOS runner exit -- building, packaging, signing and conformance are host-agnostic.
+if not str(build.get("runs-on", "")).startswith("ubuntu-"):
+    bad.append("the build job must run on ubuntu-*, not %r" % build.get("runs-on"))
+
+# shipyard cannot install a RELEASED shipyard to test the commit about to become one. On Linux,
+# install@v1 by local path hands the job this checkout's shell half, which is that commit.
 inst = [s for s in build_steps
-        if str(s.get("uses", "")) == "./.github/actions/install" and (s.get("with") or {}).get("source") == "build"]
+        if str(s.get("uses", "")) == "./.github/actions/install"
+        and (s.get("with") or {}).get("source", "release") == "release"]
 if not inst:
-    bad.append("the build job must use ./.github/actions/install with source: build")
+    bad.append("the build job must use ./.github/actions/install by local path, on its Linux path (no source: build)")
 # spec: 2026-10-09 C4 -- CMake is the cmake product's, which install@v1 installs at shipyard's pin.
 #       shipyard builds none, so nothing hands install@v1 a tree.
 elif "cmake-tree" in (inst[0].get("with") or {}):
@@ -126,41 +132,60 @@ tars = find(r"(^|[\s;|&(])tar\s") + find(r"\.tar\.gz\b")
 if tars:
     bad.append("the release tarball should be gone; the pkg is the asset now: %r" % tars[0])
 
-# The pkg is INSTALLED on this Apple Silicon runner before it is uploaded. That is the only place the
-# pkg's scripts ever run for real before a developer's box sees them, and nothing on the 10.9 box can
-# build or exercise the arm64 half. WHAT must then hold of the install is stated once, in
-# scripts/assert-installed-shipyard.sh (R-P1-17) -- this step must not restate it inline, or the two
-# callers drift and the fixture test stops covering either. Checked within ONE step, bounded by
-# timeout-minutes, ahead of the upload.
-smoke = [i for i, s in enumerate(build_steps)
-         if any(re.search(r'^sudo installer -pkg "?dist/mavericks-shipyard-\$v\.pkg"? -target /(\s|$)', c) for c in step_cmds(s))]
-if not smoke:
-    bad.append('release.yml never installs the pkg on the runner (sudo installer -pkg "dist/mavericks-shipyard-$v.pkg" -target /)')
+# GNU binutils cannot read Mach-O, so conformance's slice and SDK checks need clang22's tools, exported
+# to every later step before conformance runs.
+conf = [i for i, s in enumerate(build_steps)
+        if any(re.search(r"^sh scripts/artifact-facts\.sh dist ", c) for c in step_cmds(s))]
+for tool in ("LIPO", "OTOOL", "NM"):
+    exp = [i for i, s in enumerate(build_steps)
+           if any(re.search(r'^echo "%s=\$CL/bin/llvm-' % tool, c) for c in step_cmds(s))
+           and '>> "$GITHUB_ENV"' in (s.get("run") or "")]
+    if not exp or not conf or exp[0] > conf[0]:
+        bad.append("the build job never exports %s (clang22's llvm tool) to $GITHUB_ENV before artifact conformance" % tool)
+
+# The pkg is installed on the runner nowhere: the build is on Linux, and pkg-smoke.yml installs it on
+# 10.9 with what must hold stated once, in scripts/assert-installed-shipyard.sh (R-P1-17).
+if find(r"^sudo (-n )?installer "):
+    bad.append("release.yml installs a pkg on a runner itself; the smoke job (pkg-smoke.yml) installs it on 10.9")
+
+# SPARKLE_PRIVATE_KEY reaches the signing step's env and the scan's secrets, nothing else.
+jobs = wf.get("jobs") or {}
+holders = []
+for jn, job in jobs.items():
+    if "SPARKLE_PRIVATE_KEY" in str(job.get("env") or ""):
+        holders.append("%s (job env)" % jn)
+    if jn != "scan" and "SPARKLE_PRIVATE_KEY" in str(job.get("secrets") or ""):
+        holders.append("%s (secrets)" % jn)
+    for st in (job.get("steps") or []):
+        if "SPARKLE_PRIVATE_KEY" in (st.get("run") or ""):
+            holders.append("%s step %r (run)" % (jn, st.get("name")))
+        signs = any(re.search(r"^sh scripts/sign_and_appcast\.sh ", c) for c in step_cmds(st))
+        if "SPARKLE_PRIVATE_KEY" in str(st.get("env") or "") and not (jn == "build" and signs):
+            holders.append("%s step %r (env)" % (jn, st.get("name")))
+if "SPARKLE_PRIVATE_KEY" in str(wf.get("env") or ""):
+    holders.append("the workflow's env")
+if holders:
+    bad.append("SPARKLE_PRIVATE_KEY reaches more than the signing step's env and the scan: %s" % ", ".join(holders))
+if find(r"(^|\s)set -[a-z]*x"):
+    bad.append("release.yml traces a step (set -x), which could print the signing key")
+
+# spec: .github/workflows/pkg-smoke.yml -- the release's own pkg, installed on Mac OS X 10.9 with its
+#       tests run there, before publish.
+sm = jobs.get("smoke") or {}
+if str(sm.get("uses", "")) != "./.github/workflows/pkg-smoke.yml":
+    bad.append("release.yml has no smoke job calling ./.github/workflows/pkg-smoke.yml")
 else:
-    i = smoke[0]; s = build_steps[i]; sc = step_cmds(s)
-    def has(p): return any(re.search(p, c) for c in sc)
-    # The PLUMBING, not just the call. Both of these run under `set -eu` with their failure caught, so
-    # that the installer log can be dumped before the step dies -- and `|| true` in place of `|| bad=1`
-    # makes the whole smoke decorative while every other assertion here stays green (R-P1-20).
-    if not has(r'^sudo installer -pkg "?dist/mavericks-shipyard-\$v\.pkg"? -target / \|\| bad=1$'):
-        bad.append("the smoke's `sudo installer` does not record its failure (|| bad=1), so a pkg that "
-                   "fails to install cannot fail the step")
-    if not has(r'''^sh scripts/assert-installed-shipyard\.sh --cmake-version "\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)" --root / \|\| bad=1$'''):
-        bad.append("the smoke never runs scripts/assert-installed-shipyard.sh against the installed "
-                   "root, with the Kitware part of components/cmake/version and its failure recorded (|| bad=1)")
-    if not has(r'^/usr/local/bin/mavergreen check \|\| bad=1$'):
-        bad.append("the smoke never runs the installed helper's own check (/usr/local/bin/mavergreen "
-                   "check || bad=1), so a pkg whose farm links or manifest are wrong would publish")
-    if not has(r'^\[ "\$bad" -eq 0 \] \|\| exit 1$'):
-        bad.append("the smoke's failures never fail the step ([ \"$bad\" -eq 0 ] || exit 1)")
-    if not s.get("timeout-minutes"):
-        bad.append("the install smoke step has no timeout-minutes; an install that hangs would hold the runner for the job's whole budget")
-    up = [j for j, t in enumerate(build_steps) if str(t.get("uses", "")).startswith("actions/upload-artifact")]
-    if not up or i > up[0]:
-        bad.append("the install smoke must run BEFORE upload-artifact, so a pkg that fails it is never published")
+    w_ = sm.get("with") or {}
+    if (sm.get("needs") if isinstance(sm.get("needs"), str) else ",".join(sm.get("needs") or [])) != "build":
+        bad.append("the smoke job must need build")
+    if w_.get("artifact") != "shipyard-dist":
+        bad.append("the smoke job must install the shipyard-dist artifact, not %r" % w_.get("artifact"))
+    if "github.sha" not in str(w_.get("ref", "")):
+        bad.append("the smoke job must run the guest's tests at github.sha")
+    if "MAVERICKS_VM_KEY" not in str(sm.get("secrets") or ""):
+        bad.append("the smoke job never passes MAVERICKS_VM_KEY to pkg-smoke.yml")
 
 # The key scan stays between build and publish (another session's work; a rewrite must not drop it).
-jobs = wf.get("jobs") or {}
 if "scan-for-key.yml" not in str((jobs.get("scan") or {}).get("uses", "")):
     bad.append("the scan job (./.github/workflows/scan-for-key.yml) is gone")
 # spec: release.yml "canary" -- @v1 moves only after the published release installs through source: release.
@@ -179,10 +204,22 @@ if not any("assert-installed-shipyard.sh" in (st.get("run") or "") for st in cst
 for t in ("tests/fetch_stevedore_darwin.bats", "tests/updater-clang22-darwin-test.sh", "tests/umbrella-langs.sh"):
     if not any(t in (st.get("run") or "") for st in cst):
         print("FAIL: the canary must run " + t + ", which only a Mac can run"); sys.exit(1)
+# The Linux-built updater's arm64 slice runs nowhere else on Apple Silicon before @v1 moves.
+ccmds = [c for st in cst for c in step_cmds(st)]
+if not any(re.search(r'^sh tests/lib/launch-updater\.sh "/Library/Application Support/Mavergreen/shipyard-updater\.app"$', c) for c in ccmds):
+    bad.append('the canary never launches the INSTALLED updater check-only '
+               '(sh tests/lib/launch-updater.sh "/Library/Application Support/Mavergreen/shipyard-updater.app")')
+if not str(can.get("runs-on", "")).startswith("macos-"):
+    bad.append("the canary must run on a macos-* runner; it is the one place the release meets Apple Silicon")
 if "canary" not in ((jobs.get("major-tag") or {}).get("needs") or []):
     print("FAIL: major-tag must need canary, so @v1 never names a release that will not install"); sys.exit(1)
-if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan"]:
-    bad.append("publish must need exactly [build, linux, scan]")
+if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan", "smoke"]:
+    bad.append("publish must need exactly [build, linux, scan, smoke]")
+if "build" not in ((jobs.get("scan") or {}).get("needs") or []):
+    bad.append("the scan job must need build, to scan its artifact and logs")
+macos = sorted(jn for jn, job in jobs.items() if "macos-" in str(job.get("runs-on", "")))
+if macos != ["canary"]:
+    bad.append("the canary must be release.yml's only macOS job, not %r" % macos)
 
 # Nothing of the superseded design survives in any command: no user package registry, no second
 # "cross" updater app, no postinstall picking a slice by hw.optional.arm64.
@@ -194,7 +231,7 @@ if bad:
     for b in bad:
         print("FAIL: " + b)
     sys.exit(1)
-print("ok: one universal updater, the prefix pkg, a shared install assertion, no tarball, scan before publish")
+print("ok: built and signed on Linux, smoked on 10.9 before publish, the canary the one macOS job")
 PY
 
 # spec: .github/actions/install/action.yml -- the other half of the same design: a consumer gets the

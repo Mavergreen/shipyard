@@ -42,6 +42,11 @@ for name in os.listdir(wf):
     if not pushes_to_main(d):
         continue
     body = open(os.path.join(wf, name)).read()
+    # A job calling a LOCAL reusable workflow runs that workflow's steps in this one.
+    for job in (d.get("jobs") or {}).values():
+        u = str(job.get("uses", ""))
+        if u.startswith("./.github/workflows/"):
+            body += open(os.path.join(wf, os.path.basename(u))).read()
     if "run-repo-tests" in body:
         runners.append(name)
 
@@ -79,8 +84,14 @@ def cmds(name):
             out += [" ".join(l.split()) for l in joined.splitlines() if l.strip()]
     return out
 
-# spec: .github/workflows/pkg-smoke.yml -- ci.yml's install smoke runs there, in the 10.9 guest.
-ci, rel = cmds("ci.yml") + cmds("pkg-smoke.yml"), cmds("release.yml")
+# spec: .github/workflows/pkg-smoke.yml -- both workflows install the pkg there, in the 10.9 guest; its
+#       commands count only for a workflow with a job that calls it.
+def calls(name, called):
+    d = yaml.safe_load(open(os.path.join(wf, name)))
+    return any(str(j.get("uses", "")) == "./.github/workflows/" + called for j in (d.get("jobs") or {}).values())
+ci, rel = cmds("ci.yml"), cmds("release.yml")
+if calls("ci.yml", "pkg-smoke.yml"): ci += cmds("pkg-smoke.yml")
+if calls("release.yml", "pkg-smoke.yml"): rel += cmds("pkg-smoke.yml")
 def has(cs, pat): return any(re.search(pat, c) for c in cs)
 
 # Each of these is a step release.yml would otherwise run for the first time while publishing.
@@ -88,16 +99,12 @@ def has(cs, pat): return any(re.search(pat, c) for c in cs)
 # with the failure caught, so the installer log can be dumped before the step dies -- and `|| true` in
 # place of `|| bad=1` turns the whole smoke into decoration while every other assertion stays green
 # (R-P1-20). A pattern that stops at the command name cannot see that.
-# spec: .github/workflows/pkg-smoke.yml -- the guest runs `sudo -n` and `--no-slices`, which only the
-#       ci.yml side may: release.yml installs on the runner and reads the slices.
 ASSERT = r"--cmake-version \"\$\(sed 's/-mavericks\\\.\.\*//' components/cmake/version\)\" .* \|\| bad=1$"
-ci_form = {r"^sudo installer -pkg .* \|\| bad=1$": r"^sudo (-n )?installer -pkg .* \|\| bad=1$",
-           r"^sh scripts/assert-installed-shipyard\.sh " + ASSERT: r"^sh scripts/assert-installed-shipyard\.sh (--no-slices )?" + ASSERT}
 for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 ", "build the universal updater with clang22 (tests/lib/build-updater.sh)"),
                   (r"^sh scripts/package-pkg\.sh ", "build the pkg (scripts/package-pkg.sh)"),
                   (r"^sh scripts/assert_pkg_installs_in_place\.sh ", "gate the pkg (scripts/assert_pkg_installs_in_place.sh)"),
-                  (r"^sudo installer -pkg .* \|\| bad=1$", "install the pkg on the runner, recording failure (sudo installer ... || bad=1)"),
-                  (r"^sh scripts/assert-installed-shipyard\.sh " + ASSERT,
+                  (r"^sudo (-n )?installer -pkg .* \|\| bad=1$", "install the pkg in the 10.9 guest, recording failure (sudo -n installer ... || bad=1)"),
+                  (r"^sh scripts/assert-installed-shipyard\.sh (--no-slices )?" + ASSERT,
                    "assert the install against the Kitware part of components/cmake/version, recording failure "
                    "(scripts/assert-installed-shipyard.sh ... || bad=1)"),
                   # The merge's own result, asserted rather than assumed: lipo-merge-tree.sh's
@@ -107,7 +114,7 @@ for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 
                    "assert the merged updater carries an arm64 slice")):
     if not has(rel, pat):
         bad.append("release.yml no longer does: %s" % what)
-    elif not has(ci, ci_form.get(pat, pat)):
+    elif not has(ci, pat):
         bad.append("ci.yml does not rehearse release.yml's packaging path: it never runs %s, so that "
                    "step's first real execution would be a push that is already publishing" % what)
 

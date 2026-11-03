@@ -13,11 +13,30 @@ on:
 
 jobs:
   audit:
-    runs-on: macos-26
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/mavergreen-clang22
+          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('components/clang22/version') }}
+
+      # spec: scripts/artifact-facts.sh -- GNU binutils cannot read Mach-O, so the audit reads each
+      #       release's slices with clang22's LLVM tools.
+      - name: clang22's Mach-O tools
+        run: |
+          set -eu
+          CL="$(sh scripts/fetch_clang22.sh components/clang22)"
+          {
+            echo "LIPO=$CL/bin/llvm-lipo"
+            echo "OTOOL=$CL/bin/llvm-otool"
+            echo "NM=$CL/bin/llvm-nm"
+            echo "STRINGS=$CL/bin/llvm-strings"
+          } >> "$GITHUB_ENV"
+
       # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the
       #       input reaches the shell through env, never spliced into run:, so its text is data, not
       #       script. $REPOS is left unquoted to split the list into one argument per repo; set -f
