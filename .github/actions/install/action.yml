@@ -119,12 +119,18 @@ runs:
         [ -f "$root/MavericksShipyardConfig.cmake" ] || {
           echo "::error::$root holds no MavericksShipyardConfig.cmake -- find_package(MavericksShipyard) would not resolve on this runner"; exit 1; }
         ref='${{ github.action_ref }}'
+        local=no
+        if [ -z "$ref" ] && [ "$(cd -P "$root" && pwd)" = "$(cd -P "${GITHUB_WORKSPACE:-/nonexistent}" 2>/dev/null && pwd)" ]; then
+          local=yes
+        fi
         ref="${ref:-$(basename "$root")}"
         {
           echo "SHIPYARD_SCRIPTS=$scripts"
           echo "MavericksShipyard_DIR=$root"
         } >> "$GITHUB_ENV"
-        if ver="$(sh "$root/scripts/resolve-action-version.sh" "$ref")"; then
+        if [ "$local" = yes ]; then
+          echo "shipyard's own checkout ($root) names no release, so SHIPYARD_VERSION is unset"
+        elif ver="$(sh "$root/scripts/resolve-action-version.sh" "$ref")"; then
           echo "SHIPYARD_VERSION=$ver" >> "$GITHUB_ENV"
         else
           echo "::warning::'$ref' names no shipyard release, so SHIPYARD_VERSION is unset and packaging a .pkg here will fail -- pin install@v1 or an exact @vX.Y.Z"
