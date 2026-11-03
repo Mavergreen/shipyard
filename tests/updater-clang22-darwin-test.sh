@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- proves a Mac builds the updater with clang22 rather than the Apple clang it has
+# platform: macOS-only -- proves a Mac builds the updater with clang22 rather than the Apple clang it has; run by hand on Golden Gate (tests/maintainer-tests)
 #   usage: updater-clang22-darwin-test.sh
 #          The x86_64 updater, built the way shipyard's release builds it (tests/lib/build-updater.sh), is
 #          compiled and linked by clang22, never /usr/bin/clang, and records minos 10.9 and sdk 10.9. A

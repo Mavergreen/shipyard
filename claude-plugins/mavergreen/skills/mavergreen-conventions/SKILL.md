@@ -136,10 +136,11 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   the commit count (`scripts/shipyard-version.sh`), publishes a GitHub Release for the immutable
   `vX.Y.Z`, and fast-forwards `@v1` to that commit. So a shipyard change reaches consumers by **pushing
   `main`** — never move `@v1` by hand, and there's no separate "publish" step to run.
-  **The fast-forward happens only AFTER publish and the release-install canary succeed.** The canary
-  installs that exact release with its pinned cmake and checks both installations; `major-tag` needs it:
-  `@v1` must never name a version that failed to release, because fifteen repos would consume it within
-  minutes of the move.
+  **The fast-forward happens only AFTER publish succeeds**, and publish needs the build, the key scan
+  and the Linux suites (`linux`): `@v1` must never name a version that failed to release, because
+  fifteen repos would consume it within minutes of the move. shipyard runs no macOS job and no 10.9 VM
+  job: it is unlikely to break on 10.9, and a break is found quickly. Its tests that need a 10.9 box or
+  a modern Mac are listed in `tests/maintainer-tests`, by box, and run by hand.
 - **After `install@v1`, use `$SHIPYARD_SCRIPTS`** — the action exports the installed scripts dir.
   **Everywhere else, run `shipyard-scripts`**: `SHIPYARD_SCRIPTS="${SHIPYARD_SCRIPTS:-$(shipyard-scripts)}"`.
   It honours `SHIPYARD_SCRIPTS` when CI has set it, and otherwise
@@ -440,7 +441,8 @@ exits non-zero when a green bump could not merge.
 **Read the required context from a real check-run, never by analogy.** The context is the build job
 name, and the right one is a job that runs *on pull requests*. shipyard's own release job is named
 `build` but its workflow is push-only, so requiring `build` there would have blocked every PR
-forever; the PR-visible job is `test`, from `ci.yml`. Check first:
+forever. Its PR-visible check is `ci.yml`'s gate job, `required (ci)`, which needs every other
+`ci.yml` job (`sh scripts/required-checks.sh` prints it). Check first:
 `gh api repos/OWNER/REPO/commits/main/check-runs --jq '[.check_runs[].name]|unique'`
 
 **Every build ingredient must be able to auto-update — give its value file a Renovate line 2 when the standard managers
@@ -1830,7 +1832,9 @@ needs fails, so the VM job's failure fails the PR.
 
 - A deviation with scope `*` stands in for the job, and is the only thing that exempts a repo from
   check 29. Legitimate where the guest cannot be the target: real hardware (magic-trackpad2's kext
-  drives a physical trackpad), or a library proven through its consumers (recaulk). Otherwise it is
+  drives a physical trackpad), a library proven through its consumers (recaulk), or tooling whose
+  10.9 break its consumers' own 10.9 jobs find quickly (shipyard, whose on-target tests the maintainer
+  runs by hand from `tests/maintainer-tests`). Otherwise it is
   a to-do and says so, with its exit: a reason of `no 10.9 acceptance job yet` and a revisit of `a vm-test job
   that installs and runs the pkg`.
 - A deviation whose scope is `<part>` declares one gap in the job's coverage. `<part>` is one word, with no
@@ -2104,7 +2108,7 @@ pass Installer's target volume rather than assuming `/`; with any other root it 
 | `unlink <product>` | removes every farm link into it; never changes a selection |
 | `select <group> [<product>]` | prints the selection, or moves it: the group's bare links swap to that member |
 | `list` | one line per installed product: short name, group, line (`-` for none), version, `selected` |
-| `check` | dangling farm links, links into a directory with no manifest, a manifest whose `product` is not its directory, missing links, system-replace drift — each on stderr, non-zero on any. shipyard's own install smoke runs it |
+| `check` | dangling farm links, links into a directory with no manifest, a manifest whose `product` is not its directory, missing links, system-replace drift — each on stderr, non-zero on any. scripts/assert-installed-shipyard.sh runs it |
 | `uninstall <product>` | below |
 | `system-replace <product>` / `system-restore <product>` | below |
 | `version` | the helper's version |
@@ -2495,7 +2499,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **28.** Nothing a build or test fetches is taken as whatever is newest: no tagless `gh release download`, no `gh release view` of another repo without a tag, no fetch command (`curl`, `wget`, `shipyard_curl`) or `gh api` on a `/releases/latest` URL, no `@latest` install (`npm install`, `npx`, `go install`, `pipx`, `cargo install`, `uvx`), no `:latest` image (`FROM`, `image:`, `docker pull/run`) — in `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt`, `*.bats` and Dockerfiles, tests included, comments excepted — unless an `unpinned` deviation scoped to the path says why it must be the newest, and when to reconsider | A pin in a file a Renovate manager tracks makes every change a commit with CI attached; "latest" lets someone else's release change this repo's results with no commit to blame. It drifted exactly that way: python-315's CI installed longboat's latest, shipyard's on-target job python-315's latest, and `sign_and_appcast.sh` signed every family release with the latest `ed25519` pkg, unverified (all 2026-10-18). A feed URL, an install hint or an end-user `install.sh` names a newest-release URL without fetching it at build time, so only a fetch command's line counts |
 | **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@`, or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) whose steps do (comments do not count; an uncalled job in another workflow file and a remote reusable workflow do not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or an `on-target` deviation with scope `*` is declared. An `on-target` deviation scoped to `<part>` declares a coverage gap and exempts nothing; a glob for `<part>` is refused | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
 | **35.** No tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt` outside `tests/` and `test/` calls the system `pkgbuild` or `productbuild` on a non-comment line, unless the path is grandfathered or a `packager` deviation is scoped to it | The pkg is built by stevedore, which runs on any host; a direct call keeps the build on a scarce macOS runner. This steers repos off the system packager one path at a time, and `@v1` moving reddens none of them while their lines stand |
-| **36.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` runner (as a string, a list, or `${{ matrix.X }}` read through the job's matrix) is grandfathered or declares a `macos-runner` deviation scoped to `<workflow file>:<job>` (`ci.yml:build`) | macOS runners are scarce, and a job lands on one by default. The deviation names the reason it needs macOS and what would let it leave; the key is `<workflow file>:<job>`, so a new `build` job in another workflow is caught. Needs PyYAML, which check 8 already requires |
+| **36.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` runner (as a string, a list, or `${{ matrix.X }}` read through the job's matrix) is grandfathered or declares a `macos-runner` deviation scoped to `<workflow file>:<job>` (`ci.yml:build`; shipyard has none, since it runs no macOS job) | macOS runners are scarce, and a job lands on one by default. The deviation names the reason it needs macOS and what would let it leave; the key is `<workflow file>:<job>`, so a new `build` job in another workflow is caught. Needs PyYAML, which check 8 already requires |
 | **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when an `arm64` deviation is declared; a declaration with no such job and a job with no declaration fail with different messages. At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). An `arm64` deviation scoped to a glob of only `*`, `?` and `/` is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
 | **`pr-trigger`.** `release.yml` runs on a pull request to `main` (or on every push), or a `ci.yml` does, unless `renovate.json` sets `ignoreTests: true` | Renovate's automerge waits on a CI check; without one on the bump PR it stalls forever. fd and rg each asserted this themselves |
 | **`publish-order`.** In `release.yml` the first mentions of `release-notes.sh`, `release-state-record.sh`, `sign_and_appcast.sh` and `publish-release.yml` come in that order | The appcast and the Release must carry the same notes. A step a repo lacks takes no part |
@@ -2709,7 +2713,7 @@ spells `assert-tree-clean.sh` does not count as having called it.
 
 **Prefer the narrowest entry that works**, and know what a subtree entry costs. shipyard and clang
 both declare `dist/` and both run the bare assertion at the *end* of the build job: packaging,
-signing, appcast and install-smoke therefore all run inside the exempt subtree, and nothing they
+signing and appcast therefore all run inside the exempt subtree, and nothing they
 write there is checked. That is a deliberate trade — asserting last covers more of the job than
 asserting before the first `mkdir` does — but it is a trade, not a freebie. A maintainer who
 declares `build/` "for one file" has handed every later change a repo-wide exemption.

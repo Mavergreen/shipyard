@@ -43,11 +43,6 @@ macos-runner recaulk release.yml:build
 macos-runner rg release.yml:build
 macos-runner rust release.yml:build
 macos-runner rust release.yml:collect
-macos-runner shipyard audit-sdks.yml:audit
-macos-runner shipyard ci.yml:package
-macos-runner shipyard ci.yml:test
-macos-runner shipyard release.yml:build
-macos-runner shipyard release.yml:canary
 macos-runner signal-desktop release.yml:build
 macos-runner swift release.yml:build
 macos-runner swift release.yml:build-cross

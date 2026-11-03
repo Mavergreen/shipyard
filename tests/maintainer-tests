@@ -1,0 +1,16 @@
+10.9 tests/stage-product-test.sh
+10.9 tests/mavergreen-helper-test.sh
+10.9 tests/assert-installed-shipyard-test.sh
+10.9 tests/installed-updater-launch-test.sh
+10.9 tests/check-fixtures-run.sh
+10.9 tests/mavergreen-meta-test.sh
+10.9 tests/shipyard-scripts-test.sh
+10.9 tests/resolve-version-test.sh
+10.9 tests/shipyard-pins-test.sh
+10.9 tests/vercmp-test.sh
+10.9 tests/name-rules-test.sh
+10.9 tests/shipyard-provision-on-target-test.sh
+golden-gate tests/installed-shipyard-test.sh
+golden-gate tests/fetch_stevedore_darwin.bats
+golden-gate tests/updater-clang22-darwin-test.sh
+golden-gate tests/umbrella-langs.sh

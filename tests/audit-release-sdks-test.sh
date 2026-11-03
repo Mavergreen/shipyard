@@ -12,7 +12,10 @@ S="$here/../scripts/audit-release-sdks.sh"
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/audit-sdks-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 . "$here/../scripts/lib/macho-tools.sh"
-mach_tool OTOOL 2>/dev/null && mach_tool LIPO 2>/dev/null || { echo "SKIP: no LLVM readers (install llvm, or set OTOOL and LIPO)"; exit 77; }
+if ! { mach_tool OTOOL && mach_tool LIPO; } 2>/dev/null; then
+  CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/..")" || { echo "SKIP: no LLVM readers and no clang22 (install llvm, or set OTOOL and LIPO)"; exit 77; }
+  LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; export LIPO OTOOL NM
+fi
 mkdir -p "$w/good/dist" "$w/bad/dist" "$w/repo" "$w/unreadable/dist" "$w/src"
 cp "$here/fixtures/macho/clean" "$w/src/h"
 ( cd "$w/src" && tar -czf "$w/good/dist/t-1.0.0-mavericks.1.tar.gz" h )

@@ -7,15 +7,16 @@ default PATH, and shipyard-check runs from there; that a probe under a stripped 
 through shipyard-cmake; that the installed updater is
 universal; that nothing is left in /usr/local/bin from the old layout; that an installed mavergreen helper
 passes its own check; and that any other cmake is refused, by name. --root defaults to "/" (a real install);
-a fixture root makes it unit-testable. It is shipyard's own check, run in its install smoke.
+a fixture root makes it unit-testable. It is shipyard's own check, run by hand on a real install
+(tests/installed-shipyard-test.sh, listed in tests/maintainer-tests).
 
 ## Incident
 Undated: the assertions used to live inline in release.yml's install smoke, a step that runs only on a push to
-main. That left them unrunnable until the very push that must not be a rehearsal, so release.yml, ci.yml and
-this script's test now share one statement of what an installed shipyard looks like.
+main. That left them unrunnable until the very push that must not be a rehearsal, so the hand-run test of a
+real install and this script's fixture test now share one statement of what an installed shipyard looks like.
 
 ## Limits
-macOS-only: lipo checks the installed universal binaries. It examines a prefix, so it says nothing about a
+The slices are read with $LIPO (an LLVM lipo off macOS); --no-slices skips them. It examines a prefix, so it says nothing about a
 package that installed into a different one. Exit 2 is a usage error, never "the installed shipyard is
 wrong".
 

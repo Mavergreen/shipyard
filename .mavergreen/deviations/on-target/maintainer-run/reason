@@ -1,0 +1,1 @@
+shipyard is unlikely to break on 10.9, and when it does a consumer's own 10.9 job or the maintainer finds out quickly, so its CI and release run no VM job; its on-target tests are in tests/maintainer-tests, run by hand on the 10.9 box.

@@ -1,17 +1,16 @@
 #!/bin/sh
 # platform: macOS-only -- launches the Cocoa updater app
-#   usage: launch-updater.sh TAR
-#          Unpacks shipyard-updater.app from TAR (tests/updater-linux-test.sh's UPDATER_TEST_OUT tarball)
-#          and launches it in check-only mode (--background: a silent probe of its feed, no UI, no
-#          install), giving it 180 seconds to exit by itself. Exit 0 when it started, logged its check and
+#   usage: launch-updater.sh APP
+#          Takes the shipyard-updater.app at APP in place and launches it in check-only mode
+#          (--background: a silent probe of its feed, no UI, no install), giving it 180 seconds to exit
+#          by itself. Exit 0 when it started, logged its check and
 #          exited 0; 1 otherwise, printing its output. Runs on Mac OS X 10.9 without the Command Line Tools.
 set -eu
-[ $# -eq 1 ] && [ -f "$1" ] || { echo "usage: launch-updater.sh TAR" >&2; exit 2; }
+[ $# -eq 1 ] && [ -d "$1" ] || { echo "usage: launch-updater.sh APP" >&2; exit 2; }
 _tmp="${TMPDIR:-/tmp}"
 t="$(mktemp -d "${_tmp%/}/launch-updater.XXXXXX")"; trap 'rm -rf "$t"' EXIT
-tar -xf "$1" -C "$t"
-exe="$t/shipyard-updater.app/Contents/MacOS/shipyard-updater"
-[ -x "$exe" ] || { echo "FAIL: $1 holds no shipyard-updater.app/Contents/MacOS/shipyard-updater"; exit 1; }
+exe="$1/Contents/MacOS/shipyard-updater"
+[ -x "$exe" ] || { echo "FAIL: $1 holds no shipyard-updater executable at $exe"; exit 1; }
 "$exe" --background > "$t/log" 2>&1 &
 pid=$!
 waited=0

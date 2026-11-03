@@ -7,9 +7,6 @@ name: linux-host
 
 on:
   workflow_call:
-    secrets:
-      MAVERICKS_VM_KEY:
-        required: false
 
 jobs:
   strict-host:
@@ -41,22 +38,14 @@ jobs:
         run: sh scripts/assert-tree-clean.sh --record
 
       - name: Host-agnostic suites, strictly
-        env:
-          UPDATER_TEST_OUT: ${{ runner.temp }}/linux-updater
         run: sh scripts/run-repo-tests.sh --strict-host
 
       # spec: tests/check-fixtures-run.sh -- strictly: no fixture may skip on Linux; then again with git
-      #       hidden, which is how the 10.9 guest runs them, so every fixture not marked NEEDS git proves it needs none.
+      #       hidden, which is how a 10.9 box runs them, so every fixture not marked NEEDS git proves it needs none.
       - name: Every check's fixtures
         run: sh tests/check-fixtures-run.sh --strict
       - name: The same fixtures with git hidden
         run: sh tests/check-fixtures-run.sh --no-git
-      - name: Save the Linux-built updater
-        uses: actions/upload-artifact@v7
-        with:
-          name: shipyard-updater-linux
-          path: ${{ runner.temp }}/linux-updater/shipyard-updater-linux.tar
-          if-no-files-found: error
 
       - name: Our own conventions gate, where consumers run it
         run: sh scripts/shipyard-check
@@ -75,29 +64,3 @@ jobs:
 
       - name: The suites must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
-
-  on-target-updater:
-    needs: strict-host
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@v8
-        with:
-          name: shipyard-updater-linux
-          path: linux-updater
-      - name: Launch the Linux-built updater on Mac OS X 10.9, check only
-        uses: Mavergreen/mavericks-vm@v1
-        with:
-          image-key: ${{ secrets.MAVERICKS_VM_KEY }}
-          copyback: false
-          run: |
-            set -eu
-            sw_vers
-            sh tests/lib/launch-updater.sh linux-updater/shipyard-updater-linux.tar

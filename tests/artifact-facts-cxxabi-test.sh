@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- the fixtures are Mach-O, built with cc and merged with lipo
+# platform: host-agnostic
 set -eu
 unset GITHUB_REPOSITORY
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -9,9 +9,12 @@ w="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/af-cxxabi.XXXXXX")" && pwd)"; trap 'rm 
 fail() { echo "FAIL: $*"; exit 1; }
 
 S9="$(sh "$here/../scripts/fetch_sdk.sh")"
+CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/..")"
+LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; AR="$CL/bin/llvm-ar"
+export LIPO OTOOL NM
 mkdir -p "$w/src/bin" "$w/src/lib" "$w/stubs" "$w/dist"
 cd "$w"
-build() { SDKROOT="$S9" cc -arch x86_64 -mmacosx-version-min=10.9 "$@"; }
+build() { "$CL/bin/clang" --no-default-config -Wno-unused-command-line-argument -fuse-ld=lld --ld-path="$CL/bin/ld64.lld" -target x86_64-apple-macos10.9 -isysroot "$S9" "$@"; }
 
 printf 'void __cxa_throw(void) {}\nint main(void) { return 0; }\n' > throws.c
 printf 'void __cxa_call_terminate(void) {}\nvoid __cxa_init_primary_exception(void) {}\nvoid __cxa_throw_bad_array_new_length(void) {}\nvoid __cxa_uncaught_exceptions(void) {}\nint main(void) { return 0; }\n' > backfills.c
@@ -32,10 +35,10 @@ sh "$here/../scripts/fetch_product_pkg.sh" recaulk "$pin" "$w/recaulk" > /dev/nu
 build withrecaulk.c "$w/recaulk/lib/librecaulk.a" -lc++abi -o src/bin/withrecaulk
 build -c throw-member.c -o throw-member.o
 build -c back-member.c -o back-member.o
-ar rcs src/lib/libthrow.a throw-member.o 2>/dev/null
-ar rcs src/lib/libback.a back-member.o 2>/dev/null
+"$AR" rcs src/lib/libthrow.a throw-member.o
+"$AR" rcs src/lib/libback.a back-member.o
 build -c hidden-member.c -o hidden-member.o
-ar rcs src/lib/libhidden.a hidden-member.o 2>/dev/null
+"$AR" rcs src/lib/libhidden.a hidden-member.o
 
 stub() {  # $1 = stub name, $2 = install name
   printf 'void %s(void) {}\n' "$1" > "stubs/$1.c"
@@ -60,13 +63,14 @@ build -dynamiclib -install_name @rpath/libreex.dylib reex.c -Wl,-reexport_librar
 fatarch=""
 printf '#ifndef __x86_64__\nvoid __cxa_throw(void) {}\n#endif\nint main(void) { return 0; }\n' > fat.c
 build fat.c -o fat-x86_64
-# platform: a modern Mac builds arm64 against the pinned 11.3 SDK; 10.9's toolchain builds i386 instead
-if SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh" --arch arm64)" cc -arch arm64 -mmacosx-version-min=11.0 fat.c -o fat-other 2>/dev/null; then
+# platform: the 10.9 box's clang22 builds x86_64 only, and its second arch is an i386 object (it cannot link
+#           i386); every other host builds arm64 against the pinned 11.3 SDK.
+if build -target arm64-apple-macos11.0 -isysroot "$(sh "$here/../scripts/fetch_sdk.sh" --arch arm64)" fat.c -o fat-other 2>/dev/null; then
   fatarch=arm64
-elif SDKROOT="$S9" cc -arch i386 -mmacosx-version-min=10.9 fat.c -o fat-other 2>/dev/null; then
+elif build -target i386-apple-macos10.9 -c fat.c -o fat-other 2>/dev/null; then
   fatarch=i386
 fi
-[ -z "$fatarch" ] || lipo -create fat-x86_64 fat-other -output src/bin/fat
+[ -z "$fatarch" ] || "$LIPO" -create fat-x86_64 fat-other -output src/bin/fat
 
 ( cd src && tar -czf "$w/dist/t-1.0.0-mavericks.1.tgz" bin lib )
 

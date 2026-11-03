@@ -8,9 +8,11 @@ setup() {
   GUARD="$BATS_TEST_DIRNAME/../scripts/assert_binary_compatible.sh"
   SELF="$BATS_TEST_DIRNAME/../scripts"
   . "$SELF/lib/macho-tools.sh"
-  for v in LIPO NM STRINGS OTOOL; do
-    mach_tool "$v" 2>/dev/null || skip "no LLVM reader for $v (install llvm, or set $v)"
-  done
+  if ! { mach_tool LIPO && mach_tool NM && mach_tool STRINGS && mach_tool OTOOL; } 2>/dev/null; then
+    CL="$(sh "$SELF/fetch_clang22.sh" "$BATS_TEST_DIRNAME/..")" || skip "no LLVM readers and no clang22 (install llvm, or set LIPO, NM, STRINGS and OTOOL)"
+    LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; STRINGS="$CL/bin/llvm-strings"
+    export LIPO OTOOL NM STRINGS
+  fi
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/compat_guard_test.XXXXXX")"
   cp -p "$BATS_TEST_DIRNAME"/fixtures/macho/* "$WORK"/
 }

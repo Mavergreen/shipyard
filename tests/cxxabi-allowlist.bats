@@ -1,19 +1,18 @@
 #!/usr/bin/env bats
-# platform: macOS-only -- the fixture archives are Mach-O, built with cc and ar
+# platform: host-agnostic
 
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/cxxabi-allowlist-test.XXXXXX")" && pwd)"
-  if [ -z "${NM:-}" ]; then
-    NM=nm
-    [ ! -x /usr/local/mavergreen/clang22/bin/llvm-nm ] || NM=/usr/local/mavergreen/clang22/bin/llvm-nm
-  fi
-  export NM MAVERGREEN_PREFIX="$WORK/no-prefix"
-  command -v cc >/dev/null 2>&1 && command -v ar >/dev/null 2>&1 || skip "no cc and ar"
+  CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT")"
+  AR="$CL/bin/llvm-ar"
+  export NM="${NM:-$CL/bin/llvm-nm}" LIPO="${LIPO:-$CL/bin/llvm-lipo}" OTOOL="${OTOOL:-$CL/bin/llvm-otool}"
+  export MAVERGREEN_PREFIX="$WORK/no-prefix"
   printf '\t.globl ___cxa_uncaught_exceptions\n___cxa_uncaught_exceptions:\n\tret\n\t.globl __ZTISt9exception\n\t.data\n__ZTISt9exception:\n\t.quad 0\n' > "$WORK/a.s"
   printf '\t.globl _foo\n_foo:\n\tret\n' > "$WORK/b.s"
-  ( cd "$WORK" && cc -c a.s b.s && ar rcs fixture.a a.o b.o ) > /dev/null 2>&1 || skip "cannot build a Mach-O fixture"
+  ( cd "$WORK" && asm a.s b.s && "$AR" rcs fixture.a a.o b.o ) > /dev/null 2>&1 || skip "cannot build a Mach-O fixture"
 }
+asm() { "$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -c "$@"; }
 teardown() { rm -rf "$WORK"; }
 
 pkg_release() {  # pkg_release: serve a Recaulk release holding the fixture archive, listed in SHA256SUMS
@@ -56,7 +55,7 @@ DIST
 
 @test "a private external is on the allow-list as hidden" {
   printf '\t.globl ___cxa_uncaught_exceptions\n___cxa_uncaught_exceptions:\n\tret\n\t.private_extern __ZTVN10__cxxabiv119__pointer_type_infoE\n\t.globl __ZTVN10__cxxabiv119__pointer_type_infoE\n\t.data\n__ZTVN10__cxxabiv119__pointer_type_infoE:\n\t.quad 0\n' > "$WORK/p.s"
-  ( cd "$WORK" && cc -c p.s && ar rcs private.a p.o ) > /dev/null 2>&1
+  ( cd "$WORK" && asm p.s && "$AR" rcs private.a p.o ) > /dev/null 2>&1
   run sh "$ROOT/scripts/cxxabi-allowlist.sh" "$WORK/private.a"
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf '%s\n' '__ZTVN10__cxxabiv119__pointer_type_infoE hidden' '___cxa_uncaught_exceptions visible' | LC_ALL=C sort)" ] || false
@@ -79,7 +78,7 @@ DIST
 }
 
 @test "an archive with no machinery is no allow-list" {
-  ( cd "$WORK" && ar rcs plain.a b.o )
+  ( cd "$WORK" && "$AR" rcs plain.a b.o )
   run sh -c "sh '$ROOT/scripts/cxxabi-allowlist.sh' '$WORK/plain.a' 2>/dev/null"
   [ "$status" -eq 1 ]
   [ -z "$output" ]

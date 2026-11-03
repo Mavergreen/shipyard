@@ -4,127 +4,24 @@ on:
   push:
     branches-ignore: [main]   # spec: tests/shipyard-workflow-coupling-test.sh (only one workflow may run the suite on main)
   pull_request:
-    branches: [main]          # the `test` job here is main's required status check
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  test:
-    runs-on: macos-26   # the CMake modules gate on Apple clang; Linux cannot exercise them
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
-
-      # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
-      - uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/mavericks-sdk
-          key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
-
-      # spec: scripts/install-macho-readers.sh -- the compat guard reads Mach-O with LLVM's readers and
-      #       never Apple's, and a macOS runner has only Apple's; this must run before the first build.
-      - name: LLVM's Mach-O readers
-        run: sh scripts/install-macho-readers.sh
-
-      # spec: scripts/lib/macho-tools.sh -- records what the runner's Xcode provides and whether brew was needed.
-      - name: What the Mach-O readers resolved to
-        run: |
-          . scripts/lib/macho-tools.sh
-          for v in OTOOL LIPO NM STRINGS; do
-            mach_tool "$v" || continue
-            eval "p=\$$v"
-            echo "$v=$p"; "$p" --version 2>&1 | head -n 1
-          done
-          for t in llvm-otool llvm-lipo llvm-nm llvm-strings; do echo "xcrun -f $t: $(xcrun -f $t 2>&1)"; done
-          command -v brew >/dev/null 2>&1 && { brew list llvm >/dev/null 2>&1 && echo "brew llvm: present" || echo "brew llvm: absent"; } || echo "no brew"
-
-      - uses: actions/cache@v6
-        with:
-          path: ~/Library/Caches/mavergreen-clang22
-          key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.mavergreen/ingredients/clang22/VERSION') }}
-
-      - name: Install mavericks-shipyard (self, source-build) -- and bats, so the *.bats suites below can run
-        uses: ./.github/actions/install
-        with:
-          source: build
-
-      - name: Record the pre-build tree
-        run: sh scripts/assert-tree-clean.sh --record
-
-      - name: ctest (parameterized suites)
-        run: |
-          shipyard-cmake -S . -B "$RUNNER_TEMP/build"
-          shipyard-ctest --test-dir "$RUNNER_TEMP/build" --output-on-failure
-
-      - name: Standalone test suites
-        run: sh scripts/run-repo-tests.sh
-
-      - name: Our own conventions gate
-        run: sh scripts/shipyard-check
-
-      - name: The build must not have written into the source tree
-        run: sh scripts/assert-tree-clean.sh
-
   linux:
     permissions:
       contents: read
-      packages: write
     uses: ./.github/workflows/linux-host.yml
-    secrets:
-      MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
-
-  # spec: tests/on-target-job-test.sh -- the flag-day P1 ruling R5: this job runs every check on Mac OS X
-  #       10.9. The guest has no python3 of its own, so it installs the python-315 release
-  #       .mavergreen/ingredients/python-315/VERSION names, which Renovate bumps.
-  on-target:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    permissions:
-      contents: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
-          persist-credentials: false
-      - name: The pinned python-315 release, fetched on the runner and verified against its SHA256SUMS
-        run: |
-          set -eu
-          v="$(. scripts/mavergreen-meta.sh && mg_value ingredients/python-315/VERSION)" || v=
-          [ -n "$v" ] || { echo "::error::.mavergreen/ingredients/python-315/VERSION names no python-315 release"; exit 1; }
-          gh release download "$v" -R Mavergreen/python-315 --pattern '*.pkg' --pattern SHA256SUMS --dir python-315-pkg
-          cd python-315-pkg
-          set -- *.pkg
-          [ "$#" -eq 1 ] || { echo "::error::python-315 $v has $# pkgs, not one: $*"; exit 1; }
-          awk -v f="$1" '$2 == f' SHA256SUMS | sha256sum -c --strict -
-      - name: Fixtures on Mac OS X 10.9
-        uses: Mavergreen/mavericks-vm@v1
-        with:
-          image-key: ${{ secrets.MAVERICKS_VM_KEY }}
-          copyback: false
-          debug-on-error: true
-          run: |
-            set -eu
-            sudo -n installer -pkg python-315-pkg/*.pkg -target /
-            SHIPYARD_CHECK_DIR="$PWD/scripts" sh -c '. "$SHIPYARD_CHECK_DIR/lib/py.sh"; p="$(chk_python3)"; echo "python3: $p"; "$p" --version'
-            sh tests/check-fixtures-run.sh --jobs 2
-            while IFS= read -r t; do
-              [ -n "$t" ] || continue
-              echo "== $t"
-              sh "$t"
-            done < tests/on-target-tests
 
   # spec: R-P1-17 -- this job REHEARSES release.yml's whole packaging path. release.yml runs only on a
-  #       push to main, so the packaging and install-smoke steps below would otherwise first execute
-  #       during a push that is already publishing.
+  #       push to main, so the packaging steps below would otherwise first execute during a push that
+  #       is already publishing.
   package:
-    runs-on: macos-26
-    timeout-minutes: 90
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
@@ -136,20 +33,26 @@ jobs:
           path: ~/Library/Caches/mavericks-sdk
           key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
-      # spec: scripts/install-macho-readers.sh -- the compat guard reads Mach-O with LLVM's readers and
-      #       never Apple's, and a macOS runner has only Apple's; this must run before the first build.
-      - name: LLVM's Mach-O readers
-        run: sh scripts/install-macho-readers.sh
-
       - uses: actions/cache@v6
         with:
-          path: ~/Library/Caches/mavergreen-clang22
+          path: ~/.cache/mavergreen-clang22
           key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.mavergreen/ingredients/clang22/VERSION') }}
 
-      - name: Install mavericks-shipyard (self, source-build)
+      - name: Install mavericks-shipyard (the Linux path)
         uses: ./.github/actions/install
-        with:
-          source: build
+
+      # spec: scripts/artifact-facts.sh -- GNU binutils cannot read Mach-O, so the merge, the SDK audit
+      #       and the slice checks read it with clang22's LLVM tools.
+      - name: clang22's Mach-O tools
+        run: |
+          set -eu
+          CL="$(sh scripts/fetch_clang22.sh .)"
+          {
+            echo "LIPO=$CL/bin/llvm-lipo"
+            echo "OTOOL=$CL/bin/llvm-otool"
+            echo "NM=$CL/bin/llvm-nm"
+            echo "STRINGS=$CL/bin/llvm-strings"
+          } >> "$GITHUB_ENV"
 
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
@@ -173,11 +76,11 @@ jobs:
           v="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"
           echo "rehearsing the pkg for $v"
           mkdir -p "$RUNNER_TEMP/dist"
-          shipyard-cmake -S . -B "$RUNNER_TEMP/payload-build"
+          cmake -S . -B "$RUNNER_TEMP/payload-build"
           # spec: scripts/package-pkg.sh -- the install bakes its prefix into mavericks-presets.json, so
           #       it installs INTO the pkg's prefix, staged under DESTDIR; package-pkg.sh refuses presets
           #       naming any other toolchain file.
-          DESTDIR="$RUNNER_TEMP/payload-stage" shipyard-cmake --install "$RUNNER_TEMP/payload-build" \
+          DESTDIR="$RUNNER_TEMP/payload-stage" cmake --install "$RUNNER_TEMP/payload-build" \
             --prefix /usr/local/mavergreen/shipyard
           sh scripts/package-pkg.sh \
             --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
@@ -220,26 +123,21 @@ jobs:
             10.9.5 "$d/RELEASE_NOTES.md" "sparkle:edSignature=\"rehearsal\" length=\"$len\"" > "$d/shipyard.xml"
           sh scripts/shipyard-check --dist "$d"
 
-      - name: Install smoke (the rehearsed pkg)
-        timeout-minutes: 10
+      # spec: scripts/package-pkg.sh -- its two inputs, as tars that keep modes and links, so the pkg
+      #       can be rebuilt from the same bytes on another host and compared.
+      - name: Tar the packaging inputs
         run: |
           set -eu
-          bad=0
-          sudo installer -pkg "$RUNNER_TEMP"/dist/mavericks-shipyard-*.pkg -target / || bad=1
-          sh scripts/assert-installed-shipyard.sh --cmake-version "$(. scripts/mavergreen-meta.sh && mg_value ingredients/cmake/VERSION | sed 's/-mavericks\..*//')" --root / || bad=1
-          /usr/local/bin/mavergreen check || bad=1
-          if [ "$bad" -ne 0 ]; then
-            echo "---- /var/log/install.log, the pkg's scripts ----"
-            sudo grep -E 'preinstall|postinstall|mavericks-shipyard|mavergreen' /var/log/install.log | tail -n 100 || true
-          fi
-          [ "$bad" -eq 0 ] || exit 1
+          mkdir -p "$RUNNER_TEMP/inputs"
+          tar -cf "$RUNNER_TEMP/inputs/payload-stage.tar" -C "$RUNNER_TEMP" payload-stage
+          tar -cf "$RUNNER_TEMP/inputs/shipyard-updater.app.tar" -C "$RUNNER_TEMP" shipyard-updater.app
+          sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p' > "$RUNNER_TEMP/inputs/version"
 
-      # spec: scripts/assert-installed-shipyard.sh -- retain the exact smoke-tested pkg for rehearsal on developer Macs.
-      - name: Save the rehearsed package
+      - name: Save the packaging inputs
         uses: actions/upload-artifact@v7
         with:
-          name: shipyard-rehearsal-pkg
-          path: ${{ runner.temp }}/dist/*.pkg
+          name: shipyard-rehearsal-inputs
+          path: ${{ runner.temp }}/inputs/
           if-no-files-found: error
 
       - name: The build must not have written into the source tree
@@ -277,3 +175,16 @@ jobs:
           [ -z "$(git ls-remote --tags origin "refs/tags/$REHEARSAL_TAG")" ] \
             || { echo "::error::$REHEARSAL_TAG is still on the remote"; exit 1; }
           echo "rehearsal tag $REHEARSAL_TAG is gone"
+
+  required:
+    name: required (ci)
+    if: always()
+    needs: [linux, package, tag-push-rehearsal]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/required-gate
+        with:
+          needs: ${{ toJSON(needs) }}

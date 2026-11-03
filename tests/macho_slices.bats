@@ -7,9 +7,11 @@
 setup() {
   S="$BATS_TEST_DIRNAME/../scripts/macho-slices.sh"
   . "$BATS_TEST_DIRNAME/../scripts/lib/macho-tools.sh"
-  for v in LIPO OTOOL; do
-    mach_tool "$v" 2>/dev/null || skip "no LLVM reader for $v (install llvm, or set $v)"
-  done
+  if ! { mach_tool LIPO && mach_tool OTOOL; } 2>/dev/null; then
+    CL="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_clang22.sh" "$BATS_TEST_DIRNAME/..")" || skip "no LLVM readers and no clang22 (install llvm, or set LIPO and OTOOL)"
+    LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"
+    export LIPO OTOOL
+  fi
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/macho_slices.XXXXXX")"
   cp -p "$BATS_TEST_DIRNAME"/fixtures/macho/* "$WORK"/
 }
