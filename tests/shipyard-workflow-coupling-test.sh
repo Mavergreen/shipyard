@@ -207,6 +207,34 @@ if bad:
 print("ok: ci.yml rehearses the packaging path release.yml only ever runs while publishing, and "
       "neither builds CMake")
 PY
+python3 - "$wf/ci.yml" <<'PY'
+import sys, yaml
+jobs = yaml.safe_load(open(sys.argv[1])).get("jobs") or {}
+g = jobs.get("required") or {}
+bad = []
+if g.get("name") != "required (ci)":
+    bad.append("ci.yml has no job \"required\" named \"required (ci)\", the one check branch protection requires")
+else:
+    needs = g.get("needs") or []
+    needs = [needs] if isinstance(needs, str) else needs
+    others = sorted(j for j in jobs if j != "required")
+    if sorted(needs) != others:
+        bad.append("required (ci) must need every other ci.yml job %r, not %r" % (others, sorted(needs)))
+    if str(g.get("if", "")).strip() not in ("always()", "${{ always() }}"):
+        bad.append("required (ci) must run if: always(), or a failed job skips it and a skipped check passes")
+    if not str(g.get("runs-on", "")).startswith("ubuntu-"):
+        bad.append("required (ci) must run on ubuntu, not %r" % g.get("runs-on"))
+    steps = g.get("steps") or []
+    if not any(str(st.get("uses", "")) == "./.github/actions/required-gate"
+               and "toJSON(needs)" in str((st.get("with") or {}).get("needs", "")) for st in steps):
+        bad.append("required (ci) must run ./.github/actions/required-gate with needs: toJSON(needs), the gate this commit ships")
+for b in bad:
+    print("FAIL:", b)
+sys.exit(1 if bad else 0)
+PY
+checks="$(sh "$here/../scripts/required-checks.sh" "$here/..")" || { echo "FAIL: required-checks.sh refuses this repo's workflows"; exit 1; }
+printf '%s\n' "$checks" | grep -qx 'required (ci)' || { echo "FAIL: required-checks.sh does not list required (ci): $checks"; exit 1; }
+echo "ok: required (ci) gates every ci.yml job"
 mac="$(grep -rnE 'macos-' "$here/../.github" --include='*.yml' --include='*.yaml' | grep -E 'runs-on|os:' || :)"
 [ -z "$mac" ] || { printf '%s\n' "$mac"; echo "FAIL: shipyard runs no job on a macos-* runner; every job above must move to ubuntu or the 10.9 guest"; exit 1; }
 echo "ok: no job in .github runs on a macos-* runner"

@@ -145,3 +145,16 @@ jobs:
       ref: ${{ github.sha }}
     secrets:
       MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
+
+  required:
+    name: required (ci)
+    if: always()
+    needs: [linux, package, pkg-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/required-gate
+        with:
+          needs: ${{ toJSON(needs) }}
