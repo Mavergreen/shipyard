@@ -20,8 +20,8 @@ jobs:
       MAVERICKS_VM_KEY: ${{ secrets.MAVERICKS_VM_KEY }}
 
   # spec: R-P1-17 -- this job REHEARSES release.yml's whole packaging path. release.yml runs only on a
-  #       push to main, so the packaging and install-smoke steps below would otherwise first execute
-  #       during a push that is already publishing.
+  #       push to main, so the packaging steps below and pkg-smoke's install would otherwise first
+  #       execute during a push that is already publishing.
   package:
     runs-on: ubuntu-latest
     timeout-minutes: 60
