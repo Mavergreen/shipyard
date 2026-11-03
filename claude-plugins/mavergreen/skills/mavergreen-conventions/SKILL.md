@@ -137,10 +137,10 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   `vX.Y.Z`, and fast-forwards `@v1` to that commit. So a shipyard change reaches consumers by **pushing
   `main`** — never move `@v1` by hand, and there's no separate "publish" step to run.
   **The fast-forward happens only AFTER publish succeeds**, and publish needs the build, the key scan
-  and the 10.9 install smoke (`smoke`): `@v1` must never name a version that failed to release, because
-  fifteen repos would consume it within minutes of the move. shipyard runs no macOS job: the build,
-  the signing and the smoke run on Linux and in the 10.9 guest. Its tests that need a modern Mac are
-  listed in `tests/maintainer-tests` and run by hand.
+  and the Linux suites (`linux`): `@v1` must never name a version that failed to release, because
+  fifteen repos would consume it within minutes of the move. shipyard runs no macOS job and no 10.9 VM
+  job: it is unlikely to break on 10.9, and a break is found quickly. Its tests that need a 10.9 box or
+  a modern Mac are listed in `tests/maintainer-tests`, by box, and run by hand.
 - **After `install@v1`, use `$SHIPYARD_SCRIPTS`** — the action exports the installed scripts dir.
   **Everywhere else, source `msc.sh`**: copy `$SHIPYARD_SCRIPTS/templates/msc.sh` to your repo's
   `build/msc.sh` and `. build/msc.sh`. It honours `SHIPYARD_SCRIPTS` when CI has set it, and otherwise
@@ -441,8 +441,8 @@ exits non-zero when a green bump could not merge.
 **Read the required context from a real check-run, never by analogy.** The context is the build job
 name, and the right one is a job that runs *on pull requests*. shipyard's own release job is named
 `build` but its workflow is push-only, so requiring `build` there would have blocked every PR
-forever. Its PR-visible check is `ci.yml`'s gate job, `required (ci)`, which needs `linux`, `package`
-and `pkg-smoke` (`sh scripts/required-checks.sh` prints it). Check first:
+forever. Its PR-visible check is `ci.yml`'s gate job, `required (ci)`, which needs `linux` and
+`package` (`sh scripts/required-checks.sh` prints it). Check first:
 `gh api repos/OWNER/REPO/commits/main/check-runs --jq '[.check_runs[].name]|unique'`
 
 **Every build ingredient must be able to auto-update — wire a customManager when the standard managers
@@ -1889,7 +1889,9 @@ needs fails, so the VM job's failure fails the PR.
 
 - `- on-target: <reason>` (bare) stands in for the job, and is the only thing that exempts a repo from
   check 29. Legitimate where the guest cannot be the target: real hardware (magic-trackpad2's kext
-  drives a physical trackpad), or a library proven through its consumers (recaulk). Otherwise it is
+  drives a physical trackpad), a library proven through its consumers (recaulk), or tooling whose
+  10.9 break its consumers' own 10.9 jobs find quickly (shipyard, whose on-target tests the maintainer
+  runs by hand from `tests/maintainer-tests`). Otherwise it is
   a to-do and says so, with its exit: `- on-target: no 10.9 acceptance job yet; exit: a vm-test job
   that installs and runs the pkg`.
 - `- on-target:<part>: <reason>` declares one gap in the job's coverage. `<part>` is one word, with no
