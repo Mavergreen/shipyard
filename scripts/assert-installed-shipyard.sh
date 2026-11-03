@@ -1,6 +1,6 @@
 #!/bin/sh
-# platform: macOS-only -- lipo checks the installed universal binaries
-#   usage: assert-installed-shipyard.sh --cmake-version V [--root DIR]
+# platform: host-agnostic
+#   usage: [LIPO=<lipo>] assert-installed-shipyard.sh --cmake-version V [--root DIR] [--no-slices]
 #          Asserts that an INSTALLED mavericks-shipyard is what we meant to ship: the cmake product
 #          beside it is the CMake in components/cmake/version and universal; the farm's
 #          shipyard-cmake, shipyard-ctest and shipyard-cpack are executable on the default PATH; a
@@ -8,18 +8,20 @@
 #          updater is universal; nothing is left in /usr/local/bin from the old layout; an installed
 #          mavergreen helper passes its own check; and any other cmake is refused, by name. --root
 #          defaults to "/" (a real install); a fixture root makes this unit-testable. Exit 0 clean, 1
-#          on a failed assertion, 2 on a usage error.
+#          on a failed assertion, 2 on a usage error. --no-slices skips reading the
+#          two universal binaries' slices, for a host that has no lipo that reads Mach-O.
 # spec: R-P1-17 -- these assertions used to live inline in release.yml's install smoke, the one step
 #       that runs ONLY on a push to main, which left them unrunnable until the very push that must
 #       not be a rehearsal. release.yml, ci.yml and tests/assert-installed-shipyard-test.sh now share
 #       this one statement of what an installed shipyard looks like.
 set -eu
 
-ROOT="/"; WANT=""
+ROOT="/"; WANT=""; SLICES=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --root) ROOT="$2"; shift 2;;
     --cmake-version) WANT="$2"; shift 2;;
+    --no-slices) SLICES=0; shift;;
     *) echo "assert-installed-shipyard: unknown option $1" >&2; exit 2;;
   esac
 done
@@ -78,8 +80,8 @@ if [ -f "$R/usr/local/bin/mavergreen" ]; then
   sh "$R/usr/local/bin/mavergreen" --root "$ROOT" check || fail "mavergreen check failed"
 fi
 # spec: 2026-10-09 C4 -- shipyard-cmake is a launcher script, so the slices are the cmake product's.
-if [ -x "$PRODUCT" ]; then
-  cmarchs="$(lipo -info "$PRODUCT" 2>&1 || true)"
+if [ "$SLICES" -eq 1 ] && [ -x "$PRODUCT" ]; then
+  cmarchs="$(${LIPO:-lipo} -info "$PRODUCT" 2>&1 || true)"
   case "$cmarchs" in
     *x86_64*) ;;
     *) fail "the cmake product has no x86_64 slice, so it cannot run on 10.9: $cmarchs" ;;
@@ -103,15 +105,17 @@ fi
 # platform: 10.9's lipo has no -archs, so read the slices with lipo -info;
 #           check-shell-portability.sh bans the idiom outright.
 if [ -f "$EXE" ]; then
-  archs="$(lipo -info "$EXE" 2>&1 || true)"
-  case "$archs" in
-    *x86_64*) ;;
-    *) fail "the installed updater has no x86_64 slice: $archs" ;;
-  esac
-  case "$archs" in
-    *arm64*) ;;
-    *) fail "the installed updater has no arm64 slice: $archs" ;;
-  esac
+  if [ "$SLICES" -eq 1 ]; then
+    archs="$(${LIPO:-lipo} -info "$EXE" 2>&1 || true)"
+    case "$archs" in
+      *x86_64*) ;;
+      *) fail "the installed updater has no x86_64 slice: $archs" ;;
+    esac
+    case "$archs" in
+      *arm64*) ;;
+      *) fail "the installed updater has no arm64 slice: $archs" ;;
+    esac
+  fi
 else
   fail "no installed updater executable at $EXE"
 fi
@@ -140,4 +144,5 @@ else
 fi
 
 [ "$bad" -eq 0 ] || exit 1
-echo "installed shipyard: shipyard-cmake runs CMake $WANT and finds shipyard in $CFGDIR; updater universal; $refusal"
+if [ "$SLICES" -eq 1 ]; then universal="updater universal"; else universal="slices: not checked (--no-slices)"; fi
+echo "installed shipyard: shipyard-cmake runs CMake $WANT and finds shipyard in $CFGDIR; $universal; $refusal"

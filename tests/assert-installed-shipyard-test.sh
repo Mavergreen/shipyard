@@ -1,12 +1,12 @@
 #!/bin/sh
-# platform: macOS-only -- tests a lipo-based assertion, and on Linux shipyard refuses no cmake
+# platform: host-agnostic
 #   usage: assert-installed-shipyard-test.sh
 #          Drives scripts/assert-installed-shipyard.sh against a FIXTURE root shaped like the pkg's
-#          layout, built from this box's own cmake. Three of its four assertions run for real here;
-#          the two universal-binary ones cannot (making an x86_64+arm64 Mach-O needs a cross
-#          toolchain this suite's 10.9 box has none of), so lipo is stubbed per argument, which
-#          proves the script's READING of lipo -info and nothing more. Exit 0 clean, 1 on failure,
-#          77 when there is no cmake to build a fixture from.
+#          layout, built from this box's own cmake. The two universal-binary assertions read lipo
+#          stubbed per argument, which proves the script's READING of lipo -info and nothing more;
+#          --no-slices and LIPO are proved with no stub reaching the script, and with a real x86_64
+#          Mach-O built by the pinned clang22. Exit 0 clean, 1 on failure, 77 when there is no cmake
+#          to build a fixture from.
 # spec: R-P1-17 -- scripts/assert-installed-shipyard.sh is the ONE statement release.yml's install
 #       smoke and ci.yml's packaging rehearsal share, and a shared assertion nothing exercises is
 #       worse than an inline one: both callers would go green on a script that stopped asserting.
@@ -14,6 +14,7 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 . "$here/lib/cmake_fixture.sh"
 S="$root/scripts/assert-installed-shipyard.sh"
+CL="$(sh "$root/scripts/fetch_clang22.sh" "$root/components/clang22")"
 
 real="$(command -v cmake 2>/dev/null)" || { echo "SKIP: no cmake to build a fixture prefix from"; exit 77; }
 # platform: macOS sets TMPDIR with a trailing slash. The fixture root is passed as --root and
@@ -86,6 +87,8 @@ esac
 EOF
   chmod +x "$stub/lipo"
 }
+nolipo="$w/nolipo"; mkdir -p "$nolipo"
+printf '#!/bin/sh\nexit 99\n' > "$nolipo/lipo"; chmod +x "$nolipo/lipo"
 UNIVERSAL_CMAKE="cmake: architecture x86_64 arm64"
 UNIVERSAL_APP="shipyard-updater: architecture x86_64 arm64"
 assert() {  # remaining args are appended to the script's own
@@ -206,6 +209,19 @@ cp "$ms/usr/local/mavergreen/cmake/mavergreen.plist" "$product/mavergreen.plist"
 echo cmake > "$fx/usr/local/mavergreen/var/mavergreen/selections/cmake"
 check "with the helper and the cmake product installed and shipyard linked, a correct install passes mavergreen check too" 0 "finds shipyard in" \
   assert --cmake-version "$ver"
+
+check "--no-slices runs no lipo" 0 "slices: not checked" \
+  env HOME="$run_home" PATH="$nolipo:$PATH" LIPO=false sh "$S" --root "$fx" --cmake-version "$ver" --no-slices
+
+printf 'int main(void){return 0;}\n' > "$w/thin.c"
+"$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -isysroot "$(sh "$root/scripts/fetch_sdk.sh")" \
+  -fuse-ld=lld --ld-path="$CL/bin/ld64.lld" -Wno-unused-command-line-argument "$w/thin.c" -o "$w/thin" \
+  || { echo "FAIL: could not build an x86_64 Mach-O with clang22"; exit 1; }
+mv "$updir/shipyard-updater" "$w/updater-aside"
+cp "$w/thin" "$updir/shipyard-updater"
+check "LIPO is honoured: an x86_64-only updater fails through llvm-lipo, whatever lipo is on PATH" 1 "installed updater has no arm64 slice" \
+  env HOME="$run_home" PATH="$stub:$PATH" LIPO="$CL/bin/llvm-lipo" sh "$S" --root "$fx" --cmake-version "$ver"
+mv "$w/updater-aside" "$updir/shipyard-updater"
 
 check "--cmake-version is required" 2 "--cmake-version required" \
   assert

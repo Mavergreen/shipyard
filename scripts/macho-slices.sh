@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: macOS-only -- lipo and otool read the Mach-O slices
+# platform: host-agnostic
 #   usage: [LIPO=<lipo>] [OTOOL=<otool>] macho-slices.sh FILE
 #          Prints one line per distinct (arch, filetype, minos, sdk) in FILE: "<arch> <filetype> <minos> <sdk>",
 #          "-" where a slice records no version load command (a kext), "?" for a missing field. A static
