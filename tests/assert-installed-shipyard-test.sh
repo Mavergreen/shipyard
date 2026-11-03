@@ -16,7 +16,9 @@ here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 S="$root/scripts/assert-installed-shipyard.sh"
 CL="$(sh "$root/scripts/fetch_clang22.sh" "$root/components/clang22")"
 
-real="$(command -v cmake 2>/dev/null)" || { echo "SKIP: no cmake to build a fixture prefix from"; exit 77; }
+# platform: the 10.9 guest (tests/on-target-tests) has no cmake on PATH, only the cmake product it installed.
+real="$(command -v cmake 2>/dev/null)" || real=/usr/local/mavergreen/cmake/bin/cmake
+[ -x "$real" ] || { echo "SKIP: no cmake to build a fixture prefix from"; exit 77; }
 # platform: macOS sets TMPDIR with a trailing slash. The fixture root is passed as --root and
 #           greped for verbatim in cmake's own STATUS output, and cmake normalizes "//" away when it
 #           prints MavericksShipyard_DIR -- so an unstripped slash fails on every real macOS session
