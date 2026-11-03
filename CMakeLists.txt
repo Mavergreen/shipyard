@@ -177,18 +177,14 @@ else()
 endif()
 
 # Prove the à-la-carte modules load without include(Mavericks) / the AppleClang gate.
-# Point find_package at THIS source tree (it carries the config + modules).
 add_test(NAME standalone-include
-  COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/standalone-include.sh ${CMAKE_CURRENT_SOURCE_DIR})
+  COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/standalone-include.sh)
 
 # Prove include(Mavericks) is universally includable: auto-scoped gate (no
 # MAVERICKS_REQUIRE_LANGS), LANGUAGES NONE no-op, and multi-arch safe.
 add_test(NAME umbrella-langs
-  COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/umbrella-langs.sh ${CMAKE_CURRENT_SOURCE_DIR})
+  COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/umbrella-langs.sh)
 
-# Both configure a scratch consumer through shipyard-cmake (MavericksShipyardConfig.cmake
-# refuses any other cmake) and exit 77 to SKIP when none is reachable -- a box that hasn't
-# installed the shipyard pkg. Without this, ctest counts a 77 exit as Failed, not Skipped.
 set_tests_properties(standalone-include umbrella-langs PROPERTIES SKIP_RETURN_CODE 77)
 
 # Prove stage_updater.sh stages an updater .app + LaunchAgent and renders the templates.
