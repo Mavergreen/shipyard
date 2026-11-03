@@ -126,6 +126,8 @@ jobs:
     name: required (ci)
     if: always()
     needs: [linux, package]
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
