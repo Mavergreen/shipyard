@@ -60,17 +60,12 @@ build second.c stubs/vendor1.dylib -o src/bin/second
 printf 'void reex(void) {}\n' > reex.c
 build -dynamiclib -install_name @rpath/libreex.dylib reex.c -Wl,-reexport_library,stubs/rpath2.dylib -o src/lib/reex.dylib
 
-fatarch=""
 printf '#ifndef __x86_64__\nvoid __cxa_throw(void) {}\n#endif\nint main(void) { return 0; }\n' > fat.c
 build fat.c -o fat-x86_64
-# platform: the 10.9 box's clang22 builds x86_64 only, and its second arch is an i386 object (it cannot link
-#           i386); every other host builds arm64 against the pinned 11.3 SDK.
-if build -target arm64-apple-macos11.0 -isysroot "$(sh "$here/../scripts/fetch_sdk.sh" --arch arm64)" fat.c -o fat-other 2>/dev/null; then
-  fatarch=arm64
-elif build -target i386-apple-macos10.9 -c fat.c -o fat-other 2>/dev/null; then
-  fatarch=i386
-fi
-[ -z "$fatarch" ] || "$LIPO" -create fat-x86_64 fat-other -output src/bin/fat
+# platform: the second slice is an i386 object, the one every host's clang22 builds (10.9's native
+#           clang22 targets x86_64 only and links no i386).
+build -target i386-apple-macos10.9 -c fat.c -o fat-other
+"$LIPO" -create fat-x86_64 fat-other -output src/bin/fat
 
 ( cd src && tar -czf "$w/dist/t-1.0.0-mavericks.1.tgz" bin lib )
 
@@ -94,12 +89,8 @@ has "cxxabi-loads $T bin/rpathbad x86_64 @rpath/libc++abi.dylib" "an @rpath libc
 has "cxxabi-loads $T bin/second x86_64 /opt/vendor/lib/libc++abi.1.dylib" "loading a second libc++abi fails"
 has "cxxabi-loads $T lib/reex.dylib x86_64 @rpath/libc++abi.2.dylib" "a re-exported libc++abi is a load"
 lacks "^cxxabi-loads $T lib/reex.dylib .*libreex" "a dylib's own install name is not a load"
-if [ -n "$fatarch" ]; then
-  has "cxxabi-defines $T bin/fat $fatarch ___cxa_throw visible" "a definition in one slice of a fat binary fails"
-  lacks "^cxxabi-defines $T bin/fat x86_64 " "each slice is judged on its own"
-else
-  echo "artifact-facts-cxxabi: skip: no second arch to build a fat fixture with"
-fi
+has "cxxabi-defines $T bin/fat i386 ___cxa_throw visible" "a definition in one slice of a fat binary fails"
+lacks "^cxxabi-defines $T bin/fat x86_64 " "each slice is judged on its own"
 has end-of-facts "a run that read every Mach-O ends its stream"
 out="$(printf '%s\n' "$facts" | sh "$S" 2>&1)" && fail "a release carrying these fails conformance: $out"
 printf '%s\n' "$out" | grep -q '^conformance: cxxabi: ' || fail "the failure is cxxabi's: $out"
