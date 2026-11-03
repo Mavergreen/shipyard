@@ -167,7 +167,7 @@ for name in ("ci.yml", "release.yml"):
             bad.append("%s job %s fetches clang22 (~2 GB, unpacked) with no actions/cache of %s keyed on "
                        "hashFiles('components/clang22/version') before it, so every run downloads and "
                        "expands it again" % (name, job, want))
-# Linux has no shipyard-cmake and install@v1 refuses source: build there.
+# Linux has no shipyard-cmake.
 for name in ("ci.yml", "release.yml"):
     d = yaml.safe_load(open(os.path.join(wf, name)))
     for job, spec in (d.get("jobs") or {}).items():
@@ -176,8 +176,6 @@ for name in ("ci.yml", "release.yml"):
         for step in (spec.get("steps") or []):
             if re.search(r"(^|[\s;|&(=])shipyard-c(make|test|pack)\b", str(step.get("run") or "")):
                 bad.append("%s job %s runs shipyard-cmake/ctest/cpack on ubuntu, where install@v1 provides none" % (name, job))
-            if str(step.get("uses", "")) == "./.github/actions/install" and (step.get("with") or {}).get("source") == "build":
-                bad.append("%s job %s asks install@v1 for source: build on ubuntu, which it refuses" % (name, job))
 if os.path.exists(os.path.join(wf, "..", "actions", "shipyard-cmake")):
     bad.append(".github/actions/shipyard-cmake still exists")
 

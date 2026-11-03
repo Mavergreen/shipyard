@@ -9,7 +9,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 python3 - "$here/../.github/actions/install/action.yml" <<'PY'
 import sys, yaml
 steps = yaml.safe_load(open(sys.argv[1]))["runs"]["steps"]
-off = [s for s in steps if "inputs.source == 'release'" in (s.get("if") or "") and "runner.os != 'macOS'" in (s.get("if") or "")]
+off = [s for s in steps if "runner.os != 'macOS'" in (s.get("if") or "")]
 bad = []
 if len(off) != 1:
     bad.append("expected one release step off macOS, got %d" % len(off))

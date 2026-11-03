@@ -5,14 +5,6 @@ description: >
   product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. Consumers
   configure with shipyard-cmake; MavericksShipyardConfig.cmake refuses any other cmake.
 
-inputs:
-  source:
-    description: >
-      'release' (default): install the released pkg this action's ref names. 'build': shipyard's own
-      workflows only -- assemble shipyard from this checkout beside the cmake product.
-    required: false
-    default: release
-
 runs:
   using: composite
   steps:
@@ -47,13 +39,6 @@ runs:
           python3 -c 'import yaml; print("PyYAML", yaml.__version__)'
         fi
 
-    - if: inputs.source == 'build' && runner.os != 'macOS'
-      shell: bash
-      run: |
-        set -eu
-        echo "::error::source: build needs a macOS runner -- it pairs this checkout with the cmake product, which is a macOS pkg. Consumers want the default (source: release)."
-        exit 1
-
     # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- every
     #       consumer build fetches a pinned SDK, so without a cache every job re-downloads it. The key
     #       hashes the sdk-pins.sh and fetch_sdk.sh this ref ships (hashFiles() cannot see the action's
@@ -72,7 +57,7 @@ runs:
         key: ${{ steps.mav-sdk-key.outputs.key }}
 
     # spec: 2026-10-09 C4 -- shipyard's launchers run the cmake product beside shipyard, and shipyard's
-    #       pkg refuses to install without it, so it goes in first, in both modes, at the pin this ref
+    #       pkg refuses to install without it, so it goes in first, at the pin this ref
     #       carries.
     - if: runner.os == 'macOS'
       shell: bash
@@ -86,7 +71,7 @@ runs:
         sudo installer -pkg "$pkg" -target /
         /usr/local/mavergreen/cmake/bin/cmake --version | head -1
 
-    - if: inputs.source == 'release' && runner.os == 'macOS'
+    - if: runner.os == 'macOS'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -118,7 +103,7 @@ runs:
     #       them would have broken every consumer of repackage-on-ingredient-bump.yml on the day this
     #       action started installing a pkg. The scripts come from the action's OWN checkout, at the
     #       ref the consumer pinned, so the shell half is still version-pinned, just not packaged.
-    - if: inputs.source == 'release' && runner.os != 'macOS'
+    - if: runner.os != 'macOS'
       shell: bash
       run: |
         set -eu
@@ -145,28 +130,3 @@ runs:
           echo "::warning::'$ref' names no shipyard release, so SHIPYARD_VERSION is unset and packaging a .pkg here will fail -- pin install@v1 or an exact @vX.Y.Z"
         fi
         echo "${RUNNER_OS:-this runner} is not macOS and shipyard has no Linux pkg yet, so nothing was installed. You get shipyard's shell half from the ref you pinned: SHIPYARD_SCRIPTS=$scripts, and find_package(MavericksShipyard) resolves via MavericksShipyard_DIR=$root. There is no shipyard-cmake here, so a configure that needs one must run on a macOS runner."
-
-    # spec: R-P1-19 -- THIS ACTION MUST CONTAIN NO `uses: ./...`. GitHub resolves a local action path
-    #       inside a composite against the CONSUMER's GITHUB_WORKSPACE, and prepares nested actions
-    #       BEFORE evaluating step `if:` conditions, so every consumer's job would die with "Can't find
-    #       'action.yml'", and shipyard's own CI could not reproduce it.
-    - if: inputs.source == 'build'
-      shell: bash
-      run: |
-        set -eu
-        mg="$RUNNER_TEMP/mg"; rm -rf "$mg"; mkdir -p "$mg"
-        # spec: MavericksShipyardConfig.cmake -- a copy, not a link: the pair rule takes the cmake's
-        #       REALPATH, and /usr/local/mavergreen, where a link resolves, has no shipyard yet.
-        cp -R /usr/local/mavergreen/cmake "$mg/cmake"
-        "$mg/cmake/bin/cmake" -S "$GITHUB_WORKSPACE" -B "$RUNNER_TEMP/shipyard-self-build" >/dev/null
-        "$mg/cmake/bin/cmake" --install "$RUNNER_TEMP/shipyard-self-build" --prefix "$mg/shipyard" >/dev/null
-        # platform: shipyard's own bin also holds bare cmake/ctest/cpack, which on PATH would shadow
-        #           the runner's cmake, so PATH gets a directory of the three launchers alone.
-        b="$RUNNER_TEMP/shipyard-bin"; mkdir -p "$b"
-        for c in cmake ctest cpack; do ln -sf "$mg/shipyard/bin/shipyard-$c" "$b/shipyard-$c"; done
-        echo "$b" >> "$GITHUB_PATH"
-        {
-          echo "SHIPYARD_SCRIPTS=$mg/shipyard/share/cmake/MavericksShipyard/scripts"
-          echo "SHIPYARD_CMAKE=$b/shipyard-cmake"
-        } >> "$GITHUB_ENV"
-        "$b/shipyard-cmake" --version | head -1
