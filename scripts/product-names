@@ -42,3 +42,5 @@ sdk113 dev.mavergreen.longboat.sdk113 longboat
 cmake dev.mavergreen.cmake cmake
 stevedore dev.mavergreen.stevedore stevedore
 jdk25 dev.mavergreen.jdk.jdk25 jdk-25
+zig dev.mavergreen.zig.zig zig
+zig-cross dev.mavergreen.zig.zig-cross zig
