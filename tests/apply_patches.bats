@@ -39,7 +39,7 @@ apply() { sh "$ROOT/scripts/apply_patches.sh" "$@"; }
   apply "$T/src" "$T/patches"
   run --separate-stderr apply "$T/src" "$T/patches"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"already applied"* ]]
+  [[ "$output" == *"already applied"* ]] || false
   [ "$(sed -n 2p "$T/src/f.txt")" = "2" ]
 }
 
@@ -48,14 +48,14 @@ apply() { sh "$ROOT/scripts/apply_patches.sh" "$@"; }
   rm "$T/patches/02-b.patch"
   run --separate-stderr apply "$T/src" "$T/patches"
   [ "$status" -eq 1 ]
-  [[ "$stderr" == *"patched with a different set"* ]]
+  [[ "$stderr" == *"patched with a different set"* ]] || false
 }
 
 @test "rejected_hunk_names_patch" {
   printf 'one\nzzz\nthree\n' > "$T/src/f.txt"
   run --separate-stderr apply "$T/src" "$T/patches"
   [ "$status" -eq 1 ]
-  [[ "$stderr" == *"01-a.patch"* ]]
+  [[ "$stderr" == *"01-a.patch"* ]] || false
 }
 
 @test "no_orig_files_left" {
@@ -77,13 +77,13 @@ apply() { sh "$ROOT/scripts/apply_patches.sh" "$@"; }
   [ "$(sed -n 2p "$T/src/f.txt")" = "two" ]
   run --separate-stderr apply "$T/src" "$T/patches"
   [ "$status" -eq 1 ]
-  [[ "$stderr" == *"patched with a different set"* ]]
+  [[ "$stderr" == *"patched with a different set"* ]] || false
 }
 
 @test "missing_patchdir_fails" {
   run --separate-stderr apply "$T/src" "$T/nonexistent"
   [ "$status" -eq 1 ]
-  [[ "$stderr" == *"cannot read"* ]]
+  [[ "$stderr" == *"cannot read"* ]] || false
 }
 
 teardown() { chmod -R u+rwx "$BATS_TEST_TMPDIR" 2>/dev/null || true; }
@@ -93,6 +93,6 @@ teardown() { chmod -R u+rwx "$BATS_TEST_TMPDIR" 2>/dev/null || true; }
   chmod 311 "$T/patches"
   run --separate-stderr apply "$T/src" "$T/patches"
   [ "$status" -eq 1 ]
-  [[ "$stderr" == *"cannot read"* ]]
+  [[ "$stderr" == *"cannot read"* ]] || false
   [ ! -e "$T/src/.mavergreen-patches" ]
 }
