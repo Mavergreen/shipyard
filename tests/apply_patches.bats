@@ -69,3 +69,19 @@ apply() { sh "$ROOT/scripts/apply_patches.sh" "$@"; }
   [ "$status" -eq 0 ]
   [ "$(sed -n 2p "$T/src/f.txt")" = "2" ]
 }
+
+@test "empty_patchdir_is_noop" {
+  mkdir "$T/none"
+  run --separate-stderr apply "$T/src" "$T/none"
+  [ "$status" -eq 0 ]
+  [ "$(sed -n 2p "$T/src/f.txt")" = "two" ]
+  run --separate-stderr apply "$T/src" "$T/patches"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"patched with a different set"* ]]
+}
+
+@test "missing_patchdir_fails" {
+  run --separate-stderr apply "$T/src" "$T/nonexistent"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"cannot read"* ]]
+}
