@@ -9,6 +9,7 @@ set -eu
 [ "$#" -eq 2 ] || { echo "usage: apply_patches.sh SRC PATCHDIR" >&2; exit 2; }
 src="$(cd "$1" && pwd)" && dir="$(cd "$2" && pwd)" || { echo "apply_patches.sh: cannot read $1 or $2" >&2; exit 1; }
 
+[ -r "$dir" ] || { echo "apply_patches.sh: cannot read $dir" >&2; exit 1; }
 want="$(cd "$dir" && for p in *.patch; do [ -f "$p" ] && shasum -a 256 "$p"; done; true)" \
   || { echo "apply_patches.sh: cannot read $dir" >&2; exit 1; }
 if [ -f "$src/.mavergreen-patches" ]; then

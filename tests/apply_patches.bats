@@ -85,3 +85,14 @@ apply() { sh "$ROOT/scripts/apply_patches.sh" "$@"; }
   [ "$status" -eq 1 ]
   [[ "$stderr" == *"cannot read"* ]]
 }
+
+teardown() { chmod -R u+rwx "$BATS_TEST_TMPDIR" 2>/dev/null || true; }
+
+@test "unreadable_patchdir_fails" {
+  [ "$(id -u)" -ne 0 ] || skip "root reads everything"
+  chmod 311 "$T/patches"
+  run --separate-stderr apply "$T/src" "$T/patches"
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"cannot read"* ]]
+  [ ! -e "$T/src/.mavergreen-patches" ]
+}
