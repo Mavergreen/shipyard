@@ -1189,8 +1189,9 @@ ordinary commit moves no declared input, so it renders the same digest and publi
     be released: run `sh "$SHIPYARD_SCRIPTS/self-upstream-version.sh"` at that commit. `release-notes/`
     is own code, so the notes commit can itself move the date to its own day and restart `.N` at `.1`:
     run it after committing the notes.
-  - `vX.Y.Z` (magic-trackpad2): the tag you will push, `v` included, such as `v0.5.6`. Name the directory
-    exactly that.
+  - `vX.Y.Z` (magic-trackpad2): `v` plus the `MAVERICKS_VERSION` in `CMakeLists.txt` that the release will
+    publish, such as `v0.5.6`. `publish-release.yml` mints the tag; never push it by hand (the pre-push
+    hook refuses).
   - `<upstream>-mavericks.N` (every port): N is 1 for a new upstream, else the highest
     `<upstream>-mavericks.*` tag's N plus 1.
 
@@ -2972,7 +2973,8 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    `cancel-in-progress` naming `pull_request`. (Not `cancel-in-progress: false`: it protects the
    RUNNING run, not the QUEUED one, and the gate rejects it.)
 6. `build/upstream-release-notes-url.sh` (a port: where upstream's notes for a version live — see
-   Release notes; no `release-notes/README.md`, each release adds its own `release-notes/<TAG>/`); Sparkle updater target. (`SPARKLE_PRIVATE_KEY` is an org secret the
+   Release notes); no `release-notes/README.md`, since each release adds its own
+   `release-notes/<TAG>/`; Sparkle updater target. (`SPARKLE_PRIVATE_KEY` is an org secret the
    new repo already sees, being public -- set nothing; see Sparkle updater.)
 7. Choose the upstream-verification method; note it if it deviates from a sibling.
 8. If the repo bakes in build ingredients (anything it's built WITH, not the upstream it ports): make
