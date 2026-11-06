@@ -204,7 +204,7 @@ no "corpus: backtick path" "formatting character" <<'X'
 `docs/decisions/0009` has the measurements.
 X
 
-# spec: survey 4c-4g and section 6 -- every bad example the survey quotes fails; every good one, converted, passes
+# spec: scripts/check-release-sentence.sh -- examples quoted from the release-notes survey: each bad one fails, each good one, converted, passes
 corpus_no() { printf '%s\n' "$3" | no "survey: $1" "$2"; }
 corpus_no "swift 6.3.3-mavericks.2" "formatting character '\`'" "Cut to exercise the shared \`publish-release.yml\`."
 corpus_no "swift 6.3.3-mavericks.2 caveat" "internal term" "ACCEPTANCE IS STILL MANUAL: a macOS 26 runner cannot exercise the 10.9-only behaviour this runtime exists to fix."
