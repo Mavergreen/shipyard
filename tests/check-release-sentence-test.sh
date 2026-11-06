@@ -93,6 +93,9 @@ X
 ok "env var with digits" <<'X'
 Set GODEBUG_X2 to see more.
 X
+printf 'The caf\303\251_au file opens now.\n' | ok "underscore between non-ASCII and ASCII letters"
+printf 'The caf\303\251_ file opens now.\n' | no "underscore after a non-ASCII letter at a word edge" "formatting character '_'"
+printf 'The _\303\251cole file opens now.\n' | no "underscore before a non-ASCII letter at a word edge" "formatting character '_'"
 ok "inner underscore" <<'X'
 The set_value call now works.
 X

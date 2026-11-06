@@ -62,10 +62,10 @@ esac
 
 has() { printf '%s\n' "$first" | grep -E "$@" >/dev/null 2>&1; }
 
-bad="$(printf '%s\n' "$first" | awk '{
+bad="$(printf '%s\n' "$first" | LC_ALL=C awk '{
   n = split("` * # < > | [ ] ~", chars, " ")
   for (i = 1; i <= n; i++) if (index($0, chars[i])) { print chars[i]; exit }
-  if (match($0, /(^|[^A-Za-z0-9_])_|_([^A-Za-z0-9_]|$)/)) { print "_"; exit }
+  if (match($0, /(^|[^A-Za-z0-9_\200-\377])_|_([^A-Za-z0-9_\200-\377]|$)/)) { print "_"; exit }
   if (match($0, /^[-+]/)) print substr($0, 1, 1)
 }')"
 [ -z "$bad" ] || fail "contains formatting character '$bad'"
