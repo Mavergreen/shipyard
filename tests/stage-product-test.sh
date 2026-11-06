@@ -375,7 +375,8 @@ mkvol() {
   _v="$1"; rm -rf "$_v" "$_v.out"; mkdir -p "$_v.out/escape.app" "$_v.out/linked/x.app"
   _u="$_v/Library/Application Support/Mavergreen"
   mkdir -p "$_u/openssh-updater.app/Contents" "$_u/other-updater.app" "$_v/Library/LaunchAgents" "$_v/Library/NotABundle" \
-    "$_v/usr/local/mavergreen/openssh" "$_v/usr/local/mavergreen/other/x.app"
+    "$_v/usr/local/mavergreen/openssh" "$_v/usr/local/mavergreen/other/x.app" "$_v/Library/Java/JavaVirtualMachines/x.jdk/Contents"
+  : > "$_v/Library/Java/JavaVirtualMachines/x.jdk/Contents/Stale"
   : > "$_u/openssh-updater.app/Contents/Stale"; : > "$_u/openssh-updater.app/Contents/Info.plist"
   : > "$_v/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist"; : > "$_v/Library/NotABundle/f"
   ln -s "$_v.out/linked" "$_v/Library/Linked"; ln -s "$_v.out/escape.app" "$_v/Library/Symlinked.app"
@@ -384,7 +385,8 @@ V4="$w/vol-bundles"; mkvol "$V4"; M4="$V4/usr/local/mavergreen/openssh/mavergree
 { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>outside</key><array>\n'
 for o in "Library/Application Support/Mavergreen/openssh-updater.app" "Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" \
   Library/NotABundle ../vol-bundles.out/escape.app "$V4.out/escape.app" Library/Linked/x.app Library/Symlinked.app \
-  usr/local/mavergreen/other/x.app "Library/./Application Support/Mavergreen/other-updater.app" "Library/Missing.app"; do
+  usr/local/mavergreen/other/x.app "Library/./Application Support/Mavergreen/other-updater.app" "Library/Missing.app" \
+  Library/Java/JavaVirtualMachines/x.jdk; do
   printf '<string>%s</string>\n' "$o"
 done
 printf '</array></dict></plist>\n'; } > "$M4"
@@ -393,6 +395,7 @@ sh "$w/scr-bundle/preinstall" /x.pkg "$V4/" "$V4/" 2>"$w/err" || fail "a preinst
   || fail "the product's preinstall hook runs before its bundles are cleared, so it can unload a kext first"
 [ ! -e "$V4/Library/Application Support/Mavergreen/openssh-updater.app" ] \
   || fail "the installed manifest's updater bundle is cleared, so a file the new version drops cannot break its seal"
+[ ! -e "$V4/Library/Java/JavaVirtualMachines/x.jdk" ] || fail "an installed .jdk bundle is cleared like an .app, so a file the new version drops cannot linger"
 [ -f "$V4/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" ] || fail "a listed file is left for the payload to overwrite"
 [ -f "$V4/Library/NotABundle/f" ] || fail "a listed directory that is not a bundle is never cleared"
 [ -d "$V4.out/escape.app" ] || fail "an entry that climbs out of the volume is never cleared"

@@ -2194,7 +2194,7 @@ has nothing left to prune.
 | `appcast` | the registry | the product's feed (`product-name.sh feed <product>`) when it stages an updater, else empty; `--appcast` is refused |
 | `exports-exclude` | `--exclude`, repeatable | tree-relative paths kept out of the farm |
 | `replaces` | `--replaces /abs/path=tree/path`, repeatable | system-replace, below |
-| `outside` | **the stage itself** | every file or link staged outside the tree, collapsed to its enclosing `.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle` or `.framework` |
+| `outside` | **the stage itself** | every file or link staged outside the tree, collapsed to its enclosing `.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework` or `.jdk` |
 | `generated` | `--generated REL`, repeatable | files the product creates at install time outside its tree, which no payload carries (a preset's materialized viewer app); same shape rules as `outside`, never required to exist |
 
 `outside` is read from whatever is staged when the manifest is rendered, which is why
@@ -2253,7 +2253,7 @@ prompt, which the helper survives on purpose -- is reported as cancelled, not fa
 `system-restore` if the product
 has replaced system files, and **stops there if that fails**, removing nothing: the manifest
 survives, so a retry can finish the restore. Then it unlinks; removes each `outside` and `generated` entry (a `generated` entry that does not exist is not an error) — a file or link, or a whole bundle directory (`.app`,
-`.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`), unloading a launchd job first when the
+`.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`, `.jdk`), unloading a launchd job first when the
 root is `/`; never a
 plain directory, and never an entry that is empty, absolute, ends in `/`, has an empty, `.` or `..` segment or lies under
 `usr/local/mavergreen/`; removes the tree and `var/<product>`; never removes an entry, the tree
@@ -2319,7 +2319,7 @@ scripts:
   is reported before it exits. Then `mavergreen unlink
   <product>` if a helper exists; then the product's
   `--preinstall-hook`, which still sees the outgoing version's tree and bundles; then removes each
-  bundle directory (`.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`) that the
+  bundle directory (`.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`, `.jdk`) that the
   installed manifest lists in `outside`, so a file the new version drops (from Sparkle, say) cannot
   linger inside a bundle and break its code-signature seal; then removes
   `/usr/local/mavergreen/<product>` (never `var/`). Listed files are left for the payload to
@@ -2379,7 +2379,7 @@ is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
 | Check | Default rule | Deviation scoped to |
 |---|---|---|
 | `identifier` | the pkg's identifier is `dev.mavergreen.*` | the pkg filename |
-| `bundle-id` | every TOP-LEVEL bundle (`.app`, `.prefPane`, `.kext`, `.bundle`, `.framework`, …; not one nested inside another, so Sparkle.framework inside an updater is not asked) has a `CFBundleIdentifier` under `dev.mavergreen.*` | the identifier |
+| `bundle-id` | every TOP-LEVEL bundle (`.app`, `.prefPane`, `.kext`, `.bundle`, `.framework`, `.jdk`, …; not one nested inside another, so Sparkle.framework inside an updater is not asked) has a `CFBundleIdentifier` under `dev.mavergreen.*` | the identifier |
 | `launchd-label` | every `Library/Launch{Agents,Daemons}/*.plist` has a `Label` under `dev.mavergreen.*`, and is named `<Label>.plist` | the Label |
 | `install-path` | every installed file or link is under `usr/local/mavergreen/<the product its manifest names>/`, `Applications/` or `Library/Application Support/Mavergreen/`, or is a `dev.mavergreen.*` launchd plist — or is under `usr/local/mavergreen/.base/` in an archive that carries `dev.mavergreen.base` | the installed path (glob; `*` spans `/` and spaces) |
 | `manifest` | a pkg that installs anything besides the base's staged helper carries exactly one manifest; its `product` is its directory; its `identifier` is the one the registry gives that product, and one of the pkg's components; its `outside` names everything installed outside the tree, exactly as uninstall would remove it (the entry itself, or a bundle directory and what is inside it), with no entry left unused and none in a shape the helper refuses; every `generated` entry has a shape the helper accepts, and need not be in the payload | the pkg filename |

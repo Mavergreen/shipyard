@@ -8,7 +8,10 @@ w="$(mktemp -d "${TMPDIR:-/tmp}/render-manifest.XXXXXX")"; trap 'rm -rf "$w"' EX
 fail() { echo "FAIL: $1"; exit 1; }
 st="$w/stage"
 mkdir -p "$st/usr/local/mavergreen/openssh/bin" "$st/Applications/Mavericks X.app/Contents/MacOS" \
-         "$st/Library/LaunchAgents" "$st/Library/Application Support/Mavergreen/OpenSSHUpdater.app/Contents"
+         "$st/Library/LaunchAgents" "$st/Library/Application Support/Mavergreen/OpenSSHUpdater.app/Contents" \
+         "$st/Library/Java/JavaVirtualMachines/x.jdk/Contents"
+touch "$st/Library/Java/JavaVirtualMachines/x.jdk/Contents/Info.plist"
+ln -s /usr/local/mavergreen/openssh "$st/Library/Java/JavaVirtualMachines/x.jdk/Contents/Home"
 touch "$st/usr/local/mavergreen/openssh/bin/ssh" "$st/Applications/Mavericks X.app/Contents/MacOS/X" \
       "$st/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" \
       "$st/Library/Application Support/Mavergreen/OpenSSHUpdater.app/Contents/Info.plist"
@@ -27,8 +30,8 @@ sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version
 sh "$S" --stage "$st" --product openssh --name x --version 1 --appcast https://example/appcast.xml 2>/dev/null \
   && fail "--appcast must be refused: the registry, not the repo, names the feed"
 outside="$(i=0; while v="$("$SD" plist get "$M" "outside:$i" 2>/dev/null)"; do echo "$v"; i=$((i+1)); done)"
-[ "$outside" = "$(printf '%s\n' 'Applications/Mavericks X.app' 'Library/Application Support/Mavergreen/OpenSSHUpdater.app' 'Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist')" ] \
-  || fail "outside lists what is installed outside the tree, bundles collapsed, spaces intact: $outside"
+[ "$outside" = "$(printf '%s\n' 'Applications/Mavericks X.app' 'Library/Application Support/Mavergreen/OpenSSHUpdater.app' 'Library/Java/JavaVirtualMachines/x.jdk' 'Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist')" ] \
+  || fail "outside lists what is installed outside the tree, bundles (a .jdk among them) collapsed, spaces intact: $outside"
 nasty_name='O'\''Brien "quoted" \back & <angle>'
 sh "$S" --stage "$st" --product openssh --name "$nasty_name" --version 1
 [ "$(p name)" = "$nasty_name" ] \

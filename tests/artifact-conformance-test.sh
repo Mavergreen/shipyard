@@ -985,6 +985,13 @@ installs p.pkg Applications/X.app/Contents/MacOS/X
 installs p.pkg Applications/X.app/Contents/Info.plist
 installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist"
 
+ok "manifest: a .jdk bundle entry covers the Info.plist and Home link beneath it" "$REL
+$LAYOUT
+deviation install-path:Library/Java/JavaVirtualMachines/* 10.9's java_home looks only here
+manifest-outside p.pkg Library/Java/JavaVirtualMachines/x.jdk
+installs p.pkg Library/Java/JavaVirtualMachines/x.jdk/Contents/Info.plist
+installs p.pkg Library/Java/JavaVirtualMachines/x.jdk/Contents/Home"
+
 no "base: a product archive must carry dev.mavergreen.base first" "base" "$REL
 component p.pkg dev.mavergreen.x
 component p.pkg dev.mavergreen.base
