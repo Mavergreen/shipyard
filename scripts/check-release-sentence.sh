@@ -7,7 +7,8 @@
 #     - valid UTF-8; no control character but tab (after CRs are dropped)
 #     - after trimming each line's leading and trailing whitespace: not empty; exactly one non-empty line
 #     - at most 30 words; ends with '.', '!' or '?'
-#     - no formatting: ` * # < > | [ ] ~, '_' at a word edge (an inner '_' is fine), a leading '-' or
+#     - no formatting: ` * # < > | [ ] ~, '_' at a word edge (an inner '_' between ASCII letters
+#       or digits is fine; a non-ASCII byte beside it makes it an edge), a leading '-' or
 #       '+', or a leading number followed by '.' or ')' and then whitespace or the end of the line
 #       ("1. ", "1) "); the complaint names the character
 #     - no URL (scheme:// or www.)
@@ -17,7 +18,8 @@
 #     - no '@' before a letter or digit (a GitHub @-mention notifies that user from every release)
 #     - no internal term, any case, whole word, plural -s included: CI runner workflow conformance
 #       dogfood agent subagent plan QUEUE commit SHA shipyard Renovate ingredient pin, "base recipe(s)",
-#       "check <number>", ".yml"; '_' separates words here, so release_workflow is refused; --allow WORD exempts one of these words
+#       "check <number>", ".yml"; '_' separates words
+#       here, so release_workflow is refused; --allow WORD exempts one of these words
 #     - does not open with "This release", "This version", "We ", "I ", "Cut to" or "Note:" (any case)
 #     - no all-caps word of 4 or more letters except ECDSA DHCP HTTP HTTPS JSON NVRAM UEFI QEMU LLVM
 #       GODEBUG EPYC; a token with an inner '_' (SSL_CERT_FILE) is an identifier and exempt
@@ -65,7 +67,7 @@ has() { printf '%s\n' "$first" | grep -E "$@" >/dev/null 2>&1; }
 bad="$(printf '%s\n' "$first" | LC_ALL=C awk '{
   n = split("` * # < > | [ ] ~", chars, " ")
   for (i = 1; i <= n; i++) if (index($0, chars[i])) { print chars[i]; exit }
-  if (match($0, /(^|[^A-Za-z0-9_\200-\377])_|_([^A-Za-z0-9_\200-\377]|$)/)) { print "_"; exit }
+  if (match($0, /(^|[^A-Za-z0-9_])_|_([^A-Za-z0-9_]|$)/)) { print "_"; exit }
   if (match($0, /^[-+]/)) print substr($0, 1, 1)
 }')"
 [ -z "$bad" ] || fail "contains formatting character '$bad'"
