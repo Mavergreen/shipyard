@@ -148,9 +148,23 @@ fi
 #       separately nests them under release-notes/<short>/. Anything else there fails, naming it.
 #       A minted tag skips only the sentence check, so a later rule never reddens its regeneration.
 MINTED=no; if minted; then MINTED=yes; fi
+# spec: SKILL.md "Release notes" -- a directory named for any other tag would be silently dropped, so
+#       a new release refuses one that is not an existing tag or a product's nest. A minted tag's
+#       regeneration leaves alone notes staged for the release after it.
+if [ "$MINTED" = no ]; then
+  for e in "$ROOT"/*; do
+    [ -d "$e" ] || continue
+    b="${e##*/}"
+    [ "$b" = "$TAG" ] && continue
+    [ "$b" = "$SHORT" ] && continue
+    git rev-parse -q --verify "refs/tags/$b^{commit}" >/dev/null && continue
+    sh "$SELF/product-name.sh" repo "$b" >/dev/null 2>&1 && continue
+    die "$e is release notes for $b, which is not an existing tag; this release is $TAG, so rename it $DIR (see SKILL.md \"Release notes\")"
+  done
+fi
 ALLOW=""; if [ "$PRODUCT" = Shipyard ]; then ALLOW="--allow shipyard"; fi
 line1() {
-  awk 'NR == 1 { gsub(/\r/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; exit }' "$1" \
+  awk 'NR == 1 { gsub(/\r/, ""); sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit }' "$1" \
     || die "could not read $1"
 }
 sentence() {

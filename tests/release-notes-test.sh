@@ -294,6 +294,27 @@ for m in new minted; do
   fi
 done
 
+dset vt; mkdir -p "$d/changes"; printf 'Works now.\v\n' > "$d/changes/w"
+dgen minted
+[ "$rc" -eq 0 ] || { echo "FAIL dir-vt: minted ships"; cat "$r/ERR"; exit 1; }
+grep -q '^- Works now\.$' "$r/OUT.md" || { echo "FAIL dir-vt: line 1 is stripped as the checker strips it"; od -c "$r/OUT.md" | head -20; exit 1; }
+
+dset wrongtag; w="$r/release-notes/9.9p2-mavericks.9"; mkdir -p "$w/changes"; printf 'Keys load again.\n' > "$w/changes/keys"
+dgen new
+refused dir-wrongtag "$w"
+grep -qF "$T" "$r/ERR" || { echo "FAIL dir-wrongtag: the complaint names the expected $T"; cat "$r/ERR"; exit 1; }
+dset wrongtag-short; w="$r/release-notes/swift-runtime/9.9p2-mavericks.9"; mkdir -p "$w/changes"; printf 'Keys load again.\n' > "$w/changes/keys"
+dgen new --short swift-runtime
+refused dir-wrongtag-short "$w"
+dset wrongtag-minted; mkdir -p "$r/release-notes/9.9p2-mavericks.9/changes"; printf 'Keys load again.\n' > "$r/release-notes/9.9p2-mavericks.9/changes/keys"
+dgen minted
+[ "$rc" -eq 0 ] || { echo "FAIL dir-wrongtag-minted: regenerating a published release ignores notes staged for a later one"; cat "$r/ERR"; exit 1; }
+dset oldtag; mkdir -p "$r/release-notes/9.9p2-mavericks.1/changes" "$r/release-notes/swift-runtime"
+printf 'Old news.\n' > "$r/release-notes/9.9p2-mavericks.1/changes/old"; printf 'Use the runtime from here.\n' > "$r/release-notes/swift-runtime/notice"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-oldtag: an existing tag's directory and a product's nest are not strays"; cat "$r/ERR"; exit 1; }
+grep -q 'Old news\|runtime from here' "$r/OUT.md" && { echo "FAIL dir-oldtag: neither is read"; cat "$r/OUT.md"; exit 1; }
+
 for p in Shipyard Porthole; do
   r="$work/dir-shipyard-$p"; mkrepo "$r"; ( cd "$r" && git tag v1.0.1 )
   mkdir -p "$r/release-notes/v1.0.2/changes"; printf 'Shipyard now installs beside cmake.\n' > "$r/release-notes/v1.0.2/changes/x"
