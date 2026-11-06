@@ -3,7 +3,7 @@
 #   usage: check-release-sentence.sh [--allow WORD]... FILE
 #          Is FILE one release-note sentence a reader of the update dialog can use? Exit 0 silently,
 #          1 with a one-line complaint naming the first rule broken, 2 on bad usage.
-# spec: .superpowers/specs/2026-11-05-release-notes-as-files-design.md "The sentence check" --
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes" --
 #       a sentence is shown to end users verbatim, so it carries no markup, no link, no identifier
 #       and none of the project's own process vocabulary.
 set -eu
