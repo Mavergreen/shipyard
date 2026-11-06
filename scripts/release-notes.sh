@@ -118,7 +118,8 @@ else
 fi
 
 # spec: SKILL.md "Release notes" -- a tag already minted (it names a commit other than HEAD) is a
-#       published release being regenerated (QUEUE #123), so its committed prose publishes as is.
+#       published release being regenerated (a non-publishing main run regenerates the latest
+#       published tag's notes), so its committed prose publishes as is.
 minted() {
   _t="$(git -C "$MAVERICKS_ROOT" rev-parse -q --verify "refs/tags/$TAG^{commit}")" || return 1
   [ "$_t" != "$(git -C "$MAVERICKS_ROOT" rev-parse HEAD)" ]
