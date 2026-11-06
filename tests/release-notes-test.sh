@@ -117,11 +117,12 @@ r="$work/pkgonly"; mkrepo "$r"
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q 'packaging changes only' "$r/OUT.md" || { echo "FAIL pkgonly: kind"; cat "$r/OUT.md"; exit 1; }
 grep -q '### Build ingredients' "$r/OUT.md" && { echo "FAIL pkgonly: no pin moved, no section"; exit 1; }
+
 # spec: scripts/release-notes.sh -- committed prose for an already-minted tag (a non-publishing run
 #       regenerating a published release) is published verbatim with any mark line
 #       stripped and no mark required; for a tag not yet minted it is refused, naming the directory form.
 M='<!-- edited by a human -->'
-hp() {  # $1 = case, $2 = minted|new, $3 = printf format of release-notes/9.9p2-mavericks.1.md; leaves $r and $rc
+hp() {
   r="$work/hp-$1"; mkrepo "$r"
   printf "$3" > "$r/release-notes/9.9p2-mavericks.1.md"
   ( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
