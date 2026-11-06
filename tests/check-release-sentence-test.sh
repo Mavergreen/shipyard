@@ -96,7 +96,7 @@ ok "20+ letter word" <<'X'
 The internationalizationally word is fine.
 X
 no "base64 needs letter and digit mix" "base64" <<'X'
-The key ghijklmnopqrstuvwxyz12 is gone.
+The key gHiJkLmNoPqRsTuVwXyZ12 is gone.
 X
 for term in runners commits ingredients pins agents workflows plans Renovates; do
   printf 'The %s stay stopped.\n' "$term" | no "plural internal term: $term" "internal term"
@@ -141,6 +141,36 @@ OPTS="--allow shipyard"; no "allow does not exempt others" "internal term" <<'X'
 Shipyard now installs beside the runner.
 X
 OPTS=
+
+printf 'Works\001 now.\n' | no "control character" "control character"
+printf 'Works now.\f\n' | no "trailing form feed" "control character"
+printf 'Works\tnow.\n' | ok "tab"
+printf 'Caf\351 opens now.\n' | no "Latin-1 byte" "not valid UTF-8"
+printf 'Caf\303\251 opens now.\n' | ok "UTF-8 e-acute"
+
+ok "leading version number" <<'X'
+10.9 users can now open files.
+X
+for bad in '1) Stop.' '1. Stop.'; do
+  printf '%s\n' "$bad" | no "numbered list: $bad" "Markdown"
+done
+
+ok "path is not base64" <<'X'
+Go now installs in /usr/local/mavergreen/go127 by default.
+X
+ok "setting is not base64" <<'X'
+Set GODEBUG=x509usefallbackroots=0 to use them.
+X
+no "base64 with plus" "base64" <<'X'
+The key XQ+fNmP4kL9sT2vW8yZ1aB3c is gone.
+X
+
+no "mention" "@-mention" <<'X'
+Thanks to @wowfunhappy for the patch.
+X
+ok "name without mention" <<'X'
+Wowfunhappy wrote the patch.
+X
 
 no "corpus: yml" "internal term" <<'X'
 Cut to exercise the shared publish-release.yml.

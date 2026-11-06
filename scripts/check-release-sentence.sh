@@ -3,6 +3,23 @@
 #   usage: check-release-sentence.sh [--allow WORD]... FILE
 #          Is FILE one release-note sentence a reader of the update dialog can use? Exit 0 silently,
 #          1 with a one-line complaint naming the first rule broken, 2 on bad usage.
+#   rules, in the order checked:
+#     - valid UTF-8; no control character but tab (after CRs are dropped)
+#     - after trimming each line's leading and trailing whitespace: not empty; exactly one non-empty line
+#     - at most 30 words; ends with '.', '!' or '?'
+#     - no formatting: ` * # < > | [ ], '_' at a word edge, a leading '-' or '+', or a leading number
+#       followed by '.' or ')' and then whitespace or the end of the line ("1. ", "1) ")
+#     - no URL (scheme:// or www.)
+#     - no hex run of 7 or more that has a digit and a letter a-f
+#     - no base64-looking run: 20 or more [A-Za-z0-9+] in a row (any other character, '/' and '='
+#       included, ends a run) holding a digit, an uppercase and a lowercase letter
+#     - no '@' before a letter or digit (a GitHub @-mention notifies that user from every release)
+#     - no internal term, any case, whole word, plural -s/-es included: CI runner workflow conformance
+#       dogfood agent subagent plan QUEUE commit SHA shipyard Renovate ingredient pin, "base recipe(s)",
+#       "check <number>", ".yml"; --allow WORD exempts one of these words
+#     - does not open with "This release", "This version", "We ", "I ", "Cut to" or "Note:" (any case)
+#     - no all-caps word of 4 or more letters except ECDSA DHCP HTTP HTTPS JSON NVRAM UEFI QEMU LLVM
+#       GODEBUG EPYC
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes" --
 #       a sentence is shown to end users verbatim, so it carries no markup, no link, no identifier
 #       and none of the project's own process vocabulary.
@@ -23,6 +40,9 @@ done
 f="$1"
 
 [ -f "$f" ] && [ -r "$f" ] || fail "cannot read the file"
+iconv -f UTF-8 -t UTF-8 < "$f" >/dev/null 2>&1 || fail "not valid UTF-8"
+LC_ALL=C tr -d '\r\t' < "$f" | LC_ALL=C grep '[[:cntrl:]]' >/dev/null 2>&1 \
+  && fail "control character other than tab is not allowed"
 
 norm="$(tr -d '\r' < "$f" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 [ -n "$norm" ] || fail "empty; a sentence must say something"
@@ -41,19 +61,20 @@ esac
 
 has() { printf '%s\n' "$first" | grep -E "$@" >/dev/null 2>&1; }
 
-if has '[`*#<>|]|\[|\]|(^|[[:space:]])_|_([[:space:]]|$)|^[-+]|^[0-9]+\.'; then
+if has '[`*#<>|]|\[|\]|(^|[[:space:]])_|_([[:space:]]|$)|^[-+]|^[0-9]+[.)]([[:space:]]|$)'; then
   fail "Markdown or formatting characters are not allowed"
 fi
 has -i '[a-z][a-z0-9+.-]*://|(^|[^[:alnum:]])www\.' && fail "URL is not allowed"
 run() {
-  printf '%s\n' "$first" | awk -v bad="$1" -v min="$2" -v whole="$3" -v letters="$4" '{
+  printf '%s\n' "$first" | awk -v bad="$1" -v min="$2" -v whole="$3" -v letters="$4" -v also="$5" '{
     gsub(bad, " ")
     for (i = 1; i <= NF; i++)
-      if (length($i) >= min && $i ~ /[0-9]/ && $i ~ whole && $i ~ letters) found = 1
+      if (length($i) >= min && $i ~ /[0-9]/ && $i ~ whole && $i ~ letters && $i ~ also) found = 1
   } END { exit !found }'
 }
-run '[^0-9A-Fa-f]' 7 '^[0-9A-Fa-f]+$' '[A-Fa-f]' && fail "hex run of 7 or more is not allowed"
-run '[^A-Za-z0-9+/]' 20 '.' '[A-Za-z]' && fail "base64-looking run of 20 or more is not allowed"
+run '[^0-9A-Fa-f]' 7 '^[0-9A-Fa-f]+$' '[A-Fa-f]' '.' && fail "hex run of 7 or more is not allowed"
+run '[^A-Za-z0-9+]' 20 '.' '[A-Z]' '[a-z]' && fail "base64-looking run of 20 or more is not allowed"
+has '@[[:alnum:]]' && fail "@-mention is not allowed"
 
 terms="CI runner workflow conformance dogfood agent subagent plan QUEUE commit SHA shipyard Renovate ingredient pin"
 pattern=
