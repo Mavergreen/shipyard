@@ -179,7 +179,7 @@ dgen() {  # $1 = minted|new, rest = extra args; tags $T, generates $T, leaves $r
 refused() {  # $1 = label, $2 = text the complaint must carry
   [ "$rc" -ne 0 ] || { echo "FAIL $1: refused"; cat "$r/OUT.md"; exit 1; }
   [ ! -e "$r/OUT.md" ] || { echo "FAIL $1: --out was written"; exit 1; }
-  grep -qF "$2" "$r/ERR" || { echo "FAIL $1: the complaint names $2"; cat "$r/ERR"; exit 1; }
+  grep -qF -- "$2" "$r/ERR" || { echo "FAIL $1: the complaint names $2"; cat "$r/ERR"; exit 1; }
 }
 
 dset changes; mkdir -p "$d/changes"
@@ -272,7 +272,7 @@ dgen new --short swift-runtime
 grep -q '^- Runtime loads faster\.$' "$r/OUT.md" && grep -q '^Use the runtime from here\.$' "$r/OUT.md" \
   || { echo "FAIL dir-short: the nested tree is read"; cat "$r/OUT.md"; exit 1; }
 grep -q 'Top-level' "$r/OUT.md" && { echo "FAIL dir-short: the top-level tree is ignored"; exit 1; }
-rm -f "$r/OUT.md"; rc=0; gen "$r" "$T" --short swift-runtime-other >/dev/null 2>"$r/ERR" || rc=$?
+rm -f "$r/OUT.md"; rc=0; gen "$r" "$T" --short openssh >/dev/null 2>"$r/ERR" || rc=$?
 refused dir-short-fallback "$d/notes.md"
 r="$work/dir-changes-self-ing"; mkrepo "$r"
 ( cd "$r" && git tag 20260802.5 && printf '3.9.2\n' > components/libressl/version )
@@ -314,6 +314,70 @@ printf 'Old news.\n' > "$r/release-notes/9.9p2-mavericks.1/changes/old"; printf 
 dgen new
 [ "$rc" -eq 0 ] || { echo "FAIL dir-oldtag: an existing tag's directory and a product's nest are not strays"; cat "$r/ERR"; exit 1; }
 grep -q 'Old news\|runtime from here' "$r/OUT.md" && { echo "FAIL dir-oldtag: neither is read"; cat "$r/OUT.md"; exit 1; }
+
+# spec: scripts/release-notes.sh -- a notes directory that cannot be read is refused, not read as absent.
+if [ "$(id -u)" != 0 ]; then
+  for mode in 000 644; do
+    for sub in "" changes; do
+      dset "unreadable-$mode-$sub"; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/keys"
+      ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
+      chmod "$mode" "$d${sub:+/$sub}"
+      rc=0; gen "$r" "$T" >/dev/null 2>"$r/ERR" || rc=$?
+      chmod 755 "$d${sub:+/$sub}"
+      refused "dir-unreadable $mode $sub" "$d${sub:+/$sub}"
+    done
+  done
+fi
+
+# spec: scripts/release-notes.sh -- requires/<short> holds one line, the minimum version.
+dset requires-two; mkdir -p "$d/requires"; printf '22.1.8\nand more\n' > "$d/requires/clang22"
+dgen new
+refused dir-requires-two "$d/requires/clang22"
+dset requires-blank; mkdir -p "$d/requires"; printf '22.1.8\n\n  \n' > "$d/requires/clang22"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-requires-blank: trailing blank lines are not a second line"; cat "$r/ERR"; exit 1; }
+dset requires-ff; mkdir -p "$d/requires"; printf '\f22.1.8\f\n' > "$d/requires/clang22"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-requires-ff: ships"; cat "$r/ERR"; exit 1; }
+grep -q '^- Install clang22 22\.1\.8 or later first\.$' "$r/OUT.md" \
+  || { echo "FAIL dir-requires-ff: line 1 is stripped as the checker strips it"; od -c "$r/OUT.md" | head; exit 1; }
+
+# spec: scripts/release-notes.sh -- --short names a registered product, in the form a short name takes.
+for sv in .. a/b '' Foo -x swift-runtime-other; do
+  dset "short-bad-$(printf %s "$sv" | tr -c a-z0-9 -)"; n="$r/release-notes/swift-runtime"; mkdir -p "$n/$T/changes"
+  printf 'Runtime loads faster.\n' > "$n/$T/changes/x"
+  dgen new --short "$sv"
+  refused "dir-short-bad '$sv'" "--short"
+done
+
+# spec: SKILL.md "Release notes" -- Before you update with only the rebuild bullet; a first release
+#       whose footer is only the notice; a port repackage that has changes/ and moved ingredients.
+dset rebuild-only; mkdir -p "$d"; printf 'Rebuild your Go programs to use the new SDK.\n' > "$d/rebuild"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-rebuild-only: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### Before you update$/{f=1; next} f&&/^$/{exit} f{print}' "$r/OUT.md")" = '- Rebuild your Go programs to use the new SDK.' ] \
+  || { echo "FAIL dir-rebuild-only: only the rebuild bullet"; cat "$r/OUT.md"; exit 1; }
+r="$work/dir-notice-first"; mkrepo "$r"; printf 'Never publish an image that contains macOS.\n' > "$r/release-notes/notice"
+( cd "$r" && git add -A && git commit -qm notice && git tag 9.9p2-mavericks.1 )
+gen "$r" 9.9p2-mavericks.1 --min-os '' >/dev/null 2>"$r/ERR" || { echo "FAIL dir-notice-first: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^---$/{f=1; next} f' "$r/OUT.md")" = 'Never publish an image that contains macOS.' ] \
+  || { echo "FAIL dir-notice-first: the footer is the notice alone"; cat "$r/OUT.md"; exit 1; }
+dset changes-ing; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/keys"
+printf '3.9.2\n' > "$r/components/libressl/version"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-changes-ing: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==3{exit}' "$r/OUT.md")" = "$(printf -- '- Keys load again.\n- Repackage of upstream OpenSSH 9.9p2, rebuilt because build ingredients moved (below).\n  No upstream change.')" ] \
+  || { echo "FAIL dir-changes-ing: changes lead, then the ingredient repackage line"; cat "$r/OUT.md"; exit 1; }
+grep -q '^### Build ingredients$' "$r/OUT.md" || { echo "FAIL dir-changes-ing: ingredients listed"; exit 1; }
+grep -q 'Built on upstream' "$r/OUT.md" && { echo "FAIL dir-changes-ing: not 'Built on upstream'"; exit 1; }
+
+# spec: scripts/release-notes.sh -- bullets order by slug in the C locale: '-' before a letter, which a
+#       dictionary collation reverses. Capitals are not slugs, so a-z and aa stand in for B-x and a-x.
+dset slug-order; mkdir -p "$d/changes"; printf 'Second thing.\n' > "$d/changes/aa"; printf 'First thing.\n' > "$d/changes/a-z"
+LC_ALL=en_US.UTF-8 dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-slug-order: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- First thing.\n- Second thing.')" ] \
+  || { echo "FAIL dir-slug-order: C-locale order"; cat "$r/OUT.md"; exit 1; }
 
 for p in Shipyard Porthole; do
   r="$work/dir-shipyard-$p"; mkrepo "$r"; ( cd "$r" && git tag v1.0.1 )

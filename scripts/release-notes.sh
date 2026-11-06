@@ -24,7 +24,7 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # MAVERICKS_ROOT
 
-TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""; SHORT=""
+TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""; SHORT=""; SHORT_SET=no
 while [ $# -gt 0 ]; do
   case "$1" in
     --tag) TAG="$2"; shift 2;;
@@ -33,7 +33,7 @@ while [ $# -gt 0 ]; do
     --out) OUT="$2"; shift 2;;
     --line) LINE="$2"; shift 2;;
     --min-os) MINOS="$2"; shift 2;;
-    --short) SHORT="$2"; shift 2;;
+    --short) SHORT="$2"; SHORT_SET=yes; shift 2;;
     *) echo "release-notes: unknown argument: $1" >&2; exit 2;;
   esac
 done
@@ -48,6 +48,14 @@ if [ -n "$LINE" ]; then
     *'*') ;;                      # already a glob
     *) LINE="$LINE.*" ;;
   esac
+fi
+
+if [ "$SHORT_SET" = yes ]; then
+  case "$SHORT" in
+    ''|-*|*[!a-z0-9-]*) die "--short '$SHORT' is not a short name ([a-z0-9][a-z0-9-]*)" ;;
+  esac
+  sh "$SELF/product-name.sh" repo "$SHORT" >/dev/null 2>&1 \
+    || die "--short '$SHORT' is not a registered product short name (scripts/product-name.sh)"
 fi
 
 cd "$MAVERICKS_ROOT"
@@ -117,9 +125,8 @@ else
   printf '## %s %s for Mavericks (%s)\n' "$PRODUCT" "$UP" "$VER" > "$tmp"
 fi
 
-# spec: SKILL.md "Release notes" -- a tag already minted (it names a commit other than HEAD) is a
-#       published release being regenerated (a non-publishing main run regenerates the latest
-#       published tag's notes), so its committed prose publishes as is.
+# spec: SKILL.md "Release notes" -- a tag that names a commit other than HEAD is already minted; its
+#       committed prose publishes as is.
 minted() {
   _t="$(git -C "$MAVERICKS_ROOT" rev-parse -q --verify "refs/tags/$TAG^{commit}")" || return 1
   [ "$_t" != "$(git -C "$MAVERICKS_ROOT" rev-parse HEAD)" ]
@@ -175,6 +182,7 @@ sentence() {
     || die "$1 is not one release-note sentence (see the complaint above); see SKILL.md \"Release notes\""
 }
 if [ -d "$DIR" ]; then
+  { [ -r "$DIR" ] && [ -x "$DIR" ]; } || die "$DIR cannot be read; fix its permissions"
   for e in "$DIR"/* "$DIR"/.*; do
     case "${e##*/}" in .|..) continue ;; esac
     { [ -e "$e" ] || [ -L "$e" ]; } || continue
@@ -186,6 +194,7 @@ if [ -d "$DIR" ]; then
   done
   for sub in changes requires; do
     [ -d "$DIR/$sub" ] || continue
+    { [ -r "$DIR/$sub" ] && [ -x "$DIR/$sub" ]; } || die "$DIR/$sub cannot be read; fix its permissions"
     n=0
     for e in "$DIR/$sub"/* "$DIR/$sub"/.*; do
       b="${e##*/}"
@@ -199,6 +208,8 @@ if [ -d "$DIR" ]; then
       else
         sh "$SELF/product-name.sh" repo "$b" >/dev/null 2>&1 \
           || die "$e: $b is not a registered product short name (scripts/product-name.sh)"
+        [ "$(awk '/[^[:space:]]/ { n++ } END { print n + 0 }' "$e")" -le 1 ] \
+          || die "$e: holds one line, the minimum version"
         v="$(line1 "$e")"
         case "$v" in
           [0-9]*[!0-9A-Za-z.+-]*|[!0-9]*|'') die "$e: line 1 must be a minimum version ([0-9][0-9A-Za-z.+-]*), not '$v'" ;;
