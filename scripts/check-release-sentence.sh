@@ -46,14 +46,14 @@ if has '[`*#<>|]|\[|\]|(^|[[:space:]])_|_([[:space:]]|$)|^[-+]|^[0-9]+\.'; then
 fi
 has -i '[a-z][a-z0-9+.-]*://|(^|[^[:alnum:]])www\.' && fail "URL is not allowed"
 run() {
-  printf '%s\n' "$first" | awk -v bad="$1" -v min="$2" -v need="$3" '{
+  printf '%s\n' "$first" | awk -v bad="$1" -v min="$2" -v whole="$3" -v letters="$4" '{
     gsub(bad, " ")
     for (i = 1; i <= NF; i++)
-      if (length($i) >= min && $i ~ /[0-9]/ && $i ~ need) found = 1
+      if (length($i) >= min && $i ~ /[0-9]/ && $i ~ whole && $i ~ letters) found = 1
   } END { exit !found }'
 }
-run '[^0-9A-Fa-f]' 7 '^[0-9A-Fa-f]+$' && fail "hex run of 7 or more is not allowed"
-run '[^A-Za-z0-9+/]' 20 '[A-Za-z]' && fail "base64-looking run of 20 or more is not allowed"
+run '[^0-9A-Fa-f]' 7 '^[0-9A-Fa-f]+$' '[A-Fa-f]' && fail "hex run of 7 or more is not allowed"
+run '[^A-Za-z0-9+/]' 20 '.' '[A-Za-z]' && fail "base64-looking run of 20 or more is not allowed"
 
 terms="CI runner workflow conformance dogfood agent subagent plan QUEUE commit SHA shipyard Renovate ingredient pin"
 pattern=

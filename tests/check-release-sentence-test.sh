@@ -87,6 +87,9 @@ X
 ok "all-letter hex-looking word" <<'X'
 Stop now stays defaced and accede.
 X
+ok "date version is not hex" <<'X'
+Recaulk 20261025 now links.
+X
 ok "20+ letter word" <<'X'
 The internationalizationally word is fine.
 X
