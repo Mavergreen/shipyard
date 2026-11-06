@@ -114,13 +114,19 @@ else
   printf '## %s %s for Mavericks (%s)\n' "$PRODUCT" "$UP" "$VER" > "$tmp"
 fi
 
-# spec: SKILL.md "Release notes" -- committed prose
-#       publishes only once a human has marked it edited; the mark never reaches readers.
+# spec: SKILL.md "Release notes" -- a tag already minted (it names a commit other than HEAD) is a
+#       published release being regenerated (QUEUE #123), so its committed prose publishes as is.
+minted() {
+  _t="$(git -C "$MAVERICKS_ROOT" rev-parse -q --verify "refs/tags/$TAG^{commit}")" || return 1
+  [ "$_t" != "$(git -C "$MAVERICKS_ROOT" rev-parse HEAD)" ]
+}
+
+# spec: SKILL.md "Release notes" -- committed .md prose publishes only for a minted tag; a new
+#       release writes release-notes/<TAG>/ instead. Any mark line is stripped, never shown to readers.
 MARK='<!-- edited by a human -->'
 notes="$MAVERICKS_ROOT/release-notes/${TAG}.md"
 if [ -f "$notes" ] && [ -s "$notes" ]; then
-  awk -v m="$MARK" '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l == m) f = 1 } END { exit !f }' "$notes" \
-    || die "$notes has no line '$MARK'. Committed prose publishes only after a human has edited it: once you have, add that line to the file. An agent never adds it."
+  minted || die "$notes is prose for a release not yet published. Write release-notes/${TAG}/changes/<slug> files instead; see SKILL.md \"Release notes\"."
   awk -v m="$MARK" '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l != m) print }' "$notes" > "$tmp.prose" \
     || die "could not read $notes"
   if [ -s "$tmp.prose" ]; then

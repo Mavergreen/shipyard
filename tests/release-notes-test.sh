@@ -117,52 +117,50 @@ r="$work/pkgonly"; mkrepo "$r"
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q 'packaging changes only' "$r/OUT.md" || { echo "FAIL pkgonly: kind"; cat "$r/OUT.md"; exit 1; }
 grep -q '### Build ingredients' "$r/OUT.md" && { echo "FAIL pkgonly: no pin moved, no section"; exit 1; }
-
-# spec: scripts/release-notes.sh -- committed prose must be slotted in verbatim, never
-#       rewritten.
-r="$work/prose"; mkrepo "$r"
-printf 'Hand-written paragraph.\n\n- a bullet a human wrote\n<!-- edited by a human -->\n' > "$r/release-notes/9.9p2-mavericks.1.md"
-( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
-gen "$r" 9.9p2-mavericks.1 >/dev/null
-grep -q 'Hand-written paragraph.' "$r/OUT.md" || { echo "FAIL prose: not included"; exit 1; }
-grep -q '^- a bullet a human wrote$' "$r/OUT.md" || { echo "FAIL prose: mangled"; exit 1; }
-grep -q '^### What changed$' "$r/OUT.md" || { echo "FAIL prose: generated sections dropped"; exit 1; }
-
-# spec: SKILL.md "Release notes" -- committed prose
-#       publishes only once a human has added the mark, and readers never see the mark.
+# spec: scripts/release-notes.sh -- committed prose for an already-minted tag (a non-publishing run
+#       regenerating a published release, QUEUE #123) is published verbatim with any mark line
+#       stripped and no mark required; for a tag not yet minted it is refused, naming the directory form.
 M='<!-- edited by a human -->'
-hp() {  # $1 = case, $2 = printf format of release-notes/9.9p2-mavericks.1.md; leaves $r and $rc
+hp() {  # $1 = case, $2 = minted|new, $3 = printf format of release-notes/9.9p2-mavericks.1.md; leaves $r and $rc
   r="$work/hp-$1"; mkrepo "$r"
-  printf "$2" > "$r/release-notes/9.9p2-mavericks.1.md"
+  printf "$3" > "$r/release-notes/9.9p2-mavericks.1.md"
   ( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
+  if [ "$2" = minted ]; then ( cd "$r" && echo x >> README.md && git add -A && git commit -qm later ); fi
   rc=0; gen "$r" 9.9p2-mavericks.1 >/dev/null 2>"$r/ERR" || rc=$?
 }
-hp unmarked 'Some prose.\n'
-[ "$rc" -ne 0 ] || { echo "FAIL unmarked prose is refused"; exit 1; }
-[ ! -e "$r/OUT.md" ] || { echo "FAIL unmarked prose is refused: --out was written"; exit 1; }
-grep -qF "$M" "$r/ERR" && grep -qF 'release-notes/9.9p2-mavericks.1.md' "$r/ERR" \
-  || { echo "FAIL unmarked prose is refused: the complaint names the file and the line"; cat "$r/ERR"; exit 1; }
-hp marked "Some prose.\n$M\n"
-[ "$rc" -eq 0 ] || { echo "FAIL marked prose ships"; cat "$r/ERR"; exit 1; }
-grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL marked prose ships without the mark"; exit 1; }
-grep -q '^Some prose\.$' "$r/OUT.md" || { echo "FAIL marked prose ships its prose"; exit 1; }
-[ "$(awk 'f{print;n++} /^Some prose\.$/{f=1} n==2{exit}' "$r/OUT.md")" = "$(printf '\n### What changed')" ] \
-  || { echo "FAIL marked prose ships: the mark's line leaves no trace"; cat "$r/OUT.md"; exit 1; }
-hp crlf "Some prose.\n$M  \r\n"
-[ "$rc" -eq 0 ] || { echo "FAIL mark with CR or trailing spaces counts"; cat "$r/ERR"; exit 1; }
-grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL mark with CR or trailing spaces is stripped"; exit 1; }
-hp indented "Some prose.\n    $M\n"
-[ "$rc" -ne 0 ] || { echo "FAIL indented mark does not count"; exit 1; }
-hp nearmiss 'Some prose.\n<!-- Edited by a human -->\n'
-[ "$rc" -ne 0 ] || { echo "FAIL near-miss mark is refused"; exit 1; }
-grep -qF "$M" "$r/ERR" || { echo "FAIL near-miss mark is refused: the complaint prints the exact line"; exit 1; }
-hp markonly "$M\n"
-[ "$rc" -eq 0 ] || { echo "FAIL mark-only file inserts nothing"; cat "$r/ERR"; exit 1; }
-r1="$r"; r="$work/hp-none"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 ); gen "$r" 9.9p2-mavericks.1 >/dev/null
-[ "$(cat "$r1/OUT.md")" = "$(cat "$r/OUT.md")" ] || { echo "FAIL mark-only file inserts nothing: body differs from no prose"; diff "$r/OUT.md" "$r1/OUT.md"; exit 1; }
-hp twice "$M\nSome prose.\n$M\n"
+hp legacy-minted minted "Some prose.\n$M\nMore.\n"
+[ "$rc" -eq 0 ] || { echo "FAIL legacy-minted: ships"; cat "$r/ERR"; exit 1; }
+grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL legacy-minted: the mark is stripped"; exit 1; }
+grep -q '^Some prose\.$' "$r/OUT.md" && grep -q '^More\.$' "$r/OUT.md" \
+  || { echo "FAIL legacy-minted: prose verbatim"; cat "$r/OUT.md"; exit 1; }
+[ "$(awk 'f{print;n++} /^More\.$/{f=1} n==2{exit}' "$r/OUT.md")" = "$(printf '\n### What changed')" ] \
+  || { echo "FAIL legacy-minted: the mark's line leaves no trace"; cat "$r/OUT.md"; exit 1; }
+hp legacy-minted-unmarked minted 'Some prose.\n'
+[ "$rc" -eq 0 ] || { echo "FAIL legacy-minted-unmarked: #123 needs no mark"; cat "$r/ERR"; exit 1; }
+grep -q '^Some prose\.$' "$r/OUT.md" || { echo "FAIL legacy-minted-unmarked: prose included"; exit 1; }
+hp legacy-verbatim minted 'Hand-written paragraph.\n\n- a bullet a human wrote\n'
+[ "$rc" -eq 0 ] || { echo "FAIL legacy-verbatim: ships"; cat "$r/ERR"; exit 1; }
+grep -q 'Hand-written paragraph.' "$r/OUT.md" || { echo "FAIL legacy-verbatim: not included"; exit 1; }
+grep -q '^- a bullet a human wrote$' "$r/OUT.md" || { echo "FAIL legacy-verbatim: mangled"; exit 1; }
+grep -q '^### What changed$' "$r/OUT.md" || { echo "FAIL legacy-verbatim: generated sections dropped"; exit 1; }
+hp legacy-crlf minted "Some prose.\n$M  \r\n"
+[ "$rc" -eq 0 ] || { echo "FAIL legacy-crlf: ships"; cat "$r/ERR"; exit 1; }
+grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL legacy-crlf: mark with CR or trailing spaces is stripped"; exit 1; }
+hp twice minted "$M\nSome prose.\n$M\n"
 [ "$rc" -eq 0 ] || { echo "FAIL every mark line is stripped"; cat "$r/ERR"; exit 1; }
 grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL every mark line is stripped"; exit 1; }
+hp markonly minted "$M\n"
+[ "$rc" -eq 0 ] || { echo "FAIL mark-only file inserts nothing"; cat "$r/ERR"; exit 1; }
+r1="$r"; r="$work/hp-none"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 && echo x >> README.md && git add -A && git commit -qm later ); gen "$r" 9.9p2-mavericks.1 >/dev/null
+[ "$(cat "$r1/OUT.md")" = "$(cat "$r/OUT.md")" ] || { echo "FAIL mark-only file inserts nothing: body differs from no prose"; diff "$r/OUT.md" "$r1/OUT.md"; exit 1; }
+for c in legacy-new legacy-new-marked; do
+  case "$c" in legacy-new) f='Some prose.\n' ;; *) f="Some prose.\n$M\n" ;; esac
+  hp "$c" new "$f"
+  [ "$rc" -ne 0 ] || { echo "FAIL $c: refused"; exit 1; }
+  [ ! -e "$r/OUT.md" ] || { echo "FAIL $c: --out was written"; exit 1; }
+  grep -qF 'release-notes/9.9p2-mavericks.1.md' "$r/ERR" && grep -qF 'release-notes/9.9p2-mavericks.1/' "$r/ERR" \
+    || { echo "FAIL $c: the complaint names the file and the directory"; cat "$r/ERR"; exit 1; }
+done
 
 # spec: scripts/release-notes.sh -- self-upstream has no -mavericks axis, so no upstream claim
 #       and a plain title.
@@ -692,7 +690,7 @@ grep -q '^- Changed `patches/fix.patch`$' "$r/OUT.md" || { echo "FAIL patchnewup
 # spec: scripts/patch-notes.sh -- committed prose under release-notes/ is not a modification of
 #       upstream.
 r="$work/patchprose"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 && printf 'Words.\n<!-- edited by a human -->\n' > release-notes/9.9p2-mavericks.2.md \
+( cd "$r" && git tag 9.9p2-mavericks.1 && printf 'Words.\n<!-- edited by a human -->\n' > release-notes/README.md \
     && git add -A && git commit -qm prose && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q '^- Repackage of upstream OpenSSH 9.9p2; packaging changes only\.$' "$r/OUT.md" \
