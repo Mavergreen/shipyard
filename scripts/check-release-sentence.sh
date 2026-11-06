@@ -17,7 +17,7 @@
 #     - no '@' before a letter or digit (a GitHub @-mention notifies that user from every release)
 #     - no internal term, any case, whole word, plural -s included: CI runner workflow conformance
 #       dogfood agent subagent plan QUEUE commit SHA shipyard Renovate ingredient pin, "base recipe(s)",
-#       "check <number>", ".yml"; --allow WORD exempts one of these words
+#       "check <number>", ".yml"; '_' separates words here, so release_workflow is refused; --allow WORD exempts one of these words
 #     - does not open with "This release", "This version", "We ", "I ", "Cut to" or "Note:" (any case)
 #     - no all-caps word of 4 or more letters except ECDSA DHCP HTTP HTTPS JSON NVRAM UEFI QEMU LLVM
 #       GODEBUG EPYC; a token with an inner '_' (SSL_CERT_FILE) is an identifier and exempt
@@ -92,7 +92,7 @@ for t in $terms; do
   $skip || pattern="$pattern|$t"
 done
 pattern="(${pattern#|})s?|base recipes?|check [0-9]+"
-has -i -w "$pattern" && fail "internal term is not allowed"
+printf '%s\n' "$first" | tr _ ' ' | grep -iwE "$pattern" >/dev/null 2>&1 && fail "internal term is not allowed"
 has -i '\.yml' && fail "internal term '.yml' is not allowed"
 
 has -i '^(this release|this version|we |i |cut to|note:)' && fail "opens with process talk"

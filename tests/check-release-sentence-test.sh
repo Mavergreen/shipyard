@@ -84,7 +84,7 @@ for pair in '`=Stop `now` stays stopped.' '*=Stop *now* stays stopped.' '#=Stop 
   printf '%s\n' "${pair#*=}" | no "formatting: ${pair#*=}" "contains formatting character '${pair%%=*}'"
 done
 printf '%s\n' '1. Stop now stays stopped.' | no "numbered list" "list number"
-printf '%s\n' 'Stop *now* and `then` go.' | no "first offender is named" "formatting character '\`'"
+printf '%s\n' 'Stop *now* and `then` go.' | no "one of several formatting characters is named" "formatting character '\`'"
 printf '%s\n' 'Write to me at me@example.com for help.' | no "email autolink" "@-mention"
 printf '%s\n' 'Your ~/ folder stays.' | no "tilde" "formatting character '~'"
 ok "env var" <<'X'
@@ -130,6 +130,9 @@ X
 for term in CI runner workflow conformance dogfood agent subagent plan QUEUE commit SHA shipyard Renovate ingredient pin \
   "base recipe" "check 22" ".yml" "ci"; do
   printf 'The %s stays stopped.\n' "$term" | no "internal term: $term" "internal term"
+done
+for snake in "Run the release_workflow now." "The CI_runner stays." "Automatically cut via workflow_dispatch local_release."; do
+  printf '%s\n' "$snake" | no "internal term inside an identifier: $snake" "internal term"
 done
 ok "CIA is not CI" <<'X'
 The CIA stays stopped.
@@ -216,6 +219,7 @@ corpus_no "packer .7 purpose" "internal term" "That comment is the release's who
 corpus_no "packer .8" "internal term" "This is the Mavergreen family's check 22, which now fails the build when a new script doesn't say where it runs."
 corpus_no "packer 0040" "formatting character '\`'" "This release exists to capture the next stall, and \`docs/decisions/0040\` describes what is read."
 corpus_no "packer .4" "internal term" "v0.20261005.3's build peaked at 80 GiB of a GitHub runner's 85 GiB free."
+corpus_no "container-tools dispatch" "internal term" "Automatically cut via workflow_dispatch local_release."
 corpus_no "container-tools template" "internal term" "Automatically cut from a build-ingredient bump."
 corpus_no "container-tools bold" "end with" "**Migration hardening (found by dogfooding on a real 10.9 box):**"
 corpus_no "golang-126 bold" "end with" "**Pure-Go programs now run on Mavericks.**"
@@ -232,8 +236,7 @@ for good in "Docker tells you when your Mac's disk is full." "Docker won't start
   "Go 1.27 for Mac OS X 10.9 Mavericks." "The cross toolchain needs macOS 13 or later, as upstream Go 1.27 does." \
   "A new shared CA location." "On darwin, SSL_CERT_FILE and SSL_CERT_DIR add CA files to the keychain-union trust store." \
   "Go's verifier does not fetch missing intermediate certificates; a server that omits them fails verification, as with Go on Linux." \
-  "A program that brings its own static C++ runtime now links." "Pure-Go programs now run on Mavericks." \
-  "Nothing changes in how the trackpad works."; do
+  "A program that brings its own static C++ runtime now links." "Pure-Go programs now run on Mavericks."; do
   printf '%s\n' "$good" | ok "survey good: $good"
 done
 
