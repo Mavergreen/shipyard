@@ -412,10 +412,8 @@ grep -q 'Built on upstream' "$r/OUT.md" && { echo "FAIL dir-changes-ing: not 'Bu
 # spec: scripts/release-notes.sh -- bullets order by slug in the C locale: '-' before a letter, which a
 #       dictionary collation reverses. Capitals are not slugs, so a-z and aa stand in for B-x and a-x.
 dset slug-order; mkdir -p "$d/changes"; printf 'Second thing.\n' > "$d/changes/aa"; printf 'First thing.\n' > "$d/changes/a-z"
-if [ "${LC_ALL+set}" = set ]; then lc_was="$LC_ALL"; else unset lc_was; fi
-LC_ALL=en_US.UTF-8; export LC_ALL
-dgen new
-if [ "${lc_was+set}" = set ]; then LC_ALL="$lc_was"; else unset LC_ALL; fi
+( LC_ALL=en_US.UTF-8; export LC_ALL; dgen new; echo "$rc" > "$r/RC" )
+rc="$(cat "$r/RC")"
 [ "$rc" -eq 0 ] || { echo "FAIL dir-slug-order: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- First thing.\n- Second thing.')" ] \
   || { echo "FAIL dir-slug-order: C-locale order"; cat "$r/OUT.md"; exit 1; }
