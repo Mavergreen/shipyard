@@ -354,6 +354,19 @@ if [ "$(id -u)" != 0 ]; then
   grep -q 'integer expression' "$r/ERR" && { echo "FAIL dir-requires-unreadable: a shell error leaked"; cat "$r/ERR"; exit 1; }
 fi
 
+# spec: scripts/release-notes.sh -- a registry that cannot be read is said so, not called "not registered".
+dset registry-short; n="$r/release-notes/swift-runtime"; mkdir -p "$n/$T/changes"; printf 'Runtime loads faster.\n' > "$n/$T/changes/x"
+dgen new --short swift-runtime --out "$r/OUT.md"
+[ "$rc" -eq 0 ] || { echo "FAIL registry-short: baseline ships"; cat "$r/ERR"; exit 1; }
+rm -f "$r/OUT.md"; rc=0; ( MAVERGREEN_PRODUCT_NAMES="$work/no-such-registry"; export MAVERGREEN_PRODUCT_NAMES; gen "$r" "$T" --short swift-runtime ) >/dev/null 2>"$r/ERR" || rc=$?
+refused dir-registry-short "registry"
+grep -q 'not a registered' "$r/ERR" && { echo "FAIL dir-registry-short: calls an unreadable registry 'not registered'"; cat "$r/ERR"; exit 1; }
+dset registry-requires; mkdir -p "$d/requires"; printf '22.1.8\n' > "$d/requires/clang22"
+dgen new
+rm -f "$r/OUT.md"; rc=0; ( MAVERGREEN_PRODUCT_NAMES="$work/no-such-registry"; export MAVERGREEN_PRODUCT_NAMES; gen "$r" "$T" ) >/dev/null 2>"$r/ERR" || rc=$?
+refused dir-registry-requires "registry"
+grep -q 'not a registered' "$r/ERR" && { echo "FAIL dir-registry-requires: calls an unreadable registry 'not registered'"; cat "$r/ERR"; exit 1; }
+
 # spec: scripts/release-notes.sh -- requires/<short> holds one line, the minimum version.
 dset requires-two; mkdir -p "$d/requires"; printf '22.1.8\nand more\n' > "$d/requires/clang22"
 dgen new
@@ -399,9 +412,10 @@ grep -q 'Built on upstream' "$r/OUT.md" && { echo "FAIL dir-changes-ing: not 'Bu
 # spec: scripts/release-notes.sh -- bullets order by slug in the C locale: '-' before a letter, which a
 #       dictionary collation reverses. Capitals are not slugs, so a-z and aa stand in for B-x and a-x.
 dset slug-order; mkdir -p "$d/changes"; printf 'Second thing.\n' > "$d/changes/aa"; printf 'First thing.\n' > "$d/changes/a-z"
+if [ "${LC_ALL+set}" = set ]; then lc_was="$LC_ALL"; else unset lc_was; fi
 LC_ALL=en_US.UTF-8; export LC_ALL
 dgen new
-unset LC_ALL
+if [ "${lc_was+set}" = set ]; then LC_ALL="$lc_was"; else unset LC_ALL; fi
 [ "$rc" -eq 0 ] || { echo "FAIL dir-slug-order: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- First thing.\n- Second thing.')" ] \
   || { echo "FAIL dir-slug-order: C-locale order"; cat "$r/OUT.md"; exit 1; }

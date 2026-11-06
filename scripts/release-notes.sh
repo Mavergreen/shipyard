@@ -50,12 +50,20 @@ if [ -n "$LINE" ]; then
   esac
 fi
 
+registered() {
+  rc=0; sh "$SELF/product-name.sh" repo "$1" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] && REGISTRY_BROKEN=yes || REGISTRY_BROKEN=no
+  [ "$rc" -eq 0 ]
+}
+registry_complaint() {
+  if [ "$REGISTRY_BROKEN" = yes ]; then echo "$1: the product registry could not be read (scripts/product-name.sh)"
+  else echo "$1 is not a registered product short name (scripts/product-name.sh)"; fi
+}
 if [ "$SHORT_SET" = yes ]; then
   case "$SHORT" in
     ''|-*|*[!a-z0-9-]*) die "--short '$SHORT' is not a short name ([a-z0-9][a-z0-9-]*)" ;;
   esac
-  sh "$SELF/product-name.sh" repo "$SHORT" >/dev/null 2>&1 \
-    || die "--short '$SHORT' is not a registered product short name (scripts/product-name.sh)"
+  registered "$SHORT" || die "$(registry_complaint "--short '$SHORT'")"
 fi
 
 cd "$MAVERICKS_ROOT"
@@ -212,8 +220,7 @@ if [ -d "$DIR" ]; then
         case "$b" in *[!a-z0-9-]*) die "$e: a change's name is [a-z0-9-]+ (the names order the bullets)" ;; esac
         sentence "$e"
       else
-        sh "$SELF/product-name.sh" repo "$b" >/dev/null 2>&1 \
-          || die "$e: $b is not a registered product short name (scripts/product-name.sh)"
+        registered "$b" || die "$(registry_complaint "$e: $b")"
         [ -r "$e" ] || die "$e cannot be read; fix its permissions"
         [ "$(awk '/[^[:space:]]/ { n++ } END { print n + 0 }' "$e")" -le 1 ] \
           || die "$e: holds one line, the minimum version"
