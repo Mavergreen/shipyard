@@ -24,7 +24,7 @@ f="$1"
 
 [ -f "$f" ] && [ -r "$f" ] || fail "cannot read the file"
 
-norm="$(tr -d '\r' < "$f" | sed 's/[[:space:]]*$//')"
+norm="$(tr -d '\r' < "$f" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
 [ -n "$norm" ] || fail "empty; a sentence must say something"
 
 count="$(printf '%s\n' "$norm" | awk 'NF { n++ } END { print n + 0 }')"

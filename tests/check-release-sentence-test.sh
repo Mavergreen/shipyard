@@ -58,6 +58,8 @@ no "blank first line" "one line" <<'X'
 
 Stop now stays stopped.
 X
+printf '  We fixed Stop.\n' | no "indented opener" "opens with"
+printf ' - Stop now stays.\n' | no "indented bullet" "Markdown"
 w31="a b c d e f g h i j k l m n o p q r s t u v w x y z aa bb cc dd ee."
 printf '%s\n' "$w31" | no "31 words" "30 words"
 w30="a b c d e f g h i j k l m n o p q r s t u v w x y z aa bb cc dd."
