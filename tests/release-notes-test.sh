@@ -274,6 +274,25 @@ grep -q '^- Runtime loads faster\.$' "$r/OUT.md" && grep -q '^Use the runtime fr
 grep -q 'Top-level' "$r/OUT.md" && { echo "FAIL dir-short: the top-level tree is ignored"; exit 1; }
 rm -f "$r/OUT.md"; rc=0; gen "$r" "$T" --short swift-runtime-other >/dev/null 2>"$r/ERR" || rc=$?
 refused dir-short-fallback "$d/notes.md"
+r="$work/dir-changes-self-ing"; mkrepo "$r"
+( cd "$r" && git tag 20260802.5 && printf '3.9.2\n' > components/libressl/version )
+mkdir -p "$r/release-notes/20260802.6/changes"; printf 'Pure-Go programs now run on Mavericks.\n' > "$r/release-notes/20260802.6/changes/go"
+( cd "$r" && git add -A && git commit -qm "bump libressl" )
+gen "$r" 20260802.6 --product Porthole --min-os 10.9 >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self-ing: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- Pure-Go programs now run on Mavericks.\n- Rebuilt because build ingredients moved (below).')" ] \
+  || { echo "FAIL dir-changes-self-ing: changes are a change to the product itself"; cat "$r/OUT.md"; exit 1; }
+
+for m in new minted; do
+  dset "short-md-$m"; n="$r/release-notes/swift-runtime"; mkdir -p "$n"
+  printf 'Nested prose.\n' > "$n/$T.md"
+  dgen "$m" --short swift-runtime
+  if [ "$m" = new ]; then
+    refused dir-short-md "$n/$T.md"
+  else
+    [ "$rc" -eq 0 ] || { echo "FAIL dir-short-md: minted nested prose ships"; cat "$r/ERR"; exit 1; }
+    grep -q '^Nested prose\.$' "$r/OUT.md" || { echo "FAIL dir-short-md: minted nested prose publishes"; cat "$r/OUT.md"; exit 1; }
+  fi
+done
 
 for p in Shipyard Porthole; do
   r="$work/dir-shipyard-$p"; mkrepo "$r"; ( cd "$r" && git tag v1.0.1 )

@@ -125,11 +125,15 @@ minted() {
 }
 
 # spec: SKILL.md "Release notes" -- committed .md prose publishes only for a minted tag; a new
-#       release writes release-notes/<TAG>/ instead. Any mark line is stripped, never shown to readers.
+#       release writes release-notes/<TAG>/ instead (both under release-notes/<short>/ when --short
+#       names a nested tree). Any mark line is stripped, never shown to readers.
+ROOT="$MAVERICKS_ROOT/release-notes"
+if [ -n "$SHORT" ] && [ -d "$ROOT/$SHORT" ]; then ROOT="$ROOT/$SHORT"; fi
+DIR="$ROOT/$TAG"
 MARK='<!-- edited by a human -->'
-notes="$MAVERICKS_ROOT/release-notes/${TAG}.md"
+notes="$ROOT/${TAG}.md"
 if [ -f "$notes" ] && [ -s "$notes" ]; then
-  minted || die "$notes is prose for a release not yet published. Write release-notes/${TAG}/changes/<slug> files instead; see SKILL.md \"Release notes\"."
+  minted || die "$notes is prose for a release not yet published. Write $DIR/changes/<slug> files instead; see SKILL.md \"Release notes\"."
   awk -v m="$MARK" '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l != m) print }' "$notes" > "$tmp.prose" \
     || die "could not read $notes"
   if [ -s "$tmp.prose" ]; then
@@ -142,9 +146,6 @@ fi
 #       requires/<short>, and release-notes/notice a standing footer line; a repo tagging products
 #       separately nests them under release-notes/<short>/. Anything else there fails, naming it.
 #       A minted tag skips only the sentence check, so a later rule never reddens its regeneration.
-ROOT="$MAVERICKS_ROOT/release-notes"
-if [ -n "$SHORT" ] && [ -d "$ROOT/$SHORT" ]; then ROOT="$ROOT/$SHORT"; fi
-DIR="$ROOT/$TAG"
 MINTED=no; if minted; then MINTED=yes; fi
 ALLOW=""; if [ "$PRODUCT" = Shipyard ]; then ALLOW="--allow shipyard"; fi
 line1() {
@@ -312,7 +313,11 @@ if [ "$SELF_UPSTREAM" = yes ]; then
   elif [ -n "$(date_of "$VER")" ] && [ "$(date_of "$VER")" = "$(date_of "$PREV")" ] \
        && { [ -n "$INGREDIENTS" ] || [ -z "$HAS_CHANGES" ]; }; then
     if [ -n "$INGREDIENTS" ]; then
-      printf -- '- Rebuilt because build ingredients moved (below); no change to %s itself.\n' "$PRODUCT" >> "$tmp"
+      if [ -n "$HAS_CHANGES" ]; then
+        printf -- '- Rebuilt because build ingredients moved (below).\n' >> "$tmp"
+      else
+        printf -- '- Rebuilt because build ingredients moved (below); no change to %s itself.\n' "$PRODUCT" >> "$tmp"
+      fi
     else
       printf -- '- Repackage of %s %s; packaging changes only.\n' "$PRODUCT" "$(date_of "$VER")" >> "$tmp"
     fi
