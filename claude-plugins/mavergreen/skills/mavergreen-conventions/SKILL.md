@@ -1142,34 +1142,69 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   `Mavergreen-State:` marker above is the live case — and the separator is emitted only when
   something already precedes it, since a footer that opens with a blank line renders an empty leading
   `<p>`.
-- **Committed prose publishes only once a human has edited it.** `release-notes.sh` refuses a
-  non-empty `release-notes/<TAG>.md` until it holds the line `<!-- edited by a human -->`, which a
-  human adds after editing the prose, and it strips that line from what it publishes.
-  `check-release-notes.sh` refuses a body that still carries it, so publish-release.yml catches a body
-  composed some other way. **An agent never adds the mark,** and an agent that changes marked prose
-  removes it in the same commit, so a human looks again. As with the README gate, nothing checks
-  authorship. Prose reaches every user in the update dialog, and nobody reads text they did not ask
-  to review. Revisit when an unedited body ships anyway: then publish needs a GitHub environment
-  approval.
-- **The shape, in order:** title, the committed `release-notes/<TAG>.md` prose verbatim when present,
-  `### What changed`, `### Our patches` when one of our modifications changed, `### Build
-  ingredients` when a pin moved, then a footer (the floor line, a compare link). Prose stays optional
-  and is never rewritten; a release with none still says what changed. `patch-notes.sh` finds "our
-  patches" as any `*.patch`/`*.diff`, or anything under a `patches/` or `overlays/` directory, at any
-  depth (never `release-notes/`, and never a pin `ingredient-notes.sh` already reports), changed since
-  the previous tag — so a repackage that adds one (tailscale's `darwin-exit-nodes.patch`) no longer
-  claims "packaging changes only". **Committed prose must NOT carry its own title** — the generator emits the title itself and
-  slots the prose verbatim right after it, so a note beginning with a heading produces two. **Nine
-  files across five repos still do** (all historical — none is a future release, so nothing is broken
-  today, but a regeneration of one of these exact tags would be a surprise without this list):
-  - container-tools: `20260719-mavericks.1.md`, `20260727-mavericks.1.md`, `20260727-mavericks.2.md` (own `## ` title)
-  - golang: `1.26.4-mavericks.1.md`, `1.26.4-mavericks.2.md`, `1.26.4-mavericks.3.md` (own `## ` title)
+- **Release notes are files, not prose.** What a release says beyond the generated sections is a few
+  small files, each one checkable fact or one checkable sentence; an agent may write them, a check that
+  passes is the approval, and nothing in a release waits on a human. Today's layout:
+
+  ```
+  release-notes/<TAG>/
+    changes/<slug>      one per user-visible change; <slug> is [a-z0-9-]+ and orders them by ls
+                        line 1: one sentence; no other lines
+    rebuild             OPTIONAL: present means users must rebuild something; line 1 says what
+    requires/<short>    OPTIONAL: a dependency newly required or raised; <short> is a registered
+                        product short name; line 1 is its minimum version
+  release-notes/notice  OPTIONAL, standing: line 1 opens every release's footer
+  ```
+
+  A repo that tags products separately (swift) nests the same under `release-notes/<short>/`, `notice`
+  included, and passes `--short <short>` to `release-notes.sh`; given it, and when that directory
+  exists, only the nested tree is read. An unknown entry in `release-notes/<TAG>/` fails the release,
+  naming it; nothing else from the directory reaches the body. At the flag day the tree moves under
+  `.mavergreen/`: `changes/` and `rebuild` to `.mavergreen/release-notes/<TAG>/`, `requires/` is derived
+  from `products/<short>/requires/<dep>/min` changing since the previous tag, and `notice` becomes
+  `products/<short>/notice`.
+
+  **Every sentence is checked by `check-release-sentence.sh`** (`changes/*`, `rebuild`, `notice`; its
+  header and its test hold the rules, so they are not restated here), and `requires/<short>` is checked
+  as a registered short name plus a version. A file that fails is refused, never trimmed.
+
+  **Legacy `.md` prose.** A tag is *minted* when it exists locally on a commit other than `HEAD`
+  (checkouts are fetch-depth 0; publish-release.yml mints the tag after the notes are built). A
+  `release-notes/<TAG>.md` for a tag not minted is refused, with a message naming the directory form.
+  For a minted tag it is published verbatim with no mark required, and `release-notes/<TAG>/` for a
+  minted tag renders without the sentence check, so tightening the check never reddens the
+  regeneration of a published release. Old tags' `.md` files stay as they are.
+
+  **Writing rules** for the sentences, which the check cannot test (from the `i-have-adhd` skill, MIT;
+  its file disables model invocation, so agents cannot load it):
+  - Lead with the effect on the user, or the action they take: "Stop now stays stopped until you start
+    Docker again." not "Fixed an issue where...".
+  - One bounded thing per sentence; a second change is a second file.
+  - Concrete: name the menu item, command or program; no "various", "some", "improvements".
+  - No tangents, no reasons, no history; before → now when the old behaviour was visible.
+
+  Known limits, install steps and usage belong in the repo's README, not in a release. The human-edit
+  mark `<!-- edited by a human -->` is retired: `release-notes.sh` neither requires nor writes it, and
+  `check-release-notes.sh` still refuses a body that carries it.
+- **The shape, in order:** title; `### Before you update` when `requires/` or `rebuild` exists (one
+  `- Install <short> <min> or later first.` bullet per requirement, then the `rebuild` line); `### What
+  changed` (the `changes/` bullets first, then the generated upstream line, which with `changes/`
+  present never says "packaging changes only"); `### Our patches` when one of our modifications
+  changed; `### Build ingredients` when a pin moved; then a footer (`notice` first, then the floor
+  line and a compare link). A release with no `release-notes/<TAG>/` still says what changed.
+  `patch-notes.sh` finds "our patches" as any `*.patch`/`*.diff`, or anything under a `patches/` or
+  `overlays/` directory, at any depth (never `release-notes/`, and never a pin `ingredient-notes.sh`
+  already reports), changed since the previous tag — so a repackage that adds one (tailscale's
+  `darwin-exit-nodes.patch`) no longer claims "packaging changes only". **A minted legacy `.md` must
+  NOT carry its own title**: the generator emits the title itself and slots the prose verbatim after
+  it, so a note beginning with a heading produces two. **Two files still do** (historical, so a
+  regeneration of one of these exact tags would be a surprise without this list):
   - clang: `22.1.1-mavericks.1.md` (own `## ` title)
-  - swift-runtime: `6.3.3-mavericks.1.md` (own `## ` title)
   - swift-toolchain: `6.3.3-mavericks.1.md` (own `# ` title — one level off, same defect)
 
-  The family's per-repo `release-notes/README.md` files still describe the old convention where the
-  note supplied its own title; a later plan updates them.
+  The family's per-repo `release-notes/README.md` files still describe the old convention; each is
+  replaced by one generated line pointing here in the migration of that repo's next release, not by a
+  sweep.
 - **Three generator defects surfaced by this migration's family sweep, fixed before any product push**
   (`f54a0cd`, `a566a06`, `26d6139`): `ingredient-notes.sh` dispatched per-key vs. opaque-blob rendering
   by filename extension (`*.sh`), so a `KEY=VALUE` pin file under any other name (swift-toolchain's
