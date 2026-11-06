@@ -1186,9 +1186,11 @@ ordinary commit moves no declared input, so it renders the same digest and publi
     `v<line>.<commit count>`. It moves with every commit, the notes commit and anyone else's included,
     so rename the directory to match the commit that is actually released.
   - `YYYYMMDD.N` (porthole, longboat): what `self-upstream-version.sh` prints for the commit that will
-    be released, which a non-publishing run shows on its version line. `release-notes/` is own code, so
-    the notes commit can itself move the date to its own day and restart `.N` at `.1`: run it after
-    committing the notes.
+    be released: run `sh "$SHIPYARD_SCRIPTS/self-upstream-version.sh"` at that commit. `release-notes/`
+    is own code, so the notes commit can itself move the date to its own day and restart `.N` at `.1`:
+    run it after committing the notes.
+  - `vX.Y.Z` (magic-trackpad2): the tag you will push, `v` included, such as `v0.5.6`. Name the directory
+    exactly that.
   - `<upstream>-mavericks.N` (every port): N is 1 for a new upstream, else the highest
     `<upstream>-mavericks.*` tag's N plus 1.
 
@@ -1312,6 +1314,8 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   <version>." for every one, so an ingredient-only repackage read like new code. "First release" is
   a claim, so a checkout with no tags at all stops instead of making it when the repo evidently has
   earlier releases: a `YYYYMMDD.N` with N > 1, or, in CI, any release `gh release list` finds.
+  A port with `changes/` and no moved pin or patch says
+  `- Built on upstream <product> <upstream> (no upstream change).` instead.
 - **A self-upstream repo gets a real baseline too, via `--tag-glob`.**
   `previous-release-tag.sh`'s default glob is `*-mavericks.*`, which never matches a self-upstream
   repo's own tags — shipyard (`vX.Y.Z`), porthole (`YYYYMMDD.N`), magic-trackpad2 (`vX.Y.Z`) — so those
@@ -2967,8 +2971,8 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    create`; the `concurrency:` block from "Release workflow" above — group keyed on `github.run_id`,
    `cancel-in-progress` naming `pull_request`. (Not `cancel-in-progress: false`: it protects the
    RUNNING run, not the QUEUED one, and the gate rejects it.)
-6. `release-notes/README.md`; `build/upstream-release-notes-url.sh` (a port: where upstream's notes
-   for a version live — see Release notes); Sparkle updater target. (`SPARKLE_PRIVATE_KEY` is an org secret the
+6. `build/upstream-release-notes-url.sh` (a port: where upstream's notes for a version live — see
+   Release notes; no `release-notes/README.md`, each release adds its own `release-notes/<TAG>/`); Sparkle updater target. (`SPARKLE_PRIVATE_KEY` is an org secret the
    new repo already sees, being public -- set nothing; see Sparkle updater.)
 7. Choose the upstream-verification method; note it if it deviates from a sibling.
 8. If the repo bakes in build ingredients (anything it's built WITH, not the upstream it ports): make
