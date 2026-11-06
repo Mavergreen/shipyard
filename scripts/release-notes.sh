@@ -1,16 +1,18 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: release-notes.sh --tag T --version V --product P --out FILE [--line L] [--min-os M]
+#                           [--short S]
 #     --tag/--version   the release tag and full version (equal for most repos; golang's differ)
 #     --product         the BARE product noun ("OpenSSH", "Go", "Signal Desktop"). This composes the
 #                       family's prose register: "OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)".
 #     --line            upstream-line prefix for a repo shipping parallel lines (golang: "1.26";
 #                       "1.26.*" also accepted -- both are normalized to a glob before use)
 #     --min-os          emits the install floor line; omit for a product that is not a 10.9 .pkg
+#     --short           this product's short name, in a repo whose release-notes/<short>/ nests its tree
 #     Generates ONE product's release notes: the Sparkle appcast <description> and the GitHub
 #     Release body, which are the same bytes by construction. Sections, in order: title, committed
-#     prose (verbatim, never rewritten), What changed, Our patches (only when one changed), Build
-#     ingredients (only when a pin moved), footer.
+#     prose (verbatim, never rewritten), Before you update (only with requires/ or rebuild), What
+#     changed, Our patches (only when one changed), Build ingredients (only when a pin moved), footer.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes" --
 #       NOTES ARE PART OF THE RELEASE CONTRACT: every gap here is fatal and names its cause. The old
 #       doctrine -- prose must never fail a release -- meant every section was appended with
@@ -22,7 +24,7 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # MAVERICKS_ROOT
 
-TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""
+TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""; SHORT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --tag) TAG="$2"; shift 2;;
@@ -31,6 +33,7 @@ while [ $# -gt 0 ]; do
     --out) OUT="$2"; shift 2;;
     --line) LINE="$2"; shift 2;;
     --min-os) MINOS="$2"; shift 2;;
+    --short) SHORT="$2"; shift 2;;
     *) echo "release-notes: unknown argument: $1" >&2; exit 2;;
   esac
 done
@@ -135,7 +138,87 @@ if [ -f "$notes" ] && [ -s "$notes" ]; then
   rm -f "$tmp.prose"
 fi
 
+# spec: SKILL.md "Release notes" -- release-notes/<TAG>/ holds changes/<slug>, rebuild and
+#       requires/<short>, and release-notes/notice a standing footer line; a repo tagging products
+#       separately nests them under release-notes/<short>/. Anything else there fails, naming it.
+#       A minted tag skips only the sentence check, so a later rule never reddens its regeneration.
+ROOT="$MAVERICKS_ROOT/release-notes"
+if [ -n "$SHORT" ] && [ -d "$ROOT/$SHORT" ]; then ROOT="$ROOT/$SHORT"; fi
+DIR="$ROOT/$TAG"
+MINTED=no; if minted; then MINTED=yes; fi
+ALLOW=""; if [ "$PRODUCT" = Shipyard ]; then ALLOW="--allow shipyard"; fi
+line1() {
+  awk 'NR == 1 { gsub(/\r/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); print; exit }' "$1" \
+    || die "could not read $1"
+}
+sentence() {
+  { [ -f "$1" ] && [ -r "$1" ]; } || die "cannot read $1"
+  [ "$MINTED" = yes ] && return 0
+  # shellcheck disable=SC2086  # ALLOW is empty or one flag and its word
+  sh "$SELF/check-release-sentence.sh" $ALLOW "$1" \
+    || die "$1 is not one release-note sentence (see the complaint above); see SKILL.md \"Release notes\""
+}
+if [ -d "$DIR" ]; then
+  for e in "$DIR"/* "$DIR"/.*; do
+    case "${e##*/}" in .|..) continue ;; esac
+    { [ -e "$e" ] || [ -L "$e" ]; } || continue
+    case "${e##*/}" in
+      changes|requires) { [ -d "$e" ] && [ ! -L "$e" ]; } || die "$e must be a directory" ;;
+      rebuild) sentence "$e" ;;
+      *) die "$e is not a release-notes entry (only changes/, rebuild and requires/ are); see SKILL.md \"Release notes\"" ;;
+    esac
+  done
+  for sub in changes requires; do
+    [ -d "$DIR/$sub" ] || continue
+    n=0
+    for e in "$DIR/$sub"/* "$DIR/$sub"/.*; do
+      b="${e##*/}"
+      case "$b" in .|..) continue ;; esac
+      { [ -e "$e" ] || [ -L "$e" ]; } || continue
+      n=$((n + 1))
+      [ -f "$e" ] || die "$e must be a file"
+      if [ "$sub" = changes ]; then
+        case "$b" in *[!a-z0-9-]*) die "$e: a change's name is [a-z0-9-]+ (the names order the bullets)" ;; esac
+        sentence "$e"
+      else
+        sh "$SELF/product-name.sh" repo "$b" >/dev/null 2>&1 \
+          || die "$e: $b is not a registered product short name (scripts/product-name.sh)"
+        v="$(line1 "$e")"
+        case "$v" in
+          [0-9]*[!0-9A-Za-z.+-]*|[!0-9]*|'') die "$e: line 1 must be a minimum version ([0-9][0-9A-Za-z.+-]*), not '$v'" ;;
+        esac
+      fi
+    done
+    [ "$n" -gt 0 ] || die "$DIR/$sub is empty; remove it or add an entry"
+  done
+  if [ -d "$DIR/requires" ] || [ -f "$DIR/rebuild" ]; then
+    printf '\n### Before you update\n' >> "$tmp"
+    if [ -d "$DIR/requires" ]; then
+      for b in $(LC_ALL=C ls "$DIR/requires"); do
+        v="$(line1 "$DIR/requires/$b")"
+        printf -- '- Install %s %s or later first.\n' "$b" "$v" >> "$tmp"
+      done
+    fi
+    if [ -f "$DIR/rebuild" ]; then
+      v="$(line1 "$DIR/rebuild")"
+      printf -- '- %s\n' "$v" >> "$tmp"
+    fi
+  fi
+fi
+NOTICE=""
+if [ -e "$ROOT/notice" ] || [ -L "$ROOT/notice" ]; then
+  sentence "$ROOT/notice"
+  NOTICE="$(line1 "$ROOT/notice")"
+fi
+HAS_CHANGES=""; if [ -d "$DIR/changes" ]; then HAS_CHANGES=yes; fi
+
 printf '\n### What changed\n' >> "$tmp"
+if [ -n "$HAS_CHANGES" ]; then
+  for b in $(LC_ALL=C ls "$DIR/changes"); do
+    v="$(line1 "$DIR/changes/$b")"
+    printf -- '- %s\n' "$v" >> "$tmp"
+  done
+fi
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Consuming a
 #       Mavergreen toolchain + auto-propagation" -- "Name that caller
@@ -226,7 +309,8 @@ if [ "$SELF_UPSTREAM" = yes ]; then
   fi
   if [ -z "$PREV" ]; then
     printf -- '- First release of %s %s.\n' "$PRODUCT" "$VER" >> "$tmp"
-  elif [ -n "$(date_of "$VER")" ] && [ "$(date_of "$VER")" = "$(date_of "$PREV")" ]; then
+  elif [ -n "$(date_of "$VER")" ] && [ "$(date_of "$VER")" = "$(date_of "$PREV")" ] \
+       && { [ -n "$INGREDIENTS" ] || [ -z "$HAS_CHANGES" ]; }; then
     if [ -n "$INGREDIENTS" ]; then
       printf -- '- Rebuilt because build ingredients moved (below); no change to %s itself.\n' "$PRODUCT" >> "$tmp"
     else
@@ -262,6 +346,8 @@ else
       elif [ -n "$PATCHES" ]; then
         printf -- '- Repackage of upstream %s %s with changes to our patches (below).\n  No upstream change.\n' \
           "$PRODUCT" "$UP" >> "$tmp"
+      elif [ -n "$HAS_CHANGES" ]; then
+        printf -- '- Built on upstream %s %s (no upstream change).\n' "$PRODUCT" "$UP" >> "$tmp"
       else
         printf -- '- Repackage of upstream %s %s; packaging changes only.\n' "$PRODUCT" "$UP" >> "$tmp"
       fi
@@ -283,7 +369,11 @@ fi
 # spec: tests/release-notes-test.sh "nofooter"/"withfooter" -- the footer's '---' rule is buffered
 #       separately and emitted only when at least one footer line follows it; swift-toolchain has
 #       neither a --min-os floor nor (in a fixture with no remote) a compare link.
-[ -z "$MINOS" ] || printf 'Requires Mac OS X %s or later.\n' "$MINOS" >> "$footer_tmp"
+[ -z "$NOTICE" ] || printf '%s\n' "$NOTICE" >> "$footer_tmp"
+if [ -n "$MINOS" ]; then
+  if [ -s "$footer_tmp" ]; then printf '\n' >> "$footer_tmp"; fi
+  printf 'Requires Mac OS X %s or later.\n' "$MINOS" >> "$footer_tmp"
+fi
 
 if [ -n "$PREV" ]; then
   if [ -n "${GITHUB_SERVER_URL:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then

@@ -162,6 +162,131 @@ for c in legacy-new legacy-new-marked; do
     || { echo "FAIL $c: the complaint names the file and the directory"; cat "$r/ERR"; exit 1; }
 done
 
+# spec: SKILL.md "Release notes" -- a new release says what changed in release-notes/<TAG>/ files:
+#       changes/<slug> bullets lead What changed, requires/ and rebuild make Before you update, and
+#       a standing release-notes/notice opens the footer. Each sentence is checked unless the tag is
+#       minted; the tree's shape is checked always.
+T=9.9p2-mavericks.2
+dset() {  # $1 = case; leaves $r with tag 9.9p2-mavericks.1 and $d = its release-notes/$T
+  r="$work/dir-$1"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 ); d="$r/release-notes/$T"
+}
+dgen() {  # $1 = minted|new, rest = extra args; tags $T, generates $T, leaves $rc and $r/ERR
+  m="$1"; shift
+  ( cd "$r" && git add -A && git commit -q --allow-empty -m notes && git tag "$T" )
+  if [ "$m" = minted ]; then ( cd "$r" && echo x >> README.md && git add -A && git commit -qm later ); fi
+  rc=0; gen "$r" "$T" "$@" >/dev/null 2>"$r/ERR" || rc=$?
+}
+refused() {  # $1 = label, $2 = text the complaint must carry
+  [ "$rc" -ne 0 ] || { echo "FAIL $1: refused"; cat "$r/OUT.md"; exit 1; }
+  [ ! -e "$r/OUT.md" ] || { echo "FAIL $1: --out was written"; exit 1; }
+  grep -qF "$2" "$r/ERR" || { echo "FAIL $1: the complaint names $2"; cat "$r/ERR"; exit 1; }
+}
+
+dset changes; mkdir -p "$d/changes"
+printf 'Stop now stays stopped.\n' > "$d/changes/a-first"
+printf 'Keys load again.\n' > "$d/changes/b-second"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-changes: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==3{exit}' "$r/OUT.md")" = "$(printf -- '- Stop now stays stopped.\n- Keys load again.\n- Built on upstream OpenSSH 9.9p2 (no upstream change).')" ] \
+  || { echo "FAIL dir-changes: change bullets lead What changed"; cat "$r/OUT.md"; exit 1; }
+grep -q 'packaging changes only' "$r/OUT.md" && { echo "FAIL dir-changes: changes are not packaging only"; cat "$r/OUT.md"; exit 1; }
+grep -q '### Before you update' "$r/OUT.md" && { echo "FAIL dir-changes: no requires/ or rebuild, no section"; exit 1; }
+r="$work/dir-changes-self"; mkrepo "$r"
+( cd "$r" && git tag 20260802.4 && git tag 20260802.5 )
+mkdir -p "$r/release-notes/20260802.6/changes"; printf 'Pure-Go programs now run on Mavericks.\n' > "$r/release-notes/20260802.6/changes/go"
+( cd "$r" && git add -A && git commit -qm notes )
+gen "$r" 20260802.6 --product Porthole --min-os 10.9 >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==3{exit}' "$r/OUT.md")" = "$(printf -- '- Pure-Go programs now run on Mavericks.\n- New release of Porthole 20260802.6 (was 20260802.5).\n  [Changes since 20260802.5](https://github.com/Mavergreen/mavericks-openssh/compare/20260802.5...20260802.6)')" ] \
+  || { echo "FAIL dir-changes-self: a same-date release with changes is a new release"; cat "$r/OUT.md"; exit 1; }
+
+dset before; mkdir -p "$d/changes" "$d/requires"
+printf 'Keys load again.\n' > "$d/changes/keys"
+printf '22.1.8\n' > "$d/requires/clang22"
+printf 'Rebuild your Go programs to use the new SDK.\n' > "$d/rebuild"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-before: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### /{print}' "$r/OUT.md" | sed -n 1,2p)" = "$(printf '### Before you update\n### What changed')" ] \
+  || { echo "FAIL dir-before: Before you update comes first"; cat "$r/OUT.md"; exit 1; }
+[ "$(awk '/^### Before you update$/{f=1; next} f&&/^$/{exit} f{print}' "$r/OUT.md")" = "$(printf -- '- Install clang22 22.1.8 or later first.\n- Rebuild your Go programs to use the new SDK.')" ] \
+  || { echo "FAIL dir-before: requirements, then rebuild"; cat "$r/OUT.md"; exit 1; }
+
+dset notice; printf 'Never publish an image that contains macOS.\n' > "$r/release-notes/notice"
+dgen new --min-os ''
+[ "$rc" -eq 0 ] || { echo "FAIL dir-notice: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^---$/{f=1; next} f' "$r/OUT.md")" = "$(printf 'Never publish an image that contains macOS.\n\n[All changes since 9.9p2-mavericks.1](https://github.com/Mavergreen/mavericks-openssh/compare/9.9p2-mavericks.1...9.9p2-mavericks.2)')" ] \
+  || { echo "FAIL dir-notice: the notice opens the footer"; cat "$r/OUT.md"; exit 1; }
+gen "$r" "$T" >/dev/null 2>"$r/ERR" || { echo "FAIL dir-notice: ships with a floor"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^---$/{f=1; next} f' "$r/OUT.md" | sed -n 1,3p)" = "$(printf 'Never publish an image that contains macOS.\n\nRequires Mac OS X 10.9.5 or later.')" ] \
+  || { echo "FAIL dir-notice: a blank line before each later footer line"; cat "$r/OUT.md"; exit 1; }
+printf 'See https://x.org now.\n' > "$r/release-notes/notice"
+rm -f "$r/OUT.md"; rc=0; gen "$r" "$T" >/dev/null 2>"$r/ERR" || rc=$?
+refused dir-notice-checked 'check-release-sentence:'
+
+for m in new minted; do
+  dset "bad-sentence-$m"; mkdir -p "$d/changes"; printf 'Cut to exercise the shared publish-release.yml.\n' > "$d/changes/x"
+  dgen "$m"
+  if [ "$m" = new ]; then
+    refused dir-bad-sentence 'check-release-sentence:'
+    grep -qF "$d/changes/x" "$r/ERR" || { echo "FAIL dir-bad-sentence: names the file"; cat "$r/ERR"; exit 1; }
+  else
+    [ "$rc" -eq 0 ] || { echo "FAIL dir-bad-sentence: a minted tag regenerates without the sentence check"; cat "$r/ERR"; exit 1; }
+    grep -q '^- Cut to exercise' "$r/OUT.md" || { echo "FAIL dir-bad-sentence: minted renders"; cat "$r/OUT.md"; exit 1; }
+  fi
+done
+
+for c in notes.md .DS_Store 'changes/Foo Bar' changes/ requires/; do
+  for m in new minted; do
+    dset "stray-$m-$(printf %s "$c" | tr -c a-zA-Z -)"; mkdir -p "$d/changes"
+    case "$c" in
+      */) rm -rf "$d/changes"; mkdir -p "$d/$c"; printf 'Keep going.\n' > "$d/rebuild"; ( cd "$r" && git add -A && git commit -qm keep ); want="$d/${c%/}" ;;
+      *) printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Stray.\n' > "$d/$c"; want="$d/$c" ;;
+    esac
+    dgen "$m"
+    refused "dir-stray $c $m" "$want"
+  done
+done
+
+dset crlf; mkdir -p "$d/changes"; printf 'Works now.  \r' > "$d/changes/w"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-crlf: ships"; cat "$r/ERR"; exit 1; }
+grep -q '^- Works now\.$' "$r/OUT.md" || { echo "FAIL dir-crlf: rendered without the CR"; od -c "$r/OUT.md" | head -20; exit 1; }
+
+dset both; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Prose.\n' > "$r/release-notes/$T.md"
+dgen new
+refused dir-both "release-notes/$T.md"
+
+for c in 'nosuch 1.0' 'clang22 1 .0' 'clang22 v1.0'; do
+  dset "requires-bad-$(printf %s "$c" | tr -c a-z0-9 -)"; mkdir -p "$d/requires"; printf '%s\n' "${c#* }" > "$d/requires/${c%% *}"
+  for m in new minted; do
+    [ "$m" = new ] || { rm -f "$r/OUT.md"; ( cd "$r" && git tag -d "$T" >/dev/null ); }
+    dgen "$m"
+    refused "dir-requires-bad $c $m" "$d/requires/${c%% *}"
+  done
+done
+
+dset short; n="$r/release-notes/swift-runtime"; mkdir -p "$n/$T/changes" "$d"
+printf 'Runtime loads faster.\n' > "$n/$T/changes/x"; printf 'Use the runtime from here.\n' > "$n/notice"
+printf 'Stray.\n' > "$d/notes.md"; printf 'Top-level notice.\n' > "$r/release-notes/notice"
+dgen new --short swift-runtime
+[ "$rc" -eq 0 ] || { echo "FAIL dir-short: ships"; cat "$r/ERR"; exit 1; }
+grep -q '^- Runtime loads faster\.$' "$r/OUT.md" && grep -q '^Use the runtime from here\.$' "$r/OUT.md" \
+  || { echo "FAIL dir-short: the nested tree is read"; cat "$r/OUT.md"; exit 1; }
+grep -q 'Top-level' "$r/OUT.md" && { echo "FAIL dir-short: the top-level tree is ignored"; exit 1; }
+rm -f "$r/OUT.md"; rc=0; gen "$r" "$T" --short swift-runtime-other >/dev/null 2>"$r/ERR" || rc=$?
+refused dir-short-fallback "$d/notes.md"
+
+for p in Shipyard Porthole; do
+  r="$work/dir-shipyard-$p"; mkrepo "$r"; ( cd "$r" && git tag v1.0.1 )
+  mkdir -p "$r/release-notes/v1.0.2/changes"; printf 'Shipyard now installs beside cmake.\n' > "$r/release-notes/v1.0.2/changes/x"
+  ( cd "$r" && git add -A && git commit -qm notes )
+  rc=0; gen "$r" v1.0.2 --product "$p" >/dev/null 2>"$r/ERR" || rc=$?
+  if [ "$p" = Shipyard ]; then
+    [ "$rc" -eq 0 ] || { echo "FAIL dir-shipyard: shipyard's own notes may name it"; cat "$r/ERR"; exit 1; }
+  else
+    refused dir-shipyard-other 'internal term'
+  fi
+done
+
 # spec: scripts/release-notes.sh -- self-upstream has no -mavericks axis, so no upstream claim
 #       and a plain title.
 r="$work/self"; mkrepo "$r"; rm "$r/build/upstream-release-notes-url.sh"
