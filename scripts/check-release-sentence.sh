@@ -45,8 +45,15 @@ if has '[`*#<>|]|\[|\]|(^|[[:space:]])_|_([[:space:]]|$)|^[-+]|^[0-9]+\.'; then
   fail "Markdown or formatting characters are not allowed"
 fi
 has -i '[a-z][a-z0-9+.-]*://|(^|[^[:alnum:]])www\.' && fail "URL is not allowed"
-has '(^|[^[:alnum:]])[0-9a-fA-F]{7,}([^[:alnum:]]|$)' && fail "hex run of 7 or more is not allowed"
-has '[A-Za-z0-9+/]{20,}' && fail "base64-looking run of 20 or more is not allowed"
+run() {
+  printf '%s\n' "$first" | awk -v bad="$1" -v min="$2" -v need="$3" '{
+    gsub(bad, " ")
+    for (i = 1; i <= NF; i++)
+      if (length($i) >= min && $i ~ /[0-9]/ && $i ~ need) found = 1
+  } END { exit !found }'
+}
+run '[^0-9A-Fa-f]' 7 '^[0-9A-Fa-f]+$' && fail "hex run of 7 or more is not allowed"
+run '[^A-Za-z0-9+/]' 20 '[A-Za-z]' && fail "base64-looking run of 20 or more is not allowed"
 
 terms="CI runner workflow conformance dogfood agent subagent plan QUEUE commit SHA shipyard Renovate ingredient pin"
 pattern=
@@ -57,7 +64,7 @@ for t in $terms; do
   done
   $skip || pattern="$pattern|$t"
 done
-pattern="${pattern#|}|base recipe|check [0-9]+"
+pattern="(${pattern#|})(s|es)?|base recipes?|check [0-9]+"
 has -i -w "$pattern" && fail "internal term is not allowed"
 has -i '\.yml' && fail "internal term '.yml' is not allowed"
 

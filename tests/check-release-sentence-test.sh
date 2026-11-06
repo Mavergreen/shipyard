@@ -79,13 +79,25 @@ no "URL" "URL" <<'X'
 See https://x.org for more.
 X
 no "hex" "hex" <<'X'
-Fixed in deadbee today.
+Fixed in 3f2a9c1 today.
 X
 ok "short hex-looking word" <<'X'
 Fixed in decade today.
 X
+ok "all-letter hex-looking word" <<'X'
+Stop now stays defaced and accede.
+X
+ok "20+ letter word" <<'X'
+The internationalizationally word is fine.
+X
+no "base64 needs letter and digit mix" "base64" <<'X'
+The key ghijklmnopqrstuvwxyz12 is gone.
+X
+for term in runners commits ingredients pins agents workflows plans Renovates; do
+  printf 'The %s stay stopped.\n' "$term" | no "plural internal term: $term" "internal term"
+done
 no "base64" "base64" <<'X'
-The key QUJDREVGR0hJSktMTU5P is gone.
+The key QUJDREVGR0hJSk1TU5P0 is gone.
 X
 
 for term in CI runner workflow conformance dogfood agent subagent plan QUEUE commit SHA shipyard Renovate ingredient pin \
