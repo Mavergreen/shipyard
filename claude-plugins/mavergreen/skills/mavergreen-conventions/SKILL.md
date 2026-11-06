@@ -1159,19 +1159,44 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   A repo that tags products separately (swift) nests the same under `release-notes/<short>/`, `notice`
   included, and passes `--short <short>` to `release-notes.sh`; given it, and when that directory
   exists, only the nested tree is read. An unknown entry in `release-notes/<TAG>/` fails the release,
-  naming it; nothing else from the directory reaches the body. At the flag day the tree moves under
+  naming it; nothing else from the directory reaches the body. A directory beside it named for any
+  other tag fails a new release too, naming the tag it expected: only `<TAG>`, an existing tag's
+  directory, or a registered product's nest may sit there (a minted tag's regeneration leaves notes
+  staged for a later release alone). At the flag day the tree moves under
   `.mavergreen/`: `changes/` and `rebuild` to `.mavergreen/release-notes/<TAG>/`, `requires/` is derived
   from `products/<short>/requires/<dep>/min` changing since the previous tag, and `notice` becomes
   `products/<short>/notice`.
 
   **Every sentence is checked by `check-release-sentence.sh`** (`changes/*`, `rebuild`, `notice`; its
-  header and its test hold the rules, so they are not restated here), and `requires/<short>` is checked
-  as a registered short name plus a version. A file that fails is refused, never trimmed.
+  header lists every rule, one per line, and its test holds the cases, so they are not restated here),
+  and `requires/<short>` is checked as a registered short name plus a version. A file that fails is
+  refused, never trimmed. Check each file before committing it:
+
+  ```sh
+  sh "$SHIPYARD_SCRIPTS/check-release-sentence.sh" release-notes/<TAG>/changes/<slug>
+  ```
+
+  (shipyard's own notes add `--allow shipyard`). To see the whole body, render it from the repo root
+  with tags fetched, as the release would: `sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag <TAG>
+  --version <VERSION> --product <noun> --out "$TMPDIR/notes.md"` (plus the `--line`, `--min-os` and
+  `--short` the repo's `release.yml` passes).
+
+  **Naming `<TAG>` before the release exists**, by version scheme:
+  - `vLINE.COUNT` (shipyard, `shipyard-version.sh`): the tag of the commit that will be released,
+    `v<line>.<commit count>`. It moves with every commit, the notes commit and anyone else's included,
+    so rename the directory to match the commit that is actually released.
+  - `YYYYMMDD.N` (porthole, longboat): what `self-upstream-version.sh` prints for the commit that will
+    be released, which a non-publishing run shows on its version line. `release-notes/` is own code, so
+    the notes commit can itself move the date to its own day and restart `.N` at `.1`: run it after
+    committing the notes.
+  - `<upstream>-mavericks.N` (every port): N is 1 for a new upstream, else the highest
+    `<upstream>-mavericks.*` tag's N plus 1.
 
   **Legacy `.md` prose.** A tag is *minted* when it exists locally on a commit other than `HEAD`
   (checkouts are fetch-depth 0; publish-release.yml mints the tag after the notes are built). A
   `release-notes/<TAG>.md` for a tag not minted is refused, with a message naming the directory form.
-  For a minted tag it is published verbatim with no mark required, and `release-notes/<TAG>/` for a
+  For a minted tag it is published verbatim with no mark required, right after the title and before
+  `### Before you update`, with any `<!-- edited by a human -->` line stripped; `release-notes/<TAG>/` for a
   minted tag renders without the sentence check, so tightening the check never reddens the
   regeneration of a published release. Old tags' `.md` files stay as they are.
 
@@ -1186,10 +1211,11 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   Known limits, install steps and usage belong in the repo's README, not in a release. The human-edit
   mark `<!-- edited by a human -->` is retired: `release-notes.sh` neither requires nor writes it, and
   `check-release-notes.sh` still refuses a body that carries it.
-- **The shape, in order:** title; `### Before you update` when `requires/` or `rebuild` exists (one
+- **The shape, in order:** title; a minted tag's legacy `.md` prose; `### Before you update` when `requires/` or `rebuild` exists (one
   `- Install <short> <min> or later first.` bullet per requirement, then the `rebuild` line); `### What
   changed` (the `changes/` bullets first, then the generated upstream line, which with `changes/`
-  present never says "packaging changes only"); `### Our patches` when one of our modifications
+  present never says "packaging changes only": a port's repackage that moved no pin and no patch
+  says `- Built on upstream <P> <UP> (no upstream change).`); `### Our patches` when one of our modifications
   changed; `### Build ingredients` when a pin moved; then a footer (`notice` first, then the floor
   line and a compare link). A release with no `release-notes/<TAG>/` still says what changed.
   `patch-notes.sh` finds "our patches" as any `*.patch`/`*.diff`, or anything under a `patches/` or
@@ -1277,6 +1303,8 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   `- First release of <product> <version>.` with no earlier release; for a `YYYYMMDD.N` version on
   the same date as the previous one, `- Rebuilt because build ingredients moved (below); no change to
   <product> itself.` when a pin moved, else `- Repackage of <product> <date>; packaging changes only.`;
+  with `changes/` present, a pin that moved gives `- Rebuilt because build ingredients moved (below).`
+  (the changes say what changed in the product), and none gives the `New release` line below;
   otherwise `- New release of <product> <version> (was <prev>).` and a
   `[Changes since <prev>](https://github.com/<owner>/<repo>/compare/<prev tag>...<tag>)` line, the
   repo from `GITHUB_REPOSITORY`, else the registry entry for the lowercased product noun; with
