@@ -330,6 +330,30 @@ if [ "$(id -u)" != 0 ]; then
   done
 fi
 
+# spec: scripts/release-notes.sh -- the release-notes/ tree itself, and a --short nest, are refused when unreadable.
+if [ "$(id -u)" != 0 ]; then
+  for mode in 000 644; do
+    for level in top nest; do
+      dset "unreadable-$level-$mode"; n="$r/release-notes"
+      mkdir -p "$d/changes" "$n/swift-runtime/$T/changes"
+      printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Runtime loads faster.\n' > "$n/swift-runtime/$T/changes/x"
+      ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
+      if [ "$level" = top ]; then victim="$n"; extra=""; else victim="$n/swift-runtime"; extra="--short swift-runtime"; fi
+      chmod "$mode" "$victim"
+      rc=0; gen "$r" "$T" $extra >/dev/null 2>"$r/ERR" || rc=$?
+      chmod 755 "$victim"
+      refused "dir-unreadable-$level $mode" "$victim"
+    done
+  done
+  dset requires-unreadable; mkdir -p "$d/requires"; printf '22.1.8\n' > "$d/requires/clang22"
+  ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
+  chmod 000 "$d/requires/clang22"
+  rc=0; gen "$r" "$T" >/dev/null 2>"$r/ERR" || rc=$?
+  chmod 644 "$d/requires/clang22"
+  refused dir-requires-unreadable "$d/requires/clang22"
+  grep -q 'integer expression' "$r/ERR" && { echo "FAIL dir-requires-unreadable: a shell error leaked"; cat "$r/ERR"; exit 1; }
+fi
+
 # spec: scripts/release-notes.sh -- requires/<short> holds one line, the minimum version.
 dset requires-two; mkdir -p "$d/requires"; printf '22.1.8\nand more\n' > "$d/requires/clang22"
 dgen new
@@ -375,7 +399,9 @@ grep -q 'Built on upstream' "$r/OUT.md" && { echo "FAIL dir-changes-ing: not 'Bu
 # spec: scripts/release-notes.sh -- bullets order by slug in the C locale: '-' before a letter, which a
 #       dictionary collation reverses. Capitals are not slugs, so a-z and aa stand in for B-x and a-x.
 dset slug-order; mkdir -p "$d/changes"; printf 'Second thing.\n' > "$d/changes/aa"; printf 'First thing.\n' > "$d/changes/a-z"
-LC_ALL=en_US.UTF-8 dgen new
+LC_ALL=en_US.UTF-8; export LC_ALL
+dgen new
+unset LC_ALL
 [ "$rc" -eq 0 ] || { echo "FAIL dir-slug-order: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- First thing.\n- Second thing.')" ] \
   || { echo "FAIL dir-slug-order: C-locale order"; cat "$r/OUT.md"; exit 1; }

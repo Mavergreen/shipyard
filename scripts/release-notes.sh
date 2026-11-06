@@ -135,8 +135,14 @@ minted() {
 # spec: SKILL.md "Release notes" -- committed .md prose publishes only for a minted tag; a new
 #       release writes release-notes/<TAG>/ instead (both under release-notes/<short>/ when --short
 #       names a nested tree). Any mark line is stripped, never shown to readers.
+readable_dir() {
+  { [ -r "$1" ] && [ -x "$1" ]; } || die "$1 cannot be read; fix its permissions"
+}
 ROOT="$MAVERICKS_ROOT/release-notes"
-if [ -n "$SHORT" ] && [ -d "$ROOT/$SHORT" ]; then ROOT="$ROOT/$SHORT"; fi
+if [ -d "$ROOT" ]; then
+  readable_dir "$ROOT"
+  if [ -n "$SHORT" ] && [ -d "$ROOT/$SHORT" ]; then ROOT="$ROOT/$SHORT"; readable_dir "$ROOT"; fi
+fi
 DIR="$ROOT/$TAG"
 MARK='<!-- edited by a human -->'
 notes="$ROOT/${TAG}.md"
@@ -182,7 +188,7 @@ sentence() {
     || die "$1 is not one release-note sentence (see the complaint above); see SKILL.md \"Release notes\""
 }
 if [ -d "$DIR" ]; then
-  { [ -r "$DIR" ] && [ -x "$DIR" ]; } || die "$DIR cannot be read; fix its permissions"
+  readable_dir "$DIR"
   for e in "$DIR"/* "$DIR"/.*; do
     case "${e##*/}" in .|..) continue ;; esac
     { [ -e "$e" ] || [ -L "$e" ]; } || continue
@@ -194,7 +200,7 @@ if [ -d "$DIR" ]; then
   done
   for sub in changes requires; do
     [ -d "$DIR/$sub" ] || continue
-    { [ -r "$DIR/$sub" ] && [ -x "$DIR/$sub" ]; } || die "$DIR/$sub cannot be read; fix its permissions"
+    readable_dir "$DIR/$sub"
     n=0
     for e in "$DIR/$sub"/* "$DIR/$sub"/.*; do
       b="${e##*/}"
@@ -208,6 +214,7 @@ if [ -d "$DIR" ]; then
       else
         sh "$SELF/product-name.sh" repo "$b" >/dev/null 2>&1 \
           || die "$e: $b is not a registered product short name (scripts/product-name.sh)"
+        [ -r "$e" ] || die "$e cannot be read; fix its permissions"
         [ "$(awk '/[^[:space:]]/ { n++ } END { print n + 0 }' "$e")" -le 1 ] \
           || die "$e: holds one line, the minimum version"
         v="$(line1 "$e")"
