@@ -87,7 +87,7 @@ git -C "$R" tag 20261012.3
 at 2026-10-19T22:30:00-05:00 src/x.c
 want 20261020.1 "the day is the UTC day, neither the committer's offset nor the caller's TZ"
 
-for p in tests/a.sh .github/workflows/x.yml README.md UPSTREAM_VERSION ingredients/foo/product; do
+for p in tests/a.sh .github/workflows/x.yml README.md UPSTREAM_VERSION ingredients/foo/product release-notes/20261019.1/changes/x release-notes/notice; do
   fresh "default-$(printf '%s' "$p" | tr '/.' '__')"
   git -C "$R" tag 20261012.3
   at 2026-10-19T12:00:00Z "$p"

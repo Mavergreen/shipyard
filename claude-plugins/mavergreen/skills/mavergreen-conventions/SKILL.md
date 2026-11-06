@@ -607,8 +607,8 @@ it **drops the `-mavericks` suffix** and versions itself directly:
   that day and starts again at `.1`; an ingredient-only release keeps the date and takes `.N+1`. `.N`
   is never omitted. `$SHIPYARD_SCRIPTS/self-upstream-version.sh` derives it from git history
   (`fetch-depth: 0`). Own code is every path but `UPSTREAM_VERSION`, `components/*/version`,
-  `ingredients/**`, `.github/**`, `tests/**`, top-level `*.md`, each file `## Declared state` names,
-  and each `## Conformance deviations` entry `- self-upstream-exclude:<glob>: <reason>` (a git
+  `ingredients/**`, `.github/**`, `tests/**`, `release-notes/**`, top-level `*.md`, each file
+  `## Declared state` names, and each `## Conformance deviations` entry `- self-upstream-exclude:<glob>: <reason>` (a git
   pathspec glob: `*` stays in one directory, `**/` spans any). It sets the version only; publishing
   is unchanged — declared state or a `workflow_dispatch`, which is how own code ships on purpose.
   `UPSTREAM_VERSION` stays the declared `upstream` entry but is no longer read for the date: editing
@@ -1187,8 +1187,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
     so rename the directory to match the commit that is actually released.
   - `YYYYMMDD.N` (porthole, longboat): what `self-upstream-version.sh` prints for the commit that will
     be released: run `sh "$SHIPYARD_SCRIPTS/self-upstream-version.sh"` at that commit. `release-notes/`
-    is own code, so the notes commit can itself move the date to its own day and restart `.N` at `.1`:
-    run it after committing the notes.
+    is not own code, so committing the notes does not move the version.
   - `vX.Y.Z` (magic-trackpad2): `v` plus the `MAVERICKS_VERSION` in `CMakeLists.txt` that the release will
     publish, such as `v0.5.6`. `publish-release.yml` mints the tag; never push it by hand (the pre-push
     hook refuses).

@@ -7,8 +7,8 @@
 #          REV, if own code never changed), .1. When own code changed since the last tag: that day
 #          .1 if it is later than the tag's date, else the tag's date .N+1. Otherwise the tag's date
 #          .N+1. Own code is every path except UPSTREAM_VERSION, components/*/version,
-#          ingredients/**, .github/**, tests/**, top-level *.md, each file declared-state.sh names,
-#          and each INGREDIENTS.md "## Conformance deviations" entry
+#          ingredients/**, .github/**, tests/**, release-notes/**, top-level *.md, each file
+#          declared-state.sh names, and each INGREDIENTS.md "## Conformance deviations" entry
 #          "- self-upstream-exclude:<glob>: <reason>", a git pathspec glob (`*` stays within one
 #          directory, `**/` spans any). Exit 2 on a usage error, a non-repo, an unknown REV, a
 #          shallow clone, or an INGREDIENTS.md the parsers refuse.
@@ -50,7 +50,7 @@ rev="$(git -C "$ROOT" rev-parse --verify -q "$REF^{commit}" 2>/dev/null)" || {
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/self-upstream-version.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
-for p in UPSTREAM_VERSION 'components/*/version' 'ingredients/**' '.github/**' 'tests/**' '*.md'; do
+for p in UPSTREAM_VERSION 'components/*/version' 'ingredients/**' '.github/**' 'tests/**' 'release-notes/**' '*.md'; do
   printf ':(exclude,glob)%s\n' "$p"
 done > "$work/exclude"
 
