@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: shipyard-cmake-min-test.sh
-#          The minimum configured into the installed MavericksShipyardConfig.cmake is the Kitware part
+#          The minimum configured into the installed MavergreenShipyardConfig.cmake is the Kitware part
 #          of .mavergreen/products/shipyard/requires/cmake/min; -DSHIPYARD_CMAKE_MIN replaces it for one configure only, and a
 #          value that is not a version fails the configure. Exit 0 clean, 1 on failure, 77 with no cmake.
 # spec: 2026-10-09 C5
@@ -14,7 +14,7 @@ fails=0
 fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
 min="$(sed -n '1s/-mavericks\.[0-9][0-9]*$//p' "$root/.mavergreen/products/shipyard/requires/cmake/min")"
 [ -n "$min" ] || { echo "FAIL: .mavergreen/products/shipyard/requires/cmake/min is not X.Y.Z-mavericks.N"; exit 1; }
-baked() { sed -n 's/^ *set(_shipyard_cmake_min "\(.*\)")$/\1/p' "$w/b/MavericksShipyardConfig.cmake"; }
+baked() { sed -n 's/^ *set(_shipyard_cmake_min "\(.*\)")$/\1/p' "$w/b/MavergreenShipyardConfig.cmake"; }
 
 "$cm" -S "$root" -B "$w/b" > "$w/c1.log" 2>&1 || { echo "FAIL: shipyard does not configure:"; sed 's/^/    | /' "$w/c1.log"; exit 1; }
 [ "$(baked)" = "$min" ] || fail "with no -DSHIPYARD_CMAKE_MIN the minimum must be the Kitware part of requires/cmake/min, $min; got '$(baked)'"

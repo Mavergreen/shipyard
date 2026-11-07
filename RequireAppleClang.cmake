@@ -7,7 +7,7 @@
 # 10.9, the current Xcode's clang on a modern host.
 #
 # By default this checks every language project() enabled and requires each to be
-# AppleClang -- so a plain `include(Mavericks)` just works, no configuration. Knobs:
+# AppleClang -- so a plain `include(Mavergreen)` just works, no configuration. Knobs:
 #   set(MAVERICKS_REQUIRE_APPLECLANG OFF)  # opt out (an intentional non-Apple
 #                                          # toolchain, or a foreign/Go build)
 #   set(MAVERICKS_REQUIRE_LANGS C OBJC)    # override which languages to check
@@ -36,7 +36,7 @@ if(MAVERICKS_REQUIRE_APPLECLANG)
         "reconfigure a CLEAN build dir, e.g.:\n"
         "    cmake -S . -B build -DCMAKE_C_COMPILER=/usr/bin/clang -DCMAKE_CXX_COMPILER=/usr/bin/clang++\n"
         "In CLion: Settings > Build > CMake > Toolchain -> /usr/bin/clang, then reset the cache.\n"
-        "If a non-Apple toolchain is intended here, set(MAVERICKS_REQUIRE_APPLECLANG OFF) before include(Mavericks).")
+        "If a non-Apple toolchain is intended here, set(MAVERICKS_REQUIRE_APPLECLANG OFF) before include(Mavergreen).")
     endif()
   endforeach()
 

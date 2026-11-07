@@ -3,7 +3,7 @@ description: >
   Provide shipyard and shipyard-cmake to a job. A consumer references this action at the ref it pins
   (@v1 or @vX.Y.Z -- that ref IS the version) and gets exactly the pkgs a developer installs: the cmake
   product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. Consumers
-  configure with shipyard-cmake; MavericksShipyardConfig.cmake refuses any other cmake.
+  configure with shipyard-cmake; MavergreenShipyardConfig.cmake refuses any other cmake.
 
 runs:
   using: composite
@@ -103,7 +103,7 @@ runs:
         sudo installer -pkg "$pkg" -target /
         echo /usr/local/mavergreen/bin >> "$GITHUB_PATH"
         /usr/local/mavergreen/bin/shipyard-cmake --version | head -1
-        scripts=/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts
+        scripts=/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/scripts
         [ -d "$scripts" ] || { echo "::error::the shipyard pkg installed no scripts dir at $scripts"; exit 1; }
         echo "SHIPYARD_SCRIPTS=$scripts" >> "$GITHUB_ENV"
         echo "shipyard $ver installed; SHIPYARD_SCRIPTS=$scripts"
@@ -137,13 +137,13 @@ runs:
         scripts="$root/scripts"
         [ -f "$scripts/run-repo-tests.sh" ] || {
           echo "::error::$scripts does not look like shipyard's scripts dir (no run-repo-tests.sh) -- the action's own checkout is not where this expected it"; exit 1; }
-        # spec: R-P1-23 -- MavericksShipyard_DIR, not CMAKE_PREFIX_PATH: package-scoped and EXACT, so
+        # spec: R-P1-23 -- MavergreenShipyard_DIR, not CMAKE_PREFIX_PATH: package-scoped and EXACT, so
         #       it can neither mis-resolve nor shadow another package the way a whole checkout on
         #       CMAKE_PREFIX_PATH could. The config skips its shipyard-cmake refusal when the HOST is
-        #       not Apple, so find_package(MavericksShipyard) resolves here rather than being
+        #       not Apple, so find_package(MavergreenShipyard) resolves here rather than being
         #       rejected -- container-tools' two ubuntu-latest jobs need exactly that.
-        [ -f "$root/MavericksShipyardConfig.cmake" ] || {
-          echo "::error::$root holds no MavericksShipyardConfig.cmake -- find_package(MavericksShipyard) would not resolve on this runner"; exit 1; }
+        [ -f "$root/MavergreenShipyardConfig.cmake" ] || {
+          echo "::error::$root holds no MavergreenShipyardConfig.cmake -- find_package(MavergreenShipyard) would not resolve on this runner"; exit 1; }
         b="$RUNNER_TEMP/shipyard-bin"; mkdir -p "$b"
         ln -sf "$scripts/shipyard-check" "$b/shipyard-check"
         echo "$b" >> "$GITHUB_PATH"
@@ -155,7 +155,7 @@ runs:
         ref="${ref:-$(basename "$root")}"
         {
           echo "SHIPYARD_SCRIPTS=$scripts"
-          echo "MavericksShipyard_DIR=$root"
+          echo "MavergreenShipyard_DIR=$root"
         } >> "$GITHUB_ENV"
         if [ "$local" = yes ]; then
           echo "shipyard's own checkout ($root) names no release, so SHIPYARD_VERSION is unset"
@@ -164,4 +164,4 @@ runs:
         else
           echo "::warning::'$ref' names no shipyard release, so SHIPYARD_VERSION is unset and packaging a .pkg here will fail -- pin install@v1 or an exact @vX.Y.Z"
         fi
-        echo "${RUNNER_OS:-this runner} is not macOS and shipyard has no Linux pkg yet, so nothing was installed. You get shipyard's shell half from the ref you pinned: SHIPYARD_SCRIPTS=$scripts, and find_package(MavericksShipyard) resolves via MavericksShipyard_DIR=$root. There is no shipyard-cmake here, so a configure that needs one must run on a macOS runner."
+        echo "${RUNNER_OS:-this runner} is not macOS and shipyard has no Linux pkg yet, so nothing was installed. You get shipyard's shell half from the ref you pinned: SHIPYARD_SCRIPTS=$scripts, and find_package(MavergreenShipyard) resolves via MavergreenShipyard_DIR=$root. There is no shipyard-cmake here, so a configure that needs one must run on a macOS runner."

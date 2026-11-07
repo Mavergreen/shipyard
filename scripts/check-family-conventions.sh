@@ -561,7 +561,7 @@ for p in sys.argv[1:]:
             continue
         # A job that demonstrably runs off macOS is skipped: shipyard ships no Linux pkg and no
         # Linux shipyard-cmake, so demanding it there is incoherent -- the same reasoning
-        # MavericksShipyardConfig.cmake gives for skipping its refusal unless CMAKE_HOST_APPLE.
+        # MavergreenShipyardConfig.cmake gives for skipping its refusal unless CMAKE_HOST_APPLE.
         # Requiring it anyway broke container-tools' ubuntu jobs twice, most recently 2026-09-16.
         # Skip ONLY when runs-on is plainly non-macOS; anything unresolvable (an expression, a
         # matrix) is still checked, because a gate that stays silent when it cannot tell is the
@@ -667,7 +667,7 @@ fi
 
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
 #       build-location override. A preset's own `environment` block is applied AFTER the real
-#       process environment, so exporting MAVERICKS_BUILD_ROOT cannot redirect a --preset
+#       process environment, so exporting MAVERGREEN_BUILD_ROOT cannot redirect a --preset
 #       build and this file is the only thing that can. It must be gitignored, or it pollutes
 #       git status and gets committed by accident. Keyed on a COMMITTED CMakePresets.json: a
 #       repo with no presets has no override channel to protect.

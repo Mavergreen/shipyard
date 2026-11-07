@@ -1,18 +1,18 @@
 #!/usr/bin/env bats
 # platform: host-agnostic
-# mavericks_require_icon: forced icon decision (FATAL unless real .icns or explicit generic).
+# mavergreen_require_icon: forced icon decision (FATAL unless real .icns or explicit generic).
 SHARED="${BATS_TEST_DIRNAME}/.."
 
-# Configure a tiny project whose CMakeLists calls mavericks_require_icon with $1 (extra args).
+# Configure a tiny project whose CMakeLists calls mavergreen_require_icon with $1 (extra args).
 # Echoes cmake's combined output; status reflects configure success/failure.
 try_icon() {  # $1 = the require-icon args line; $2 (optional) = extra -D flags
   d="$(mktemp -d "${TMPDIR:-/tmp}/reqicon.XXXXXX")"
   cat > "$d/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
 project(t LANGUAGES NONE)
-include("${SHARED}/MavericksDecisions.cmake")
+include("${SHARED}/MavergreenDecisions.cmake")
 add_custom_target(app)
-mavericks_require_icon($1)
+mavergreen_require_icon($1)
 EOF
   run cmake ${2:-} -S "$d" -B "$d/b"
   rm -rf "$d"
@@ -40,9 +40,9 @@ EOF
   cat > "$d/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
 project(t LANGUAGES NONE)
-include("${SHARED}/MavericksDecisions.cmake")
+include("${SHARED}/MavergreenDecisions.cmake")
 add_custom_target(app)
-mavericks_require_icon(TARGET app ICNS "$d/AppIcon.icns")
+mavergreen_require_icon(TARGET app ICNS "$d/AppIcon.icns")
 EOF
   run cmake -S "$d" -B "$d/b"
   st=$status; out="$output"; rm -rf "$d"
@@ -63,9 +63,9 @@ EOF
   cat > "$d/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
 project(t LANGUAGES NONE)
-include("${SHARED}/MavericksDecisions.cmake")
+include("${SHARED}/MavergreenDecisions.cmake")
 add_custom_target(app)
-mavericks_require_icon(TARGET app ICNS "$d/AppIcon.icns")
+mavergreen_require_icon(TARGET app ICNS "$d/AppIcon.icns")
 EOF
   run cmake -DMAVERGREEN_PLACEHOLDER_DENYLIST="$d/deny.sha256" -S "$d" -B "$d/b"
   st=$status; out="$output"; rm -rf "$d"
@@ -80,9 +80,9 @@ EOF
   cat > "$d/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
 project(t LANGUAGES NONE)
-include("${SHARED}/MavericksDecisions.cmake")
+include("${SHARED}/MavergreenDecisions.cmake")
 add_custom_target(app)
-mavericks_require_icon(TARGET app ICNS "$d/AppIcon.icns")
+mavergreen_require_icon(TARGET app ICNS "$d/AppIcon.icns")
 EOF
   run cmake -DMAVERGREEN_PLACEHOLDER_DENYLIST="$d/deny.sha256" -DMAVERGREEN_ALLOW_GENERIC_ICON=ON -S "$d" -B "$d/b"
   st=$status; out="$output"; rm -rf "$d"

@@ -12,8 +12,8 @@ printf '9.9\n' > "$work/other/.mavergreen/upstream/VERSION"
 cat > "$work/a/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.5)
 project(p NONE)
-include("$root/MavericksVersion.cmake")
-mavericks_resolve_version(V)
+include("$root/MavergreenVersion.cmake")
+mavergreen_resolve_version(V)
 message(STATUS "resolved=\${V}")
 EOF
 out="$(MAVERGREEN_REPO_ROOT="$work/other" cmake -S "$work/a" -B "$work/b" 2>&1)" || { echo "FAIL: configure failed: $out"; exit 1; }

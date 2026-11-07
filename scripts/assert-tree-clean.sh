@@ -144,7 +144,7 @@ done
 if [ -s "$offenders" ]; then
   chk_fail tree-clean "the build changed the source tree" \
     "$(wc -l < "$offenders" | tr -d ' ') path(s) appeared or went missing that nothing declares, checked $mode" \
-    "build outside the tree (\$MAVERICKS_BUILD_ROOT), or declare the path in .mavergreen/intree with a reason"
+    "build outside the tree (\$MAVERGREEN_BUILD_ROOT), or declare the path in .mavergreen/intree with a reason"
   while IFS= read -r p; do
     report "$p"
   done < "$offenders"

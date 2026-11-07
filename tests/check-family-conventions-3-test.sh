@@ -33,7 +33,7 @@ rm "$work/cm5/scripts/x.sh"; (cd "$work/cm5" && git add -A) >/dev/null 2>&1
 
 # spec: SKILL.md "Family conventions" check 16 -- nothing tracked reads the CMake user package
 #       registry, because nothing writes it any more.
-mkrepo "$work/r16"; printf '#!/bin/sh\ncat "$HOME/.cmake/packages/MavericksShipyard/"*\n' > "$work/r16/build/x.sh"
+mkrepo "$work/r16"; printf '#!/bin/sh\ncat "$HOME/.cmake/packages/MavergreenShipyard/"*\n' > "$work/r16/build/x.sh"
 (cd "$work/r16" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/r16" && sh "$S" 2>&1)"; then echo "FAIL 16: a registry read should fail"; exit 1; fi
 first_is "$out" registry-read || { echo "FAIL should be a registry-read failure: $out"; exit 1; }
@@ -45,7 +45,7 @@ deviation "$work/r16" registry-read x 'build/x.sh' 'a shim that leaves with the 
 mkrepo "$work/r16ok"
 printf '#!/bin/sh\ngrep -q "cmake/packages" out && { echo "the registry came back"; exit 1; }\n' \
   > "$work/r16ok/tests/registry-gone-test.sh"
-printf '#!/bin/sh\n# We used to read "$HOME/.cmake/packages/MavericksShipyard"; shipyard-scripts replaced it.\nexit 0\n' \
+printf '#!/bin/sh\n# We used to read "$HOME/.cmake/packages/MavergreenShipyard"; shipyard-scripts replaced it.\nexit 0\n' \
   > "$work/r16ok/build/history.sh"
 (cd "$work/r16ok" && git add -A) >/dev/null 2>&1
 (cd "$work/r16ok" && sh "$S" >/dev/null) || { echo "FAIL 16: a test asserting the registry is gone, and a comment about it, should pass"; exit 1; }

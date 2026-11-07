@@ -20,7 +20,7 @@ real="$(command -v cmake 2>/dev/null)" || real=/usr/local/mavergreen/cmake/bin/c
 [ -x "$real" ] || { echo "SKIP: no cmake to build a fixture prefix from"; exit 77; }
 # platform: macOS sets TMPDIR with a trailing slash. The fixture root is passed as --root and
 #           greped for verbatim in cmake's own STATUS output, and cmake normalizes "//" away when it
-#           prints MavericksShipyard_DIR -- so an unstripped slash fails on every real macOS session
+#           prints MavergreenShipyard_DIR -- so an unstripped slash fails on every real macOS session
 #           while looking fine here with TMPDIR unset.
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/assert-installed.XXXXXX")"; trap 'rm -rf "$w"' EXIT
@@ -146,20 +146,20 @@ check "an updater with no arm64 slice fails" 1 "no arm64 slice" \
   assert --cmake-version "$ver"
 lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
 
-mv "$prefix/share/cmake/MavericksShipyard/.mavergreen" "$w/pins-aside"
+mv "$prefix/share/cmake/MavergreenShipyard/.mavergreen" "$w/pins-aside"
 check "an install without shipyard's own pins beside its scripts fails" 1 "read shipyard's own pins" \
   assert --cmake-version "$ver"
-mv "$w/pins-aside" "$prefix/share/cmake/MavericksShipyard/.mavergreen"
+mv "$w/pins-aside" "$prefix/share/cmake/MavergreenShipyard/.mavergreen"
 
 mv "$updir/shipyard-updater" "$w/updater-aside"
 check "a missing updater fails" 1 "no installed updater executable" \
   assert --cmake-version "$ver"
 mv "$w/updater-aside" "$updir/shipyard-updater"
 
-mv "$prefix/share/cmake/MavericksShipyard" "$w/shipyard-aside"
+mv "$prefix/share/cmake/MavergreenShipyard" "$w/shipyard-aside"
 check "a prefix whose shipyard is missing fails the stripped-environment probe" 1 "under a stripped environment" \
   assert --cmake-version "$ver"
-mv "$w/shipyard-aside" "$prefix/share/cmake/MavericksShipyard"
+mv "$w/shipyard-aside" "$prefix/share/cmake/MavergreenShipyard"
 
 mv "$farm/shipyard-cmake" "$w/link-aside"
 check "a missing /usr/local/mavergreen/bin/shipyard-cmake fails" 1 "no executable shipyard-cmake" \

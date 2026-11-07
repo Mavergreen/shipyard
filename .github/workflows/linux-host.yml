@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
 
       # spec: .github/actions/install/action.yml R-P1-18 -- the consumer's Linux path, exercised with
-      #       this checkout: it installs bats and exports SHIPYARD_SCRIPTS and MavericksShipyard_DIR.
+      #       this checkout: it installs bats and exports SHIPYARD_SCRIPTS and MavergreenShipyard_DIR.
       - name: Install mavericks-shipyard (the Linux path)
         uses: ./.github/actions/install
 

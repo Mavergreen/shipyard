@@ -4,7 +4,7 @@ tree-clean: a build writes nothing into the source tree that nothing declares.
 A family checkout may live on NFS, and an in-tree build crosses the network for every object, link and test
 fixture: measured on macho-tools, the same commit and compiler took 2.96s with the build on local disk and
 11.16s in-tree on NFS. The cost is I/O wait, and it compounds, since an agent-driven session runs dozens of
-builds per task. The shared presets put the build under $MAVERICKS_BUILD_ROOT (default $TMPDIR/mm-build) so
+builds per task. The shared presets put the build under $MAVERGREEN_BUILD_ROOT (default $TMPDIR/mavergreen-build) so
 the tree stays clean. This script is what enforces it, not the presets: it asks only what the source tree
 looks like before and after a build, never how the build ran, so it holds for CMake, make, a shell script or
 a build system nobody has invented, and cannot be outgrown by a new mechanism. Run --record before the build

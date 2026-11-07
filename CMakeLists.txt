@@ -18,7 +18,7 @@ else()
     file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/.mavergreen/upstream/VERSION" _MSC_VERSION LIMIT_COUNT 1)
   endif()
 endif()
-project(MavericksShipyard VERSION ${_MSC_VERSION} LANGUAGES NONE)
+project(MavergreenShipyard VERSION ${_MSC_VERSION} LANGUAGES NONE)
 
 # The Sparkle updater that keeps an installed shipyard current. OPT-IN: shipyard is LANGUAGES NONE
 # and compiles nothing, so `cmake --install` works on a box with no ObjC compiler -- and the payload
@@ -54,8 +54,8 @@ endif()
 
 # This project ships CMake modules + helper scripts (no compiled artifacts). It
 # installs itself as a find_package() config package so consumers can just:
-#   find_package(MavericksShipyard REQUIRED)
-#   include(Mavericks)
+#   find_package(MavergreenShipyard REQUIRED)
+#   include(Mavergreen)
 # instead of vendoring a submodule.
 # spec: 2026-10-09 C4 -- consumers find this package through bin/shipyard-cmake, which runs the cmake
 #       product in the sibling prefix with this prefix on CMAKE_PREFIX_PATH. To develop shipyard,
@@ -64,7 +64,7 @@ endif()
 
 include(GNUInstallDirs)
 
-set(_dest "${CMAKE_INSTALL_DATADIR}/cmake/MavericksShipyard")
+set(_dest "${CMAKE_INSTALL_DATADIR}/cmake/MavergreenShipyard")
 
 # spec: 2026-10-09 C5 -- the config refuses a cmake below the Kitware part of shipyard's cmake minimum.
 #       -DSHIPYARD_CMAKE_MIN sets another for one configure, so a fixture can pair shipyard with the
@@ -77,14 +77,14 @@ else()
   file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/.mavergreen/products/shipyard/requires/cmake/min" _shipyard_cmake_min LIMIT_COUNT 1)
   string(REGEX REPLACE "-mavericks\\.[0-9]+$" "" _shipyard_cmake_min "${_shipyard_cmake_min}")
 endif()
-# spec: MavericksShipyardConfig.cmake -- a minimum that is not a version reads as a checkout's
+# spec: MavergreenShipyardConfig.cmake -- a minimum that is not a version reads as a checkout's
 #       placeholder there, and every consumer would then fail on a missing .mavergreen/products/shipyard/requires/cmake/min.
 if(NOT _shipyard_cmake_min MATCHES "^[0-9]+(\\.[0-9]+)*$")
   message(FATAL_ERROR "shipyard's cmake minimum is '${_shipyard_cmake_min}', not a version: "
     ".mavergreen/products/shipyard/requires/cmake/min must hold X.Y.Z-mavericks.N, and -DSHIPYARD_CMAKE_MIN must be X.Y.Z")
 endif()
 set(SHIPYARD_CMAKE_MIN "${_shipyard_cmake_min}")
-configure_file(MavericksShipyardConfig.cmake "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake" @ONLY)
+configure_file(MavergreenShipyardConfig.cmake "${CMAKE_CURRENT_BINARY_DIR}/MavergreenShipyardConfig.cmake" @ONLY)
 
 # spec: 2026-10-09 C4 -- the launchers, plus bin/{cmake,ctest,cpack} linked to them so a build
 #       directory configured before the cmake product existed still regenerates; the pkg keeps those
@@ -104,23 +104,23 @@ file(CREATE_LINK "../${_dest}/scripts/shipyard-provision" "${CMAKE_CURRENT_BINAR
 install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/compat/shipyard-provision" DESTINATION bin)
 
 install(FILES
-  "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfig.cmake"
-  Mavericks.cmake
-  MavericksMode.cmake
+  "${CMAKE_CURRENT_BINARY_DIR}/MavergreenShipyardConfig.cmake"
+  Mavergreen.cmake
+  MavergreenMode.cmake
   RequireAppleClang.cmake
-  MavericksFetch.cmake
-  MavericksToolchain.cmake
-  MavericksCompatGuard.cmake
+  MavergreenFetch.cmake
+  MavergreenToolchain.cmake
+  MavergreenCompatGuard.cmake
   MavericksSparkle.cmake
-  MavericksVersion.cmake
-  MavericksDecisions.cmake
-  MavericksSDKMetadata.cmake
+  MavergreenVersion.cmake
+  MavergreenDecisions.cmake
+  MavergreenSDKMetadata.cmake
   default.json
   DESTINATION "${_dest}")
 
 # platform: CMake expands a preset's ${fileDir} against the file of the preset being CONFIGURED, not
-#           the file that wrote the macro, so a consumer inheriting mavericks-cross from the installed
-#           presets got "Could not find toolchain file: <consumer dir>/MavericksToolchain.cmake"
+#           the file that wrote the macro, so a consumer inheriting mavergreen-cross from the installed
+#           presets got "Could not find toolchain file: <consumer dir>/MavergreenToolchain.cmake"
 #           (CMake 3.28, 4.4.3). The installed copy names the installed toolchain file absolutely.
 #           The source keeps ${fileDir}: it is the token replaced here, it keeps the source valid
 #           JSON, and it is still right for the one caller it can serve -- a CMakePresets.json
@@ -134,19 +134,19 @@ set(_msc_presets_code [[
   else()
     set(_msc_to "${CMAKE_INSTALL_PREFIX}/@_dest@")
   endif()
-  file(READ "@CMAKE_CURRENT_SOURCE_DIR@/mavericks-presets.json" _msc_json)
-  set(_msc_token "\${fileDir}/MavericksToolchain.cmake")
+  file(READ "@CMAKE_CURRENT_SOURCE_DIR@/mavergreen-presets.json" _msc_json)
+  set(_msc_token "\${fileDir}/MavergreenToolchain.cmake")
   string(FIND "${_msc_json}" "${_msc_token}" _msc_at)
   if(_msc_at EQUAL -1)
-    message(FATAL_ERROR "mavericks-presets.json has no ${_msc_token} to replace with the installed toolchain file")
+    message(FATAL_ERROR "mavergreen-presets.json has no ${_msc_token} to replace with the installed toolchain file")
   endif()
-  string(REPLACE "${_msc_token}" "${_msc_to}/MavericksToolchain.cmake" _msc_json "${_msc_json}")
+  string(REPLACE "${_msc_token}" "${_msc_to}/MavergreenToolchain.cmake" _msc_json "${_msc_json}")
   if(_msc_json MATCHES "fileDir")
-    message(FATAL_ERROR "mavericks-presets.json still names \${fileDir} after install-time substitution")
+    message(FATAL_ERROR "mavergreen-presets.json still names \${fileDir} after install-time substitution")
   endif()
-  file(WRITE "@CMAKE_CURRENT_BINARY_DIR@/installed-presets/mavericks-presets.json" "${_msc_json}")
+  file(WRITE "@CMAKE_CURRENT_BINARY_DIR@/installed-presets/mavergreen-presets.json" "${_msc_json}")
   file(INSTALL DESTINATION "${_msc_to}" TYPE FILE
-    FILES "@CMAKE_CURRENT_BINARY_DIR@/installed-presets/mavericks-presets.json")
+    FILES "@CMAKE_CURRENT_BINARY_DIR@/installed-presets/mavergreen-presets.json")
 ]])
 string(CONFIGURE "${_msc_presets_code}" _msc_presets_code @ONLY)
 install(CODE "${_msc_presets_code}")
@@ -161,9 +161,9 @@ install(DIRECTORY updater DESTINATION "${_dest}")
 
 # spec: tests/payload-cmake-independent-test.sh -- configured from our own template, not CMake's,
 #       so the payload does not depend on which cmake stages it.
-configure_file(MavericksShipyardConfigVersion.cmake.in
-  "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfigVersion.cmake" @ONLY)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/MavericksShipyardConfigVersion.cmake"
+configure_file(MavergreenShipyardConfigVersion.cmake.in
+  "${CMAKE_CURRENT_BINARY_DIR}/MavergreenShipyardConfigVersion.cmake" @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/MavergreenShipyardConfigVersion.cmake"
   DESTINATION "${_dest}")
 
 # Self-tests for the shared shell helpers.
@@ -185,11 +185,11 @@ else()
   message(STATUS "bats not found -- shell helper tests won't run via ctest (install bats to enable)")
 endif()
 
-# Prove the à-la-carte modules load without include(Mavericks) / the AppleClang gate.
+# Prove the à-la-carte modules load without include(Mavergreen) / the AppleClang gate.
 add_test(NAME standalone-include
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/standalone-include.sh)
 
-# Prove include(Mavericks) is universally includable: auto-scoped gate (no
+# Prove include(Mavergreen) is universally includable: auto-scoped gate (no
 # MAVERICKS_REQUIRE_LANGS), LANGUAGES NONE no-op, and multi-arch safe.
 add_test(NAME umbrella-langs
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/umbrella-langs.sh)

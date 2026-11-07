@@ -3,7 +3,7 @@
 #   usage: shipyard-cmake|shipyard-ctest|shipyard-cpack [ARG...]
 #          Installed as <prefix>/shipyard/bin/shipyard-{cmake,ctest,cpack}; runs the cmake product's
 #          <prefix>/cmake/bin/{cmake,ctest,cpack}. shipyard-cmake first appends <prefix>/shipyard to
-#          CMAKE_PREFIX_PATH, so find_package(MavericksShipyard) finds it after any caller's entry.
+#          CMAKE_PREFIX_PATH, so find_package(MavergreenShipyard) finds it after any caller's entry.
 # spec: 2026-10-09 C4
 self="$0"
 case "$self" in */*) ;; *) self="./$self" ;; esac

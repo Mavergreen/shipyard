@@ -77,7 +77,7 @@ jobs:
           echo "rehearsing the pkg for $v"
           mkdir -p "$RUNNER_TEMP/dist"
           cmake -S . -B "$RUNNER_TEMP/payload-build"
-          # spec: scripts/package-pkg.sh -- the install bakes its prefix into mavericks-presets.json, so
+          # spec: scripts/package-pkg.sh -- the install bakes its prefix into mavergreen-presets.json, so
           #       it installs INTO the pkg's prefix, staged under DESTDIR; package-pkg.sh refuses presets
           #       naming any other toolchain file.
           DESTDIR="$RUNNER_TEMP/payload-stage" cmake --install "$RUNNER_TEMP/payload-build" \

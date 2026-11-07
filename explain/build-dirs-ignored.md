@@ -20,6 +20,6 @@ computes it, is invisible. It asks git whether the directory (with a trailing sl
 
 ## Deviating
 No deviation is read for this id. Add a pattern that covers the directory to .gitignore, or build outside
-the tree under $MAVERICKS_BUILD_ROOT.
+the tree under $MAVERGREEN_BUILD_ROOT.
 
 Formerly gate check 7d

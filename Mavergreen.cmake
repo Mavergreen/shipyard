@@ -1,4 +1,4 @@
-# Mavericks.cmake -- shared build conventions for the mavericks-* family.
+# Mavergreen.cmake -- shared build conventions for the mavericks-* family.
 #
 # These projects all build native artifacts that run on OS X 10.9 "Mavericks"
 # and cross-build for it from a modern macOS on GitHub Actions. This module
@@ -8,16 +8,16 @@
 #
 #   project(foo LANGUAGES C OBJC)
 #
-#   find_package(MavericksShipyard REQUIRED)   # sets up CMAKE_MODULE_PATH
-#   include(Mavericks)                 # mode detect + AppleClang check + helpers
+#   find_package(MavergreenShipyard REQUIRED)   # sets up CMAKE_MODULE_PATH
+#   include(Mavergreen)                 # mode detect + AppleClang check + helpers
 #   # (Sparkle-updater projects also: include(MavericksSparkle))
 #
 #   add_executable(foo ...)
-#   mavericks_assert_binary_compatible(foo)        # assert the binary stays 10.9-safe
+#   mavergreen_assert_binary_compatible(foo)        # assert the binary stays 10.9-safe
 #
 # Deployment target + architecture must be set BEFORE project() to take effect, so
-# they come from your preset (inherit mavericks-native / mavericks-cross from
-# mavericks-presets.json) -- NOT from this umbrella, which runs after project(). A
+# they come from your preset (inherit mavergreen-native / mavergreen-cross from
+# mavergreen-presets.json) -- NOT from this umbrella, which runs after project(). A
 # project on a non-Apple toolchain sets(MAVERICKS_REQUIRE_APPLECLANG OFF) first.
 # Install once with `cmake --install` (self-registers); see README.
 
@@ -28,7 +28,7 @@ set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-
 # project() via the preset -- this umbrella runs too late to set them.)
 add_compile_options(-Wall -Wno-deprecated-declarations)
 
-include(MavericksMode)          # -> MAVERGREEN_MODE, guard vs the preset's expected mode
+include(MavergreenMode)          # -> MAVERGREEN_MODE, guard vs the preset's expected mode
 
 # SKILL.md "SDK pinning": a cross build links the PINNED SDK for its arch, never the runner's. The
 # toolchain file (via the shipyard presets) sets it before project(); anything else is refused here, the
@@ -42,7 +42,7 @@ if(MAVERGREEN_MODE STREQUAL "cross")
                     OUTPUT_VARIABLE _mav_pin OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _mav_prc)
     if(NOT _mav_prc EQUAL 0)
       message(FATAL_ERROR
-        "include(Mavericks): could not fetch the pinned SDK for ${CMAKE_OSX_ARCHITECTURES} "
+        "include(Mavergreen): could not fetch the pinned SDK for ${CMAKE_OSX_ARCHITECTURES} "
         "(fetch_sdk.sh --arch ${CMAKE_OSX_ARCHITECTURES} exit ${_mav_prc}), so CMAKE_OSX_SYSROOT "
         "'${CMAKE_OSX_SYSROOT}' cannot be checked against it. Check the network and MAVERGREEN_SDK_CACHE; "
         "see SKILL.md \"SDK pinning\".")
@@ -52,8 +52,8 @@ if(MAVERGREEN_MODE STREQUAL "cross")
     if(NOT _mav_have STREQUAL _mav_want)
       message(FATAL_ERROR
         "CMAKE_OSX_SYSROOT '${CMAKE_OSX_SYSROOT}' is not the pinned SDK for ${CMAKE_OSX_ARCHITECTURES} ('${_mav_pin}').\n"
-        "Configure through a shipyard preset (mavericks-cross), or pass "
-        "-DCMAKE_TOOLCHAIN_FILE=${MAVERGREEN_SHARED_DIR}/MavericksToolchain.cmake. See SKILL.md \"SDK pinning\".")
+        "Configure through a shipyard preset (mavergreen-cross), or pass "
+        "-DCMAKE_TOOLCHAIN_FILE=${MAVERGREEN_SHARED_DIR}/MavergreenToolchain.cmake. See SKILL.md \"SDK pinning\".")
     endif()
   elseif(_mav_na EQUAL 0)
     # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a plain
@@ -63,15 +63,15 @@ if(MAVERGREEN_MODE STREQUAL "cross")
     # not the "one arch per cross configure" message meant for 2+ arches.
     message(FATAL_ERROR
       "CMAKE_OSX_ARCHITECTURES is empty -- no arch means no pinned SDK to check.\n"
-      "Configure through a shipyard preset (mavericks-cross), or pass "
-      "-DCMAKE_TOOLCHAIN_FILE=${MAVERGREEN_SHARED_DIR}/MavericksToolchain.cmake. See SKILL.md \"SDK pinning\".")
+      "Configure through a shipyard preset (mavergreen-cross), or pass "
+      "-DCMAKE_TOOLCHAIN_FILE=${MAVERGREEN_SHARED_DIR}/MavergreenToolchain.cmake. See SKILL.md \"SDK pinning\".")
   else()
-    message(FATAL_ERROR "include(Mavericks): one arch per cross configure (got '${CMAKE_OSX_ARCHITECTURES}'); build each and merge")
+    message(FATAL_ERROR "include(Mavergreen): one arch per cross configure (got '${CMAKE_OSX_ARCHITECTURES}'); build each and merge")
   endif()
 endif()
 
 include(RequireAppleClang)      # reject gcc / Homebrew / pkgsrc clang
-include(MavericksFetch)         # mavericks_fetch_sdk()
-include(MavericksCompatGuard)   # mavericks_assert_binary_compatible()
-include(MavericksVersion)       # mavericks_resolve_version() -- VERSION is derived, never committed
-include(MavericksDecisions)     # mavericks_require_icon() -- forced icon decision
+include(MavergreenFetch)         # mavergreen_fetch_sdk()
+include(MavergreenCompatGuard)   # mavergreen_assert_binary_compatible()
+include(MavergreenVersion)       # mavergreen_resolve_version() -- VERSION is derived, never committed
+include(MavergreenDecisions)     # mavergreen_require_icon() -- forced icon decision

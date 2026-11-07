@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: shipyard-scripts
 #          Prints shipyard's scripts directory: $SHIPYARD_SCRIPTS when it names a directory, else
-#          wherever shipyard-cmake's find_package(MavericksShipyard) lands, so a CMAKE_PREFIX_PATH
+#          wherever shipyard-cmake's find_package(MavergreenShipyard) lands, so a CMAKE_PREFIX_PATH
 #          dev override moves the scripts together with the modules. About 2 s without the variable.
 #          Exit 1, with nothing on stdout, when shipyard cannot be found.
 dir="${SHIPYARD_SCRIPTS:-}"
@@ -10,7 +10,7 @@ if [ ! -d "$dir" ]; then
   dir=""
   probe="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-probe.XXXXXX")" || exit 1
   printf '%s\n' 'cmake_minimum_required(VERSION 3.16)' 'project(shipyard_probe NONE)' \
-    'find_package(MavericksShipyard REQUIRED)' 'message(STATUS "SHIPYARD_DIR=${MavericksShipyard_DIR}")' \
+    'find_package(MavergreenShipyard REQUIRED)' 'message(STATUS "SHIPYARD_DIR=${MavergreenShipyard_DIR}")' \
     > "$probe/CMakeLists.txt"
   # platform: appending /scripts to the substitution directly made a failed probe yield the
   #           literal "/scripts" -- an absolute, plausible-looking path.

@@ -27,7 +27,7 @@ A deviations/compat-imports/<label>/ with a scope (<glob>), a reason and a revis
 path inside the pkg or tarball (usr/local/mavergreen/<product>/...). That is how one binary in a dist keeps
 the allowance its CMake target passes in a knob, since --dist applies one environment to every binary. The knobs are per-build
 environment variables (MAVERGREEN_POST_10_9_SYMBOLS, MAVERGREEN_ALLOW_GUARDED_WEAK) that
-mavericks_assert_binary_compatible passes. A good use of the weak allowance names the runtime that guards the
+mavergreen_assert_binary_compatible passes. A good use of the weak allowance names the runtime that guards the
 call.
 
 Formerly the compat guard's imports rule

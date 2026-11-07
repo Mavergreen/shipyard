@@ -5,7 +5,7 @@ set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d "${TMPDIR:-/tmp}/linux-host.XXXXXX")"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/shipyard/scripts" "$T/project" "$T/SDK with spaces"
-cp "$ROOT/MavericksToolchain.cmake" "$T/shipyard/"
+cp "$ROOT/MavergreenToolchain.cmake" "$T/shipyard/"
 cat > "$T/shipyard/scripts/fetch_sdk.sh" <<'SH'
 #!/bin/sh
 printf '%s\n' "$TEST_SDK"
@@ -29,8 +29,8 @@ if(NOT actual_sdk STREQUAL expected_sdk)
 endif()
 CMAKE
 export TEST_SDK="$T/SDK with spaces"
-TEST_ARCH=x86_64 TEST_FLOOR=10.9 cmake -S "$T/project" -B "$T/build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake"
-TEST_ARCH=arm64 TEST_FLOOR=11.0 cmake -S "$T/project" -B "$T/arm" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=arm64
+TEST_ARCH=x86_64 TEST_FLOOR=10.9 cmake -S "$T/project" -B "$T/build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavergreenToolchain.cmake"
+TEST_ARCH=arm64 TEST_FLOOR=11.0 cmake -S "$T/project" -B "$T/arm" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavergreenToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=arm64
 mkdir -p "$T/llvm/bin" "$T/tools"
 for t in clang llvm-install-name-tool llvm-ar llvm-ranlib llvm-strip llvm-nm; do
   printf '#!/bin/sh\n' > "$T/llvm/bin/$t"; chmod 755 "$T/llvm/bin/$t"
@@ -50,6 +50,6 @@ foreach(pair INSTALL_NAME_TOOL=llvm-install-name-tool AR=llvm-ar RANLIB=llvm-ran
   endif()
 endforeach()
 CMAKE
-TEST_LLVM="$T/llvm" cmake -S "$T/tools" -B "$T/tools-build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavericksToolchain.cmake" \
+TEST_LLVM="$T/llvm" cmake -S "$T/tools" -B "$T/tools-build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavergreenToolchain.cmake" \
   -DCMAKE_OBJC_COMPILER="$T/llvm/bin/clang"
 echo "PASS: Linux cross configuration selects the arch, its floor, the pinned SDK path and the compiler's Mach-O tools"

@@ -20,7 +20,7 @@
 #            SHIPYARD_CHECK_DIST               the dist directory, when no binary is named.
 #            MAVERGREEN_DEVIATIONS_ROOT         the repo whose .mavergreen/deviations/ declares the deviations
 #                                               (default: SHIPYARD_CHECK_REPO, else the current
-#                                               directory; mavericks_assert_binary_compatible passes
+#                                               directory; mavergreen_assert_binary_compatible passes
 #                                               CMAKE_SOURCE_DIR).
 #            MAVERGREEN_ALLOW_ARCHS             the exact arch set each binary must contain (default
 #                                               "x86_64"; a universal updater passes "x86_64 arm64").

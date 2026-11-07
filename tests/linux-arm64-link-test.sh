@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: linux-arm64-link-test.sh
 #          Linux arm64 configure links Mach-O arm64: a one-file C project, configured through
-#          MavericksToolchain.cmake with the pinned clang22's Linux archive (.mavergreen/ingredients/clang22) and the
+#          MavergreenToolchain.cmake with the pinned clang22's Linux archive (.mavergreen/ingredients/clang22) and the
 #          pinned 11.3 SDK, is an arm64 Mach-O whose minos is 11.0. Fetches both over the network.
 set -eu
 [ "$(uname -s)" = Linux ] || { echo 'SKIP: Linux arm64 cross-link'; exit 77; }
@@ -18,7 +18,7 @@ add_executable(hello hello.c)
 CMAKE
 printf 'int main(void) { return 0; }\n' > "$T/project/hello.c"
 cmake -S "$T/project" -B "$T/build" \
-  -DCMAKE_TOOLCHAIN_FILE="$ROOT/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_TOOLCHAIN_FILE="$ROOT/MavergreenToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_C_COMPILER="$LLVM/bin/clang" -DCMAKE_C_COMPILER_TARGET=arm64-apple-macos11.0 \
   -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld --ld-path=$LLVM/bin/ld64.lld"
 cmake --build "$T/build"

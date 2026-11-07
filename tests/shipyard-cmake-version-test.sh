@@ -8,7 +8,7 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-cmakever.XXXXXX")"; trap 'rm -rf "$w
 
 want="$(sh "$root/scripts/shipyard-version.sh" | sed -n 's/^FULL=//p')"
 cmake -S "$root" -B "$work/b" >/dev/null 2>&1 || { echo "FAIL: configure failed"; exit 1; }
-got="$(sed -n 's/^set(PACKAGE_VERSION "\(.*\)")$/\1/p' "$work/b/MavericksShipyardConfigVersion.cmake" | head -1)"
+got="$(sed -n 's/^set(PACKAGE_VERSION "\(.*\)")$/\1/p' "$work/b/MavergreenShipyardConfigVersion.cmake" | head -1)"
 [ "$got" = "$want" ] \
   || { echo "FAIL: a local cmake --install is a snapshot with no staleness signal of its own, so the installed package must report the DERIVED version: says '$got', derived version is '$want'"; exit 1; }
 case "$got" in

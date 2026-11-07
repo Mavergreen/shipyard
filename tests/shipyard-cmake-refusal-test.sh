@@ -13,10 +13,10 @@ here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 . "$here/lib/cmake_fixture.sh"
 real="$(command -v cmake 2>/dev/null)" || { echo "SKIP: no cmake"; exit 77; }
 command -v make >/dev/null 2>&1 || { echo "FAIL: the regeneration case needs make"; exit 1; }
-# platform: on a Linux runner, install@v1 exports MavericksShipyard_DIR (and a caller may carry a
+# platform: on a Linux runner, install@v1 exports MavergreenShipyard_DIR (and a caller may carry a
 #           CMAKE_PREFIX_PATH) for the whole job; either outranks the search every case here tests, so
 #           clear both and let the cases that want one set it themselves.
-unset MavericksShipyard_DIR CMAKE_PREFIX_PATH
+unset MavergreenShipyard_DIR CMAKE_PREFIX_PATH
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/refusal-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 # platform: the launcher resolves its prefix physically, and macOS's TMPDIR is under /var, a link to
@@ -43,11 +43,11 @@ install_shipyard "$w/sb-above" "$w/above/shipyard" "$above"
 ln -s "$fx/cmake" "$w/above/cmake"
 
 mkdir -p "$w/c"
-printf 'cmake_minimum_required(VERSION 3.16)\nproject(c NONE)\nfind_package(MavericksShipyard REQUIRED)\nmessage(STATUS "DIR=${MavericksShipyard_DIR}")\n' > "$w/c/CMakeLists.txt"
+printf 'cmake_minimum_required(VERSION 3.16)\nproject(c NONE)\nfind_package(MavergreenShipyard REQUIRED)\nmessage(STATUS "DIR=${MavergreenShipyard_DIR}")\n' > "$w/c/CMakeLists.txt"
 sc="$fx/shipyard/bin/shipyard-cmake"
 
 out="$("$sc" -S "$w/c" -B "$w/b1" 2>&1)" || { echo "FAIL: the real pair, through shipyard-cmake, must configure; got:"; echo "$out"; exit 1; }
-printf '%s' "$out" | grep -q "DIR=$fx/shipyard/share/cmake/MavericksShipyard" || { echo "FAIL: expected the fixture's shipyard; got:"; echo "$out"; exit 1; }
+printf '%s' "$out" | grep -q "DIR=$fx/shipyard/share/cmake/MavergreenShipyard" || { echo "FAIL: expected the fixture's shipyard; got:"; echo "$out"; exit 1; }
 
 refused() {  # $1 = what  $2 = the minimum the refusal must name; the rest is the configure
   _what="$1"; _min="$2"; shift 2
@@ -59,25 +59,25 @@ refused() {  # $1 = what  $2 = the minimum the refusal must name; the rest is th
     _out="$("$@" 2>&1)" || { echo "FAIL: off macOS $_what must configure -- there is no Linux cmake product to demand; got:"; echo "$_out"; exit 1; }
   fi
 }
-# spec: MavericksShipyardConfig.cmake -- the refusal is keyed on CMAKE_HOST_APPLE, so what each case
+# spec: MavergreenShipyardConfig.cmake -- the refusal is keyed on CMAKE_HOST_APPLE, so what each case
 #       must get depends on the host running this test, and each host checks its own half.
 refused "the host cmake run directly" "$ver" \
-  "$real" -S "$w/c" -B "$w/b2" -DMavericksShipyard_DIR="$fx/shipyard/share/cmake/MavericksShipyard"
+  "$real" -S "$w/c" -B "$w/b2" -DMavergreenShipyard_DIR="$fx/shipyard/share/cmake/MavergreenShipyard"
 refused "a cmake below the minimum, through shipyard-cmake" "$above" \
   "$w/above/shipyard/bin/shipyard-cmake" -S "$w/c" -B "$w/b2a"
 
 # spec: 2026-10-09 C5 "Developer override" -- a bare dev prefix, with no cmake beside it.
 out="$(CMAKE_PREFIX_PATH="$w/dev" "$sc" -S "$w/c" -B "$w/b3" 2>&1)" || { echo "FAIL: dev override must configure; got:"; echo "$out"; exit 1; }
-printf '%s' "$out" | grep -q "DIR=$w/dev/share/cmake/MavericksShipyard" || { echo "FAIL: dev override must load the dev copy; got:"; echo "$out"; exit 1; }
+printf '%s' "$out" | grep -q "DIR=$w/dev/share/cmake/MavergreenShipyard" || { echo "FAIL: dev override must load the dev copy; got:"; echo "$out"; exit 1; }
 
 # platform: a cmake in a directory named cmake, beside a shipyard that has no launcher. Its CMAKE_ROOT
 #           is linked, not copied: nothing is installed into it.
-mkdir -p "$w/lone/cmake/bin" "$w/lone/cmake/share" "$w/lone/shipyard/share/cmake/MavericksShipyard"
+mkdir -p "$w/lone/cmake/bin" "$w/lone/cmake/share" "$w/lone/shipyard/share/cmake/MavergreenShipyard"
 cp "$fx/cmake/bin/cmake" "$w/lone/cmake/bin/cmake"
 for d in "$fx/cmake/share"/*; do ln -s "$d" "$w/lone/cmake/share/"; done
-: > "$w/lone/shipyard/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake"
+: > "$w/lone/shipyard/share/cmake/MavergreenShipyard/MavergreenShipyardConfig.cmake"
 refused "a cmake at <Y>/cmake/bin/cmake with no <Y>/shipyard/bin/shipyard-cmake" "$ver" \
-  "$w/lone/cmake/bin/cmake" -S "$w/c" -B "$w/b3a" -DMavericksShipyard_DIR="$fx/shipyard/share/cmake/MavericksShipyard"
+  "$w/lone/cmake/bin/cmake" -S "$w/c" -B "$w/b3a" -DMavergreenShipyard_DIR="$fx/shipyard/share/cmake/MavergreenShipyard"
 
 # spec: R-P1-23 -- the refusal is keyed on CMAKE_HOST_APPLE and must NOT fire on a non-Apple host:
 #       shipyard ships no Linux pkg and no Linux cmake, so demanding shipyard-cmake there is
@@ -87,7 +87,7 @@ refused "a cmake at <Y>/cmake/bin/cmake with no <Y>/shipyard/bin/shipyard-cmake"
 #           so `cmake -P` exercises the real guard in the real file with a CMAKE_COMMAND that has no
 #           shipyard beside it: the Linux runner's situation exactly.
 probe() {  # $1 = CMAKE_HOST_APPLE value; prints the config's verdict
-  printf 'set(CMAKE_HOST_APPLE %s)\nset(CMAKE_COMMAND "%s/no-such-prefix/bin/cmake")\ninclude("%s/MavericksShipyardConfig.cmake")\nmessage(STATUS "CONFIGURED")\n' \
+  printf 'set(CMAKE_HOST_APPLE %s)\nset(CMAKE_COMMAND "%s/no-such-prefix/bin/cmake")\ninclude("%s/MavergreenShipyardConfig.cmake")\nmessage(STATUS "CONFIGURED")\n' \
     "$1" "$w" "$root" > "$w/probe-$1.cmake"
   ( cd "$w" && "$real" -P "$w/probe-$1.cmake" 2>&1 )
 }
@@ -96,7 +96,7 @@ printf '%s' "$out" | grep -q 'shipyard-cmake' || { echo "FAIL: the Apple-host re
 out="$(probe 0)" || { echo "FAIL: on a NON-Apple host the config must load anyway (no Linux pkg exists to demand); got:"; echo "$out"; exit 1; }
 printf '%s' "$out" | grep -q 'CONFIGURED' || { echo "FAIL: the non-Apple host did not reach the end of the config; got:"; echo "$out"; exit 1; }
 
-# spec: .github/actions/install/action.yml -- its non-macOS path points MavericksShipyard_DIR at the
+# spec: .github/actions/install/action.yml -- its non-macOS path points MavergreenShipyard_DIR at the
 #       action's own CHECKOUT, where the config sits at the root rather than under share/cmake and
 #       the minimum comes from .mavergreen/products/shipyard/requires/cmake/min; copies of it hold this box's
 #       cmake and one above it, each with a cmake pin above both, which the minimum never reads.
@@ -108,13 +108,13 @@ checkout() {  # $1 = dir  $2 = the minimum it carries
 }
 checkout "$w/co" "$ver-mavericks.1"
 checkout "$w/co-above" "$above-mavericks.1"
-out="$(MavericksShipyard_DIR="$w/co" "$sc" -S "$w/c" -B "$w/b4" 2>&1)" \
-  || { echo "FAIL: MavericksShipyard_DIR pointed at a shipyard CHECKOUT must configure (that is what install@v1 exports on Linux); got:"; echo "$out"; exit 1; }
+out="$(MavergreenShipyard_DIR="$w/co" "$sc" -S "$w/c" -B "$w/b4" 2>&1)" \
+  || { echo "FAIL: MavergreenShipyard_DIR pointed at a shipyard CHECKOUT must configure (that is what install@v1 exports on Linux); got:"; echo "$out"; exit 1; }
 printf '%s' "$out" | grep -q "DIR=$w/co" || { echo "FAIL: expected the checkout's config; got:"; echo "$out"; exit 1; }
 refused "a cmake below a checkout's minimum" "$above" \
-  env MavericksShipyard_DIR="$w/co-above" "$sc" -S "$w/c" -B "$w/b4a"
+  env MavergreenShipyard_DIR="$w/co-above" "$sc" -S "$w/c" -B "$w/b4a"
 refused "the host cmake run directly against a checkout" "$ver" \
-  env MavericksShipyard_DIR="$w/co" "$real" -S "$w/c" -B "$w/b4b"
+  env MavergreenShipyard_DIR="$w/co" "$real" -S "$w/c" -B "$w/b4b"
 
 # spec: 2026-10-09 C4 -- a build directory configured before the switch names shipyard/bin/cmake as its
 #       CMAKE_COMMAND and its CMAKE_ROOT under shipyard/share, so the compatibility link must
@@ -130,7 +130,7 @@ grep -qxF "CMAKE_COMMAND:INTERNAL=$fx/shipyard/bin/cmake" "$w/regen/CMakeCache.t
 sleep 1; touch "$w/c/CMakeLists.txt"
 out="$("$fx/shipyard/bin/cmake" --build "$w/regen" 2>&1)" \
   || { echo "FAIL: a build directory from before the switch must regenerate; got:"; echo "$out"; exit 1; }
-printf '%s' "$out" | grep -q "DIR=$fx/shipyard/share/cmake/MavericksShipyard" \
+printf '%s' "$out" | grep -q "DIR=$fx/shipyard/share/cmake/MavergreenShipyard" \
   || { echo "FAIL: the build did not re-run configure; got:"; echo "$out"; exit 1; }
 
 echo "PASS: shipyard-cmake-refusal"

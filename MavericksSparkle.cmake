@@ -1,5 +1,5 @@
 # MavericksSparkle.cmake -- Sparkle auto-update tooling shared across mavericks-* products.
-# No side effects on include (mirrors MavericksFetch.cmake). Provides:
+# No side effects on include (mirrors MavergreenFetch.cmake). Provides:
 #   mavericks_fetch_sparkle(<out_framework>)   -- fetch the pinned Sparkle 1.27.3 verbatim, return the .framework path
 #   mavericks_add_updater_app(...)             -- build a Sparkle-hosting .app (Cocoa-only, NO Swift)
 # The EdDSA signing tools are NOT built here -- use the prebuilt ed25519-keygen / ed25519-sign from
@@ -9,8 +9,8 @@
 #                                   rendering updater/{updatecheck.plist,agent-load}.in per product
 #   scripts/sign_and_appcast.sh  -- sign a .pkg (via ed25519-sign) then write its feed, <short>.xml (gen_appcast.sh)
 set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
-include("${MAVERGREEN_SHARED_DIR}/MavericksDecisions.cmake")   # mavericks_reject_placeholder_icon()
-include("${MAVERGREEN_SHARED_DIR}/MavericksCompatGuard.cmake")   # mavericks_assert_binary_compatible()
+include("${MAVERGREEN_SHARED_DIR}/MavergreenDecisions.cmake")   # mavergreen_reject_placeholder_icon()
+include("${MAVERGREEN_SHARED_DIR}/MavergreenCompatGuard.cmake")   # mavergreen_assert_binary_compatible()
 
 function(mavericks_fetch_sparkle out_var)
   # The pinned framework, verbatim and fat: a fat framework links into an updater of either arch, and
@@ -143,11 +143,11 @@ function(mavericks_add_updater_app)
   set(MAVERICKS_RELAUNCH_MARKER "${A_RELAUNCH_MARKER}")
   set(MAVERICKS_PANE_HINT_KEY   "${A_PANE_HINT_KEY}")              # empty => notification mode
   set(MAVERICKS_POST_UPDATE_HELPER "${A_POST_UPDATE_HELPER}")      # empty => no post-install hook
-  # Icon decision (mirrors mavericks_require_icon): a real ICON is gated through the placeholder
+  # Icon decision (mirrors mavergreen_require_icon): a real ICON is gated through the placeholder
   # guard; NO icon requires an explicit generic opt-in and ships the standard macOS app icon
   # (empty CFBundleIconFile) -- embedding no artwork at all.
   if(A_ICON)
-    mavericks_reject_placeholder_icon("${A_NAME}" "${A_ICON}")
+    mavergreen_reject_placeholder_icon("${A_NAME}" "${A_ICON}")
     get_filename_component(MAVERICKS_ICON_NAME "${A_ICON}" NAME_WE)
   elseif(A_ALLOW_GENERIC OR MAVERGREEN_ALLOW_GENERIC_ICON)
     set(MAVERICKS_ICON_NAME "")   # empty CFBundleIconFile => generic macOS app icon, no artwork shipped
@@ -217,7 +217,7 @@ function(mavericks_add_updater_app)
     COMMAND ${CMAKE_COMMAND} -E make_directory ${_app}/Contents
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/${A_NAME}-Info.plist ${_app}/Contents/Info.plist)
   add_dependencies(${A_NAME} ${A_NAME}_info_plist)
-  mavericks_assert_binary_compatible(${A_NAME})
+  mavergreen_assert_binary_compatible(${A_NAME})
   if(A_ICON)
     add_custom_command(TARGET ${A_NAME} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy ${A_ICON} ${_app}/Contents/Resources/${MAVERICKS_ICON_NAME}.icns

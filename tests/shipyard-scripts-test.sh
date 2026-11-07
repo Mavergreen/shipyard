@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: shipyard-scripts-test.sh
 #          scripts/shipyard-scripts prints shipyard's scripts directory: $SHIPYARD_SCRIPTS when set,
-#          else wherever shipyard-cmake's find_package(MavericksShipyard) lands (so a
+#          else wherever shipyard-cmake's find_package(MavergreenShipyard) lands (so a
 #          CMAKE_PREFIX_PATH dev override moves the scripts with the modules), else through the
 #          absolute /usr/local/mavergreen/bin/shipyard-cmake. The stub cases need no cmake and
 #          run in the 10.9 guest; the real-cmake cases are skipped without one.
@@ -56,7 +56,7 @@ copy_cmake_product "$real" "$fx/cmake"
 "$real" --install "$w/sb" --prefix "$fx/shipyard" > "$w/install.log" 2>&1 \
   || { echo "FAIL: could not install shipyard into the fixture prefix:"; sed 's/^/    | /' "$w/install.log"; exit 1; }
 ln -s "$fx/shipyard/bin/shipyard-cmake" "$w/pbin/shipyard-cmake"
-want="$fx/shipyard/share/cmake/MavericksShipyard/scripts"
+want="$fx/shipyard/share/cmake/MavergreenShipyard/scripts"
 [ -x "$fx/shipyard/bin/shipyard-scripts" ] || { echo "FAIL: the install must put shipyard-scripts in bin/"; exit 1; }
 got="$(env -i PATH="$w/pbin:/usr/bin:/bin" TMPDIR="$_tmp" "$fx/shipyard/bin/shipyard-scripts")" \
   || { echo "FAIL: the installed shipyard-scripts must find its own scripts"; exit 1; }
@@ -66,7 +66,7 @@ got="$(env -i PATH="$w/pbin:/usr/bin:/bin" TMPDIR="$_tmp" "$fx/shipyard/bin/ship
   || { echo "FAIL: could not install the dev copy:"; sed 's/^/    | /' "$w/install-dev.log"; exit 1; }
 got="$(env -i PATH="$w/pbin:/usr/bin:/bin" TMPDIR="$_tmp" CMAKE_PREFIX_PATH="$w/dev" sh "$T")" \
   || { echo "FAIL: must find the dev copy under CMAKE_PREFIX_PATH"; exit 1; }
-[ "$got" = "$w/dev/share/cmake/MavericksShipyard/scripts" ] || { echo "FAIL: under CMAKE_PREFIX_PATH gave '$got'"; exit 1; }
+[ "$got" = "$w/dev/share/cmake/MavergreenShipyard/scripts" ] || { echo "FAIL: under CMAKE_PREFIX_PATH gave '$got'"; exit 1; }
 
 mkdir -p "$w/fb2"; ln -s "$fx/shipyard/bin/shipyard-cmake" "$w/fb2/shipyard-cmake"
 sed "s#$installed_cm#$w/fb2/shipyard-cmake#g" "$T" > "$w/realfallback"

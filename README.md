@@ -36,7 +36,7 @@ appending shipyard's prefix to `CMAKE_PREFIX_PATH`, so your own search paths sti
 `shipyard-ctest` and `shipyard-cpack` launch that product's matching tools. The bare names
 `cmake`, `ctest` and `cpack` stay out of the family's link farm.
 
-On macOS, `MavericksShipyardConfig.cmake` accepts only a CMake product paired with an installed
+On macOS, `MavergreenShipyardConfig.cmake` accepts only a CMake product paired with an installed
 shipyard and at least the pinned upstream version; it names a foreign or older CMake when refusing it.
 Existing build directories keep regenerating through compatibility links at
 `shipyard/bin/{cmake,ctest,cpack}`. If the CMake product has been removed, the launchers print its
@@ -51,14 +51,14 @@ pkg works on Intel, on Apple Silicon and on 10.9.
 GUI tools that want a CMake executable (CLion, VS Code's CMake Tools, Xcode wrappers), launchd jobs and
 anything else that never runs a login shell do not see `paths.d`: point them at
 `/usr/local/mavergreen/bin/shipyard-cmake`. The shared presets live at
-`/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/mavericks-presets.json`.
+`/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/mavergreen-presets.json`.
 
 **The CMake product has no HTTPS downloader.** `file(DOWNLOAD https://…)` and HTTPS
 `FetchContent` fail with "Unsupported protocol". See [CMake's README](https://github.com/Mavergreen/cmake#readme)
 for the limit and the offline FetchContent pattern. Fetch pinned sources with shipyard's
 `mavergreen_fetch.sh`, `clone_pinned.sh` or `fetch_pinned_source.sh` instead.
 
-If you have a machine that ran an older shipyard, `rm -rf ~/.cmake/packages/MavericksShipyard` once.
+If you have a machine that ran an older shipyard, `rm -rf ~/.cmake/packages/MavergreenShipyard` once.
 Nothing reads it any more.
 
 A machine that had shipyard installed before it moved under `/usr/local/mavergreen` still has the old
@@ -118,7 +118,7 @@ command runs in CI on ubuntu-latest (`.github/workflows/linux-host.yml`), and a 
 publish unless it passes.
 
 Consumers get the same half in their own Linux jobs: `install@v1` on a non-macOS runner exports
-`SHIPYARD_SCRIPTS` and `MavericksShipyard_DIR`, and `find_package(MavericksShipyard)` resolves with any
+`SHIPYARD_SCRIPTS` and `MavergreenShipyard_DIR`, and `find_package(MavergreenShipyard)` resolves with any
 cmake.
 
 ## Use
@@ -128,11 +128,11 @@ In your `CMakeLists.txt`:
 ```cmake
 project(foo LANGUAGES C OBJC)
 
-find_package(MavericksShipyard REQUIRED)
-include(Mavericks)
+find_package(MavergreenShipyard REQUIRED)
+include(Mavergreen)
 
 add_executable(foo ...)
-mavericks_assert_binary_compatible(foo)
+mavergreen_assert_binary_compatible(foo)
 ```
 
 In your `CMakePresets.json`:
@@ -140,10 +140,10 @@ In your `CMakePresets.json`:
 ```json
 {
   "version": 6,
-  "include": ["/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/mavericks-presets.json"],
+  "include": ["/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/mavergreen-presets.json"],
   "configurePresets": [
-    { "name": "native", "inherits": "mavericks-native" },
-    { "name": "cross",  "inherits": "mavericks-cross"  }
+    { "name": "native", "inherits": "mavergreen-native" },
+    { "name": "cross",  "inherits": "mavergreen-cross"  }
   ]
 }
 ```
@@ -163,7 +163,7 @@ shipyard-ctest --preset native
 shipyard-cpack --preset native    # where the product packages with CPack
 ```
 
-On macOS, a foreign or too-old CMake is refused by `find_package(MavericksShipyard)`, with a
+On macOS, a foreign or too-old CMake is refused by `find_package(MavergreenShipyard)`, with a
 message naming the minimum version and `shipyard-cmake`. On Linux, any CMake may configure it.
 
 ## Sparkle
@@ -190,12 +190,12 @@ its bundle id and its feed are derived from that line.
 
 Some Objective-C source needs a declaration the 10.9 SDK lacks, such as `NSArray`'s lightweight
 generic parameter. Recaulk ships recipes for those edits as data
-(`/usr/local/mavergreen/recaulk/share/sdk-metadata/recipes.json`, schema 1); `MavericksSDKMetadata`
+(`/usr/local/mavergreen/recaulk/share/sdk-metadata/recipes.json`, schema 1); `MavergreenSDKMetadata`
 applies them without touching the SDK:
 
 ```cmake
-include(MavericksSDKMetadata)
-mavericks_materialize_sdk_metadata(overlay
+include(MavergreenSDKMetadata)
+mavergreen_materialize_sdk_metadata(overlay
   SDK        "${CMAKE_OSX_SYSROOT}"
   RECIPES    "${recipes_json}"
   IDS        foundation-array-generics-v1
@@ -216,7 +216,7 @@ case) reaches the SDK's own header.
 A product opts one target in, explicitly:
 
 ```cmake
-mavericks_target_sdk_metadata(TARGET iTerm2
+mavergreen_target_sdk_metadata(TARGET iTerm2
   SDK        "${CMAKE_OSX_SYSROOT}"
   RECIPES    "${recipes_json}"
   IDS        foundation-array-generics-v1
@@ -262,7 +262,7 @@ files, and prints the user-owned prefix on stdout. It requires Python 3.9 or new
 curl, and either shasum or sha256sum. Override `MAVERGREEN_TAR_CACHE` to choose a
 local-disk cache; no root installation is required.
 
-A Linux build targeting Mavericks uses `MavericksToolchain.cmake` with explicit
+A Linux build targeting Mavericks uses `MavergreenToolchain.cmake` with explicit
 Linux-native clang22 compiler and LLVM tool paths. It selects Darwin and the
 configured arch (x86_64 against the pinned 10.9 SDK, arm64 against the pinned 11.3 SDK with
 deployment target 11.0) before compiler detection. Use host-native

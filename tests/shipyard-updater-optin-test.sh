@@ -24,7 +24,7 @@ else
 fi
 
 # spec: 2026-09-11 -- one universal updater, so no per-arch target name or bundle id survives.
-# platform: comments are skipped -- CMakeLists.txt's own comments may name the shared mavericks-cross
+# platform: comments are skipped -- CMakeLists.txt's own comments may name the shared mavergreen-cross
 #           preset, which is prose about presets, not a per-arch updater slice.
 if grep -v '^[[:space:]]*#' "$root/CMakeLists.txt" | grep -q 'CrossUpdater\|-cross'; then
   echo "FAIL: CMakeLists.txt still defines a -cross updater slice; there is one universal app now"; exit 1

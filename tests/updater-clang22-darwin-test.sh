@@ -29,7 +29,7 @@ grep -E '(version|minos) 10\.9$' "$T/lc" > /dev/null || fail 'the x86_64 updater
 grep -E 'sdk 10\.9$' "$T/lc" > /dev/null || fail 'the x86_64 updater must record the pinned 10.9 SDK'
 
 cmake -S "$ROOT" -B "$T/bare" -DSHIPYARD_BUILD_UPDATER=ON -DMAVERGREEN_ALLOW_GENERIC_ICON=ON \
-  -DCMAKE_TOOLCHAIN_FILE="$ROOT/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+  -DCMAKE_TOOLCHAIN_FILE="$ROOT/MavergreenToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=x86_64 \
   -DCMAKE_OBJC_COMPILER="$CL/bin/clang" > "$T/bare.log" 2>&1 || { cat "$T/bare.log"; fail 'a configure naming only clang22 failed'; }
 cmake --build "$T/bare" -v > "$T/bare.log" 2>&1 || { cat "$T/bare.log"; fail 'a build configured with only clang22 failed'; }
 for line in compile link; do
@@ -42,7 +42,7 @@ done
 grep -e ' -o shipyard-updater ' "$T/bare.log" | grep -e ' -fuse-ld=lld ' > /dev/null \
   || fail 'the updater must link with ld64.lld (-fuse-ld=lld) on every host'
 if cmake -S "$ROOT" -B "$T/wrong" -DSHIPYARD_BUILD_UPDATER=ON -DMAVERGREEN_ALLOW_GENERIC_ICON=ON \
-  -DCMAKE_TOOLCHAIN_FILE="$ROOT/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+  -DCMAKE_TOOLCHAIN_FILE="$ROOT/MavergreenToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=x86_64 \
   -DCMAKE_OBJC_COMPILER="$CL/bin/clang" -DCMAKE_OBJC_COMPILER_TARGET=x86_64-apple-macos10.10 > "$T/wrong.log" 2>&1; then
   fail 'a compiler target other than the configure arch and floor (x86_64-apple-macos10.9) must be refused'
 fi

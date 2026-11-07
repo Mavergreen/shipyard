@@ -36,7 +36,7 @@ FARM="$R/usr/local/mavergreen/bin"
 CM="$FARM/shipyard-cmake"
 PREFIX="$R/usr/local/mavergreen/shipyard"
 PRODUCT="$R/usr/local/mavergreen/cmake/bin/cmake"
-CFGDIR="$PREFIX/share/cmake/MavericksShipyard"
+CFGDIR="$PREFIX/share/cmake/MavergreenShipyard"
 EXE="$R/Library/Application Support/Mavergreen/shipyard-updater.app/Contents/MacOS/shipyard-updater"
 
 bad=0
@@ -48,8 +48,8 @@ mkdir -p "$W/probe"
 printf '%s\n' \
   'cmake_minimum_required(VERSION 3.16)' \
   'project(probe NONE)' \
-  'find_package(MavericksShipyard REQUIRED)' \
-  'message(STATUS "DIR=${MavericksShipyard_DIR}")' \
+  'find_package(MavergreenShipyard REQUIRED)' \
+  'message(STATUS "DIR=${MavergreenShipyard_DIR}")' \
   > "$W/probe/CMakeLists.txt"
 
 if [ -x "$PRODUCT" ]; then
@@ -129,7 +129,7 @@ else
 fi
 
 other="$(command -v cmake 2>/dev/null || true)"
-# platform: MavericksShipyardConfig.cmake refuses a foreign cmake only when CMAKE_HOST_APPLE; a Linux
+# platform: MavergreenShipyardConfig.cmake refuses a foreign cmake only when CMAKE_HOST_APPLE; a Linux
 #           host has no refusal to check, so the probe runs on Darwin alone.
 [ "$(uname -s)" = Darwin ] || other=""
 # spec: 2026-10-09 C5 -- the config accepts the cmake product, so a cmake on PATH that resolves under
@@ -143,7 +143,7 @@ while [ -n "$_o" ]; do
   case "$_l" in /*) _o="$_l" ;; *) _o="${_o%/*}/$_l" ;; esac
 done
 if [ -n "$other" ]; then
-  if "$other" -S "$W/probe" -B "$W/other" -DMavericksShipyard_DIR="$CFGDIR" > "$W/other.log" 2>&1; then
+  if "$other" -S "$W/probe" -B "$W/other" -DMavergreenShipyard_DIR="$CFGDIR" > "$W/other.log" 2>&1; then
     fail "$other configured against shipyard; every cmake but the cmake product must be refused"
   fi
   grep -q 'shipyard-cmake' "$W/other.log" \

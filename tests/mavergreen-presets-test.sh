@@ -6,7 +6,7 @@
 #           binaryDir break the second one's reconfigure.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
-P="$root/mavericks-presets.json"
+P="$root/mavergreen-presets.json"
 fails=0
 say() { echo "FAIL: $1"; fails=$((fails+1)); }
 
@@ -16,17 +16,17 @@ fi
 if [ "$(grep -c '${sourceDirName}' "$P" || true)" -ne 2 ]; then
   say "expected both hidden presets' binaryDir to key off \${sourceDirName} so two checkouts do not collide"
 fi
-grep -q '"MAVERICKS_BUILD_ROOT": "\$penv{TMPDIR}/mm-build"' "$P" \
-  || say "MAVERICKS_BUILD_ROOT is not defaulted to TMPDIR"
+grep -q '"MAVERGREEN_BUILD_ROOT": "\$penv{TMPDIR}/mavergreen-build"' "$P" \
+  || say "MAVERGREEN_BUILD_ROOT is not defaulted to TMPDIR"
 # spec: tests/installed-presets-test.sh -- the source's toolchainFile is the token the install
 #       replaces with the installed toolchain file's absolute path; that test checks the result.
-[ "$(grep -c '"toolchainFile": "${fileDir}/MavericksToolchain.cmake"' "$P" || true)" -eq 2 ] \
-  || say "both hidden presets must carry \${fileDir}/MavericksToolchain.cmake, the token the install replaces, so a consumer's preset pins the SDK by inheriting"
+[ "$(grep -c '"toolchainFile": "${fileDir}/MavergreenToolchain.cmake"' "$P" || true)" -eq 2 ] \
+  || say "both hidden presets must carry \${fileDir}/MavergreenToolchain.cmake, the token the install replaces, so a consumer's preset pins the SDK by inheriting"
 
 command -v cmake >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
 
 # spec: SKILL.md "Build OUT of the source tree, onto fast local storage" --
-#       a consumer's preset supplies neither binaryDir nor MAVERICKS_BUILD_ROOT,
+#       a consumer's preset supplies neither binaryDir nor MAVERGREEN_BUILD_ROOT,
 #       it only inherits; this fixture must match that shape or the test
 #       proves nothing about real consumers.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the
@@ -43,10 +43,10 @@ fixture() {  # $1 = directory to populate as a CMake source root
   cat > "$1/CMakePresets.json" <<JSON
 { "version": 6,
   "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
-  "include": ["$installed/mavericks-presets.json"],
+  "include": ["$installed/mavergreen-presets.json"],
   "configurePresets": [
-    { "name": "native", "inherits": "mavericks-native" },
-    { "name": "cross", "inherits": "mavericks-cross" } ] }
+    { "name": "native", "inherits": "mavergreen-native" },
+    { "name": "cross", "inherits": "mavergreen-cross" } ] }
 JSON
 }
 
@@ -58,9 +58,9 @@ check_cache_var() {  # $1=CMakeCache.txt $2=var $3=expected value $4=label
 work1="$(mktemp -d "${TMPDIR:-/tmp}/presets1.XXXXXX")"
 work2="$(mktemp -d "${TMPDIR:-/tmp}/presets2.XXXXXX")"
 b1="$(basename "$work1")"; b2="$(basename "$work2")"
-bd1="${TMPDIR:-/tmp}/mm-build/${b1}-native"
-bd2="${TMPDIR:-/tmp}/mm-build/${b2}-native"
-bd1cross="${TMPDIR:-/tmp}/mm-build/${b1}-cross"
+bd1="${TMPDIR:-/tmp}/mavergreen-build/${b1}-native"
+bd2="${TMPDIR:-/tmp}/mavergreen-build/${b2}-native"
+bd1cross="${TMPDIR:-/tmp}/mavergreen-build/${b1}-cross"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- both
 #       presets' toolchainFile now runs on every configure below and fetches the pinned SDK;
@@ -80,7 +80,7 @@ trap 'rm -rf "$work1" "$work2" "$work3" "$work4" "$bd1" "$bd2" "$bd1cross"' EXIT
 cmake -S "$root" -B "$work4/build" > "$work4/install.log" 2>&1 \
   && cmake --install "$work4/build" --prefix "$work4/prefix" >> "$work4/install.log" 2>&1 \
   || { echo "FAIL: shipyard does not install"; sed 's/^/    | /' "$work4/install.log"; exit 1; }
-installed="$work4/prefix/share/cmake/MavericksShipyard"
+installed="$work4/prefix/share/cmake/MavergreenShipyard"
 sdk="$work3/MacOSX10.9.sdk"
 
 fixture "$work1"
@@ -115,14 +115,14 @@ out1cross="$(cd "$work1" && cmake --preset cross 2>&1)" \
 # platform: a guard here (`[ -f ... ] &&`) would skip these checks silently
 #           if it ever failed, without touching $fails -- omit it on
 #           purpose; existence was already asserted above.
-check_cache_var "$bd1/CMakeCache.txt" MAVERGREEN_EXPECTED_MODE native "mavericks-native"
-check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-native"
-check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-native"
-check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_SYSROOT "$sdk" "mavericks-native"
-check_cache_var "$bd1cross/CMakeCache.txt" MAVERGREEN_EXPECTED_MODE cross "mavericks-cross"
-check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-cross"
-check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-cross"
-check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_SYSROOT "$sdk" "mavericks-cross"
+check_cache_var "$bd1/CMakeCache.txt" MAVERGREEN_EXPECTED_MODE native "mavergreen-native"
+check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavergreen-native"
+check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavergreen-native"
+check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_SYSROOT "$sdk" "mavergreen-native"
+check_cache_var "$bd1cross/CMakeCache.txt" MAVERGREEN_EXPECTED_MODE cross "mavergreen-cross"
+check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavergreen-cross"
+check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavergreen-cross"
+check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_SYSROOT "$sdk" "mavergreen-cross"
 
-[ "$fails" -eq 0 ] && echo "mavericks-presets: ok"
+[ "$fails" -eq 0 ] && echo "mavergreen-presets: ok"
 exit $([ "$fails" -eq 0 ] && echo 0 || echo 1)

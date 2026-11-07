@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: package-pkg.sh --shipyard-prefix DIR --app APP --version V --out PKG
 #          Packages shipyard as ONE prefix -- /usr/local/mavergreen/shipyard holding shipyard itself
-#          (share/cmake/MavericksShipyard), the launchers bin/shipyard-{cmake,ctest,cpack} into the
+#          (share/cmake/MavergreenShipyard), the launchers bin/shipyard-{cmake,ctest,cpack} into the
 #          cmake product, and bin/{cmake,ctest,cpack} linked to them -- plus one universal updater and
 #          the dev.mavergreen.base component. The mavergreen helper exports the shipyard-* names
 #          into /usr/local/mavergreen/bin, never the bare cmake/ctest/cpack; nothing is installed into
@@ -71,8 +71,8 @@ require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-sep
     }
   done
 }
-[ -f "$SPREFIX/share/cmake/MavericksShipyard/MavericksShipyardConfig.cmake" ] \
-  || { echo "package-pkg: --shipyard-prefix has no share/cmake/MavericksShipyard: $SPREFIX" >&2; exit 1; }
+[ -f "$SPREFIX/share/cmake/MavergreenShipyard/MavergreenShipyardConfig.cmake" ] \
+  || { echo "package-pkg: --shipyard-prefix has no share/cmake/MavergreenShipyard: $SPREFIX" >&2; exit 1; }
 # spec: 2026-09-11 decision 1 -- the prefix BECOMES the product prefix verbatim, so the enumeration of
 #       the payload is a gate rather than a description: a stray shipyard-cmake-tree.tar.gz once
 #       shipped a copy of the whole payload inside the payload, and nothing complained.
@@ -89,9 +89,9 @@ done
 # spec: tests/installed-presets-test.sh -- the install bakes its --prefix into the presets' toolchainFile, so this prefix
 #       must have been installed AS $PREFIX_DIR (staged under DESTDIR), or every consumer's
 #       `cmake --preset` looks for the toolchain file in a directory that exists only on the runner.
-presets="$SPREFIX/share/cmake/MavericksShipyard/mavericks-presets.json"
-want="$PREFIX_DIR/share/cmake/MavericksShipyard/MavericksToolchain.cmake"
-[ -f "$presets" ] || { echo "package-pkg: --shipyard-prefix has no mavericks-presets.json: $presets" >&2; exit 1; }
+presets="$SPREFIX/share/cmake/MavergreenShipyard/mavergreen-presets.json"
+want="$PREFIX_DIR/share/cmake/MavergreenShipyard/MavergreenToolchain.cmake"
+[ -f "$presets" ] || { echo "package-pkg: --shipyard-prefix has no mavergreen-presets.json: $presets" >&2; exit 1; }
 tcs="$(sed -n 's/^[[:space:]]*"toolchainFile":[[:space:]]*"\([^"]*\)".*/\1/p' "$presets")"
 wrong="$(printf '%s\n' "$tcs" | grep -vxF "$want" || true)"
 if [ -z "$tcs" ] || [ -n "$wrong" ]; then

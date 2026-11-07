@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: compat-guard-cmake-test.sh
-#          mavericks_assert_binary_compatible() hands the guard MAVERGREEN_DEVIATIONS_ROOT = the
+#          mavergreen_assert_binary_compatible() hands the guard MAVERGREEN_DEVIATIONS_ROOT = the
 #          project's CMAKE_SOURCE_DIR. A POST_BUILD command runs in the build tree, so without it the
 #          guard would look there for .mavergreen/deviations/ and honour no sdk-pin exemption at all.
 # platform: script mode (cmake -P) sets CMAKE_SOURCE_DIR to the working directory and cannot run
@@ -16,8 +16,8 @@ cat > "$src/probe.cmake" <<EOF
 function(add_custom_command)
   message("ARGS: \${ARGN}")
 endfunction()
-include("$root/MavericksCompatGuard.cmake")
-mavericks_assert_binary_compatible(foo)
+include("$root/MavergreenCompatGuard.cmake")
+mavergreen_assert_binary_compatible(foo)
 EOF
 out="$(cd "$src" && cmake -P probe.cmake 2>&1)" || { echo "FAIL: the probe did not run:"; echo "$out"; exit 1; }
 printf '%s\n' "$out" | grep -q ";MAVERGREEN_DEVIATIONS_ROOT=$src;" \

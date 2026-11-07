@@ -71,9 +71,9 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   runner it verifies and installs the pinned cmake product first, then shipyard's released `.pkg`.
   It adds `/usr/local/mavergreen/bin` to `$GITHUB_PATH` (a
   job's steps are not login shells, so `paths.d` never reaches them) and exports `SHIPYARD_SCRIPTS`
-  (`/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts`). On any other runner
+  (`/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/scripts`). On any other runner
   it installs nothing and adds nothing to `PATH`: `SHIPYARD_SCRIPTS` is the action checkout's own
-  `scripts/`, and `MavericksShipyard_DIR` points `find_package` at that checkout. Consume the CMake
+  `scripts/`, and `MavergreenShipyard_DIR` points `find_package` at that checkout. Consume the CMake
   side with `find_package` — **no `CMAKE_PREFIX_PATH`, no vendored copy, no hand-run `--install`.**
 
   On every runner it also makes **PyYAML** importable for the job's own `python3` (`pip --user`,
@@ -97,7 +97,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   **Configure, test and package with `shipyard-cmake` / `shipyard-ctest` / `shipyard-cpack`** — in
   workflows and in `build/*.sh` alike. These POSIX sh launchers exec the sibling cmake product's tools.
   `shipyard-cmake` appends shipyard's prefix to `CMAKE_PREFIX_PATH`, after the developer's entries.
-  On macOS, `MavericksShipyardConfig.cmake` accepts only a cmake product paired with a shipyard
+  On macOS, `MavergreenShipyardConfig.cmake` accepts only a cmake product paired with a shipyard
   (`<prefix>/cmake/bin/cmake` beside `<prefix>/shipyard/bin/shipyard-cmake`) at or above the
   pinned upstream version. Foreign and older cmakes are refused by name. Linux skips this refusal.
   Compatibility links at `shipyard/bin/{cmake,ctest,cpack}` keep existing build directories
@@ -146,7 +146,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   **Everywhere else, run `shipyard-scripts`**: `SHIPYARD_SCRIPTS="${SHIPYARD_SCRIPTS:-$(shipyard-scripts)}"`.
   It honours `SHIPYARD_SCRIPTS` when CI has set it, and otherwise
   asks `shipyard-cmake` (from `PATH`, else `/usr/local/mavergreen/bin/shipyard-cmake`, so a shell
-  that predates the install still works) where `find_package(MavericksShipyard)` lands — so a
+  that predates the install still works) where `find_package(MavergreenShipyard)` lands — so a
   `CMAKE_PREFIX_PATH` dev override moves the scripts together with the modules. A committed copy of the retired script finder fails the gate
   (`legacy-top-level`): eleven hand-kept copies had already drifted into three variants. Change
   it in shipyard, not in your repo.
@@ -179,15 +179,15 @@ updaters, signing, or compat checks:**
 
 | Facility (CMake fn · script) | Does | Don't hand-roll |
 |---|---|---|
-| `mavericks_build_mode` · `MavericksMode` · `mavergreen_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
-| `mavericks_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
+| `mavergreen_build_mode` · `MavergreenMode` · `mavergreen_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
+| `mavergreen_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
 | `RequireAppleClang` | enforces Apple `/usr/bin/clang` for a configure that still declares it; every caller is a leftover, not an exception (see "The compiler: clang22 on every host") | assuming the toolchain |
-| `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set) | a bespoke compat check |
+| `mavergreen_assert_binary_compatible` · `MavergreenCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set) | a bespoke compat check |
 | `mavericks_add_updater_app` · `MavericksSparkle` · `stage_updater.sh` | builds/stages the Sparkle updater (self-fetches the framework) | wiring Sparkle by hand |
 | `apply_patches.sh SRC PATCHDIR` | applies `PATCHDIR/*.patch` to an unpacked source once, in name order with no fuzz; records their SHA-256s in `SRC/.mavergreen-patches`, no-ops on the same set, refuses a tree patched with another | a hand-rolled `patch` loop |
 | `build_component_pkg.sh` · `set_install_floor.sh` | builds a component `.pkg`; stamps the 10.9.5 install floor on a product `.pkg` (see "Seam hosts", below) | `pkgbuild`, `productbuild`, editing the pkg Distribution |
 | `sign_and_appcast.sh` · `gen_appcast.sh` | EdDSA-signs + renders the appcast (fetches `ed25519-sign` via `gh`) | rolling your own signing |
-| `mavericks_fetch` · `MavericksFetch` · `mavergreen_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
+| `mavericks_fetch` · `MavergreenFetch` · `mavergreen_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
 | `shipyard_curl URL OUT\|-` · `mavergreen_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
 | `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
 | `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh with `stevedore expand`; runs on 10.9 and Linux | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
@@ -287,16 +287,16 @@ dozens of builds per task (one per commit, one per mutation test, one per
 verification round), and the test suites compile fixtures and dylibs on every
 run. This is the single cheapest speedup available to this family.
 
-- **shipyard's shared hidden presets (`mavericks-native` / `mavericks-cross`) declare
-  `MAVERICKS_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mm-build`,
+- **shipyard's shared hidden presets (`mavergreen-native` / `mavergreen-cross`) declare
+  `MAVERGREEN_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mavergreen-build`,
   and derive their OWN `binaryDir` from it, keyed by `${sourceDirName}`:**
   ```json
-  "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-native"
+  "binaryDir": "$env{MAVERGREEN_BUILD_ROOT}/${sourceDirName}-native"
   ```
-  A consumer's preset supplies neither `MAVERICKS_BUILD_ROOT` nor `binaryDir` — it
+  A consumer's preset supplies neither `MAVERGREEN_BUILD_ROOT` nor `binaryDir` — it
   just inherits:
   ```json
-  {"name": "native", "inherits": "mavericks-native"}
+  {"name": "native", "inherits": "mavergreen-native"}
   ```
   `${sourceDirName}` is the name of the checkout directory, so it differs per
   checkout — this matters because shipyard itself has three checkouts in this tree
@@ -307,18 +307,18 @@ run. This is the single cheapest speedup available to this family.
   of the consumer's own preset also removes a per-repo chance to typo the path. Do
   NOT hardcode a developer's local path here, and do NOT use `${sourceDir}/build-*`
   — both put the build back inside the (possibly NFS) source tree.
-- **A script-driven repo (no CMake presets) reads `$MAVERICKS_BUILD_ROOT` from the
-  environment directly**, with the same `${TMPDIR}/mm-build` fallback if it is unset.
+- **A script-driven repo (no CMake presets) reads `$MAVERGREEN_BUILD_ROOT` from the
+  environment directly**, with the same `${TMPDIR}/mavergreen-build` fallback if it is unset.
 - **To override the location, use `CMakeUserPresets.json`, not a shell export.** A
   preset's `environment` overrides the real environment — exporting
-  `MAVERICKS_BUILD_ROOT` in your shell does not win against a shared preset that
+  `MAVERGREEN_BUILD_ROOT` in your shell does not win against a shared preset that
   already sets it. Gitignore the file, and have it inherit while repointing the
   variable:
   ```json
   {"version": 6,
    "configurePresets": [
      {"name": "native-local", "inherits": "native",
-      "environment": {"MAVERICKS_BUILD_ROOT": "/private/tmp/build/$env{USER}"}}]}
+      "environment": {"MAVERGREEN_BUILD_ROOT": "/private/tmp/build/$env{USER}"}}]}
   ```
   Preset names must be unique across both files, so a local preset takes a new
   name rather than shadowing the shared one.
@@ -339,9 +339,9 @@ The product must run on **10.9**, but **there is no 10.9 build runner in CI** �
 on a modern Mac. So each project MUST establish that its cross-build equals a native-10.9 build, via
 shipyard's facilities rather than trusting the runner:
 
-- Drive the build through the **mode** machinery (`mavericks_build_mode`) so native and cross are the same
+- Drive the build through the **mode** machinery (`mavergreen_build_mode`) so native and cross are the same
   recipe against the same pinned 10.9 SDK and floor — not two divergent paths.
-- **Gate on the compat guard** (`mavericks_assert_binary_compatible`): fail the build if any shipped binary
+- **Gate on the compat guard** (`mavergreen_assert_binary_compatible`): fail the build if any shipped binary
   declares a floor above 10.9 or links a symbol 10.9 lacks. This is the in-CI equivalence proof — every
   project needs it (or an equivalent gate), since no 10.9 runner validates the output.
   - **`MAVERGREEN_REQUIRE_DEFINED_SYMBOLS` is product-specific — do NOT copy golang's blindly.** The guard
@@ -408,7 +408,7 @@ A consumer's Renovate config is **`.github/renovate.json`**: `{"$schema", "exten
 
 **That path, and no other.** Renovate itself accepts a config at the repo root, in `.github/`,
 `.gitlab/` or as `.renovaterc*`, but the family uses exactly one:
-- `MavericksShipyardConfig.cmake` scaffolds `.github/renovate.json` on every configure when it is
+- `MavergreenShipyardConfig.cmake` scaffolds `.github/renovate.json` on every configure when it is
   absent (opt out with `-DMAVERGREEN_NO_RENOVATE_SCAFFOLD=ON`). So a repo that keeps its config
   anywhere else, and configures through shipyard's CMake package, gets a second, preset-only config
   written beside it by its first build. That dirties the tree `assert-tree-clean.sh` checks, and
@@ -645,8 +645,8 @@ suffix** moves for a packaging-only re-release (recipe/patch/updater/CA change, 
   `upstream_version()`.
 - **`VERSION`** — `<upstream>-mavericks.N`, **a BUILD PRODUCT**: gitignored (`/VERSION`), written by
   `resolve-version.sh`, never committed. `check-family-conventions.sh` fails a *tracked* one. In CMake
-  use `mavericks_resolve_version(MYVAR)` (from the package Config, so plain `find_package` is enough —
-  no `include(Mavericks)` needed) rather than `file(STRINGS VERSION …)`, which only ever worked because
+  use `mavergreen_resolve_version(MYVAR)` (from the package Config, so plain `find_package` is enough —
+  no `include(Mavergreen)` needed) rather than `file(STRINGS VERSION …)`, which only ever worked because
   four repos committed the file.
 - **`scripts/resolve-version.sh [auto|local]`** — the one way to learn the version at build time. It
   reuses an existing `VERSION` so **every job in one run agrees**, and derives+writes one otherwise.
@@ -1575,9 +1575,9 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   - Mac OS X 10.9: the native `clang22` pkg, since the cross pkg does not run there and 10.9 has no
     AArch64 backend, so x86_64 only.
   - Either Mac: an installed `clang22-cross` (`clang22` on 10.9) at the pinned release.
-  An updater-only configure sets `MAVERICKS_REQUIRE_APPLECLANG OFF` before `include(Mavericks)`. The
+  An updater-only configure sets `MAVERICKS_REQUIRE_APPLECLANG OFF` before `include(Mavergreen)`. The
   AppleClang gate is per configure, not per target, and it stays for every other caller. Configure once
-  per arch through `MavericksToolchain.cmake` with:
+  per arch through `MavergreenToolchain.cmake` with:
   ```sh
   -DCMAKE_OBJC_COMPILER="$CL/bin/clang" -DCMAKE_OBJC_COMPILER_TARGET=<arch>-apple-macos<floor>
   -DCMAKE_OBJC_FLAGS=--no-default-config -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
@@ -1679,7 +1679,7 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
 ## App icons (forced decision — no unopted placeholders)
 
 Every shipped app — **including the Sparkle updater** — must make an EXPLICIT icon decision.
-`mavericks_require_icon(TARGET t ICNS <path>)` and `mavericks_add_updater_app(… ICON <path>)` both
+`mavergreen_require_icon(TARGET t ICNS <path>)` and `mavericks_add_updater_app(… ICON <path>)` both
 FATAL at configure time if the icon is missing OR is a **registered placeholder** — its sha256 is
 listed in shipyard's `scripts/placeholder-icons.sha256`. The one way to ship a generic/
 placeholder icon is the explicit opt-in `-DMAVERGREEN_ALLOW_GENERIC_ICON=ON` (or `ALLOW_GENERIC`).
@@ -1688,7 +1688,7 @@ This gate exists because an agent-generated solid-colour stand-in once shipped i
 were real artwork, waved off as a "minor" follow-up. **If you generate a placeholder icon, register
 its sha256 in `placeholder-icons.sha256`** in the same change — then the product cannot build a
 release until real artwork (a different hash) replaces it, or someone opts in on purpose. Both icon
-entry points call the shared `mavericks_reject_placeholder_icon`, so neither the main-app nor the
+entry points call the shared `mavergreen_reject_placeholder_icon`, so neither the main-app nor the
 updater path can smuggle one through.
 
 **Porthole presets' vendor icons.** A preset never ships its app's icon; it names where the user's
@@ -1717,13 +1717,13 @@ nothing noticed: the compat guard read minos and never the SDK. Linking the runn
 declaration compile and fail only on the target, and a Linux host has no runner SDK at all. So the family
 needs one policy for both hosts.
 
-**How a build complies:** configure through the shipyard presets (`mavericks-cross` / `mavericks-native`),
-or pass `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`. That sets the pinned SDK, the
+**How a build complies:** configure through the shipyard presets (`mavergreen-cross` / `mavergreen-native`),
+or pass `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavergreenToolchain.cmake`. That sets the pinned SDK, the
 arch and the deployment target **before `project()`**, one arch per configure. A build that calls the
 compiler itself passes `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`. A repo that
 ships `fetch_sdk.sh` (in a toolchain's `libexec/`, e.g.) ships `sdk-pins.sh` and `mavergreen_fetch.sh`
 beside it; without `sdk-pins.sh` it exits 2 naming the missing file.
-`include(Mavericks)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
+`include(Mavergreen)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
 Linux cross-builds both arches: the toolchain file selects Darwin and the configured arch, and the
 compiler is clang22's Linux archive with `ld64.lld` (`--target=arm64-apple-macos11.0 -fuse-ld=lld
 --ld-path=<clang22>/bin/ld64.lld` for arm64).
@@ -1753,7 +1753,7 @@ restores a stale SDK.
   `macho` fact for every Mach-O slice in every pkg payload and shipped tarball, and conformance's
   `sdk-pin` rule checks each one. Check 21 already makes every pkg-building repo run conformance.
 - **Right after each build (early feedback).** The compat guard checks each slice against its arch's
-  rule. `MAVERGREEN_ALLOW_ARCHS` gives the exact arch set (`mavericks_assert_binary_compatible` passes
+  rule. `MAVERGREEN_ALLOW_ARCHS` gives the exact arch set (`mavergreen_assert_binary_compatible` passes
   `CMAKE_OSX_ARCHITECTURES`).
 
 **Exemptions are declared, never implicit:**
@@ -1764,7 +1764,7 @@ restores a stale SDK.
   excuses the rule for **every** file in the release: use it only when that is what you mean.
 - The compat guard honours the same globs at build time. It matches each glob against the path exactly
   as its command line gives it, and reads `.mavergreen/deviations/` from `MAVERGREEN_DEVIATIONS_ROOT` (default: the
-  current directory; `mavericks_assert_binary_compatible` passes `CMAKE_SOURCE_DIR`). **Write each glob
+  current directory; `mavergreen_assert_binary_compatible` passes `CMAKE_SOURCE_DIR`). **Write each glob
   with a leading `*/`**, as in a scope of `*/lib/libswiftCore.dylib`, so that one glob matches
   both the payload path and the staged or build path the guard sees. `*` spans `/`.
 - An excuse covers the minos/SDK rule only. The guard still checks the file's arches and its post-10.9
@@ -2546,7 +2546,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **15.** Every comment cites `# platform:` or `# spec:`, delegated to `check-comments.sh`; **opt-in**, only in a repo with its own `.mavergreen/config/comment-reasons` file | See "Comments cite a reason", above, for the full rule. Three false claims that reached review — each confidently wrong, each living in a comment rather than in code — are the reason this check exists at all: a comment is the one artifact that stays wrong while every test passes. Opt-in so `@v1` reaching all fourteen consumers doesn't redden a repo that hasn't swept yet; a swept repo states a declared exception as a `comments` deviation |
 | **16.** Nothing tracked reads the CMake **user package registry** (`~/.cmake/packages`) | the `shipyard-cmake` launcher supplies shipyard's prefix and nothing writes that registry any more, so a script reading it reads a file that is no longer there — and reads it *silently*, resolving to an empty path rather than failing |
 | **17.** A repo has **no committed** copy of the retired script finder, top-level or under `build/` (`legacy-top-level`); the `shipyard-scripts` command finds shipyard | The copy was the one piece each product carried in order to find shipyard. Eleven hand-kept copies had drifted into three variants, so "the incantation" meant three different things depending on which repo you opened. Tracked copies only — an untracked scratch copy in your worktree is not what the repo ships |
-| **18.** No plain `cmake` / `ctest` / `cpack` at command position — in workflow `run:` bodies or in committed `*.sh` outside `tests/` | `MavericksShipyardConfig.cmake` refuses foreign or too-old cmakes on macOS; this finds the call in the PR instead of in the release. `tests/` is excluded because fixtures quote the command on purpose |
+| **18.** No plain `cmake` / `ctest` / `cpack` at command position — in workflow `run:` bodies or in committed `*.sh` outside `tests/` | `MavergreenShipyardConfig.cmake` refuses foreign or too-old cmakes on macOS; this finds the call in the PR instead of in the release. `tests/` is excluded because fixtures quote the command on purpose |
 | **22.** Every tracked script declares its host in its header — `# platform: host-agnostic` or `# platform: macOS-only -- <why>` — and a host-agnostic one runs no macOS-only tool at command position (`check-host-tools.sh`); **opt-in**, in a repo where at least one script declares | Nothing stopped a script that a Linux job depends on from growing an `otool` or `sw_vers`: it passed every gate and broke on the runner. `check-shell-portability.sh` cannot see it — flawless POSIX sh can still call `lipo`. An undeclared script **fails** rather than defaulting to host-agnostic, because a default makes the gate silently incomplete. Opt-in, like 15, so `@v1` reaching fourteen consumers reddens none of them |
 | **23.** A repo that builds a `.pkg` (the same test as 21) calls `stage_product.sh`, on a non-comment line of a tracked, non-test `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt`, at command position — line start, after `;` `&` `\|` or a backtick, after `$(`, `then`, `do` or `exec`, after a YAML `run:` or a CMake `COMMAND`, any of these optionally followed by `if`, `elif`, `while`, `until` or `!` — spelled `sh` or `/bin/sh` (with any option flags, `sh -e`) and a word ending `stage_product.sh`, or a word ending `/stage_product.sh` (`"$SHIPYARD_SCRIPTS"/stage_product.sh`, `./stage_product.sh`); or declares a `stage-product` deviation | Conformance enforces the install layout, and `stage_product.sh` is what produces it: the manifest, and the unlink–remove–link install scripts that make an upgrade replace the tree while keeping the selection. A hand-rolled pkg fails `manifest` only at package time; this finds it on the PR. A mention is not a call — `echo "sh stage_product.sh"` does not count, and neither does an assignment (`SP="$S/stage_product.sh"`: a word holding `=`). **Known false negatives:** a bare `stage_product.sh` found on `PATH`; `bash` or `.` instead of `sh`; a call behind a prefix command (`sudo`, `env`, `time`, `command`) or opening a `{ … }` group or a `( … )` subshell; a path with a space or `=` in it (`"$(dirname "$0")"/stage_product.sh`); and a call followed directly by `;` or `)` (`then sh "$S/stage_product.sh"; fi`, `$(sh …/stage_product.sh)`) — give the call its own line, or at least a space before the separator |
 | **24.** A repo that builds a `.pkg` (the same test as 21), where `$GITHUB_REPOSITORY` is set, is the repo of at least one short name in shipyard's `scripts/product-names` (by name, not owner); a `registered` deviation exempts it | Every feed URL and updater identity is derived from the registry's repo, so a repo the registry does not name publishes feeds no installed updater polls. The short names themselves are known only at package time, where conformance's `repository` check holds each to its registered repo; this finds an unregistered or renamed repo on the PR |
@@ -2778,7 +2778,7 @@ declares `build/` "for one file" has handed every later change a repo-wide exemp
 **20. A repo that commits `CMakePresets.json` must gitignore `CMakeUserPresets.json`.** That file
 is the per-developer build-location override, and it is the *only* thing that can override the
 shared default: a preset's own `environment` block is applied after the real process environment,
-so exporting `MAVERICKS_BUILD_ROOT` cannot redirect a `--preset` build. Left unignored it sits in
+so exporting `MAVERGREEN_BUILD_ROOT` cannot redirect a `--preset` build. Left unignored it sits in
 `git status` and gets committed by accident, pinning everyone to one person's paths. A repo with
 no committed presets file has no override channel and is not asked about one.
 
@@ -2986,7 +2986,7 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
     everything under `usr/local/mavergreen/<short name>/`; get the install scripts and manifest from
     `stage_product.sh` (product-specific steps as hooks); wrap with `set_install_floor.sh`, which
     adds `dev.mavergreen.base`. See "Install layout and identity".
-15. Configure through the shipyard presets or `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`,
+15. Configure through the shipyard presets or `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavergreenToolchain.cmake`,
     never an SDK by hand; a build that calls the compiler itself passes
     `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`. See "SDK pinning".
 16. **Before the first push, rewrite the local history into clean, sequential commits** — each one a

@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: macOS-only -- compiles Objective-C against the pinned 10.9 SDK with clang22
 # usage: sh tests/sdk-metadata-consumer-test.sh
-#        mavericks_target_sdk_metadata on a real SDK: only the opted-in Objective-C target gets the
+#        mavergreen_target_sdk_metadata on a real SDK: only the opted-in Objective-C target gets the
 #        overlay; generic NSArray code compiles with it and fails without it; a reconfigure reuses
 #        the verified generation; a tampered or unowned generation is refused, never overwritten.
 #        SDK_METADATA_CC names the compiler (default: the installed clang22, clang-22 on 10.9 or
@@ -101,14 +101,14 @@ cmp -s "$h1" "$h2" || bad "two generations of the same inputs hold different hea
 echo "== tampered_cached_header_refused"
 printf '/* tampered */\n' >> "$h1"
 if configure "$w/b1" "$w/gen root"; then bad "a tampered generation was accepted"; fi
-grep -q 'mavericks_target_sdk_metadata' "$w/configure.log" || bad "tampered: refused without naming the function"
+grep -q 'mavergreen_target_sdk_metadata' "$w/configure.log" || bad "tampered: refused without naming the function"
 tail -1 "$h1" | grep -q tampered || bad "tampered: the generation was overwritten instead of refused"
 
 echo "== unowned_generation_refused"
 g2="$(gen_dir "$ov2")"
-rm -f "$g2/.mavericks-sdk-metadata-stamp.json"
+rm -f "$g2/.mavergreen-sdk-metadata-stamp.json"
 if configure "$w/b2" "$w/gen root 2"; then bad "an unowned generation was accepted"; fi
-grep -q 'mavericks_target_sdk_metadata' "$w/configure.log" || bad "unowned: refused without naming the function"
+grep -q 'mavergreen_target_sdk_metadata' "$w/configure.log" || bad "unowned: refused without naming the function"
 [ -f "$g2/overlay.json" ] || bad "unowned: the generation was removed or replaced"
 
 [ "$("$SC" -E sha256sum "$NSARRAY" | awk '{print $1}')" = "$sdk_before" ] || bad "the SDK's NSArray.h changed"

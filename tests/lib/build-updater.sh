@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: build-updater.sh --arch x86_64|arm64 [--arch x86_64|arm64] --out APP
 #          Builds shipyard's own Sparkle updater (CMakeLists.txt, SHIPYARD_BUILD_UPDATER) with the pinned
-#          clang22 (scripts/fetch_clang22.sh) and MavericksToolchain.cmake, one configure per arch
+#          clang22 (scripts/fetch_clang22.sh) and MavergreenToolchain.cmake, one configure per arch
 #          (x86_64: 10.9 SDK, minos 10.9; arm64: 11.3 SDK, minos 11.0), on Linux and on a Mac alike. Two
 #          arches are merged into one app by lipo-merge-tree.sh with LIPO=llvm-lipo; one arch is copied
 #          as built, which only the tests ask for. APP must not exist. The build logs go to stderr,
@@ -30,14 +30,14 @@ CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT")"
 LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; STRINGS="$CL/bin/llvm-strings"
 export LIPO OTOOL NM STRINGS
 _tmp="${TMPDIR:-/tmp}"
-root="${MAVERICKS_BUILD_ROOT:-${_tmp%/}/mm-build}"
+root="${MAVERGREEN_BUILD_ROOT:-${_tmp%/}/mavergreen-build}"
 mkdir -p "$root"
 work="$(mktemp -d "$root/shipyard-updater.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 for a in $archs; do
   case "$a" in x86_64) floor=10.9 ;; arm64) floor=11.0 ;; esac
   "$CMAKE" -S "$ROOT" -B "$work/$a" -DSHIPYARD_BUILD_UPDATER=ON -DMAVERGREEN_ALLOW_GENERIC_ICON=ON \
-    -DCMAKE_TOOLCHAIN_FILE="$ROOT/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES="$a" \
+    -DCMAKE_TOOLCHAIN_FILE="$ROOT/MavergreenToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES="$a" \
     -DCMAKE_OBJC_COMPILER="$CL/bin/clang" -DCMAKE_OBJC_COMPILER_TARGET="$a-apple-macos$floor" \
     -DCMAKE_OBJC_FLAGS=--no-default-config -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld >&2 \
     || die "the $a updater did not configure"

@@ -5,7 +5,7 @@
 # platform: Homebrew's CMAKE_ROOT is <prefix>/share/cmake -- the very path shipyard installs into --
 #           and is itself a SYMLINK, while BSD `cp -R` copies a symlink AS a symlink: the fixture's
 #           share/cmake would alias Homebrew's real share directory and the `cmake --install` two
-#           lines later would create MavericksShipyard INSIDE the host's own cmake installation.
+#           lines later would create MavergreenShipyard INSIDE the host's own cmake installation.
 #           Homebrew's tree is also read-only and `cp -R` preserves the source's mode, so even a
 #           materialised copy could not be installed into ("file cannot create directory: ... Maybe
 #           need administrative privileges"). Both are INVISIBLE on a pkgsrc cmake (share/cmake-X.Y,

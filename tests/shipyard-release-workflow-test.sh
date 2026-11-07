@@ -277,9 +277,9 @@ if not exports(rel_mac, "SHIPYARD_SCRIPTS"):
 if not any(re.search(r'^echo /usr/local/mavergreen/bin >> "\$GITHUB_PATH"$', c) for c in rel_mac):
     bad.append("the macOS release path never puts /usr/local/mavergreen/bin on the job's PATH "
                "(echo /usr/local/mavergreen/bin >> \"$GITHUB_PATH\"), so no later step finds shipyard-cmake")
-if not any(re.search(r'^scripts=/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts$', c) for c in rel_mac):
+if not any(re.search(r'^scripts=/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/scripts$', c) for c in rel_mac):
     bad.append("the macOS release path must export SHIPYARD_SCRIPTS from the installed product "
-               "tree, /usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts")
+               "tree, /usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/scripts")
 
 # R-P1-18: a non-macOS runner gets shipyard's shell half, pinned to the ref, and nothing installed.
 # repackage-on-ingredient-bump.yml runs on ubuntu-latest and wants exactly that.
@@ -292,13 +292,13 @@ else:
     if not any("GITHUB_ACTION_PATH" in c for c in rel_oth):
         bad.append("the non-macOS release path must take its scripts from the action's OWN checkout "
                    "($GITHUB_ACTION_PATH/../../..), which is shipyard at the ref the consumer pinned")
-    # R-P1-23: find_package(MavericksShipyard) has to RESOLVE there too -- container-tools' two
+    # R-P1-23: find_package(MavergreenShipyard) has to RESOLVE there too -- container-tools' two
     # ubuntu-latest jobs do exactly that. SHIPYARD_SCRIPTS alone does not make find_package work.
-    if not exports(rel_oth, "MavericksShipyard_DIR"):
-        bad.append("the non-macOS release path never exports MavericksShipyard_DIR, so "
-                   "find_package(MavericksShipyard) cannot resolve on a Linux runner (R-P1-23)")
-    if not any(re.search(r'^\[ -f "\$root/MavericksShipyardConfig\.cmake" \] \|\|', c) for c in rel_oth):
-        bad.append("the non-macOS release path exports MavericksShipyard_DIR without checking the "
+    if not exports(rel_oth, "MavergreenShipyard_DIR"):
+        bad.append("the non-macOS release path never exports MavergreenShipyard_DIR, so "
+                   "find_package(MavergreenShipyard) cannot resolve on a Linux runner (R-P1-23)")
+    if not any(re.search(r'^\[ -f "\$root/MavergreenShipyardConfig\.cmake" \] \|\|', c) for c in rel_oth):
+        bad.append("the non-macOS release path exports MavergreenShipyard_DIR without checking the "
                    "config is actually there; a wrong path would surface as a consumer's find_package failure")
     for pat, why in ((r'^sudo installer', "installs a pkg"),
                      (r'^gh release download|fetch-release-pkg\.sh', "downloads a release asset")):

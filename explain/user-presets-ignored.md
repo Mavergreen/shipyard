@@ -3,7 +3,7 @@ user-presets-ignored: a repo that commits CMakePresets.json also ignores CMakeUs
 ## Why
 CMakeUserPresets.json is the per-developer build-location override, and the only thing that can override the
 shared default: a preset's own environment block is applied after the real process environment, so
-exporting MAVERICKS_BUILD_ROOT cannot redirect a --preset build. Left unignored it sits in git status and
+exporting MAVERGREEN_BUILD_ROOT cannot redirect a --preset build. Left unignored it sits in git status and
 gets committed by accident, pinning everyone to one person's paths. A repo with no committed presets file
 has no override channel and is not asked.
 

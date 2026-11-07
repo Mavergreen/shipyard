@@ -4,7 +4,7 @@
 #          Fetches + caches + checksum-verifies the family's PINNED SDK for one arch (sdk-pins.sh):
 #          MacOSX10.9.sdk for x86_64 (the default), MacOSX11.3.sdk for arm64. Prints the SDK root on
 #          stdout, exactly as its archive shipped it. A native 10.9
-#          build uses this pin too, never xcrun's own SDK (MavericksToolchain.cmake).
+#          build uses this pin too, never xcrun's own SDK (MavergreenToolchain.cmake).
 #          MAVERGREEN_SDK_SETTINGS_JSON=1 prints instead, for an arch whose pin has none (x86_64), a sibling
 #          <cache>/with-sdk-settings-json/<SDK dir>: symlinks to the pinned SDK's entries plus the
 #          SDKSettings.json Swift reads its SDK version from. The sibling is interim until clang22's

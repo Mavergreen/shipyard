@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 # usage: sh tests/sdk-metadata-test.sh
-#        mavericks_materialize_sdk_metadata against a synthetic SDK: exact edits, aliases, paths with
+#        mavergreen_materialize_sdk_metadata against a synthetic SDK: exact edits, aliases, paths with
 #        spaces, and every refusal leaving the SDK unchanged and nothing published.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -81,7 +81,7 @@ refuse_case() {
   if run "$sdk" "$base/recipes.json" "$ids" "$out"; then
     bad "$name: materialize succeeded but should have refused"
   fi
-  grep -q 'mavericks_materialize_sdk_metadata' "$w/log" || bad "$name: refused without naming the function: $(cat "$w/log")"
+  grep -q 'mavergreen_materialize_sdk_metadata' "$w/log" || bad "$name: refused without naming the function: $(cat "$w/log")"
   [ "$(sha "$sdk/$CANON")" = "$before" ] || bad "$name: the SDK header changed"
   if [ "$out" = "$base/scratch/out" ]; then
     left="$(cd "$base/scratch" && ls -A)"

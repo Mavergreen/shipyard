@@ -7,5 +7,5 @@ CFGDIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 SRC=$(cd "$(dirname "$0")/standalone-include" && pwd)
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/standalone_include.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
-"$SC" -S "$SRC" -B "$WORK" -DMavericksShipyard_DIR="$CFGDIR" >/dev/null
+"$SC" -S "$SRC" -B "$WORK" -DMavergreenShipyard_DIR="$CFGDIR" >/dev/null
 echo "standalone-include: OK"

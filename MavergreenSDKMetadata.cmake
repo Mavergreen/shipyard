@@ -1,16 +1,16 @@
-# MavericksSDKMetadata.cmake -- defines mavericks_materialize_sdk_metadata(). No side effects at include.
+# MavergreenSDKMetadata.cmake -- defines mavergreen_materialize_sdk_metadata(). No side effects at include.
 #
-# mavericks_materialize_sdk_metadata(<out_var> SDK <abs dir> RECIPES <abs json> IDS <id>...
+# mavergreen_materialize_sdk_metadata(<out_var> SDK <abs dir> RECIPES <abs json> IDS <id>...
 #                                    OUTPUT_DIR <abs dir that does not exist yet>)
 #   Checks the selected recipes of a Recaulk sdk-metadata file (schema 1) against the SDK's own bytes,
 #   writes each edited header under OUTPUT_DIR and a clang VFS overlay mapping the header's canonical
 #   and alias paths onto that copy, and sets <out_var> to the overlay's path. The SDK is never written.
 #   Every check runs before anything is written; OUTPUT_DIR appears whole or not at all.
 include_guard(GLOBAL)
-set(_MAVERICKS_SDK_METADATA_DIR "${CMAKE_CURRENT_LIST_DIR}")
+set(_MAVERGREEN_SDK_METADATA_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 function(_msm_fail msg)
-  message(FATAL_ERROR "mavericks_materialize_sdk_metadata: ${msg}")
+  message(FATAL_ERROR "mavergreen_materialize_sdk_metadata: ${msg}")
 endfunction()
 
 function(_msm_only_keys obj where)
@@ -54,7 +54,7 @@ function(_msm_array obj key where out_len)
 endfunction()
 
 function(_msm_pinned_archive_sha out)
-  file(STRINGS "${_MAVERICKS_SDK_METADATA_DIR}/scripts/sdk-pins.sh" lines REGEX "^[ \t]*x86_64\\)[ \t]*echo")
+  file(STRINGS "${_MAVERGREEN_SDK_METADATA_DIR}/scripts/sdk-pins.sh" lines REGEX "^[ \t]*x86_64\\)[ \t]*echo")
   list(GET lines 0 line)
   string(REGEX MATCH "echo \"[^ ]+ ([0-9a-f]+) " m "${line}")
   string(LENGTH "${CMAKE_MATCH_1}" len)
@@ -89,7 +89,7 @@ function(_msm_json_string out s)
   set(${out} "\"${s}\"" PARENT_SCOPE)
 endfunction()
 
-function(mavericks_materialize_sdk_metadata out_var)
+function(mavergreen_materialize_sdk_metadata out_var)
   cmake_parse_arguments(PARSE_ARGV 1 A "_MSM_VALIDATE_ONLY" "SDK;RECIPES;OUTPUT_DIR" "IDS")
   if(A_UNPARSED_ARGUMENTS)
     _msm_fail("unexpected arguments: ${A_UNPARSED_ARGUMENTS}")
@@ -319,7 +319,7 @@ function(mavericks_materialize_sdk_metadata out_var)
   set(${out_var} "${out}/overlay.json" PARENT_SCOPE)
 endfunction()
 
-# mavericks_target_sdk_metadata(TARGET <target> SDK <abs dir> RECIPES <abs json> IDS <id>...
+# mavergreen_target_sdk_metadata(TARGET <target> SDK <abs dir> RECIPES <abs json> IDS <id>...
 #                               OUTPUT_DIR <abs generation root>)
 #   Gives <target>'s Objective-C and Objective-C++ compiles, and nothing else, the overlay of the
 #   selected recipes: -ivfsoverlay <overlay>, beside the unchanged sysroot. The overlay lives in a
@@ -327,10 +327,10 @@ endfunction()
 #   A generation this module wrote, whose files still match its stamp, is reused; one without a stamp
 #   or with a changed file is refused and left as it is.
 function(_msm_target_fail msg)
-  message(FATAL_ERROR "mavericks_target_sdk_metadata: ${msg}")
+  message(FATAL_ERROR "mavergreen_target_sdk_metadata: ${msg}")
 endfunction()
 
-set(_MSM_STAMP ".mavericks-sdk-metadata-stamp.json")
+set(_MSM_STAMP ".mavergreen-sdk-metadata-stamp.json")
 
 function(_msm_generation_files gen out)
   file(GLOB_RECURSE files LIST_DIRECTORIES false RELATIVE "${gen}" "${gen}/*")
@@ -383,7 +383,7 @@ function(_msm_generation out_var)
     _msm_target_fail("OUTPUT_DIR '${groot}' resolves into the SDK")
   endif()
 
-  file(SHA256 "${_MAVERICKS_SDK_METADATA_DIR}/MavericksSDKMetadata.cmake" generator)
+  file(SHA256 "${_MAVERGREEN_SDK_METADATA_DIR}/MavergreenSDKMetadata.cmake" generator)
   file(SHA256 "${A_RECIPES}" recipes_sha)
   string(JOIN "\n" identity "schema 1" "generator ${generator}" "recipes ${recipes_sha}"
     "ids ${A_IDS}" "sdk ${A_SDK}" "sdk-real ${sdk_real}"
@@ -396,10 +396,10 @@ function(_msm_generation out_var)
     if(IS_SYMLINK "${gen}" OR NOT IS_DIRECTORY "${gen}")
       _msm_target_fail("${gen} is not a directory this module wrote; refusing to use or replace it")
     endif()
-    mavericks_materialize_sdk_metadata(ignored _MSM_VALIDATE_ONLY SDK "${A_SDK}" RECIPES "${A_RECIPES}" IDS ${A_IDS})
+    mavergreen_materialize_sdk_metadata(ignored _MSM_VALIDATE_ONLY SDK "${A_SDK}" RECIPES "${A_RECIPES}" IDS ${A_IDS})
     _msm_verify_generation("${gen}" "${key}")
   else()
-    mavericks_materialize_sdk_metadata(made SDK "${A_SDK}" RECIPES "${A_RECIPES}" IDS ${A_IDS}
+    mavergreen_materialize_sdk_metadata(made SDK "${A_SDK}" RECIPES "${A_RECIPES}" IDS ${A_IDS}
       OUTPUT_DIR "${gen}")
     _msm_generation_files("${gen}" files)
     set(stamp "{\"schema\":1,\"files\":{}}")
@@ -416,7 +416,7 @@ function(_msm_generation out_var)
   set(${out_var} "${gen}/overlay.json" PARENT_SCOPE)
 endfunction()
 
-function(mavericks_target_sdk_metadata)
+function(mavergreen_target_sdk_metadata)
   cmake_parse_arguments(PARSE_ARGV 0 A "" "TARGET;SDK;RECIPES;OUTPUT_DIR" "IDS")
   if(A_UNPARSED_ARGUMENTS)
     _msm_target_fail("unexpected arguments: ${A_UNPARSED_ARGUMENTS}")

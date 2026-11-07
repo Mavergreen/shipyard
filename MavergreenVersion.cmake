@@ -1,8 +1,8 @@
-# MavericksVersion.cmake -- one way for every product repo to learn its version at configure time.
+# MavergreenVersion.cmake -- one way for every product repo to learn its version at configure time.
 #
-#   mavericks_resolve_version(MYVAR)          # auto: the shipped N for this upstream
-#   mavericks_resolve_version(MYVAR MODE local)   # a repackage: N+1
-#   mavericks_resolve_version(MYVAR ROOT "${CMAKE_SOURCE_DIR}/..")   # standalone subproject
+#   mavergreen_resolve_version(MYVAR)          # auto: the shipped N for this upstream
+#   mavergreen_resolve_version(MYVAR MODE local)   # a repackage: N+1
+#   mavergreen_resolve_version(MYVAR ROOT "${CMAKE_SOURCE_DIR}/..")   # standalone subproject
 #
 # Replaces the `file(STRINGS "${CMAKE_SOURCE_DIR}/VERSION" ...)` every repo hand-rolled. That line
 # needed VERSION to already exist, which was true only because four repos COMMITTED it -- and the
@@ -13,7 +13,7 @@
 # The logic lives in scripts/resolve-version.sh (shell, under test); this is the CMake doorway to it.
 set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
 
-function(mavericks_resolve_version outvar)
+function(mavergreen_resolve_version outvar)
   cmake_parse_arguments(A "" "MODE;ROOT" "" ${ARGN})
   if(NOT A_MODE)
     set(A_MODE auto)
@@ -36,7 +36,7 @@ function(mavericks_resolve_version outvar)
   # Fail the configure rather than carry on with an empty version: artifacts named "-mavericks."
   # with nothing in front look almost right, and the mistake surfaces at publish time.
   if(NOT _rc EQUAL 0 OR _ver STREQUAL "")
-    message(FATAL_ERROR "mavericks_resolve_version: could not resolve the version\n${_err}")
+    message(FATAL_ERROR "mavergreen_resolve_version: could not resolve the version\n${_err}")
   endif()
 
   set(${outvar} "${_ver}" PARENT_SCOPE)

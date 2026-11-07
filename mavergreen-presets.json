@@ -3,12 +3,12 @@
   "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
   "configurePresets": [
     {
-      "name": "mavericks-native",
+      "name": "mavergreen-native",
       "hidden": true,
       "displayName": "native -- build on OS X 10.9",
-      "environment": { "MAVERICKS_BUILD_ROOT": "$penv{TMPDIR}/mm-build" },
-      "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-native",
-      "toolchainFile": "${fileDir}/MavericksToolchain.cmake",
+      "environment": { "MAVERGREEN_BUILD_ROOT": "$penv{TMPDIR}/mavergreen-build" },
+      "binaryDir": "$env{MAVERGREEN_BUILD_ROOT}/${sourceDirName}-native",
+      "toolchainFile": "${fileDir}/MavergreenToolchain.cmake",
       "cacheVariables": {
         "MAVERGREEN_EXPECTED_MODE": "native",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "10.9",
@@ -16,12 +16,12 @@
       }
     },
     {
-      "name": "mavericks-cross",
+      "name": "mavergreen-cross",
       "hidden": true,
       "displayName": "cross -- build for 10.9 on a modern host",
-      "environment": { "MAVERICKS_BUILD_ROOT": "$penv{TMPDIR}/mm-build" },
-      "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-cross",
-      "toolchainFile": "${fileDir}/MavericksToolchain.cmake",
+      "environment": { "MAVERGREEN_BUILD_ROOT": "$penv{TMPDIR}/mavergreen-build" },
+      "binaryDir": "$env{MAVERGREEN_BUILD_ROOT}/${sourceDirName}-cross",
+      "toolchainFile": "${fileDir}/MavergreenToolchain.cmake",
       "cacheVariables": {
         "MAVERGREEN_EXPECTED_MODE": "cross",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "10.9",

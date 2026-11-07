@@ -1,8 +1,8 @@
-# MavericksShipyardConfig.cmake -- found by find_package(MavericksShipyard).
+# MavergreenShipyardConfig.cmake -- found by find_package(MavergreenShipyard).
 #
 # Installed alongside the modules + scripts under <prefix>/share/cmake/
-# MavericksShipyard/. Adds that directory to CMAKE_MODULE_PATH so consumers
-# can `include(Mavericks)` (which then finds MavericksMode/RequireAppleClang and
+# MavergreenShipyard/. Adds that directory to CMAKE_MODULE_PATH so consumers
+# can `include(Mavergreen)` (which then finds MavergreenMode/RequireAppleClang and
 # resolves scripts/ from its own location). This is a find_package package meant
 # to be INSTALLED to a prefix -- installed by the shipyard pkg and found by
 # shipyard-cmake -- NOT vendored/submoduled into a consumer's source tree (the
@@ -54,19 +54,19 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 
-# Version resolution is included HERE, not left to include(Mavericks), because every product needs it
+# Version resolution is included HERE, not left to include(Mavergreen), because every product needs it
 # and not every product includes that umbrella: container-tools' root is project(LANGUAGES NONE) and
-# deliberately skips the AppleClang gate, so find_package alone left mavericks_resolve_version()
+# deliberately skips the AppleClang gate, so find_package alone left mavergreen_resolve_version()
 # undefined and the configure failed. Defining a function is language-agnostic and costs nothing.
-include(MavericksVersion)
+include(MavergreenVersion)
 
 # Convenience: expose the presets file's installed path (CMakePresets.json can
 # $env-include it; it cannot see find_package results directly).
-set(MavericksShipyard_PRESETS "${CMAKE_CURRENT_LIST_DIR}/mavericks-presets.json")
+set(MavergreenShipyard_PRESETS "${CMAKE_CURRENT_LIST_DIR}/mavergreen-presets.json")
 
-# Installed scripts dir, so consumers reference ${MavericksShipyard_SCRIPTS}/assert_binary_compatible.sh
-# instead of hard-coding "${MavericksShipyard_DIR}/scripts/...".
-set(MavericksShipyard_SCRIPTS "${CMAKE_CURRENT_LIST_DIR}/scripts")
+# Installed scripts dir, so consumers reference ${MavergreenShipyard_SCRIPTS}/assert_binary_compatible.sh
+# instead of hard-coding "${MavergreenShipyard_DIR}/scripts/...".
+set(MavergreenShipyard_SCRIPTS "${CMAKE_CURRENT_LIST_DIR}/scripts")
 
 # Scaffold a sensible default Renovate config for consumer projects. On configure,
 # if the top-level project is a git repo that has NO .github/renovate.json, write

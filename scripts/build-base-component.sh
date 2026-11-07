@@ -21,8 +21,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 if [ -z "$VER" ]; then
-  if [ -f "$SELF/../MavericksShipyardConfigVersion.cmake" ]; then
-    VER="$(sed -n 's/.*set(PACKAGE_VERSION "\([^"]*\)").*/\1/p' "$SELF/../MavericksShipyardConfigVersion.cmake" | head -1)"
+  if [ -f "$SELF/../MavergreenShipyardConfigVersion.cmake" ]; then
+    VER="$(sed -n 's/.*set(PACKAGE_VERSION "\([^"]*\)").*/\1/p' "$SELF/../MavergreenShipyardConfigVersion.cmake" | head -1)"
   elif [ -n "${SHIPYARD_VERSION:-}" ]; then
     VER="$SHIPYARD_VERSION"
   else

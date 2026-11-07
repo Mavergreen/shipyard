@@ -50,8 +50,8 @@ copy_cmake_root "$w/cmake" "$dest"
 
 # platform: `mkdir -p` gives the top level a mode of its own and only the subdirectories carry the
 #           source's, so writability is checked at the top of the copy AND inside it.
-mkdir "$dest/MavericksShipyard" 2>/dev/null \
-  || fail "cannot create $dest/MavericksShipyard -- the copy kept the host's read-only mode, which is " \
+mkdir "$dest/MavergreenShipyard" 2>/dev/null \
+  || fail "cannot create $dest/MavergreenShipyard -- the copy kept the host's read-only mode, which is " \
           "exactly the macos-26 failure ('Maybe need administrative privileges')"
 mkdir "$dest/Modules/Sub" 2>/dev/null \
   || fail "cannot create a directory INSIDE the copied tree; the copy kept the host's read-only mode"
@@ -65,7 +65,7 @@ printf 'the fixture wrote this\n' > "$dest/Modules/Outside.cmake" 2>/dev/null \
 [ "$(cat "$w/outside.txt")" = "outside the fixture" ] \
   || fail "writing inside the fixture changed $w/outside.txt -- an internal symlink was followed out"
 
-[ ! -e "$host/MavericksShipyard" ] || fail "the host tree gained MavericksShipyard -- the fixture wrote THROUGH to it"
+[ ! -e "$host/MavergreenShipyard" ] || fail "the host tree gained MavergreenShipyard -- the fixture wrote THROUGH to it"
 [ "$(cat "$host/Modules/FindFoo.cmake")" = "the host cmake owns this" ] \
   || fail "the host tree's contents changed -- the fixture wrote THROUGH to it"
 

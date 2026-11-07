@@ -37,6 +37,6 @@ grep -q "::warning::'main' names no shipyard release" "$w/out" \
 run '' "$root"
 ! grep -q '::warning::' "$w/out" \
   || { echo "FAIL: shipyard's own ./.github/actions/install must not warn about its empty ref:"; sed 's/^/    | /' "$w/out"; bad=1; }
-grep -qx "MavericksShipyard_DIR=$root" "$w/env" || { echo "FAIL: the local checkout must still export MavericksShipyard_DIR"; bad=1; }
+grep -qx "MavergreenShipyard_DIR=$root" "$w/env" || { echo "FAIL: the local checkout must still export MavergreenShipyard_DIR"; bad=1; }
 [ "$bad" -eq 0 ] || exit 1
 echo "PASS: install-action-linux-version"
