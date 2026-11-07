@@ -6,4 +6,4 @@
 set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
 [ -d /usr/local/mavergreen/shipyard ] || { echo "SKIP: no shipyard installed at /usr/local/mavergreen/shipyard"; exit 77; }
-exec sh "$root/scripts/assert-installed-shipyard.sh" --cmake-version "$(. "$root/scripts/mavergreen-meta.sh" && MAVERGREEN_REPO_ROOT="$root" mg_value ingredients/cmake/VERSION | sed 's/-mavericks\..*//')" --root /
+exec sh "$root/scripts/assert-installed-shipyard.sh" --cmake-version "$(. "$root/scripts/mavergreen-meta.sh" && MAVERGREEN_REPO_ROOT="$root" mg_value ingredients/cmake/VERSION | sed 's/-mavergreen\..*//')" --root /

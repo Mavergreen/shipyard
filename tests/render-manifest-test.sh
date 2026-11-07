@@ -17,7 +17,7 @@ ln -s /usr/local/mavergreen/openssh "$st/Library/Java/JavaVirtualMachines/x.jdk/
 touch "$st/usr/local/mavergreen/openssh/bin/ssh" "$st/Applications/Mavericks X.app/Contents/MacOS/X" \
       "$st/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" \
       "$st/Library/Application Support/Mavergreen/OpenSSHUpdater.app/Contents/Info.plist"
-sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version 10.5p1-mavericks.5 \
+sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version 10.5p1-mavergreen.5 \
   --replaces /usr/bin/ssh=bin/ssh
 M="$st/usr/local/mavergreen/openssh/mavergreen.plist"
 p() { "$SD" plist get "$M" "$1"; }
@@ -25,7 +25,7 @@ p() { "$SD" plist get "$M" "$1"; }
 [ "$(p group)" = openssh ] && [ "$(p line)" = "" ] || fail "group defaults to the product, line to empty"
 [ "$(p replaces:/usr/bin/ssh)" = bin/ssh ] || fail "replaces is carried"
 [ "$(p appcast)" = "" ] || fail "a manifest rendered without --has-updater names no feed: the product has no updater"
-sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version 10.5p1-mavericks.5 \
+sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version 10.5p1-mavergreen.5 \
   --replaces /usr/bin/ssh=bin/ssh --has-updater
 [ "$(p appcast)" = https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml ] \
   || fail "with an updater, the feed is derived: this repo's name under Mavergreen, openssh.xml"

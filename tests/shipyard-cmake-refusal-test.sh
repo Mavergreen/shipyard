@@ -104,10 +104,10 @@ checkout() {  # $1 = dir  $2 = the minimum it carries
   mkdir -p "$1/.mavergreen/ingredients/cmake" "$1/.mavergreen/products/shipyard/requires/cmake"
   cp "$root"/*.cmake "$1/"
   printf '%s\n' "$2" > "$1/.mavergreen/products/shipyard/requires/cmake/min"
-  printf '%s\n# renovate: datasource=github-releases depName=Mavergreen/cmake\n' "$((${ver%%.*} + 9)).0.0-mavericks.1" > "$1/.mavergreen/ingredients/cmake/VERSION"
+  printf '%s\n# renovate: datasource=github-releases depName=Mavergreen/cmake\n' "$((${ver%%.*} + 9)).0.0-mavergreen.1" > "$1/.mavergreen/ingredients/cmake/VERSION"
 }
-checkout "$w/co" "$ver-mavericks.1"
-checkout "$w/co-above" "$above-mavericks.1"
+checkout "$w/co" "$ver-mavergreen.1"
+checkout "$w/co-above" "$above-mavergreen.1"
 out="$(MavergreenShipyard_DIR="$w/co" "$sc" -S "$w/c" -B "$w/b4" 2>&1)" \
   || { echo "FAIL: MavergreenShipyard_DIR pointed at a shipyard CHECKOUT must configure (that is what install@v1 exports on Linux); got:"; echo "$out"; exit 1; }
 printf '%s' "$out" | grep -q "DIR=$w/co" || { echo "FAIL: expected the checkout's config; got:"; echo "$out"; exit 1; }

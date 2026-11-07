@@ -33,7 +33,7 @@ function(mavergreen_resolve_version outvar)
     RESULT_VARIABLE _rc
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-  # Fail the configure rather than carry on with an empty version: artifacts named "-mavericks."
+  # Fail the configure rather than carry on with an empty version: artifacts named "-mavergreen."
   # with nothing in front look almost right, and the mistake surfaces at publish time.
   if(NOT _rc EQUAL 0 OR _ver STREQUAL "")
     message(FATAL_ERROR "mavergreen_resolve_version: could not resolve the version\n${_err}")

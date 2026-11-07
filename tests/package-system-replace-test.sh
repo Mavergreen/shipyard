@@ -56,7 +56,7 @@ sh "$S" --emit-postinstall "$w/inject4" --product 'ab cd' 2>/dev/null || rc=$?
 
 SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
 SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed -- the pkg block is the only gate for this seam, so it cannot be skipped"
-sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavericks.5 --out "$w/r.pkg" --base-version 1.0.9 >/dev/null 2>&1 \
+sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavergreen.5 --out "$w/r.pkg" --base-version 1.0.9 >/dev/null 2>&1 \
   || fail "the pkg must build"
 "$SD" expand "$w/r.pkg" "$w/x"
 grep -q 'id="dev.mavergreen.openssh.system-replace"' "$w/x/Distribution" || fail "the component is <identifier>.system-replace"
@@ -69,7 +69,7 @@ ls "$w/x/system-replace.pkg" >/dev/null 2>&1 || fail "the expanded archive carri
 for t in a b; do
   case $t in a) um=077;; b) um=022;; esac
   mkdir -p "$w/tmp$t-xx"
-  (umask $um; TMPDIR="$w/tmp$t-xx"; export TMPDIR; sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavericks.5 --out "$w/seam-$t.pkg" --base-version 1.0.9 >/dev/null 2>&1) || fail "the pkg must build under umask $um"
+  (umask $um; TMPDIR="$w/tmp$t-xx"; export TMPDIR; sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavergreen.5 --out "$w/seam-$t.pkg" --base-version 1.0.9 >/dev/null 2>&1) || fail "the pkg must build under umask $um"
 done
 cmp "$w/seam-a.pkg" "$w/seam-b.pkg" || fail "seam output ignores umask and TMPDIR"
 

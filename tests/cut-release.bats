@@ -30,7 +30,7 @@ EOF
   [ ! -x /usr/bin/base64 ] || ln -s /usr/bin/base64 "$WORK/bin/base64"
   export PATH="$WORK/bin:$PATH"
   echo 4242 > "$STUB/newrun"
-  echo 1.0-mavericks.1 > "$STUB/before"
+  echo 1.0-mavergreen.1 > "$STUB/before"
 }
 teardown() { rm -rf "$WORK"; }
 
@@ -42,16 +42,16 @@ dispatch_inputs() {  # the release.yml's workflow_dispatch inputs, one name per 
 
 @test "asks for a publish through local_release, and reports the tag it published" {
   dispatch_inputs local_release
-  echo 1.0-mavericks.2 > "$STUB/after"
+  echo 1.0-mavergreen.2 > "$STUB/after"
   run sh "$HELPER" thing
   [ "$status" -eq 0 ]
   grep -qx 'dispatch workflow run release.yml -R Mavergreen/thing --ref main -f local_release=true' "$STUB/log"
-  [[ "$output" == *"released 1.0-mavericks.2: https://github.com/Mavergreen/thing/releases/tag/1.0-mavericks.2"* ]] || false
+  [[ "$output" == *"released 1.0-mavergreen.2: https://github.com/Mavergreen/thing/releases/tag/1.0-mavergreen.2"* ]] || false
 }
 
 @test "uses repackage where that is the repo's publish-anyway input, ignoring reconcile" {
   dispatch_inputs repackage reconcile
-  echo 1.0-mavericks.2 > "$STUB/after"
+  echo 1.0-mavergreen.2 > "$STUB/after"
   run sh "$HELPER" thing
   [ "$status" -eq 0 ]
   grep -qx 'dispatch workflow run release.yml -R Mavergreen/thing --ref main -f repackage=true' "$STUB/log"
@@ -67,7 +67,7 @@ dispatch_inputs() {  # the release.yml's workflow_dispatch inputs, one name per 
 
 @test "--if-needed dispatches plainly, and a run that publishes nothing is fine" {
   dispatch_inputs local_release
-  echo 1.0-mavericks.1 > "$STUB/after"
+  echo 1.0-mavergreen.1 > "$STUB/after"
   run sh "$HELPER" thing --if-needed
   [ "$status" -eq 0 ]
   grep -qx 'dispatch workflow run release.yml -R Mavergreen/thing --ref main' "$STUB/log"
@@ -76,7 +76,7 @@ dispatch_inputs() {  # the release.yml's workflow_dispatch inputs, one name per 
 
 @test "a requested publish that publishes nothing fails" {
   dispatch_inputs local_release
-  echo 1.0-mavericks.1 > "$STUB/after"
+  echo 1.0-mavergreen.1 > "$STUB/after"
   run sh "$HELPER" thing
   [ "$status" -eq 1 ]
   [[ "$output" == *"passed but published nothing"* ]] || false
@@ -112,9 +112,9 @@ dispatch_inputs() {  # the release.yml's workflow_dispatch inputs, one name per 
 @test "a run that waits long in the queue is waited out, not reported failed" {
   dispatch_inputs local_release
   printf 'queued\nqueued\nin_progress\ncompleted\n' > "$STUB/states"
-  echo 1.0-mavericks.2 > "$STUB/after"
+  echo 1.0-mavergreen.2 > "$STUB/after"
   run sh "$HELPER" thing
   [ "$status" -eq 0 ]
   [ "$(cat "$STUB/polls")" -ge 4 ]
-  [[ "$output" == *"released 1.0-mavericks.2"* ]] || false
+  [[ "$output" == *"released 1.0-mavergreen.2"* ]] || false
 }

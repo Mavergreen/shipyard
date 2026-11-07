@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 # spec: scripts/patch-notes.sh -- a repackage that adds or changes OUR modifications to the upstream
-#       source is a behaviour change, not "packaging changes only": tailscale 1.102.4-mavericks.7
+#       source is a behaviour change, not "packaging changes only": tailscale 1.102.4-mavergreen.7
 #       added patches/darwin-exit-nodes.patch (exit nodes on macOS) and its notes said otherwise.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -16,14 +16,14 @@ printf 'keep\n'  > patches/keep.patch
 printf 'a\nb\nc\nd\ne\nf\ng\nh\n' > patches/moveme.patch
 printf 'int x;\n' > overlays/systray_darwin.m
 printf 'b2d\n'   > boot2docker/patches/kernel.config
-printf 'prose\n' > .mavergreen/release-notes/1.0-mavericks.1.md
+printf 'prose\n' > .mavergreen/release-notes/1.0-mavergreen.1.md
 printf 'code\n'  > src/main.go
 printf 'readme\n' > README.md
 printf 'patches/*.patch\n' > .mavergreen/ingredients/patches/watch
-git add -A; git commit -qm base; git tag 1.0-mavericks.1
+git add -A; git commit -qm base; git tag 1.0-mavergreen.1
 
 # spec: scripts/patch-notes.sh usage -- nothing changed -> nothing printed, so callers append unconditionally (as ingredient-notes).
-out="$(sh "$S" 1.0-mavericks.1)"
+out="$(sh "$S" 1.0-mavergreen.1)"
 [ -z "$out" ] || { echo "FAIL unchanged: expected nothing, got '$out'"; exit 1; }
 
 # spec: scripts/patch-notes.sh usage -- no previous release -> nothing printed.
@@ -31,12 +31,12 @@ out="$(sh "$S" "")"
 [ -z "$out" ] || { echo "FAIL no-prev: expected nothing, got '$out'"; exit 1; }
 
 # spec: scripts/patch-notes.sh usage -- prose, ordinary source, and README are not our patches.
-printf 'more prose\n' >> .mavergreen/release-notes/1.0-mavericks.1.md
+printf 'more prose\n' >> .mavergreen/release-notes/1.0-mavergreen.1.md
 printf 'more\n' >> src/main.go
 printf 'more\n' >> README.md
 printf 'overlays/*\n' >> .mavergreen/ingredients/patches/watch
 git commit -qam "not patches"
-out="$(sh "$S" 1.0-mavericks.1)"
+out="$(sh "$S" 1.0-mavergreen.1)"
 [ -z "$out" ] || { echo "FAIL non-patch paths: expected nothing, got '$out'"; exit 1; }
 
 # spec: added / changed (a non-.patch file under overlays/ and under a nested patches/) / removed /
@@ -48,9 +48,9 @@ mkdir -p src/deep; printf 'd\n' > src/deep/fix.diff
 git rm -q patches/old.patch
 git mv patches/moveme.patch patches/moved.patch
 git add -A; git commit -qm "patch changes"
-out="$(sh "$S" 1.0-mavericks.1)"
+out="$(sh "$S" 1.0-mavergreen.1)"
 want="$(printf '%s\n' '### Our patches' ''; cat <<'EOF'
-Changed since 1.0-mavericks.1:
+Changed since 1.0-mavergreen.1:
 
 - Changed `boot2docker/patches/kernel.config`
 - Changed `overlays/systray_darwin.m`
@@ -64,7 +64,7 @@ EOF
 
 # spec: a path passed as an exclusion (an ingredient pin, already reported by ingredient-notes.sh,
 #       possibly in its "path:KEY" form) is not reported twice.
-out="$(sh "$S" 1.0-mavericks.1 patches/darwin-exit-nodes.patch overlays/systray_darwin.m:KEY)"
+out="$(sh "$S" 1.0-mavergreen.1 patches/darwin-exit-nodes.patch overlays/systray_darwin.m:KEY)"
 printf '%s\n' "$out" | grep -q 'darwin-exit-nodes' && { echo "FAIL exclude: pin reported twice"; printf '%s\n' "$out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'systray_darwin' && { echo "FAIL exclude path:KEY: pin reported twice"; printf '%s\n' "$out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'old.patch' || { echo "FAIL exclude: dropped a non-excluded path"; exit 1; }

@@ -38,6 +38,7 @@ abort() {  # $1 = why.
 }
 
 printf 'expected %s\n' "$version"
+printf 'upstream-kind %s\n' "$(mg_port_or_own)"
 _repo="$(mg_repo)" && printf 'repository %s\n' "$_repo"
 for _pd in "$root"/.mavergreen/products/*/; do
   [ -d "$_pd" ] || continue
@@ -289,7 +290,7 @@ for f in "$dist"/*; do
       # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "The Sparkle
       #       comparison version must be dotted-numeric AND monotonic" -- the version that IDENTIFIES
       #       the release is the human shortVersionString; <sparkle:version> is a separate NUMERIC
-      #       comparison key Sparkle can order, deliberately NOT equal to the "-mavericks.N" release
+      #       comparison key Sparkle can order, deliberately NOT equal to the "-mavergreen.N" release
       #       version, so conformance reads shortVersionString here.
       ver="$(sed -n 's|.*<sparkle:shortVersionString>\([^<]*\)<.*|\1|p' "$f" | head -1)"
       minos="$(sed -n 's|.*<sparkle:minimumSystemVersion>\([^<]*\)<.*|\1|p' "$f" | head -1)"

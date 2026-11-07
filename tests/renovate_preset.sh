@@ -25,15 +25,15 @@ for f in [".mavergreen/ingredients/clang22/LINUX_SHA256", ".mavergreen/ingredien
     assert not manages(f), "the manager must not read %s" % f
 def deps(text):
     return [{k: v for k, v in m.groupdict().items() if v is not None} for ms in mgr["matchStrings"] for m in re.finditer(js(ms), text)]
-MMVER = "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
+MMVER = "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavergreen\\.(?<build>\\d+)$"
 SHA = "f8745da2d9b1c3e4f5a6b7c8d9e0f1a2b3c4d5e6"
 cases = [
-    ("a VERSION on github-releases with -mavericks.N versioning",
-     "4.4.5-mavericks.2\n# renovate: datasource=github-releases depName=Mavergreen/cmake versioning=%s\n" % MMVER,
-     [{"currentValue": "4.4.5-mavericks.2", "datasource": "github-releases", "depName": "Mavergreen/cmake", "versioning": MMVER}]),
+    ("a VERSION on github-releases with -mavergreen.N versioning",
+     "4.4.5-mavergreen.2\n# renovate: datasource=github-releases depName=Mavergreen/cmake versioning=%s\n" % MMVER,
+     [{"currentValue": "4.4.5-mavergreen.2", "datasource": "github-releases", "depName": "Mavergreen/cmake", "versioning": MMVER}]),
     ("the same VERSION with no final newline",
-     "4.4.5-mavericks.2\n# renovate: datasource=github-releases depName=Mavergreen/cmake versioning=%s" % MMVER,
-     [{"currentValue": "4.4.5-mavericks.2", "datasource": "github-releases", "depName": "Mavergreen/cmake", "versioning": MMVER}]),
+     "4.4.5-mavergreen.2\n# renovate: datasource=github-releases depName=Mavergreen/cmake versioning=%s" % MMVER,
+     [{"currentValue": "4.4.5-mavergreen.2", "datasource": "github-releases", "depName": "Mavergreen/cmake", "versioning": MMVER}]),
     ("a PIN on git-tags",
      "v1.5.7@%s\n# renovate: datasource=git-tags depName=https://github.com/owner/repo\n" % SHA,
      [{"currentValue": "v1.5.7", "currentDigest": SHA, "datasource": "git-tags", "depName": "https://github.com/owner/repo"}]),
@@ -41,8 +41,8 @@ cases = [
      "1.26.8\n# renovate: datasource=github-tags depName=golang/go extractVersion=^go(?<version>\\S+)$\n",
      [{"currentValue": "1.26.8", "datasource": "github-tags", "depName": "golang/go", "extractVersion": "^go(?<version>\\S+)$"}]),
     ("a VERSION with versioning and extractVersion",
-     "1.2.3-mavericks.4\n# renovate: datasource=github-tags depName=a/b versioning=%s extractVersion=^v(?<version>.+)$\n" % MMVER,
-     [{"currentValue": "1.2.3-mavericks.4", "datasource": "github-tags", "depName": "a/b", "versioning": MMVER, "extractVersion": "^v(?<version>.+)$"}]),
+     "1.2.3-mavergreen.4\n# renovate: datasource=github-tags depName=a/b versioning=%s extractVersion=^v(?<version>.+)$\n" % MMVER,
+     [{"currentValue": "1.2.3-mavergreen.4", "datasource": "github-tags", "depName": "a/b", "versioning": MMVER, "extractVersion": "^v(?<version>.+)$"}]),
     ("a VERSION on pypi with no versioning",
      "6.0.3\n# renovate: datasource=pypi depName=PyYAML\n",
      [{"currentValue": "6.0.3", "datasource": "pypi", "depName": "PyYAML"}]),

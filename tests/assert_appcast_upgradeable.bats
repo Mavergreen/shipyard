@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # platform: host-agnostic
 # Tests for scripts/assert_appcast_upgradeable.sh -- the "auto-update will see this as newer" gate.
-# A local fixture repo with prior -mavericks.N tags stands in for a release history; no network, no
+# A local fixture repo with prior -mavergreen.N tags stands in for a release history; no network, no
 # Sparkle framework (the gate reasons over the numeric domain SUStandardVersionComparator orders).
 
 setup() {
@@ -11,8 +11,8 @@ setup() {
   git -C "$REPO" init -q
   git -C "$REPO" config user.email t@t; git -C "$REPO" config user.name t
   git -C "$REPO" commit -q --allow-empty -m init
-  git -C "$REPO" tag 1.102.0-mavericks.6
-  git -C "$REPO" tag 1.102.0-mavericks.7
+  git -C "$REPO" tag 1.102.0-mavergreen.6
+  git -C "$REPO" tag 1.102.0-mavergreen.7
 }
 teardown() { [ -n "${WORK:-}" ] && rm -rf "$WORK"; }
 
@@ -24,50 +24,50 @@ appcast() {
 }
 
 @test "numeric and greater than the highest prior tag: passes" {
-  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.8)' --version 1.102.0-mavericks.8"
+  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.8)' --version 1.102.0-mavergreen.8"
   [ "$status" -eq 0 ]
   echo "$output" | grep -q '> previous 1.102.0.7'
 }
 
-@test "the shipped bug shape (sparkle:version still carries -mavericks.N): rejected" {
-  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0-mavericks.8)' --version 1.102.0-mavericks.8"
+@test "the shipped bug shape (sparkle:version still carries -mavergreen.N): rejected" {
+  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0-mavergreen.8)' --version 1.102.0-mavergreen.8"
   [ "$status" -ne 0 ]
   echo "$output" | grep -q 'not purely dotted-numeric'
 }
 
 @test "numeric but not greater (re-cut an existing N): rejected" {
-  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.7)' --version 1.102.0-mavericks.7x"
+  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.7)' --version 1.102.0-mavergreen.7x"
   [ "$status" -ne 0 ]
   echo "$output" | grep -q 'does NOT order after previous'
   [ "$(echo "$output" | sed -n 1p | cut -d: -f1)" = feed-upgradeable ]
 }
 
 @test "lower than the highest prior tag: rejected" {
-  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.6)' --version 1.102.0-mavericks.6x"
+  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.6)' --version 1.102.0-mavergreen.6x"
   [ "$status" -ne 0 ]
 }
 
 @test "N=10 beats N=9 (numeric, not lexical): passes" {
-  git -C "$REPO" tag 1.102.0-mavericks.9
-  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.10)' --version 1.102.0-mavericks.10"
+  git -C "$REPO" tag 1.102.0-mavergreen.9
+  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.10)' --version 1.102.0-mavergreen.10"
   [ "$status" -eq 0 ]
   echo "$output" | grep -q '> previous 1.102.0.9'
 }
 
 @test "first release (no prior tags): skips ordering, but says so" {
   empty="$WORK/empty"; mkdir -p "$empty"; git -C "$empty" init -q
-  run sh -c "cd '$empty' && sh '$GATE' --appcast '$(appcast 1.0.0.1)' --version 1.0.0-mavericks.1"
+  run sh -c "cd '$empty' && sh '$GATE' --appcast '$(appcast 1.0.0.1)' --version 1.0.0-mavergreen.1"
   [ "$status" -eq 0 ]
   echo "$output" | grep -q 'first release'
 }
 
 @test "not a git checkout: fails rather than skipping silently" {
-  run sh -c "cd '$WORK' && sh '$GATE' --appcast '$(appcast 1.0.0.1)' --version 1.0.0-mavericks.1"
+  run sh -c "cd '$WORK' && sh '$GATE' --appcast '$(appcast 1.0.0.1)' --version 1.0.0-mavergreen.1"
   [ "$status" -ne 0 ]
   echo "$output" | grep -q 'refusing to skip silently'
 }
 
-# --- --tag-glob: a repo whose tags are NOT <upstream>-mavericks.N ---------------------------------
+# --- --tag-glob: a repo whose tags are NOT <upstream>-mavergreen.N ---------------------------------
 # shipyard tags vX.Y.Z. Without --tag-glob the default scope finds none of them, so every release
 # would take the "first release" exit -- the silent no-op this gate exists to refuse. The call below
 # is the one shipyard's release.yml makes; 'v*.*.*' also keeps out the moving major tag (v1).
@@ -77,16 +77,16 @@ appcast() {
   git -C "$empty" config user.email t@t; git -C "$empty" config user.name t
   git -C "$empty" commit -q --allow-empty -m init
   git -C "$empty" tag v1.0.135
-  run sh -c "cd '$empty' && sh '$GATE' --appcast '$(appcast 1.0.0.1)' --version 1.0.0-mavericks.1"
+  run sh -c "cd '$empty' && sh '$GATE' --appcast '$(appcast 1.0.0.1)' --version 1.0.0-mavergreen.1"
   [ "$status" -eq 0 ]
   echo "$output" | grep -q 'first release'
 }
 
-@test "default scope still skips a stray v-prefixed twin of a -mavericks.N tag" {
-  # legacysupport really has v1.5.2-mavericks.1 beside 1.5.2-mavericks.1. Re-running the release it
+@test "default scope still skips a stray v-prefixed twin of a -mavergreen.N tag" {
+  # legacysupport really has v1.5.2-mavergreen.1 beside 1.5.2-mavergreen.1. Re-running the release it
   # names must still compare against the PREDECESSOR, not against its own twin.
-  git -C "$REPO" tag v1.102.0-mavericks.8
-  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.8)' --version 1.102.0-mavericks.8"
+  git -C "$REPO" tag v1.102.0-mavergreen.8
+  run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.8)' --version 1.102.0-mavergreen.8"
   [ "$status" -eq 0 ]
   echo "$output" | grep -q '> previous 1.102.0.7'
 }
@@ -127,7 +127,7 @@ appcast() {
   ! echo "$output" | grep -q 'tag v1)' || false
 }
 
-@test "--tag-glob: the -mavericks.N tags of the default scope are out of scope" {
+@test "--tag-glob: the -mavergreen.N tags of the default scope are out of scope" {
   git -C "$REPO" tag v1.0.5
   run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.0.6)' --version v1.0.6 --tag-glob 'v*.*.*'"
   [ "$status" -eq 0 ]

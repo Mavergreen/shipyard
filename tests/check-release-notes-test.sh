@@ -19,8 +19,8 @@ no() {  # $1 = version, $2 = label, $3 = expected substring of the complaint; co
   [ "$(printf '%s\n' "$out" | sed -n 1p | cut -d: -f1)" = notes-shape ] || { echo "FAIL $2: the complaint should open with its id, notes-shape: $out"; exit 1; }
 }
 
-ok 9.9p2-mavericks.6 "the family shape" <<'EOF'
-## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)
+ok 9.9p2-mavergreen.6 "the family shape" <<'EOF'
+## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
 
 ### What changed
 - Repackage of upstream OpenSSH 9.9p2; packaging changes only.
@@ -39,14 +39,14 @@ ok 20260802.6 "self-upstream title" <<'EOF'
 - Release of Porthole 20260802.6.
 EOF
 
-no 9.9p2-mavericks.6 "empty file" "empty" </dev/null
-no 9.9p2-mavericks.6 "whitespace only" "empty" <<'EOF'
+no 9.9p2-mavergreen.6 "empty file" "empty" </dev/null
+no 9.9p2-mavergreen.6 "whitespace only" "empty" <<'EOF'
 
 
 EOF
 
-no 9.9p2-mavericks.6 "stale version in title" "9.9p2-mavericks.6" <<'EOF'
-## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.5)
+no 9.9p2-mavergreen.6 "stale version in title" "9.9p2-mavergreen.6" <<'EOF'
+## OpenSSH 9.9p2 (9.9p2-mavergreen.5)
 
 ### What changed
 - Repackage.
@@ -78,21 +78,21 @@ no v "degenerate version \"v\" must not match every title" "does not name v" <<'
 - Whatever.
 EOF
 
-ok 9.9p2-mavericks.6 "no leading v anywhere, unaffected" <<'EOF'
-## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)
+ok 9.9p2-mavergreen.6 "no leading v anywhere, unaffected" <<'EOF'
+## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
 
 ### What changed
 - Repackage.
 EOF
 
-no 9.9p2-mavericks.6 "no What changed" "What changed" <<'EOF'
-## Mavericks OpenSSH 9.9p2 (9.9p2-mavericks.6)
+no 9.9p2-mavergreen.6 "no What changed" "What changed" <<'EOF'
+## Mavericks OpenSSH 9.9p2 (9.9p2-mavergreen.6)
 
 Automated release for Mac OS X 10.9 (Mavericks).
 EOF
 
-no 9.9p2-mavericks.6 "empty What changed" "empty" <<'EOF'
-## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)
+no 9.9p2-mavergreen.6 "empty What changed" "empty" <<'EOF'
+## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
 
 ### What changed
 
@@ -103,8 +103,8 @@ EOF
 # spec: scripts/check-release-notes.sh -- an empty ### section followed by a further ## heading
 #       must still be caught: the ## branch that resets tracking for a new top-level heading
 #       must not skip the pending-empty-section check.
-no 9.9p2-mavericks.6 "empty section before a further ## heading" "empty" <<'EOF'
-## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)
+no 9.9p2-mavergreen.6 "empty section before a further ## heading" "empty" <<'EOF'
+## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
 
 ### What changed
 - Repackage.
@@ -115,29 +115,29 @@ no 9.9p2-mavericks.6 "empty section before a further ## heading" "empty" <<'EOF'
 Some trailing content.
 EOF
 
-no 9.9p2-mavericks.6 "title not first" "first line" <<'EOF'
+no 9.9p2-mavergreen.6 "title not first" "first line" <<'EOF'
 Some prose first.
 
-## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)
+## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
 
 ### What changed
 - Repackage.
 EOF
 
-ok 20260727-mavericks.37 "a bullet of an untracked ingredient, with no link" <<'EOF'
-## Container Tools 20260727 for Mavericks (20260727-mavericks.37)
+ok 20260727-mavergreen.37 "a bullet of an untracked ingredient, with no link" <<'EOF'
+## Container Tools 20260727 (20260727-mavergreen.37)
 
 ### What changed
 - Repackage of upstream Container Tools 20260727, rebuilt because build ingredients moved (below).
 
 ### Build ingredients
 
-Changed since 20260727-mavericks.36:
+Changed since 20260727-mavergreen.36:
 
 - **docker-cli / VERSION**: v29.9.0 -> v29.9.1
   The docker CLI
 EOF
 
-printf '## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.1)\n\nWords.\n<!-- edited by a human -->\n\n### What changed\n\n- a change\n' \
-  | no 9.9p2-mavericks.1 "a body carrying the mark is refused" 'edited by a human'
+printf '## OpenSSH 9.9p2 (9.9p2-mavergreen.1)\n\nWords.\n<!-- edited by a human -->\n\n### What changed\n\n- a change\n' \
+  | no 9.9p2-mavergreen.1 "a body carrying the mark is refused" 'edited by a human'
 echo "PASS: check-release-notes"

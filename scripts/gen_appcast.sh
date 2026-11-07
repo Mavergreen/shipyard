@@ -117,7 +117,7 @@ CHANNEL_TITLE="$1"; VER="$2"; URL="$3"; MINOS="$4"; NOTES_FILE="$5"; ENCLOSURE_A
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "The Sparkle
 #       comparison version must be dotted-numeric AND monotonic" -- SUStandardVersionComparator can't
-#       order the "-mavericks.N" suffix (it reads 1.2.3-mavericks.3 and .4 as EQUAL), so
+#       order the "-mavergreen.N" suffix (it reads 1.2.3-mavergreen.3 and .4 as EQUAL), so
 #       <sparkle:version> must be numeric-only; the human string stays in shortVersionString. The
 #       derivation itself is lib.sh's comparison_key(); MavericksSparkle.cmake mirrors it.
 BUILD_VER=$(comparison_key "$VER")

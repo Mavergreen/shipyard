@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: upstream-notes.sh [--url-only] <version>          (<upstream>-mavericks.N)
+#   usage: upstream-notes.sh [--url-only] <version>          (<upstream>-mavergreen.N)
 #          Links upstream's own release notes, as a markdown section for the release notes (Sparkle
 #          appcast <description> + GitHub Release body), when this release ships an upstream version
 #          that no earlier release shipped. WHERE upstream publishes notes is per-repo, so the repo
@@ -24,7 +24,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 url_only=no
 if [ "${1:-}" = "--url-only" ]; then url_only=yes; shift; fi
 ver="${1:?upstream-notes: version required}"
-up="${ver%%-mavericks.*}"
+up="${ver%%-mavergreen.*}"
 
 bail() {  # $1 = --url-only exit code, $2 = message
   [ "$url_only" = yes ] || { echo "upstream-notes: $2" >&2; exit 0; }
@@ -37,7 +37,7 @@ bail() {  # $1 = --url-only exit code, $2 = message
 if [ "$(cd "$MAVERGREEN_REPO_ROOT" && git rev-parse --is-shallow-repository 2>/dev/null)" = true ]; then
   bail 5 "$MAVERGREEN_REPO_ROOT is a shallow clone, so its release tags are unknown (use fetch-depth: 0)"
 fi
-if ! tags="$(cd "$MAVERGREEN_REPO_ROOT" && git tag --list "$up-mavericks.*")"; then
+if ! tags="$(cd "$MAVERGREEN_REPO_ROOT" && git tag --list "$up-mavergreen.*")"; then
   bail 5 "cannot list release tags in $MAVERGREEN_REPO_ROOT"
 fi
 for t in $tags; do

@@ -2,7 +2,7 @@ name: release
 on:
   push:
     branches: [main]
-    tags: ['*-mavericks.*']
+    tags: ['*-mavergreen.*']
   pull_request:
     branches: [main]
 permissions:

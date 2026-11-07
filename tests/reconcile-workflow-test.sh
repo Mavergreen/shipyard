@@ -138,7 +138,7 @@ proc, out = simulate(hook=True)
 if proc.returncode != 0:
     fail.append("simulated state step failed on a PIN upstream with its derive hook "
                 "(stdout=%r stderr=%r)" % (proc.stdout, proc.stderr))
-elif "version=1.0.421-mavericks.1" not in out:
+elif "version=1.0.421-mavergreen.1" not in out:
     fail.append("simulated state step did not derive the version from the PIN: outputs=%r stderr=%r"
                 % (out, proc.stderr))
 

@@ -112,9 +112,9 @@ jobs:
       - uses: Mavergreen/mavericks-vm@v1'
 CALLER='  on-mavericks:
     needs: [build]
-    uses: ./.github/workflows/on-mavericks.yml'
+    uses: ./.github/workflows/on-mavergreen.yml'
 callee() {  # $1 = name, $2 = the called workflow
-  printf '%s\n' "$2" > "$work/vm-$1/.github/workflows/on-mavericks.yml"
+  printf '%s\n' "$2" > "$work/vm-$1/.github/workflows/on-mavergreen.yml"
   (cd "$work/vm-$1" && git add -A) >/dev/null 2>&1
 }
 vm local "$CALLER
@@ -137,7 +137,7 @@ vm_fails localcomment "$NOVM"
 
 vm remote "  on-mavericks:
     needs: [build]
-    uses: Mavergreen/elsewhere/.github/workflows/on-mavericks.yml@v1
+    uses: Mavergreen/elsewhere/.github/workflows/on-mavergreen.yml@v1
 $PUB
     needs: [build, on-mavericks]"
 vm_fails remote "$NOVM"

@@ -96,4 +96,19 @@ eq "mg_glob_hits: * crosses a /, and a last line with no newline is read" "$(mg_
 eq "mg_glob_hits: * crosses a /" "$(mg_glob_hits 'src/*.patch' "$m/../tracked")" src/deep/y.patch
 eq "mg_glob_hits: no match prints nothing" "$(mg_glob_hits 'nope/*' "$m/../tracked")" ""
 
+k="$w/kind"; mkdir -p "$k/.mavergreen/upstream"
+kind() { MAVERGREEN_REPO_ROOT="$k"; mg_port_or_own; }
+printf '1.0\n' > "$k/.mavergreen/upstream/VERSION"
+eq "a bare upstream value is its own upstream" "$(kind)" own
+printf '1.0\n# renovate: datasource=github-releases depName=a/b\n' > "$k/.mavergreen/upstream/VERSION"
+eq "a Renovate-tracked upstream value is a port" "$(kind)" port
+rm "$k/.mavergreen/upstream/VERSION"
+printf '0123456789abcdef0123456789abcdef01234567\n' > "$k/.mavergreen/upstream/COMMIT"
+eq "an untracked COMMIT with no derive hook is its own upstream" "$(kind)" own
+mkdir -p "$k/.mavergreen/hooks"; printf '#!/bin/sh\necho 20260727\n' > "$k/.mavergreen/hooks/derive-upstream-version"
+eq "a derive-upstream-version hook makes a port" "$(kind)" port
+rm -r "$k/.mavergreen/upstream" "$k/.mavergreen/hooks"
+eq "no upstream at all is its own upstream" "$(kind)" own
+MAVERGREEN_REPO_ROOT="$w"
+
 echo "mavergreen-meta-test: ok"

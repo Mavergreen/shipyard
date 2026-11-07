@@ -14,7 +14,7 @@ ing() {   # $1 = dir, rest = lines of the "## Declared state" section
   mkdir -p "$1"; d="$1"; shift
   { printf '%s\n' '# Build ingredients' '' '| Ingredient | Pinned in |' '|---|---|' \
       '| CMake 4.4.3 | `pins.env` |' '' '## Conformance deviations' '' \
-      '- scheme: shipyard versions are not <upstream>-mavericks.N' '' '## Declared state' ''
+      '- scheme: shipyard versions are not <upstream>-mavergreen.N' '' '## Declared state' ''
     for l in "$@"; do printf '%s\n' "$l"; done
   } > "$d/INGREDIENTS.md"
 }

@@ -217,10 +217,10 @@ X
 
 # spec: scripts/check-release-sentence.sh -- examples quoted from the release-notes survey: each bad one fails, each good one, converted, passes
 corpus_no() { printf '%s\n' "$3" | no "survey: $1" "$2"; }
-corpus_no "swift 6.3.3-mavericks.2" "formatting character '\`'" "Cut to exercise the shared \`publish-release.yml\`."
-corpus_no "swift 6.3.3-mavericks.2 caveat" "internal term" "ACCEPTANCE IS STILL MANUAL: a macOS 26 runner cannot exercise the 10.9-only behaviour this runtime exists to fix."
-corpus_no "swift 6.3.3-mavericks.3" "end with" "First release through the artifact conformance check, which asserts the .pkg, the appcast and the tag agree…"
-corpus_no "swift 6.3.3-mavericks.4 key" "base64" "The updater now trusts the Mavergreen org-wide signing key (/XQ+fNmP4nxdj9jnKmJDwL8rnsKYz6Kg5X61REAIqkI=)."
+corpus_no "swift 6.3.3-mavergreen.2" "formatting character '\`'" "Cut to exercise the shared \`publish-release.yml\`."
+corpus_no "swift 6.3.3-mavergreen.2 caveat" "internal term" "ACCEPTANCE IS STILL MANUAL: a macOS 26 runner cannot exercise the 10.9-only behaviour this runtime exists to fix."
+corpus_no "swift 6.3.3-mavergreen.3" "end with" "First release through the artifact conformance check, which asserts the .pkg, the appcast and the tag agree…"
+corpus_no "swift 6.3.3-mavergreen.4 key" "base64" "The updater now trusts the Mavergreen org-wide signing key (/XQ+fNmP4nxdj9jnKmJDwL8rnsKYz6Kg5X61REAIqkI=)."
 corpus_no "swift-toolchain commit" "formatting character '\`'" "commit \`82cdc19fa54d566969527b56f587ea8ea30bef51\`."
 corpus_no "packer .7 comment" "30 words" "Nothing a box does has changed. This release changes only a comment in the Aqua Transport layer's template, \`mavericks-aquatransport\`, which now says that nothing in that template's directory is part of the base recipe."
 corpus_no "packer .7 purpose" "internal term" "That comment is the release's whole purpose: it proves the base recipe works as v0.20261005.6 promised."

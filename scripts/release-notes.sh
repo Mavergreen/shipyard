@@ -4,7 +4,7 @@
 #                           [--short S]
 #     --tag/--version   the release tag and full version (equal for most repos; golang's differ)
 #     --product         the BARE product noun ("OpenSSH", "Go", "Signal Desktop"). This composes the
-#                       family's prose register: "OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)".
+#                       family's prose register: "OpenSSH 9.9p2 (9.9p2-mavergreen.6)".
 #     --line            upstream-line prefix for a repo shipping parallel lines (golang: "1.26";
 #                       "1.26.*" also accepted -- both are normalized to a glob before use)
 #     --min-os          emits the install floor line; omit for a product that is not a 10.9 .pkg
@@ -66,7 +66,7 @@ cd "$MAVERGREEN_REPO_ROOT"
   || die "$MAVERGREEN_REPO_ROOT is a shallow clone, so release tags are unknown and the release kind cannot be decided (use fetch-depth: 0)"
 git tag --list >/dev/null 2>&1 || die "cannot list release tags in $MAVERGREEN_REPO_ROOT"
 
-UP="${VER%%-mavericks.*}"
+UP="${VER%%-mavergreen.*}"
 SELF_UPSTREAM=no
 if [ "$UP" = "$VER" ]; then SELF_UPSTREAM=yes; fi
 
@@ -86,12 +86,12 @@ fi
 #           succeeding with empty output, so the shallow guard above never fires for it.
 # spec: tests/release-notes-test.sh "notags" -- a second, independent check for exactly that gap.
 if [ "$SELF_UPSTREAM" = no ]; then
-  UPTAGS="$(git tag --list "$UP-mavericks.*" 2>/dev/null || true)"
+  UPTAGS="$(git tag --list "$UP-mavergreen.*" 2>/dev/null || true)"
   if [ -z "$UPTAGS" ]; then
-    N="${VER##*-mavericks.}"
+    N="${VER##*-mavergreen.}"
     case "$N" in
       1) ;;
-      *) die "$VER is -mavericks.$N but no $UP-mavericks.* tags are visible in $MAVERGREEN_REPO_ROOT, so it is unknown whether this is a first release or a repackage (tags may not be fetched -- use fetch-tags: true or fetch-depth: 0)" ;;
+      *) die "$VER is -mavergreen.$N but no $UP-mavergreen.* tags are visible in $MAVERGREEN_REPO_ROOT, so it is unknown whether this is a first release or a repackage (tags may not be fetched -- use fetch-tags: true or fetch-depth: 0)" ;;
     esac
   fi
 fi
@@ -111,9 +111,9 @@ fi
 #       earlier release" here, so a repackage would otherwise publish with no ingredient section and
 #       no compare link, green. N=1 is left alone: a first release of a new line has no baseline.
 if [ -n "$LINE" ] && [ -z "$PREV" ] && [ "$SELF_UPSTREAM" = no ]; then
-  case "${VER##*-mavericks.}" in
+  case "${VER##*-mavergreen.}" in
     1) ;;
-    *) die "--line matches no ${LINE}-mavericks.* tag, so $VER (a repackage) would ship with no compare link and no ingredient section; pass the prefix the tags actually carry (1.26, not 126)" ;;
+    *) die "--line matches no ${LINE}-mavergreen.* tag, so $VER (a repackage) would ship with no compare link and no ingredient section; pass the prefix the tags actually carry (1.26, not 126)" ;;
   esac
 fi
 
@@ -125,7 +125,7 @@ trap 'rm -f "$tmp" "$footer_tmp" "$watched_tmp"' EXIT
 if [ "$SELF_UPSTREAM" = yes ]; then
   printf '## %s %s\n' "$PRODUCT" "$VER" > "$tmp"
 else
-  printf '## %s %s for Mavericks (%s)\n' "$PRODUCT" "$UP" "$VER" > "$tmp"
+  printf '## %s %s (%s)\n' "$PRODUCT" "$UP" "$VER" > "$tmp"
 fi
 
 # spec: SKILL.md "Release notes" -- a tag that names a commit other than HEAD is already minted; its
@@ -320,7 +320,7 @@ if [ -n "$PREV" ]; then
   WATCHED="$(LC_ALL=C sort -u "$watched_tmp")"
 fi
 
-# spec: tests/release-notes-test.sh "patchadd" -- tailscale 1.102.4-mavericks.7 added
+# spec: tests/release-notes-test.sh "patchadd" -- tailscale's seventh 1.102.4 release added
 #       patches/darwin-exit-nodes.patch (exit nodes on macOS) and its notes still said "packaging
 #       changes only": a change to OUR modifications of the upstream source is a behaviour change a
 #       reader is owed. Watched files are excluded because ingredient-notes.sh already reports them. A
@@ -387,9 +387,9 @@ else
   case "$urc" in
     0)
       if [ -n "$PREV" ]; then
-        printf -- '- New upstream: %s %s (was %s).\n' "$PRODUCT" "$UP" "${PREV%%-mavericks.*}" >> "$tmp"
+        printf -- '- New upstream: %s %s (was %s).\n' "$PRODUCT" "$UP" "${PREV%%-mavergreen.*}" >> "$tmp"
       else
-        printf -- '- First release of %s %s for Mavericks.\n' "$PRODUCT" "$UP" >> "$tmp"
+        printf -- '- First release of %s %s.\n' "$PRODUCT" "$UP" >> "$tmp"
       fi
       printf -- '  [Upstream release notes for %s](%s)\n' "$UP" "$URL" >> "$tmp"
       ;;

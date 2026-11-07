@@ -226,7 +226,7 @@ if [ -x /usr/libexec/PlistBuddy ]; then
   mkdir -p "$fx/usr/local/mavergreen/var/mavergreen/selections"
   echo shipyard > "$fx/usr/local/mavergreen/var/mavergreen/selections/shipyard"
   mkdir -p "$ms/usr/local/mavergreen/cmake"
-  MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product cmake --name "CMake for Mavericks" --version 4.4.4-mavericks.1 \
+  MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product cmake --name "CMake for Mavericks" --version 4.4.4-mavergreen.1 \
     --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
   cp "$ms/usr/local/mavergreen/cmake/mavergreen.plist" "$product/mavergreen.plist"
   echo cmake > "$fx/usr/local/mavergreen/var/mavergreen/selections/cmake"

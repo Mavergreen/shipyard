@@ -9,7 +9,7 @@
 #          must not say it looked.
 # platform: a draft is left at all because action-gh-release creates the release as a draft,
 #           uploads the assets, and only then publishes it, which is when the tag is minted -- a
-#           failed upload stops it in between. golang's 1.26.8-mavericks.3 lost its native .pkg to
+#           failed upload stops it in between. golang's third 1.26.8 release lost its native .pkg to
 #           "other side closed" and sat as a draft with no tag, invisible to Renovate, to the
 #           appcast, to every sibling, with its ingredient bump unshipped.
 set -eu

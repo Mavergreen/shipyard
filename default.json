@@ -10,7 +10,7 @@
     "AUTOMERGE POLICY: if it builds and passes, it ships -- patch, minor AND major alike. ignoreTests",
     "is false, so a green build is the gate, and a consumer must produce a CI status check on Renovate",
     "PRs (a pull_request-triggered build, or push: branches ['**']). A repo with NO build to gate sets",
-    "ignoreTests:true locally. Breakage that gets through is fixed forward in a -mavericks.N+1 release,",
+    "ignoreTests:true locally. Breakage that gets through is fixed forward in a -mavergreen.N+1 release,",
     "which costs less than a human reviewing every routine bump.",
     "EXCEPTION RULE: a repo restricts automerge only where a bad bump would BUILD FINE AND BE WRONG --",
     "the case a green build cannot catch. State that reason in the packageRule's description; an",

@@ -78,7 +78,7 @@ rc=0; PATH="$t/nogh:$PATH" sh "$sc" --repo-state >"$t/out" 2>"$t/err" || rc=$?
 
 for d in "$t/no-such-dir" "$t/empty-dist"; do
   rm -rf "$t/empty-dist"; mkdir "$t/empty-dist"; printf 'notes\n' > "$t/empty-dist/RELEASE_NOTES.md"
-  rc=0; SHIPYARD_CHECK_VERSION=1.0-mavericks.1 sh "$sc" --dist "$d" >"$t/out" 2>"$t/err" || rc=$?
+  rc=0; SHIPYARD_CHECK_VERSION=1.0-mavergreen.1 sh "$sc" --dist "$d" >"$t/out" 2>"$t/err" || rc=$?
   [ "$rc" = 2 ] || fail "--dist $d, which holds no artifact, exits 2, got $rc: $(cat "$t/out")"
   grep -qF -- "$d" "$t/err" || fail "the --dist refusal names $d: $(cat "$t/err")"
 done

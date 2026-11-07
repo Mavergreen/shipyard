@@ -23,14 +23,14 @@ SH
   PATH="$WORK/bin:$PATH"
   printf '[{"nameWithOwner":"Mavergreen/cmake"},{"nameWithOwner":"Mavergreen/swift"}]\n' > "$STUB/repos"
   cat > "$STUB/prs-cmake" <<JSON
-[{"number":4,"title":"chore(deps): update dependency mavergreen/clang-22 to v22.1.8-mavericks.11","createdAt":"$(ago 10.5)","headRefName":"renovate/mavergreen-clang-22-22.x"},
+[{"number":4,"title":"chore(deps): update dependency mavergreen/clang-22 to v22.1.8-mavergreen.11","createdAt":"$(ago 10.5)","headRefName":"renovate/mavergreen-clang-22-22.x"},
  {"number":5,"title":"chore(deps): update dependency mavergreen/stevedore to v20261027.1","createdAt":"$(ago 2)","headRefName":"renovate/mavergreen-stevedore-20261027.x"},
  {"number":6,"title":"Update dependency Mavergreen/recaulk by hand","createdAt":"$(ago 30)","headRefName":"bump-recaulk"},
  {"number":7,"title":"chore(deps): update dependency kitware/cmake to v4.5.0","createdAt":"$(ago 40)","headRefName":"renovate/kitware-cmake-4.x"}]
 JSON
   cat > "$STUB/prs-swift" <<JSON
 [{"number":20,"title":"chore(deps): update mavergreen ingredients","createdAt":"$(ago 20.2)","headRefName":"renovate/mavergreen-ingredients"},
- {"number":21,"title":"Update dependency Mavergreen/golang-127 to v1.27.3-mavericks.6","createdAt":"$(ago 8)","headRefName":"renovate/mavergreen-golang-127-1.x"}]
+ {"number":21,"title":"Update dependency Mavergreen/golang-127 to v1.27.3-mavergreen.6","createdAt":"$(ago 8)","headRefName":"renovate/mavergreen-golang-127-1.x"}]
 JSON
 }
 teardown() { rm -rf "$WORK"; }
@@ -39,12 +39,12 @@ teardown() { rm -rf "$WORK"; }
   run sh "$HELPER"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "Mavergreen/swift#20 20 chore(deps): update mavergreen ingredients" ]
-  [ "${lines[1]}" = "Mavergreen/cmake#4 10 chore(deps): update dependency mavergreen/clang-22 to v22.1.8-mavericks.11" ]
-  [ "${lines[2]}" = "Mavergreen/swift#21 8 Update dependency Mavergreen/golang-127 to v1.27.3-mavericks.6" ]
+  [ "${lines[1]}" = "Mavergreen/cmake#4 10 chore(deps): update dependency mavergreen/clang-22 to v22.1.8-mavergreen.11" ]
+  [ "${lines[2]}" = "Mavergreen/swift#21 8 Update dependency Mavergreen/golang-127 to v1.27.3-mavergreen.6" ]
   [ "${#lines[@]}" -eq 3 ]
   grep -qxF "Mavergreen/swift#20 20 chore(deps): update mavergreen ingredients" "$GITHUB_STEP_SUMMARY"
-  grep -qxF "Mavergreen/cmake#4 10 chore(deps): update dependency mavergreen/clang-22 to v22.1.8-mavericks.11" "$GITHUB_STEP_SUMMARY"
-  grep -qxF "Mavergreen/swift#21 8 Update dependency Mavergreen/golang-127 to v1.27.3-mavericks.6" "$GITHUB_STEP_SUMMARY"
+  grep -qxF "Mavergreen/cmake#4 10 chore(deps): update dependency mavergreen/clang-22 to v22.1.8-mavergreen.11" "$GITHUB_STEP_SUMMARY"
+  grep -qxF "Mavergreen/swift#21 8 Update dependency Mavergreen/golang-127 to v1.27.3-mavergreen.6" "$GITHUB_STEP_SUMMARY"
   ! grep -q '#5 \|#6 \|#7 ' "$GITHUB_STEP_SUMMARY" || false
 }
 

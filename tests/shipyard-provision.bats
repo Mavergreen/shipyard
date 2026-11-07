@@ -29,7 +29,7 @@ STUB
   export SHIPYARD_PROVISION_OS=Darwin
   unset CI
   P="sh $S/shipyard-provision"
-  ing "cmake" Mavergreen/cmake 4.4.5-mavericks.2 cmake shipped
+  ing "cmake" Mavergreen/cmake 4.4.5-mavergreen.2 cmake shipped
   ing "stevedore" Mavergreen/stevedore 20261027.1 stevedore build-only
 }
 teardown() { rm -rf "$WORK"; }
@@ -47,7 +47,7 @@ installed() {  # installed PRODUCT VERSION
 }
 
 @test "an installed copy at the pin is used, with no fetch" {
-  installed cmake 4.4.5-mavericks.2
+  installed cmake 4.4.5-mavergreen.2
   run $P --only cmake
   [ "$status" -eq 0 ]
   [ "$output" = "cmake=$WORK/prefix/cmake" ]
@@ -55,11 +55,11 @@ installed() {  # installed PRODUCT VERSION
 }
 
 @test "an installed copy at another release is not used: the pinned release is fetched" {
-  installed cmake 4.4.4-mavericks.1
+  installed cmake 4.4.4-mavergreen.1
   run $P --only cmake --into "$WORK/into"
   [ "$status" -eq 0 ]
-  [ "$output" = "cmake=$WORK/into/cmake-4.4.5-mavericks.2" ]
-  [ "$(cat "$STUB_LOG")" = "pkg --repo Mavergreen/cmake cmake 4.4.5-mavericks.2 $WORK/into/cmake-4.4.5-mavericks.2" ]
+  [ "$output" = "cmake=$WORK/into/cmake-4.4.5-mavergreen.2" ]
+  [ "$(cat "$STUB_LOG")" = "pkg --repo Mavergreen/cmake cmake 4.4.5-mavergreen.2 $WORK/into/cmake-4.4.5-mavergreen.2" ]
 }
 
 @test "--role keeps only the ingredients with one of the roles" {
@@ -67,7 +67,7 @@ installed() {  # installed PRODUCT VERSION
   [ "$status" -eq 0 ]
   [ "$output" = "stevedore=$WORK/into/stevedore-20261027.1" ]
   run $P --role linked,shipped --into "$WORK/into"
-  [ "$output" = "cmake=$WORK/into/cmake-4.4.5-mavericks.2" ]
+  [ "$output" = "cmake=$WORK/into/cmake-4.4.5-mavergreen.2" ]
 }
 
 @test "an ingredient with no product is not provisioned" {
@@ -86,11 +86,11 @@ installed() {  # installed PRODUCT VERSION
 @test "a from child comes out of its parent's download" {
   d="$WORK/repo/.mavergreen/ingredients/libcxx22"; mkdir -p "$d"
   printf 'clang22\n' > "$d/from"; printf 'libcxx22\n' > "$d/product"; printf 'linked\n' > "$d/role"
-  ing clang22 Mavergreen/clang-22 22.1.8-mavericks.12 clang22 build-only
+  ing clang22 Mavergreen/clang-22 22.1.8-mavergreen.12 clang22 build-only
   run $P --only libcxx22 --into "$WORK/into"
   [ "$status" -eq 0 ]
-  [ "$output" = "libcxx22=$WORK/into/libcxx22-22.1.8-mavericks.12" ]
-  [ "$(cat "$STUB_LOG")" = "pkg --repo Mavergreen/clang-22 libcxx22 22.1.8-mavericks.12 $WORK/into/libcxx22-22.1.8-mavericks.12" ]
+  [ "$output" = "libcxx22=$WORK/into/libcxx22-22.1.8-mavergreen.12" ]
+  [ "$(cat "$STUB_LOG")" = "pkg --repo Mavergreen/clang-22 libcxx22 22.1.8-mavergreen.12 $WORK/into/libcxx22-22.1.8-mavergreen.12" ]
 }
 
 @test "Linux takes the tarball path for an ingredient with a LINUX_SHA256" {
@@ -98,8 +98,8 @@ installed() {  # installed PRODUCT VERSION
   printf '%s\n' "$sha" > "$WORK/repo/.mavergreen/ingredients/cmake/LINUX_SHA256"
   SHIPYARD_PROVISION_OS=Linux run $P --into "$WORK/into"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"cmake=$WORK/into/cmake-4.4.5-mavericks.2"* ]] || false
-  grep -qx "tar --repo Mavergreen/cmake cmake 4.4.5-mavericks.2 $sha $WORK/into/cmake-4.4.5-mavericks.2" "$STUB_LOG"
+  [[ "$output" == *"cmake=$WORK/into/cmake-4.4.5-mavergreen.2"* ]] || false
+  grep -qx "tar --repo Mavergreen/cmake cmake 4.4.5-mavergreen.2 $sha $WORK/into/cmake-4.4.5-mavergreen.2" "$STUB_LOG"
   grep -qx "pkg --repo Mavergreen/stevedore stevedore 20261027.1 $WORK/into/stevedore-20261027.1" "$STUB_LOG"
 }
 
@@ -118,7 +118,7 @@ installed() {  # installed PRODUCT VERSION
   run $P --only cmake --install
   [ "$status" -eq 0 ]
   [ "$output" = "cmake=$WORK/prefix/cmake" ]
-  grep -qx "sudo installer -pkg $WORK/cache/cmake/4.4.5-mavericks.2/cmake-4.4.5-mavericks.2.pkg -target /" "$STUB_LOG"
+  grep -qx "sudo installer -pkg $WORK/cache/cmake/4.4.5-mavergreen.2/cmake-4.4.5-mavergreen.2.pkg -target /" "$STUB_LOG"
 }
 
 @test "CI=true implies --install" {
@@ -136,18 +136,18 @@ installed() {  # installed PRODUCT VERSION
 }
 
 @test "--env-file writes MAVERGREEN_INGREDIENT_<name>=<path>, a dash in a name becoming an underscore" {
-  ing python-315 Mavergreen/python-315 3.15.0-mavericks.1 python315 test
+  ing python-315 Mavergreen/python-315 3.15.0-mavergreen.1 python315 test
   run $P --role test,shipped --into "$WORK/into" --env-file "$WORK/env"
   [ "$status" -eq 0 ]
-  [ "$(cat "$WORK/env")" = "MAVERGREEN_INGREDIENT_cmake=$WORK/into/cmake-4.4.5-mavericks.2
-MAVERGREEN_INGREDIENT_python_315=$WORK/into/python315-3.15.0-mavericks.1" ]
-  [[ "$output" == *"python-315=$WORK/into/python315-3.15.0-mavericks.1"* ]] || false
+  [ "$(cat "$WORK/env")" = "MAVERGREEN_INGREDIENT_cmake=$WORK/into/cmake-4.4.5-mavergreen.2
+MAVERGREEN_INGREDIENT_python_315=$WORK/into/python315-3.15.0-mavergreen.1" ]
+  [[ "$output" == *"python-315=$WORK/into/python315-3.15.0-mavergreen.1"* ]] || false
 }
 
 @test "--product and --asset steer the one ingredient --only names" {
   run $P --only cmake --product cmake-cross --asset other.pkg --into "$WORK/into"
   [ "$status" -eq 0 ]
-  [ "$(cat "$STUB_LOG")" = "pkg --repo Mavergreen/cmake --asset other.pkg cmake-cross 4.4.5-mavericks.2 $WORK/into/cmake-cross-4.4.5-mavericks.2" ]
+  [ "$(cat "$STUB_LOG")" = "pkg --repo Mavergreen/cmake --asset other.pkg cmake-cross 4.4.5-mavergreen.2 $WORK/into/cmake-cross-4.4.5-mavergreen.2" ]
   run $P --asset other.pkg --into "$WORK/into"
   [ "$status" -eq 2 ]
 }

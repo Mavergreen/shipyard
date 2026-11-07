@@ -15,18 +15,19 @@ _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/audit-sdks.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 audit_one() {  # $1 = label, $2 = dist dir, $3 = repo root holding .mavergreen/deviations/ (may lack one)
   # platform: only the macho, deviation and sentinel facts reach the checker, so the version it is told
-  #           is never compared with anything; a fixed well-formed one keeps its scheme check quiet.
+  #           is never compared with anything; a fixed well-formed one, and a port's kind, keep its scheme
+  #           check quiet.
   # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the filter
   #       below drops every `pkg` record, so a pkg stevedore could not expand (artifact-facts.sh emits
   #       "pkg <file> unreadable none none" rather than aborting the stream) would otherwise leave the
   #       checker NOTHING to examine and pass this audit having looked at nothing. Captured ONCE to
   #       "$w/facts": the checker reads the filtered view of it, and this function separately reads the
   #       unfiltered file for the unreadable-pkg record the filter would hide.
-  sh "$SELF/artifact-facts.sh" "$2" 0.0.0-mavericks.0 "$3" > "$w/facts" || true
+  sh "$SELF/artifact-facts.sh" "$2" 0.0.0-mavergreen.0 "$3" > "$w/facts" || true
   _unreadable="$(sed -n 's/^pkg \([^ ]*\) unreadable .*/\1/p' "$w/facts")"
   _n="$(grep -c '^macho ' "$w/facts" || true)"
   _ok=1
-  if ! grep -E '^(expected|deviation|macho|abort|end-of-facts)( |$)' "$w/facts" \
+  if ! { echo 'upstream-kind port'; grep -E '^(expected|deviation|macho|abort|end-of-facts)( |$)' "$w/facts"; } \
        | sh "$SELF/check-artifact-conformance.sh" > "$w/out" 2>&1; then
     _ok=0
   fi

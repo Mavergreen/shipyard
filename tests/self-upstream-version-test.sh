@@ -166,7 +166,7 @@ want 20261012.11 "the last tag is the numerically greatest: .10 beats .9"
 
 fresh foreign-tags
 git -C "$R" tag v1.0
-git -C "$R" tag 20261012-mavericks.1
+git -C "$R" tag 20261012-mavergreen.1
 at 2026-10-19T12:00:00Z .mavergreen/ingredients/golang/VERSION
 want 20261012.1 "a tag not shaped YYYYMMDD.N is not a release tag"
 said "self-upstream-version: 20261012.1: no release tag yet"

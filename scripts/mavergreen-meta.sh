@@ -160,3 +160,13 @@ mavergreen_name() {
       printf '%s\n' "$_mn_s" ;;
   esac
 }
+
+mg_port_or_own() {
+  if mg_has hooks/derive-upstream-version; then
+    echo port
+  elif _mg_vf="$(mg_upstream_kind)" && mg_renovate "upstream/$_mg_vf" >/dev/null; then
+    echo port
+  else
+    echo own
+  fi
+}

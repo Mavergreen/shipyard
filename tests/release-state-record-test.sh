@@ -13,25 +13,25 @@ D1='v1:sha256:8c5fc85c689b60ccc9a3ed0120fa949e2bd9c0f9a121ac572fa11ba148312be7'
 D2='v1:sha256:405b7fdda86a03f4ef636aceb3c7c819fe5d93208118cd365a0b962cb37c8004'
 
 printf '## What changed\n\n- a thing\n' > "$w/body1"
-out="$(sh "$S" --tag 1.2.3-mavericks.1 --digest "$D1" --body-file "$w/body1" --out "$w/new1")"
-[ "$out" = "BACKFILLED=1.2.3-mavericks.1" ] || { echo "FAIL append: got '$out'"; exit 1; }
+out="$(sh "$S" --tag 1.2.3-mavergreen.1 --digest "$D1" --body-file "$w/body1" --out "$w/new1")"
+[ "$out" = "BACKFILLED=1.2.3-mavergreen.1" ] || { echo "FAIL append: got '$out'"; exit 1; }
 grep -q '^## What changed$' "$w/new1" || { echo "FAIL: appending must preserve every existing byte of the notes users read -- lost the heading"; exit 1; }
 grep -q '^- a thing$' "$w/new1" || { echo "FAIL append lost a bullet"; exit 1; }
 grep -q "^Mavergreen-State: $D1\$" "$w/new1" || { echo "FAIL append did not add the line"; exit 1; }
 
-out="$(sh "$S" --tag 1.2.3-mavericks.1 --digest "$D1" --body-file "$w/new1" --out "$w/new2")"
-[ "$out" = "UNCHANGED=1.2.3-mavericks.1" ] || { echo "FAIL: the same digest again must be idempotent and say so: got '$out'"; exit 1; }
+out="$(sh "$S" --tag 1.2.3-mavergreen.1 --digest "$D1" --body-file "$w/new1" --out "$w/new2")"
+[ "$out" = "UNCHANGED=1.2.3-mavergreen.1" ] || { echo "FAIL: the same digest again must be idempotent and say so: got '$out'"; exit 1; }
 cmp -s "$w/new1" "$w/new2" || { echo "FAIL idempotent run rewrote the body"; exit 1; }
 
 rc=0
-sh "$S" --tag 1.2.3-mavericks.1 --digest "$D2" --body-file "$w/new1" --out "$w/new3" >"$w/o3" 2>&1 || rc=$?
+sh "$S" --tag 1.2.3-mavergreen.1 --digest "$D2" --body-file "$w/new1" --out "$w/new3" >"$w/o3" 2>&1 || rc=$?
 [ "$rc" = 3 ] || { echo "FAIL: a DIFFERENT digest already recorded must exit 3 and write nothing -- two declared states claiming one release is a question for a human: got $rc"; exit 1; }
 [ ! -f "$w/new3" ] || { echo "FAIL conflict still wrote an output"; exit 1; }
 grep -q "$D1" "$w/o3" || { echo "FAIL conflict message does not show the digest already recorded"; exit 1; }
 
 : > "$w/body4"
-out="$(sh "$S" --tag 9.9.9-mavericks.1 --digest "$D1" --body-file "$w/body4" --out "$w/new4")"
-[ "$out" = "BACKFILLED=9.9.9-mavericks.1" ] || { echo "FAIL: an empty body must be fine -- a release with no notes still gets its marker: got '$out'"; exit 1; }
+out="$(sh "$S" --tag 9.9.9-mavergreen.1 --digest "$D1" --body-file "$w/body4" --out "$w/new4")"
+[ "$out" = "BACKFILLED=9.9.9-mavergreen.1" ] || { echo "FAIL: an empty body must be fine -- a release with no notes still gets its marker: got '$out'"; exit 1; }
 [ "$(head -1 "$w/new4")" = "Mavergreen-State: $D1" ] \
   || { echo "FAIL empty body got a leading blank line: $(head -2 "$w/new4")"; exit 1; }
 
@@ -54,7 +54,7 @@ rc=0; sh "$S" --tag t --digest "$D1" --body-file "$w/body4" >/dev/null 2>&1 || r
 #       both produced from this one notes file, so marking it before packaging is what keeps
 #       them in agreement. It takes no --tag: the notes file is not a release yet, and inventing
 #       a tag argument for it would invite passing the wrong one.
-printf '## 1.2.3-mavericks.1\n\n### What changed\n\n- a thing\n' > "$w/notes"
+printf '## 1.2.3-mavergreen.1\n\n### What changed\n\n- a thing\n' > "$w/notes"
 out="$(sh "$S" --notes-file "$w/notes" --digest "$D1")"
 [ "$out" = "RECORDED=$w/notes" ] || { echo "FAIL notes-file: got '$out'"; exit 1; }
 grep -q '^### What changed$' "$w/notes" || { echo "FAIL notes-file lost a section"; exit 1; }
@@ -82,7 +82,7 @@ rc=0; sh "$S" --notes-file "$w/nope.md" --digest "$D1" >"$w/o11" 2>&1 || rc=$?
 [ "$rc" = 2 ] || { echo "FAIL: a missing notes file is an error, never a file this script creates -- the notes are a build product, and a missing one means the caller ran this before generating them: should exit 2, got $rc"; exit 1; }
 grep -q 'nope.md' "$w/o11" || { echo "FAIL missing-notes error does not name the file"; exit 1; }
 
-printf '## 1.2.3-mavericks.1\n\n### What changed\n\n- a thing\n\n---\n\nRequires Mac OS X 10.9.5 or later.\n' > "$w/n12"
+printf '## 1.2.3-mavergreen.1\n\n### What changed\n\n- a thing\n\n---\n\nRequires Mac OS X 10.9.5 or later.\n' > "$w/n12"
 sh "$S" --notes-file "$w/n12" --digest "$D1" >/dev/null
 [ "$(tail -1 "$w/n12")" = "Mavergreen-State: $D1" ] || { echo "FAIL marker not last"; exit 1; }
 [ -z "$(tail -2 "$w/n12" | head -1)" ] \
@@ -112,30 +112,30 @@ cmp -s "$w/n13" "$w/n13.first" || { echo "FAIL: the paragraph break must not acc
 RN="$here/../scripts/release-needed.sh"
 TAB="$(printf '\t')"
 
-printf '## 9.9.9-mavericks.2\n\n- a thing\n\nMavergreen-State: v0:sha256:deadbeef\n' > "$w/u15"
+printf '## 9.9.9-mavergreen.2\n\n- a thing\n\nMavergreen-State: v0:sha256:deadbeef\n' > "$w/u15"
 rc=0
-out="$(sh "$S" --tag 9.9.9-mavericks.2 --digest "$D1" --replace-unreadable \
+out="$(sh "$S" --tag 9.9.9-mavergreen.2 --digest "$D1" --replace-unreadable \
         --body-file "$w/u15" --out "$w/n15" 2>"$w/o15")" || rc=$?
 [ "$rc" = 0 ] || { echo "FAIL --replace-unreadable still refused (rc=$rc): $(cat "$w/o15")"; exit 1; }
-[ "$out" = "REPLACED=9.9.9-mavericks.2" ] || { echo "FAIL replace-unreadable: got '$out'"; exit 1; }
+[ "$out" = "REPLACED=9.9.9-mavergreen.2" ] || { echo "FAIL replace-unreadable: got '$out'"; exit 1; }
 grep -q "^Mavergreen-State: $D1\$" "$w/n15" || { echo "FAIL the new digest was not written"; exit 1; }
 if grep -q 'v0:sha256:deadbeef' "$w/n15"; then echo "FAIL the unreadable marker survived"; exit 1; fi
 [ "$(grep -c 'Mavergreen-State:' "$w/n15")" = 1 ] \
   || { echo "FAIL: it must replace exactly the unreadable marker, in place, preserving every other byte -- left more than one marker"; exit 1; }
 grep -q '^- a thing$' "$w/n15" || { echo "FAIL replacing lost a bullet"; exit 1; }
-grep -q '^## 9.9.9-mavericks.2$' "$w/n15" || { echo "FAIL replacing lost the heading"; exit 1; }
+grep -q '^## 9.9.9-mavergreen.2$' "$w/n15" || { echo "FAIL replacing lost the heading"; exit 1; }
 
 # spec: scripts/release-needed.sh -- the escape must actually escape, so the blocked answer is
 #       reproduced here and the rewritten body is what unblocks it. Asserting the write without
 #       asserting the unblocking is how a dead-end instruction ships in the first place.
-before="$(MAVERICKS_RELEASES="9.9.9-mavericks.2${TAB}v0:sha256:deadbeef" \
-  sh "$RN" --digest "$D1" --version 9.9.9-mavericks.3 2>/dev/null)"
-[ "$before" = "SKIP=unreadable-marker/9.9.9-mavericks.2" ] \
+before="$(MAVERICKS_RELEASES="9.9.9-mavergreen.2${TAB}v0:sha256:deadbeef" \
+  sh "$RN" --digest "$D1" --version 9.9.9-mavergreen.3 2>/dev/null)"
+[ "$before" = "SKIP=unreadable-marker/9.9.9-mavergreen.2" ] \
   || { echo "FAIL the block this escapes is not reproducible: got '$before'"; exit 1; }
 dg="$(sed -n 's/^Mavergreen-State:[[:space:]]*//p' "$w/n15" | head -1)"
-after="$(MAVERICKS_RELEASES="9.9.9-mavericks.2${TAB}${dg}" \
-  sh "$RN" --digest "$D1" --version 9.9.9-mavericks.3 2>/dev/null)"
-[ "$after" = "SKIP=already-released/9.9.9-mavericks.2" ] \
+after="$(MAVERICKS_RELEASES="9.9.9-mavergreen.2${TAB}${dg}" \
+  sh "$RN" --digest "$D1" --version 9.9.9-mavergreen.3 2>/dev/null)"
+[ "$after" = "SKIP=already-released/9.9.9-mavergreen.2" ] \
   || { echo "FAIL after replacing, the state still does not read as released: got '$after'"; exit 1; }
 
 printf 'notes\n\nMavergreen-State: %s\n' "$D1" > "$w/u17"

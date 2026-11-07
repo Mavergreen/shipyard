@@ -6,7 +6,7 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 G="$here/../scripts/assert_pkg_installs_in_place.sh"
 fx="$here/fixtures/checks/pkg-in-place"
-PKG=ed25519-1.0.0-mavericks.1.pkg
+PKG=ed25519-1.0.0-mavergreen.1.pkg
 w="$(mktemp -d "${TMPDIR:-/tmp}/pkg-in-place-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 unset SHIPYARD_CHECK_DIST
 

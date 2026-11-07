@@ -29,10 +29,10 @@ git init -q -b main .
 git config user.email t@example.com; git config user.name tester
 
 meta cmake 'The Mavergreen cmake product'
-ing cmake VERSION 4.4.4-mavericks.1 "$REL depName=Mavergreen/cmake versioning=regex:^(?<major>\\d+)\$"
+ing cmake VERSION 4.4.4-mavergreen.1 "$REL depName=Mavergreen/cmake versioning=regex:^(?<major>\\d+)\$"
 ing cmake REPO Mavergreen/cmake
 meta clang22 "The family's LLVM 22 toolchain"
-ing clang22 VERSION 22.1.8-mavericks.11 "$REL depName=Mavergreen/clang-22"
+ing clang22 VERSION 22.1.8-mavergreen.11 "$REL depName=Mavergreen/clang-22"
 ing clang22 LINUX_SHA256 "$H1"
 meta swift 'Swift'
 ing swift VERSION 6.3.3 '# renovate: datasource=github-tags depName=swiftlang/swift extractVersion=^swift-(?<version>.+)-RELEASE$'
@@ -58,16 +58,16 @@ meta sparkle 'Sparkle 1.x'
 printf 'the version is a literal\n' > .mavergreen/ingredients/sparkle/untracked
 printf 'MavericksSparkle.cmake\n' > .mavergreen/ingredients/sparkle/watch
 printf 'set(SPARKLE 1.26.0)\n' > MavericksSparkle.cmake
-git add -A; git commit -qm base; git tag 1.0-mavericks.1
+git add -A; git commit -qm base; git tag 1.0-mavergreen.1
 
-out="$(sh "$S" 1.0-mavericks.1)"
+out="$(sh "$S" 1.0-mavergreen.1)"
 [ -z "$out" ] || fail "unchanged: nothing moved prints nothing, so callers append unconditionally: '$out'"
 out="$(sh "$S" "")"
 [ -z "$out" ] || fail "no-prev: '$out'"
 if sh "$S" no-such-tag >/dev/null 2>&1; then fail "badprev: a baseline git cannot read must be fatal"; fi
 
-ing cmake VERSION 4.4.5-mavericks.2 "$REL depName=Mavergreen/cmake versioning=regex:^(?<major>\\d+)\$"
-ing clang22 VERSION 22.1.8-mavericks.12 "$REL depName=Mavergreen/clang-22"
+ing cmake VERSION 4.4.5-mavergreen.2 "$REL depName=Mavergreen/cmake versioning=regex:^(?<major>\\d+)\$"
+ing clang22 VERSION 22.1.8-mavergreen.12 "$REL depName=Mavergreen/clang-22"
 ing clang22 LINUX_SHA256 "$H2"
 ing swift VERSION 6.4.1 '# renovate: datasource=github-tags depName=swiftlang/swift extractVersion=^swift-(?<version>.+)-RELEASE$'
 ing libgit PIN "v1.1@$B"
@@ -85,18 +85,18 @@ meta newone 'lazydocker'
 ing newone VERSION 0.24.1 "$REL depName=jesseduffield/lazydocker extractVersion=^v(?<version>.+)\$"
 printf 'set(SPARKLE 1.27.0)\n' > MavericksSparkle.cmake
 
-out="$(sh "$S" 1.0-mavericks.1)"
+out="$(sh "$S" 1.0-mavergreen.1)"
 cat > "$work/want" <<EOF
 ### Build ingredients
 
-Changed since 1.0-mavericks.1:
+Changed since 1.0-mavergreen.1:
 
 - **child / from**: self -> cmake
   built from the upstream
-- **clang22 / LINUX_SHA256**: 111111111111... -> 222222222222... ([release notes](https://github.com/Mavergreen/clang-22/releases/tag/22.1.8-mavericks.12))
+- **clang22 / LINUX_SHA256**: 111111111111... -> 222222222222... ([release notes](https://github.com/Mavergreen/clang-22/releases/tag/22.1.8-mavergreen.12))
   The family's LLVM 22 toolchain
-- **clang22 / VERSION**: 22.1.8-mavericks.11 -> 22.1.8-mavericks.12 ([release notes](https://github.com/Mavergreen/clang-22/releases/tag/22.1.8-mavericks.12))
-- **cmake / VERSION**: 4.4.4-mavericks.1 -> 4.4.5-mavericks.2 ([release notes](https://github.com/Mavergreen/cmake/releases/tag/4.4.5-mavericks.2))
+- **clang22 / VERSION**: 22.1.8-mavergreen.11 -> 22.1.8-mavergreen.12 ([release notes](https://github.com/Mavergreen/clang-22/releases/tag/22.1.8-mavergreen.12))
+- **cmake / VERSION**: 4.4.4-mavergreen.1 -> 4.4.5-mavergreen.2 ([release notes](https://github.com/Mavergreen/cmake/releases/tag/4.4.5-mavergreen.2))
   The Mavergreen cmake product
 - **gone**: removed
 - **guess / VERSION**: 1.0 -> 1.1
@@ -119,11 +119,11 @@ EOF
 want="$(cat "$work/want")"
 [ "$out" = "$want" ] || { echo "FAIL two trees: got:"; printf '%s\n' "$out"; echo "want:"; printf '%s\n' "$want"; exit 1; }
 printf '%s\n' "$out" | LC_ALL=C grep -q '[^ -~]' && fail "ASCII only, since the notes are embedded in appcast XML: $out"
-sh "$S" --watched "$work/watched" 1.0-mavericks.1 >/dev/null
+sh "$S" --watched "$work/watched" 1.0-mavergreen.1 >/dev/null
 [ "$(cat "$work/watched")" = MavericksSparkle.cmake ] || fail "--watched names exactly the watched paths bulleted: $(cat "$work/watched")"
 
 ing libgit REPO https://gitlab.com/libgit2/libgit2.git
-out="$(sh "$S" 1.0-mavericks.1)"
+out="$(sh "$S" 1.0-mavergreen.1)"
 printf '%s\n' "$out" | grep -qx -- "- \*\*libgit / PIN\*\*: v1.0@aaaaaaaaaaaa -> v1.1@bbbbbbbbbbbb" \
   || fail "a REPO off GitHub links nothing: $out"
 printf '%s\n' "$out" | grep -qx -- "- \*\*libgit / REPO\*\*: https://github.com/libgit2/libgit2.git -> https://gitlab.com/libgit2/libgit2.git" \
@@ -135,7 +135,7 @@ git config user.email t@example.com; git config user.name tester
 printf '4.4.4\n' > CMAKE_VERSION
 git add -A; git commit -qm base; git tag v1.0.1
 meta cmake 'The Mavergreen cmake product'
-ing cmake VERSION 4.4.5-mavericks.2 "$REL depName=Mavergreen/cmake"
+ing cmake VERSION 4.4.5-mavergreen.2 "$REL depName=Mavergreen/cmake"
 meta zlib zlib
 ing zlib VERSION 1.3.1
 out="$(sh "$S" v1.0.1)"

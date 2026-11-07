@@ -32,8 +32,8 @@ EOF
   git -C "$R" config user.email t@example.com
   git -C "$R" config user.name t
   echo 1.0 > "$R/UPSTREAM_VERSION"
-  pin clang22 clang-22 22.1.0-mavericks.3
-  pin rust rust 1.92.0-mavericks.1
+  pin clang22 clang-22 22.1.0-mavergreen.3
+  pin rust rust 1.92.0-mavergreen.1
   pin recaulk recaulk 20261020.1
   git -C "$R" add -A
   git -C "$R" commit -qm base
@@ -100,7 +100,7 @@ recaulk_bump() { bump recaulk 20261025.1; head_commit; }
 
 @test "upstream caught up is settled" {
   recaulk_bump
-  ypin clang-22 22.1.0-mavericks.3 recaulk recaulk 20261025.1
+  ypin clang-22 22.1.0-mavergreen.3 recaulk recaulk 20261025.1
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
   [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1"* ]] || false
@@ -108,7 +108,7 @@ recaulk_bump() { bump recaulk 20261025.1; head_commit; }
 
 @test "upstream ahead is settled" {
   recaulk_bump
-  ypin clang-22 22.1.0-mavericks.3 recaulk recaulk 20261026.1
+  ypin clang-22 22.1.0-mavergreen.3 recaulk recaulk 20261026.1
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
   [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1"* ]] || false
@@ -119,8 +119,8 @@ recaulk_bump() { bump recaulk 20261025.1; head_commit; }
   recaulk_bump
   b="$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/mystery"
   mkdir -p "$b"
-  echo mystery > "$b/product@22.1.0-mavericks.3"
-  ylist clang-22 22.1.0-mavericks.3
+  echo mystery > "$b/product@22.1.0-mavergreen.3"
+  ylist clang-22 22.1.0-mavergreen.3
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
   [[ "$output" == *"WAITING clang22 for recaulk 20261025.1"* ]] || false
@@ -129,7 +129,7 @@ recaulk_bump() { bump recaulk 20261025.1; head_commit; }
 
 @test "Y without the pin is settled" {
   recaulk_bump
-  yrm clang-22 22.1.0-mavericks.3 recaulk
+  yrm clang-22 22.1.0-mavergreen.3 recaulk
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
   [[ "$output" == SETTLED* ]] || false
@@ -138,8 +138,8 @@ recaulk_bump() { bump recaulk 20261025.1; head_commit; }
 
 @test "an ingredient of Y without a product is not a pin of X" {
   recaulk_bump
-  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/product@22.1.0-mavericks.3"
-  ylist clang-22 22.1.0-mavericks.3
+  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/product@22.1.0-mavergreen.3"
+  ylist clang-22 22.1.0-mavergreen.3
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
   [[ "$output" != *WAITING* ]] || false
@@ -147,10 +147,10 @@ recaulk_bump() { bump recaulk 20261025.1; head_commit; }
 
 @test "Y's tag with no .mavergreen reports no family pin and is never a bump" {
   recaulk_bump
-  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients@22.1.0-mavericks.3"
+  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients@22.1.0-mavergreen.3"
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
-  [[ "$output" == *"no family pin at 22.1.0-mavericks.3"* ]] || false
+  [[ "$output" == *"no family pin at 22.1.0-mavergreen.3"* ]] || false
   [[ "$output" != *WAITING* ]] || false
   [[ "$output" == *SETTLED* ]] || false
 }
@@ -159,8 +159,8 @@ recaulk_bump() { bump recaulk 20261025.1; head_commit; }
   git -C "$R" rm -q -r .mavergreen
   git -C "$R" commit -qm no-mavergreen
   git -C "$R" tag -f pr-base >/dev/null
-  pin clang22 clang-22 22.1.0-mavericks.3
-  pin rust rust 1.92.0-mavericks.1
+  pin clang22 clang-22 22.1.0-mavergreen.3
+  pin rust rust 1.92.0-mavergreen.1
   pin recaulk recaulk 20261025.1
   head_commit
   settled $((RECAULK_PUB + 3600))
@@ -172,15 +172,15 @@ recaulk_bump() { bump recaulk 20261025.1; head_commit; }
 @test "only the first line of a VERSION is read" {
   recaulk_bump
   b="$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk"
-  printf '20261020.1\nnot read\n' > "$b/VERSION@22.1.0-mavericks.3"
+  printf '20261020.1\nnot read\n' > "$b/VERSION@22.1.0-mavergreen.3"
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
   [[ "$output" == *"WAITING clang22 for recaulk 20261025.1"* ]] || false
 }
 
 clang_caught_up() {
-  fx clang-22/releases/latest '{"tag_name":"22.1.0-mavericks.4","draft":false,"prerelease":false,"published_at":"2026-10-25T18:00:00Z"}'
-  ypin clang-22 22.1.0-mavericks.4 recaulk recaulk 20261025.1
+  fx clang-22/releases/latest '{"tag_name":"22.1.0-mavergreen.4","draft":false,"prerelease":false,"published_at":"2026-10-25T18:00:00Z"}'
+  ypin clang-22 22.1.0-mavergreen.4 recaulk recaulk 20261025.1
 }
 
 @test "upstream caught up but PR pins old Y waits" {
@@ -188,13 +188,13 @@ clang_caught_up() {
   clang_caught_up
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
-  [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavericks.4 (it carries recaulk 20261025.1)"* ]] || false
+  [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavergreen.4 (it carries recaulk 20261025.1)"* ]] || false
   [[ "$output" != *SETTLED* ]] || false
 }
 
 @test "upstream caught up and PR takes it is settled" {
   bump recaulk 20261025.1
-  bump clang22 22.1.0-mavericks.4
+  bump clang22 22.1.0-mavergreen.4
   head_commit
   clang_caught_up
   settled $((RECAULK_PUB + 3600))
@@ -207,7 +207,7 @@ clang_caught_up() {
   clang_caught_up
   settled $((RECAULK_PUB + DAY))
   [ "$status" -eq 0 ]
-  [[ "$output" == *"::warning::ingredients-settled: Mavergreen/porthole has not taken clang22 22.1.0-mavericks.4 (it carries recaulk 20261025.1)"* ]] || false
+  [[ "$output" == *"::warning::ingredients-settled: Mavergreen/porthole has not taken clang22 22.1.0-mavergreen.4 (it carries recaulk 20261025.1)"* ]] || false
   [[ "$output" == *RELEASED-ANYWAY* ]] || false
 }
 
@@ -217,13 +217,13 @@ clang_caught_up() {
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
-  [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavericks.4"* ]] || false
+  [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavergreen.4"* ]] || false
 
-  bump clang22 22.1.0-mavericks.4
+  bump clang22 22.1.0-mavergreen.4
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
-  [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1 (clang22 22.1.0-mavericks.4 pins recaulk 20261025.1)"* ]] || false
+  [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1 (clang22 22.1.0-mavergreen.4 pins recaulk 20261025.1)"* ]] || false
   [[ "$output" != *WAITING* ]] || false
   [[ "$output" != *"recaulk for clang22"* ]] || false
 }
@@ -240,16 +240,16 @@ clang_caught_up() {
   [[ "$output" != *WAITING* ]] || false
 
   git -C "$R" tag -f pr-base pr-head >/dev/null
-  bump clang22 22.1.0-mavericks.4
-  ypin rust 1.92.0-mavericks.1 clang22 clang-22 22.1.0-mavericks.2
+  bump clang22 22.1.0-mavergreen.4
+  ypin rust 1.92.0-mavergreen.1 clang22 clang-22 22.1.0-mavergreen.2
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
-  [[ "$output" == *"WAITING rust for clang22 22.1.0-mavericks.4"* ]] || false
+  [[ "$output" == *"WAITING rust for clang22 22.1.0-mavergreen.4"* ]] || false
 }
 
 @test "a newly declared ingredient is not a bump" {
-  pin make make 4.4.1-mavericks.1
+  pin make make 4.4.1-mavergreen.1
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
@@ -290,7 +290,7 @@ clang_caught_up() {
 
 @test "release boundary" {
   bump recaulk 20261025.1
-  bump rust 1.93.0-mavericks.1
+  bump rust 1.93.0-mavergreen.1
   head_commit
 
   settled $((RECAULK_PUB + DAY))
@@ -309,7 +309,7 @@ clang_caught_up() {
 
 @test "each release and file is read once per run" {
   bump recaulk 20261025.1
-  bump rust 1.93.0-mavericks.1
+  bump rust 1.93.0-mavergreen.1
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
@@ -331,7 +331,7 @@ clang_caught_up() {
 @test "server error reading a file is failure" {
   recaulk_bump
   printf 'gh: Bad Gateway (HTTP 502)\n' \
-    > "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/VERSION@22.1.0-mavericks.3.error"
+    > "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/VERSION@22.1.0-mavergreen.3.error"
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 2 ]
   [[ "$output" == *"HTTP 502"* ]] || false
@@ -354,14 +354,14 @@ clang_caught_up() {
 
 @test "a malformed REPO at Y's tag is failure" {
   recaulk_bump
-  echo elsewhere/recaulk > "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/REPO@22.1.0-mavericks.3"
+  echo elsewhere/recaulk > "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/REPO@22.1.0-mavergreen.3"
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 2 ]
 }
 
 @test "a Y ingredient with a REPO and no VERSION is failure" {
   recaulk_bump
-  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/VERSION@22.1.0-mavericks.3"
+  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/VERSION@22.1.0-mavergreen.3"
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 2 ]
   [[ "$output" == *VERSION* ]] || false
@@ -369,7 +369,7 @@ clang_caught_up() {
 
 @test "non-version pin fails" {
   recaulk_bump
-  ypin clang-22 22.1.0-mavericks.3 recaulk recaulk latest
+  ypin clang-22 22.1.0-mavergreen.3 recaulk recaulk latest
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 2 ]
   [[ "$output" == *latest* ]] || false
@@ -391,12 +391,12 @@ clang_caught_up() {
 }
 
 @test "a sibling product's pin counts as a pin of X" {
-  ypin rust 1.92.0-mavericks.1 clang22-cross clang-22 22.1.0-mavericks.3
-  bump clang22 22.1.0-mavericks.4
+  ypin rust 1.92.0-mavergreen.1 clang22-cross clang-22 22.1.0-mavergreen.3
+  bump clang22 22.1.0-mavergreen.4
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
-  [[ "$output" == *"WAITING rust for clang22 22.1.0-mavericks.4"* ]] || false
+  [[ "$output" == *"WAITING rust for clang22 22.1.0-mavergreen.4"* ]] || false
 }
 
 @test "an unexpected failure is failure, not waiting" {
@@ -434,8 +434,8 @@ EOF2
 @test "Y ahead while the PR pins an old Y waits" {
   recaulk_bump
   clang_caught_up
-  ypin clang-22 22.1.0-mavericks.4 recaulk recaulk 20261026.1
+  ypin clang-22 22.1.0-mavergreen.4 recaulk recaulk 20261026.1
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
-  [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavericks.4 (it carries recaulk 20261025.1)"* ]] || false
+  [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavergreen.4 (it carries recaulk 20261025.1)"* ]] || false
 }

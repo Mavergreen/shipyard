@@ -63,23 +63,23 @@ signs "$work/sa6" "$SA --product w --feed-dir dist --pkg dist/x.pkg
 $SA --product w-cross --pkg dist/y.pkg"
 sa_refused "$work/sa6" "a second call without --feed-dir"
 
-# spec: SKILL.md "Renovate & automerge" -- a pin on a -mavericks.N release must be read with
+# spec: SKILL.md "Renovate & automerge" -- a pin on a -mavergreen.N release must be read with
 #       versioning that COMPARES N. Renovate's default coerces the suffix away, so .1 and .4
 #       compare equal and the bot proposes nothing: swift-runtime's swift-toolchain pin sat at
-#       6.3.3-mavericks.1 while .4 shipped, with a manager wired and green.
-MMVER='regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavericks\.(?<build>\d+)$'
+#       6.3.3-mavergreen.1 while .4 shipped, with a manager wired and green.
+MMVER='regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavergreen\.(?<build>\d+)$'
 mkrepo "$work/mv"
-printf '6.3.3-mavericks.1\n# renovate: datasource=github-releases depName=Mavergreen/swift-toolchain\n' > "$work/mv/.mavergreen/upstream/VERSION"
+printf '6.3.3-mavergreen.1\n# renovate: datasource=github-releases depName=Mavergreen/swift-toolchain\n' > "$work/mv/.mavergreen/upstream/VERSION"
 (cd "$work/mv" && git add -A) >/dev/null 2>&1
-if out="$(cd "$work/mv" && sh "$S" 2>&1)"; then echo "FAIL a -mavericks.N pin with default versioning should fail"; exit 1; fi
+if out="$(cd "$work/mv" && sh "$S" 2>&1)"; then echo "FAIL a -mavergreen.N pin with default versioning should fail"; exit 1; fi
 first_is "$out" renovate-suffix-versioning || { echo "FAIL should be a renovate-suffix-versioning failure: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'Mavergreen/swift-toolchain = 6.3.3-mavericks.1 (.mavergreen/upstream/VERSION)' || { echo "FAIL the failure names the dependency, its pin and its file: $out"; exit 1; }
-printf '6.3.3-mavericks.1\n# renovate: datasource=github-releases depName=Mavergreen/swift-toolchain versioning=%s\n' "$MMVER" > "$work/mv/.mavergreen/upstream/VERSION"
+printf '%s\n' "$out" | grep -q 'Mavergreen/swift-toolchain = 6.3.3-mavergreen.1 (.mavergreen/upstream/VERSION)' || { echo "FAIL the failure names the dependency, its pin and its file: $out"; exit 1; }
+printf '6.3.3-mavergreen.1\n# renovate: datasource=github-releases depName=Mavergreen/swift-toolchain versioning=%s\n' "$MMVER" > "$work/mv/.mavergreen/upstream/VERSION"
 (cd "$work/mv" && git add -A) >/dev/null 2>&1
-(cd "$work/mv" && sh "$S" >/dev/null) || { echo "FAIL a -mavericks.N pin with the family versioning should pass"; exit 1; }
+(cd "$work/mv" && sh "$S" >/dev/null) || { echo "FAIL a -mavergreen.N pin with the family versioning should pass"; exit 1; }
 mkrepo "$work/mv2"
 mkdir -p "$work/mv2/.mavergreen/ingredients/x"
-printf 'v6.3.3-mavericks.1@%s\n# renovate: datasource=git-tags depName=https://example.com/x versioning=regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\n' 0123456789abcdef0123456789abcdef01234567 > "$work/mv2/.mavergreen/ingredients/x/PIN"
+printf 'v6.3.3-mavergreen.1@%s\n# renovate: datasource=git-tags depName=https://example.com/x versioning=regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\n' 0123456789abcdef0123456789abcdef01234567 > "$work/mv2/.mavergreen/ingredients/x/PIN"
 (cd "$work/mv2" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/mv2" && sh "$S" 2>&1)"; then echo "FAIL versioning that ignores N should fail, on a PIN's ref too"; exit 1; fi
 first_is "$out" renovate-suffix-versioning || { echo "FAIL should be a renovate-suffix-versioning failure: $out"; exit 1; }
@@ -88,7 +88,7 @@ printf 'V_9_9_P2\n# renovate: datasource=github-tags depName=openssh/openssh-por
 (cd "$work/mv3" && git add -A) >/dev/null 2>&1
 (cd "$work/mv3" && sh "$S" >/dev/null) || { echo "FAIL a non-mavericks pin should pass"; exit 1; }
 mkrepo "$work/mv4"
-printf '6.3.3-mavericks.1\n# renovate: datasource=github-releases versioning=%s depName=Mavergreen/swift-toolchain\n' "$MMVER" > "$work/mv4/.mavergreen/upstream/VERSION"
+printf '6.3.3-mavergreen.1\n# renovate: datasource=github-releases versioning=%s depName=Mavergreen/swift-toolchain\n' "$MMVER" > "$work/mv4/.mavergreen/upstream/VERSION"
 (cd "$work/mv4" && git add -A) >/dev/null 2>&1
 if out="$(cd "$work/mv4" && sh "$S" 2>&1)"; then echo "FAIL a line 2 the preset's manager cannot read should fail"; exit 1; fi
 first_is "$out" renovate-suffix-versioning || { echo "FAIL should be a renovate-suffix-versioning failure: $out"; exit 1; }

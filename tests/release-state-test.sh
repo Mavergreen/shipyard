@@ -94,7 +94,7 @@ printf 'CMAKE_VERSION=4.4.3\nOTHER=ignored\n' > "$r/pins.env"
 printf '%s\n' '# Build ingredients' '' 'prose only' > "$r/INGREDIENTS.md"
 $GIT -C "$r" add -A
 $GIT -C "$r" commit -q -m 'the release that predates this design'
-$GIT -C "$r" tag 1.2.3-mavericks.1
+$GIT -C "$r" tag 1.2.3-mavergreen.1
 printf 'CMAKE_VERSION=4.4.4\nOTHER=ignored\n' > "$r/pins.env"
 printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
   '- upstream: .mavergreen/upstream/VERSION' '- cmake: pins.env:CMAKE_VERSION' > "$r/INGREDIENTS.md"
@@ -105,11 +105,11 @@ got="$(sh "$S" --root "$r")"
 want='v1:sha256:405b7fdda86a03f4ef636aceb3c7c819fe5d93208118cd365a0b962cb37c8004'
 [ "$got" = "$want" ] || { echo "FAIL: the working tree must render the CURRENT state: got '$got'"; exit 1; }
 
-got="$(sh "$S" --root "$r" --ref 1.2.3-mavericks.1)"
+got="$(sh "$S" --root "$r" --ref 1.2.3-mavergreen.1)"
 [ "$got" = "$GOLD" ] \
   || { echo "FAIL: --ref must render what the TAG contained -- same rendering, same wire format, same golden digest, only the source of the values changes; the two must DIFFER, since that difference is the unreleased bump the version match could not see: --ref did not render the tag's own tree: got '$got'"; exit 1; }
 
-got="$(sh "$S" --root "$r" --ref 1.2.3-mavericks.1 --render)"
+got="$(sh "$S" --root "$r" --ref 1.2.3-mavergreen.1 --render)"
 want="$(printf 'cmake=4.4.3\nupstream=1.2.3')"
 [ "$got" = "$want" ] \
   || { echo "FAIL: the DECLARATION comes from the working tree on purpose -- the tag's tree has no \"## Declared state\" section, because every pre-migration release predates it, and the question --ref answers is \"what were TODAY's declared inputs worth at that revision?\": got '$got'"; exit 1; }
@@ -124,10 +124,10 @@ printf '%s\n' '# Build ingredients' '' '## Declared state' '' \
   '- upstream: .mavergreen/upstream/VERSION' '- cmake: pins.env:CMAKE_VERSION' '- later: later.pin' \
   > "$r/INGREDIENTS.md"
 printf '7\n' > "$r/later.pin"
-rc=0; sh "$S" --root "$r" --ref 1.2.3-mavericks.1 >"$w/r18" 2>&1 || rc=$?
+rc=0; sh "$S" --root "$r" --ref 1.2.3-mavergreen.1 >"$w/r18" 2>&1 || rc=$?
 [ "$rc" = 2 ] || { echo "FAIL: a declared path the revision's tree does not have must exit 2 too, naming the ref -- at an older tag a pin file may simply not exist yet, and \"absent\" must not render as a new state: a path absent at the ref should exit 2, got $rc"; exit 1; }
 grep -q 'later.pin' "$w/r18" || { echo "FAIL the absent-at-ref error does not name the file"; exit 1; }
-grep -q '1.2.3-mavericks.1' "$w/r18" || { echo "FAIL the absent-at-ref error does not name the ref"; exit 1; }
+grep -q '1.2.3-mavergreen.1' "$w/r18" || { echo "FAIL the absent-at-ref error does not name the ref"; exit 1; }
 sh "$S" --root "$r" >/dev/null || { echo "FAIL: that same declaration must render fine from the working tree, so the failure is about the ref -- the working tree stopped rendering"; exit 1; }
 
 # platform: BYTE order, pinned by names that GENUINELY DISAGREE about it. The golden fixture's

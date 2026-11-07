@@ -99,14 +99,14 @@ S="$here/../scripts/check-release-notes.sh"
 T="$(mktemp -d "${TMPDIR:-/tmp}/pns.XXXXXX")"
 trap 'rm -rf "$T"' EXIT
 
-printf '## %s\n\nAutomated release.\n' 9.9p2-mavericks.6 > "$T/hand.md"
-if sh "$S" "$T/hand.md" 9.9p2-mavericks.6 >/dev/null 2>&1; then
+printf '## %s\n\nAutomated release.\n' 9.9p2-mavergreen.6 > "$T/hand.md"
+if sh "$S" "$T/hand.md" 9.9p2-mavergreen.6 >/dev/null 2>&1; then
   echo "FAIL: a hand-rolled body from a repo that never adopted the shared generator (no '### What changed') must not pass"; exit 1
 fi
 echo "ok: a hand-rolled body is refused"
 
 : > "$T/empty.md"
-if sh "$S" "$T/empty.md" 9.9p2-mavericks.6 >/dev/null 2>&1; then
+if sh "$S" "$T/empty.md" 9.9p2-mavergreen.6 >/dev/null 2>&1; then
   echo "FAIL: an empty body must not pass -- tailscale published one on EVERY release, forever, before this check closed the hole"; exit 1
 fi
 echo "ok: an empty body is refused"

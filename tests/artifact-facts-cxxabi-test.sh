@@ -67,12 +67,12 @@ build fat.c -o fat-x86_64
 build -target i386-apple-macos10.9 -c fat.c -o fat-other
 "$LIPO" -create fat-x86_64 fat-other -output src/bin/fat
 
-( cd src && tar -czf "$w/dist/t-1.0.0-mavericks.1.tgz" bin lib )
+( cd src && tar -czf "$w/dist/t-1.0.0-mavergreen.1.tgz" bin lib )
 
-facts="$(sh "$AF" "$w/dist" 1.0.0-mavericks.1 "$w" 2>"$w/err")" || fail "artifact-facts failed: $(cat "$w/err")"
+facts="$(sh "$AF" "$w/dist" 1.0.0-mavergreen.1 "$w" 2>"$w/err")" || fail "artifact-facts failed: $(cat "$w/err")"
 has() { printf '%s\n' "$facts" | grep -qxF "$1" || fail "$2 -- want '$1' in: $facts"; }
 lacks() { printf '%s\n' "$facts" | grep -q "$1" && fail "$2 -- got: $(printf '%s\n' "$facts" | grep "$1")"; return 0; }
-T=t-1.0.0-mavericks.1.tgz
+T=t-1.0.0-mavergreen.1.tgz
 
 has "cxxabi-defines $T bin/throws x86_64 ___cxa_throw visible" "a program defining ___cxa_throw fails"
 lacks "^cxxabi-defines $T bin/backfills " "Recaulk's back-fills alone pass"
@@ -99,7 +99,7 @@ printf 'void x(void) {}\n' > plain.c
 mkdir -p plain/bin plain-dist
 build plain.c -dynamiclib -o plain/bin/plain.dylib
 ( cd plain && tar -czf "$w/plain-dist/p.tgz" bin )
-nofacts="$(NM=/nonexistent/nm sh "$AF" "$w/plain-dist" 1.0.0-mavericks.1 "$w" 2>/dev/null)" \
+nofacts="$(NM=/nonexistent/nm sh "$AF" "$w/plain-dist" 1.0.0-mavergreen.1 "$w" 2>/dev/null)" \
   && fail "a Mach-O with no NM to read it must abort: $nofacts"
 printf '%s\n' "$nofacts" | grep -q '^abort .*NM.*/nonexistent/nm' || fail "the abort record names NM: $nofacts"
 printf '%s\n' "$nofacts" | grep -qx end-of-facts && fail "an aborted stream carries no end-of-facts"
@@ -107,23 +107,23 @@ printf '%s\n' "$nofacts" | grep -qx end-of-facts && fail "an aborted stream carr
 mkdir -p fakebin
 printf '#!/bin/sh\ncase "$*" in *plain.dylib*) echo "nm: broke" >&2; exit 1 ;; esac\nexec nm "$@"\n' > fakebin/nm
 chmod +x fakebin/nm
-nofacts="$(NM="$w/fakebin/nm" sh "$AF" "$w/plain-dist" 1.0.0-mavericks.1 "$w" 2>/dev/null)" \
+nofacts="$(NM="$w/fakebin/nm" sh "$AF" "$w/plain-dist" 1.0.0-mavergreen.1 "$w" 2>/dev/null)" \
   && fail "an NM that fails on a shipped Mach-O must abort: $nofacts"
 printf '%s\n' "$nofacts" | grep -q '^abort .*plain.dylib' || fail "the abort record names the file NM could not read: $nofacts"
 
-nomachinery="$(MAVERGREEN_PREFIX="$w/no-prefix" MAVERGREEN_RELEASES="file://$w/no-releases" MAVERGREEN_PKG_CACHE="$w/no-cache" sh "$AF" "$w/plain-dist" 1.0.0-mavericks.1 "$w" 2>&1)" \
+nomachinery="$(MAVERGREEN_PREFIX="$w/no-prefix" MAVERGREEN_RELEASES="file://$w/no-releases" MAVERGREEN_PKG_CACHE="$w/no-cache" sh "$AF" "$w/plain-dist" 1.0.0-mavergreen.1 "$w" 2>&1)" \
   || fail "a Mach-O with no C++ runtime machinery never fetches Recaulk (the fixture release URL fails if touched): $nomachinery"
 printf '%s\n' "$nomachinery" | grep -qx end-of-facts || fail "a Mach-O with no machinery ends its stream: $nomachinery"
 mkdir -p throws-dist
 ( cd src && tar -czf "$w/throws-dist/t.tgz" bin/throws )
-nofacts="$(MAVERGREEN_PREFIX="$w/no-prefix" MAVERGREEN_RELEASES="file://$w/no-releases" MAVERGREEN_PKG_CACHE="$w/no-cache" sh "$AF" "$w/throws-dist" 1.0.0-mavericks.1 "$w" 2>/dev/null)" \
+nofacts="$(MAVERGREEN_PREFIX="$w/no-prefix" MAVERGREEN_RELEASES="file://$w/no-releases" MAVERGREEN_PKG_CACHE="$w/no-cache" sh "$AF" "$w/throws-dist" 1.0.0-mavergreen.1 "$w" 2>/dev/null)" \
   && fail "no allow-list, no facts: $nofacts"
 printf '%s\n' "$nofacts" | grep -q '^abort cxxabi allow-list unavailable: ' || fail "a failed Recaulk fetch aborts naming the allow-list: $nofacts"
 printf '%s\n' "$nofacts" | sh "$S" >/dev/null 2>&1 && fail "an aborted stream never passes conformance"
 
 mkdir -p txt-src txt-dist; echo x > txt-src/f
 ( cd txt-src && tar -czf "$w/txt-dist/x.tgz" f )
-txtfacts="$(NM=/nonexistent/nm MAVERGREEN_PREFIX="$w/no-prefix" MAVERGREEN_RELEASES="file://$w/no-releases" MAVERGREEN_PKG_CACHE="$w/no-cache" sh "$AF" "$w/txt-dist" 1.0.0-mavericks.1 "$w" 2>&1)" \
+txtfacts="$(NM=/nonexistent/nm MAVERGREEN_PREFIX="$w/no-prefix" MAVERGREEN_RELEASES="file://$w/no-releases" MAVERGREEN_PKG_CACHE="$w/no-cache" sh "$AF" "$w/txt-dist" 1.0.0-mavergreen.1 "$w" 2>&1)" \
   || fail "a release with no Mach-O needs neither NM nor the allow-list: $txtfacts"
 
 echo "PASS: artifact-facts-cxxabi"

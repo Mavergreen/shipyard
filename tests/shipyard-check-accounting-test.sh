@@ -48,16 +48,16 @@ rc=0; (cd "$c" && SHIPYARD_CHECK_FILES="$c/FILES" sh "$sc" --only release-concur
 
 for d in "$t/no-such-dist" "$t/empty-dist"; do
   rm -rf "$t/empty-dist"; mkdir "$t/empty-dist"
-  rc=0; SHIPYARD_CHECK_VERSION=1.0.0-mavericks.1 sh "$sc" --dist "$d" > "$t/out" 2>&1 || rc=$?
+  rc=0; SHIPYARD_CHECK_VERSION=1.0.0-mavergreen.1 sh "$sc" --dist "$d" > "$t/out" 2>&1 || rc=$?
   [ "$rc" = 2 ] || fail "C2: --dist $(basename "$d") exits 2, got $rc: $(tail -n 1 "$t/out")"
   grep -qF -- "$d" "$t/out" || fail "C2: the refusal names $(basename "$d")"
 done
 
-rc=0; SHIPYARD_CHECK_VERSION=1.0.0-mavericks.1 sh "$sc" --dist "$fx/compat-archs/pass/dist" --only pkg-in-place gui-relaunch-safe > "$t/out" 2>&1 || rc=$?
+rc=0; SHIPYARD_CHECK_VERSION=1.0.0-mavergreen.1 sh "$sc" --dist "$fx/compat-archs/pass/dist" --only pkg-in-place gui-relaunch-safe > "$t/out" 2>&1 || rc=$?
 [ "$rc" = 0 ] && [ "$(tail -n 1 "$t/out")" = "shipyard-check: 0 checks, 0 failed, 2 not run" ] \
   || fail "M3: a dist with no .pkg reports the pkg checks not run, got $rc: $(tail -n 1 "$t/out")"
 if sh -c '. "$1"; mach_tool OTOOL && mach_tool LIPO' sh "$here/scripts/lib/macho-tools.sh" >/dev/null 2>&1; then
-  rc=0; (cd "$t" && SHIPYARD_CHECK_VERSION=1.0.0-mavericks.1 SHIPYARD_CHECK_REPO="$t" sh "$sc" --dist "$fx/bundle-id/pass/dist" --only enclosure notes floor) > "$t/out" 2>&1 || rc=$?
+  rc=0; (cd "$t" && SHIPYARD_CHECK_VERSION=1.0.0-mavergreen.1 SHIPYARD_CHECK_REPO="$t" sh "$sc" --dist "$fx/bundle-id/pass/dist" --only enclosure notes floor) > "$t/out" 2>&1 || rc=$?
   [ "$rc" = 0 ] && [ "$(tail -n 1 "$t/out")" = "shipyard-check: 1 checks, 0 failed, 2 not run" ] \
     || fail "M3: a dist with no appcast reports the appcast checks not run, got $rc: $(tail -n 1 "$t/out")"
 fi

@@ -4,8 +4,8 @@
 #          --version        the release being published -- the TAG name; excluded from the tag
 #                           search so a tag build compares against its PREDECESSOR, not itself.
 #          --upstream-glob  scope for a repo shipping parallel upstream lines (golang: '1.26.*'), so
-#                           N is compared within its own line. Searches '<G>-mavericks.*'.
-#          --tag-glob       for a repo whose tags are NOT <upstream>-mavericks.N: the whole tag glob,
+#                           N is compared within its own line. Searches '<G>-mavergreen.*'.
+#          --tag-glob       for a repo whose tags are NOT <upstream>-mavergreen.N: the whole tag glob,
 #                           verbatim. shipyard tags vX.Y.Z and calls this with 'v*.*.*' -- which also
 #                           keeps out its moving major tag (v1). Without it the default scope finds
 #                           no shipyard tag at all, and every release would take the first-release
@@ -23,7 +23,7 @@
 #          skip.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "The Sparkle
 #       comparison version must be dotted-numeric AND monotonic" -- the failure mode this catches is
-#       SUStandardVersionComparator returning EQUAL for consecutive "-mavericks.N" repackages, so a
+#       SUStandardVersionComparator returning EQUAL for consecutive "-mavergreen.N" repackages, so a
 #       client reports "you're up to date". Uses lib.sh's ver_cmp (no `sort -V`, which the 10.9 box's
 #       BSD sort lacks) -- the same comparator previous-release-tag.sh uses, so the two cannot
 #       disagree on which tag is highest.
@@ -33,7 +33,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
 chk_ran feed-upgradeable
 rule="the appcast is seen as an upgrade by a client on the previous release"
-fix="give the release a <sparkle:version> that is dotted-numeric and greater than the previous release's (a -mavericks.N repackage bumps N)"
+fix="give the release a <sparkle:version> that is dotted-numeric and greater than the previous release's (a -mavergreen.N repackage bumps N)"
 
 APPCAST=""; VER=""; GLOB=""; TAG_GLOB=""
 while [ $# -gt 0 ]; do
@@ -57,7 +57,7 @@ if ! numeric "$NEW"; then
   exit 1
 fi
 
-pattern="*-mavericks.*"; [ -z "$GLOB" ] || pattern="${GLOB}-mavericks.*"
+pattern="*-mavergreen.*"; [ -z "$GLOB" ] || pattern="${GLOB}-mavergreen.*"
 [ -z "$TAG_GLOB" ] || pattern="$TAG_GLOB"
 if ! tags="$(git tag --list "$pattern" 2>/dev/null)"; then
   chk_fail feed-upgradeable "$rule" "cannot list git tags (not a checkout?), and refusing to skip silently" "run where the release tags live: the release job's checkout"
@@ -69,9 +69,9 @@ for t in $tags; do
   [ "$t" = "$VER" ] && continue
   # spec: tests/assert_appcast_upgradeable.bats "default scope still skips a stray v-prefixed twin"
   #       -- the leading "v" is stripped only under --tag-glob; legacysupport really has
-  #       v1.5.2-mavericks.1 beside 1.5.2-mavericks.1, and the default scope must keep skipping it.
+  #       a v-prefixed twin beside a real release tag, and the default scope must keep skipping it.
   if [ -n "$TAG_GLOB" ]; then k="${t#v}"; else k="$t"; fi
-  k="$(printf '%s' "$k" | sed 's/-mavericks\./\./')"
+  k="$(comparison_key "$k")"
   numeric "$k" || continue
   if [ -z "$PREV" ] || [ "$(ver_cmp "$k" "$PREV")" = 1 ]; then PREV="$k"; PREV_TAG="$t"; fi
 done

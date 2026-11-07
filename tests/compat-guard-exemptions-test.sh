@@ -114,7 +114,7 @@ macho 'x86_64 EXECUTE 10.9 10.9' 'STR labelColor' 'DEF _shim' > "$r/bin/demo"
 macho 'x86_64 EXECUTE 10.9 10.9' 'arm64 EXECUTE 11.0 11.3' 'DEF _shim' > "$r/bin/updater"
 macho 'x86_64 EXECUTE 10.9 10.9' 'NM                  (undefined) weak external _os_log_create (from libSystem)' 'DEF _shim' > "$r/bin/weak"
 macho 'x86_64 EXECUTE 10.9 10.9' > "$r/bin/noshim"
-(cd "$w/tree" && tar czf "$w/dist/demo-1.0.0-mavericks.1.tar.gz" usr)
+(cd "$w/tree" && tar czf "$w/dist/demo-1.0.0-mavergreen.1.tar.gz" usr)
 dist() { rc=0; out="$(cd "$w" && SHIPYARD_CHECK_DIST="$w/dist" MAVERGREEN_DEVIATIONS_ROOT="$w/repo" MAVERGREEN_REQUIRE_DEFINED_SYMBOLS=_shim sh "$G" 2>&1)" || rc=$?; }
 label="--dist with no deviation: each binary's own allowance is missing"
 deviations_are

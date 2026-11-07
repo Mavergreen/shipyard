@@ -145,20 +145,20 @@ printf 'name: CI\njobs:\n  build:\n    steps:\n      - run: shipyard-ctest --pre
 
 # spec: SKILL.md "Versioning" -- VERSION must not be committed. The shipped state lives in tags; a
 #       committed VERSION is a second answer to "what version is this?", and it drifts --
-#       container-tools built -mavericks.14 from a file that still said .2, which also made its
+#       container-tools built -mavergreen.14 from a file that still said .2, which also made its
 #       tag-triggered publish path (tag must equal VERSION) unsatisfiable. .mavergreen/upstream/ is
 #       the committed input; VERSION is derived from it plus the tags.
 mkrepo "$work/v1"
 (cd "$work/v1" && sh "$S" >/dev/null) || { echo "FAIL derived-version repo should pass"; exit 1; }
 
 mkrepo "$work/v2"
-printf '1.0.0-mavericks.3\n' > "$work/v2/VERSION"
+printf '1.0.0-mavergreen.3\n' > "$work/v2/VERSION"
 (cd "$work/v2" && git add -f VERSION) >/dev/null 2>&1
 if out="$(cd "$work/v2" && sh "$S" 2>&1)"; then echo "FAIL tracked VERSION should fail"; exit 1; fi
 first_is "$out" no-tracked-version || { echo "FAIL should be a no-tracked-version failure: $out"; exit 1; }
 
 mkrepo "$work/v3"
-printf '1.0.0-mavericks.3\n' > "$work/v3/VERSION"
+printf '1.0.0-mavergreen.3\n' > "$work/v3/VERSION"
 (cd "$work/v3" && sh "$S" >/dev/null) || { echo "FAIL: an untracked VERSION (a build product sitting in the tree) is FINE -- that is the normal state after any local build, and failing on it would make the gate unrunnable on a developer's machine: should pass"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- check 7b fails a repo with a TRACKED lines/ dir --

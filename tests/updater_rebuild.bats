@@ -26,12 +26,12 @@ build_at() {
 key() { grep -A1 "<key>$1</key>" "$d/b/openssh-updater.app/Contents/Info.plist" | sed -n 's|.*<string>\(.*\)</string>.*|\1|p'; }
 
 @test "add_updater_app: a rebuild at a new VERSION in the same build dir gives the app that version" {
-  run build_at 9.9p2-mavericks.1
+  run build_at 9.9p2-mavergreen.1
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(key CFBundleShortVersionString)" = 9.9p2-mavericks.1 ]
-  run build_at 9.9p2-mavericks.2
+  [ "$(key CFBundleShortVersionString)" = 9.9p2-mavergreen.1 ]
+  run build_at 9.9p2-mavergreen.2
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  [ "$(key CFBundleShortVersionString)" = 9.9p2-mavericks.2 ] || { key CFBundleShortVersionString; return 1; }
+  [ "$(key CFBundleShortVersionString)" = 9.9p2-mavergreen.2 ] || { key CFBundleShortVersionString; return 1; }
   [ "$(key CFBundleVersion)" = 9.9.2.2 ] || { key CFBundleVersion; return 1; }
   cmp "$d/b/openssh-updater-Info.plist" "$d/b/openssh-updater.app/Contents/Info.plist"
 }

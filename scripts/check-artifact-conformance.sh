@@ -8,6 +8,7 @@
 #          current directory). Piped, it reads a fact stream on stdin (see artifact-facts.sh), one
 #          record per line:
 #            expected      <version>                              the version this release claims to be
+#            upstream-kind <port|own>                             whether the repo ports an upstream or is its own
 #            pkg           <file> <version> <floor> <identifier>  one per shipped .pkg
 #            component     <file> <identifier>                    one per component, in Distribution order
 #            installs      <file> <path>                          one per installed file or link (%20-encoded)
@@ -101,7 +102,7 @@ kind_ran macho Mach-O sdk-pin cxxabi
 
 rule_of() {
   case "$1" in
-    version-scheme) echo "the release version is <upstream>-mavericks.N" ;;
+    version-scheme) echo "a port's release version is <upstream>-mavergreen.N, and an own-upstream repo's is YYYYMMDD.N" ;;
     version) echo "every artifact names the version the release claims" ;;
     floor) echo "a product archive declares an install floor of 10.9.5, and a component package an appcast that declares its minimum" ;;
     identifier) echo "a pkg identifier is inside dev.mavergreen.*" ;;
@@ -126,7 +127,7 @@ rule_of() {
 }
 fix_of() {
   case "$1" in
-    version-scheme) echo "version the release <upstream>-mavericks.N, e.g. 1.2.3-mavericks.1" ;;
+    version-scheme) echo "version a port <upstream>-mavergreen.N (1.2.3-mavergreen.1) and an own-upstream repo YYYYMMDD.N (20261006.1), or declare .mavergreen/deviations/version-scheme/<label>/ (scope *, a reason, a revisit)" ;;
     version) echo "rebuild the artifact with the release version, or remove the stale one from dist/" ;;
     floor) echo "wrap the component with set_install_floor.sh (10.9.5), or have the appcast declare sparkle:minimumSystemVersion; or declare .mavergreen/deviations/floor/<label>/ (scope <glob>, a reason, a revisit)" ;;
     identifier) echo "give the pkg an identifier beginning dev.mavergreen., or declare .mavergreen/deviations/identifier/<label>/ (scope <glob>, a reason, a revisit)" ;;
@@ -192,10 +193,27 @@ expected="$(sed -n 's/^expected \(..*\)$/\1/p' "$facts" | head -1)"
   exit 1
 }
 
-# spec: SKILL.md "Artifact conformance" axis table -- SIBLINGS: version scheme <upstream>-mavericks.N.
-case "$expected" in
-  *-mavericks.[0-9]*) : ;;
-  *) fail scheme "version '$expected' is not <upstream>-mavericks.N" ;;
+upstream_kind="$(sed -n 's/^upstream-kind \(..*\)$/\1/p' "$facts" | head -1)"
+case "$upstream_kind" in
+  port)
+    case "$expected" in
+      ?*-mavergreen.*) n="${expected##*-mavergreen.}" ;;
+      *) n="" ;;
+    esac
+    case "$n" in
+      ''|*[!0123456789]*) fail scheme "version '$expected' is not <upstream>-mavergreen.N, though this repo ports an upstream" ;;
+    esac
+    ;;
+  own)
+    case "$expected" in
+      [0123456789][0123456789][0123456789][0123456789][0123456789][0123456789][0123456789][0123456789].*) n="${expected#????????.}" ;;
+      *) n="" ;;
+    esac
+    case "$n" in
+      ''|*[!0123456789]*) fail scheme "version '$expected' is not YYYYMMDD.N, though this repo is its own upstream" ;;
+    esac
+    ;;
+  *) fail scheme "the repo's kind is unknown (no upstream-kind fact), so version '$expected' cannot be checked against its scheme" ;;
 esac
 
 # spec: SKILL.md "Artifact conformance" axis table -- ITSELF/NEIGHBOURS: every .pkg agrees with the
@@ -322,7 +340,7 @@ done
 #       feed are the derived record's, a lined product's line is its version and its repo's suffix,
 #       and every product a release ships is one this repo declares.
 repository="$(sed -n 's/^repository \([^ ][^ ]*\)$/\1/p' "$facts" | head -1)"
-up="${expected%%-mavericks.*}"; up="${up#v}"
+up="${expected%%-mavergreen.*}"; up="${up#v}"
 c1="${up%%.*}"; c12=""
 case "$up" in *.*) _r="${up#*.}"; c12="$c1${_r%%.*}" ;; esac
 repo="${repository#*/}"

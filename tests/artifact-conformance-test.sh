@@ -28,15 +28,16 @@ has() {  # facts must fail, and some failure must start with the check's id (oth
   printf '%s\n' "$out" | grep -q "^$2: " || { echo "FAIL $1: a failure should start with '$2: ', got: $out"; exit 1; }
 }
 
-GOOD='expected 1.26.5-mavericks.5
-pkg golang-1.26.5-native-mavericks.5.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
-appcast appcast.xml 1.26.5-mavericks.5 golang-1.26.5-native-mavericks.5.pkg 4096 10.9.5
-asset golang-1.26.5-native-mavericks.5.pkg 4096
+GOOD='expected 1.26.5-mavergreen.5
+upstream-kind port
+pkg golang-1.26.5-native-mavergreen.5.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
+appcast appcast.xml 1.26.5-mavergreen.5 golang-1.26.5-native-mavergreen.5.pkg 4096 10.9.5
+asset golang-1.26.5-native-mavergreen.5.pkg 4096
 asset appcast.xml 700'
 ok "a coherent release" "$GOOD"
 
 # spec: SKILL.md "SDK pinning" -- the sdk-pin rule over every shipped Mach-O slice.
-M='macho golang-1.26.5-native-mavericks.5.pkg usr/local/go/bin/go'
+M='macho golang-1.26.5-native-mavergreen.5.pkg usr/local/go/bin/go'
 ok "a pinned x86_64 slice" "$GOOD
 $M x86_64 EXECUTE 10.9 10.9 aa"
 no "an x86_64 slice linked against the runner's SDK" "sdk-pin" "$GOOD
@@ -66,17 +67,17 @@ macho p.pkg usr/local/go/bin/go x86_64 EXECUTE 10.9 26.5 aa"
 # spec: SKILL.md "Family conventions" check 37 -- a pkg's arm64 slice is a declared deviation,
 #       an arm64 deviation whose scope is a glob, matched against the install path; a Sparkle updater's slices are
 #       exempt, and a repo grandfathered as modern-smoke is warned rather than failed.
-T='macho golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go'
-U='sparkle golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
-macho golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa'
-no "an undeclared arm64 tool slice" "arm64|golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
+T='macho golang-1.26.5-native-mavergreen.5.pkg usr/local/mavergreen/go126/bin/go'
+U='sparkle golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
+macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa'
+no "an undeclared arm64 tool slice" "arm64|golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
 $T x86_64 EXECUTE 10.9 10.9 aa
 $T arm64 EXECUTE 11.0 11.3 aa"
 ok "a declared arm64 tool slice" "$GOOD
 deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
 $T x86_64 EXECUTE 10.9 10.9 aa
 $T arm64 EXECUTE 11.0 11.3 aa"
-no "a declaration covers only the install paths its glob names" "arm64|golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
+no "a declaration covers only the install paths its glob names" "arm64|golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
 deviation arm64:build/build.sh a source path names nothing the pkg installs
 $T arm64 EXECUTE 11.0 11.3 aa"
 no "a declaration of another check does not cover it" "arm64|with an arm64 slice" "$GOOD
@@ -89,12 +90,12 @@ $(printf '%s\n' "$U" | sed -n 2p)
 $(printf '%s\n' "$U" | sed -n 1p)"
 no "the updater exemption is the updater's bundle, not a path beside it" "arm64|with an arm64 slice" "$GOOD
 $U
-macho golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app-helper/tool arm64 EXECUTE 11.0 11.3 aa"
+macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app-helper/tool arm64 EXECUTE 11.0 11.3 aa"
 no "another pkg's updater exempts nothing here" "arm64|with an arm64 slice" "$GOOD
-pkg other-1.26.5-mavericks.5.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
-sparkle other-1.26.5-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
-macho golang-1.26.5-native-mavericks.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa"
-R='manifest golang-1.26.5-native-mavericks.5.pkg go126 dev.mavergreen.go126 go126
+pkg other-1.26.5-mavergreen.5.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
+sparkle other-1.26.5-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
+macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa"
+R='manifest golang-1.26.5-native-mavergreen.5.pkg go126 dev.mavergreen.go126 go126
 product go126
 derived go126 dev.mavergreen.go126.updater dev.mavergreen.go126-updatecheck Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml'
 _ro="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "$R" "$U" | sh "$S" 2>&1)" || :
@@ -102,8 +103,8 @@ printf '%s\n' "$_ro" | grep -q 'with an arm64 slice' && { echo "FAIL: the derive
 printf '%s\n' "$_ro" | grep -q 'arm64: 0 declared, 0 undeclared' && { echo "FAIL: the arm64 summary prints only when there is something to count: $_ro"; exit 1; }
 has "a product with a derived updater exempts only that bundle" arm64 "$GOOD
 $R
-sparkle golang-1.26.5-native-mavericks.5.pkg Applications/Vendor.app https://vendor.example/appcast.xml
-macho golang-1.26.5-native-mavericks.5.pkg Applications/Vendor.app/Contents/MacOS/Vendor arm64 EXECUTE 11.0 11.3 aa"
+sparkle golang-1.26.5-native-mavergreen.5.pkg Applications/Vendor.app https://vendor.example/appcast.xml
+macho golang-1.26.5-native-mavergreen.5.pkg Applications/Vendor.app/Contents/MacOS/Vendor arm64 EXECUTE 11.0 11.3 aa"
 ok "an x86_64-only pkg needs no declaration" "$GOOD
 $T x86_64 EXECUTE 10.9 10.9 aa"
 ok "a shipped tarball is not a pkg" "$GOOD
@@ -116,7 +117,7 @@ cp -R "$here/../scripts" "$_gfs/scripts"
 printf 'modern-smoke golang-126 release.yml:modern-smoke\n' > "$_gfs/scripts/conventions-grandfathered"
 _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-126" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
   || { echo "FAIL: a grandfathered repo's undeclared arm64 slice warns, never fails: $_gfo"; exit 1; }
-printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: arm64: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go' \
+printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: arm64: golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go' \
   || { echo "FAIL: a grandfathered repo's undeclared arm64 slice is reported as a ::warning:: naming it: $_gfo"; exit 1; }
 _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-127" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
   && { echo "FAIL: another repo's modern-smoke line excuses nothing here: $_gfo"; exit 1; }
@@ -125,9 +126,9 @@ _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golan
   && { echo "FAIL: another check's grandfathered line excuses nothing here: $_gfo"; exit 1; }
 rm -rf "$_gfs"
 
-X='macho golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
-C='golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go'
-no "a program defining ___cxa_throw fails" "cxxabi|golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines C++ runtime machinery beyond Recaulk's back-fills: ___cxa_throw" "$GOOD
+X='macho golang-1.26.5-native-mavergreen.5.pkg usr/local/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
+C='golang-1.26.5-native-mavergreen.5.pkg usr/local/mavergreen/go126/bin/go'
+no "a program defining ___cxa_throw fails" "cxxabi|golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines C++ runtime machinery beyond Recaulk's back-fills: ___cxa_throw" "$GOOD
 $X
 cxxabi-defines $C x86_64 ___cxa_throw visible"
 no "the failure says how to declare it" "cxxabi|declare .mavergreen/deviations/cxxabi/<label>/ (scope usr/local/mavergreen/go126/bin/go, a reason, a revisit)" "$GOOD
@@ -170,7 +171,7 @@ deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run
 $X
 macho $C arm64 EXECUTE 11.0 11.3 aa
 cxxabi-defines $C arm64 ___cxa_throw visible"
-no "loading a second libc++abi fails" "cxxabi|golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which loads /opt/vendor/lib/libc++abi.1.dylib" "$GOOD
+no "loading a second libc++abi fails" "cxxabi|golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which loads /opt/vendor/lib/libc++abi.1.dylib" "$GOOD
 $X
 cxxabi-loads $C x86_64 /opt/vendor/lib/libc++abi.1.dylib"
 no "a load path with a space is decoded" "cxxabi|which loads @rpath/Vendor Runtime/libc++abi.dylib" "$GOOD
@@ -189,7 +190,7 @@ gfrun() {  # $1 = the grandfathered file's one line, $2 = the repository; the fa
 }
 _gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw hidden\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
   || { echo "FAIL: a grandfathered repo's violation warns and passes: $_gfo"; exit 1; }
-printf '%s\n' "$_gfo" | grep -q "^::warning::conformance: cxxabi: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines .*(grandfathered: cxxabi golang-126 usr/local/mavergreen/go126/bin/go)$" \
+printf '%s\n' "$_gfo" | grep -q "^::warning::conformance: cxxabi: golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines .*(grandfathered: cxxabi golang-126 usr/local/mavergreen/go126/bin/go)$" \
   || { echo "FAIL: a grandfathered cxxabi violation is a ::warning:: naming its line: $_gfo"; exit 1; }
 _gfo="$(printf 'cxxabi-loads %s x86_64 /opt/vendor/lib/libc++abi.1.dylib\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
   || { echo "FAIL: a grandfathered repo's second libc++abi load warns and passes: $_gfo"; exit 1; }
@@ -206,108 +207,142 @@ _gfo="$(printf '%s\n%s\nrepository Mavergreen/golang-126\nmacho p.pkg usr/local/
   || { echo "FAIL: a grandfathered path keeps its %20 encoding, one field per line: $_gfo"; exit 1; }
 rm -rf "$_gfs"
 
-no "pkg version disagrees with the tag" "version" 'expected 1.26.5-mavericks.5
-pkg p.pkg 1.26.5-mavericks.4 10.9.5 dev.mavergreen.golang.go126
+no "pkg version disagrees with the tag" "version" 'expected 1.26.5-mavergreen.5
+upstream-kind port
+pkg p.pkg 1.26.5-mavergreen.4 10.9.5 dev.mavergreen.golang.go126
 asset p.pkg 10'
 
-no "appcast version disagrees with the pkg" "version" 'expected 1.26.5-mavericks.5
-pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
-appcast appcast.xml 1.26.5-mavericks.4 p.pkg 10
+no "appcast version disagrees with the pkg" "version" 'expected 1.26.5-mavergreen.5
+upstream-kind port
+pkg p.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
+appcast appcast.xml 1.26.5-mavergreen.4 p.pkg 10
 asset p.pkg 10
 asset appcast.xml 700'
 
-no "appcast points at an asset that was not published" "enclosure" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
-appcast appcast.xml 1.0.0-mavericks.1 ghost.pkg 10
+no "appcast points at an asset that was not published" "enclosure" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
+appcast appcast.xml 1.0.0-mavergreen.1 ghost.pkg 10
 asset p.pkg 10
 asset appcast.xml 700'
 
-no "appcast enclosure length disagrees with the real file" "length" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
-appcast appcast.xml 1.0.0-mavericks.1 p.pkg 999
+no "appcast enclosure length disagrees with the real file" "length" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
+appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 999
 asset p.pkg 10
 asset appcast.xml 700'
 
-no "a .pkg without the 10.9.5 floor" "floor" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.13 dev.mavergreen.x
+no "a .pkg without the 10.9.5 floor" "floor" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 10.13 dev.mavergreen.x
 asset p.pkg 10'
 
-no "an identifier outside the family scheme" "identifier" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 com.example.thing
+no "an identifier outside the family scheme" "identifier" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 com.example.thing
 asset p.pkg 10'
 
 no "a version outside the family scheme" "version-scheme" 'expected 1.0.0
+upstream-kind port
 pkg p.pkg 1.0.0 10.9.5 dev.mavergreen.x
 asset p.pkg 10'
+no "a port still versioned with the retired suffix" "version-scheme|mavergreen" 'expected 1.2.3-mavericks.1
+upstream-kind port'
+no "a port whose N is not a number" "version-scheme" 'expected 1.2.3-mavergreen.rc1
+upstream-kind port'
+ok "an own-upstream repo versions by date" 'expected 20261006.1
+upstream-kind own'
+no "an own-upstream repo does not take the port suffix" "version-scheme|YYYYMMDD.N" 'expected 1.2.3-mavergreen.1
+upstream-kind own'
+no "an own-upstream date needs its N" "version-scheme" 'expected 20261006
+upstream-kind own'
+no "a seven-digit date is not a date" "version-scheme" 'expected 2026106.1
+upstream-kind own'
+no "a release whose repo kind is unknown cannot be checked against a scheme" "version-scheme|kind" 'expected 1.2.3-mavergreen.1'
+ok "a declared version-scheme deviation excuses either kind" 'expected 1.0.300
+upstream-kind own
+deviation version-scheme versioned <line>.<count>'
 
-no "two pkgs of one release disagree about the version" "version" 'expected 1.0.0-mavericks.1
-pkg native.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
-pkg cross.pkg 1.0.0-mavericks.2 10.9.5 dev.mavergreen.x-cross
+no "two pkgs of one release disagree about the version" "version" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg native.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
+pkg cross.pkg 1.0.0-mavergreen.2 10.9.5 dev.mavergreen.x-cross
 asset native.pkg 10
 asset cross.pkg 10'
 
-ok "a tools product with no updater ships no appcast, and that is fine" 'expected 20221003-mavericks.2
-pkg ed25519-20221003-mavericks.2.pkg 20221003-mavericks.2 10.9.5 dev.mavergreen.ed25519
-asset ed25519-20221003-mavericks.2.pkg 10'
+ok "a tools product with no updater ships no appcast, and that is fine" 'expected 20221003-mavergreen.2
+upstream-kind port
+pkg ed25519-20221003-mavergreen.2.pkg 20221003-mavergreen.2 10.9.5 dev.mavergreen.ed25519
+asset ed25519-20221003-mavergreen.2.pkg 10'
 
 # platform: a component .pkg (PackageInfo, no Distribution) has no os-version floor by
 #           construction -- floors are a productbuild concept. Its effective minimum lives in
 #           the appcast that ships it. golang's cross product is exactly this: it TARGETS 10.9
 #           but RUNS on 11.0+, so demanding 10.9.5 of it would be wrong.
-ok "a component pkg whose appcast declares the minimum" 'expected 1.26.5-mavericks.5
-pkg golang-cross.pkg 1.26.5-mavericks.5 none dev.mavergreen.golang.go126-cross
-appcast appcast-cross.xml 1.26.5-mavericks.5 golang-cross.pkg 10 11.0
+ok "a component pkg whose appcast declares the minimum" 'expected 1.26.5-mavergreen.5
+upstream-kind port
+pkg golang-cross.pkg 1.26.5-mavergreen.5 none dev.mavergreen.golang.go126-cross
+appcast appcast-cross.xml 1.26.5-mavergreen.5 golang-cross.pkg 10 11.0
 asset golang-cross.pkg 10
 asset appcast-cross.xml 700'
 
-no "a pkg with no floor and no appcast to declare one" "floor" 'expected 1.0.0-mavericks.1
-pkg orphan.pkg 1.0.0-mavericks.1 none dev.mavergreen.x
+no "a pkg with no floor and no appcast to declare one" "floor" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg orphan.pkg 1.0.0-mavergreen.1 none dev.mavergreen.x
 asset orphan.pkg 10'
 
-ok "a product archive that does declare 10.9.5" 'expected 1.0.0-mavericks.1
-pkg native.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+ok "a product archive that does declare 10.9.5" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg native.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
 asset native.pkg 10'
 
-no "an undeclared floor deviation still fails" "floor" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 11.0 dev.mavergreen.x
+no "an undeclared floor deviation still fails" "floor" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 11.0 dev.mavergreen.x
 asset p.pkg 10'
 
-ok "a declared floor deviation passes" 'expected 1.0.0-mavericks.1
+ok "a declared floor deviation passes" 'expected 1.0.0-mavergreen.1
+upstream-kind port
 deviation floor the cross toolchain runs on modern macOS and targets 10.9; it is not itself a 10.9 install
-pkg p.pkg 1.0.0-mavericks.1 11.0 dev.mavergreen.x
+pkg p.pkg 1.0.0-mavergreen.1 11.0 dev.mavergreen.x
 asset p.pkg 10'
 
-no "a deviation with no reason is not a deviation" "floor|reason" 'expected 1.0.0-mavericks.1
+no "a deviation with no reason is not a deviation" "floor|reason" 'expected 1.0.0-mavergreen.1
+upstream-kind port
 deviation floor
-pkg p.pkg 1.0.0-mavericks.1 11.0 dev.mavergreen.x
+pkg p.pkg 1.0.0-mavergreen.1 11.0 dev.mavergreen.x
 asset p.pkg 10'
 
-no "a floor deviation is scoped to its own check and does not excuse a bad identifier" "identifier" 'expected 1.0.0-mavericks.1
+no "a floor deviation is scoped to its own check and does not excuse a bad identifier" "identifier" 'expected 1.0.0-mavergreen.1
+upstream-kind port
 deviation floor targets 10.9 rather than running on it
-pkg p.pkg 1.0.0-mavericks.1 11.0 com.example.thing
+pkg p.pkg 1.0.0-mavergreen.1 11.0 com.example.thing
 asset p.pkg 10'
 
-CROSS='expected 1.26.8-mavericks.7
+CROSS='expected 1.26.8-mavergreen.7
+upstream-kind port
 deviation floor:golang-*-cross-*.pkg the cross toolchain runs on macOS 11 and later and only targets 10.9
-pkg golang-1.26.8-cross-mavericks.7.pkg 1.26.8-mavericks.7 11.0 dev.mavergreen.golang.go126-cross
-asset golang-1.26.8-cross-mavericks.7.pkg 10'
+pkg golang-1.26.8-cross-mavergreen.7.pkg 1.26.8-mavergreen.7 11.0 dev.mavergreen.golang.go126-cross
+asset golang-1.26.8-cross-mavergreen.7.pkg 10'
 ok "a floor deviation scoped to the cross archive excuses its 11.0 floor" "$CROSS
-pkg golang-1.26.8-native-mavericks.7.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.golang.go126
-asset golang-1.26.8-native-mavericks.7.pkg 10"
+pkg golang-1.26.8-native-mavergreen.7.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.golang.go126
+asset golang-1.26.8-native-mavergreen.7.pkg 10"
 _xerr="$(printf '%s\nend-of-facts\n' "$CROSS
-pkg golang-1.26.8-native-mavericks.7.pkg 1.26.8-mavericks.7 11.0 dev.mavergreen.golang.go126
-asset golang-1.26.8-native-mavericks.7.pkg 10" | sh "$S" 2>&1 >/dev/null)" \
+pkg golang-1.26.8-native-mavergreen.7.pkg 1.26.8-mavergreen.7 11.0 dev.mavergreen.golang.go126
+asset golang-1.26.8-native-mavergreen.7.pkg 10" | sh "$S" 2>&1 >/dev/null)" \
   && { echo "FAIL: the cross archive's floor deviation must not excuse the native archive's 11.0 floor"; exit 1; }
-printf '%s\n' "$_xerr" | grep -q 'golang-1.26.8-native-mavericks.7.pkg declares an install floor of 11.0' \
+printf '%s\n' "$_xerr" | grep -q 'golang-1.26.8-native-mavergreen.7.pkg declares an install floor of 11.0' \
   || { echo "FAIL: the native archive must be the one named: $_xerr"; exit 1; }
-printf '%s\n' "$_xerr" | grep -q 'cross-mavericks.7.pkg declares' \
+printf '%s\n' "$_xerr" | grep -q 'cross-mavergreen.7.pkg declares' \
   && { echo "FAIL: the cross archive is excused and must not be reported: $_xerr"; exit 1; }
 
 # spec: scripts/check-artifact-conformance.sh's scoped deviations -- swift-toolchain
 #       republishes swift.org's .pkg verbatim so the correspondence with download.swift.org
 #       stays checkable. Its version, floor and identifier are UPSTREAM's and must stay that way
 #       -- but that must not excuse the artifacts we do build alongside it.
-MIRROR='expected 6.3.3-mavericks.2
+MIRROR='expected 6.3.3-mavergreen.2
+upstream-kind port
 deviation version:upstream-swift-*.pkg mirrored verbatim from swift.org; the version is upstream own
 deviation floor:upstream-swift-*.pkg same mirror
 deviation identifier:upstream-swift-*.pkg same mirror
@@ -315,26 +350,29 @@ pkg upstream-swift-6.3.3-RELEASE-osx.pkg 6.3.3.20260625101 10.11 org.swift.63320
 asset upstream-swift-6.3.3-RELEASE-osx.pkg 10'
 ok "a scoped deviation excuses the mirrored pkg" "$MIRROR"
 
-no "the same scoped deviation does NOT excuse our own artifact" "version" 'expected 6.3.3-mavericks.2
+no "the same scoped deviation does NOT excuse our own artifact" "version" 'expected 6.3.3-mavergreen.2
+upstream-kind port
 deviation version:upstream-swift-*.pkg mirrored verbatim from swift.org
-pkg ours.pkg 6.3.3-mavericks.1 10.9.5 dev.mavergreen.swift
+pkg ours.pkg 6.3.3-mavergreen.1 10.9.5 dev.mavergreen.swift
 asset ours.pkg 10'
 
 # platform: an enclosure URL carries the release tag. If it names another release, Sparkle
 #           serves users a different build than the one just published -- the feed and the
 #           release silently disagree, and every other check still passes because both
 #           artifacts are individually fine.
-ok "an enclosure pointing at this release" 'expected 1.26.5-mavericks.5
-pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
-appcast appcast.xml 1.26.5-mavericks.5 p.pkg 10 10.9.5
-enclosure-url appcast.xml https://github.com/Mavergreen/golang/releases/download/1.26.5-mavericks.5/p.pkg
+ok "an enclosure pointing at this release" 'expected 1.26.5-mavergreen.5
+upstream-kind port
+pkg p.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
+appcast appcast.xml 1.26.5-mavergreen.5 p.pkg 10 10.9.5
+enclosure-url appcast.xml https://github.com/Mavergreen/golang/releases/download/1.26.5-mavergreen.5/p.pkg
 asset p.pkg 10
 asset appcast.xml 700'
 
-no "an enclosure pointing at a DIFFERENT release" "enclosure-url" 'expected 1.26.5-mavericks.5
-pkg p.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
-appcast appcast.xml 1.26.5-mavericks.5 p.pkg 10 10.9.5
-enclosure-url appcast.xml https://github.com/Mavergreen/golang/releases/download/1.26.5-mavericks.4/p.pkg
+no "an enclosure pointing at a DIFFERENT release" "enclosure-url" 'expected 1.26.5-mavergreen.5
+upstream-kind port
+pkg p.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
+appcast appcast.xml 1.26.5-mavergreen.5 p.pkg 10 10.9.5
+enclosure-url appcast.xml https://github.com/Mavergreen/golang/releases/download/1.26.5-mavergreen.4/p.pkg
 asset p.pkg 10
 asset appcast.xml 700'
 
@@ -343,62 +381,70 @@ asset appcast.xml 700'
 #       legitimately does not (cross-built apps look at the native prefix). "Same shim, same CA"
 #       is a claim about INPUTS, so each variant records what it used and conformance compares
 #       the records.
-ok "variants agreeing on their ingredients" 'expected 1.26.5-mavericks.5
-build-info build-info-native.txt mls_version 1.5.2-mavericks.2
+ok "variants agreeing on their ingredients" 'expected 1.26.5-mavergreen.5
+upstream-kind port
+build-info build-info-native.txt mls_version 1.5.2-mavergreen.2
 build-info build-info-native.txt ca_sha256 3ff344e30b9b
-build-info build-info-cross.txt mls_version 1.5.2-mavericks.2
+build-info build-info-cross.txt mls_version 1.5.2-mavergreen.2
 build-info build-info-cross.txt ca_sha256 3ff344e30b9b
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
+pkg n.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
-no "variants built from DIFFERENT shim pins" "variant-build-info|mls_version" 'expected 1.26.5-mavericks.5
-build-info build-info-native.txt mls_version 1.5.2-mavericks.2
-build-info build-info-cross.txt mls_version 1.5.2-mavericks.1
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
+no "variants built from DIFFERENT shim pins" "variant-build-info|mls_version" 'expected 1.26.5-mavergreen.5
+upstream-kind port
+build-info build-info-native.txt mls_version 1.5.2-mavergreen.2
+build-info build-info-cross.txt mls_version 1.5.2-mavergreen.1
+pkg n.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
-no "variants built from different CA bundles" "variant-build-info|ca_sha256" 'expected 1.26.5-mavericks.5
+no "variants built from different CA bundles" "variant-build-info|ca_sha256" 'expected 1.26.5-mavergreen.5
+upstream-kind port
 build-info build-info-native.txt ca_sha256 3ff344e30b9b
 build-info build-info-cross.txt ca_sha256 9a1c72b4aa0f
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
+pkg n.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
-ok "keys that SHOULD differ per variant are not evidence of disagreement" 'expected 1.26.5-mavericks.5
+ok "keys that SHOULD differ per variant are not evidence of disagreement" 'expected 1.26.5-mavergreen.5
+upstream-kind port
 build-info build-info-native.txt variant native
 build-info build-info-native.txt arch x86_64
 build-info build-info-native.txt prefix /usr/local/go126
 build-info build-info-cross.txt variant cross
 build-info build-info-cross.txt arch arm64
 build-info build-info-cross.txt prefix /usr/local/go126-cross
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
+pkg n.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
-ok "a single-variant product has nothing to compare against" 'expected 1.5.2-mavericks.2
-build-info build-info.txt mls_version 1.5.2-mavericks.2
-pkg p.pkg 1.5.2-mavericks.2 10.9.5 dev.mavergreen.legacysupport
+ok "a single-variant product has nothing to compare against" 'expected 1.5.2-mavergreen.2
+upstream-kind port
+build-info build-info.txt mls_version 1.5.2-mavergreen.2
+pkg p.pkg 1.5.2-mavergreen.2 10.9.5 dev.mavergreen.legacysupport
 asset p.pkg 10'
 
-ok "a declared disagreement, with a reason" 'expected 1.26.5-mavericks.5
+ok "a declared disagreement, with a reason" 'expected 1.26.5-mavergreen.5
+upstream-kind port
 deviation ingredients the cross variant is deliberately built against the previous shim this once
-build-info build-info-native.txt mls_version 1.5.2-mavericks.2
-build-info build-info-cross.txt mls_version 1.5.2-mavericks.1
-pkg n.pkg 1.26.5-mavericks.5 10.9.5 dev.mavergreen.golang.go126
+build-info build-info-native.txt mls_version 1.5.2-mavergreen.2
+build-info build-info-cross.txt mls_version 1.5.2-mavergreen.1
+pkg n.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
 # spec: scripts/check-artifact-conformance.sh -- "ok" must not be indistinguishable from
 #       "compared nothing". A check whose silence means both "agreed" and "there was nothing to
 #       look at" cannot be trusted the day the records stop shipping.
-out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
+out="$(printf '%s\n' 'expected 1.0.0-mavergreen.1
+upstream-kind port
 build-info build-info-a.txt commit abc
 build-info build-info-b.txt commit abc
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10
 end-of-facts' | sh "$S")"
 printf '%s\n' "$out" | grep -qi 'compared 2' \
   || { echo "FAIL should say how many records it compared; got: $out"; exit 1; }
 
-out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+out="$(printf '%s\n' 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10
 end-of-facts' | sh "$S")"
 printf '%s\n' "$out" | grep -qi 'no build records' \
@@ -411,22 +457,27 @@ AF="$here/../scripts/artifact-facts.sh"
 #       today, which is exactly why the assertion is cheap and why a future change that breaks
 #       the coupling should be loud: a 10.9 user reading the update dialog must not be told a
 #       different story than the Release page.
-ok "notes: agreement passes" 'expected 9.9p2-mavericks.6
+ok "notes: agreement passes" 'expected 9.9p2-mavergreen.6
+upstream-kind port
 notes-render RELEASE_NOTES.md aaaa1111
 appcast-notes appcast.xml aaaa1111'
 
-no "notes: disagreement fails" "notes" 'expected 9.9p2-mavericks.6
+no "notes: disagreement fails" "notes" 'expected 9.9p2-mavergreen.6
+upstream-kind port
 notes-render RELEASE_NOTES.md aaaa1111
 appcast-notes appcast.xml bbbb2222'
 
-no "notes: an appcast with no description fails, since an empty one is a defect (what a 10.9 user reads in the update dialog) not an absence to skip" "notes" 'expected 9.9p2-mavericks.6
+no "notes: an appcast with no description fails, since an empty one is a defect (what a 10.9 user reads in the update dialog) not an absence to skip" "notes" 'expected 9.9p2-mavergreen.6
+upstream-kind port
 notes-render RELEASE_NOTES.md aaaa1111
 appcast-notes appcast.xml'
 
-ok "notes: a product with no appcast at all (a component-only release) has nothing to compare" 'expected 9.9p2-mavericks.6
+ok "notes: a product with no appcast at all (a component-only release) has nothing to compare" 'expected 9.9p2-mavergreen.6
+upstream-kind port
 notes-render RELEASE_NOTES.md aaaa1111'
 
-ok "notes: a declared deviation excuses it, with a reason, like every other check" 'expected 9.9p2-mavericks.6
+ok "notes: a declared deviation excuses it, with a reason, like every other check" 'expected 9.9p2-mavergreen.6
+upstream-kind port
 deviation notes the swift.org pkg is republished verbatim with its own notes
 notes-render RELEASE_NOTES.md aaaa1111
 appcast-notes appcast.xml bbbb2222'
@@ -436,7 +487,8 @@ appcast-notes appcast.xml bbbb2222'
 #       recognize must not get a green run with this whole layer silently disabled. An
 #       appcast-notes fact with NO notes-render to compare against is the same "records stopped
 #       shipping" shape as an outright disagreement, and must not be quietly skipped.
-no "notes: an appcast-notes fact with no notes-render is not silently skipped" "notes" 'expected 9.9p2-mavericks.6
+no "notes: an appcast-notes fact with no notes-render is not silently skipped" "notes" 'expected 9.9p2-mavergreen.6
+upstream-kind port
 appcast-notes appcast.xml aaaa1111'
 
 # spec: scripts/gen_appcast.sh + scripts/artifact-facts.sh -- not a hand-written fixture. A
@@ -461,9 +513,9 @@ Some bug fixes.
 
 Requires 10.9.5 or later.
 NOTES
-sh "$GA" "Test Channel" "9.9p2-mavericks.6" "https://example.com/x.pkg" "10.9.5" \
+sh "$GA" "Test Channel" "9.9p2-mavergreen.6" "https://example.com/x.pkg" "10.9.5" \
   "$_nr/dist/RELEASE_NOTES.md" 'sparkle:edSignature="x" length="10"' > "$_nr/dist/appcast.xml"
-_facts="$(sh "$AF" "$_nr/dist" 9.9p2-mavericks.6 "$_nr")"
+_facts="$(sh "$AF" "$_nr/dist" 9.9p2-mavergreen.6 "$_nr")"
 _render_digest="$(printf '%s\n' "$_facts" | sed -n 's/^notes-render [^ ]* \(..*\)$/\1/p')"
 _appcast_digest="$(printf '%s\n' "$_facts" | sed -n 's/^appcast-notes [^ ]* \(..*\)$/\1/p')"
 [ -n "$_render_digest" ] \
@@ -490,7 +542,7 @@ awk '
 ' "$_nr/dist/appcast.xml" > "$_nr/dist-nodesc/appcast.xml"
 grep -q '<description></description>' "$_nr/dist-nodesc/appcast.xml" \
   || { echo "FAIL: test setup did not produce an empty <description> fixture"; exit 1; }
-_nodesc_facts="$(sh "$AF" "$_nr/dist-nodesc" 9.9p2-mavericks.6 "$_nr")"
+_nodesc_facts="$(sh "$AF" "$_nr/dist-nodesc" 9.9p2-mavergreen.6 "$_nr")"
 _nodesc_line="$(printf '%s\n' "$_nodesc_facts" | grep '^appcast-notes ')"
 [ "$_nodesc_line" = "appcast-notes appcast.xml" ] \
   || { echo "FAIL: an emptied <description> should emit 'appcast-notes appcast.xml' with no digest field; got: $_nodesc_line"; exit 1; }
@@ -508,12 +560,12 @@ Some bug fixes.
 
 Requires 10.9.5 or later.
 NOTES
-sh "$GA" "Test Channel" "9.9p2-mavericks.6" "https://example.com/x.pkg" "10.9.5" \
+sh "$GA" "Test Channel" "9.9p2-mavergreen.6" "https://example.com/x.pkg" "10.9.5" \
   "$_nr/dist/RELEASE_NOTES_B.md" 'sparkle:edSignature="x" length="10"' > "$_nr/dist/appcast-b.xml"
 mkdir -p "$_nr/dist-mismatch"
 cp "$_nr/dist/RELEASE_NOTES.md" "$_nr/dist-mismatch/RELEASE_NOTES.md"     # notes-render from A
 cp "$_nr/dist/appcast-b.xml" "$_nr/dist-mismatch/appcast.xml"             # appcast rendered from B
-_mismatch_facts="$(sh "$AF" "$_nr/dist-mismatch" 9.9p2-mavericks.6 "$_nr")"
+_mismatch_facts="$(sh "$AF" "$_nr/dist-mismatch" 9.9p2-mavergreen.6 "$_nr")"
 _a_digest="$(printf '%s\n' "$_mismatch_facts" | sed -n 's/^notes-render [^ ]* \(..*\)$/\1/p')"
 _b_digest="$(printf '%s\n' "$_mismatch_facts" | sed -n 's/^appcast-notes [^ ]* \(..*\)$/\1/p')"
 [ "$_a_digest" != "$_b_digest" ] \
@@ -532,7 +584,7 @@ sed 's#<style>body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-
   "$_nr/dist/appcast.xml" > "$_nr/dist-css/appcast.xml"
 grep -q '<style>body{color:red}</style>' "$_nr/dist-css/appcast.xml" \
   || { echo "FAIL: test setup did not change the injected CSS"; exit 1; }
-_css_facts="$(sh "$AF" "$_nr/dist-css" 9.9p2-mavericks.6 "$_nr")"
+_css_facts="$(sh "$AF" "$_nr/dist-css" 9.9p2-mavergreen.6 "$_nr")"
 _css_render_digest="$(printf '%s\n' "$_css_facts" | sed -n 's/^notes-render [^ ]* \(..*\)$/\1/p')"
 _css_appcast_digest="$(printf '%s\n' "$_css_facts" | sed -n 's/^appcast-notes [^ ]* \(..*\)$/\1/p')"
 [ "$_css_render_digest" = "$_css_appcast_digest" ] \
@@ -560,7 +612,7 @@ cat > "$_m14/dist/appcast.xml" <<XML
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
     <item>
-      <sparkle:shortVersionString>9.9p2-mavericks.6</sparkle:shortVersionString>
+      <sparkle:shortVersionString>9.9p2-mavergreen.6</sparkle:shortVersionString>
       <description><![CDATA[
 <style>body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:13px;}</style>
 <p>Ordinary paragraph line one.</p>
@@ -570,7 +622,7 @@ $ASIDE
   </channel>
 </rss>
 XML
-_m14_facts="$(sh "$AF" "$_m14/dist" 9.9p2-mavericks.6 "$_m14")"
+_m14_facts="$(sh "$AF" "$_m14/dist" 9.9p2-mavergreen.6 "$_m14")"
 _m14_digest="$(printf '%s\n' "$_m14_facts" | sed -n 's/^appcast-notes [^ ]* \(..*\)$/\1/p')"
 _m14_expected="$(printf '%s\n%s\n' '<p>Ordinary paragraph line one.</p>' "$ASIDE" | shasum -a 256 | cut -d' ' -f1)"
 rm -rf "$_m14"
@@ -590,7 +642,7 @@ _empty="$(mktemp -d "${TMPDIR:-/tmp}/af-notes-empty.XXXXXX")"
 mkdir -p "$_empty/dist"
 : > "$_empty/dist/RELEASE_NOTES.md"
 _empty_out="$(mktemp "${TMPDIR:-/tmp}/af-notes-empty-out.XXXXXX")"
-if sh "$AF" "$_empty/dist" 9.9p2-mavericks.6 "$_empty" >"$_empty_out" 2>&1; then
+if sh "$AF" "$_empty/dist" 9.9p2-mavergreen.6 "$_empty" >"$_empty_out" 2>&1; then
   rm -rf "$_empty"; rm -f "$_empty_out"
   echo "FAIL: artifact-facts.sh should refuse an empty RELEASE_NOTES.md, not emit a notes-render fact for it"
   exit 1
@@ -607,8 +659,9 @@ rm -rf "$_empty"; rm -f "$_empty_out"
 #       successful producer run ends with, and these fixtures bypass ok()/no() (which append it)
 #       to say so. Every record present and correct, but the stream just stops: that must not be
 #       a pass.
-_trunc_out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+_trunc_out="$(printf '%s\n' 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10' | sh "$S" 2>&1)" \
   && { echo "FAIL: a stream with no end-of-facts sentinel must not pass; got: $_trunc_out"; exit 1; }
 
@@ -619,14 +672,14 @@ asset p.pkg 10' | sh "$S" 2>&1)" \
 #       that did not come from a completed run: a dist/ file whose NAME contains a newline splits
 #       its own `asset` record and forges a bare `end-of-facts`. Keying only on the sentinel read
 #       that as "conformance: ok" while the producer was reporting failure.
-_ab="$(printf 'expected 1.0.0-mavericks.1\nabort gen_appcast.sh --render-notes failed for RELEASE_NOTES.md\nend-of-facts\n' | sh "$S" 2>&1)" \
+_ab="$(printf 'expected 1.0.0-mavergreen.1\nabort gen_appcast.sh --render-notes failed for RELEASE_NOTES.md\nend-of-facts\n' | sh "$S" 2>&1)" \
   && { echo "FAIL: a stream carrying an abort record must not pass, sentinel or not; got: $_ab"; exit 1; }
 printf '%s\n' "$_ab" | grep -q 'aborted' \
   || { echo "FAIL: an aborted stream must name the producer's reason; got: $_ab"; exit 1; }
 
 # spec: scripts/check-artifact-conformance.sh -- and the forged-sentinel shape itself, as a
 #       real dist/ would emit it.
-_fg="$(printf 'expected 1.0.0-mavericks.1\nasset A\nend-of-facts\nZ 0\nasset RELEASE_NOTES.md 0\nabort gen_appcast.sh --render-notes failed for RELEASE_NOTES.md\n' | sh "$S" 2>&1)" \
+_fg="$(printf 'expected 1.0.0-mavergreen.1\nasset A\nend-of-facts\nZ 0\nasset RELEASE_NOTES.md 0\nabort gen_appcast.sh --render-notes failed for RELEASE_NOTES.md\n' | sh "$S" 2>&1)" \
   && { echo "FAIL: a forged end-of-facts must not pass while an abort is present; got: $_fg"; exit 1; }
 printf '%s\n' "$_trunc_out" | grep -qi 'incomplete' \
   || { echo "FAIL: a truncated stream should say it is incomplete; got: $_trunc_out"; exit 1; }
@@ -634,7 +687,8 @@ printf '%s\n' "$_trunc_out" | grep -qi 'incomplete' \
 # spec: scripts/check-artifact-conformance.sh -- the human-readable cause must survive the
 #       pipe. "The stream stopped" is true and useless; the operator needs to read WHY, which is
 #       what the producer's `abort` record carries.
-_abort_out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
+_abort_out="$(printf '%s\n' 'expected 1.0.0-mavergreen.1
+upstream-kind port
 abort gen_appcast.sh --render-notes failed for RELEASE_NOTES.md' | sh "$S" 2>&1)" \
   && { echo "FAIL: a stream carrying an abort record must not pass; got: $_abort_out"; exit 1; }
 printf '%s\n' "$_abort_out" | grep -qi 'render-notes failed for RELEASE_NOTES.md' \
@@ -644,9 +698,10 @@ printf '%s\n' "$_abort_out" | grep -qi 'render-notes failed for RELEASE_NOTES.md
 #       emitted EARLY (before dist/ is walked) so they SURVIVE a truncation -- a product could
 #       otherwise declare its way out of the one check that notices every other check was
 #       skipped.
-_dev_out="$(printf '%s\n' 'expected 1.0.0-mavericks.1
+_dev_out="$(printf '%s\n' 'expected 1.0.0-mavergreen.1
+upstream-kind port
 deviation end-of-facts we would rather not be checked, thanks
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10' | sh "$S" 2>&1)" \
   && { echo "FAIL: a deviation must not excuse a truncated stream; got: $_dev_out"; exit 1; }
 
@@ -655,7 +710,7 @@ asset p.pkg 10' | sh "$S" 2>&1)" \
 _sent="$(mktemp -d "${TMPDIR:-/tmp}/af-sentinel.XXXXXX")"
 mkdir -p "$_sent/dist"
 printf 'a\n' > "$_sent/dist/some-asset.txt"
-_sent_facts="$(sh "$AF" "$_sent/dist" 1.0.0-mavericks.1 "$_sent")"
+_sent_facts="$(sh "$AF" "$_sent/dist" 1.0.0-mavergreen.1 "$_sent")"
 rm -rf "$_sent"
 [ "$(printf '%s\n' "$_sent_facts" | tail -1)" = "end-of-facts" ] \
   || { echo "FAIL: artifact-facts.sh must end a successful run with the sentinel; got: $(printf '%s\n' "$_sent_facts" | tail -1)"; exit 1; }
@@ -668,29 +723,29 @@ cat > "$_ext/dist/appcast.xml" <<'XML'
   <channel>
     <item>
       <sparkle:version>1000</sparkle:version>
-      <sparkle:shortVersionString>1.0.0-mavericks.1</sparkle:shortVersionString>
+      <sparkle:shortVersionString>1.0.0-mavergreen.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>10.9.5</sparkle:minimumSystemVersion>
-      <enclosure url="https://example.com/d/1.0.0-mavericks.1/p.pkg" length="4096" sparkle:edSignature="x" />
+      <enclosure url="https://example.com/d/1.0.0-mavergreen.1/p.pkg" length="4096" sparkle:edSignature="x" />
     </item>
   </channel>
 </rss>
 XML
 cp "$_ext/dist/appcast.xml" "$_ext/dist/go126.xml"
-_ext_facts="$(sh "$AF" "$_ext/dist" 1.0.0-mavericks.1 "$_ext")"
+_ext_facts="$(sh "$AF" "$_ext/dist" 1.0.0-mavergreen.1 "$_ext")"
 rm -rf "$_ext"
-printf '%s\n' "$_ext_facts" | grep -qxF 'appcast appcast.xml 1.0.0-mavericks.1 p.pkg 4096 10.9.5' \
-  || { echo "FAIL: the identifying version and the OS floor are ELEMENTS while the URL and the length are enclosure ATTRIBUTES, so reading either from the wrong half yields unknown/0 -- and the element to read is shortVersionString, not <sparkle:version> 1000, which is the orderable comparison key and deliberately not the release version. Expected 'appcast appcast.xml 1.0.0-mavericks.1 p.pkg 4096 10.9.5', got: $_ext_facts"; exit 1; }
-printf '%s\n' "$_ext_facts" | grep -qxF 'appcast go126.xml 1.0.0-mavericks.1 p.pkg 4096 10.9.5' \
+printf '%s\n' "$_ext_facts" | grep -qxF 'appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 4096 10.9.5' \
+  || { echo "FAIL: the identifying version and the OS floor are ELEMENTS while the URL and the length are enclosure ATTRIBUTES, so reading either from the wrong half yields unknown/0 -- and the element to read is shortVersionString, not <sparkle:version> 1000, which is the orderable comparison key and deliberately not the release version. Expected 'appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 4096 10.9.5', got: $_ext_facts"; exit 1; }
+printf '%s\n' "$_ext_facts" | grep -qxF 'appcast go126.xml 1.0.0-mavergreen.1 p.pkg 4096 10.9.5' \
   || { echo "FAIL: a feed is named <short name>.xml, and any *.xml asset must be read as one: $_ext_facts"; exit 1; }
 
 _rp="$(mktemp -d "${TMPDIR:-/tmp}/af-repository.XXXXXX")"
 mkdir -p "$_rp/dist"; printf 'a\n' > "$_rp/dist/some-asset.txt"
-_rp_set="$(GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$AF" "$_rp/dist" 1.0.0-mavericks.1 "$_rp")"
-_rp_unset="$(sh "$AF" "$_rp/dist" 1.0.0-mavericks.1 "$_rp")"
+_rp_set="$(GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$AF" "$_rp/dist" 1.0.0-mavergreen.1 "$_rp")"
+_rp_unset="$(sh "$AF" "$_rp/dist" 1.0.0-mavergreen.1 "$_rp")"
 _rp_git=""
 if git --version >/dev/null 2>&1; then
   git -C "$_rp" init -q && git -C "$_rp" remote add origin https://github.com/Mavergreen/clang-22.git
-  _rp_git="$(sh "$AF" "$_rp/dist" 1.0.0-mavericks.1 "$_rp")"
+  _rp_git="$(sh "$AF" "$_rp/dist" 1.0.0-mavergreen.1 "$_rp")"
 fi
 rm -rf "$_rp"
 printf '%s\n' "$_rp_set" | grep -qx 'repository Mavergreen/golang-126' \
@@ -707,24 +762,25 @@ printf '%s\n' "$_rp_unset" | grep -q '^repository ' \
 #       ANOTHER release were never even described -- and the checker printed "conformance: ok".
 #       Piped exactly as release.yml pipes it, with no pipefail, this must now be loud.
 _e2e="$(mktemp -d "${TMPDIR:-/tmp}/af-e2e.XXXXXX")"
-mkdir -p "$_e2e/dist"
+mkdir -p "$_e2e/dist" "$_e2e/.mavergreen/upstream"
+printf '9.9p2\n# renovate: datasource=github-tags depName=openssh/openssh-portable\n' > "$_e2e/.mavergreen/upstream/VERSION"
 : > "$_e2e/dist/RELEASE_NOTES.md"
 cat > "$_e2e/dist/appcast.xml" <<'XML'
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
     <item>
-      <sparkle:shortVersionString>9.9p2-mavericks.6</sparkle:shortVersionString>
+      <sparkle:shortVersionString>9.9p2-mavergreen.6</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>10.9.5</sparkle:minimumSystemVersion>
       <description><![CDATA[
 <p>Text that is not this release's notes at all.</p>
 ]]></description>
-      <enclosure url="https://github.com/Mavergreen/openssh/releases/download/9.9p2-mavericks.5/ghost.pkg" length="4096" sparkle:edSignature="x" />
+      <enclosure url="https://github.com/Mavergreen/openssh/releases/download/9.9p2-mavergreen.5/ghost.pkg" length="4096" sparkle:edSignature="x" />
     </item>
   </channel>
 </rss>
 XML
-_e2e_out="$(sh "$AF" "$_e2e/dist" 9.9p2-mavericks.6 "$_e2e" 2>/dev/null | sh "$S" 2>&1)" \
+_e2e_out="$(sh "$AF" "$_e2e/dist" 9.9p2-mavergreen.6 "$_e2e" 2>/dev/null | sh "$S" 2>&1)" \
   && { rm -rf "$_e2e"; echo "FAIL: a dist whose producer aborts must fail the pipeline, not pass it; got: $_e2e_out"; exit 1; }
 printf '%s\n' "$_e2e_out" | grep -qi 'render-notes' \
   || { rm -rf "$_e2e"; echo "FAIL: the end-to-end failure should name the cause; got: $_e2e_out"; exit 1; }
@@ -748,14 +804,14 @@ NOTES
 #           fixture is not about, the same trap the comment above already names for .pkg.
 mkdir -p "$_e2e/good-src"
 printf 'payload\n' > "$_e2e/good-src/payload.txt"
-( cd "$_e2e/good-src" && tar -czf "$_e2e/good/thing-9.9p2-mavericks.6.tgz" payload.txt )
+( cd "$_e2e/good-src" && tar -czf "$_e2e/good/thing-9.9p2-mavergreen.6.tgz" payload.txt )
 rm -rf "$_e2e/good-src"
-_good_len="$(wc -c < "$_e2e/good/thing-9.9p2-mavericks.6.tgz" | tr -d ' ')"
-sh "$GA" "Test Channel" "9.9p2-mavericks.6" \
-  "https://github.com/Mavergreen/openssh/releases/download/9.9p2-mavericks.6/thing-9.9p2-mavericks.6.tgz" \
+_good_len="$(wc -c < "$_e2e/good/thing-9.9p2-mavergreen.6.tgz" | tr -d ' ')"
+sh "$GA" "Test Channel" "9.9p2-mavergreen.6" \
+  "https://github.com/Mavergreen/openssh/releases/download/9.9p2-mavergreen.6/thing-9.9p2-mavergreen.6.tgz" \
   "10.9.5" "$_e2e/good/RELEASE_NOTES.md" "sparkle:edSignature=\"x\" length=\"$_good_len\"" \
   > "$_e2e/good/appcast.xml"
-_good_out="$(sh "$AF" "$_e2e/good" 9.9p2-mavericks.6 "$_e2e" 2>&1 | sh "$S" 2>&1)" \
+_good_out="$(sh "$AF" "$_e2e/good" 9.9p2-mavergreen.6 "$_e2e" 2>&1 | sh "$S" 2>&1)" \
   || { rm -rf "$_e2e"; echo "FAIL: a normal dist must still pass end to end; got: $_good_out"; exit 1; }
 printf '%s\n' "$_good_out" | grep -qi 'conformance: ok' \
   || { rm -rf "$_e2e"; echo "FAIL: a normal dist should report ok; got: $_good_out"; exit 1; }
@@ -773,7 +829,7 @@ _fc1="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-a.XXXXXX")"
 mkdir -p "$_fc1/src" "$_fc1/dist"
 printf '\317\372\355\376x' > "$_fc1/src/tiny"
 ( cd "$_fc1/src" && tar -czf "$_fc1/dist/broken.tar.gz" tiny )
-_fc1_facts="$(sh "$AF" "$_fc1/dist" 1.0.0-mavericks.1 "$_fc1" 2>/dev/null)" \
+_fc1_facts="$(sh "$AF" "$_fc1/dist" 1.0.0-mavergreen.1 "$_fc1" 2>/dev/null)" \
   && { rm -rf "$_fc1"; echo "FAIL: a tarball holding an unreadable Mach-O-magic file must abort, not succeed; got: $_fc1_facts"; exit 1; }
 printf '%s\n' "$_fc1_facts" | grep -q '^abort cannot read a Mach-O' \
   || { rm -rf "$_fc1"; echo "FAIL: expected an 'abort cannot read a Mach-O' record; got: $_fc1_facts"; exit 1; }
@@ -795,7 +851,7 @@ if mach_tool OTOOL 2>/dev/null; then
   for _fc4_sub in -l -hv; do
     printf '#!/bin/sh\ncase "$1" in %s) echo "otool: %s broke" >&2; exit 1 ;; esac\nexec "%s" "$@"\n' "$_fc4_sub" "$_fc4_sub" "$OTOOL" > "$_fc4/bin/otool"
     chmod +x "$_fc4/bin/otool"
-    _fc4_facts="$(OTOOL="$_fc4/bin/otool" sh "$AF" "$_fc4/dist" 1.0.0-mavericks.1 "$_fc4" 2>/dev/null)" \
+    _fc4_facts="$(OTOOL="$_fc4/bin/otool" sh "$AF" "$_fc4/dist" 1.0.0-mavergreen.1 "$_fc4" 2>/dev/null)" \
       && { rm -rf "$_fc4"; echo "FAIL: a fat binary whose reader fails must abort, not vanish from the stream; got: $_fc4_facts"; exit 1; }
     printf '%s\n' "$_fc4_facts" | grep -q '^abort cannot read a Mach-O' \
       || { rm -rf "$_fc4"; echo "FAIL: expected an 'abort cannot read a Mach-O' record for a failing reader; got: $_fc4_facts"; exit 1; }
@@ -813,7 +869,7 @@ rm -rf "$_fc4"
 _fc2="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-b.XXXXXX")"
 mkdir -p "$_fc2/dist"
 printf 'not a tarball\n' > "$_fc2/dist/fake.tgz"
-_fc2_facts="$(sh "$AF" "$_fc2/dist" 1.0.0-mavericks.1 "$_fc2" 2>/dev/null)" \
+_fc2_facts="$(sh "$AF" "$_fc2/dist" 1.0.0-mavergreen.1 "$_fc2" 2>/dev/null)" \
   && { rm -rf "$_fc2"; echo "FAIL: a .tgz that is not really a tarball must abort, not succeed; got: $_fc2_facts"; exit 1; }
 printf '%s\n' "$_fc2_facts" | grep -q '^abort cannot extract' \
   || { rm -rf "$_fc2"; echo "FAIL: expected an 'abort cannot extract' record; got: $_fc2_facts"; exit 1; }
@@ -843,7 +899,7 @@ else
   #           mode-000 source file at archive time (which even its owner cannot do); GNU tar
   #           (this host) restores that exact mode on extraction.
   ( cd "$_fc3/src" && tar --mode=000 -czf "$_fc3/dist/noperm.tar.gz" noperm )
-  _fc3_facts="$(sh "$AF" "$_fc3/dist" 1.0.0-mavericks.1 "$_fc3" 2>/dev/null)" \
+  _fc3_facts="$(sh "$AF" "$_fc3/dist" 1.0.0-mavergreen.1 "$_fc3" 2>/dev/null)" \
     && { rm -rf "$_fc3"; echo "FAIL: a tarball holding an unreadable (mode 000) Mach-O-magic file must abort, not succeed; got: $_fc3_facts"; exit 1; }
   printf '%s\n' "$_fc3_facts" | grep -q '^abort ' \
     || { rm -rf "$_fc3"; echo "FAIL: expected an abort record; got: $_fc3_facts"; exit 1; }
@@ -874,8 +930,9 @@ enclosure-url appcast.xml https://github.com/Mavergreen/magic-trackpad2/releases
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
 #       identity" -- what a pkg installs carries the family's identity and lands where the family puts
 #       things, unless a deviation scoped to that identifier or path says why not.
-REL='expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+REL='expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
 asset p.pkg 10'
 
 LAYOUT='component p.pkg dev.mavergreen.base
@@ -915,8 +972,9 @@ has "install-path: another product's tree is not this pkg's" "install-path" "$RE
 $LAYOUT
 installs p.pkg usr/local/mavergreen/y/bin/y"
 
-has "install-path: .base is only for a pkg that carries the base component" "install-path" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x
+has "install-path: .base is only for a pkg that carries the base component" "install-path" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
 product x
@@ -1015,9 +1073,10 @@ manifest p.pkg x dev.mavergreen.x x
 product x
 installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
 
-no "base: a bare component pkg cannot carry the helper, so it cannot install a product" "base" 'expected 1.0.0-mavericks.1
-pkg p.pkg 1.0.0-mavericks.1 none dev.mavergreen.x
-appcast appcast.xml 1.0.0-mavericks.1 p.pkg 10 11.0
+no "base: a bare component pkg cannot carry the helper, so it cannot install a product" "base" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 none dev.mavergreen.x
+appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 10 11.0
 asset p.pkg 10
 asset appcast.xml 10
 component p.pkg dev.mavergreen.x
@@ -1144,7 +1203,7 @@ sparkle p.pkg Library/Application%20Support/Mavergreen/x-updater.app https://git
 launchd p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck
 manifest-appcast p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
 FEED='asset x.xml 700
-appcast x.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5'
+appcast x.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5'
 
 ok "updater: the derived bundle id, app, label and feed pass" "$REL
 $FEED
@@ -1183,23 +1242,24 @@ printf '%s\n' "$_none" | grep -q "should name 'none'" \
   && { echo "FAIL: an underivable feed is one failure, not also a manifest that 'should name none': $_none"; exit 1; }
 alone "feed: a release with feeds but not this updater's" "feed" "$REL
 asset y.xml 700
-appcast y.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
+appcast y.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5
 $UPD"
 no "feed: appcast.xml is not a feed any updater polls" "feed|x.xml" "$REL
 asset appcast.xml 700
-appcast appcast.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
+appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5
 $UPD"
 ok "feed: a declared feed deviation excuses the URL and the name" "$REL
 deviation feed porthole's releases were also consumed as an ingredient under a moving @vMAJOR tag, so /latest/ could name a release that is not the newest product release
 asset appcast.xml 700
-appcast appcast.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
+appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5
 $(printf '%s\n' "$UPD" | sed '/^sparkle /s|/releases/latest/download/x\.xml$|/releases/download/feed-x/appcast.xml|')"
 
 # spec: scripts/check-artifact-conformance.sh -- a feed's enclosure names the pkg it describes;
 #       two products' feeds naming EACH OTHER's pkg must fail through the enclosure-name check
 #       alone: neither product carries a derived fact, so the per-updater checks never run.
-SWAP='expected 1.26.8-mavericks.7
-pkg go126.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.go126
+SWAP='expected 1.26.8-mavergreen.7
+upstream-kind port
+pkg go126.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go126
 asset go126.pkg 10
 component go126.pkg dev.mavergreen.base
 component go126.pkg dev.mavergreen.go126
@@ -1207,7 +1267,7 @@ manifest go126.pkg go126 dev.mavergreen.go126 go126
 product go126
 manifest-line go126.pkg 126
 installs go126.pkg usr/local/mavergreen/go126/mavergreen.plist
-pkg go126-cross.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.go126-cross
+pkg go126-cross.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go126-cross
 asset go126-cross.pkg 10
 component go126-cross.pkg dev.mavergreen.base
 component go126-cross.pkg dev.mavergreen.go126-cross
@@ -1216,13 +1276,14 @@ product go126-cross
 manifest-line go126-cross.pkg 126-cross
 installs go126-cross.pkg usr/local/mavergreen/go126-cross/mavergreen.plist
 asset go126.xml 700
-appcast go126.xml 1.26.8-mavericks.7 go126-cross.pkg 10 10.9.5
+appcast go126.xml 1.26.8-mavergreen.7 go126-cross.pkg 10 10.9.5
 asset go126-cross.xml 700
-appcast go126-cross.xml 1.26.8-mavericks.7 go126.pkg 10 10.9.5'
+appcast go126-cross.xml 1.26.8-mavergreen.7 go126.pkg 10 10.9.5'
 alone "feed: two updaters' feeds swap enclosures -- each is named for the pkg it actually describes" "feed" "$SWAP"
 
-GO='expected 1.26.8-mavericks.7
-pkg go.pkg 1.26.8-mavericks.7 10.9.5 dev.mavergreen.go126
+GO='expected 1.26.8-mavergreen.7
+upstream-kind port
+pkg go.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go126
 asset go.pkg 10
 component go.pkg dev.mavergreen.base
 component go.pkg dev.mavergreen.go126
@@ -1257,8 +1318,9 @@ ok "line: with no repository known, only the version is compared" "$GO
 manifest-line go.pkg 126"
 alone "line: with no repository known, the version still carries the line" "line" "$GO
 manifest-line go.pkg 127"
-ok "line: one component can be the line (22.1.1 is clang 22)" 'expected 22.1.1-mavericks.5
-pkg c.pkg 22.1.1-mavericks.5 10.9.5 dev.mavergreen.clang22
+ok "line: one component can be the line (22.1.1 is clang 22)" 'expected 22.1.1-mavergreen.5
+upstream-kind port
+pkg c.pkg 22.1.1-mavergreen.5 10.9.5 dev.mavergreen.clang22
 asset c.pkg 10
 component c.pkg dev.mavergreen.base
 component c.pkg dev.mavergreen.clang22
@@ -1314,42 +1376,43 @@ export STEVEDORE="$SD"
 PLIST
   mkdir -p "$_pk/.mavergreen/products/x" "$_pk/.mavergreen/products/w"
   printf 'X\n' > "$_pk/.mavergreen/products/x/noun"; printf 'W\n' > "$_pk/.mavergreen/products/w/noun"
-  "$SD" component --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
-    --mtime 1700000000 --out "$_pk/dist/x-1.0.0-mavericks.1.pkg"
-  "$SD" component --root "$_st/usr/local/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
-    --install-location /usr/local/y --mtime 1700000000 --out "$_pk/dist/y-1.0.0-mavericks.1.pkg"
-  "$SD" component --root "$_st" --identifier dev.mavergreen.z --version 1.0.0-mavericks.1 --install-location /opt/z \
-    --mtime 1700000000 --out "$_pk/dist/z-1.0.0-mavericks.1.pkg"
-  cp "$_pk/dist/x-1.0.0-mavericks.1.pkg" "$_pk/comp/x-component.pkg"
+  mkdir -p "$_pk/.mavergreen/upstream"; printf '1.0.0\n# renovate: datasource=github-releases depName=example/x\n' > "$_pk/.mavergreen/upstream/VERSION"
+  "$SD" component --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavergreen.1 --install-location / \
+    --mtime 1700000000 --out "$_pk/dist/x-1.0.0-mavergreen.1.pkg"
+  "$SD" component --root "$_st/usr/local/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavergreen.1 \
+    --install-location /usr/local/y --mtime 1700000000 --out "$_pk/dist/y-1.0.0-mavergreen.1.pkg"
+  "$SD" component --root "$_st" --identifier dev.mavergreen.z --version 1.0.0-mavergreen.1 --install-location /opt/z \
+    --mtime 1700000000 --out "$_pk/dist/z-1.0.0-mavergreen.1.pkg"
+  cp "$_pk/dist/x-1.0.0-mavergreen.1.pkg" "$_pk/comp/x-component.pkg"
   sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --base-version 1.0.9 \
-    --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavericks.1.pkg" >/dev/null 2>&1 \
+    --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavergreen.1.pkg" >/dev/null 2>&1 \
     || { echo "FAIL: set_install_floor.sh could not build the archive this fixture reads"; exit 1; }
-  _f="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
+  _f="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"
   printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"
-  _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavericks.1.pkg" | tr -d ' ')"
-  sh "$GA" X 1.0.0-mavericks.1 https://github.com/Mavergreen/x/releases/download/1.0.0-mavericks.1/x-1.0.0-mavericks.1.pkg \
+  _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavergreen.1.pkg" | tr -d ' ')"
+  sh "$GA" X 1.0.0-mavergreen.1 https://github.com/Mavergreen/x/releases/download/1.0.0-mavergreen.1/x-1.0.0-mavergreen.1.pkg \
     10.9.5 "$_pk/archive/RELEASE_NOTES.md" "sparkle:edSignature=\"x\" length=\"$_alen\"" > "$_pk/archive/x.xml"
-  _fa="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/archive" 1.0.0-mavericks.1 "$_pk")"
-  mkdir -p "$_pk/rehearsal"; cp "$_pk/archive/x-1.0.0-mavericks.1.pkg" "$_pk/rehearsal/"
-  GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null \
+  _fa="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/archive" 1.0.0-mavergreen.1 "$_pk")"
+  mkdir -p "$_pk/rehearsal"; cp "$_pk/archive/x-1.0.0-mavergreen.1.pkg" "$_pk/rehearsal/"
+  GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavergreen.1 2>/dev/null \
     || { echo "FAIL: stand-in-feeds.sh must stage a feed for a build that signs nothing"; exit 1; }
   [ -f "$_pk/rehearsal/x.xml" ] && [ -s "$_pk/rehearsal/RELEASE_NOTES.md" ] \
     || { echo "FAIL: stand-in-feeds.sh writes x.xml for x's updater, and stand-in notes for its description"; exit 1; }
   _sum="$(cksum < "$_pk/rehearsal/x.xml")"
-  GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null
+  GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavergreen.1 2>/dev/null
   [ "$(cksum < "$_pk/rehearsal/x.xml")" = "$_sum" ] || { echo "FAIL: stand-in-feeds.sh never overwrites a feed"; exit 1; }
-  _fr="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/rehearsal" 1.0.0-mavericks.1 "$_pk")"
-  _fq="$(sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
+  _fr="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/rehearsal" 1.0.0-mavergreen.1 "$_pk")"
+  _fq="$(sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"
   printf '%s\n' "$_fq" | grep -qxF 'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app none' \
     || { echo "FAIL: with no repo to name, the updater's identity is still derived and its feed is none: $_fq"; exit 1; }
   printf '%s\n' "$_fq" | grep -q '^abort' && { echo "FAIL: an unknown repo is not a reason to stop the stream: $_fq"; exit 1; }
   rm -f "$_pk/.mavergreen/products/w/noun"
-  _nn=0; _fw="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk" 2>"$_pk/err")" || _nn=$?
+  _nn=0; _fw="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk" 2>"$_pk/err")" || _nn=$?
   [ "$_nn" -ne 0 ] && printf '%s\n' "$_fw" | grep -q '^abort cannot derive w' && grep -q 'noun' "$_pk/err" \
     || { echo "FAIL: a declared product whose identity cannot be derived stops the stream, saying why: $_fw $(cat "$_pk/err")"; exit 1; }
   printf 'W\n' > "$_pk/.mavergreen/products/w/noun"
   rm -rf "$_pk/.mavergreen/products/x"
-  _fn="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
+  _fn="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"
   printf '%s\n' "$_fn" | grep -q '^derived x ' \
     && { echo "FAIL: a product this repo does not declare has no derived identity: $_fn"; exit 1; }
   printf '%s\n' "$_fn" | grep -qx 'end-of-facts' && ! printf '%s\n' "$_fn" | grep -q '^abort' \
@@ -1360,26 +1423,26 @@ PLIST
     && { echo "FAIL: the stream carries no registered record; identity is derived: $_f"; exit 1; }
   rm -rf "$_pk"
   for want in \
-    'installs x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist' \
-    'installs x-1.0.0-mavericks.1.pkg usr/local/mavergreen/x/link' \
-    'installs y-1.0.0-mavericks.1.pkg usr/local/y/bin/x' \
-    'bundle x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.x.updater' \
-    'launchd x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck' \
-    'manifest x-1.0.0-mavericks.1.pkg x dev.mavergreen.x x' \
-    'component x-1.0.0-mavericks.1.pkg dev.mavergreen.x' \
+    'installs x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist' \
+    'installs x-1.0.0-mavergreen.1.pkg usr/local/mavergreen/x/link' \
+    'installs y-1.0.0-mavergreen.1.pkg usr/local/y/bin/x' \
+    'bundle x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.x.updater' \
+    'launchd x-1.0.0-mavergreen.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck' \
+    'manifest x-1.0.0-mavergreen.1.pkg x dev.mavergreen.x x' \
+    'component x-1.0.0-mavergreen.1.pkg dev.mavergreen.x' \
     'product x' \
-    'manifest-outside x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app' \
-    'manifest-outside x-1.0.0-mavericks.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist' \
-    'manifest-generated x-1.0.0-mavericks.1.pkg Applications/Linux%20X.app' \
-    'sparkle x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
+    'manifest-outside x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app' \
+    'manifest-outside x-1.0.0-mavergreen.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist' \
+    'manifest-generated x-1.0.0-mavergreen.1.pkg Applications/Linux%20X.app' \
+    'sparkle x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
     'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
-    'manifest-line x-1.0.0-mavericks.1.pkg none' \
-    'manifest-appcast x-1.0.0-mavericks.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml'
+    'manifest-line x-1.0.0-mavergreen.1.pkg none' \
+    'manifest-appcast x-1.0.0-mavergreen.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml'
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
   if [ -n "$_macho" ]; then
-  printf '%s\n' "$_f" | grep -qE '^macho x-1\.0\.0-mavericks\.1\.pkg usr/local/mavergreen/x/bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
+  printf '%s\n' "$_f" | grep -qE '^macho x-1\.0\.0-mavergreen\.1\.pkg usr/local/mavergreen/x/bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
     || { echo "FAIL: a Mach-O in a pkg payload must yield a macho fact -- got: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -qE '^macho x-tools\.tar\.gz bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
     || { echo "FAIL: a Mach-O in a shipped tarball must yield a macho fact -- got: $_f"; exit 1; }
@@ -1388,18 +1451,18 @@ PLIST
     && { echo "FAIL: a non-Mach-O file must not yield a macho fact: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q 'org.sparkle-project' \
     && { echo "FAIL: a framework nested inside the updater is not a top-level bundle; its identifier is not the product's: $_f"; exit 1; }
-  printf '%s\n' "$_f" | grep -q '^installs y-1.0.0-mavericks.1.pkg bin/' \
+  printf '%s\n' "$_f" | grep -q '^installs y-1.0.0-mavergreen.1.pkg bin/' \
     && { echo "FAIL: payload paths must be read relative to the component's install-location, not to /: $_f"; exit 1; }
-  printf '%s\n' "$_f" | grep -q '^manifest z-1.0.0-mavericks.1.pkg ' \
+  printf '%s\n' "$_f" | grep -q '^manifest z-1.0.0-mavergreen.1.pkg ' \
     && { echo "FAIL: a manifest is read only from a payload installed at /, where a product tree always lands: $_f"; exit 1; }
   for want in \
-    'pkg x-1.0.0-mavericks.1.pkg 1.0.0-mavericks.1 10.9.5 dev.mavergreen.x' \
-    'installs x-1.0.0-mavericks.1.pkg usr/local/mavergreen/.base/1.0.9/mavergreen'
+    'pkg x-1.0.0-mavergreen.1.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x' \
+    'installs x-1.0.0-mavergreen.1.pkg usr/local/mavergreen/.base/1.0.9/mavergreen'
   do
     printf '%s\n' "$_fa" | grep -qxF "$want" \
       || { echo "FAIL: a product archive's version and identity are the product's, not the base component's that precedes it: want $want -- got: $_fa"; exit 1; }
   done
-  [ "$(printf '%s\n' "$_fa" | sed -n 's/^component x-1.0.0-mavericks.1.pkg //p' | tr '\n' ' ')" = 'dev.mavergreen.base dev.mavergreen.x ' ] \
+  [ "$(printf '%s\n' "$_fa" | sed -n 's/^component x-1.0.0-mavergreen.1.pkg //p' | tr '\n' ' ')" = 'dev.mavergreen.base dev.mavergreen.x ' ] \
     || { echo "FAIL: an archive's components are reported in Distribution order, base first: $_fa"; exit 1; }
   _ca="$(printf '%s\n' "$_fa" | sh "$S" 2>&1)" \
     || { echo "FAIL: an archive set_install_floor.sh built from a laid-out stage must pass conformance: $_ca"; exit 1; }
@@ -1411,7 +1474,7 @@ PLIST
   "$SD" component --root "$_un/root" --identifier dev.mavergreen.ok --version 1 --install-location / --mtime 1700000000 --out "$_un/good.pkg" >/dev/null \
     || { echo "FAIL: stevedore could not build the positive-control pkg"; exit 1; }
   rm -rf "$_un/root"
-  _fu="$(sh "$AF" "$_un" 1.0.0-mavericks.1 "$_un")" && _ur=0 || _ur=$?
+  _fu="$(sh "$AF" "$_un" 1.0.0-mavergreen.1 "$_un")" && _ur=0 || _ur=$?
   rm -rf "$_un"
   [ "$_ur" -eq 0 ] && printf "%s\n" "$_fu" | grep -qxF "pkg bad.pkg unreadable none none" \
     && printf "%s\n" "$_fu" | grep -qxF end-of-facts && ! printf "%s\n" "$_fu" | grep -q "^abort" \

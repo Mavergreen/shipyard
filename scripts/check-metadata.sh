@@ -376,7 +376,7 @@ for _s in $_prods; do
     if [ "$_cmp" -ne 0 ]; then
       chk_fail requires-min "$_rat/min \"$_min\" cannot be ordered against .mavergreen/$_i's pin \"$_pin\"" \
         "a min the comparator cannot order with the pin might be above it, so it is refused rather than passed unproven" \
-        "write the min, and the pin, as dotted numbers with at most a -mavericks.N or pN suffix"
+        "write the min, and the pin, as dotted numbers with at most a -mavergreen.N or pN suffix"
     elif [ "$_ord" = 1 ]; then
       chk_fail requires-min "$_rat/min $_min is above .mavergreen/$_i's pin $_pin" \
         "the preinstall would refuse the very release the product was built and tested with" \

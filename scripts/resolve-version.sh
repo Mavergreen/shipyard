@@ -1,12 +1,12 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: resolve-version.sh [auto|local]
-#          Prints this repo's full version (<upstream>-mavericks.N), writing VERSION if it is not
+#          Prints this repo's full version (<upstream>-mavergreen.N), writing VERSION if it is not
 #          there yet. VERSION is a build PRODUCT -- written here, read by cmake and the updater,
 #          gitignored, never committed. An existing VERSION is reused as-is: within one CI run, an
 #          earlier job already resolved it and every job must agree.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning" --
-#       the shipped state lives in tags; container-tools shipped -mavericks.14 while its committed
+#       the shipped state lives in tags; container-tools shipped release 14 of one upstream while its committed
 #       VERSION still said .2, which also made its tag-triggered publish path (tag must equal
 #       VERSION) impossible to satisfy.
 set -eu

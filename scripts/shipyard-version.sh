@@ -3,7 +3,7 @@
 #   usage: shipyard-version.sh          (prints FULL=<line>.<count> and TAG=v<line>.<count>)
 #          shipyard's own version -- .mavergreen/upstream/VERSION holds the LINE (major.minor); the patch is the
 #          commit count, so a new commit is necessarily a new version with no discipline to remember.
-#          NOT resolve-version.sh: that hardcodes -mavericks.N, which is for repackaged upstreams, not
+#          NOT resolve-version.sh: that hardcodes -mavergreen.N, which is for repackaged upstreams, not
 #          for us.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "shipyard: consume
 #       its facilities, never hand-roll them" -- we are our own upstream, consumed through a MOVING

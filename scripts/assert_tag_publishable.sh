@@ -6,7 +6,7 @@
 #          family repo is public, so this needs no token.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "An existing tag
 #       refuses the publish -- except the tag that triggered the run" -- two runs can compute the
-#       same -mavericks.(N+1) and both build it; the loser must not publish and must not relabel (the
+#       same -mavergreen.(N+1) and both build it; the loser must not publish and must not relabel (the
 #       version is already baked into the pkg and the appcast), so it re-dispatches. A run started BY
 #       a pushed tag always finds its own tag, and blanket refusal made the documented "publish from
 #       a tag" model impossible (clang had no working release path at all), so that case publishes,
@@ -37,7 +37,7 @@ fi
 if [ "$REF_TYPE" != tag ] || [ "$REF_NAME" != "$VER" ]; then
   chk_fail tag-publishable "the tag being published is free, or is the one that triggered this run" \
     "tag $VER already exists -- another run published it while this one was building, and nothing was published" \
-    "re-dispatch this release: it will compute the next -mavericks.N and rebuild with that version baked in"
+    "re-dispatch this release: it will compute the next -mavergreen.N and rebuild with that version baked in"
   exit 1
 fi
 

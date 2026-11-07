@@ -33,7 +33,7 @@ rc=0; sh "$here/scripts/macho-slices.sh" "$t/Fake.class" >/dev/null 2>&1 || rc=$
 
 for k in fat Fake.class; do
   rm -rf "$t/root" "$t/dist"; mkdir -p "$t/root/lib" "$t/dist"; cp "$t/$k" "$t/root/lib/$k"
-  (cd "$t/root" && tar czf "$t/dist/demo-1.0.0-mavericks.1.tar.gz" lib)
+  (cd "$t/root" && tar czf "$t/dist/demo-1.0.0-mavergreen.1.tar.gz" lib)
   rc=0; (cd "$t" && SHIPYARD_CHECK_DIST="$t/dist" sh "$here/scripts/assert_binary_compatible.sh") > "$t/out" 2>&1 || rc=$?
   if [ "$k" = fat ]; then
     [ "$rc" = 1 ] && grep -q 'CANNOT MEASURE' "$t/out" || fail "M13: the guard fails closed on a fat Mach-O lipo cannot read, got $rc: $(cat "$t/out")"

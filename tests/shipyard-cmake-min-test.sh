@@ -12,8 +12,8 @@ _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/shipyard-cmake-min.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fails=0
 fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
-min="$(sed -n '1s/-mavericks\.[0-9][0-9]*$//p' "$root/.mavergreen/products/shipyard/requires/cmake/min")"
-[ -n "$min" ] || { echo "FAIL: .mavergreen/products/shipyard/requires/cmake/min is not X.Y.Z-mavericks.N"; exit 1; }
+min="$(sed -n '1s/^\([0-9][0-9]*\(\.[0-9][0-9]*\)*\).*$/\1/p' "$root/.mavergreen/products/shipyard/requires/cmake/min")"
+[ -n "$min" ] || { echo "FAIL: .mavergreen/products/shipyard/requires/cmake/min does not begin with X.Y.Z"; exit 1; }
 baked() { sed -n 's/^ *set(_shipyard_cmake_min "\(.*\)")$/\1/p' "$w/b/MavergreenShipyardConfig.cmake"; }
 
 "$cm" -S "$root" -B "$w/b" > "$w/c1.log" 2>&1 || { echo "FAIL: shipyard does not configure:"; sed 's/^/    | /' "$w/c1.log"; exit 1; }
@@ -22,7 +22,7 @@ baked() { sed -n 's/^ *set(_shipyard_cmake_min "\(.*\)")$/\1/p' "$w/b/Mavergreen
 [ "$(baked)" = 3.1.4 ] || fail "-DSHIPYARD_CMAKE_MIN=3.1.4 must be the minimum; got '$(baked)'"
 "$cm" -S "$root" -B "$w/b" > "$w/c3.log" 2>&1 || { echo "FAIL: the reconfigure does not configure:"; sed 's/^/    | /' "$w/c3.log"; exit 1; }
 [ "$(baked)" = "$min" ] || fail "a later configure without -DSHIPYARD_CMAKE_MIN must read the min again; got '$(baked)'"
-for bad in "" 4.4.4-mavericks.1 four; do
+for bad in "" 4.4.4-mavergreen.1 four; do
   rc=0; "$cm" -S "$root" -B "$w/bad" -DSHIPYARD_CMAKE_MIN="$bad" > "$w/bad.log" 2>&1 || rc=$?
   [ "$rc" -ne 0 ] || fail "-DSHIPYARD_CMAKE_MIN='$bad' must fail the configure"
   grep -qF "'$bad', not a version" "$w/bad.log" && grep -q '.mavergreen/products/shipyard/requires/cmake/min' "$w/bad.log" \

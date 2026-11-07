@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: version.sh [auto|local]
-#          Derives the full version (<upstream>-mavericks.N), its tag, and whether to release.
+#          Derives the full version (<upstream>-mavergreen.N), its tag, and whether to release.
 #            auto  (default): new upstream (no tag yet) -> N=1, RELEASE=yes; else current N,
 #                  RELEASE=no.
 #            local          : N = maxExistingN + 1, RELEASE=yes  (an independent repackage).
@@ -19,13 +19,13 @@ U="$(upstream_version)"
 if [ -n "${MAVERGREEN_TAGS+x}" ]; then
   tags="$MAVERGREEN_TAGS"
 else
-  tags="$(git -C "$MAVERGREEN_REPO_ROOT" tag --list "${U}-mavericks.*" 2>/dev/null || true)"
+  tags="$(git -C "$MAVERGREEN_REPO_ROOT" tag --list "${U}-mavergreen.*" 2>/dev/null || true)"
 fi
 
 maxN=0
 for t in $tags; do
   case "$t" in
-    "${U}-mavericks."*)
+    "${U}-mavergreen."*)
       n="${t##*.}"
       case "$n" in ''|*[!0-9]*) : ;; *) [ "$n" -gt "$maxN" ] && maxN="$n" ;; esac
       ;;
@@ -38,5 +38,5 @@ case "$mode" in
   *) echo "version.sh: mode must be 'auto' or 'local' (got '$mode')" >&2; exit 2 ;;
 esac
 
-full="${U}-mavericks.${N}"
+full="${U}-mavergreen.${N}"
 printf 'FULL=%s\nTAG=%s\nRELEASE=%s\n' "$full" "$full" "$rel"

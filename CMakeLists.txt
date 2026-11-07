@@ -75,13 +75,13 @@ if(DEFINED CACHE{SHIPYARD_CMAKE_MIN})
   unset(SHIPYARD_CMAKE_MIN CACHE)
 else()
   file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/.mavergreen/products/shipyard/requires/cmake/min" _shipyard_cmake_min LIMIT_COUNT 1)
-  string(REGEX REPLACE "-mavericks\\.[0-9]+$" "" _shipyard_cmake_min "${_shipyard_cmake_min}")
+  string(REGEX MATCH "^[0-9]+(\\.[0-9]+)*" _shipyard_cmake_min "${_shipyard_cmake_min}")
 endif()
 # spec: MavergreenShipyardConfig.cmake -- a minimum that is not a version reads as a checkout's
 #       placeholder there, and every consumer would then fail on a missing .mavergreen/products/shipyard/requires/cmake/min.
 if(NOT _shipyard_cmake_min MATCHES "^[0-9]+(\\.[0-9]+)*$")
   message(FATAL_ERROR "shipyard's cmake minimum is '${_shipyard_cmake_min}', not a version: "
-    ".mavergreen/products/shipyard/requires/cmake/min must hold X.Y.Z-mavericks.N, and -DSHIPYARD_CMAKE_MIN must be X.Y.Z")
+    ".mavergreen/products/shipyard/requires/cmake/min must begin with X.Y.Z, and -DSHIPYARD_CMAKE_MIN must be X.Y.Z")
 endif()
 set(SHIPYARD_CMAKE_MIN "${_shipyard_cmake_min}")
 configure_file(MavergreenShipyardConfig.cmake "${CMAKE_CURRENT_BINARY_DIR}/MavergreenShipyardConfig.cmake" @ONLY)

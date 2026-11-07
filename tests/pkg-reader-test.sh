@@ -30,7 +30,7 @@ fx="$here/tests/fixtures/checks"
 c="$w/repo"
 fixture_tree "$fx" "$fx/artifact-facts/pass" "$c"
 rm -f "$c/ENV"
-cp "$c/dist/ed25519-1.0.0-mavericks.1.pkg" "$c/dist/second-1.0.0-mavericks.1.pkg"
+cp "$c/dist/ed25519-1.0.0-mavergreen.1.pkg" "$c/dist/second-1.0.0-mavergreen.1.pkg"
 cat > "$w/stevedore" <<STUB
 #!/bin/sh
 [ "\$1" != expand ] || echo "\$2" >> "$w/expands"
@@ -39,13 +39,13 @@ STUB
 chmod +x "$w/stevedore"
 : > "$w/expands"
 
-(cd "$c" && STEVEDORE="$w/stevedore" SHIPYARD_CHECK_VERSION=1.0.0-mavericks.1 SHIPYARD_CHECK_REPO="$c" \
+(cd "$c" && STEVEDORE="$w/stevedore" SHIPYARD_CHECK_VERSION=1.0.0-mavergreen.1 SHIPYARD_CHECK_REPO="$c" \
   sh "$here/scripts/shipyard-check" --dist "$c/dist" > "$w/out" 2>&1) || :
 n="$(wc -l < "$w/expands" | tr -d ' ')"
 [ "$n" = 2 ] || fail "--dist extracts each pkg once: two pkgs, $n expands: $(cat "$w/expands")"
 [ "$(sort -u "$w/expands" | wc -l | tr -d ' ')" = 2 ] || fail "--dist extracts each pkg once: a pkg was expanded twice: $(cat "$w/expands")"
 
-rm "$c/dist/second-1.0.0-mavericks.1.pkg"
+rm "$c/dist/second-1.0.0-mavergreen.1.pkg"
 for s in assert_pkg_installs_in_place.sh assert_gui_relaunch_safe.sh assert_binary_compatible.sh; do
   : > "$w/expands"
   (cd "$c" && STEVEDORE="$w/stevedore" SHIPYARD_CHECK_DIST="$c/dist" env -u SHIPYARD_CHECK_PKGS sh "$here/scripts/$s" > "$w/out" 2>&1) || :

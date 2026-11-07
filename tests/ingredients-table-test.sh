@@ -11,7 +11,7 @@ out="$(cd "$w" && MAVERGREEN_REPO_ROOT="$w" sh "$S")"
 [ -z "$out" ] || fail "no ingredients prints nothing: '$out'"
 
 mkdir -p "$i/cmake" "$i/gha" "$i/libgit" "$i/child" "$i/pipe" "$i/frozen" "$i/self-child"
-printf '4.4.5-mavericks.2\n# renovate: datasource=github-releases depName=Mavergreen/cmake\n' > "$i/cmake/VERSION"
+printf '4.4.5-mavergreen.2\n# renovate: datasource=github-releases depName=Mavergreen/cmake\n' > "$i/cmake/VERSION"
 printf 'shipped\n' > "$i/cmake/role"
 printf 'The Mavergreen cmake product\n' > "$i/cmake/description"
 printf 'build-only\r\ntest\r\n' > "$i/gha/role"
@@ -41,7 +41,7 @@ cat > "$w/want" <<'EOF'
 | Ingredient | Role | Description | Value | Tracking |
 | --- | --- | --- | --- | --- |
 | child | shipped | part of cmake |  | tracked with cmake |
-| cmake | shipped | The Mavergreen cmake product | 4.4.5-mavericks.2 | tracked (github-releases Mavergreen/cmake) |
+| cmake | shipped | The Mavergreen cmake product | 4.4.5-mavergreen.2 | tracked (github-releases Mavergreen/cmake) |
 | frozen | reference | a commit, for want of tags | 0123456789ab | untracked: upstream has no tags |
 | gha | build-only, test | GitHub Actions |  | tracked by Renovate's github-actions manager, in .github/workflows/*.yml |
 | libgit | linked | libgit2 | v1.1 | untracked: no manager reads it, and a bump is a port decision |

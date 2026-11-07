@@ -359,7 +359,7 @@ if [ -n "$_bad12" ]; then
     "sh \"\$SHIPYARD_SCRIPTS/sign_and_appcast.sh\" --product <short> --feed-dir dist ... as one command (continue it with a trailing \\), with no > after it"
 fi
 
-# spec: SKILL.md "Family conventions" check 13 -- a pin whose line 1 ends in -mavericks.N needs a
+# spec: SKILL.md "Family conventions" check 13 -- a pin whose line 1 ends in -mavergreen.N needs a
 #       line-2 regex versioning that compares N; default versioning coerces it away and every
 #       repackage compares equal (swift-runtime missed three releases this way).
 chk_ran renovate-suffix-versioning
@@ -387,7 +387,7 @@ for f in open(sys.argv[1]).read().split('\n'):
     if kind == 'COMMIT':
         continue
     cv = lines[0].split('@', 1)[0] if kind == 'PIN' else lines[0]
-    n = re.search(r'-mavericks\.(\d+)$', cv)
+    n = re.search(r'-mavergreen\.(\d+)$', cv)
     if not n:
         continue
     vt = kv.get('versioning', '')
@@ -405,9 +405,9 @@ PY
           "the preset's manager reads '# renovate: datasource=... depName=...[ versioning=...][ extractVersion=...]' in that order, with no other key, and tracks nothing from any other line 2" \
           "rewrite line 2 of $b as '# renovate: datasource=<datasource> depName=<name>', then ' versioning=<versioning>' and ' extractVersion=<regex>' where it needs them"
       else
-        chk_fail renovate-suffix-versioning "Renovate cannot see new -mavericks.N releases of $b" \
-          "its versioning does not compare N, so every -mavericks.N of one upstream compares equal" \
-          'end its line 2 with " versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavericks\.(?<build>\d+)$"'
+        chk_fail renovate-suffix-versioning "Renovate cannot see new -mavergreen.N releases of $b" \
+          "its versioning does not compare N, so every -mavergreen.N of one upstream compares equal" \
+          'end its line 2 with " versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavergreen\.(?<build>\d+)$"'
       fi
     done < "$tmp/suffix"
   fi
