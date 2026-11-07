@@ -9,6 +9,9 @@ w="$(mktemp -d "${TMPDIR:-/tmp}/stage-product.XXXXXX")"; trap 'chmod -R u+w "$w"
 fail() { echo "FAIL: $1"; exit 1; }
 repo="$w/repo"
 for s in openssh swift-runtime go126 go127 porthole; do mkdir -p "$repo/.mavergreen/products/$s"; echo "$s" > "$repo/.mavergreen/products/$s/noun"; done
+echo Porthole > "$repo/.mavergreen/products/porthole/noun"
+echo Go > "$repo/.mavergreen/products/go126/noun"; echo 1.26 > "$repo/.mavergreen/products/go126/line"
+echo Go > "$repo/.mavergreen/products/go127/noun"; echo 1.27 > "$repo/.mavergreen/products/go127/line"
 for s in container-tools openssh; do
   mkdir -p "$repo/.mavergreen/ingredients/$s"; echo "$s" > "$repo/.mavergreen/ingredients/$s/product"
   echo "Mavergreen/$s" > "$repo/.mavergreen/ingredients/$s/REPO"
@@ -42,9 +45,9 @@ run_with_timeout() {
 }
 st="$w/stage"; mkdir -p "$st/usr/local/mavergreen/openssh/bin"; echo ssh > "$st/usr/local/mavergreen/openssh/bin/ssh"
 printf 'echo post-hook-ran "$ROOT" >> "$ROOT/hook.log"\n' > "$w/hook"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr" --postinstall-hook "$w/hook"
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr" --postinstall-hook "$w/hook"
 [ -f "$st/usr/local/mavergreen/openssh/mavergreen.plist" ] || fail "the manifest is rendered"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-gen" \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-gen" \
   --generated "Applications/Linux X.app" || fail "stage_product must accept --generated"
 [ "$("$SD" plist get "$st/usr/local/mavergreen/openssh/mavergreen.plist" generated:0)" = "Applications/Linux X.app" ] \
   || fail "stage_product passes --generated through to the manifest"
@@ -68,10 +71,10 @@ rm -rf "$V/usr/local/mavergreen/.base"
 sh "$w/scr/postinstall" /x.pkg "$V/" "$V/" 2>/dev/null && fail "postinstall with no helper at all must fail loudly"
 sh "$w/scr/preinstall" /x.pkg >/dev/null 2>&1; [ -d "$V/usr/local/mavergreen/openssh" ] || fail "preinstall with no target volume removes nothing"
 mkdir -p "$w/empty"
-sh "$S" --stage "$w/empty" --product openssh --name x --version 1 --scripts-out "$w/scr2" 2>/dev/null \
+sh "$S" --stage "$w/empty" --product openssh --version 1 --scripts-out "$w/scr2" 2>/dev/null \
   && fail "a product with nothing staged at all must be refused"
 so="$w/outside-only"; mkdir -p "$so/usr/lib/swift"; echo lib > "$so/usr/lib/swift/libswiftCore.dylib"
-sh "$S" --stage "$so" --product swift-runtime --name "Swift Runtime" --version 1 --scripts-out "$w/scr-so" \
+sh "$S" --stage "$so" --product swift-runtime --version 1 --scripts-out "$w/scr-so" \
   || fail "a product whose every file lives where the OS dictates still stages, so its manifest can find them"
 [ -f "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist" ] \
   || fail "an outside-only product's manifest sits at its tree root, where the helper and conformance look"
@@ -87,7 +90,7 @@ printf '#!/bin/sh\n' > "$APP/Contents/MacOS/openssh-updater"
 chmod +x "$APP/Contents/MacOS/openssh-updater"
 xplist "$APP/Contents/Info.plist" CFBundleIdentifier dev.mavergreen.openssh.updater SUFeedURL https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml
 SCRU="$w/scr-updater"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$SCRU" --updater-app "$APP" \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$SCRU" --updater-app "$APP" \
   || fail "stage_product with --updater-app must succeed"
 [ -d "$st/Library/Application Support/Mavergreen/openssh-updater.app" ] \
   || fail "the updater lands where the registry puts openssh's"
@@ -97,26 +100,26 @@ sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out
   || fail "a product that stages an updater names the registry's feed in its manifest"
 [ -z "$("$SD" plist get "$so/usr/local/mavergreen/swift-runtime/mavergreen.plist" appcast)" ] \
   || fail "a product with no updater has no feed, so its manifest's appcast is empty -- never a URL that 404s"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-hu" --has-updater 2>/dev/null \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-hu" --has-updater 2>/dev/null \
   && fail "--has-updater is stage_product's to pass, never a caller's"
 for f in --appcast --app-dir --agent-label; do
-  rc=0; sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-refused" \
+  rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-refused" \
     --updater-app "$APP" "$f" x 2>/dev/null || rc=$?
   [ "$rc" -eq 2 ] || fail "$f is derived from the registry, so passing it is a usage error (exit 2); got $rc"
 done
 WRONG="$w/wrong/openssh-updater.app"; mkdir -p "$WRONG/Contents/MacOS"
 printf '#!/bin/sh\n' > "$WRONG/Contents/MacOS/openssh-updater"
 xplist "$WRONG/Contents/Info.plist" CFBundleIdentifier dev.mavergreen.OpenSSHUpdater SUFeedURL https://github.com/Mavergreen/openssh/releases/latest/download/appcast.xml
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-wrong" \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-wrong" \
   --updater-app "$WRONG" 2>"$w/err" \
   && fail "an updater built with another bundle id or feed than the registry's must be refused -- the app and its stage would disagree"
 grep -q 'dev.mavergreen.openssh.updater' "$w/err" || fail "the refusal names the identity the registry expects: $(cat "$w/err")"
 rm -rf "$w/undeclared"; mkdir -p "$w/undeclared/.mavergreen/products"
-rc=0; MAVERGREEN_REPO_ROOT="$w/undeclared" sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 \
+rc=0; MAVERGREEN_REPO_ROOT="$w/undeclared" sh "$S" --stage "$st" --product openssh --version 1 \
   --scripts-out "$w/scr-undeclared" --updater-app "$APP" 2>"$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "an updater for a product the repo does not declare must be refused (1), got $rc"
 grep -q '.mavergreen/products/openssh/' "$w/err" || fail "the refusal says where to declare the product: $(cat "$w/err")"
-rc=0; ( cd "$w" && GITHUB_REPOSITORY= sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 \
+rc=0; ( cd "$w" && GITHUB_REPOSITORY= sh "$S" --stage "$st" --product openssh --version 1 \
   --scripts-out "$w/scr-norepo" --updater-app "$APP" ) 2>"$w/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "an updater whose feed's repo cannot be learned must be refused (2), got $rc"
 grep -q GITHUB_REPOSITORY "$w/err" || fail "the refusal says to set GITHUB_REPOSITORY: $(cat "$w/err")"
@@ -125,7 +128,7 @@ for s in go126 go127; do
   a="$w/lines/$s-updater.app"; mkdir -p "$a/Contents/MacOS"; printf '#!/bin/sh\n' > "$a/Contents/MacOS/$s-updater"
   xplist "$a/Contents/Info.plist" CFBundleIdentifier "$(sh "$here/../scripts/updater-identity.sh" bundle-id "$s")" SUFeedURL "$(sh "$here/../scripts/updater-identity.sh" feed "$s")"
   sl="$w/stage-$s"; mkdir -p "$sl/usr/local/mavergreen/$s/bin"; echo go > "$sl/usr/local/mavergreen/$s/bin/go"
-  sh "$S" --stage "$sl" --product "$s" --name Go --version 1 --group go --line "${s#go}" \
+  sh "$S" --stage "$sl" --product "$s" --version 1 --group go \
     --scripts-out "$w/scr-$s" --updater-app "$a" || fail "staging $s with its own updater must succeed"
   ol "$sl/usr/local/mavergreen/$s/mavergreen.plist" > "$w/outside-$s"
 done
@@ -188,7 +191,7 @@ done
 EOF
 st2="$w/stage2"; mkdir -p "$st2/usr/local/mavergreen/openssh/bin"; echo ssh > "$st2/usr/local/mavergreen/openssh/bin/ssh"
 sh "$fake/stage_product.sh" --stage "$st2" --product openssh \
-  --name "Open SSH Suite" --version 1.2.3 --group opengrp --line 9 \
+  --version 1.2.3 --group opengrp \
   --exclude "bin/extra one" --exclude "share/man/man1/extra.1" \
   --replaces "/usr/bin/ssh=bin/ssh" --replaces "/usr/bin/scp=bin/scp two" \
   --scripts-out "$w/scr3" \
@@ -199,10 +202,9 @@ sh "$fake/stage_product.sh" --stage "$st2" --product openssh \
 expected="$(printf '%s\n' \
   --stage "$st2" \
   --product openssh \
-  --name "Open SSH Suite" \
+  \
   --version 1.2.3 \
   --group opengrp \
-  --line 9 \
   --exclude "bin/extra one" \
   --exclude "share/man/man1/extra.1" \
   --replaces "/usr/bin/ssh=bin/ssh" \
@@ -218,14 +220,24 @@ grep -qF container-tools "$w/rm.log" && fail "--requires's value must never reac
 [ "$(sed -n '/^--product$/{n;p;}' "$w/rmu.log")" = openssh ] \
   || fail "stage_updater is told the product, and derives the rest: got [$(cat "$w/rmu.log")]"
 
+for o in name:noun line:line; do
+  rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-refuse" --${o%%:*} X 2>"$w/err" || rc=$?
+  [ "$rc" -eq 2 ] || fail "--${o%%:*} must be refused with exit 2, got $rc"
+  grep -qF ".mavergreen/products/<P>/${o#*:}" "$w/err" || fail "the refusal of --${o%%:*} names products/<P>/${o#*:}: $(cat "$w/err")"
+done
+[ "$("$SD" plist get "$w/stage-go127/usr/local/mavergreen/go127/mavergreen.plist" name)" = "Go 1.27" ] \
+  || fail "staging go127 (noun Go, line 1.27) writes the name 'Go 1.27'"
+[ "$("$SD" plist get "$w/stage-go127/usr/local/mavergreen/go127/mavergreen.plist" line)" = 1.27 ] \
+  || fail "staging go127 writes the line 1.27"
+
 rc1="$w/rc1"
-if run_with_timeout 5 "$rc1" sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out; then
+if run_with_timeout 5 "$rc1" sh "$S" --stage "$st" --product openssh --version 1 --scripts-out; then
   [ "$(cat "$rc1")" = 2 ] || fail "an option missing its value (at the end of the argument list) must exit 2, got $(cat "$rc1" 2>/dev/null)"
 else
   fail "an option missing its value at the end of the argument list must exit promptly, not hang"
 fi
 rc2="$w/rc2"
-if run_with_timeout 5 "$rc2" sh "$S" --stage "$st" --product openssh --name --end --version 1 --scripts-out "$w/scrbad2"; then
+if run_with_timeout 5 "$rc2" sh "$S" --stage "$st" --product openssh --group --end --version 1 --scripts-out "$w/scrbad2"; then
   [ "$(cat "$rc2")" = 2 ] || fail "an option value literally --end must exit 2, got $(cat "$rc2" 2>/dev/null)"
 else
   fail "an option value literally --end must exit promptly, not hang"
@@ -234,7 +246,7 @@ fi
 hooknonl="$w/hook-no-nl"
 printf 'echo hook-no-nl-ran "$ROOT" >> "$ROOT/hook2.log"' > "$hooknonl"
 scrnl="$w/scr-nonl"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$scrnl" \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$scrnl" \
   --preinstall-hook "$hooknonl" --postinstall-hook "$hooknonl" \
   || fail "stage_product must succeed even with a hook lacking a trailing newline"
 sh -n "$scrnl/preinstall" || fail "preinstall with a no-trailing-newline hook must still be valid sh"
@@ -265,7 +277,7 @@ sh "$w/scr/postinstall" /x.pkg "$Vver/" "$Vver/" \
 
 
 stg="$w/stage-go"; mkdir -p "$stg/usr/local/mavergreen/go126/bin"; echo go > "$stg/usr/local/mavergreen/go126/bin/go"
-sh "$S" --stage "$stg" --product go126 --name "Go 1.26" --version 2 --group go --line 126 --scripts-out "$w/scr-go" \
+sh "$S" --stage "$stg" --product go126 --version 2 --group go --scripts-out "$w/scr-go" \
   || fail "staging a group member must succeed"
 Vup="$w/volup"; MGup="$Vup/usr/local/mavergreen"; mkdir -p "$Vup/usr/local/bin" "$MGup/go127/bin"
 sed 's/@MAVERGREEN_VERSION@/9.9/' "$here/../scripts/mavergreen.sh" > "$Vup/usr/local/bin/mavergreen"; chmod +x "$Vup/usr/local/bin/mavergreen"
@@ -286,7 +298,7 @@ sh "$w/scr-go/postinstall" /x.pkg "$Vup/" "$Vup/" || fail "the selected member's
 
 
 printf 'if [ -f "$ROOT/usr/local/mavergreen/openssh/bin/ssh" ]; then echo saw-old-tree >> "$ROOT/prehook.log"; else echo tree-gone >> "$ROOT/prehook.log"; fi\n' > "$w/prehook"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-pre" --preinstall-hook "$w/prehook" \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-pre" --preinstall-hook "$w/prehook" \
   || fail "staging with a preinstall hook must succeed"
 Vp="$w/volpre"; MGp="$Vp/usr/local/mavergreen"
 mkdir -p "$MGp/openssh/bin" "$MGp/openssh-other" "$MGp/bin"
@@ -321,11 +333,11 @@ chmod +x "$V2/usr/local/bin/mavergreen"
 printf 'false\n' > "$w/hook-false"
 printf 'exit 0\n' > "$w/hook-exit"
 printf 'if [ -z "$ROOT" ]; then false; fi\n' > "$w/hook-guarded"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-false" \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-false" \
   --preinstall-hook "$w/hook-false" --postinstall-hook "$w/hook-false" || fail "staging with failing hooks must succeed"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-exit" \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-exit" \
   --preinstall-hook "$w/hook-exit" || fail "staging with an exiting hook must succeed"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-guarded" \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-guarded" \
   --postinstall-hook "$w/hook-guarded" || fail "staging with a guarded hook must succeed"
 cp -R "$st/usr/local/mavergreen/openssh" "$T2/"
 "$V2/usr/local/bin/mavergreen" --root "$V2/" link openssh || fail "setup: link the installed version"
@@ -346,11 +358,11 @@ sh "$w/scr-guarded/postinstall" /x.pkg "$V2/" "$V2/" \
 printf 'echo inside)\n' > "$w/hook-paren"
 printf 'echo "unbalanced\n' > "$w/hook-quote"
 for h in hook-paren hook-quote; do
-  rc=0; sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-$h" \
+  rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-$h" \
     --preinstall-hook "$w/$h" 2>"$w/err" || rc=$?
   [ "$rc" -eq 1 ] || fail "a preinstall hook that is not valid sh must be refused at staging ($h), got exit $rc"
   grep -q "$w/$h" "$w/err" || fail "the refusal names the hook ($h): $(cat "$w/err")"
-  rc=0; sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-$h-post" \
+  rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-$h-post" \
     --postinstall-hook "$w/$h" 2>"$w/err" || rc=$?
   [ "$rc" -eq 1 ] || fail "a postinstall hook that is not valid sh must be refused at staging ($h), got exit $rc"
   grep -q "$w/$h" "$w/err" || fail "the refusal names the hook ($h): $(cat "$w/err")"
@@ -362,7 +374,7 @@ else
   V3="$w/vol-relink"; T3="$V3/usr/local/mavergreen"; mkdir -p "$V3/usr/local/bin" "$T3"
   cp "$V2/usr/local/bin/mavergreen" "$V3/usr/local/bin/mavergreen"
   printf 'chmod 555 "$ROOT/usr/local/mavergreen/bin"; false\n' > "$w/hook-lockfarm"
-  sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-lockfarm" \
+  sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-lockfarm" \
     --preinstall-hook "$w/hook-lockfarm" || fail "staging with a farm-locking hook must succeed"
   cp -R "$st/usr/local/mavergreen/openssh" "$T3/"
   "$V3/usr/local/bin/mavergreen" --root "$V3/" link openssh || fail "setup: link the installed version"
@@ -375,7 +387,7 @@ else
 fi
 
 printf 'if [ -f "$ROOT/Library/Application Support/Mavergreen/openssh-updater.app/Contents/Stale" ]; then echo saw-old-bundle >> "$ROOT/bundlehook.log"; else echo bundle-gone >> "$ROOT/bundlehook.log"; fi\n' > "$w/bundlehook"
-sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out "$w/scr-bundle" \
+sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-bundle" \
   --updater-app "$APP" --preinstall-hook "$w/bundlehook" || fail "staging with an updater and a preinstall hook must succeed"
 mkvol() {
   _v="$1"; rm -rf "$_v" "$_v.out"; mkdir -p "$_v.out/escape.app" "$_v.out/linked/x.app"
@@ -420,7 +432,7 @@ done
 stp="$w/stage-porthole"; mkdir -p "$stp/usr/local/mavergreen/porthole/bin"
 echo porthole > "$stp/usr/local/mavergreen/porthole/bin/porthole"
 SCRP="$w/scr-porthole"
-sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRP" \
+sh "$S" --stage "$stp" --product porthole --version 1 --scripts-out "$SCRP" \
   --requires container-tools \
   || fail "staging porthole with --requires container-tools must succeed"
 sh -n "$SCRP/preinstall" || fail "generated preinstall with --requires must be valid sh"
@@ -445,7 +457,7 @@ grep -q "https://github.com/Mavergreen/container-tools/releases " "$w/req-err" \
 [ ! -s "$mglog" ] || fail "a missing requirement is checked before mavergreen unlink runs: $(cat "$mglog")"
 
 SCRP2="$w/scr-porthole2"
-sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRP2" \
+sh "$S" --stage "$stp" --product porthole --version 1 --scripts-out "$SCRP2" \
   --requires container-tools --requires openssh \
   || fail "staging porthole with two --requires must succeed"
 Vtwo="$w/vol-requires-two"; mkdir -p "$Vtwo/usr/local/mavergreen/openssh"
@@ -455,17 +467,17 @@ rc=0; sh "$SCRP2/preinstall" /x.pkg "$Vtwo/" "$Vtwo/" 2>"$w/req-err2" || rc=$?
 grep -q "container-tools" "$w/req-err2" || fail "the missing requirement (container-tools) must be named: $(cat "$w/req-err2")"
 grep -q "openssh" "$w/req-err2" && fail "the satisfied requirement (openssh) must not be named: $(cat "$w/req-err2")"
 
-rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-badreq" \
+rc=0; sh "$S" --stage "$stp" --product porthole --version 1 --scripts-out "$w/scr-badreq" \
   --requires nonexistent-product 2>"$w/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "staging with a --requires the repo has no ingredient for must exit 2, got $rc"
 grep -q '.mavergreen/ingredients/nonexistent-product' "$w/err" || fail "the refusal says where to declare the requirement: $(cat "$w/err")"
 mkdir -p "$repo/.mavergreen/ingredients/norepo"; echo norepo > "$repo/.mavergreen/ingredients/norepo/product"
-rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-norepo-req" \
+rc=0; sh "$S" --stage "$stp" --product porthole --version 1 --scripts-out "$w/scr-norepo-req" \
   --requires norepo 2>"$w/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "staging with a --requires whose ingredient has no REPO must exit 2, got $rc"
 grep -q '.mavergreen/ingredients/norepo' "$w/err" || fail "the refusal names the ingredient missing its REPO: $(cat "$w/err")"
 
-rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-selfreq" \
+rc=0; sh "$S" --stage "$stp" --product porthole --version 1 --scripts-out "$w/scr-selfreq" \
   --requires porthole 2>"$w/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "staging with --requires naming the product itself must exit 2, got $rc"
 grep -q porthole "$w/err" || fail "the refusal names the self-requirement: $(cat "$w/err")"
@@ -488,7 +500,7 @@ reqvol() {
   done
 }
 SCRM="$w/scr-porthole-min"
-sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRM" \
+sh "$S" --stage "$stp" --product porthole --version 1 --scripts-out "$SCRM" \
   --requires 'container-tools>=20261019.1' \
   || fail "staging porthole with --requires container-tools>=20261019.1 must succeed"
 sh -n "$SCRM/preinstall" || fail "generated preinstall with a minimum must be valid sh"
@@ -529,7 +541,7 @@ for v in - 1.0-rc1 dict; do
 done
 
 SCRM2="$w/scr-porthole-min2"
-sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRM2" \
+sh "$S" --stage "$stp" --product porthole --version 1 --scripts-out "$SCRM2" \
   --requires 'container-tools>=20261019.1' --requires 'openssh>=9.9p2' \
   || fail "staging porthole with two minimums must succeed"
 [ "$(grep -c '^mavergreen_vercmp()' "$SCRM2/preinstall")" -eq 1 ] \
@@ -553,13 +565,13 @@ sh "$SCRP/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" \
 SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed"
 for u in 077 022; do
   mkdir -p "$w/um$u/usr/local/mavergreen/openssh/bin"; echo ssh > "$w/um$u/usr/local/mavergreen/openssh/bin/ssh"
-  (umask $u; sh "$S" --stage "$w/um$u" --product openssh --name OpenSSH --version 1 --scripts-out "$w/umscr$u") >/dev/null 2>&1 || fail "stage_product must run under umask $u"
+  (umask $u; sh "$S" --stage "$w/um$u" --product openssh --version 1 --scripts-out "$w/umscr$u") >/dev/null 2>&1 || fail "stage_product must run under umask $u"
   SOURCE_DATE_EPOCH=1700000000 "$SD" component --root "$w/um$u" --scripts "$w/umscr$u" --identifier dev.mavergreen.openssh --version 1 --install-location / --mtime 1700000000 --out "$w/um$u.pkg" || fail "component must build under umask $u"
 done
 cmp "$w/um077.pkg" "$w/um022.pkg" || fail "stage_product output ignores umask"
 
 for bad in 'container-tools>=' 'container-tools>=1.0-rc1' 'container-tools>=abc' '>=20261019.1'; do
-  rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-badmin" \
+  rc=0; sh "$S" --stage "$stp" --product porthole --version 1 --scripts-out "$w/scr-badmin" \
     --requires "$bad" 2>"$w/err" || rc=$?
   [ "$rc" -eq 2 ] || fail "staging with --requires $bad must exit 2, got $rc"
   case "$bad" in

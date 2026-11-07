@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic -- stevedore reads the updater's identity; the generated preinstall's PlistBuddy text runs on the target
-#   usage: stage_product.sh --stage ROOT --product P --name N --version V --scripts-out DIR
-#            [--group G] [--line L] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
+#   usage: stage_product.sh --stage ROOT --product P --version V --scripts-out DIR
+#            [--group G] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
 #            [--requires SHORT[>=VERSION]]... [--updater-app P-updater.app] [--preinstall-hook FILE]
 #            [--postinstall-hook FILE]
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
@@ -32,11 +32,11 @@ requires_repo() {
   done
   return 1
 }
-ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; NAME=""; REQ=""
+ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; REQ=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
-    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--exclude|--replaces|--generated|--requires)
+    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--line|--version|--group|--exclude|--replaces|--generated|--requires)
       [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
@@ -46,9 +46,10 @@ while [ "$1" != --end ]; do
     --updater-app) APP="$2"; shift 2 ;;
     --preinstall-hook) PREH="$2"; shift 2 ;;
     --postinstall-hook) POSTH="$2"; shift 2 ;;
-    --name) NAME="$2"; set -- "$@" "$1" "$2"; shift 2 ;;
+    --name) echo "stage_product: --name is derived from the product; write .mavergreen/products/<P>/noun" >&2; exit 2 ;;
+    --line) echo "stage_product: --line is derived from the product; write .mavergreen/products/<P>/line" >&2; exit 2 ;;
     --requires) REQ="$REQ$2$nl"; shift 2 ;;
-    --version|--group|--line|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
+    --version|--group|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
     --appcast|--app-dir|--agent-label) echo "stage_product: $1 is derived from --product; stop passing it" >&2; exit 2 ;;
     *) echo "stage_product: unknown option $1" >&2; exit 2 ;;
   esac
@@ -56,6 +57,7 @@ done
 shift
 [ -n "$ST" ] && [ -n "$P" ] && [ -n "$SCR" ] || { echo "stage_product: need --stage --product --scripts-out" >&2; exit 2; }
 case "$P" in ''|-*|*[!a-z0-9-]*) echo "stage_product: bad product name '$P'" >&2; exit 2 ;; esac
+NAME="$(mavergreen_name manifest-name "$P")" || exit $?
 [ -n "$(find "$ST" \( -type f -o -type l \) 2>/dev/null | head -n 1)" ] || { echo "stage_product: nothing staged under $ST" >&2; exit 1; }
 _ifs="$IFS"; IFS="$nl"
 for r in $REQ; do

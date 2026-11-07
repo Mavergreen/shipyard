@@ -355,7 +355,7 @@ printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n
 out="$(cd "$work/pk" && sh "$S" 2>&1)" && { echo "FAIL: a pkg repo that never calls stage_product.sh should fail check 23"; exit 1; }
 has_id "$out" artifact-checks-wired && { echo "FAIL: a pkg repo that runs artifact conformance should no longer fail check 21: $out"; exit 1; }
 first_is "$out" stage-product || { echo "FAIL: check 23 should be a stage-product failure: $out"; exit 1; }
-printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
+printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
 (cd "$work/pk" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a pkg repo that calls stage_product.sh should pass: $(cd "$work/pk" && sh "$S" 2>&1)"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh check 23 -- matches a CALL shape ANCHORED to command
@@ -377,7 +377,7 @@ first_is "$out" stage-product || { echo "FAIL should be a stage-product failure:
 #       is still a call: its continuation lines are their own physical lines, indented but
 #       otherwise ordinary shell, so the plain line-start anchor covers them with no special case.
 mkrepo "$work/pkblock"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pkblock/build/package.sh"
-printf '      - run: |\n          SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n          sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
+printf '      - run: |\n          SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n          sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --version 1 --scripts-out scr\n' \
   >> "$work/pkblock/.github/workflows/release.yml"
 (cd "$work/pkblock" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: a stage_product.sh call inside a YAML run: | block should satisfy check 23: $(cd "$work/pkblock" && sh "$S" 2>&1)"; exit 1; }
@@ -387,7 +387,7 @@ printf '      - run: |\n          SHIPYARD_CHECK_VERSION="$FULL" shipyard-check 
 #       does not need because check 18 only ever scans *.sh files and extracted YAML run: lines.
 mkrepo "$work/pkcmake"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pkcmake/build/package.sh"
 printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n' >> "$work/pkcmake/.github/workflows/release.yml"
-printf 'execute_process(COMMAND sh ${SHIPYARD_SCRIPTS}/stage_product.sh --stage stage --product w --name W --version 1 --scripts-out scr)\n' > "$work/pkcmake/CMakeLists.txt"
+printf 'execute_process(COMMAND sh ${SHIPYARD_SCRIPTS}/stage_product.sh --stage stage --product w --version 1 --scripts-out scr)\n' > "$work/pkcmake/CMakeLists.txt"
 (cd "$work/pkcmake" && git add -A && sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: a stage_product.sh call via CMake's COMMAND keyword should satisfy check 23: $(cd "$work/pkcmake" && sh "$S" 2>&1)"; exit 1; }
 

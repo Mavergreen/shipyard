@@ -2112,10 +2112,10 @@ has nothing left to prune.
 | Key | From | Notes |
 |---|---|---|
 | `identifier` | the registry | the pkg receipt; not a flag, so it cannot disagree with the registry |
-| `name` | `--name` | display |
+| `name` | `.mavergreen/products/<short>/noun`, then the line | display; `--name` is refused |
 | `product` | `--product` | the short name; must equal the tree's directory name |
 | `group` | `--group` | defaults to `product` |
-| `line` | `--line` | empty for a product with one line |
+| `line` | line 1 of `.mavergreen/products/<short>/line`, as upstream spells it (`1.27`) | empty for a product with one line; `--line` is refused |
 | `version` | `--version` | |
 | `appcast` | the registry | the product's feed (`product-name.sh feed <product>`) when it stages an updater, else empty; `--appcast` is refused |
 | `exports-exclude` | `--exclude`, repeatable | tree-relative paths kept out of the farm |

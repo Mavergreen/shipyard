@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic -- stevedore lints and reads back the manifest it writes
-#   usage: render-manifest.sh --stage ROOT --product P --name N --version V [--group G] [--line L]
+#   usage: render-manifest.sh --stage ROOT --product P --version V [--group G]
 #            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]... [--has-updater]
 #          Writes ROOT/usr/local/mavergreen/P/mavergreen.plist. Run it LAST: `outside` is read from
 #          whatever is staged at that moment.
@@ -20,10 +20,10 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --stage) ST="${2%/}"; shift 2 ;;
     --product) P="$2"; shift 2 ;;
-    --name) NAME="$2"; shift 2 ;;
+    --name) echo "render-manifest: --name is derived from the product; write .mavergreen/products/<P>/noun" >&2; exit 2 ;;
     --version) VER="$2"; shift 2 ;;
     --group) G="$2"; shift 2 ;;
-    --line) L="$2"; shift 2 ;;
+    --line) echo "render-manifest: --line is derived from the product; write .mavergreen/products/<P>/line" >&2; exit 2 ;;
     --appcast) echo "render-manifest: --appcast is derived from --product; stop passing it" >&2; exit 2 ;;
     --has-updater) HASUPD=1; shift ;;
     --exclude) EXCL="$EXCL$2$nl"; shift 2 ;;
@@ -49,8 +49,10 @@ while [ $# -gt 0 ]; do
     *) echo "render-manifest: unknown option $1" >&2; exit 2 ;;
   esac
 done
-[ -n "$ST" ] && [ -n "$P" ] && [ -n "$NAME" ] && [ -n "$VER" ] || { echo "render-manifest: need --stage --product --name --version" >&2; exit 2; }
+[ -n "$ST" ] && [ -n "$P" ] && [ -n "$VER" ] || { echo "render-manifest: need --stage --product --version" >&2; exit 2; }
 ID="$(mavergreen_name identifier "$P")" || exit $?
+NAME="$(mavergreen_name manifest-name "$P")" || exit $?
+L="$(mg_value "products/$P/line" 2>/dev/null)" || L=
 if [ -n "$HASUPD" ]; then
   AC="$(sh "$SELF/updater-identity.sh" feed "$P")" || exit $?
 fi

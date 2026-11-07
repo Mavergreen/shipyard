@@ -114,7 +114,7 @@ COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
 #           payload -- and, left in place while the manifest is rendered, be listed in its `outside`.
 strip_appledouble() { find "$STAGE" -name '._*' -delete 2>/dev/null || true; }
 strip_appledouble
-sh "$SELF/stage_product.sh" --stage "$STAGE" --product shipyard --name "$(mavergreen_name manifest-name shipyard)" \
+sh "$SELF/stage_product.sh" --stage "$STAGE" --product shipyard \
   --version "$VER" --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack \
   --requires "cmake>=$cmake_min" --updater-app "$APP" --scripts-out "$SCR"
 strip_appledouble

@@ -4,7 +4,7 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib/conventions_fixture.sh"
 
-A='--stage stage --product w --name W --version 1 --scripts-out scr'
+A='--stage stage --product w --version 1 --scripts-out scr'
 pkcall "$work/pkif" "if sh \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A; then :; fi"
 pkcall "$work/pkelif" "if false; then :
 elif sh \"\$SHIPYARD_SCRIPTS/stage_product.sh\" $A; then :; fi"
@@ -55,7 +55,7 @@ printf '#!/bin/sh\n# platform: host-agnostic\nexit 0\n' > "$work/host/tests/a-te
 #       $work/pk is the compliant pkg repo from the check 21/23 cases, rebuilt here because those
 #       cases live in another file.
 mkrepo "$work/pk"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pk/build/package.sh"
-printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
+printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
 printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n' >> "$work/pk/.github/workflows/release.yml"
 (cd "$work/pk" && git add -A) >/dev/null 2>&1
 (cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" >/dev/null 2>&1) \

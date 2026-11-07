@@ -66,6 +66,7 @@ owner() {
 
 plan_links() {
   _line="$(mf "$1" line)"
+  _line="$(printf '%s' "$_line" | tr -d .)"
   exports "$1" | while IFS= read -r _rel; do
     if [ -n "$_line" ]; then printf '%s\t%s\n' "$(versioned "$_rel" "$_line")" "$_rel"; fi
     if [ "$2" = bare ]; then printf '%s\t%s\n' "$_rel" "$_rel"; fi

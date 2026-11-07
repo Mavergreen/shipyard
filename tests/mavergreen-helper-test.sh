@@ -27,8 +27,8 @@ mg link openssh || fail "linking a single-line product must succeed"
 [ ! -e "$T/bin/ssh-" ] || fail "a product with no line exports no versioned names"
 mg link openssh || fail "link must be idempotent"
 
-mkproduct go126 go 126 bin/go bin/gofmt share/man/man1/go.1.gz
-mkproduct go127 go 127 bin/go bin/gofmt
+mkproduct go126 go 1.26 bin/go bin/gofmt share/man/man1/go.1.gz
+mkproduct go127 go 1.27 bin/go bin/gofmt share/man/man1/go.1.gz
 mg link go126
 [ "$(target bin/go)" = ../go126/bin/go ] || fail "the first member of a group is selected automatically"
 [ "$(target bin/go-126)" = ../go126/bin/go ] || fail "a line product always exports <cmd>-<line>"
@@ -37,6 +37,8 @@ mg link go126
 mg link go127
 [ "$(target bin/go)" = ../go126/bin/go ] || fail "installing another line must never take the selection"
 [ "$(target bin/go-127)" = ../go127/bin/go ] || fail "the second line still exports its versioned names"
+[ "$(target share/man/man1/go-127.1.gz)" = ../../../go127/share/man/man1/go.1.gz ] \
+  || fail "a line spelled 1.27 links its manpage with the dots removed: go-127.1.gz"
 
 mg unlink go126
 [ "$(mg select go)" = go126 ] || fail "unlink never changes a selection: an upgrade's preinstall runs it on the selected line"
@@ -88,7 +90,7 @@ mg unlink oddsections
   || fail "unlink must remove a link in a man section outside man1-man8 (man9)"
 rm -rf "$T/oddsections"
 
-mg list | grep -q '^go127 go 127 1.0 selected$' || fail "list shows product group line version and selection: $(mg list)"
+mg list | grep -q '^go127 go 1.27 1.0 selected$' || fail "list shows product group line version and selection: $(mg list)"
 mg link no-such 2>/dev/null && fail "linking a product that is not installed must fail"
 rc=0; mg link '../x' 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "a malformed product name is a usage error (exit 2), got $rc"
@@ -103,7 +105,7 @@ mg check || fail "a consistent farm must pass check: $(mg check 2>&1)"
 rm -rf "$T/go127/bin/gofmt"
 mg check 2>"$w/err" && fail "a dangling link must fail check"
 grep -q 'bin/gofmt' "$w/err" || fail "check must name the dangling link"
-mkproduct go127 go 127 bin/go bin/gofmt
+mkproduct go127 go 1.27 bin/go bin/gofmt
 
 stub="$w/stub"; mkdir -p "$stub"
 for c in launchctl pkgutil sudo; do printf '#!/bin/sh\necho "%s $*" >> "%s/calls"\n' "$c" "$w" > "$stub/$c"; chmod +x "$stub/$c"; done
