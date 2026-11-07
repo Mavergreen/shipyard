@@ -3,7 +3,7 @@
 setup() {
   HELPER="$BATS_TEST_DIRNAME/../scripts/fetch_clang22.sh"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch-clang22.XXXXXX")" && pwd)"
-  export MAVERGREEN_PRODUCT_NAMES="$WORK/no-such-registry" MAVERGREEN_RELEASES="file://$WORK/releases"
+  export MAVERGREEN_RELEASES="file://$WORK/releases"
   export MAVERGREEN_TAR_CACHE="$WORK/tars" MAVERGREEN_CLANG22_CACHE="$WORK/clang22"
   export MAVERGREEN_PREFIX="$WORK/prefix" MAVERGREEN_PKG_CACHE="$WORK/pkgs"
   INSTALLED="$WORK/prefix/clang22-cross"

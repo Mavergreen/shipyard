@@ -7,7 +7,6 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (.shipyard/scripts in a consumer)
 SHIPYARD_SCRIPTS="$SELF"
-. "$SELF/registry-lookup.sh"
 . "$SELF/lib/py.sh"
 . "$SELF/deviation-reason.sh"
 . "$SELF/mavergreen-meta.sh"
@@ -709,22 +708,6 @@ if [ -n "$builds_pkg" ] && ! deviated stage-product "$REL"; then
   [ -n "$staged" ] || chk_fail stage-product "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh" \
                          "its install scripts and manifest are hand-rolled" \
                          "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare .mavergreen/deviations/stage-product/<label>/ (scope *, a reason, a revisit)"
-fi
-
-# spec: SKILL.md "Family conventions" check 24 -- every feed URL and updater identity is derived from
-#       the registry's repo, so a pkg-building repo the registry does not name publishes feeds nothing polls.
-chk_ran registered
-if [ -n "$builds_pkg" ] && [ -n "${GITHUB_REPOSITORY:-}" ] && ! deviated registered "$REL"; then
-  _c24=0; registry_lookup shorts "${GITHUB_REPOSITORY#*/}" || _c24=$?
-  case "$_c24" in
-    0) ;;
-    1) chk_fail registered "this repo builds a .pkg ($builds_pkg), but shipyard's scripts/product-names assigns no product to ${GITHUB_REPOSITORY#*/}" \
-            "every feed URL and updater identity is derived from the registry's repo" \
-            "register its short names with this repo in scripts/product-names, or rename the repo to the one registered" ;;
-    *) chk_fail registered "cannot look up ${GITHUB_REPOSITORY#*/} in shipyard's registry" \
-            "$REG_WHY" \
-            "fix shipyard's scripts/product-names -- sh product-name.sh check says what is wrong with it" ;;
-  esac
 fi
 
 # spec: SKILL.md "Family conventions" check 25, and "Rosetta" above -- the family is retiring

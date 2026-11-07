@@ -2,9 +2,9 @@ deviation-known-check: no deviation is filed under a retired check name.
 
 ## Why
 A deviation filed under a name that no check reads any more excuses nothing, and looks as if it did. The old
-names are retired with no aliases: product-layout is now stage-product (and registered), artifact-conformance
+names are retired with no aliases: product-layout is now stage-product, artifact-conformance
 is now artifact-checks-wired, scheme is now version-scheme, ingredients is now variant-build-info, and
-msc-template is now the shipyard-scripts command. sparkle-updater, release-assets and python3 are read by
+msc-template is now the shipyard-scripts command. sparkle-updater, release-assets, python3 and registered are read by
 nothing, so the directory is deleted. Any other name that is not a check id fails deviation-complete.
 
 ## Incident

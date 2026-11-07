@@ -44,7 +44,7 @@ code | grep -q 'PREFIX_DIR="/usr/local/mavergreen/shipyard"' \
 code | grep -q 'usr/local/bin' && { echo "FAIL: shipyard installs nothing into /usr/local/bin -- only the base component's helper lives there"; exit 1; }
 code | grep -q 'updater-identity.sh" app shipyard' \
   || { echo "FAIL: the updater app's name is derived by updater-identity.sh app shipyard, as stage_updater.sh derives where it goes"; exit 1; }
-code | grep -q 'product-name.sh\|registry' && { echo "FAIL: package-pkg.sh derives shipyard's identity; it reads no registry"; exit 1; }
+code | grep -q 'registry' && { echo "FAIL: package-pkg.sh derives shipyard's identity; it reads no registry"; exit 1; }
 code | grep -q 'stage_product.sh' || { echo "FAIL: shipyard gets its install scripts from stage_product.sh like every product"; exit 1; }
 code | grep -q -- '--base-version "\$VER"' \
   || { echo "FAIL: the base component shipyard ships must be stamped with the version being built (--base-version \"\$VER\")"; exit 1; }

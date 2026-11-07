@@ -5,7 +5,7 @@
 #          or refreshes an existing clone to origin's default branch (<clones-dir> is owned by this
 #          script: new or empty, or marked by a sentinel file; it refuses anything else, and a
 #          clone whose origin is not Mavergreen/<name>), keeps those whose workflows
-#          reference family-conventions.yml (the repos this gate runs in, registered or not), runs a
+#          reference family-conventions.yml (the repos this gate runs in), runs a
 #          copy of this gate WITHOUT the grandfathered file in each, and prints what the checks that
 #          consult it (packager, macos-runner, artifact-checks-wired, modern-smoke) find, as sorted
 #          "<check> <repo> <job|path>" lines. shipyard itself is read from this working tree,

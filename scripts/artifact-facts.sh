@@ -17,11 +17,12 @@ SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
 mach_tool LIPO 2>/dev/null || :; mach_tool OTOOL 2>/dev/null || :
 mach_tool NM 2>/dev/null || NM=nm; export NM
 . "$SELF/deviation-reason.sh"
-. "$SELF/registry-lookup.sh"
+. "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/pkg-tree.sh"
 dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"
-root="${3:-$(pwd)}"
+root="$(cd "${3:-.}" && pwd)"
+MAVERGREEN_REPO_ROOT="$root"; export MAVERGREEN_REPO_ROOT
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance", "A truncated fact stream fails" -- this producer runs upstream of a pipe with
@@ -37,7 +38,24 @@ abort() {  # $1 = why.
 }
 
 printf 'expected %s\n' "$version"
-[ -z "${GITHUB_REPOSITORY:-}" ] || printf 'repository %s\n' "$GITHUB_REPOSITORY"
+_repo="$(mg_repo)" && printf 'repository %s\n' "$_repo"
+for _pd in "$root"/.mavergreen/products/*/; do
+  [ -d "$_pd" ] || continue
+  _p="$(basename "$_pd")"
+  printf 'product %s\n' "$_p"
+  _dv=""
+  for _q in bundle-id agent-label app feed; do
+    _rc=0; _v="$(sh "$SELF/updater-identity.sh" "$_q" "$_p" 2>/dev/null)" || _rc=$?
+    case "$_q.$_rc" in
+      *.0) ;;
+      feed.2) _v=none ;;
+      *) _dv=""; break ;;
+    esac
+    [ "$_q" != app ] || _v="$(printf '%s' "$_v" | af_enc)"
+    _dv="$_dv $_v"
+  done
+  [ -z "$_dv" ] || printf 'derived %s%s\n' "$_p" "$_dv"
+done
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
 #       identity" -- what a pkg INSTALLS, read from its payload rather than from the recipe that built it:
@@ -117,7 +135,7 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
   done < "$_ml"
   rm -f "$_ml" "$_mferr"
 }
-payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read, or the registry cannot answer (why in _pf_why).
+payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read (why in _pf_why).
   _pf_why=""
   for _pl in $(find "$2" -name "*.root" -prune -o -name Payload -type f -print | sed 's/ /%20/g'); do
     _pl="$(printf '%s' "$_pl" | sed 's/%20/ /g')"
@@ -162,27 +180,12 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       _dir="$(basename "$(dirname "$_mf")" | enc)"
       _mp="$("$STEVEDORE" plist get "$_mf" product 2>/dev/null)" || _mp=""
       _mi="$("$STEVEDORE" plist get "$_mf" identifier 2>/dev/null)" || _mi=""
-      _reg=""; _repo=""; _dv=""
-      for _q in identifier repo updater-bundle-id agent-label updater-app feed; do
-        _rc=0; registry_lookup "$_q" "$_mp" || _rc=$?
-        [ "$_rc" -ne 1 ] || break
-        [ "$_rc" -eq 0 ] || { _pf_why="cannot look up $_mp in shipyard's registry: $(printf '%s' "$REG_WHY" | tr '\n' ' ')"; return 1; }
-        case "$_q" in
-          identifier) _reg="$REG_V" ;;
-          repo) _repo="$REG_V" ;;
-          updater-app) _dv="$_dv $(printf '%s' "$REG_V" | enc)" ;;
-          *) _dv="$_dv $REG_V" ;;
-        esac
-      done
-      _dv="${_dv# }"
       _ml="$("$STEVEDORE" plist get "$_mf" line 2>/dev/null)" || _ml=""
       _ma="$("$STEVEDORE" plist get "$_mf" appcast 2>/dev/null)" || _ma=""
       _mp="$(printf '%s' "${_mp:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest %s %s %s %s\n' "$1" "$_mp" "$(printf '%s' "${_mi:-none}" | tr -s '[:space:]' '_')" "$_dir"
-      printf 'registered %s %s %s\n' "$_mp" "$(printf '%s' "${_reg:-none}" | tr -s '[:space:]' '_')" "${_repo:-none}"
       printf 'manifest-line %s %s\n' "$1" "$(printf '%s' "${_ml:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest-appcast %s %s\n' "$1" "$(printf '%s' "${_ma:-none}" | tr -s '[:space:]' '_')"
-      [ -z "$_dv" ] || printf 'derived %s %s\n' "$_mp" "$_dv"
       _k=0
       while _o="$("$STEVEDORE" plist get "$_mf" "outside:$_k" 2>/dev/null)"; do
         printf 'manifest-outside %s %s\n' "$1" "$(printf '%s' "$_o" | tr '\n' ' ' | enc)"; _k=$((_k + 1))

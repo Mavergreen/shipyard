@@ -19,7 +19,6 @@ MAVERGREEN_POST_10_9_SELECTORS	selectors the compat guard refuses as newer than 
 MAVERGREEN_POST_10_9_SYMBOLS	symbols the compat guard refuses as newer than 10.9
 MAVERGREEN_PREFIX	directory the family's products install under
 MAVERGREEN_PRODUCT	the short name of the product a helper hook runs for
-MAVERGREEN_PRODUCT_NAMES	path of the product-names registry file
 MAVERGREEN_PROGRESS	1 makes the fetch scripts report progress on stderr
 MAVERGREEN_RELEASES	the releases URL release-needed.sh queries
 MAVERGREEN_REPO_ROOT	the root of the repo being built or checked

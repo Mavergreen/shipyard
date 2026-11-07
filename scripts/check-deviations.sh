@@ -26,7 +26,7 @@ fi
 
 retired_fix() {
   case "$1" in
-    product-layout) echo "now \`stage-product\` (and \`registered\`)" ;;
+    product-layout) echo "now \`stage-product\`" ;;
     artifact-conformance) echo "now \`artifact-checks-wired\`" ;;
     scheme) echo "now \`version-scheme\`" ;;
     ingredients) echo "now \`variant-build-info\`" ;;
@@ -35,7 +35,7 @@ retired_fix() {
     ingredients-md|ingredient-tracked) echo "now \`ingredient-complete\`, which reads no deviation; delete the directory" ;;
     ingredient-pins) echo "now \`watch-matches\`, which reads no deviation; delete the directory" ;;
     upstream-version-bare) echo "now \`value-file-line\`; move the directory to .mavergreen/deviations/value-file-line/" ;;
-    sparkle-updater|release-assets|python3) echo "no check reads this; delete the directory" ;;
+    sparkle-updater|release-assets|python3|registered) echo "no check reads this; delete the directory" ;;
     *) return 1 ;;
   esac
 }

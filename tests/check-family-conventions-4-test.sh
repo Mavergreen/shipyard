@@ -51,32 +51,15 @@ first_is "$out" host-tools || { echo "FAIL: check 22 should be a host-tools fail
 printf '#!/bin/sh\n# platform: host-agnostic\nexit 0\n' > "$work/host/tests/a-test.sh"
 (cd "$work/host" && git add -A && sh "$S" >/dev/null 2>&1) || { echo "FAIL: a clean, declared repo should pass check 22: $(cd "$work/host" && sh "$S" 2>&1)"; exit 1; }
 
-# spec: scripts/check-family-conventions.sh check 24 -- the registry check applies to a repo that
-#       builds a .pkg and already satisfies checks 21 and 23, so $work/pk is the compliant pkg repo
-#       from the check 21/23 cases, rebuilt here because those cases live in another file.
+# spec: explain/registered.md -- the gate no longer holds a pkg-building repo to a hand-kept registry;
+#       $work/pk is the compliant pkg repo from the check 21/23 cases, rebuilt here because those
+#       cases live in another file.
 mkrepo "$work/pk"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pk/build/package.sh"
 printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
 printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n' >> "$work/pk/.github/workflows/release.yml"
 (cd "$work/pk" && git add -A) >/dev/null 2>&1
-
-# spec: SKILL.md "Family conventions" check 24 -- a pkg-building repo is one scripts/product-names
-#       assigns products to, compared by name (a fork runs the same gate).
-out="$(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" 2>&1)" \
-  && { echo "FAIL: check 24: a pkg repo the registry does not name must fail"; exit 1; }
-first_is "$out" registered || { echo "FAIL should be a registered failure: $out"; exit 1; }
-(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$S" >/dev/null 2>&1) \
-  || { echo "FAIL: check 24: a registered repo passes: $(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$S" 2>&1)"; exit 1; }
-(cd "$work/pk" && GITHUB_REPOSITORY=someone/golang-126 sh "$S" >/dev/null 2>&1) \
-  || { echo "FAIL: check 24 compares the repo's name, not its owner"; exit 1; }
-(cd "$work/ok" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" >/dev/null 2>&1) \
-  || { echo "FAIL: check 24: a repo that builds no pkg ships no short name, and is not asked"; exit 1; }
-out="$(cd "$work/pk" && MAVERGREEN_PRODUCT_NAMES="$work/absent-registry" GITHUB_REPOSITORY=Mavergreen/golang-126 sh "$S" 2>&1)" \
-  && { echo "FAIL: check 24: a registry that cannot be read must fail the gate"; exit 1; }
-first_is "$out" registered || { echo "FAIL should be a registered failure: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'absent-registry' \
-  || { echo "FAIL: check 24 must pass on product-name.sh's own reason: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'assigns no product' \
-  && { echo "FAIL: check 24 must not call an unreadable registry an unregistered repo: $out"; exit 1; }
+(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" >/dev/null 2>&1) \
+  || { echo "FAIL: a pkg repo is not held to a registry: $(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" 2>&1)"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 25 -- the family is retiring Rosetta (see the
 #       conventions skill, "Rosetta"). An undeclared translated-arch call must fail, naming

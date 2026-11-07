@@ -1,8 +1,8 @@
-feed: a product's updater, feed and manifest agree with the registry.
+feed: a product's updater, feed and manifest agree with the identity derived for it.
 
 ## Why
-An updater's identity is derived, never chosen: from the product's registry line the feed is
-https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml. The check holds that the
+An updater's identity is derived, never chosen: from the product's short name and the repo it is released
+from, the feed is https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml. The check holds that the
 updater's SUFeedURL is that feed; that the dist carries <short>.xml for every updater its pkgs install (a
 build that does not sign runs stand-in-feeds.sh, which stages an unsigned stand-in); that a manifest's
 appcast is that feed when the pkg ships an updater and empty when not; and that a feed describing a product's

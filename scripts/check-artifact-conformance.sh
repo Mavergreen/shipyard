@@ -16,12 +16,12 @@
 #            manifest      <file> <product> <identifier> <dir>    one per usr/local/mavergreen/<dir>/mavergreen.plist
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
-#            registered    <product> <identifier|none> <repo|none>     what scripts/product-names registers the product to
-#            derived       <product> <bundle-id> <label> <app> <feed>  the updater identity derived for it
+#            product       <product>                              one per directory in the repo's .mavergreen/products/
+#            derived       <product> <bundle-id> <label> <app> <feed|none>  the updater identity derived for it
 #            manifest-line <file> <line|none>                     that manifest's line
 #            manifest-appcast <file> <url|none>                   that manifest's appcast
 #            sparkle       <file> <path> <SUFeedURL>              one per top-level bundle carrying a Sparkle feed
-#            repository    <owner/name>                           $GITHUB_REPOSITORY, when set
+#            repository    <owner/name>                           the repo the release is built in (mg_repo), when known
 #            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
 #            asset         <file> <bytes>                         one per file that will be published
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
@@ -111,9 +111,9 @@ rule_of() {
     base) echo "a pkg that installs a product has dev.mavergreen.base as its first component" ;;
     line) echo "a lined product's manifest, version and repo agree about the line" ;;
     install-path) echo "a pkg installs only into its product's tree and the family's places" ;;
-    feed) echo "a product's updater, feed and manifest agree with the registry" ;;
-    updater) echo "a product's updater is the one the registry derives for it" ;;
-    repository) echo "a release is built in the repo the registry assigns its products" ;;
+    feed) echo "a product's updater, feed and manifest agree with the identity derived for it" ;;
+    updater) echo "a product's updater is the one derived for it" ;;
+    repository) echo "every product a release ships is one of this repo's .mavergreen/products/" ;;
     enclosure) echo "an appcast's enclosure names a published asset" ;;
     length) echo "an appcast's enclosure length is the asset's real size" ;;
     enclosure-url) echo "an appcast's enclosure URL names this release" ;;
@@ -138,7 +138,7 @@ fix_of() {
     install-path) echo "install under usr/local/mavergreen/<product> (list the exceptions in the manifest's outside), or declare .mavergreen/deviations/install-path/<label>/ (scope <glob>, a reason, a revisit)" ;;
     feed) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>), name the feed <product>.xml, and point the manifest's appcast at it" ;;
     updater) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>) and ship its LaunchAgent" ;;
-    repository) echo "release the product from the repo scripts/product-names assigns it" ;;
+    repository) echo "declare the product in .mavergreen/products/<product>/, or release it from the repo that declares it" ;;
     enclosure) echo "publish the pkg the appcast names, or regenerate the appcast with gen_appcast.sh" ;;
     length) echo "regenerate the appcast after the pkg is final, so its length is the pkg's" ;;
     enclosure-url) echo "regenerate the appcast with the release's own tag in the pkg URL" ;;
@@ -244,7 +244,7 @@ while read -r kind file path label; do
 done < "$facts"
 
 # spec: tests/artifact-conformance-test.sh -- a pkg that installs a product carries exactly one
-#       manifest, naming a product registered to one of its components; it installs only into
+#       manifest, whose identifier is dev.mavergreen.<product> and one of its components; it installs only into
 #       that product's tree and what the manifest lists as outside (else uninstall leaves files
 #       behind); and its first component is dev.mavergreen.base, whose postinstall installs or
 #       upgrades the helper before the product's postinstall runs it. Coverage mirrors
@@ -267,9 +267,8 @@ $(awk -v p="$pk" '$2 == p' "$tmp/manifests")
 EOF
   [ "$mprod" = "$mdir" ] \
     || fail manifest "$pk's manifest names product '$mprod' but sits in usr/local/mavergreen/$(dec "$mdir")" "$pk"
-  reg="$(awk -v m="$mprod" '$1 == "registered" && $2 == m { print $3; exit }' "$facts")"
-  [ "$reg" = "$mid" ] \
-    || fail manifest "$pk's product '$mprod' is not registered to $mid in shipyard's scripts/product-names (registered: ${reg:-none})" "$pk"
+  [ "$mid" = "dev.mavergreen.$mprod" ] \
+    || fail manifest "$pk's manifest names identifier $mid; product $mprod's is dev.mavergreen.$mprod" "$pk"
   awk -v p="$pk" -v i="$mid" '$2 == p && $3 == i { f = 1 } END { exit !f }' "$tmp/components" \
     || fail manifest "$pk's manifest names identifier $mid, which is not one of its components" "$pk"
   first="$(awk -v p="$pk" '$2 == p { print $3; exit }' "$tmp/components")"
@@ -321,14 +320,15 @@ done
 
 # spec: tests/artifact-conformance-test.sh -- line identity: an updater's app, bundle id, label and
 #       feed are the derived record's, a lined product's line is its version and its repo's suffix,
-#       and a release is built in the repo the registry assigns each of its products.
+#       and every product a release ships is one this repo declares.
 repository="$(sed -n 's/^repository \([^ ][^ ]*\)$/\1/p' "$facts" | head -1)"
 up="${expected%%-mavericks.*}"; up="${up#v}"
 c1="${up%%.*}"; c12=""
 case "$up" in *.*) _r="${up#*.}"; c12="$c1${_r%%.*}" ;; esac
+repo="${repository#*/}"
 while read -r pk P; do
-  repo="$(awk -v m="$P" '$1 == "registered" && $2 == m { print $4; exit }' "$facts")"
-  [ -n "$repo" ] && [ "$repo" != none ] || continue
+  awk -v m="$P" '$1 == "product" && $2 == m { f = 1 } END { exit !f }' "$facts" \
+    || fail repository "$pk ships $P, which this repo does not declare in .mavergreen/products/$P/" "$pk"
   want_id=""; want_label=""; want_app=""; want_feed=""
   read -r _ _ want_id want_label want_app want_feed <<EOF
 $(awk -v m="$P" '$1 == "derived" && $2 == m { print; exit }' "$facts")
@@ -337,12 +337,16 @@ EOF
     awk -v p="$pk" '$1 == "sparkle" && $2 == p { print $3, $4 }' "$facts" > "$tmp/sparkle-$pk"
     while read -r spath sfeed; do
       [ "$spath" = "$want_app" ] \
-        || fail updater "$pk installs a Sparkle updater at $(dec "$spath"); $P's is $(dec "$want_app"), from scripts/product-names" "$pk"
+        || fail updater "$pk installs a Sparkle updater at $(dec "$spath"); $P's is $(dec "$want_app")" "$pk"
       sid="$(awk -v p="$pk" -v b="$spath" '$1 == "bundle" && $2 == p && $3 == b { print $4; exit }' "$facts")"
       [ "$sid" = "$want_id" ] \
         || fail updater "$pk's updater $(dec "$spath") is '${sid:-none}'; $P's is $want_id -- build it with mavericks_add_updater_app(PRODUCT $P)" "$pk"
-      [ "$sfeed" = "$want_feed" ] \
-        || fail feed "$pk's updater polls $sfeed; $P's feed is $want_feed" "$pk"
+      if [ "$want_feed" = none ]; then
+        fail feed "$pk's updater polls $sfeed, but $P's feed cannot be derived: the repo it is released from is unknown (set GITHUB_REPOSITORY)" "$pk"
+      else
+        [ "$sfeed" = "$want_feed" ] \
+          || fail feed "$pk's updater polls $sfeed; $P's feed is $want_feed" "$pk"
+      fi
     done < "$tmp/sparkle-$pk"
     if [ -s "$tmp/sparkle-$pk" ]; then
       awk -v p="$pk" -v l="$want_label" '$1 == "launchd" && $2 == p && $4 == l { f = 1 } END { exit !f }' "$facts" \
@@ -372,14 +376,11 @@ EOF
   if [ -n "$lv" ]; then
     case "$repo" in
       *-"$lv") : ;;
-      *) fail line "$pk is line $ml, so its repo is <product>-$lv, but scripts/product-names puts $P in $repo" "$pk" ;;
+      '') : ;;
+      *) fail line "$pk is line $ml, so its repo is <product>-$lv, but this release is built in $repository" "$pk" ;;
     esac
     [ "$lv" = "$c1" ] || [ "$lv" = "$c12" ] \
       || fail line "$pk is line $ml, but version $expected is line $c1${c12:+ or $c12}" "$pk"
-  fi
-  if [ -n "$repository" ]; then
-    [ "${repository#*/}" = "$repo" ] \
-      || fail repository "$pk ships $P, which scripts/product-names assigns to $repo, but this release is built in $repository" "$pk"
   fi
 done < "$tmp/prod-of"
 

@@ -11,8 +11,8 @@ line counts. A redirection (> other than 2>) fails, because output on stdout is 
 None recorded.
 
 ## Limits
-It reads the call as text. It cannot tell that the product name is the registered one (the conformance
-feed and updater ids hold the artifacts to the registry), and it does not follow a call hidden behind a
+It reads the call as text. It cannot tell that the product name is one this repo declares (the conformance
+repository, feed and updater ids hold the artifacts to it), and it does not follow a call hidden behind a
 variable or a wrapper script.
 
 ## Deviating

@@ -27,7 +27,7 @@ artifact-checks-wired	checkout	scripts/check-family-conventions.sh	gate 21	P1
 user-presets-ignored	checkout	scripts/check-family-conventions.sh	gate 20	P1
 host-tools	checkout	scripts/check-host-tools.sh	gate 22	P1
 stage-product	checkout	scripts/check-family-conventions.sh	gate 23	P1
-registered	checkout	scripts/check-family-conventions.sh	gate 24	P8
+registered	retired	scripts/check-family-conventions.sh	gate 24	P3
 rosetta	checkout	scripts/check-family-conventions.sh	gate 25	P1
 superpowers-ignored	checkout	scripts/check-family-conventions.sh	gate 27	P1
 deviation-complete	checkout	scripts/check-deviations.sh	deviations.sh refusal	P1
@@ -49,7 +49,7 @@ notes	dist	scripts/check-artifact-conformance.sh	conformance notes	P1
 sdk-pin	dist	scripts/check-artifact-conformance.sh	conformance sdk-pin	P1
 base	dist	scripts/check-artifact-conformance.sh	conformance base	P1
 updater	dist	scripts/check-artifact-conformance.sh	conformance updater	P6
-repository	dist	scripts/check-artifact-conformance.sh	conformance repository	P8
+repository	dist	scripts/check-artifact-conformance.sh	conformance repository	P3
 variant-build-info	dist	scripts/check-artifact-conformance.sh	conformance ingredients	P1
 tree-clean	only	scripts/assert-tree-clean.sh	assert-tree-clean.sh	P1
 compat-imports	dist	scripts/assert_binary_compatible.sh	compat guard imports	P1
