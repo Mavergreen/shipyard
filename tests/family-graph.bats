@@ -167,9 +167,63 @@ esac
 GHEOF
   chmod +x "$W/bin/gh"
   PATH="$W/bin:$PATH" run --separate-stderr sh "$GRAPH"
-  [ "$status" -eq 3 ]
+  [ "$status" -eq 0 ]
   [ "$output" = "app -> lib" ]
-  [ "$stderr" = "SKIP plain: no .mavergreen/ingredients (HTTP 404)" ]
+  [ -z "$stderr" ]
+}
+
+@test "without --from-dir an empty repo (HTTP 409) is not a family repo either" {
+  mkdir -p "$W/bin"
+  cat > "$W/bin/gh" <<'GHEOF'
+#!/bin/sh
+case "$*" in
+  *orgs/Mavergreen/repos*) printf 'app\nempty\n' ;;
+  *repos/Mavergreen/app/contents/.mavergreen/ingredients/empty/product*) echo empty ;;
+  *repos/Mavergreen/app/contents/.mavergreen/ingredients/empty/REPO*) echo Mavergreen/empty ;;
+  *repos/Mavergreen/app/contents/.mavergreen/ingredients*) echo empty ;;
+  *repos/Mavergreen/empty/contents/*) echo "gh: Git Repository is empty. (HTTP 409)" >&2; exit 1 ;;
+  *) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
+esac
+GHEOF
+  chmod +x "$W/bin/gh"
+  PATH="$W/bin:$PATH" run --separate-stderr sh "$GRAPH"
+  [ "$status" -eq 0 ]
+  [ "$output" = "app -> empty" ]
+  [ -z "$stderr" ]
+}
+
+@test "without --from-dir any other gh error is exit 2" {
+  mkdir -p "$W/bin"
+  cat > "$W/bin/gh" <<'GHEOF'
+#!/bin/sh
+case "$*" in
+  *orgs/Mavergreen/repos*) printf 'app\n' ;;
+  *) echo "gh: API rate limit exceeded (HTTP 403)" >&2; exit 1 ;;
+esac
+GHEOF
+  chmod +x "$W/bin/gh"
+  PATH="$W/bin:$PATH" run --separate-stderr sh "$GRAPH"
+  [ "$status" -eq 2 ]
+  [[ "$stderr" == *"HTTP 403"* ]] || false
+}
+
+@test "without --from-dir an edge to a repo outside the org is skipped and the exit is 3" {
+  mkdir -p "$W/bin"
+  cat > "$W/bin/gh" <<'GHEOF'
+#!/bin/sh
+case "$*" in
+  *orgs/Mavergreen/repos*) printf 'app\n' ;;
+  *repos/Mavergreen/app/contents/.mavergreen/ingredients/gone/product*) echo gone ;;
+  *repos/Mavergreen/app/contents/.mavergreen/ingredients/gone/REPO*) echo Mavergreen/gone ;;
+  *repos/Mavergreen/app/contents/.mavergreen/ingredients*) echo gone ;;
+  *) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
+esac
+GHEOF
+  chmod +x "$W/bin/gh"
+  PATH="$W/bin:$PATH" run --separate-stderr sh "$GRAPH"
+  [ "$status" -eq 3 ]
+  [ "$output" = "app -> gone" ]
+  [[ "$stderr" == *"SKIP gone: not a repo of the Mavergreen org"* ]] || false
 }
 
 @test "usage errors exit 2" {

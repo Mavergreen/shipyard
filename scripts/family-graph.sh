@@ -6,11 +6,11 @@
 #          <consumer>: <X> via <Y>" where the consumer pins both X and Y and Y reaches X, then
 #          "CYCLE a -> b -> ... -> a", each cycle once, starting at its smallest name. Each group is
 #          sorted. Nodes are repos.
-#          Default: reads each repo of the Mavergreen org at its default branch with read-only `gh api`
+#          Default: reads each repo of the Mavergreen org at its default branch with read-only `gh api`; a repo without .mavergreen/ingredients (404, or 409 if empty) has no pins
 #          (needs gh). --from-dir DIR reads DIR/<repo>/.mavergreen/ingredients instead, for each
 #          subdirectory of DIR that holds a .mavergreen.
-#          stderr names what could not be read: "SKIP <repo>: <reason>" for a repo with no clone or no
-#          .mavergreen/ingredients, "UNMAPPED <repo>: <name>" for an ingredient with a product and no
+#          stderr names what could not be read: "SKIP <repo>: <reason>" for an ingredient's repo with no clone
+#          (or, without --from-dir, not in the org), "UNMAPPED <repo>: <name>" for an ingredient with a product and no
 #          REPO. Exit 0 when everything was read; 3 when anything was skipped or unmapped (the graph
 #          still prints); 1 when a REPO is malformed; 2 on a usage error or when gh fails.
 # spec: tests/family-graph.bats
@@ -37,7 +37,7 @@ gh_read() {
   _rc=0
   gh api "$@" < /dev/null > "$tmp/gh.out" 2> "$tmp/gh.err" || _rc=$?
   [ "$_rc" -ne 0 ] || return 0
-  if grep -q 'HTTP 404' "$tmp/gh.err"; then return 1; fi
+  if grep -q 'HTTP 40[49]' "$tmp/gh.err"; then return 1; fi
   echo "family-graph: gh api $*: $(tr '\n' ' ' < "$tmp/gh.err")" >&2
   exit 2
 }
@@ -95,7 +95,7 @@ else
   while IFS= read -r r; do
     [ -n "$r" ] || continue
     echo "$r" >> "$tmp/nodes"
-    if fetch "$r"; then read_pins "$r" "$tmp/clone/$r"; else skip "$r" "no .mavergreen/ingredients (HTTP 404)"; fi
+    if fetch "$r"; then read_pins "$r" "$tmp/clone/$r"; fi
   done < "$tmp/repos"
 fi
 [ -z "$bad" ] || exit 1
