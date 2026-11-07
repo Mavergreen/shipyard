@@ -220,7 +220,7 @@ if [ -x /usr/libexec/PlistBuddy ]; then
     assert --cmake-version "$ver"
   ms="$w/manifest-stage"; mkdir -p "$ms/usr/local/mavergreen/shipyard"
   for p in shipyard cmake; do mkdir -p "$w/mrepo/.mavergreen/products/$p"; echo "$p" > "$w/mrepo/.mavergreen/products/$p/noun"; done
-  MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product shipyard --name "Mavericks Shipyard" --version 0.0.0 \
+  MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product shipyard --name "Shipyard" --version 0.0.0 \
     --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
   cp "$ms/usr/local/mavergreen/shipyard/mavergreen.plist" "$prefix/mavergreen.plist"
   mkdir -p "$fx/usr/local/mavergreen/var/mavergreen/selections"

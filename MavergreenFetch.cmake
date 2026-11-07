@@ -1,6 +1,6 @@
 # MavergreenFetch.cmake -- defines mavergreen_fetch_sdk(). No side effects, so a
 # consumer can include just this module without the compiler gate / mode check.
-set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
+set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyard root")
 
 # mavergreen_fetch_sdk(<out_var> [ARCH x86_64|arm64]): fetch+cache+verify the pinned SDK for ARCH (default
 # x86_64: MacOSX10.9.sdk; arm64: MacOSX11.3.sdk) and return its path. The pins live in scripts/sdk-pins.sh.

@@ -21,7 +21,7 @@
 # project on a non-Apple toolchain sets(MAVERICKS_REQUIRE_APPLECLANG OFF) first.
 # Install once with `cmake --install` (self-registers); see README.
 
-set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
+set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyard root")
 
 # Newer SDKs deprecate the 10.9-era Cocoa/IOKit APIs these projects use; we still
 # target them deliberately. (Deployment target + arch are the consumer's, set before

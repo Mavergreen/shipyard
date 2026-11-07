@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: package-pkg.sh --shipyard-prefix DIR --app APP --version V --out PKG
+#   usage: package-pkg.sh --shipyard-prefix DIR --app APP --version V --dist DIR
 #          Packages shipyard as ONE prefix -- /usr/local/mavergreen/shipyard holding shipyard itself
 #          (share/cmake/MavergreenShipyard), the launchers bin/shipyard-{cmake,ctest,cpack} into the
 #          cmake product, and bin/{cmake,ctest,cpack} linked to them -- plus one universal updater and
@@ -8,7 +8,7 @@
 #          into /usr/local/mavergreen/bin, never the bare cmake/ctest/cpack; nothing is installed into
 #          /usr/local/bin. The install scripts come from stage_product.sh, and its preinstall refuses
 #          a box without the cmake product at or above .mavergreen/products/shipyard/requires/cmake/min. The updater is a stopgap
-#          until Mavericks Lineup exists.
+#          until Mavericks Lineup exists. The pkg is DIR/shipyard-V.pkg.
 # spec: 2026-10-09 C4 -- shipyard ships no CMake of its own: the launchers run the cmake product
 #       installed beside it, with shipyard on CMAKE_PREFIX_PATH.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "On-target/
@@ -23,13 +23,14 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
 MAVERGREEN_REPO_ROOT="$SELF/.."; export MAVERGREEN_REPO_ROOT
-SPREFIX=""; APP=""; VER=""; OUT=""
+SPREFIX=""; APP=""; VER=""; DISTDIR=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --shipyard-prefix) SPREFIX="${2%/}"; shift 2;;
     --app) APP="${2%/}"; shift 2;;
     --version) VER="$2"; shift 2;;
-    --out) OUT="$2"; shift 2;;
+    --out) echo "package-pkg: --out is refused; the filename is derived, <short>-<version>.pkg; pass --dist" >&2; exit 2;;
+    --dist) DISTDIR="$2"; shift 2;;
     *) echo "package-pkg: unknown option $1" >&2; exit 2;;
   esac
 done
@@ -42,7 +43,7 @@ APP_NAME="${APP_REL##*/}"
 : "${SPREFIX:?package-pkg: --shipyard-prefix required}"
 : "${APP:?package-pkg: --app required}"
 : "${VER:?package-pkg: --version required}"
-: "${OUT:?package-pkg: --out required}"
+: "${DISTDIR:?package-pkg: --dist required}"
 
 [ "$(basename "$APP")" = "$APP_NAME" ] \
   || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
@@ -106,31 +107,30 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-pkg.XXXXXX")"; trap 'rm -rf "$WORK"'
 STAGE="$WORK/stage"; SCR="$WORK/scripts"
 mkdir -p "$STAGE$PREFIX_DIR" "$SCR" "$WORK/component"
 # platform: ubuntu-latest's mkdir says only "mkdir: Already exists", naming no path, so this names it.
-mkdir -p "$(dirname "$OUT")" || { echo "package-pkg: cannot make the --out directory $(dirname "$OUT")" >&2; exit 1; }
+mkdir -p "$DISTDIR" || { echo "package-pkg: cannot make the --dist directory $DISTDIR" >&2; exit 1; }
 COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
 
 # platform: an NFS or otherwise shared stage sprays AppleDouble "._*" sidecars, which would ship as
 #           payload -- and, left in place while the manifest is rendered, be listed in its `outside`.
 strip_appledouble() { find "$STAGE" -name '._*' -delete 2>/dev/null || true; }
 strip_appledouble
-sh "$SELF/stage_product.sh" --stage "$STAGE" --product shipyard --name "Mavericks Shipyard" \
+sh "$SELF/stage_product.sh" --stage "$STAGE" --product shipyard --name "$(mavergreen_name manifest-name shipyard)" \
   --version "$VER" --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack \
   --requires "cmake>=$cmake_min" --updater-app "$APP" --scripts-out "$SCR"
 strip_appledouble
 
 # platform: pkgbuild makes a payload holding a .app relocatable and version-checked, so a locally
 #           built updater elsewhere on disk would capture it; build_component_pkg.sh does not.
-comp="$WORK/component/mavericks-shipyard.pkg"
+comp="$WORK/component/$(mavergreen_name component shipyard)"
 sh "$SELF/build_component_pkg.sh" --root "$STAGE" --identifier "$ID" --version "$VER" \
   --install-location / --scripts "$SCR" --out "$comp" >&2
 
-sh "$SELF/set_install_floor.sh" \
-  --identifier "$ID" \
-  --title "Mavericks Shipyard ${VER}" \
+OUT="$(sh "$SELF/set_install_floor.sh" --short shipyard \
+  --version "$VER" \
   --component "$comp" \
-  --out "$OUT" \
+  --dist "$DISTDIR" \
   --host-arch x86_64,arm64 \
   --base-version "$VER" \
-  --require-scripts >&2
+  --require-scripts)"
 
 echo "built $OUT" >&2

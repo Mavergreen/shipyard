@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
 
-      - name: Install mavericks-shipyard (for scripts/repackage-decision.sh)
+      - name: Install shipyard (for scripts/repackage-decision.sh)
         uses: Mavergreen/shipyard/.github/actions/install@v1
 
       - name: Dispatch a repackage if a build ingredient (not own-upstream) moved

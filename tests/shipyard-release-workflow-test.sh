@@ -98,6 +98,14 @@ for arch in ("x86_64", "arm64"):
 # The pkg: shipyard's install prefix + the merged app. CMake is the cmake product's, never in the pkg.
 need(r"^sh scripts/package-pkg\.sh .*--shipyard-prefix \S+ .*--app \S*/shipyard-updater\.app\"?",
      "release.yml never runs scripts/package-pkg.sh with --shipyard-prefix and the merged --app")
+need(r"^sh scripts/package-pkg\.sh .*--dist dist(\s|$)",
+     "release.yml must build the pkg into dist with --dist dist; its name is derived, shipyard-<v>.pkg")
+if find(r"^sh scripts/package-pkg\.sh .*--out "):
+    bad.append("release.yml still passes package-pkg.sh --out; the filename is derived, so it passes --dist")
+need(r'^sh scripts/assert_pkg_installs_in_place\.sh "dist/shipyard-\$v\.pkg"$',
+     "release.yml must gate dist/shipyard-$v.pkg, the pkg package-pkg.sh derives")
+need(r'^sh scripts/sign_and_appcast\.sh .*--pkg-url "https://github\.com/Mavergreen/shipyard/releases/download/v\$v/shipyard-\$v\.pkg" .*--pkg "dist/shipyard-\$v\.pkg"$',
+     "release.yml must sign dist/shipyard-$v.pkg and point the feed at that asset")
 if find(r"--cmake-tree"):
     bad.append("release.yml still passes --cmake-tree; the pkg carries no CMake now")
 
@@ -266,7 +274,7 @@ def exports(cs, name):
     return False
 
 for pat, why in ((r'resolve-action-version\.sh', "the macOS release path never resolves its ref to a version"),
-                 (r'fetch-release-pkg\.sh" shipyard "v\$ver" "mavericks-shipyard-\$ver\.pkg" ', "the macOS release path never downloads the release's pkg through fetch-release-pkg.sh (retried, verified against SHA256SUMS)"),
+                 (r'fetch-release-pkg\.sh" shipyard "v\$ver" "shipyard-\$ver\.pkg" ', "the macOS release path never downloads the release's pkg through fetch-release-pkg.sh (retried, verified against SHA256SUMS)"),
                  (r'^sudo installer -pkg "\$pkg" ', "the macOS release path never installs the pkg it fetched")):
     if not any(re.search(pat, c) for c in rel_mac): bad.append(why)
 if not exports(rel_mac, "SHIPYARD_SCRIPTS"):

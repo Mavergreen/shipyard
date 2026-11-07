@@ -41,12 +41,12 @@ if(SHIPYARD_BUILD_UPDATER)
   # release. One PRODUCT for both builds, so the merge is of one app, not two.
   mavericks_add_updater_app(
     PRODUCT shipyard
-    PRODUCT_NAME "Mavericks Shipyard"
+    PRODUCT_NAME "Shipyard"
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "MavShipyardUpdater"
-    CONFIRM_TITLE "Mavericks Shipyard updated"
-    CONFIRM_BODY "Mavericks Shipyard in /usr/local/mavergreen/shipyard was updated."
-    RELAUNCH_MARKER "/tmp/.mavericks-shipyard-updater-relaunched"
+    CONFIRM_TITLE "Shipyard updated"
+    CONFIRM_BODY "Shipyard in /usr/local/mavergreen/shipyard was updated."
+    RELAUNCH_MARKER "/tmp/.shipyard-updater-relaunched"
     ALLOW_GENERIC
     # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification. shipyard has no UI.
   )

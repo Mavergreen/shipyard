@@ -38,7 +38,7 @@ jobs:
           path: ~/.cache/mavergreen-clang22
           key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.mavergreen/ingredients/clang22/VERSION') }}
 
-      - name: Install mavericks-shipyard (the Linux path)
+      - name: Install shipyard (the Linux path)
         uses: ./.github/actions/install
 
       # spec: scripts/artifact-facts.sh -- GNU binutils cannot read Mach-O, so the merge, the SDK audit
@@ -86,8 +86,8 @@ jobs:
             --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
             --app "$RUNNER_TEMP/shipyard-updater.app" \
             --version "$v" \
-            --out "$RUNNER_TEMP/dist/mavericks-shipyard-$v.pkg"
-          sh scripts/assert_pkg_installs_in_place.sh "$RUNNER_TEMP/dist/mavericks-shipyard-$v.pkg"
+            --dist "$RUNNER_TEMP/dist"
+          sh scripts/assert_pkg_installs_in_place.sh "$RUNNER_TEMP/dist/shipyard-$v.pkg"
 
       # spec: SKILL.md "SDK pinning" -- the release runs full conformance; the rehearsal has no appcast
       #       or notes, so it runs the family's SDK audit on the dist alone, before the release ever sees
@@ -116,10 +116,10 @@ jobs:
           d="$RUNNER_TEMP/dist"
           sh scripts/release-notes.sh --tag "v$SHIPYARD_CHECK_VERSION" --version "$SHIPYARD_CHECK_VERSION" \
             --product Shipyard --min-os 10.9.5 --out "$d/RELEASE_NOTES.md"
-          pkg="$d/mavericks-shipyard-$SHIPYARD_CHECK_VERSION.pkg"
+          pkg="$d/shipyard-$SHIPYARD_CHECK_VERSION.pkg"
           len="$(wc -c < "$pkg" | tr -d ' ')"
-          sh scripts/gen_appcast.sh "Mavericks Shipyard" "$SHIPYARD_CHECK_VERSION" \
-            "https://github.com/Mavergreen/shipyard/releases/download/v$SHIPYARD_CHECK_VERSION/mavericks-shipyard-$SHIPYARD_CHECK_VERSION.pkg" \
+          sh scripts/gen_appcast.sh "Shipyard" "$SHIPYARD_CHECK_VERSION" \
+            "https://github.com/Mavergreen/shipyard/releases/download/v$SHIPYARD_CHECK_VERSION/shipyard-$SHIPYARD_CHECK_VERSION.pkg" \
             10.9.5 "$d/RELEASE_NOTES.md" "sparkle:edSignature=\"rehearsal\" length=\"$len\"" > "$d/shipyard.xml"
           sh scripts/shipyard-check --dist "$d"
 

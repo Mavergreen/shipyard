@@ -62,3 +62,5 @@ MAVERICKS_BUILD_ROOT	MAVERGREEN_BUILD_ROOT
 mm-build	mavergreen-build
 _MAVERICKS_SDK_METADATA_DIR	_MAVERGREEN_SDK_METADATA_DIR
 .mavericks-sdk-metadata-stamp.json	.mavergreen-sdk-metadata-stamp.json
+mavericks-shipyard	shipyard
+Mavericks Shipyard	Shipyard

@@ -8,7 +8,7 @@
 #   scripts/stage_updater.sh     -- stage the updater .app + LaunchAgent into a pkg payload,
 #                                   rendering updater/{updatecheck.plist,agent-load}.in per product
 #   scripts/sign_and_appcast.sh  -- sign a .pkg (via ed25519-sign) then write its feed, <short>.xml (gen_appcast.sh)
-set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
+set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyard root")
 include("${MAVERGREEN_SHARED_DIR}/MavergreenDecisions.cmake")   # mavergreen_reject_placeholder_icon()
 include("${MAVERGREEN_SHARED_DIR}/MavergreenCompatGuard.cmake")   # mavergreen_assert_binary_compatible()
 

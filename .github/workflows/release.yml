@@ -38,7 +38,7 @@ jobs:
 
       # spec: R-P1-19 -- shipyard cannot install a RELEASED shipyard to test the one it is about to
       #       release. On Linux, install@v1 by local path hands the job this checkout's shell half.
-      - name: Install mavericks-shipyard (the Linux path)
+      - name: Install shipyard (the Linux path)
         uses: ./.github/actions/install
 
       # spec: scripts/artifact-facts.sh -- GNU binutils cannot read Mach-O, so the merge and
@@ -105,8 +105,8 @@ jobs:
             --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
             --app "$RUNNER_TEMP/shipyard-updater.app" \
             --version "$v" \
-            --out "dist/mavericks-shipyard-$v.pkg"
-          sh scripts/assert_pkg_installs_in_place.sh "dist/mavericks-shipyard-$v.pkg"
+            --dist dist
+          sh scripts/assert_pkg_installs_in_place.sh "dist/shipyard-$v.pkg"
 
       - name: Release notes
         run: |
@@ -124,11 +124,11 @@ jobs:
           set -eu
           v='${{ steps.ver.outputs.version }}'
           sh scripts/sign_and_appcast.sh --product shipyard --feed-dir dist \
-            --channel-title "Mavericks Shipyard" \
+            --channel-title "Shipyard" \
             --version "$v" \
-            --pkg-url "https://github.com/Mavergreen/shipyard/releases/download/v$v/mavericks-shipyard-$v.pkg" \
+            --pkg-url "https://github.com/Mavergreen/shipyard/releases/download/v$v/shipyard-$v.pkg" \
             --notes-file dist/RELEASE_NOTES.md \
-            --pkg "dist/mavericks-shipyard-$v.pkg"
+            --pkg "dist/shipyard-$v.pkg"
           # spec: mavergreen-conventions SKILL.md, "A self-upstream repo gets a real baseline
           #       too, via --tag-glob" -- this is the worked example the rule book names.
           sh scripts/assert_appcast_upgradeable.sh --appcast dist/shipyard.xml --version "v$v" --tag-glob 'v*.*.*'

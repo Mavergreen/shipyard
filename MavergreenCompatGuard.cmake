@@ -3,7 +3,7 @@
 # include(Mavergreen) (e.g. LANGUAGES NONE / Go) can include just this module.
 
 # Capture the install dir (this file sits alongside scripts/) at include time.
-set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
+set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyard root")
 
 # mavergreen_assert_binary_compatible(<target>): after linking <target>, assert its Mach-O holds
 # exactly this configure's arches, that every slice records its arch's pinned minos and SDK

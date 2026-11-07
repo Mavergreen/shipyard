@@ -1,20 +1,19 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: set_install_floor.sh --identifier ID --title T --component COMP.pkg --out OUT.pkg
+#   usage: set_install_floor.sh --short S --version V --component COMP.pkg --dist DIR [--system-replace]
 #            [--resources DIR] [--welcome FILE] [--license FILE] [--conclusion FILE]
 #            [--require-scripts] [--host-arch x86_64] [--min-os 10.9.5] [--base-version V]
 #          FILE for --welcome, --license and --conclusion names a file inside --resources.
 #          Wraps a flat component pkg into a distributable product archive that enforces a hard OS
-#          install floor (default MAVERGREEN_MIN_OS, the single source of truth for "the Mavericks
-#          install floor" across the family) via a Distribution -- a bare component
-#          cannot express an OS floor. Generates distribution.xml from flags, runs
-#          stevedore product, then self-checks that the floor made it into the output pkg. Every archive
-#          also carries dev.mavergreen.base (built via build-base-component.sh, --base-version picks
-#          its version; default: the base's own default) and lists it FIRST in the choices-outline,
-#          so its postinstall -- which installs or upgrades /usr/local/bin/mavergreen -- runs before
-#          the product's postinstall runs the helper. The base component is built into a private
-#          temp directory, not the caller's --component directory, so a caller that globs that
-#          directory afterward never sees it.
+#          install floor (default MAVERGREEN_MIN_OS) via a Distribution, and prints the archive's
+#          path. The filename, component name, identifier and Installer title are derived from
+#          .mavergreen/products/S/: DIR/S-V.pkg, S.pkg, dev.mavergreen.S and "Mavergreen <name>";
+#          with --system-replace, DIR/S-system-replace-V.pkg, S-system-replace.pkg,
+#          dev.mavergreen.S.system-replace and "Mavergreen <name> System Replace". COMP's own
+#          identifier must be the derived one. Every archive also carries dev.mavergreen.base (built
+#          via build-base-component.sh, --base-version picks its version) and lists it FIRST in the
+#          choices-outline, so its postinstall -- which installs or upgrades /usr/local/bin/mavergreen
+#          -- runs before the product's postinstall runs the helper.
 # spec: tests/shipyard-package-pkg-test.sh -- package-pkg.sh's own integration coverage exercises
 #       --host-arch end to end (both architectures must reach the Distribution).
 # spec: tests/set-install-floor-base-test.sh -- the base component must be first in the
@@ -22,21 +21,28 @@
 #       every payload has landed, so only a base listed first has installed or upgraded the helper
 #       by the time the product's postinstall runs it.
 set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
 
 MIN_OS="${MAVERGREEN_MIN_OS:-10.9.5}"
-ID=""; TITLE=""; COMPONENT=""; OUT=""; RES=""; WELCOME=""; LICENSE=""; CONCLUSION=""
-REQSCRIPTS="false"; HOSTARCH=""; BASEVER=""
+SHORT=""; VER=""; COMPONENT=""; DISTDIR=""; RES=""; WELCOME=""; LICENSE=""; CONCLUSION=""
+REQSCRIPTS="false"; HOSTARCH=""; BASEVER=""; SYSREP=""
 
+refuse() { echo "productbuild_floor: $1 is refused; $2" >&2; exit 2; }
 while [ $# -gt 0 ]; do
   case "$1" in
-    --identifier|--title|--component|--out|--resources|--welcome|--license|--conclusion|--host-arch|--min-os|--base-version)
+    --title) refuse --title "write .mavergreen/products/<short>/noun" ;;
+    --out) refuse --out "the filename is derived, <short>-<version>.pkg; pass --dist" ;;
+    --identifier) refuse --identifier "the identifier is dev.mavergreen.<short>" ;;
+    --short|--version|--component|--dist|--resources|--welcome|--license|--conclusion|--host-arch|--min-os|--base-version)
       [ $# -ge 2 ] || { echo "productbuild_floor: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
-    --identifier) ID="$2"; shift 2;;
-    --title) TITLE="$2"; shift 2;;
+    --short) SHORT="$2"; shift 2;;
+    --version) VER="$2"; shift 2;;
     --component) COMPONENT="$2"; shift 2;;
-    --out) OUT="$2"; shift 2;;
+    --dist) DISTDIR="${2%/}"; shift 2;;
+    --system-replace) SYSREP=1; shift;;
     --resources) RES="$2"; shift 2;;
     --welcome) WELCOME="$2"; shift 2;;
     --license) LICENSE="$2"; shift 2;;
@@ -48,10 +54,20 @@ while [ $# -gt 0 ]; do
     *) echo "productbuild_floor: unknown arg: $1" >&2; exit 2;;
   esac
 done
-[ -n "$ID" ] && [ -n "$TITLE" ] && [ -n "$COMPONENT" ] && [ -n "$OUT" ] \
-  || { echo "productbuild_floor: need --identifier --title --component --out" >&2; exit 2; }
+[ -n "$SHORT" ] && [ -n "$VER" ] && [ -n "$COMPONENT" ] && [ -n "$DISTDIR" ] \
+  || { echo "productbuild_floor: need --short --version --component --dist" >&2; exit 2; }
+ID="$(mavergreen_name identifier "$SHORT")" || exit $?
+TITLE="$(mavergreen_name installer-title "$SHORT")" || exit $?
+PKGNAME="$(mavergreen_name pkg "$SHORT" "$VER")" || exit $?
+COMP_BASE="$(mavergreen_name component "$SHORT")" || exit $?
+if [ -n "$SYSREP" ]; then
+  ID="$ID.system-replace"
+  TITLE="$TITLE System Replace"
+  PKGNAME="$SHORT-system-replace-${PKGNAME#"$SHORT"-}"
+  COMP_BASE="${COMP_BASE%.pkg}-system-replace.pkg"
+fi
 [ "$ID" != dev.mavergreen.base ] \
-  || { echo "productbuild_floor: --identifier may not be dev.mavergreen.base -- the base component is added automatically" >&2; exit 2; }
+  || { echo "productbuild_floor: the product's identifier may not be dev.mavergreen.base -- the base component is added automatically" >&2; exit 2; }
 [ -z "$CONCLUSION" ] || [ -n "$RES" ] \
   || { echo "productbuild_floor: --conclusion needs --resources, the directory holding the file" >&2; exit 2; }
 case "$WELCOME" in
@@ -71,19 +87,27 @@ esac
   || { echo "productbuild_floor: --conclusion file not found: $RES/$CONCLUSION" >&2; exit 2; }
 [ -f "$COMPONENT" ] || { echo "productbuild_floor: no component pkg: $COMPONENT" >&2; exit 1; }
 
-COMP_BASE=$(basename "$COMPONENT")
 [ "$COMP_BASE" != mavergreen-base.pkg ] || { echo "productbuild_floor: the product component may not be named mavergreen-base.pkg" >&2; exit 2; }
 BASEDIR=$(mktemp -d "${TMPDIR:-/tmp}/mavergreen-base.XXXXXX")
 DIST="$BASEDIR/distribution.xml"
 trap 'rm -rf "$BASEDIR"' EXIT
-EPOCH="$(sh "$(dirname "$0")/source-date-epoch.sh")"
-STEVEDORE="$(sh "$(dirname "$0")/fetch_stevedore.sh")"
+EPOCH="$(sh "$SELF/source-date-epoch.sh")"
+STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
+
+"$STEVEDORE" expand "$COMPONENT" "$BASEDIR/comp-x" >&2
+got_id="$(sed -n 's/.*<pkg-info[^>]*[[:space:]]identifier="\([^"]*\)".*/\1/p' "$BASEDIR/comp-x/PackageInfo" 2>/dev/null | head -1)"
+[ "$got_id" = "$ID" ] \
+  || { echo "productbuild_floor: $COMPONENT is identified as ${got_id:-nothing}; $SHORT's component must be $ID" >&2; exit 1; }
+mkdir -p "$BASEDIR/comp"
+cp "$COMPONENT" "$BASEDIR/comp/$COMP_BASE"
+COMPONENT="$BASEDIR/comp/$COMP_BASE"
+xml_text() { printf '%s\n' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 
 BASE="$BASEDIR/mavergreen-base.pkg"
 if [ -n "$BASEVER" ]; then
-  sh "$(dirname "$0")/build-base-component.sh" --version "$BASEVER" --out "$BASE" >&2
+  sh "$SELF/build-base-component.sh" --version "$BASEVER" --out "$BASE" >&2
 else
-  sh "$(dirname "$0")/build-base-component.sh" --out "$BASE" >&2
+  sh "$SELF/build-base-component.sh" --out "$BASE" >&2
 fi
 
 _opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\""
@@ -92,7 +116,7 @@ _opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\""
 {
   echo '<?xml version="1.0" encoding="utf-8"?>'
   echo '<installer-gui-script minSpecVersion="1">'
-  echo "    <title>$TITLE</title>"
+  echo "    <title>$(xml_text "$TITLE")</title>"
   [ -n "$WELCOME" ] && echo "    <welcome file=\"$(basename "$WELCOME")\" mime-type=\"text/html\"/>"
   [ -n "$LICENSE" ] && echo "    <license file=\"$(basename "$LICENSE")\"/>"
   [ -n "$CONCLUSION" ] && echo "    <conclusion file=\"$(basename "$CONCLUSION")\" mime-type=\"text/html\"/>"
@@ -114,6 +138,8 @@ _opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\""
 
 set -- product --distribution "$DIST" --package "$BASE" --package "$COMPONENT" --mtime "$EPOCH"
 [ -z "$RES" ] || set -- "$@" --resources "$RES"
+mkdir -p "$DISTDIR"
+OUT="$DISTDIR/$PKGNAME"
 "$STEVEDORE" "$@" --out "$OUT" >&2
 
 X=$(mktemp -d "${TMPDIR:-/tmp}/pkgfloor.XXXXXX")
@@ -128,4 +154,5 @@ rm -rf "$X"
   || { echo "productbuild_floor: dev.mavergreen.base is not first in $OUT" >&2; exit 1; }
 [ -z "$CONCLUSION" ] || [ "$concl" -ge 1 ] \
   || { echo "productbuild_floor: the conclusion pane did not make it into $OUT" >&2; exit 1; }
-echo "productbuild_floor: $OUT built, install floor $MIN_OS enforced"
+echo "productbuild_floor: $OUT built, install floor $MIN_OS enforced" >&2
+printf '%s\n' "$OUT"

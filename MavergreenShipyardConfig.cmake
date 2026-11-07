@@ -29,7 +29,7 @@ if(CMAKE_HOST_APPLE)
      OR NOT EXISTS "${_shipyard_cmake_pair}/shipyard/bin/shipyard-cmake"
      OR CMAKE_VERSION VERSION_LESS _shipyard_cmake_min)
     message(FATAL_ERROR
-      "mavericks-shipyard must be configured with shipyard-cmake (/usr/local/mavergreen/bin/shipyard-cmake), "
+      "shipyard must be configured with shipyard-cmake (/usr/local/mavergreen/bin/shipyard-cmake), "
       "which runs the Mavergreen cmake product installed beside shipyard, CMake ${_shipyard_cmake_min} or later. "
       "In GitHub Actions, Mavergreen/shipyard/.github/actions/install@v1 provides both. This configure is "
       "running ${CMAKE_COMMAND}, CMake ${CMAKE_VERSION}. IDEs with a configurable CMake executable: point that setting at "
@@ -44,7 +44,7 @@ if(NOT MAVERGREEN_ALLOW_VENDORED)
   file(RELATIVE_PATH _mav_rel "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_LIST_DIR}")
   if(NOT _mav_rel MATCHES "^\\.\\.")   # not "../..." => under the consumer tree
     message(FATAL_ERROR
-      "mavericks-shipyard appears VENDORED: its config is inside the consumer "
+      "shipyard appears VENDORED: its config is inside the consumer "
       "tree (${CMAKE_CURRENT_LIST_DIR} under ${CMAKE_SOURCE_DIR}). It is a "
       "find_package package -- installed by the shipyard pkg and found by "
       "shipyard-cmake; do not vendor or submodule it. See the README \"Install (once)\" "
@@ -72,7 +72,7 @@ set(MavergreenShipyard_SCRIPTS "${CMAKE_CURRENT_LIST_DIR}/scripts")
 # if the top-level project is a git repo that has NO .github/renovate.json, write
 # one that extends this repo's shared preset -- which turns on config:recommended +
 # automerge AND (via the preset's customManager) lets Renovate act on new upstream
-# mavericks-shipyard commits. Never overwrites an existing config (if they
+# shipyard commits. Never overwrites an existing config (if they
 # already have one, leave it alone). Opt out with -DMAVERGREEN_NO_RENOVATE_SCAFFOLD=ON.
 if(NOT MAVERGREEN_NO_RENOVATE_SCAFFOLD AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
   set(_mav_renovate "${CMAKE_SOURCE_DIR}/.github/renovate.json")
@@ -84,7 +84,7 @@ if(NOT MAVERGREEN_NO_RENOVATE_SCAFFOLD AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
   \"extends\": [\"github>Mavergreen/shipyard\"]
 }
 ")
-    message(STATUS "mavericks-shipyard: created a default ${_mav_renovate} "
+    message(STATUS "shipyard: created a default ${_mav_renovate} "
                    "(extends the shared Renovate preset; opt out with -DMAVERGREEN_NO_RENOVATE_SCAFFOLD=ON)")
   endif()
 endif()

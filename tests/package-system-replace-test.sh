@@ -6,7 +6,8 @@ S="$here/../scripts/package-system-replace.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/system-replace-pkg.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
 R="$w/repo/.mavergreen/products"
-for n in openssh Bad_Name 'ab;id' 'ab$(x)cd'; do mkdir -p "$R/$n"; echo "$n" > "$R/$n/noun"; done
+for n in Bad_Name 'ab;id' 'ab$(x)cd'; do mkdir -p "$R/$n"; echo "$n" > "$R/$n/noun"; done
+mkdir -p "$R/openssh"; echo OpenSSH > "$R/openssh/noun"
 MAVERGREEN_REPO_ROOT="$w/repo"; export MAVERGREEN_REPO_ROOT
 
 sh "$S" --emit-postinstall "$w/post" --product openssh
@@ -25,7 +26,7 @@ sh "$S" --emit-postinstall "$w/post" --product 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "an option given without a value must be a usage error, exit 2, never a hang or a silent mis-parse (got $rc)"
 
 rc=0
-sh "$S" --product openssh --title x --version 1 2>/dev/null || rc=$?
+sh "$S" --product openssh --dist "$w/d0" --version 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "an option given without a value at the end of the argument list must be a usage error, exit 2 (got $rc)"
 
 rc=0
@@ -54,23 +55,39 @@ sh "$S" --emit-postinstall "$w/inject4" --product 'ab cd' 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "a disallowed character past position 2 ('ab cd') must be refused by the shape check, exit 2; exit 2 (not 1) proves the SHAPE check, not the declaration lookup, is what caught it (got $rc)"
 [ ! -e "$w/inject4" ] || fail "a refused product name must not emit a postinstall (ab cd)"
 
+for f in title out; do
+  rc=0
+  err="$(sh "$S" --product openssh --version 1 --dist "$w/r-$f" "--$f" x 2>&1 >/dev/null)" || rc=$?
+  [ "$rc" -eq 2 ] || fail "--$f is refused as a usage error (exit 2): got $rc"
+  [ ! -e "$w/r-$f" ] || fail "a refused --$f writes nothing"
+  case "$f" in
+    title) printf '%s\n' "$err" | grep -qF 'write .mavergreen/products/<short>/noun' || fail "the refusal of --title names its fix: $err" ;;
+    out) printf '%s\n' "$err" | grep -qF 'pass --dist' || fail "the refusal of --out names its fix: $err" ;;
+  esac
+done
+
 SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
 SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed -- the pkg block is the only gate for this seam, so it cannot be skipped"
-sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavergreen.5 --out "$w/r.pkg" --base-version 1.0.9 >/dev/null 2>&1 \
+out="$(sh "$S" --product openssh --version 10.5p1-mavergreen.5 --dist "$w/d" --base-version 1.0.9 2>/dev/null)" \
   || fail "the pkg must build"
-"$SD" expand "$w/r.pkg" "$w/x"
+[ "$out" = "$w/d/openssh-system-replace-10.5p1-mavergreen.5.pkg" ] \
+  || fail "the System Replace pkg is <short>-system-replace-<version>.pkg, and its path is printed: got '$out'"
+"$SD" expand "$out" "$w/x"
 grep -q 'id="dev.mavergreen.openssh.system-replace"' "$w/x/Distribution" || fail "the component is <identifier>.system-replace"
+grep -qF '<title>Mavergreen OpenSSH System Replace</title>' "$w/x/Distribution" \
+  || fail "the Installer title is Mavergreen <name> System Replace: $(grep title "$w/x/Distribution")"
 grep -q 'dev.mavergreen.base' "$w/x/Distribution" || fail "it carries the base like every product archive"
-ls "$w/x/system-replace.pkg" >/dev/null 2>&1 || fail "the expanded archive carries system-replace.pkg"
-[ ! -e "$w/x/system-replace.pkg/Payload" ] || fail "the system-replace pkg has no payload member"
-[ -f "$w/x/system-replace.pkg/PackageInfo" ] || fail "the expanded system-replace component has a PackageInfo"
-! grep -q "<payload" "$w/x/system-replace.pkg/PackageInfo" || fail "the system-replace component declares a payload, so it would install files"
-[ ! -e "$w/x/system-replace.pkg/Bom" ] || fail "the system-replace component carries a Bom, so it would install files"
+C="$w/x/openssh-system-replace.pkg"
+[ -d "$C" ] || fail "the expanded archive carries openssh-system-replace.pkg"
+[ ! -e "$C/Payload" ] || fail "the system-replace pkg has no payload member"
+[ -f "$C/PackageInfo" ] || fail "the expanded system-replace component has a PackageInfo"
+! grep -q "<payload" "$C/PackageInfo" || fail "the system-replace component declares a payload, so it would install files"
+[ ! -e "$C/Bom" ] || fail "the system-replace component carries a Bom, so it would install files"
 for t in a b; do
   case $t in a) um=077;; b) um=022;; esac
   mkdir -p "$w/tmp$t-xx"
-  (umask $um; TMPDIR="$w/tmp$t-xx"; export TMPDIR; sh "$S" --product openssh --title "OpenSSH System Replace" --version 10.5p1-mavergreen.5 --out "$w/seam-$t.pkg" --base-version 1.0.9 >/dev/null 2>&1) || fail "the pkg must build under umask $um"
+  (umask $um; TMPDIR="$w/tmp$t-xx"; export TMPDIR; sh "$S" --product openssh --version 10.5p1-mavergreen.5 --dist "$w/seam-$t" --base-version 1.0.9 >/dev/null 2>&1) || fail "the pkg must build under umask $um"
 done
-cmp "$w/seam-a.pkg" "$w/seam-b.pkg" || fail "seam output ignores umask and TMPDIR"
+cmp "$w/seam-a/openssh-system-replace-10.5p1-mavergreen.5.pkg" "$w/seam-b/openssh-system-replace-10.5p1-mavergreen.5.pkg" || fail "seam output ignores umask and TMPDIR"
 
 echo "PASS: package-system-replace"

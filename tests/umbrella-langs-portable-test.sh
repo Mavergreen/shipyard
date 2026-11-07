@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: umbrella-langs-portable-test.sh [mavericks-shipyard source dir]
+#   usage: umbrella-langs-portable-test.sh [shipyard source dir]
 #          include(Mavergreen) is includable for every language set once the AppleClang gate is turned
 #          off, and leaves a caller's CMAKE_OSX_* alone. The gate's own cases are umbrella-langs.sh's.
 set -eu

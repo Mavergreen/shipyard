@@ -32,9 +32,13 @@ EOF
   SOURCE_DATE_EPOCH=1700000000 sh "$scripts/build_component_pkg.sh" --root "$root" --identifier dev.mavergreen.test \
     --version 1 --install-location / --out "$out.component.pkg" >/dev/null 2>&1 \
     || { echo "build_component_pkg.sh failed: no fixture" >&2; return 1; }
-  SOURCE_DATE_EPOCH=1700000000 sh "$scripts/set_install_floor.sh" --identifier dev.mavergreen.test --title Test \
-    --component "$out.component.pkg" --out "$out" >/dev/null 2>&1 \
+  local repo built
+  repo="$(mktemp -d "$BATS_TEST_TMPDIR/repo.XXXXXX")"
+  mkdir -p "$repo/.mavergreen/products/test"; echo Test > "$repo/.mavergreen/products/test/noun"
+  built="$(MAVERGREEN_REPO_ROOT="$repo" SOURCE_DATE_EPOCH=1700000000 sh "$scripts/set_install_floor.sh" --short test --version 1 \
+    --component "$out.component.pkg" --dist "$repo/dist" 2>/dev/null)" \
     || { echo "set_install_floor.sh failed: no fixture" >&2; return 1; }
+  mv "$built" "$out"
   rm -f "$out.component.pkg"
 }
 

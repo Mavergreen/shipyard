@@ -2931,7 +2931,7 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    already sets; a release that publishes no notes body; a release body not built by `release-notes.sh`
    (check 14 — `--generate-notes` no longer passes).
 10. Check in `.claude/settings.json` pointing at the `mavergreen` marketplace (hosted in
-   `mavericks-shipyard`) so contributors' agents load these conventions — do NOT copy the SKILL.md:
+   `Mavergreen/shipyard`) so contributors' agents load these conventions — do NOT copy the SKILL.md:
    ```json
    {"extraKnownMarketplaces": {"mavergreen": {"source": {"source": "github", "repo": "Mavergreen/shipyard"}}},
     "enabledPlugins": {"mavergreen@mavergreen": true}}

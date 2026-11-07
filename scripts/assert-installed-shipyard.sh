@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: [LIPO=<lipo>] assert-installed-shipyard.sh --cmake-version V [--root DIR] [--no-slices]
-#          Asserts that an INSTALLED mavericks-shipyard is what we meant to ship: the cmake product
+#          Asserts that an INSTALLED shipyard is what we meant to ship: the cmake product
 #          beside it is the CMake in .mavergreen/ingredients/cmake/VERSION and universal; the farm's
 #          shipyard-cmake, shipyard-ctest, shipyard-cpack, shipyard-check, shipyard-scripts and
 #          shipyard-provision are executable on the default PATH, and shipyard-check runs from there;

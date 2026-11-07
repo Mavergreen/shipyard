@@ -1,6 +1,6 @@
 # MavergreenDecisions.cmake -- forced explicit decisions (no silent defaults for
 # decisions that matter). Currently: the app icon. include()d by Mavergreen.cmake.
-set(MAVERGREEN_DECISIONS_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root (decisions)")
+set(MAVERGREEN_DECISIONS_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyard root (decisions)")
 
 # mavergreen_reject_placeholder_icon(<target> <icns>)
 #   FATAL if <icns> is a registered PLACEHOLDER (scripts/placeholder-icons.sha256), unless

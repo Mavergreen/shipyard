@@ -1384,8 +1384,8 @@ PLIST
   "$SD" component --root "$_st" --identifier dev.mavergreen.z --version 1.0.0-mavergreen.1 --install-location /opt/z \
     --mtime 1700000000 --out "$_pk/dist/z-1.0.0-mavergreen.1.pkg"
   cp "$_pk/dist/x-1.0.0-mavergreen.1.pkg" "$_pk/comp/x-component.pkg"
-  sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --base-version 1.0.9 \
-    --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavergreen.1.pkg" >/dev/null 2>&1 \
+  MAVERGREEN_REPO_ROOT="$_pk" sh "$here/../scripts/set_install_floor.sh" --short x --version 1.0.0-mavergreen.1 --base-version 1.0.9 \
+    --component "$_pk/comp/x-component.pkg" --dist "$_pk/archive" >/dev/null 2>&1 \
     || { echo "FAIL: set_install_floor.sh could not build the archive this fixture reads"; exit 1; }
   _f="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"
   printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"

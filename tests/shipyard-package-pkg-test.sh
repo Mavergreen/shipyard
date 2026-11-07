@@ -11,7 +11,7 @@ w="$(mktemp -d "${TMPDIR:-/tmp}/pkg-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 code() { grep -v '^[[:space:]]*#' "$S"; }   # the script minus its comments
 
 [ "$(code | grep -c -- '--host-arch x86_64,arm64')" = 1 ] || { echo "FAIL: the Distribution must declare BOTH architectures and exactly those -- without arm64, Installer on Apple Silicon offers Rosetta for a pkg with scripts and runs them translated; only one arch would stop the pkg installing on the other box -- package-pkg.sh must pass --host-arch x86_64,arm64 exactly once"; exit 1; }
-for gone in register-with-cmake sysctl agent-load-cross uname CrossUpdater modernmavericks mavericks-shipyard/ mavergreen-shipyard emit-preinstall; do
+for gone in register-with-cmake sysctl agent-load-cross uname CrossUpdater modernmavericks mavergreen-shipyard emit-preinstall --title; do
   code | grep -q -- "$gone" && { echo "FAIL: package-pkg.sh still mentions $gone"; exit 1; }
 done
 for c in cmake ctest cpack; do
@@ -49,16 +49,23 @@ code | grep -q 'stage_product.sh' || { echo "FAIL: shipyard gets its install scr
 code | grep -q -- '--base-version "\$VER"' \
   || { echo "FAIL: the base component shipyard ships must be stamped with the version being built (--base-version \"\$VER\")"; exit 1; }
 
-for missing in --shipyard-prefix --app --version --out; do
-  args="--shipyard-prefix $w/p --app $w/shipyard-updater.app --version 1.0.0 --out $w/o.pkg"
+code | grep -q 'set_install_floor.sh" --short shipyard ' \
+  || { echo "FAIL: shipyard's archive is named, titled and identified by set_install_floor.sh --short shipyard, like every product's"; exit 1; }
+for missing in --shipyard-prefix --app --version --dist; do
+  args="--shipyard-prefix $w/p --app $w/shipyard-updater.app --version 1.0.0 --dist $w/o"
   args="$(printf '%s' "$args" | sed "s|$missing [^ ]*||")"
   # shellcheck disable=SC2086
   if err="$(sh "$S" $args 2>&1 >/dev/null)"; then echo "FAIL: $missing must be required"; exit 1; fi
   printf '%s\n' "$err" | grep -q -- "$missing" \
     || { echo "FAIL: the refusal for a missing $missing must name it; got '$err'"; exit 1; }
 done
+rc=0
+err="$(sh "$S" --shipyard-prefix "$w/p" --app "$w/shipyard-updater.app" --version 1.0.0 --dist "$w/o" --out "$w/o.pkg" 2>&1 >/dev/null)" || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL: --out is refused as a usage error (exit 2); got $rc"; exit 1; }
+printf '%s\n' "$err" | grep -qF 'the filename is derived, <short>-<version>.pkg; pass --dist' \
+  || { echo "FAIL: the refusal of --out names its fix; got '$err'"; exit 1; }
 mkdir -p "$w/Other.app"
-if sh "$S" --shipyard-prefix "$w/p" --app "$w/Other.app" --version 1.0.0 --out "$w/o.pkg" >/dev/null 2>&1; then
+if sh "$S" --shipyard-prefix "$w/p" --app "$w/Other.app" --version 1.0.0 --dist "$w/o" >/dev/null 2>&1; then
   echo "FAIL: an app not named shipyard-updater.app must be refused"; exit 1
 fi
 
@@ -81,18 +88,18 @@ presets() {  # $1 = fixture dir  $2 = the prefix its installed presets name
   printf '{ "configurePresets": [\n  { "name": "a",\n    "toolchainFile": "%s" },\n  { "name": "b",\n    "toolchainFile": "%s" } ] }\n' \
     "$_t" "$_t" > "$1/sp/share/cmake/MavergreenShipyard/mavergreen-presets.json"
 }
-# platform: --out under a plain FILE, so a fixture that passes every input check stops at the first
+# platform: --dist under a plain FILE, so a fixture that passes every input check stops at the first
 #           mkdir after them -- exercising the checks without pkgbuild, and without a special case
 #           for valid input.
 run_pkg() {  # $1 = fixture dir; sets $rc and $err
   rc=0
   err="$(sh "$S" --shipyard-prefix "$1/sp" \
-    --app "$1/app/shipyard-updater.app" --version 1.0.0 --out "$1/notadir/o.pkg" 2>&1 >/dev/null)" || rc=$?
+    --app "$1/app/shipyard-updater.app" --version 1.0.0 --dist "$1/notadir/o" 2>&1 >/dev/null)" || rc=$?
 }
 mkfixture "$w/fa"; run_pkg "$w/fa"
-[ "$rc" -ne 0 ] || { echo "FAIL: the fixture was built to stop at --out; it did not fail at all"; exit 1; }
+[ "$rc" -ne 0 ] || { echo "FAIL: the fixture was built to stop at --dist; it did not fail at all"; exit 1; }
 printf '%s\n' "$err" | grep -q 'notadir' \
-  || { echo "FAIL: bin (three launchers, three compatibility links) and share are the payload; the fixture must pass every check and stop at --out; got '$err'"; exit 1; }
+  || { echo "FAIL: bin (three launchers, three compatibility links) and share are the payload; the fixture must pass every check and stop at --dist; got '$err'"; exit 1; }
 mkfixture "$w/fc"; mkdir -p "$w/fc/sp/build"; run_pkg "$w/fc"
 [ "$rc" -ne 0 ] || { echo "FAIL: a stray dir at the --shipyard-prefix root must be refused"; exit 1; }
 printf '%s\n' "$err" | grep -q 'build' \

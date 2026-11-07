@@ -16,7 +16,7 @@ For a first install, download both current packages into separate directories:
 gh release download -R Mavergreen/cmake --pattern '*.pkg' --dir cmake-pkg
 gh release download -R Mavergreen/shipyard --pattern '*.pkg' --dir shipyard-pkg
 sudo installer -pkg cmake-pkg/cmake-*.pkg -target /
-sudo installer -pkg shipyard-pkg/mavericks-shipyard-*.pkg -target /
+sudo installer -pkg shipyard-pkg/shipyard-*.pkg -target /
 ```
 
 Shipyard's modules, scripts and launchers land in `/usr/local/mavergreen/shipyard`.

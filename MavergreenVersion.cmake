@@ -11,7 +11,7 @@
 # So a fresh clone configures without a release having been cut first.
 #
 # The logic lives in scripts/resolve-version.sh (shell, under test); this is the CMake doorway to it.
-set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
+set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyard root")
 
 function(mavergreen_resolve_version outvar)
   cmake_parse_arguments(A "" "MODE;ROOT" "" ${ARGN})
