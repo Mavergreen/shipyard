@@ -1,0 +1,4 @@
+MAVERICKS_UPSTREAM_FILE	.mavergreen/upstream/ (the upstream's value file)
+.mavericks-intree	.mavergreen/intree
+msc.sh	shipyard-scripts
+mavericks-legacysupport	an ingredient with a # renovate: line 2

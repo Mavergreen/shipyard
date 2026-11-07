@@ -127,3 +127,4 @@ publish-unchanged	key	scripts/check-artifact-conformance.sh	deviation key (repro
 reproducible	key	scripts/check-artifact-conformance.sh	deviation key (reproducible releases: a path or repo exempt from the reproduce check)	P6
 apple-clang	key	scripts/check-deviations.sh	deviation key (a product that builds with Apple's clang where clang22 cannot)	P1
 release-sentence	publish	scripts/check-release-sentence.sh	new (check-release-sentence.sh, from main)	P1
+retired-name	checkout	scripts/check-retired-names.sh	new	P3
