@@ -28,6 +28,12 @@ sh "$S" shorts golang >/dev/null 2>&1 && fail "a repo the registry does not name
   || fail "a feed is <short name>.xml on its repo's latest release"
 [ "$(sh "$S" feed trackpad2)" = https://github.com/Mavergreen/magic-trackpad2/releases/latest/download/trackpad2.xml ] \
   || fail "a feed is named for the short name, and served from the registered repo"
+[ "$(sh "$S" identifier iterm2)" = dev.mavergreen.iterm2 ] && [ "$(sh "$S" repo iterm2)" = iterm2 ] \
+  || fail "iterm2 is registered: its updater bundle id is derived here (iTerm2 plan C0)"
+[ "$(sh "$S" updater-bundle-id iterm2)" = dev.mavergreen.iterm2.updater ] \
+  || fail "the iTerm2 updater bundle id is dev.mavergreen.iterm2.updater"
+[ "$(sh "$S" updater-app iterm2)" = 'Library/Application Support/Mavergreen/iterm2-updater.app' ] \
+  || fail "the iTerm2 updater app is iterm2-updater.app"
 [ "$(sh "$S" feed recaulk)" = https://github.com/Mavergreen/recaulk/releases/latest/download/recaulk.xml ] \
   || fail "recaulk is registered, and its feed is recaulk.xml on its repo's latest release"
 sh "$S" identifier legacysupport >/dev/null 2>&1 \

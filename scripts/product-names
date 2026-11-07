@@ -45,3 +45,4 @@ jdk25 dev.mavergreen.jdk.jdk25 jdk-25
 zig dev.mavergreen.zig.zig zig
 zig-cross dev.mavergreen.zig.zig-cross zig
 wezterm dev.mavergreen.wezterm wezterm
+iterm2 dev.mavergreen.iterm2 iterm2
