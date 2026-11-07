@@ -43,7 +43,8 @@ mg link go127
 mkdir -p "$w/suffix/.mavergreen/products/sfx"; echo Sfx > "$w/suffix/.mavergreen/products/sfx/noun"
 for l in 1.27 1.26 22 126 1.2.3 9; do
   printf '%s\n' "$l" > "$w/suffix/.mavergreen/products/sfx/line"
-  want="$(MAVERGREEN_REPO_ROOT="$w/suffix" sh -c '. "$1/scripts/mavergreen-meta.sh"; mavergreen_name link-suffix sfx' sh "$here/..")"
+  meta="$here/../scripts/mavergreen-meta.sh"
+  want="$(MAVERGREEN_REPO_ROOT="$w/suffix" sh -c '. "$1"; mavergreen_name link-suffix sfx' sh "$meta")"
   rm -rf "$T/sfx" "$T"/bin/tool*
   mkproduct sfx sfxgrp "$l" bin/tool
   mg link sfx
