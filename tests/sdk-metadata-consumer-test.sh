@@ -4,7 +4,8 @@
 #        mavericks_target_sdk_metadata on a real SDK: only the opted-in Objective-C target gets the
 #        overlay; generic NSArray code compiles with it and fails without it; a reconfigure reuses
 #        the verified generation; a tampered or unowned generation is refused, never overwritten.
-#        SDK_METADATA_CC names the compiler (default: the installed clang22). Without it the test
+#        SDK_METADATA_CC names the compiler (default: the installed clang22, clang-22 on 10.9 or
+#        clang-22-cross on a modern Mac). Without it the test
 #        skips, unless SHIPYARD_ON_TARGET=1 (tests/maintainer-tests), which makes a missing compiler
 #        or SDK a failure.
 set -eu
@@ -13,7 +14,13 @@ root="$(cd "$here/.." && pwd)"
 fx="$here/fixtures/sdk-metadata-consumer"
 recipes="$here/fixtures/sdk-metadata/recipes-v1.json"
 SC="${CMAKE:-$(command -v shipyard-cmake || echo /usr/local/mavergreen/bin/shipyard-cmake)}"
-CC="${SDK_METADATA_CC:-/usr/local/mavergreen/bin/clang-22}"
+CC="${SDK_METADATA_CC:-}"
+if [ -z "$CC" ]; then
+  for c in /usr/local/mavergreen/bin/clang-22 /usr/local/mavergreen/bin/clang-22-cross; do
+    [ -x "$c" ] && { CC="$c"; break; }
+  done
+  CC="${CC:-/usr/local/mavergreen/bin/clang-22 or clang-22-cross}"
+fi
 unmet() {
   if [ "${SHIPYARD_ON_TARGET:-}" = 1 ]; then echo "FAIL: $*"; exit 1; fi
   echo "SKIP: $*"; exit 77
