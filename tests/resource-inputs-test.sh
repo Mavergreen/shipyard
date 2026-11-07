@@ -9,6 +9,10 @@
 #        the 31 members of the pinned iTerm2 3.0.15 release (a download). MAVERICKS_HOST_TOOLS_CC names
 #        the compiler (default: clang-22 on 10.9, clang-22-cross on a modern Mac).
 set -eu
+# platform: sort orders by the locale's collation, which ignores case in modern macOS's en_US.UTF-8 and
+#           compares bytes on 10.9, so the expected listings are compared in the C locale
+LC_ALL=C
+export LC_ALL
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 fx="$here/fixtures/resource-inputs"
