@@ -21,7 +21,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
-. "$SELF/mavericks_fetch.sh"
+. "$SELF/mavergreen_fetch.sh"
 chk_ran update-trusted
 
 PKG=""; SIG=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no

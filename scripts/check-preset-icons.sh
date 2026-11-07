@@ -22,7 +22,7 @@ done
 chk_ran preset-icon
 ICON_URL= ICON_GLOB= APT_REPO= APT_KEY_URL= APT_PKGS=
 case "$CONF" in */*) . "$CONF" ;; *) . "./$CONF" ;; esac
-. "$(cd "$(dirname "$0")" && pwd)/mavericks_fetch.sh"
+. "$(cd "$(dirname "$0")" && pwd)/mavergreen_fetch.sh"
 W=$(mktemp -d "${TMPDIR:-/tmp}/check-preset-icons.XXXXXX"); trap 'rm -rf "$W"' EXIT
 
 if [ -n "$ICON_URL" ]; then

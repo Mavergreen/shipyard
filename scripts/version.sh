@@ -6,7 +6,7 @@
 #                  RELEASE=no.
 #            local          : N = maxExistingN + 1, RELEASE=yes  (an independent repackage).
 #          N resets to 1 automatically whenever the upstream version changes (a new upstream has no tags
-#          yet). Tag set comes from `git tag`, or from $MAVERICKS_TAGS (newline-separated) when set
+#          yet). Tag set comes from `git tag`, or from $MAVERGREEN_TAGS (newline-separated) when set
 #          (tests).
 # spec: tests/version-lib-test.sh
 set -eu
@@ -16,8 +16,8 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 mode="${1:-auto}"
 U="$(upstream_version)"
 
-if [ -n "${MAVERICKS_TAGS+x}" ]; then
-  tags="$MAVERICKS_TAGS"
+if [ -n "${MAVERGREEN_TAGS+x}" ]; then
+  tags="$MAVERGREEN_TAGS"
 else
   tags="$(git -C "$MAVERGREEN_REPO_ROOT" tag --list "${U}-mavericks.*" 2>/dev/null || true)"
 fi

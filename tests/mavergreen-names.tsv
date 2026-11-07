@@ -1,12 +1,36 @@
+MAVERGREEN_ALLOW_ARCHS	the exact set of architectures the compat guard accepts
+MAVERGREEN_ALLOW_GENERIC_ICON	opts a build into shipping a generic app icon
+MAVERGREEN_ALLOW_GUARDED_WEAK	weak imports the compat guard accepts because the code guards them
+MAVERGREEN_ALLOW_SELECTORS	selectors the compat guard accepts although they are newer than the SDK
+MAVERGREEN_ALLOW_VENDORED	opts a build into vendoring shipyard
 MAVERGREEN_CLANG22_CACHE	directory where fetch_clang22.sh caches the clang22 archive
+MAVERGREEN_CODELOAD	the host fetch_pinned_source.sh downloads GitHub tarballs from
+MAVERGREEN_DECISIONS_DIR	the shipyard root MavericksDecisions.cmake reads the placeholder-icon denylist from
+MAVERGREEN_DEVIATIONS_ROOT	the directory whose INGREDIENTS.md declares the compat guard's deviations
+MAVERGREEN_EXPECTED_MODE	the build mode a script asserts it is running in
 MAVERGREEN_INGREDIENT_	prefix of the per-ingredient override variables the fetch scripts read
+MAVERGREEN_MIN_OS	the install floor set_install_floor.sh and sign_and_appcast.sh default to
+MAVERGREEN_MODE	the build mode, native or cross
+MAVERGREEN_NO_RENOVATE_SCAFFOLD	opts a configure out of scaffolding .github/renovate.json
 MAVERGREEN_PKG_CACHE	directory where fetched product pkgs are cached
+MAVERGREEN_PLACEHOLDER_DENYLIST	path of the placeholder-icon denylist
+MAVERGREEN_POST_10_9_SELECTORS	selectors the compat guard refuses as newer than 10.9
+MAVERGREEN_POST_10_9_SYMBOLS	symbols the compat guard refuses as newer than 10.9
 MAVERGREEN_PREFIX	directory the family's products install under
 MAVERGREEN_PRODUCT	the short name of the product a helper hook runs for
 MAVERGREEN_PRODUCT_NAMES	path of the product-names registry file
 MAVERGREEN_PROGRESS	1 makes the fetch scripts report progress on stderr
 MAVERGREEN_RELEASES	the releases URL release-needed.sh queries
 MAVERGREEN_REPO_ROOT	the root of the repo being built or checked
+MAVERGREEN_REQUIRE_DEFINED_SYMBOLS	symbols the compat guard requires a binary to define
 MAVERGREEN_ROOT	the helper's install root, the volume it manages
+MAVERGREEN_SDK_CACHE	directory where fetch_sdk.sh caches the SDK
+MAVERGREEN_SDK_SETTINGS_JSON	path of the SDKSettings.json the SDK metadata step reads
+MAVERGREEN_SDK_SHA256	the SHA-256 fetch_sdk.sh verifies the SDK download against
+MAVERGREEN_SDK_URL	the URL fetch_sdk.sh downloads the SDK from
+MAVERGREEN_SHARED_DIR	the shipyard root the CMake modules read their scripts from
+MAVERGREEN_SOURCE_CACHE	directory where fetch_pinned_source.sh caches source tarballs
+MAVERGREEN_TAGS	the newline-separated tag list version.sh reads in place of git tag
 MAVERGREEN_TAR_CACHE	directory where fetched tarballs are cached
+MAVERGREEN_TEST_JOBS	the number of test files run-repo-tests.sh runs in parallel
 MAVERGREEN_VERSION	the shipyard version the base component is built with

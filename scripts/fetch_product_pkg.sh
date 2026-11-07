@@ -10,7 +10,7 @@
 #          .SHORT (dev.mavergreen.clang.clang22), so exactly one must. NAME is the release asset,
 #          default SHORT-VERSION.pkg; pass it where a product's pkg is named otherwise. The pkg is fetched once into
 #          ${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/REPO/VERSION and verified by
-#          mavericks_fetch.sh's shipyard_fetch_verified against the release's SHA256SUMS, which is fetched
+#          mavergreen_fetch.sh's shipyard_fetch_verified against the release's SHA256SUMS, which is fetched
 #          afresh on every call; an asset SHA256SUMS does not list fails. The component is picked by its
 #          PackageInfo identifier, never by position (a product archive lists dev.mavergreen.base first).
 #          DEST is REPLACED by its usr/local/mavergreen/SHORT tree, extracted beside DEST and swapped in,
@@ -57,7 +57,7 @@ fi
 [ -n "$ASSET" ] || ASSET="$SHORT-$VERSION.pkg"
 BASE="${MAVERGREEN_RELEASES:-https://github.com}/$OWNER/$REPO/releases/download/$VERSION"
 CACHE="${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/$REPO/$VERSION"
-. "$SELF/mavericks_fetch.sh"
+. "$SELF/mavergreen_fetch.sh"
 
 mkdir -p "$CACHE" "$(dirname "$DEST")"
 DEST="$(cd "$(dirname "$DEST")" && pwd -P)/$(basename "$DEST")"

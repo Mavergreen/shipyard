@@ -23,7 +23,7 @@ esac
 copy() {
   rm -rf "$t/r"; mkdir -p "$t/r/scripts" "$t/r/.mavergreen/ingredients"
   cp -R "$here/scripts/vendor" "$t/r/scripts/vendor"
-  cp "$here/scripts/mavericks_fetch.sh" "$here/scripts/mavergreen-meta.sh" "$t/r/scripts/"
+  cp "$here/scripts/mavergreen_fetch.sh" "$here/scripts/mavergreen-meta.sh" "$t/r/scripts/"
   cp -R "$here/.mavergreen/ingredients/pyyaml" "$t/r/.mavergreen/ingredients/pyyaml"
 }
 copy

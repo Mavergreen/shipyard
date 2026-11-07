@@ -4,7 +4,7 @@
 #          assert_binary_compatible.sh        (under shipyard-check --dist: every Mach-O in the dist)
 #          10.9 userland compat guard for one or more shipped Mach-O binaries. Per binary:
 #          (1) no post-10.9 UNDEFINED import (compat-imports), (2) no post-10.9 ObjC selector sent
-#          (compat-selectors), (3) the arches present are exactly MAVERICKS_ALLOW_ARCHS (compat-archs),
+#          (compat-selectors), (3) the arches present are exactly MAVERGREEN_ALLOW_ARCHS (compat-archs),
 #          (4) every slice records its arch's pinned minos and SDK (sdk-pins.sh; sdk-pin), (5) the
 #          symbols a project's shims must define are defined (compat-required-defined). (1) and (2)
 #          read the x86_64 slice. A file whose bytes are a pinned third-party binary (Sparkle) is
@@ -18,23 +18,23 @@
 #          the check it serves, naming the variable to set.
 #          Knobs:
 #            SHIPYARD_CHECK_DIST               the dist directory, when no binary is named.
-#            MAVERICKS_DEVIATIONS_ROOT         the repo whose .mavergreen/deviations/ declares the deviations
+#            MAVERGREEN_DEVIATIONS_ROOT         the repo whose .mavergreen/deviations/ declares the deviations
 #                                               (default: SHIPYARD_CHECK_REPO, else the current
 #                                               directory; mavericks_assert_binary_compatible passes
 #                                               CMAKE_SOURCE_DIR).
-#            MAVERICKS_ALLOW_ARCHS             the exact arch set each binary must contain (default
+#            MAVERGREEN_ALLOW_ARCHS             the exact arch set each binary must contain (default
 #                                               "x86_64"; a universal updater passes "x86_64 arm64").
-#            MAVERICKS_POST_10_9_SYMBOLS       extra post-10.9 symbols (grep -E alternation) that
+#            MAVERGREEN_POST_10_9_SYMBOLS       extra post-10.9 symbols (grep -E alternation) that
 #                                               must not appear as undefined imports.
-#            MAVERICKS_POST_10_9_SELECTORS     extra post-10.9 ObjC selectors (grep -E alternation)
+#            MAVERGREEN_POST_10_9_SELECTORS     extra post-10.9 ObjC selectors (grep -E alternation)
 #                                               to deny.
-#            MAVERICKS_ALLOW_SELECTORS         post-10.9 selectors the code guards with
+#            MAVERGREEN_ALLOW_SELECTORS         post-10.9 selectors the code guards with
 #                                               -respondsToSelector:.
-#            MAVERICKS_REQUIRE_DEFINED_SYMBOLS symbols that MUST be DEFINED (a project's 10.9 shims).
+#            MAVERGREEN_REQUIRE_DEFINED_SYMBOLS symbols that MUST be DEFINED (a project's 10.9 shims).
 #            LIPO, NM, STRINGS, OTOOL          the Mach-O readers (default: LLVM's llvm-lipo, llvm-nm,
 #                                               llvm-strings and llvm-otool, found by lib/macho-tools.sh,
 #                                               never Apple's). A reader that fails is fail-closed.
-#            MAVERICKS_ALLOW_GUARDED_WEAK      grep -E alternation of post-10.9 symbols permitted
+#            MAVERGREEN_ALLOW_GUARDED_WEAK      grep -E alternation of post-10.9 symbols permitted
 #                                               ONLY when imported *weak*, for a runtime (e.g.
 #                                               mavericks-swift) that weak-links a post-10.9 SPI and
 #                                               NULL-checks it first (Swift's
@@ -61,17 +61,17 @@ rule_of() {
   case "$1" in
     compat-imports) echo "a binary imports no symbol newer than 10.9" ;;
     compat-selectors) echo "a binary sends no ObjC selector newer than 10.9" ;;
-    compat-archs) echo "a binary holds exactly the arches MAVERICKS_ALLOW_ARCHS names" ;;
-    compat-required-defined) echo "a binary defines every symbol MAVERICKS_REQUIRE_DEFINED_SYMBOLS names" ;;
+    compat-archs) echo "a binary holds exactly the arches MAVERGREEN_ALLOW_ARCHS names" ;;
+    compat-required-defined) echo "a binary defines every symbol MAVERGREEN_REQUIRE_DEFINED_SYMBOLS names" ;;
     sdk-pin) echo "every shipped Mach-O slice records its arch's pinned minos and SDK" ;;
     deviation-complete) echo "every conformance deviation is complete" ;;
   esac
 }
 fix_of() {
   case "$1" in
-    compat-imports) echo "remove the post-10.9 call or weak-link and NULL-check it (MAVERICKS_ALLOW_GUARDED_WEAK), and link against the pinned 10.9 SDK (scripts/fetch_sdk.sh)" ;;
-    compat-selectors) echo "send the selector only after -respondsToSelector: and list it in MAVERICKS_ALLOW_SELECTORS, or use a 10.9 one" ;;
-    compat-archs) echo "build exactly those arches, or set MAVERICKS_ALLOW_ARCHS to the set the binary should hold" ;;
+    compat-imports) echo "remove the post-10.9 call or weak-link and NULL-check it (MAVERGREEN_ALLOW_GUARDED_WEAK), and link against the pinned 10.9 SDK (scripts/fetch_sdk.sh)" ;;
+    compat-selectors) echo "send the selector only after -respondsToSelector: and list it in MAVERGREEN_ALLOW_SELECTORS, or use a 10.9 one" ;;
+    compat-archs) echo "build exactly those arches, or set MAVERGREEN_ALLOW_ARCHS to the set the binary should hold" ;;
     compat-required-defined) echo "link the shim that defines it into the binary" ;;
     sdk-pin) echo "link against the pinned SDK (scripts/fetch_sdk.sh), or declare .mavergreen/deviations/sdk-pin/<label>/ (scope <glob>, a reason, a revisit)" ;;
     deviation-complete) echo "give each .mavergreen/deviations/<check>/<label>/ a one-line scope, a reason and a revisit" ;;
@@ -91,13 +91,13 @@ need_tool() {  # $1 = id, $2 = variable
 }
 
 POST_10_9='_clock_gettime|_clock_gettime_nsec_np|_os_unfair_lock_.*|_os_log.*'
-if [ -n "${MAVERICKS_POST_10_9_SYMBOLS:-}" ]; then
-  POST_10_9="$POST_10_9|$MAVERICKS_POST_10_9_SYMBOLS"
+if [ -n "${MAVERGREEN_POST_10_9_SYMBOLS:-}" ]; then
+  POST_10_9="$POST_10_9|$MAVERGREEN_POST_10_9_SYMBOLS"
 fi
 
-REQUIRE_DEFINED="${MAVERICKS_REQUIRE_DEFINED_SYMBOLS:-}"
-ALLOW_WEAK="${MAVERICKS_ALLOW_GUARDED_WEAK:-}"
-if [ -n "$REQUIRE_DEFINED" ]; then chk_ran compat-required-defined; elif [ -n "${SHIPYARD_CHECK_RUNLOG:-}" ]; then chk_notrun compat-required-defined "MAVERICKS_REQUIRE_DEFINED_SYMBOLS names no symbol"; fi
+REQUIRE_DEFINED="${MAVERGREEN_REQUIRE_DEFINED_SYMBOLS:-}"
+ALLOW_WEAK="${MAVERGREEN_ALLOW_GUARDED_WEAK:-}"
+if [ -n "$REQUIRE_DEFINED" ]; then chk_ran compat-required-defined; elif [ -n "${SHIPYARD_CHECK_RUNLOG:-}" ]; then chk_notrun compat-required-defined "MAVERGREEN_REQUIRE_DEFINED_SYMBOLS names no symbol"; fi
 
 # platform: post-10.9 Objective-C SELECTORS dispatch through objc_msgSend, so they are NOT undefined
 #           symbols -- the import check above (nm) cannot see them. A 10.9 binary that SENDS one
@@ -106,16 +106,16 @@ if [ -n "$REQUIRE_DEFINED" ]; then chk_ran compat-required-defined; elif [ -n "$
 #           button. The selector name is a C string in __TEXT,__objc_methname; matched whole-line via
 #           `strings -a`. See tests/compat_guard.bats.
 POST_10_9_SEL='labelColor|secondaryLabelColor|tertiaryLabelColor|quaternaryLabelColor|controlAccentColor'
-[ -n "${MAVERICKS_POST_10_9_SELECTORS:-}" ] && POST_10_9_SEL="$POST_10_9_SEL|$MAVERICKS_POST_10_9_SELECTORS"
-ALLOW_SEL="${MAVERICKS_ALLOW_SELECTORS:-}"
-ALLOW_ARCHS="$(printf '%s\n' ${MAVERICKS_ALLOW_ARCHS:-x86_64} | sort -u | xargs)"
+[ -n "${MAVERGREEN_POST_10_9_SELECTORS:-}" ] && POST_10_9_SEL="$POST_10_9_SEL|$MAVERGREEN_POST_10_9_SELECTORS"
+ALLOW_SEL="${MAVERGREEN_ALLOW_SELECTORS:-}"
+ALLOW_ARCHS="$(printf '%s\n' ${MAVERGREEN_ALLOW_ARCHS:-x86_64} | sort -u | xargs)"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the guard
 #       honours the same sdk-pin:<glob> exemptions as the package-time rule, parsed by the same
 #       deviations.sh and matched by the same shipyard_deviation_reason, so a file excused in the pkg is
 #       excused at build time. Read before any binary: a malformed declaration fails every run, not
 #       only the one that needed it.
-devs_root="${MAVERICKS_DEVIATIONS_ROOT:-${SHIPYARD_CHECK_REPO:-.}}"
+devs_root="${MAVERGREEN_DEVIATIONS_ROOT:-${SHIPYARD_CHECK_REPO:-.}}"
 # platform: not a pipeline -- deviations.sh exits 1 on a malformed entry, and a pipeline would report
 #           shipyard_deviation_facts' status instead, turning "this declaration is malformed" into "there
 #           are no deviations".

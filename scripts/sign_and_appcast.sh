@@ -35,7 +35,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
 
 PRODUCT=""; FEEDDIR=""
-SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; CHANNEL=""; VER=""; URL=""; NOTES=""; PKG=""; MINOS="${MAVERICKS_MIN_OS:-10.9.5}"
+SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; CHANNEL=""; VER=""; URL=""; NOTES=""; PKG=""; MINOS="${MAVERGREEN_MIN_OS:-10.9.5}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --product) PRODUCT="$2"; shift 2;;

@@ -19,7 +19,7 @@ copy_closure() {
 @test "the closure of build_component_pkg.sh holds the stevedore fetch and its pin" {
   run sh "$CLOSURE" build_component_pkg.sh
   [ "$status" -eq 0 ]
-  for need in build_component_pkg.sh fetch_stevedore.sh ../.mavergreen/ingredients/stevedore/VERSION mavergreen-meta.sh fetch-release-pkg.sh source-date-epoch.sh mavericks_fetch.sh; do
+  for need in build_component_pkg.sh fetch_stevedore.sh ../.mavergreen/ingredients/stevedore/VERSION mavergreen-meta.sh fetch-release-pkg.sh source-date-epoch.sh mavergreen_fetch.sh; do
     printf '%s\n' "$output" | grep -qx "$need" || { echo "closure lacks $need: $output"; false; }
   done
 }

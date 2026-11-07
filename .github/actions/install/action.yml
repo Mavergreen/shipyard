@@ -49,11 +49,11 @@ runs:
       run: |
         set -eu
         root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
-        echo "key=mavericks-sdk-$(cat "$root/scripts/sdk-pins.sh" "$root/scripts/fetch_sdk.sh" | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        echo "key=mavergreen-sdk-$(cat "$root/scripts/sdk-pins.sh" "$root/scripts/fetch_sdk.sh" | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
     - if: runner.os == 'macOS'
       uses: actions/cache@v6
       with:
-        path: ~/Library/Caches/mavericks-sdk
+        path: ~/Library/Caches/mavergreen/sdk
         key: ${{ steps.mav-sdk-key.outputs.key }}
 
     # spec: 2026-10-09 C4 -- shipyard's launchers run the cmake product beside shipyard, and shipyard's

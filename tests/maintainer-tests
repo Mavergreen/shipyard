@@ -12,6 +12,7 @@
 10.9 tests/mavergreen-name-test.sh
 10.9 tests/shipyard-provision-on-target-test.sh
 10.9 tests/compat-guard-native-test.sh
+10.9 tests/fetch-sdk-test.sh
 10.9 tests/sdk-metadata-consumer-test.sh
 golden-gate tests/installed-shipyard-test.sh
 golden-gate tests/fetch_stevedore_darwin.bats

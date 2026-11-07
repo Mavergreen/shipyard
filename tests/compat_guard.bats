@@ -27,20 +27,20 @@ first_is() {  # the first line of $output starts with "$1: "
   [ "$status" -eq 0 ]
 }
 
-@test "post-10.9 undefined import is caught via MAVERICKS_POST_10_9_SYMBOLS" {
-  run env MAVERICKS_POST_10_9_SYMBOLS='_mav_test_post109' sh "$GUARD" "$WORK/leak"
+@test "post-10.9 undefined import is caught via MAVERGREEN_POST_10_9_SYMBOLS" {
+  run env MAVERGREEN_POST_10_9_SYMBOLS='_mav_test_post109' sh "$GUARD" "$WORK/leak"
   [ "$status" -ne 0 ]
   first_is compat-imports
   [[ "$output" == *_mav_test_post109* ]] || false
 }
 
-@test "MAVERICKS_REQUIRE_DEFINED_SYMBOLS passes when the symbol is defined" {
-  run env MAVERICKS_REQUIRE_DEFINED_SYMBOLS='_mav_test_shim' sh "$GUARD" "$WORK/shim"
+@test "MAVERGREEN_REQUIRE_DEFINED_SYMBOLS passes when the symbol is defined" {
+  run env MAVERGREEN_REQUIRE_DEFINED_SYMBOLS='_mav_test_shim' sh "$GUARD" "$WORK/shim"
   [ "$status" -eq 0 ]
 }
 
-@test "MAVERICKS_REQUIRE_DEFINED_SYMBOLS fails when the symbol is absent" {
-  run env MAVERICKS_REQUIRE_DEFINED_SYMBOLS='_mav_test_shim' sh "$GUARD" "$WORK/clean"
+@test "MAVERGREEN_REQUIRE_DEFINED_SYMBOLS fails when the symbol is absent" {
+  run env MAVERGREEN_REQUIRE_DEFINED_SYMBOLS='_mav_test_shim' sh "$GUARD" "$WORK/clean"
   [ "$status" -ne 0 ]
   first_is compat-required-defined
 }
@@ -57,8 +57,8 @@ first_is() {  # the first line of $output starts with "$1: "
   [ "$status" -eq 0 ]
 }
 
-@test "MAVERICKS_ALLOW_SELECTORS allowlists a respondsToSelector-guarded selector" {
-  run env MAVERICKS_ALLOW_SELECTORS=labelColor sh "$GUARD" "$WORK/sel_bad"
+@test "MAVERGREEN_ALLOW_SELECTORS allowlists a respondsToSelector-guarded selector" {
+  run env MAVERGREEN_ALLOW_SELECTORS=labelColor sh "$GUARD" "$WORK/sel_bad"
   [ "$status" -eq 0 ]
 }
 
@@ -74,33 +74,33 @@ first_is() {  # the first line of $output starts with "$1: "
   [ "$status" -eq 0 ]
 }
 
-@test "an arch named twice in MAVERICKS_ALLOW_ARCHS is still the same arch set" {
-  run env MAVERICKS_ALLOW_ARCHS="x86_64 x86_64" sh "$GUARD" "$WORK/clean"
+@test "an arch named twice in MAVERGREEN_ALLOW_ARCHS is still the same arch set" {
+  run env MAVERGREEN_ALLOW_ARCHS="x86_64 x86_64" sh "$GUARD" "$WORK/clean"
   [ "$status" -eq 0 ]
 }
 
-@test "an arm64 slice needs MAVERICKS_ALLOW_ARCHS, and then the 11.3 pin" {
+@test "an arm64 slice needs MAVERGREEN_ALLOW_ARCHS, and then the 11.3 pin" {
   run sh "$GUARD" "$WORK/a113"
   [ "$status" -ne 0 ]
   first_is compat-archs
-  run env MAVERICKS_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a113"
+  run env MAVERGREEN_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a113"
   [ "$status" -eq 0 ]
-  run env MAVERICKS_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a265"
+  run env MAVERGREEN_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a265"
   [ "$status" -ne 0 ]
   first_is sdk-pin
 }
 
 @test "a universal binary with one bad slice fails and names that slice" {
-  run env MAVERICKS_ALLOW_ARCHS="x86_64 arm64" sh "$GUARD" "$WORK/fatbad"
+  run env MAVERGREEN_ALLOW_ARCHS="x86_64 arm64" sh "$GUARD" "$WORK/fatbad"
   [ "$status" -ne 0 ]
   first_is sdk-pin
   [[ "$output" == *"arm64 records minos 11.0 sdk 26.5"* ]] || false
-  run env MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
+  run env MAVERGREEN_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
   [ "$status" -eq 0 ]
 }
 
 @test "post-10.9 imports are still caught in a fat binary's x86_64 slice" {
-  run env MAVERICKS_ALLOW_ARCHS="x86_64 arm64" MAVERICKS_POST_10_9_SYMBOLS='_mav_test_post109' sh "$GUARD" "$WORK/fatleak"
+  run env MAVERGREEN_ALLOW_ARCHS="x86_64 arm64" MAVERGREEN_POST_10_9_SYMBOLS='_mav_test_post109' sh "$GUARD" "$WORK/fatleak"
   [ "$status" -ne 0 ]
   first_is compat-imports
   [[ "$output" == *_mav_test_post109* ]] || false
@@ -108,19 +108,19 @@ first_is() {  # the first line of $output starts with "$1: "
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the guard
 #       honours the same declared sdk-pin:<glob> exemptions as the package-time rule, read from
-#       $MAVERICKS_DEVIATIONS_ROOT/.mavergreen/deviations/, and they excuse the minos/sdk rule only.
+#       $MAVERGREEN_DEVIATIONS_ROOT/.mavergreen/deviations/, and they excuse the minos/sdk rule only.
 declare_deviation() { . "$BATS_TEST_DIRNAME/lib/deviation_tree.sh"; deviation "$WORK" sdk-pin "$1" "$2" "$3"; }
 
 @test "a matching sdk-pin glob excuses the SDK rule, and says so" {
   declare_deviation r265 '*/r265' 'prebuilt upstream, shipped verbatim'
-  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
+  run env MAVERGREEN_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
   [ "$status" -eq 0 ]
   [[ "$output" == *"compat guard: $WORK/r265 is excused from sdk-pin: prebuilt upstream, shipped verbatim"* ]] || false
 }
 
 @test "a non-matching sdk-pin glob excuses nothing" {
   declare_deviation other '*/other' 'prebuilt upstream'
-  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
+  run env MAVERGREEN_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
   [ "$status" -ne 0 ]
   first_is sdk-pin
   [[ "$output" == *"sdk 26.5"* ]] || false
@@ -128,19 +128,19 @@ declare_deviation() { . "$BATS_TEST_DIRNAME/lib/deviation_tree.sh"; deviation "$
 
 @test "an sdk-pin glob with no reason fails the guard closed" {
   declare_deviation r265 '*/r265' ''
-  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
+  run env MAVERGREEN_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/r265"
   [ "$status" -ne 0 ]
   first_is deviation-complete
   [[ "$output" != *"is excused"* ]] || false
 }
 
-@test "an sdk-pin excuse does not excuse an arch outside MAVERICKS_ALLOW_ARCHS" {
+@test "an sdk-pin excuse does not excuse an arch outside MAVERGREEN_ALLOW_ARCHS" {
   declare_deviation a265 '*/a265' 'prebuilt upstream'
-  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/a265"
+  run env MAVERGREEN_DEVIATIONS_ROOT="$WORK" sh "$GUARD" "$WORK/a265"
   [ "$status" -ne 0 ]
   first_is compat-archs
   [[ "$output" == *"arches 'arm64' != 'x86_64'"* ]] || false
-  run env MAVERICKS_DEVIATIONS_ROOT="$WORK" MAVERICKS_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a265"
+  run env MAVERGREEN_DEVIATIONS_ROOT="$WORK" MAVERGREEN_ALLOW_ARCHS=arm64 sh "$GUARD" "$WORK/a265"
   [ "$status" -eq 0 ]
 }
 
@@ -178,24 +178,24 @@ mk_readers() {
 
 @test "LIPO is the reader that thins a fat binary's x86_64 slice" {
   mk_readers
-  run env LIPO="$WORK/readers/lipo" MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
+  run env LIPO="$WORK/readers/lipo" MAVERGREEN_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
   [ "$status" -eq 0 ]
   [ "$(grep -c '^lipo$' "$WORK/readers.log")" -ge 2 ]
   # spec: scripts/macho-slices.sh -- thins each of the 2 slices first; only the guard's own thin, the
   #       3rd, fails.
   printf '#!/bin/sh\ncase "$1" in -thin) echo x >> "%s/thins"; [ "$(wc -l < "%s/thins")" -lt 3 ] || { echo "lipo: thin broke" >&2; exit 1; } ;; esac\nexec "%s" "$@"\n' "$WORK" "$WORK" "$LIPO" > "$WORK/readers/lipo-nothin"
   chmod +x "$WORK/readers/lipo-nothin"
-  run env LIPO="$WORK/readers/lipo-nothin" MAVERICKS_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
+  run env LIPO="$WORK/readers/lipo-nothin" MAVERGREEN_ALLOW_ARCHS="arm64 x86_64" sh "$GUARD" "$WORK/fatok"
   [ "$status" -eq 1 ]
   first_is compat-imports
   [[ "$output" == *"CANNOT MEASURE"*"-thin could not read the x86_64 slice"* ]] || false
   [[ "$output" == *"lipo: thin broke"* ]] || false
 }
 
-@test "a plain nm that cannot read the binary fails closed under MAVERICKS_REQUIRE_DEFINED_SYMBOLS" {
+@test "a plain nm that cannot read the binary fails closed under MAVERGREEN_REQUIRE_DEFINED_SYMBOLS" {
   printf '#!/bin/sh\ncase "$1" in -m) exec "%s" "$@" ;; esac\necho "plain nm broke" >&2\nexit 1\n' "$NM" > "$WORK/nm-plain-broken"
   chmod +x "$WORK/nm-plain-broken"
-  run env NM="$WORK/nm-plain-broken" MAVERICKS_REQUIRE_DEFINED_SYMBOLS=_main sh "$GUARD" "$WORK/clean"
+  run env NM="$WORK/nm-plain-broken" MAVERGREEN_REQUIRE_DEFINED_SYMBOLS=_main sh "$GUARD" "$WORK/clean"
   [ "$status" -eq 1 ]
   first_is compat-required-defined
   [[ "$output" == *"CANNOT MEASURE"*"could not read"* ]] || false
@@ -243,7 +243,7 @@ mk_readers() {
   [ "$status" -ne 0 ]
   first_is sdk-pin
   declare_deviation tool 'tool' 'built against a newer SDK, shipped verbatim'
-  run env SHIPYARD_CHECK_DIST="$WORK/dist" MAVERICKS_DEVIATIONS_ROOT="$WORK" sh "$GUARD"
+  run env SHIPYARD_CHECK_DIST="$WORK/dist" MAVERGREEN_DEVIATIONS_ROOT="$WORK" sh "$GUARD"
   [ "$status" -eq 0 ]
   [[ "$output" == *"tool is excused from sdk-pin"* ]] || false
 }

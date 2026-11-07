@@ -126,7 +126,7 @@ def simulate(hook):
 
         out_file = d / "github_output"; out_file.write_text("")
         env = dict(os.environ)
-        for k in ("MAVERGREEN_REPO_ROOT", "MAVERICKS_TAGS", "SHIPYARD", "SELF"):
+        for k in ("MAVERGREEN_REPO_ROOT", "MAVERGREEN_TAGS", "SHIPYARD", "SELF"):
             env.pop(k, None)
         env["SHIPYARD_SCRIPTS"] = str(root / "scripts")
         env["GITHUB_OUTPUT"] = str(out_file)

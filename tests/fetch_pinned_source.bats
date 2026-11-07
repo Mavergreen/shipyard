@@ -2,7 +2,7 @@
 # platform: host-agnostic
 # Tests for scripts/fetch_pinned_source.sh -- the tarball-source supply-chain boundary. No network: a
 # fixture tarball shaped like GitHub's (one top-level NAME-DIGEST directory) is served from a file://
-# tree through MAVERICKS_CODELOAD.
+# tree through MAVERGREEN_CODELOAD.
 
 setup() {
   HELPER="$BATS_TEST_DIRNAME/../scripts/fetch_pinned_source.sh"
@@ -16,7 +16,7 @@ setup() {
   mkdir -p "$WORK/codeload/acme/widget/tar.gz"
   ( cd "$WORK/stage" && tar czf "$WORK/codeload/acme/widget/tar.gz/$D" "widget-$D" )
   SHA="$(shasum -a 256 < "$WORK/codeload/acme/widget/tar.gz/$D" | cut -c1-64)"
-  export MAVERICKS_CODELOAD="file://$WORK/codeload" MAVERICKS_SOURCE_CACHE="$WORK/cache"
+  export MAVERGREEN_CODELOAD="file://$WORK/codeload" MAVERGREEN_SOURCE_CACHE="$WORK/cache"
   DEST="$WORK/build/widget"
 }
 teardown() { rm -rf "$WORK"; }
@@ -35,7 +35,7 @@ teardown() { rm -rf "$WORK"; }
 @test "a second call extracts afresh from the cached tarball: changes and strays are gone" {
   run sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"; [ "$status" -eq 0 ]
   echo changed > "$DEST/sub/file.txt"; echo stray > "$DEST/stray.orig"
-  run env MAVERICKS_CODELOAD=file:///no/such/codeload sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"
+  run env MAVERGREEN_CODELOAD=file:///no/such/codeload sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"
   [ "$status" -eq 0 ]
   [ "$(cat "$DEST/sub/file.txt")" = hello ]
   [ ! -e "$DEST/stray.orig" ]
@@ -69,10 +69,10 @@ teardown() { rm -rf "$WORK"; }
 }
 
 @test "--url prints the codeload URL of the commit, with or without .git" {
-  run env -u MAVERICKS_CODELOAD sh "$HELPER" --url "$REPO" "$D"
+  run env -u MAVERGREEN_CODELOAD sh "$HELPER" --url "$REPO" "$D"
   [ "$status" -eq 0 ]
   [ "$output" = "https://codeload.github.com/acme/widget/tar.gz/$D" ]
-  run env -u MAVERICKS_CODELOAD sh "$HELPER" --url https://github.com/acme/widget "$D"
+  run env -u MAVERGREEN_CODELOAD sh "$HELPER" --url https://github.com/acme/widget "$D"
   [ "$output" = "https://codeload.github.com/acme/widget/tar.gz/$D" ]
 }
 
@@ -140,7 +140,7 @@ PY
   run sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"; [ "$status" -eq 0 ]
   echo old > "$DEST/old.txt"
   echo junk >> "$WORK/cache/widget-$D.tar.gz"
-  run env MAVERICKS_CODELOAD=file:///no/such/codeload sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"
+  run env MAVERGREEN_CODELOAD=file:///no/such/codeload sh "$HELPER" "$REPO" "$D" "$SHA" "$DEST"
   [ "$status" -eq 1 ]
   [ ! -e "$WORK/cache/widget-$D.tar.gz" ]
   [ "$(cat "$DEST/old.txt")" = old ]

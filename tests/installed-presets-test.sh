@@ -71,7 +71,7 @@ cat > "$w/consumer/CMakePresets.json" <<JSON
   "include": ["$w/A/$rel/mavericks-presets.json"],
   "configurePresets": [ { "name": "cross", "inherits": "mavericks-cross" } ] }
 JSON
-out="$(cd "$w/consumer" && TMPDIR="$w" MAVERICKS_SDK_CACHE="$w/sdk" "$cm" --preset cross 2>&1)" \
+out="$(cd "$w/consumer" && TMPDIR="$w" MAVERGREEN_SDK_CACHE="$w/sdk" "$cm" --preset cross 2>&1)" \
   || say "a consumer inheriting mavericks-cross does not configure: $out"
 case "$out" in
   *"Could not find toolchain file"*) say "the consumer's toolchain file did not resolve: $out" ;;

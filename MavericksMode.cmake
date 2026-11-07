@@ -5,7 +5,7 @@
 # for the base decision and layer their own on top, instead of forking the detector.
 #
 # For the common case, including this module (via include(Mavericks)) still sets
-# MAVERICKS_MODE and guards against MAVERICKS_EXPECTED_MODE -- unchanged behavior.
+# MAVERGREEN_MODE and guards against MAVERGREEN_EXPECTED_MODE -- unchanged behavior.
 
 if(NOT APPLE)
   message(FATAL_ERROR "mavericks-* builds target macOS.")
@@ -22,17 +22,17 @@ function(mavericks_build_mode out_var)
   endif()
 endfunction()
 
-# mavericks_require_expected_mode(<mode>): if MAVERICKS_EXPECTED_MODE is set (by the
+# mavericks_require_expected_mode(<mode>): if MAVERGREEN_EXPECTED_MODE is set (by the
 # preset) and differs from <mode>, fail fast -- wrong preset for this host.
 function(mavericks_require_expected_mode mode)
-  if(DEFINED MAVERICKS_EXPECTED_MODE AND NOT MAVERICKS_EXPECTED_MODE STREQUAL mode)
+  if(DEFINED MAVERGREEN_EXPECTED_MODE AND NOT MAVERGREEN_EXPECTED_MODE STREQUAL mode)
     message(FATAL_ERROR
-      "This preset expects a '${MAVERICKS_EXPECTED_MODE}' build but this host does a "
+      "This preset expects a '${MAVERGREEN_EXPECTED_MODE}' build but this host does a "
       "'${mode}' build -- wrong preset for this machine.")
   endif()
 endfunction()
 
-# Back-compat for include(Mavericks): set MAVERICKS_MODE + guard, as before.
-mavericks_build_mode(MAVERICKS_MODE)
-message(STATUS "mavericks build mode: ${MAVERICKS_MODE}")
-mavericks_require_expected_mode("${MAVERICKS_MODE}")
+# Back-compat for include(Mavericks): set MAVERGREEN_MODE + guard, as before.
+mavericks_build_mode(MAVERGREEN_MODE)
+message(STATUS "mavericks build mode: ${MAVERGREEN_MODE}")
+mavericks_require_expected_mode("${MAVERGREEN_MODE}")

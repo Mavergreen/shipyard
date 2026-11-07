@@ -133,7 +133,7 @@ jobs:
               ;;
           esac
           url="https://raw.githubusercontent.com/$REPO/$SHA/README.md"
-          . .shipyard/scripts/mavericks_fetch.sh
+          . .shipyard/scripts/mavergreen_fetch.sh
           if shipyard_curl "$url" first-release-readme.md; then
             :
           else

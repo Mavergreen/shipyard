@@ -1220,7 +1220,7 @@ while IFS= read -r f; do
   awk -v f="$f" '{ print f "\t" $0 }' "$f"
 done < "$tmp/shfiles" >> "$tmp/pmlines"
 : > "$tmp/fetchers"
-printf 'scripts/mavericks_fetch.sh\nscripts/mavergreen_fetch.sh\n' >> "$tmp/fetchers"
+printf 'scripts/mavergreen_fetch.sh\nscripts/mavergreen_fetch.sh\n' >> "$tmp/fetchers"
 if [ "$PY_OK" -eq 1 ]; then
   _acts="$(grep -E '^\.github/actions/[^/]+/action\.ya?ml$' "$TF" || :)"
   rc=0
@@ -1285,7 +1285,7 @@ while IFS="$TAB" read -r _id f line; do
     bare-curl)
       chk_fail bare-curl "$f runs curl directly: $_l" \
         "a bare curl does not retry a transient failure, and one connection reset cost a two-hour rerun" \
-        "use shipyard_curl (scripts/mavericks_fetch.sh), or declare .mavergreen/deviations/bare-curl/<label>/ (scope $f, a reason, a revisit)" ;;
+        "use shipyard_curl (scripts/mavergreen_fetch.sh), or declare .mavergreen/deviations/bare-curl/<label>/ (scope $f, a reason, a revisit)" ;;
     *)
       case "$_id" in
         brew) _mgr="Homebrew, Linuxbrew or Tigerbrew" ;;

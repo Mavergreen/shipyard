@@ -1,4 +1,4 @@
-compat-required-defined: a shipped binary defines every symbol MAVERICKS_REQUIRE_DEFINED_SYMBOLS names.
+compat-required-defined: a shipped binary defines every symbol MAVERGREEN_REQUIRE_DEFINED_SYMBOLS names.
 
 ## Why
 It is the opposite assertion to compat-imports: "this symbol must be defined in the binary". It is meant only

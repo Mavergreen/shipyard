@@ -123,7 +123,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 
   **The cmake product has no HTTPS downloader.** `file(DOWNLOAD https://…)` and HTTPS
   `FetchContent` fail with "Unsupported protocol". Its [README](https://github.com/Mavergreen/cmake#readme)
-  documents the limit and offline FetchContent pattern. Fetch with `mavericks_fetch.sh`
+  documents the limit and offline FetchContent pattern. Fetch with `mavergreen_fetch.sh`
   (tarball, pinned SHA-256), `clone_pinned.sh` (git, pinned digest), or `fetch_pinned_source.sh`
   (a commit's tarball, pinned SHA-256).
 
@@ -179,7 +179,7 @@ updaters, signing, or compat checks:**
 
 | Facility (CMake fn · script) | Does | Don't hand-roll |
 |---|---|---|
-| `mavericks_build_mode` · `MavericksMode` · `mavericks_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
+| `mavericks_build_mode` · `MavericksMode` · `mavergreen_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
 | `mavericks_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
 | `RequireAppleClang` | enforces Apple `/usr/bin/clang` for a configure that still declares it; every caller is a leftover, not an exception (see "The compiler: clang22 on every host") | assuming the toolchain |
 | `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set) | a bespoke compat check |
@@ -187,8 +187,8 @@ updaters, signing, or compat checks:**
 | `apply_patches.sh SRC PATCHDIR` | applies `PATCHDIR/*.patch` to an unpacked source once, in name order with no fuzz; records their SHA-256s in `SRC/.mavergreen-patches`, no-ops on the same set, refuses a tree patched with another | a hand-rolled `patch` loop |
 | `build_component_pkg.sh` · `set_install_floor.sh` | builds a component `.pkg`; stamps the 10.9.5 install floor on a product `.pkg` (see "Seam hosts", below) | `pkgbuild`, `productbuild`, editing the pkg Distribution |
 | `sign_and_appcast.sh` · `gen_appcast.sh` | EdDSA-signs + renders the appcast (fetches `ed25519-sign` via `gh`) | rolling your own signing |
-| `mavericks_fetch` · `MavericksFetch` · `mavericks_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
-| `shipyard_curl URL OUT\|-` · `mavericks_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
+| `mavericks_fetch` · `MavericksFetch` · `mavergreen_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
+| `shipyard_curl URL OUT\|-` · `mavergreen_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
 | `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
 | `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh with `stevedore expand`; runs on 10.9 and Linux | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
 
@@ -212,7 +212,7 @@ network on first use, cached, unless `STEVEDORE` names a binary of the pinned ve
 A release tagged before its repo moved to them rebuilds only against a shipyard that still had them:
 rebuild a tag with the shipyard version it was built with, never the newest.
 
-**`MAVERGREEN_PROGRESS=1` makes the fetch scripts report progress.** Set it and `mavericks_fetch.sh`
+**`MAVERGREEN_PROGRESS=1` makes the fetch scripts report progress.** Set it and `mavergreen_fetch.sh`
 (and so `fetch_sdk.sh`, `fetch_pinned_source.sh`, `fetch_sparkle_framework.sh`) say what they are
 doing on stderr: downloading, verifying and unpacking. At a terminal the download shows curl's progress
 bar; anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
@@ -344,7 +344,7 @@ shipyard's facilities rather than trusting the runner:
 - **Gate on the compat guard** (`mavericks_assert_binary_compatible`): fail the build if any shipped binary
   declares a floor above 10.9 or links a symbol 10.9 lacks. This is the in-CI equivalence proof — every
   project needs it (or an equivalent gate), since no 10.9 runner validates the output.
-  - **`MAVERICKS_REQUIRE_DEFINED_SYMBOLS` is product-specific — do NOT copy golang's blindly.** The guard
+  - **`MAVERGREEN_REQUIRE_DEFINED_SYMBOLS` is product-specific — do NOT copy golang's blindly.** The guard
     already denies the common post-10.9 symbols (`_clock_gettime`, `_os_unfair_lock_*`, `_os_log*`, …) as
     *undefined imports* by default. `REQUIRE_DEFINED` is the opposite assertion — "this symbol MUST be
     **defined** in the binary" — and is meant ONLY for a product that deliberately *uses* a post-10.9 API
@@ -409,7 +409,7 @@ A consumer's Renovate config is **`.github/renovate.json`**: `{"$schema", "exten
 **That path, and no other.** Renovate itself accepts a config at the repo root, in `.github/`,
 `.gitlab/` or as `.renovaterc*`, but the family uses exactly one:
 - `MavericksShipyardConfig.cmake` scaffolds `.github/renovate.json` on every configure when it is
-  absent (opt out with `-DMAVERICKS_NO_RENOVATE_SCAFFOLD=ON`). So a repo that keeps its config
+  absent (opt out with `-DMAVERGREEN_NO_RENOVATE_SCAFFOLD=ON`). So a repo that keeps its config
   anywhere else, and configures through shipyard's CMake package, gets a second, preset-only config
   written beside it by its first build. That dirties the tree `assert-tree-clean.sh` checks, and
   Renovate reads only the first config it finds, so one of the two is silently dead.
@@ -957,9 +957,9 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 
 ## Version scaffolding (shared, wrapped)
 
-- **`version.sh`, `lib.sh`, and `release-notes-file.sh` live in shipyard.** A repo carries only
+- **`version.sh` and `lib.sh` live in shipyard.** A repo carries only
   thin wrappers: `shipyard-scripts` locates the installed scripts (`$SHIPYARD_SCRIPTS` → CMake user package
-  registry → sibling checkout), and `build/version.sh` / `build/release-notes-file.sh` exec the shared
+  registry → sibling checkout), and `build/version.sh` execs the shared
   implementation. Only the product name passed to the notes builder is genuinely per-repo.
 - Wrapping rather than deleting keeps every call site working: `sh build/version.sh auto` on a dev
   box, the repo's own tests, `versions.sh`, and the release workflow.
@@ -1071,13 +1071,6 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   The generator `cd`s to the repo root before it runs, so **`--out` resolves against the repo root**,
   not the caller's cwd — a relative path from a subdirectory (a `build/` step, say) will not land where
   you typed it; pass an absolute path or one rooted at `$MAVERGREEN_REPO_ROOT` from anywhere but the root.
-- **`release-notes-file.sh` is now legacy — no product repo calls it.** It was kept as a thin
-  back-compat wrapper (positional `<TAG> <FULL_VERSION> [PRODUCT_NAME]`, `MAVERICKS_NOTES_LINE`
-  forwarded to `--line`) specifically so the repos still on the old signature would get the standard
-  body before each migrated. The per-repo migration (2026-09-12) converted every remaining caller to
-  the direct form above; a repo-wide grep across all 13 product repos finds zero callers of
-  `release-notes-file.sh` left (shipyard itself still references it — in the wrapper, its test, a historical comment in `check-shell-portability.sh`, and this doc — since it is not deleted; that is a separate decision). But a new or copied workflow that
-  calls it is drift, not precedent: write the direct call instead.
 - **macho-tools is deliberately out of scope for this migration.** It has no release infrastructure at
   all (no `release.yml`, no `.pkg`, no updater) to point at the generator; its own plan needs
   correcting before any release-notes work applies to it.
@@ -1689,7 +1682,7 @@ Every shipped app — **including the Sparkle updater** — must make an EXPLICI
 `mavericks_require_icon(TARGET t ICNS <path>)` and `mavericks_add_updater_app(… ICON <path>)` both
 FATAL at configure time if the icon is missing OR is a **registered placeholder** — its sha256 is
 listed in shipyard's `scripts/placeholder-icons.sha256`. The one way to ship a generic/
-placeholder icon is the explicit opt-in `-DMAVERICKS_ALLOW_GENERIC_ICON=ON` (or `ALLOW_GENERIC`).
+placeholder icon is the explicit opt-in `-DMAVERGREEN_ALLOW_GENERIC_ICON=ON` (or `ALLOW_GENERIC`).
 
 This gate exists because an agent-generated solid-colour stand-in once shipped in a product as if it
 were real artwork, waved off as a "minor" follow-up. **If you generate a placeholder icon, register
@@ -1728,7 +1721,7 @@ needs one policy for both hosts.
 or pass `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`. That sets the pinned SDK, the
 arch and the deployment target **before `project()`**, one arch per configure. A build that calls the
 compiler itself passes `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`. A repo that
-ships `fetch_sdk.sh` (in a toolchain's `libexec/`, e.g.) ships `sdk-pins.sh` and `mavericks_fetch.sh`
+ships `fetch_sdk.sh` (in a toolchain's `libexec/`, e.g.) ships `sdk-pins.sh` and `mavergreen_fetch.sh`
 beside it; without `sdk-pins.sh` it exits 2 naming the missing file.
 `include(Mavericks)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
 Linux cross-builds both arches: the toolchain file selects Darwin and the configured arch, and the
@@ -1748,7 +1741,7 @@ that host alone linked C differently from 10.9 and Linux (measured 2026-10-13). 
 ld from Xcode 15 on warns once per stub it reads, but the family links with lld. The pinned SDK is never
 modified (clang22's `setup-sdk` verifies the tree against the archive). Swift needs an `SDKSettings.json`
 that Apple's 10.9 SDK lacks (swiftc reads the SDK version only from the JSON), so with
-`MAVERICKS_SDK_SETTINGS_JSON=1` `fetch_sdk.sh` prints a sibling, `<cache>/with-sdk-settings-json/MacOSX10.9.sdk`:
+`MAVERGREEN_SDK_SETTINGS_JSON=1` `fetch_sdk.sh` prints a sibling, `<cache>/with-sdk-settings-json/MacOSX10.9.sdk`:
 symlinks to the pinned SDK's entries plus that file (`shipyard_sdk_settings_json`, the three keys LLVM's
 `DarwinSDKInfo` needs). The 11.3 SDK ships its own, so the opt-in is a no-op for arm64. The sibling is
 interim until `setup-sdk` accepts the file in the pinned SDK. A cache key for the
@@ -1760,7 +1753,7 @@ restores a stale SDK.
   `macho` fact for every Mach-O slice in every pkg payload and shipped tarball, and conformance's
   `sdk-pin` rule checks each one. Check 21 already makes every pkg-building repo run conformance.
 - **Right after each build (early feedback).** The compat guard checks each slice against its arch's
-  rule. `MAVERICKS_ALLOW_ARCHS` gives the exact arch set (`mavericks_assert_binary_compatible` passes
+  rule. `MAVERGREEN_ALLOW_ARCHS` gives the exact arch set (`mavericks_assert_binary_compatible` passes
   `CMAKE_OSX_ARCHITECTURES`).
 
 **Exemptions are declared, never implicit:**
@@ -1770,7 +1763,7 @@ restores a stale SDK.
   for one, as in `Application*Support`) or a colon. A scope of `*`
   excuses the rule for **every** file in the release: use it only when that is what you mean.
 - The compat guard honours the same globs at build time. It matches each glob against the path exactly
-  as its command line gives it, and reads `.mavergreen/deviations/` from `MAVERICKS_DEVIATIONS_ROOT` (default: the
+  as its command line gives it, and reads `.mavergreen/deviations/` from `MAVERGREEN_DEVIATIONS_ROOT` (default: the
   current directory; `mavericks_assert_binary_compatible` passes `CMAKE_SOURCE_DIR`). **Write each glob
   with a leading `*/`**, as in a scope of `*/lib/libswiftCore.dylib`, so that one glob matches
   both the payload path and the staged or build path the guard sees. `*` spans `/`.
@@ -2573,7 +2566,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **`no-pull-request-target`.** No workflow uses `pull_request_target` | It hands a fork PR this repo's secrets |
 | **`checkout-drops-credentials`, `permissions-contents-read`.** Every `actions/checkout` in `release.yml` sets `persist-credentials: false`, and its top-level `permissions:` holds `contents: read` | The build jobs run hours of third-party code; only the job that publishes needs a token that writes |
 | **`value-file-line`, `version-ignored`.** `.mavergreen/upstream/VERSION` and every other value file hold a value on line 1, no `v`, no spaces; `.gitignore` ignores `/VERSION` | A stray `v` or space ends up in the release tag; an unignored `VERSION` is committed by the first `git add -A` |
-| **`bare-curl`.** No `curl` at command position in a tracked shell script outside `tests/`, or in a workflow or composite-action `run:` block, except in the fetch library itself (`scripts/mavericks_fetch.sh`, `scripts/mavergreen_fetch.sh`); a script that sources it still calls its helpers, never `curl`; a path is excused by a `bare-curl` deviation scoped to it | A bare curl does not retry; one connection reset cost rust a two-hour rerun. `shipyard_curl` is the fix |
+| **`bare-curl`.** No `curl` at command position in a tracked shell script outside `tests/`, or in a workflow or composite-action `run:` block, except in the fetch library itself (`scripts/mavergreen_fetch.sh`, `scripts/mavergreen_fetch.sh`); a script that sources it still calls its helpers, never `curl`; a path is excused by a `bare-curl` deviation scoped to it | A bare curl does not retry; one connection reset cost rust a two-hour rerun. `shipyard_curl` is the fix |
 | **`brew`, `macports`, `pkgsrc`, `apt`.** No use of the manager's commands (`brew`; `port`; `pkgin`, `pkg_add`, `bmake`; `apt-get`, `apt`, `dpkg -i`), at command position in the same text as `bare-curl`, nor of its prefixes (`/opt/homebrew`, `/usr/local/Homebrew`, `/home/linuxbrew`; `/opt/local`; `/opt/pkg`, `/usr/pkg`), without a deviation of that id covering the path | Each use is counted and the family works toward none; the deviation's exit names the family product that replaces it |
 | **`vendored`.** Every tracked path under a directory named `vendor/` or `third_party/` is covered by a `vendored` deviation whose reason says what deletes the copy | An undeclared vendored copy is code nobody counts |
 | **`bash32-parse`.** `/bin/sh -n` accepts every tracked shell script, after a canary proving the shell refuses an apostrophe inside `${VAR:?word}`; a host whose `/bin/sh` is not bash 3.2 fails "can't measure here" unless a `host` deviation scoped to `<os>` excuses it, which reports it not run. The install action runs `shipyard-check --only bash32-parse` on every macOS job that installs shipyard, so a repo wires nothing | Bash 3.2 is the `/bin/sh` of 10.9 and macOS, and Linux and newer bashes accept what it refuses |
@@ -2813,7 +2806,7 @@ in the same commit.
 - **The runner runs test files in parallel, one per CPU, and prints results in file order.** A test
   file gets stdin from `/dev/null` and runs in its own process group. Parallelism needs `perl` (every
   macOS and Ubuntu runner has it); without it the runner runs files one at a time, as it used to.
-  `MAVERICKS_TEST_JOBS=1` restores serial runs, for a repo whose tests share a fixed path. Any other
+  `MAVERGREEN_TEST_JOBS=1` restores serial runs, for a repo whose tests share a fixed path. Any other
   value that is not a positive integer is a usage error (exit 2).
 - **A test that cannot run yet exits 77 to SKIP**, the same idiom as ctest's `SKIP_RETURN_CODE 77`.
   Guard on the artifact you need (`[ -d "$OUT" ] || { echo "not built — skipping"; exit 77; }`) rather
@@ -2906,8 +2899,7 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
 3. `.mavergreen/upstream/VERSION` (bare, with its Renovate line 2, and a `description`); `/VERSION` in `.gitignore`, and `.superpowers/` and `.idea/` there too (check 27;
    see "Where superpowers working files go").
 4. `build/lib.sh` (`upstream_version()`), `build/version.sh` — copy from golang; call
-   `$SHIPYARD_SCRIPTS/release-notes.sh` directly from `release.yml` (see Release notes, above) — do not
-   copy `build/release-notes-file.sh`, which is legacy with zero product callers.
+   `$SHIPYARD_SCRIPTS/release-notes.sh` directly from `release.yml` (see Release notes, above).
 5. `release.yml`: pick a release model; three triggers; `ver` step with the non-main guard; `gh release
    create`; the `concurrency:` block from "Release workflow" above — group keyed on `github.run_id`,
    `cancel-in-progress` naming `pull_request`. (Not `cancel-in-progress: false`: it protects the
@@ -3012,7 +3004,7 @@ it here.** A silently dropped increment is how the family drifted in the first p
 
 - [x] Shared scripts dir (`$SHIPYARD_SCRIPTS`), shared test runner, conventions gate — done 2026-07-30
 - [x] Reusable `publish-release.yml` — done 2026-07-30; all seven repos publish through it
-- [x] Promote `version.sh` / `lib.sh` / `release-notes-file.sh` into shipyard — done 2026-07-30
+- [x] Promote `version.sh` / `lib.sh` into shipyard — done 2026-07-30
 - [x] One publisher — done 2026-07-30 with increment 2. The two version *models*
       (derive-from-tags vs committed `VERSION`) remain, and are a real design question, not drift
 - [x] Automerge policy stated in the preset — done 2026-07-30. **Ship-if-green**: patch, minor and
@@ -3031,8 +3023,7 @@ it here.** A silently dropped increment is how the family drifted in the first p
       than silent — done 2026-09-11
 - [x] Per-repo migration onto the generator (13 product repos plus shipyard itself, swift-runtime
       first) — done 2026-09-12. Every `release.yml` in the family now calls `release-notes.sh`
-      directly; `release-notes-file.sh` is legacy, with zero product-repo callers (shipyard retains the
-      wrapper and its test until the wrapper is retired). See Release notes,
+      directly; the legacy `release-notes-file.sh` wrapper is deleted. See Release notes,
       above, for the per-repo `--product`/`--line`/`--min-os` decisions this migration recorded and the
       three generator defects it found and fixed
 - [x] **The three enforcement layers** — gate (`check-family-conventions.sh` check 14: does a repo's

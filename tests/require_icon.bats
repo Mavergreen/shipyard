@@ -30,8 +30,8 @@ EOF
   [[ "$output" == *"GENERIC icon by explicit opt-in"* ]] || return 1
 }
 
-@test "require_icon: -DMAVERICKS_ALLOW_GENERIC_ICON=ON -> configures" {
-  try_icon "TARGET app" "-DMAVERICKS_ALLOW_GENERIC_ICON=ON"
+@test "require_icon: -DMAVERGREEN_ALLOW_GENERIC_ICON=ON -> configures" {
+  try_icon "TARGET app" "-DMAVERGREEN_ALLOW_GENERIC_ICON=ON"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
 
@@ -67,13 +67,13 @@ include("${SHARED}/MavericksDecisions.cmake")
 add_custom_target(app)
 mavericks_require_icon(TARGET app ICNS "$d/AppIcon.icns")
 EOF
-  run cmake -DMAVERICKS_PLACEHOLDER_DENYLIST="$d/deny.sha256" -S "$d" -B "$d/b"
+  run cmake -DMAVERGREEN_PLACEHOLDER_DENYLIST="$d/deny.sha256" -S "$d" -B "$d/b"
   st=$status; out="$output"; rm -rf "$d"
   [ "$st" -ne 0 ] || { echo "$out"; return 1; }
   [[ "$out" == *"PLACEHOLDER"* ]] || { echo "$out"; return 1; }
 }
 
-@test "require_icon: denylisted placeholder + MAVERICKS_ALLOW_GENERIC_ICON -> configures" {
+@test "require_icon: denylisted placeholder + MAVERGREEN_ALLOW_GENERIC_ICON -> configures" {
   d="$(mktemp -d "${TMPDIR:-/tmp}/reqpha.XXXXXX")"; printf 'solid-fill placeholder\n' > "$d/AppIcon.icns"
   h="$(shasum -a 256 "$d/AppIcon.icns" | awk '{print $1}')"
   printf '%s\n' "$h" > "$d/deny.sha256"
@@ -84,7 +84,7 @@ include("${SHARED}/MavericksDecisions.cmake")
 add_custom_target(app)
 mavericks_require_icon(TARGET app ICNS "$d/AppIcon.icns")
 EOF
-  run cmake -DMAVERICKS_PLACEHOLDER_DENYLIST="$d/deny.sha256" -DMAVERICKS_ALLOW_GENERIC_ICON=ON -S "$d" -B "$d/b"
+  run cmake -DMAVERGREEN_PLACEHOLDER_DENYLIST="$d/deny.sha256" -DMAVERGREEN_ALLOW_GENERIC_ICON=ON -S "$d" -B "$d/b"
   st=$status; out="$output"; rm -rf "$d"
   [ "$st" -eq 0 ] || { echo "$out"; return 1; }
 }

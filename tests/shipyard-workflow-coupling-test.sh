@@ -249,7 +249,7 @@ for name in ("ci.yml", "release.yml"):
     if not calls:
         bad.append("%s never runs shipyard-check --dist" % name)
     for st in calls:
-        for var in ("SHIPYARD_CHECK_VERSION", "SHIPYARD_CHECK_REPO", "MAVERICKS_ALLOW_ARCHS"):
+        for var in ("SHIPYARD_CHECK_VERSION", "SHIPYARD_CHECK_REPO", "MAVERGREEN_ALLOW_ARCHS"):
             if var not in (st.get("env") or {}) and var not in runs(st):
                 bad.append("%s runs shipyard-check --dist without %s" % (name, var))
     if any("check-artifact-conformance" in runs(st) for _, st in steps(name)):

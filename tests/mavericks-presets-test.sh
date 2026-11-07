@@ -73,7 +73,7 @@ bd1cross="${TMPDIR:-/tmp}/mm-build/${b1}-cross"
 _tmp="${TMPDIR:-/tmp}"
 work3="$(mktemp -d "${_tmp%/}/presets-sdkcache.XXXXXX")"
 mkdir -p "$work3/MacOSX10.9.sdk/usr/lib"
-MAVERICKS_SDK_CACHE="$work3"; export MAVERICKS_SDK_CACHE
+MAVERGREEN_SDK_CACHE="$work3"; export MAVERGREEN_SDK_CACHE
 
 work4="$(mktemp -d "${_tmp%/}/presets-shipyard.XXXXXX")"
 trap 'rm -rf "$work1" "$work2" "$work3" "$work4" "$bd1" "$bd2" "$bd1cross"' EXIT INT TERM
@@ -115,11 +115,11 @@ out1cross="$(cd "$work1" && cmake --preset cross 2>&1)" \
 # platform: a guard here (`[ -f ... ] &&`) would skip these checks silently
 #           if it ever failed, without touching $fails -- omit it on
 #           purpose; existence was already asserted above.
-check_cache_var "$bd1/CMakeCache.txt" MAVERICKS_EXPECTED_MODE native "mavericks-native"
+check_cache_var "$bd1/CMakeCache.txt" MAVERGREEN_EXPECTED_MODE native "mavericks-native"
 check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-native"
 check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-native"
 check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_SYSROOT "$sdk" "mavericks-native"
-check_cache_var "$bd1cross/CMakeCache.txt" MAVERICKS_EXPECTED_MODE cross "mavericks-cross"
+check_cache_var "$bd1cross/CMakeCache.txt" MAVERGREEN_EXPECTED_MODE cross "mavericks-cross"
 check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_DEPLOYMENT_TARGET 10.9 "mavericks-cross"
 check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_ARCHITECTURES x86_64 "mavericks-cross"
 check_cache_var "$bd1cross/CMakeCache.txt" CMAKE_OSX_SYSROOT "$sdk" "mavericks-cross"

@@ -5,7 +5,7 @@
 #            [--require-scripts] [--host-arch x86_64] [--min-os 10.9.5] [--base-version V]
 #          FILE for --welcome, --license and --conclusion names a file inside --resources.
 #          Wraps a flat component pkg into a distributable product archive that enforces a hard OS
-#          install floor (default MAVERICKS_MIN_OS, the single source of truth for "the Mavericks
+#          install floor (default MAVERGREEN_MIN_OS, the single source of truth for "the Mavericks
 #          install floor" across the family) via a Distribution -- a bare component
 #          cannot express an OS floor. Generates distribution.xml from flags, runs
 #          stevedore product, then self-checks that the floor made it into the output pkg. Every archive
@@ -23,7 +23,7 @@
 #       by the time the product's postinstall runs it.
 set -eu
 
-MIN_OS="${MAVERICKS_MIN_OS:-10.9.5}"
+MIN_OS="${MAVERGREEN_MIN_OS:-10.9.5}"
 ID=""; TITLE=""; COMPONENT=""; OUT=""; RES=""; WELCOME=""; LICENSE=""; CONCLUSION=""
 REQSCRIPTS="false"; HOSTARCH=""; BASEVER=""
 

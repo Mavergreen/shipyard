@@ -39,8 +39,8 @@ endif()
 
 # Fail clearly if consumed VENDORED: if this config resolves from INSIDE the
 # consumer's source tree, it's a submodule/copied-in checkout. Install it instead
-# (README "Install (once)"). Deliberate vendoring: -DMAVERICKS_ALLOW_VENDORED=ON.
-if(NOT MAVERICKS_ALLOW_VENDORED)
+# (README "Install (once)"). Deliberate vendoring: -DMAVERGREEN_ALLOW_VENDORED=ON.
+if(NOT MAVERGREEN_ALLOW_VENDORED)
   file(RELATIVE_PATH _mav_rel "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_LIST_DIR}")
   if(NOT _mav_rel MATCHES "^\\.\\.")   # not "../..." => under the consumer tree
     message(FATAL_ERROR
@@ -48,7 +48,7 @@ if(NOT MAVERICKS_ALLOW_VENDORED)
       "tree (${CMAKE_CURRENT_LIST_DIR} under ${CMAKE_SOURCE_DIR}). It is a "
       "find_package package -- installed by the shipyard pkg and found by "
       "shipyard-cmake; do not vendor or submodule it. See the README \"Install (once)\" "
-      "section. Override deliberately with -DMAVERICKS_ALLOW_VENDORED=ON.")
+      "section. Override deliberately with -DMAVERGREEN_ALLOW_VENDORED=ON.")
   endif()
 endif()
 
@@ -73,8 +73,8 @@ set(MavericksShipyard_SCRIPTS "${CMAKE_CURRENT_LIST_DIR}/scripts")
 # one that extends this repo's shared preset -- which turns on config:recommended +
 # automerge AND (via the preset's customManager) lets Renovate act on new upstream
 # mavericks-shipyard commits. Never overwrites an existing config (if they
-# already have one, leave it alone). Opt out with -DMAVERICKS_NO_RENOVATE_SCAFFOLD=ON.
-if(NOT MAVERICKS_NO_RENOVATE_SCAFFOLD AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+# already have one, leave it alone). Opt out with -DMAVERGREEN_NO_RENOVATE_SCAFFOLD=ON.
+if(NOT MAVERGREEN_NO_RENOVATE_SCAFFOLD AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
   set(_mav_renovate "${CMAKE_SOURCE_DIR}/.github/renovate.json")
   if(NOT EXISTS "${_mav_renovate}")
     file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/.github")
@@ -85,6 +85,6 @@ if(NOT MAVERICKS_NO_RENOVATE_SCAFFOLD AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
 }
 ")
     message(STATUS "mavericks-shipyard: created a default ${_mav_renovate} "
-                   "(extends the shared Renovate preset; opt out with -DMAVERICKS_NO_RENOVATE_SCAFFOLD=ON)")
+                   "(extends the shared Renovate preset; opt out with -DMAVERGREEN_NO_RENOVATE_SCAFFOLD=ON)")
   endif()
 endif()

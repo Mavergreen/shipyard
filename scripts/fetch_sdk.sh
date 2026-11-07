@@ -5,21 +5,21 @@
 #          MacOSX10.9.sdk for x86_64 (the default), MacOSX11.3.sdk for arm64. Prints the SDK root on
 #          stdout, exactly as its archive shipped it. A native 10.9
 #          build uses this pin too, never xcrun's own SDK (MavericksToolchain.cmake).
-#          MAVERICKS_SDK_SETTINGS_JSON=1 prints instead, for an arch whose pin has none (x86_64), a sibling
+#          MAVERGREEN_SDK_SETTINGS_JSON=1 prints instead, for an arch whose pin has none (x86_64), a sibling
 #          <cache>/with-sdk-settings-json/<SDK dir>: symlinks to the pinned SDK's entries plus the
 #          SDKSettings.json Swift reads its SDK version from. The sibling is interim until clang22's
 #          setup-sdk accepts that file in the pinned SDK.
 #          Apple SDK bytes are never committed -- this is a build-time fetch. The cache default is per-machine and durable:
 #          TMPDIR gets purged by macOS (stranding the path CMake cached at configure time).
-#          MAVERICKS_SDK_URL / MAVERICKS_SDK_SHA256 override the selected arch's pin (the tests use
-#          them); MAVERICKS_SDK_CACHE moves the cache. Exit 2 on a usage error, a bad
-#          MAVERICKS_SDK_SETTINGS_JSON, or an arch with no pin.
+#          MAVERGREEN_SDK_URL / MAVERGREEN_SDK_SHA256 override the selected arch's pin (the tests use
+#          them); MAVERGREEN_SDK_CACHE moves the cache. Exit 2 on a usage error, a bad
+#          MAVERGREEN_SDK_SETTINGS_JSON, or an arch with no pin.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a repo that
 #       ships this script (a toolchain's libexec/, e.g.) ships its two sourced helpers beside it.
-[ -f "$SELF/sdk-pins.sh" ] || { echo "fetch_sdk: sdk-pins.sh is missing beside $0 -- copy it with fetch_sdk.sh and mavericks_fetch.sh (SKILL.md \"SDK pinning\")" >&2; exit 2; }
-. "$SELF/mavericks_fetch.sh"
+[ -f "$SELF/sdk-pins.sh" ] || { echo "fetch_sdk: sdk-pins.sh is missing beside $0 -- copy it with fetch_sdk.sh and mavergreen_fetch.sh (SKILL.md \"SDK pinning\")" >&2; exit 2; }
+. "$SELF/mavergreen_fetch.sh"
 . "$SELF/sdk-pins.sh"
 ARCH=x86_64
 case "$#:${1:-}" in
@@ -27,16 +27,16 @@ case "$#:${1:-}" in
   2:--arch) ARCH="$2" ;;
   *) echo "usage: fetch_sdk.sh [--arch x86_64|arm64]" >&2; exit 2 ;;
 esac
-case "${MAVERICKS_SDK_SETTINGS_JSON:-}" in
+case "${MAVERGREEN_SDK_SETTINGS_JSON:-}" in
   ""|1) ;;
-  *) echo "fetch_sdk: MAVERICKS_SDK_SETTINGS_JSON must be unset, empty or 1" >&2; exit 2 ;;
+  *) echo "fetch_sdk: MAVERGREEN_SDK_SETTINGS_JSON must be unset, empty or 1" >&2; exit 2 ;;
 esac
 pin="$(shipyard_sdk_pin "$ARCH")" || { echo "fetch_sdk: no pinned SDK for arch '$ARCH' (x86_64 and arm64 have one)" >&2; exit 2; }
 # shellcheck disable=SC2086  # the pin is four space-free words by construction
 set -- $pin
-CACHE="${MAVERICKS_SDK_CACHE:-$HOME/Library/Caches/mavericks-sdk}"
-URL="${MAVERICKS_SDK_URL:-$1}"
-SHA="${MAVERICKS_SDK_SHA256:-$2}"
+CACHE="${MAVERGREEN_SDK_CACHE:-$HOME/Library/Caches/mavergreen/sdk}"
+URL="${MAVERGREEN_SDK_URL:-$1}"
+SHA="${MAVERGREEN_SDK_SHA256:-$2}"
 SDK="$CACHE/$4"
 if [ ! -d "$SDK" ]; then
   # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the SDK is
@@ -50,7 +50,7 @@ json="$(shipyard_sdk_settings_json "$ARCH" || true)"
 if [ -n "$json" ] && [ -f "$SDK/SDKSettings.json" ] && printf '%s\n' "$json" | cmp -s - "$SDK/SDKSettings.json"; then
   rm -f "$SDK/SDKSettings.json" || { echo "fetch_sdk: cannot remove the stale SDKSettings.json from $SDK" >&2; exit 1; }
 fi
-if [ "${MAVERICKS_SDK_SETTINGS_JSON:-}" = 1 ] && [ -n "$json" ]; then
+if [ "${MAVERGREEN_SDK_SETTINGS_JSON:-}" = 1 ] && [ -n "$json" ]; then
   SIB="$CACHE/with-sdk-settings-json"
   sibling_ok() {
     [ -f "$SIB/$4/SDKSettings.json" ] && [ ! -L "$SIB/$4/SDKSettings.json" ] \

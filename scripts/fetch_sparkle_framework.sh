@@ -10,7 +10,7 @@
 #           for the x86_64 slice). It is prebuilt against SDK 12.0, so the SDK rule exempts exactly these
 #           bytes by content (sdk-pins.sh).
 set -eu
-. "$(dirname "$0")/mavericks_fetch.sh"
+. "$(dirname "$0")/mavergreen_fetch.sh"
 
 if [ -n "${MAVERICKS_SPARKLE_ARCH:-}" ]; then
   echo "fetch_sparkle_framework: MAVERICKS_SPARKLE_ARCH is gone -- Sparkle is embedded fat and unthinned, because thinning breaks its code-signature seal; unset it" >&2

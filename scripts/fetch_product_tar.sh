@@ -28,7 +28,7 @@ fi
 CACHE="${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-tars}/$REPO/$VERSION"
 ASSET="$SHORT-$VERSION-linux-x86_64.tar.gz"
 BASE="${MAVERGREEN_RELEASES:-https://github.com}/$OWNER/$REPO/releases/download/$VERSION"
-. "$SELF/mavericks_fetch.sh"
+. "$SELF/mavergreen_fetch.sh"
 shipyard_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET"
 mkdir -p "$(dirname "$DEST")"
 DEST="$(cd "$(dirname "$DEST")" && pwd -P)/$(basename "$DEST")"

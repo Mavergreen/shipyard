@@ -3,7 +3,7 @@ compat-selectors: a shipped binary sends no Objective-C selector newer than 10.9
 ## Why
 A selector newer than 10.9 is as invisible to a cross build as a post-10.9 import is (see compat-imports). The
 guard runs strings over the x86_64 slice and matches each line exactly against
-a post-10.9 selector list. MAVERICKS_POST_10_9_SELECTORS adds selectors to deny; MAVERICKS_ALLOW_SELECTORS
+a post-10.9 selector list. MAVERGREEN_POST_10_9_SELECTORS adds selectors to deny; MAVERGREEN_ALLOW_SELECTORS
 lists those the code guards with -respondsToSelector:.
 
 ## Incident
@@ -21,6 +21,6 @@ section has sent no selectors, keeping the reader fail-closed.
 A deviations/compat-selectors/<label>/ with a scope (<glob>), a reason and a revisit excuses this id for the binaries whose path the glob matches: under shipyard-check --dist, the
 path inside the pkg or tarball (usr/local/mavergreen/<product>/...). That is how one binary in a dist keeps
 the allowance its CMake target passes in a knob, since --dist applies one environment to every binary. Add the selector to
-MAVERICKS_ALLOW_SELECTORS, or excuse the binary, only if the code guards it with -respondsToSelector:. A false positive from non-Objective-C data is that proposal's to fix, not an allowance's.
+MAVERGREEN_ALLOW_SELECTORS, or excuse the binary, only if the code guards it with -respondsToSelector:. A false positive from non-Objective-C data is that proposal's to fix, not an allowance's.
 
 Formerly the compat guard's selectors rule

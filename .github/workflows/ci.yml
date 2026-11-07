@@ -30,8 +30,8 @@ jobs:
       # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
       - uses: actions/cache@v6
         with:
-          path: ~/Library/Caches/mavericks-sdk
-          key: mavericks-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
+          path: ~/Library/Caches/mavergreen/sdk
+          key: mavergreen-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
       - uses: actions/cache@v6
         with:
@@ -108,7 +108,7 @@ jobs:
       - name: Artifact checks (the rehearsed pkg, with an unsigned feed)
         env:
           SHIPYARD_CHECK_REPO: .
-          MAVERICKS_ALLOW_ARCHS: x86_64 arm64
+          MAVERGREEN_ALLOW_ARCHS: x86_64 arm64
         run: |
           set -eu
           SHIPYARD_CHECK_VERSION="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"

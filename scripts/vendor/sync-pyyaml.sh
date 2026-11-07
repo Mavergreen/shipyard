@@ -8,7 +8,7 @@
 #          Exit 0 clean, 1 on a mismatch, 2 when the sdist cannot be fetched (--check).
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
-. "$here/../mavericks_fetch.sh"
+. "$here/../mavergreen_fetch.sh"
 . "$here/../mavergreen-meta.sh"
 pin=.mavergreen/ingredients/pyyaml
 tree="$here/yaml"

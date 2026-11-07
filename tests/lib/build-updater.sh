@@ -36,7 +36,7 @@ work="$(mktemp -d "$root/shipyard-updater.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 for a in $archs; do
   case "$a" in x86_64) floor=10.9 ;; arm64) floor=11.0 ;; esac
-  "$CMAKE" -S "$ROOT" -B "$work/$a" -DSHIPYARD_BUILD_UPDATER=ON -DMAVERICKS_ALLOW_GENERIC_ICON=ON \
+  "$CMAKE" -S "$ROOT" -B "$work/$a" -DSHIPYARD_BUILD_UPDATER=ON -DMAVERGREEN_ALLOW_GENERIC_ICON=ON \
     -DCMAKE_TOOLCHAIN_FILE="$ROOT/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES="$a" \
     -DCMAKE_OBJC_COMPILER="$CL/bin/clang" -DCMAKE_OBJC_COMPILER_TARGET="$a-apple-macos$floor" \
     -DCMAKE_OBJC_FLAGS=--no-default-config -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld >&2 \

@@ -1,20 +1,20 @@
 # MavericksDecisions.cmake -- forced explicit decisions (no silent defaults for
 # decisions that matter). Currently: the app icon. include()d by Mavericks.cmake.
-set(MAVERICKS_DECISIONS_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root (decisions)")
+set(MAVERGREEN_DECISIONS_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root (decisions)")
 
 # mavericks_reject_placeholder_icon(<target> <icns>)
 #   FATAL if <icns> is a registered PLACEHOLDER (scripts/placeholder-icons.sha256), unless
-#   MAVERICKS_ALLOW_GENERIC_ICON=ON (the explicit opt-in). A Mavergreen product must not ship
+#   MAVERGREEN_ALLOW_GENERIC_ICON=ON (the explicit opt-in). A Mavergreen product must not ship
 #   a placeholder icon it never chose. The denylist path is overridable via
-#   MAVERICKS_PLACEHOLDER_DENYLIST (for tests). Reused by mavericks_require_icon and the Sparkle
+#   MAVERGREEN_PLACEHOLDER_DENYLIST (for tests). Reused by mavericks_require_icon and the Sparkle
 #   updater so BOTH icon entry points are gated.
 function(mavericks_reject_placeholder_icon target icns)
-  if(MAVERICKS_ALLOW_GENERIC_ICON)
+  if(MAVERGREEN_ALLOW_GENERIC_ICON)
     return()
   endif()
-  set(_denylist "${MAVERICKS_DECISIONS_DIR}/scripts/placeholder-icons.sha256")
-  if(MAVERICKS_PLACEHOLDER_DENYLIST)
-    set(_denylist "${MAVERICKS_PLACEHOLDER_DENYLIST}")
+  set(_denylist "${MAVERGREEN_DECISIONS_DIR}/scripts/placeholder-icons.sha256")
+  if(MAVERGREEN_PLACEHOLDER_DENYLIST)
+    set(_denylist "${MAVERGREEN_PLACEHOLDER_DENYLIST}")
   endif()
   if(NOT EXISTS "${_denylist}" OR NOT EXISTS "${icns}")
     return()
@@ -32,7 +32,7 @@ function(mavericks_reject_placeholder_icon target icns)
     if(_banned STREQUAL _icnshash)
       message(FATAL_ERROR
         "mavericks: ${target} ships a known PLACEHOLDER icon (${icns}, sha256 ${_icnshash}). "
-        "Replace it with real artwork, or set -DMAVERICKS_ALLOW_GENERIC_ICON=ON to ship a generic "
+        "Replace it with real artwork, or set -DMAVERGREEN_ALLOW_GENERIC_ICON=ON to ship a generic "
         "icon on purpose. Mavergreen products must not ship an unopted placeholder icon.")
     endif()
   endforeach()
@@ -41,7 +41,7 @@ endfunction()
 # mavericks_require_icon(TARGET <t> [ICNS <path>] [ALLOW_GENERIC])
 #   Gate + wiring for a bundle's app icon. Exactly one of:
 #     * ICNS <path> that EXISTS  -> bundle it (MACOSX_BUNDLE_ICON_FILE) -- the real icon.
-#     * ALLOW_GENERIC (or -DMAVERICKS_ALLOW_GENERIC_ICON=ON) -> ship generic ON PURPOSE.
+#     * ALLOW_GENERIC (or -DMAVERGREEN_ALLOW_GENERIC_ICON=ON) -> ship generic ON PURPOSE.
 #     * neither -> FATAL_ERROR: you must decide.
 #   ICNS given but missing (e.g. container-extraction failed) is also FATAL -- never
 #   silently iconless.
@@ -55,7 +55,7 @@ function(mavericks_require_icon)
       message(FATAL_ERROR
         "mavericks_require_icon(${MRI_TARGET}): declared icon '${MRI_ICNS}' does not exist "
         "-- it wasn't produced (e.g. the source container was down and extraction failed). "
-        "Bring the source up and re-configure, or set -DMAVERICKS_ALLOW_GENERIC_ICON=ON to "
+        "Bring the source up and re-configure, or set -DMAVERGREEN_ALLOW_GENERIC_ICON=ON to "
         "ship the generic icon on purpose. Refusing to build ${MRI_TARGET} with no/wrong icon.")
     endif()
     if(NOT MRI_ALLOW_GENERIC)
@@ -68,12 +68,12 @@ function(mavericks_require_icon)
     message(STATUS "Mavericks: ${MRI_TARGET} ships app icon ${_mri_name}")
     return()
   endif()
-  if(MRI_ALLOW_GENERIC OR MAVERICKS_ALLOW_GENERIC_ICON)
+  if(MRI_ALLOW_GENERIC OR MAVERGREEN_ALLOW_GENERIC_ICON)
     message(STATUS "Mavericks: ${MRI_TARGET} ships the GENERIC icon by explicit opt-in")
     return()
   endif()
   message(FATAL_ERROR
     "mavericks_require_icon(${MRI_TARGET}): no icon decided. Provide ICNS <path/to.icns>, "
-    "or opt into generic with ALLOW_GENERIC (or -DMAVERICKS_ALLOW_GENERIC_ICON=ON). "
+    "or opt into generic with ALLOW_GENERIC (or -DMAVERGREEN_ALLOW_GENERIC_ICON=ON). "
     "Mavergreen apps must make an explicit icon decision.")
 endfunction()

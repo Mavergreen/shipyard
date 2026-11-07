@@ -17,11 +17,11 @@ fixture() {  # $1 = sdk dir name; prints "<tarball> <sha256>"
 set -- $(fixture MacOSX11.3.sdk); t113="$1"; s113="$2"
 set -- $(fixture MacOSX10.9.sdk); t109="$1"; s109="$2"
 
-out="$(MAVERICKS_SDK_CACHE="$w/c1" MAVERICKS_SDK_URL="file://$t113" MAVERICKS_SDK_SHA256="$s113" sh "$S" --arch arm64)" \
+out="$(MAVERGREEN_SDK_CACHE="$w/c1" MAVERGREEN_SDK_URL="file://$t113" MAVERGREEN_SDK_SHA256="$s113" sh "$S" --arch arm64)" \
   || { echo "FAIL: --arch arm64 with a verifying fixture must succeed"; exit 1; }
 [ "$out" = "$w/c1/MacOSX11.3.sdk" ] || { echo "FAIL: --arch arm64 must print the 11.3 SDK dir, got: $out"; exit 1; }
 
-out="$(MAVERICKS_SDK_CACHE="$w/c2" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" sh "$S")" \
+out="$(MAVERGREEN_SDK_CACHE="$w/c2" MAVERGREEN_SDK_URL="file://$t109" MAVERGREEN_SDK_SHA256="$s109" sh "$S")" \
   || { echo "FAIL: no --arch must default to x86_64 and succeed"; exit 1; }
 [ "$out" = "$w/c2/MacOSX10.9.sdk" ] || { echo "FAIL: the default must be the 10.9 SDK dir, got: $out"; exit 1; }
 
@@ -37,7 +37,7 @@ want_json='{"CanonicalName":"macosx10.9","MaximumDeploymentTarget":"10.9","Versi
 
 mkdir -p "$w/c7/MacOSX10.9.sdk/usr/lib"
 printf '%s\n' "$want_json" > "$w/c7/MacOSX10.9.sdk/SDKSettings.json"
-out="$(MAVERICKS_SDK_CACHE="$w/c7" MAVERICKS_SDK_URL="file://$w/absent.tar" MAVERICKS_SDK_SHA256="$s109" sh "$S")" \
+out="$(MAVERGREEN_SDK_CACHE="$w/c7" MAVERGREEN_SDK_URL="file://$w/absent.tar" MAVERGREEN_SDK_SHA256="$s109" sh "$S")" \
   || { echo "FAIL: an already-unpacked 10.9 SDK must be used without a download"; exit 1; }
 [ "$out" = "$w/c7/MacOSX10.9.sdk" ] || { echo "FAIL: an already-unpacked SDK must print its dir, got: $out"; exit 1; }
 [ ! -e "$w/c7/MacOSX10.9.sdk/SDKSettings.json" ] || { echo "FAIL: the SDKSettings.json v1.0.544 wrote must be removed"; exit 1; }
@@ -45,12 +45,12 @@ out="$(MAVERICKS_SDK_CACHE="$w/c7" MAVERICKS_SDK_URL="file://$w/absent.tar" MAVE
 [ -z "$(leftovers "$w/c7")" ] || { echo "FAIL: healing the SDK left temp entries"; exit 1; }
 
 printf '{"Version":"10.9"}\n' > "$w/c7/MacOSX10.9.sdk/SDKSettings.json"
-MAVERICKS_SDK_CACHE="$w/c7" MAVERICKS_SDK_URL="file://$w/absent.tar" MAVERICKS_SDK_SHA256="$s109" sh "$S" >/dev/null \
+MAVERGREEN_SDK_CACHE="$w/c7" MAVERGREEN_SDK_URL="file://$w/absent.tar" MAVERGREEN_SDK_SHA256="$s109" sh "$S" >/dev/null \
   || { echo "FAIL: a foreign SDKSettings.json must not fail the fetch"; exit 1; }
 [ "$(cat "$w/c7/MacOSX10.9.sdk/SDKSettings.json")" = '{"Version":"10.9"}' ] || { echo "FAIL: a foreign SDKSettings.json must be left alone"; exit 1; }
 
-sib() { MAVERICKS_SDK_SETTINGS_JSON=1 MAVERICKS_SDK_CACHE="$w/c9" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" sh "$S" "$@"; }
-out="$(sib)" || { echo "FAIL: MAVERICKS_SDK_SETTINGS_JSON=1 must succeed"; exit 1; }
+sib() { MAVERGREEN_SDK_SETTINGS_JSON=1 MAVERGREEN_SDK_CACHE="$w/c9" MAVERGREEN_SDK_URL="file://$t109" MAVERGREEN_SDK_SHA256="$s109" sh "$S" "$@"; }
+out="$(sib)" || { echo "FAIL: MAVERGREEN_SDK_SETTINGS_JSON=1 must succeed"; exit 1; }
 [ "$out" = "$w/c9/with-sdk-settings-json/MacOSX10.9.sdk" ] || { echo "FAIL: the opt-in must print the sibling, got: $out"; exit 1; }
 [ -f "$out/SDKSettings.json" ] && [ ! -L "$out/SDKSettings.json" ] || { echo "FAIL: the sibling's SDKSettings.json must be a real file"; exit 1; }
 [ "$(cat "$out/SDKSettings.json")" = "$want_json" ] && [ "$(wc -l < "$out/SDKSettings.json" | tr -d ' ')" = 1 ] \
@@ -76,25 +76,25 @@ ln -sfn /nonexistent "$out/usr"
 sib >/dev/null || { echo "FAIL: the opt-in must repair a sibling with a stale entry"; exit 1; }
 [ -f "$out/usr/lib/libSystem.tbd" ] || { echo "FAIL: the opt-in must restore a stale sibling entry"; exit 1; }
 
-out="$(MAVERICKS_SDK_SETTINGS_JSON=1 MAVERICKS_SDK_CACHE="$w/c10" MAVERICKS_SDK_URL="file://$t113" MAVERICKS_SDK_SHA256="$s113" sh "$S" --arch arm64)" \
+out="$(MAVERGREEN_SDK_SETTINGS_JSON=1 MAVERGREEN_SDK_CACHE="$w/c10" MAVERGREEN_SDK_URL="file://$t113" MAVERGREEN_SDK_SHA256="$s113" sh "$S" --arch arm64)" \
   || { echo "FAIL: the opt-in on arm64 must succeed"; exit 1; }
 [ "$out" = "$w/c10/MacOSX11.3.sdk" ] || { echo "FAIL: the opt-in on arm64 must print the pristine 11.3 SDK, got: $out"; exit 1; }
 [ ! -e "$w/c10/with-sdk-settings-json" ] || { echo "FAIL: the opt-in on arm64 must make no sibling"; exit 1; }
 
 for v in 0 yes true; do
-  rc=0; MAVERICKS_SDK_SETTINGS_JSON=$v MAVERICKS_SDK_CACHE="$w/c11" sh "$S" >/dev/null 2>&1 || rc=$?
-  [ "$rc" -eq 2 ] || { echo "FAIL: MAVERICKS_SDK_SETTINGS_JSON=$v is a usage error (2), got $rc"; exit 1; }
+  rc=0; MAVERGREEN_SDK_SETTINGS_JSON=$v MAVERGREEN_SDK_CACHE="$w/c11" sh "$S" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] || { echo "FAIL: MAVERGREEN_SDK_SETTINGS_JSON=$v is a usage error (2), got $rc"; exit 1; }
 done
-MAVERICKS_SDK_SETTINGS_JSON= MAVERICKS_SDK_CACHE="$w/c2" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" sh "$S" >/dev/null \
-  || { echo "FAIL: an empty MAVERICKS_SDK_SETTINGS_JSON is the same as unset"; exit 1; }
+MAVERGREEN_SDK_SETTINGS_JSON= MAVERGREEN_SDK_CACHE="$w/c2" MAVERGREEN_SDK_URL="file://$t109" MAVERGREEN_SDK_SHA256="$s109" sh "$S" >/dev/null \
+  || { echo "FAIL: an empty MAVERGREEN_SDK_SETTINGS_JSON is the same as unset"; exit 1; }
 
 mkdir -p "$w/c8/MacOSX11.3.sdk/usr/lib"
 printf '{"Version":"11.3"}' > "$w/c8/MacOSX11.3.sdk/SDKSettings.json"
-MAVERICKS_SDK_CACHE="$w/c8" sh "$S" --arch arm64 >/dev/null || { echo "FAIL: a cached arm64 SDK must be used"; exit 1; }
+MAVERGREEN_SDK_CACHE="$w/c8" sh "$S" --arch arm64 >/dev/null || { echo "FAIL: a cached arm64 SDK must be used"; exit 1; }
 [ "$(cat "$w/c8/MacOSX11.3.sdk/SDKSettings.json")" = '{"Version":"11.3"}' ] \
   || { echo "FAIL: the arm64 SDK's own SDKSettings.json must be left as shipped"; exit 1; }
 
-if MAVERICKS_SDK_CACHE="$w/c3" MAVERICKS_SDK_URL="file://$t113" MAVERICKS_SDK_SHA256="$s109" sh "$S" --arch arm64 >/dev/null 2>&1; then
+if MAVERGREEN_SDK_CACHE="$w/c3" MAVERGREEN_SDK_URL="file://$t113" MAVERGREEN_SDK_SHA256="$s109" sh "$S" --arch arm64 >/dev/null 2>&1; then
   echo "FAIL: a checksum mismatch must fail"; exit 1
 fi
 [ ! -e "$w/c3/MacOSX11.3.sdk" ] || { echo "FAIL: a checksum mismatch must leave no SDK dir behind"; exit 1; }
@@ -107,10 +107,10 @@ rc=0; sh "$S" --arch >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] || { echo "FAIL: --arch with no value is a usage error (2), got $rc"; exit 1; }
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a consumer
-#       that copies fetch_sdk.sh and mavericks_fetch.sh into its own libexec/ but not sdk-pins.sh gets a
+#       that copies fetch_sdk.sh and mavergreen_fetch.sh into its own libexec/ but not sdk-pins.sh gets a
 #       usage error naming the missing file, not the shell's own "sdk-pins.sh: not found".
 mkdir -p "$w/lonely"
-cp "$S" "$here/../scripts/mavericks_fetch.sh" "$w/lonely/"
+cp "$S" "$here/../scripts/mavergreen_fetch.sh" "$w/lonely/"
 rc=0; err="$(sh "$w/lonely/fetch_sdk.sh" 2>&1 >/dev/null)" || rc=$?
 [ "$rc" -eq 2 ] || { echo "FAIL: fetch_sdk.sh without sdk-pins.sh beside it must exit 2, got $rc: $err"; exit 1; }
 printf '%s' "$err" | grep -q 'sdk-pins\.sh is missing' \
@@ -134,7 +134,7 @@ printf 'stub' > "$w/stub/MacOSX10.9.sdk/System/Library/Frameworks/Foo.framework/
 sstub="$(shasum -a 256 "$w/stub.tar" | awk '{print $1}')"
 for os in 10.9.5 13.0; do
   : > "$w/tools.log"
-  FAKE_OS=$os PATH="$w/bin:$PATH" MAVERGREEN_PROGRESS=1 MAVERICKS_SDK_CACHE="$w/c-$os" MAVERICKS_SDK_URL="file://$w/stub.tar" MAVERICKS_SDK_SHA256="$sstub" \
+  FAKE_OS=$os PATH="$w/bin:$PATH" MAVERGREEN_PROGRESS=1 MAVERGREEN_SDK_CACHE="$w/c-$os" MAVERGREEN_SDK_URL="file://$w/stub.tar" MAVERGREEN_SDK_SHA256="$sstub" \
     sh "$S" > /dev/null 2> "$w/err-$os" || { echo "FAIL: a first fetch on $os must succeed"; exit 1; }
   [ ! -s "$w/tools.log" ] || { echo "FAIL: a first fetch on $os must run no tapi, xcrun or otool, ran: $(cat "$w/tools.log")"; exit 1; }
   d="$( (cd "$w/stub" && find MacOSX10.9.sdk) | LC_ALL=C sort)"
@@ -147,8 +147,8 @@ done
 
 # platform: concurrent fetches into one cache (six test files share it once they run in parallel) must
 #           each print the SDK, with no half-written tarball or half-moved tree left behind.
-MAVERICKS_SDK_CACHE="$w/c6" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" sh "$S" > "$w/o1" & p1=$!
-MAVERICKS_SDK_CACHE="$w/c6" MAVERICKS_SDK_URL="file://$t109" MAVERICKS_SDK_SHA256="$s109" sh "$S" > "$w/o2" & p2=$!
+MAVERGREEN_SDK_CACHE="$w/c6" MAVERGREEN_SDK_URL="file://$t109" MAVERGREEN_SDK_SHA256="$s109" sh "$S" > "$w/o1" & p1=$!
+MAVERGREEN_SDK_CACHE="$w/c6" MAVERGREEN_SDK_URL="file://$t109" MAVERGREEN_SDK_SHA256="$s109" sh "$S" > "$w/o2" & p2=$!
 r1=0; r2=0; wait "$p1" || r1=$?; wait "$p2" || r2=$?
 [ "$r1" -eq 0 ] && [ "$r2" -eq 0 ] || { echo "FAIL: concurrent cold fetches must both exit 0, got $r1 and $r2"; exit 1; }
 [ "$(cat "$w/o1")" = "$w/c6/MacOSX10.9.sdk" ] && [ "$(cat "$w/o2")" = "$w/c6/MacOSX10.9.sdk" ] \

@@ -26,8 +26,8 @@ if key and cache:
         if "runner.os == 'macOS'" not in (s.get("if") or ""):
             bad.append("the %s step must run on macOS only (fetch_sdk.sh's cache lives in ~/Library)" % what)
     w = c.get("with") or {}
-    if "Library/Caches/mavericks-sdk" not in str(w.get("path")):
-        bad.append("the cache path must be fetch_sdk.sh's default, ~/Library/Caches/mavericks-sdk")
+    if "Library/Caches/mavergreen/sdk" not in str(w.get("path")):
+        bad.append("the cache path must be fetch_sdk.sh's default, ~/Library/Caches/mavergreen/sdk")
     if "steps.mav-sdk-key.outputs.key" not in str(w.get("key")):
         bad.append("the cache key must come from steps.mav-sdk-key.outputs.key")
     if steps.index(c) < steps.index(k):

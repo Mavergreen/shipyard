@@ -180,8 +180,8 @@ refused sourcescurl bare-curl
 
 fresh librarycurl
 mkdir -p "$w/librarycurl/scripts"
-printf '#!/bin/sh\ncurl -fsSL "$1"\n' > "$w/librarycurl/scripts/mavericks_fetch.sh"
-printf 'scripts/mavericks_fetch.sh\n' >> "$w/librarycurl/FILES"
+printf '#!/bin/sh\ncurl -fsSL "$1"\n' > "$w/librarycurl/scripts/mavergreen_fetch.sh"
+printf 'scripts/mavergreen_fetch.sh\n' >> "$w/librarycurl/FILES"
 ok librarycurl
 
 fresh keywordcurl

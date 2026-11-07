@@ -7,8 +7,8 @@
 #          (https://github.com/OWNER/NAME, with or without .git), DIGEST its pinned commit (40 hex
 #          digits), SHA256 the pinned digest of GitHub's tarball of that commit, which --url prints
 #          (https://codeload.github.com/OWNER/NAME/tar.gz/DIGEST). The tarball is fetched once into
-#          ${MAVERICKS_SOURCE_CACHE:-$HOME/Library/Caches/mavericks-sources} and verified by
-#          mavericks_fetch.sh's shipyard_fetch_verified: fail closed, a mismatch deleted and its SHA-256
+#          ${MAVERGREEN_SOURCE_CACHE:-$HOME/Library/Caches/mavergreen/sources} and verified by
+#          mavergreen_fetch.sh's shipyard_fetch_verified: fail closed, a mismatch deleted and its SHA-256
 #          printed. Then DEST is REPLACED by a fresh extraction: the tarball's one top-level directory,
 #          NAME-DIGEST, with its files, modes and symlinks as GitHub wrote them, plus
 #          DEST/.mavergreen-source, one line "REPO DIGEST SHA256". Fresh on every call, so a caller that
@@ -17,7 +17,7 @@
 #          extraction, a failed rename or an INT or TERM before the new tree is in place leaves DEST as it
 #          was (not atomic: between the two renames DEST is briefly absent). Progress goes to
 #          stderr; stdout stays empty (--url prints only the URL). Exit 1 on a failed fetch, checksum or
-#          extraction, 2 on a usage error. MAVERICKS_CODELOAD replaces https://codeload.github.com (the
+#          extraction, 2 on a usage error. MAVERGREEN_CODELOAD replaces https://codeload.github.com (the
 #          tests serve a file:// tree).
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
@@ -38,7 +38,7 @@ case "$DIGEST" in
   *[!0-9a-f]*|'') echo "fetch_pinned_source: '$DIGEST' is not a commit (40 hex digits)" >&2; exit 2 ;;
 esac
 [ "${#DIGEST}" -eq 40 ] || { echo "fetch_pinned_source: '$DIGEST' is not a commit (40 hex digits)" >&2; exit 2; }
-URL="${MAVERICKS_CODELOAD:-https://codeload.github.com}/$OWNER/$NAME/tar.gz/$DIGEST"
+URL="${MAVERGREEN_CODELOAD:-https://codeload.github.com}/$OWNER/$NAME/tar.gz/$DIGEST"
 if [ "$URL_ONLY" = 1 ]; then echo "$URL"; exit 0; fi
 SHA256=$3; DEST=$4
 case "$SHA256" in
@@ -49,8 +49,8 @@ while [ "${DEST%/}" != "$DEST" ]; do DEST="${DEST%/}"; done
 case "$DEST" in
   ''|.|..) echo "fetch_pinned_source: refusing DEST '$DEST'" >&2; exit 2 ;;
 esac
-. "$SELF/mavericks_fetch.sh"
-CACHE="${MAVERICKS_SOURCE_CACHE:-$HOME/Library/Caches/mavericks-sources}"
+. "$SELF/mavergreen_fetch.sh"
+CACHE="${MAVERGREEN_SOURCE_CACHE:-$HOME/Library/Caches/mavergreen/sources}"
 TOP="$NAME-$DIGEST"
 shipyard_fetch_verified "$URL" "$SHA256" "$CACHE" "$TOP.tar.gz" || {
   echo "fetch_pinned_source: could not fetch and verify $URL" >&2; exit 1; }

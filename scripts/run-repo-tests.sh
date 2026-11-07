@@ -10,7 +10,7 @@
 #          --strict-host is for a job that must prove the host-agnostic half works HERE: every test
 #          must declare its host, a host-agnostic one that skips (exit 77, or a bats "# skip") FAILS,
 #          and running no host-agnostic test at all fails.
-#          MAVERICKS_TEST_JOBS=<n> runs up to n test files at once (default: the CPU count; 1 = one
+#          MAVERGREEN_TEST_JOBS=<n> runs up to n test files at once (default: the CPU count; 1 = one
 #          after another). Results still print in file order, each file's log only if it fails.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Running a repo's
 #       tests" -- a newly added test file must run the day it lands, not wait for someone to remember
@@ -58,14 +58,14 @@ fi
 
 [ -d tests ] || { echo "run-repo-tests: no tests/ directory — nothing to run"; exit 0; }
 
-if [ "${MAVERICKS_TEST_JOBS+set}" = set ]; then
-  jobs="$MAVERICKS_TEST_JOBS"
+if [ "${MAVERGREEN_TEST_JOBS+set}" = set ]; then
+  jobs="$MAVERGREEN_TEST_JOBS"
   case "$jobs" in
     ''|*[!0-9]*) jobs="" ;;
     *) [ "$jobs" -gt 0 ] 2>/dev/null || jobs="" ;;
   esac
   [ -n "$jobs" ] || {
-    echo "run-repo-tests: MAVERICKS_TEST_JOBS must be a positive integer, got '$MAVERICKS_TEST_JOBS'" >&2
+    echo "run-repo-tests: MAVERGREEN_TEST_JOBS must be a positive integer, got '$MAVERGREEN_TEST_JOBS'" >&2
     exit 2
   }
 else

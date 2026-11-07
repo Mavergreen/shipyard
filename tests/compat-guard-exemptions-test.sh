@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: compat-guard-exemptions-test.sh
 #          assert_binary_compatible.sh honours a declared sdk-pin:<glob> deviation, read from
-#          $MAVERICKS_DEVIATIONS_ROOT/.mavergreen/deviations/ (default: the current directory), for the
+#          $MAVERGREEN_DEVIATIONS_ROOT/.mavergreen/deviations/ (default: the current directory), for the
 #          minos/sdk rule ONLY. The Mach-O readers are stubbed: a fixture "binary" is the slice
 #          lines macho-slices.sh would print, so the guard's own logic runs on any host;
 #          tests/compat_guard.bats covers the same cases on real binaries.
@@ -25,7 +25,7 @@ printf '#!/bin/sh\nexit 0\n' > "$w/bin/strings"
 chmod +x "$w/bin/shasum" "$w/bin/nm" "$w/bin/strings"
 PATH="$w/bin:$PATH"; export PATH
 NM="$w/bin/nm"; STRINGS="$w/bin/strings"; export NM STRINGS
-unset MAVERICKS_DEVIATIONS_ROOT MAVERICKS_ALLOW_ARCHS MAVERICKS_ALLOW_SELECTORS MAVERICKS_ALLOW_GUARDED_WEAK
+unset MAVERGREEN_DEVIATIONS_ROOT MAVERGREEN_ALLOW_ARCHS MAVERGREEN_ALLOW_SELECTORS MAVERGREEN_ALLOW_GUARDED_WEAK
 G="$w/scripts/assert_binary_compatible.sh"
 
 echo 'x86_64 EXECUTE 10.9 26.5' > "$w/build/bin/tool"
@@ -37,9 +37,9 @@ deviations_are() {  # groups of four: check label scope reason
   while [ "$#" -ge 4 ]; do deviation "$w/repo" "$1" "$2" "$3" "$4"; shift 4; done
 }
 
-run() {  # sets rc and out; $root, when set, is MAVERICKS_DEVIATIONS_ROOT, and $cwd where the guard runs
+run() {  # sets rc and out; $root, when set, is MAVERGREEN_DEVIATIONS_ROOT, and $cwd where the guard runs
   rc=0
-  if [ -n "$root" ]; then out="$(cd "${cwd:-$w}" && MAVERICKS_DEVIATIONS_ROOT="$root" sh "$G" "$@" 2>&1)" || rc=$?
+  if [ -n "$root" ]; then out="$(cd "${cwd:-$w}" && MAVERGREEN_DEVIATIONS_ROOT="$root" sh "$G" "$@" 2>&1)" || rc=$?
   else out="$(cd "${cwd:-$w}" && sh "$G" "$@" 2>&1)" || rc=$?; fi
 }
 passes() { run "$@"; [ "$rc" -eq 0 ] || { echo "FAIL ($label): should pass, exit $rc:"; echo "$out"; exit 1; }; }
@@ -59,7 +59,7 @@ label="a glob matches the path as given on the command line"
 cwd="$w"; passes build/bin/tool
 cwd="$w/build/bin"; fails tool; cwd=""
 
-label="MAVERICKS_DEVIATIONS_ROOT defaults to the current directory"; root=""; cwd="$w/repo"
+label="MAVERGREEN_DEVIATIONS_ROOT defaults to the current directory"; root=""; cwd="$w/repo"
 passes "$w/build/bin/tool"; cwd=""; root="$w/repo"
 
 label="a non-matching glob excuses nothing"
@@ -81,10 +81,10 @@ label="a malformed entry for ANY check fails the guard closed, even for a clean 
 deviations_are version-scheme x '*' 'a reason'; : > "$w/repo/.mavergreen/deviations/version-scheme/x/revisit"
 fails "$w/build/bin/good"
 
-label="an excuse covers only the sdk rule: an arch outside MAVERICKS_ALLOW_ARCHS still fails"
+label="an excuse covers only the sdk rule: an arch outside MAVERGREEN_ALLOW_ARCHS still fails"
 deviations_are sdk-pin armtool '*/bin/armtool' 'prebuilt upstream'
 fails "$w/build/bin/armtool"; says "arches 'arm64' != 'x86_64'"
-run_arm() { MAVERICKS_ALLOW_ARCHS=arm64; export MAVERICKS_ALLOW_ARCHS; passes "$@"; unset MAVERICKS_ALLOW_ARCHS; }
+run_arm() { MAVERGREEN_ALLOW_ARCHS=arm64; export MAVERGREEN_ALLOW_ARCHS; passes "$@"; unset MAVERGREEN_ALLOW_ARCHS; }
 label="the same excuse passes once the arch is allowed"; run_arm "$w/build/bin/armtool"
 
 label="an excuse covers only the sdk rule: a post-10.9 import still fails"
@@ -115,7 +115,7 @@ macho 'x86_64 EXECUTE 10.9 10.9' 'arm64 EXECUTE 11.0 11.3' 'DEF _shim' > "$r/bin
 macho 'x86_64 EXECUTE 10.9 10.9' 'NM                  (undefined) weak external _os_log_create (from libSystem)' 'DEF _shim' > "$r/bin/weak"
 macho 'x86_64 EXECUTE 10.9 10.9' > "$r/bin/noshim"
 (cd "$w/tree" && tar czf "$w/dist/demo-1.0.0-mavericks.1.tar.gz" usr)
-dist() { rc=0; out="$(cd "$w" && SHIPYARD_CHECK_DIST="$w/dist" MAVERICKS_DEVIATIONS_ROOT="$w/repo" MAVERICKS_REQUIRE_DEFINED_SYMBOLS=_shim sh "$G" 2>&1)" || rc=$?; }
+dist() { rc=0; out="$(cd "$w" && SHIPYARD_CHECK_DIST="$w/dist" MAVERGREEN_DEVIATIONS_ROOT="$w/repo" MAVERGREEN_REQUIRE_DEFINED_SYMBOLS=_shim sh "$G" 2>&1)" || rc=$?; }
 label="--dist with no deviation: each binary's own allowance is missing"
 deviations_are
 dist; [ "$rc" -ne 0 ] || { echo "FAIL ($label): should fail"; echo "$out"; exit 1; }

@@ -19,7 +19,7 @@ run() { env -u LIPO -u NM -u OTOOL -u STRINGS "$@"; }
 run sh -c '. "$1/lib/macho-tools.sh"; for v in LIPO NM OTOOL STRINGS; do mach_tool "$v" || exit 1; done' sh "$here/../scripts" >/dev/null 2>&1 \
   || { echo "SKIP: the seam finds no LLVM Mach-O readers on this Mac"; exit 77; }
 out="$(run sh "$G" "$w/clean" 2>&1)" || { echo "FAIL: a clean binary must pass on the readers the seam finds:"; printf '%s\n' "$out" | sed 's/^/    | /'; exit 1; }
-rc=0; out="$(run env MAVERICKS_POST_10_9_SYMBOLS=_mav_test_post109 sh "$G" "$w/leak" 2>&1)" || rc=$?
+rc=0; out="$(run env MAVERGREEN_POST_10_9_SYMBOLS=_mav_test_post109 sh "$G" "$w/leak" 2>&1)" || rc=$?
 [ "$rc" -eq 1 ] && printf '%s\n' "$out" | grep -q _mav_test_post109 \
   || { echo "FAIL: a post-10.9 import must fail on the readers the seam finds, naming it (exit $rc):"; printf '%s\n' "$out" | sed 's/^/    | /'; exit 1; }
 echo "PASS: compat-guard-native"

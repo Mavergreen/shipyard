@@ -13,7 +13,7 @@ for v in "$REPO" "$TAG" "$ASSET"; do
   case "$v" in ''|*/*|.|..) echo "fetch-release-pkg: '$v' is not a repo, tag or asset name" >&2; exit 2 ;; esac
 done
 BASE="${MAVERGREEN_RELEASES:-https://github.com}/Mavergreen/$REPO/releases/download/$TAG"
-. "$SELF/mavericks_fetch.sh"
+. "$SELF/mavergreen_fetch.sh"
 mkdir -p "$DIR"
 sums="$(mktemp "${TMPDIR:-/tmp}/fetch-release-pkg.XXXXXX")"
 trap 'rm -f "$sums"' EXIT

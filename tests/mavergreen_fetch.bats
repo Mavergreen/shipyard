@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 # platform: host-agnostic
-# platform: tests for scripts/mavericks_fetch.sh run with no network -- a local fixture tarball is served via a file:// URL.
+# platform: tests for scripts/mavergreen_fetch.sh run with no network -- a local fixture tarball is served via a file:// URL.
 
 setup() {
-  . "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
+  . "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh"
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/shipyard_fetch_test.XXXXXX")"
   mkdir -p "$WORK/stage/payload"
   echo hello > "$WORK/stage/payload/file.txt"
@@ -141,7 +141,7 @@ dir_fixture() {
   #           and every later fetch into that cache would wait out the lock and fail.
   dir_fixture
   x="$(shipyard_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar d)"
-  run sh -ec '. "$1/scripts/mavericks_fetch.sh"; mv() { return 1; }; shipyard_fetch_publish "$2" "$3"' \
+  run sh -ec '. "$1/scripts/mavergreen_fetch.sh"; mv() { return 1; }; shipyard_fetch_publish "$2" "$3"' \
     sh "$BATS_TEST_DIRNAME/.." "$CACHE" "$x"
   [ "$status" -ne 0 ]
   [ ! -e "$CACHE/.mav-publish.lock" ]
@@ -200,7 +200,7 @@ BAD0=0000000000000000000000000000000000000000000000000000000000000000
 @test "default mismatch output is byte-identical to the original script's, but for the shipyard_fetch: prefix" {
   git -C "$BATS_TEST_DIRNAME/.." show a5c3e3d:scripts/mavericks_fetch.sh > "$WORK/orig.sh"
   fetch_capture old "$WORK/orig.sh" mav_fetch_extract "$BAD0" -u MAVERGREEN_PROGRESS
-  fetch_capture new "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" shipyard_fetch_extract "$BAD0" -u MAVERGREEN_PROGRESS
+  fetch_capture new "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh" shipyard_fetch_extract "$BAD0" -u MAVERGREEN_PROGRESS
   sed 's/^mav_fetch: /shipyard_fetch: /' "$WORK/old/err.n" > "$WORK/old/err.renamed" && mv "$WORK/old/err.renamed" "$WORK/old/err.n"
   [ "$(cat "$WORK/new/status")" -ne 0 ]
   [ "$(cat "$WORK/old/status")" = "$(cat "$WORK/new/status")" ]
@@ -211,7 +211,7 @@ BAD0=0000000000000000000000000000000000000000000000000000000000000000
 }
 
 @test "a value other than 1 leaves output unchanged, on success and on mismatch" {
-  S="$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
+  S="$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh"
   fetch_capture u "$S" shipyard_fetch_extract "$SHA" -u MAVERGREEN_PROGRESS
   fetch_capture um "$S" shipyard_fetch_extract "$BAD0" -u MAVERGREEN_PROGRESS
   for v in 0 yes "" 11; do
@@ -227,7 +227,7 @@ BAD0=0000000000000000000000000000000000000000000000000000000000000000
 }
 
 @test "progress: a mismatch fails and its message is the default one after the download lines" {
-  S="$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
+  S="$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh"
   fetch_capture d "$S" shipyard_fetch_extract "$BAD0" -u MAVERGREEN_PROGRESS
   fetch_capture p "$S" shipyard_fetch_extract "$BAD0" MAVERGREEN_PROGRESS=1
   [ "$(cat "$WORK/p/status")" -ne 0 ]
@@ -239,7 +239,7 @@ BAD0=0000000000000000000000000000000000000000000000000000000000000000
 }
 
 @test "progress, not a terminal: a failed download says why, and the default stays silent" {
-  S="$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
+  S="$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh"
   NOPE="file://$WORK/no-such-file.tar"
   rc=0
   sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" fixture.tar' x "$S" "$NOPE" "$SHA" "$CACHE" 2>"$WORK/derr" || rc=$?
@@ -256,7 +256,7 @@ BAD0=0000000000000000000000000000000000000000000000000000000000000000
 }
 
 @test "progress: a failed check's message keeps a backslash in the cache path" {
-  S="$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh"
+  S="$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh"
   C="$WORK/back\\cslash"
   rc=0
   MAVERGREEN_PROGRESS=1 sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" fixture.tar' x "$S" "$URL" "$BAD0" "$C" \
@@ -299,7 +299,7 @@ sc() {   # sc [ENV=VAL...] -- ARGS: shipyard_curl ARGS under sh; sets rc, $WORK/
   while [ "$1" != -- ]; do _env="$_env $1"; shift; done; shift
   rc=0
   env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 $_env \
-    sh -c '. "$1"; shift; shipyard_curl "$@"' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$@" \
+    sh -c '. "$1"; shift; shipyard_curl "$@"' x "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh" "$@" \
     >"$WORK/out" 2>"$WORK/err" || rc=$?
 }
 
@@ -410,7 +410,7 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
     sh -c '. "$1"; shipyard_curl "$2" "$3"; printf "first=%s\n" "$shipyard_curl_http"
            shipyard_curl "$2"; printf "usage=%s rc=%s\n" "$shipyard_curl_http" "$?"
            shipyard_curl "$2" "$3"; SHIPYARD_FETCH_TRIES=0 shipyard_curl "$2" "$3"; printf "tries=%s\n" "$shipyard_curl_http"' \
-    x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$WORK/x.tar" >"$WORK/out" 2>"$WORK/err" || rc=$?
+    x "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh" "$SURL" "$WORK/x.tar" >"$WORK/out" 2>"$WORK/err" || rc=$?
   cat "$WORK/out"
   printf 'first=404\nusage= rc=2\ntries=\n' > "$WORK/want"
   cmp "$WORK/want" "$WORK/out"
@@ -419,12 +419,12 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
 @test "shipyard_curl under set -e: a retried fetch carries on, a failed one stops the caller" {
   stub_curl "56 000" "0 200"
   run env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \
-    sh -ec '. "$1"; shipyard_curl "$2" "$3"; echo after' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$WORK/x.tar"
+    sh -ec '. "$1"; shipyard_curl "$2" "$3"; echo after' x "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh" "$SURL" "$WORK/x.tar"
   [ "$status" -eq 0 ]
   [ "${lines[${#lines[@]}-1]}" = after ]
   stub_curl "22 404"
   run env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \
-    sh -ec '. "$1"; shipyard_curl "$2" "$3"; echo after' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$WORK/y.tar"
+    sh -ec '. "$1"; shipyard_curl "$2" "$3"; echo after' x "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh" "$SURL" "$WORK/y.tar"
   [ "$status" -eq 22 ]
   [[ "$output" != *after* ]] || false
 }
@@ -435,7 +435,7 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
   BSHA="$(shasum -a 256 "$WORK/b" | awk '{print $1}')"
   rc=0
   env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \
-    sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" x.tar' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$BSHA" "$CACHE" \
+    sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" x.tar' x "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh" "$SURL" "$BSHA" "$CACHE" \
     2>"$WORK/err" || rc=$?
   [ "$rc" -eq 0 ]
   [ "$(calls)" -eq 2 ]
@@ -448,7 +448,7 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
   stub_curl "0 200" "0 200"
   rc=0
   env PATH="$WORK/stub:$PATH" STUB_DIR="$WORK/stub" SHIPYARD_FETCH_BACKOFF=0 \
-    sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" x.tar' x "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$SURL" "$SHA" "$CACHE" \
+    sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" x.tar' x "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh" "$SURL" "$SHA" "$CACHE" \
     2>"$WORK/err" || rc=$?
   [ "$rc" -ne 0 ]
   [ "$(calls)" -eq 1 ]
@@ -475,7 +475,7 @@ bare_path() {  # $1 = dir: the tools a fetch uses, without shasum or sha256sum
   esac
   chmod +x "$WORK/bin/sha256sum"
   run env PATH="$WORK/bin" sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" fixture.tar' sh \
-    "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$URL" "$SHA" "$CACHE"
+    "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh" "$URL" "$SHA" "$CACHE"
   [ "$status" -eq 0 ]
   [ -f "$CACHE/fixture.tar" ]
 }
@@ -483,7 +483,7 @@ bare_path() {  # $1 = dir: the tools a fetch uses, without shasum or sha256sum
 @test "sha256 tool: with neither, it fails as a missing tool, not as a mismatch" {
   bare_path "$WORK/bin"
   run env PATH="$WORK/bin" sh -c '. "$1"; shipyard_fetch_verified "$2" "$3" "$4" fixture.tar' sh \
-    "$BATS_TEST_DIRNAME/../scripts/mavericks_fetch.sh" "$URL" "$SHA" "$CACHE"
+    "$BATS_TEST_DIRNAME/../scripts/mavergreen_fetch.sh" "$URL" "$SHA" "$CACHE"
   [ "$status" -ne 0 ]
   [[ "$output" == *"no SHA-256 tool"* ]] || false
   [[ "$output" != *"not the pinned"* ]] || false

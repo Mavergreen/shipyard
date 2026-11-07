@@ -8,15 +8,15 @@
 #   scripts/stage_updater.sh     -- stage the updater .app + LaunchAgent into a pkg payload,
 #                                   rendering updater/{updatecheck.plist,agent-load}.in per product
 #   scripts/sign_and_appcast.sh  -- sign a .pkg (via ed25519-sign) then write its feed, <short>.xml (gen_appcast.sh)
-set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
-include("${MAVERICKS_SHARED_DIR}/MavericksDecisions.cmake")   # mavericks_reject_placeholder_icon()
-include("${MAVERICKS_SHARED_DIR}/MavericksCompatGuard.cmake")   # mavericks_assert_binary_compatible()
+set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-shipyard root")
+include("${MAVERGREEN_SHARED_DIR}/MavericksDecisions.cmake")   # mavericks_reject_placeholder_icon()
+include("${MAVERGREEN_SHARED_DIR}/MavericksCompatGuard.cmake")   # mavericks_assert_binary_compatible()
 
 function(mavericks_fetch_sparkle out_var)
   # The pinned framework, verbatim and fat: a fat framework links into an updater of either arch, and
   # thinning it would break the seal its code signature puts on every file (Autoupdate included).
   execute_process(
-    COMMAND sh "${MAVERICKS_SHARED_DIR}/scripts/fetch_sparkle_framework.sh"
+    COMMAND sh "${MAVERGREEN_SHARED_DIR}/scripts/fetch_sparkle_framework.sh"
     OUTPUT_VARIABLE _v OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _rc)
   if(NOT _rc EQUAL 0)
     message(FATAL_ERROR "fetch_sparkle_framework.sh failed")
@@ -47,7 +47,7 @@ endfunction()
 # POST_UPDATE_HELPER: absolute path to an executable the updater runs (as the user) after a successful
 # install + the confirmation -- for product-specific follow-up (e.g. offer to roll a VM onto a new image).
 function(_mavericks_registry_fact out_var fact short)
-  set(_script "${MAVERICKS_SHARED_DIR}/scripts/product-name.sh")
+  set(_script "${MAVERGREEN_SHARED_DIR}/scripts/product-name.sh")
   if(NOT EXISTS "${_script}")
     message(FATAL_ERROR "mavericks_add_updater_app: PRODUCT '${short}' cannot be looked up.\n ${_script} is missing")
   endif()
@@ -149,13 +149,13 @@ function(mavericks_add_updater_app)
   if(A_ICON)
     mavericks_reject_placeholder_icon("${A_NAME}" "${A_ICON}")
     get_filename_component(MAVERICKS_ICON_NAME "${A_ICON}" NAME_WE)
-  elseif(A_ALLOW_GENERIC OR MAVERICKS_ALLOW_GENERIC_ICON)
+  elseif(A_ALLOW_GENERIC OR MAVERGREEN_ALLOW_GENERIC_ICON)
     set(MAVERICKS_ICON_NAME "")   # empty CFBundleIconFile => generic macOS app icon, no artwork shipped
     message(STATUS "Mavericks: ${A_NAME} ships the GENERIC macOS app icon by explicit opt-in")
   else()
     message(FATAL_ERROR
       "mavericks_add_updater_app(${A_NAME}): no ICON. Provide ICON <path/to.icns>, or opt into the "
-      "generic macOS app icon with ALLOW_GENERIC (or -DMAVERICKS_ALLOW_GENERIC_ICON=ON).")
+      "generic macOS app icon with ALLOW_GENERIC (or -DMAVERGREEN_ALLOW_GENERIC_ICON=ON).")
   endif()
   # main.m needs the ObjC boolean form.
   if(A_AUTO_CHECK STREQUAL "true")
@@ -165,8 +165,8 @@ function(mavericks_add_updater_app)
   endif()
 
   set(_app "${CMAKE_BINARY_DIR}/${A_NAME}.app")
-  configure_file("${MAVERICKS_SHARED_DIR}/updater/Info.plist.in" "${CMAKE_BINARY_DIR}/${A_NAME}-Info.plist" @ONLY)
-  configure_file("${MAVERICKS_SHARED_DIR}/updater/main.m.in"     "${CMAKE_BINARY_DIR}/${A_NAME}-main.m"      @ONLY)
+  configure_file("${MAVERGREEN_SHARED_DIR}/updater/Info.plist.in" "${CMAKE_BINARY_DIR}/${A_NAME}-Info.plist" @ONLY)
+  configure_file("${MAVERGREEN_SHARED_DIR}/updater/main.m.in"     "${CMAKE_BINARY_DIR}/${A_NAME}-main.m"      @ONLY)
 
   add_executable(${A_NAME} "${CMAKE_BINARY_DIR}/${A_NAME}-main.m")
   target_compile_options(${A_NAME} PRIVATE -fobjc-arc)
@@ -195,7 +195,7 @@ function(mavericks_add_updater_app)
       "The updater builds with clang22 on every host; configure with -DCMAKE_OBJC_COMPILER=<clang22>/bin/clang "
       "(SKILL.md \"Sparkle updater\").")
   endif()
-  target_include_directories(${A_NAME} PRIVATE "${MAVERICKS_SHARED_DIR}/updater")  # relaunch_decision.h
+  target_include_directories(${A_NAME} PRIVATE "${MAVERGREEN_SHARED_DIR}/updater")  # relaunch_decision.h
   target_link_libraries(${A_NAME} PRIVATE
     "-F${A_SPARKLE_FRAMEWORK}/.." "-framework Sparkle" "-framework Cocoa"
     "-Wl,-rpath,@executable_path/../Frameworks")
@@ -210,7 +210,7 @@ function(mavericks_add_updater_app)
     # pinned one byte for byte, which is what keeps its code-signature seal valid.
     COMMAND rm -rf ${_app}/Contents/Frameworks/Sparkle.framework
     COMMAND cp -R ${A_SPARKLE_FRAMEWORK} ${_app}/Contents/Frameworks/Sparkle.framework
-    COMMAND sh ${MAVERICKS_SHARED_DIR}/scripts/assert_sparkle_pristine.sh
+    COMMAND sh ${MAVERGREEN_SHARED_DIR}/scripts/assert_sparkle_pristine.sh
             ${_app}/Contents/Frameworks/Sparkle.framework ${A_SPARKLE_FRAMEWORK}
     COMMENT "Assembling ${A_NAME}.app")
   add_custom_target(${A_NAME}_info_plist

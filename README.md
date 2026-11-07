@@ -56,7 +56,7 @@ anything else that never runs a login shell do not see `paths.d`: point them at
 **The CMake product has no HTTPS downloader.** `file(DOWNLOAD https://…)` and HTTPS
 `FetchContent` fail with "Unsupported protocol". See [CMake's README](https://github.com/Mavergreen/cmake#readme)
 for the limit and the offline FetchContent pattern. Fetch pinned sources with shipyard's
-`mavericks_fetch.sh`, `clone_pinned.sh` or `fetch_pinned_source.sh` instead.
+`mavergreen_fetch.sh`, `clone_pinned.sh` or `fetch_pinned_source.sh` instead.
 
 If you have a machine that ran an older shipyard, `rm -rf ~/.cmake/packages/MavericksShipyard` once.
 Nothing reads it any more.

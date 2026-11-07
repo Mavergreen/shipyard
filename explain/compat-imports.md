@@ -4,8 +4,8 @@ compat-imports: a shipped binary imports no symbol newer than 10.9.
 A newer-SDK cross build will happily let you link a post-10.9 symbol that is not present on a real Mavericks
 box, and it fails only there. A hard post-10.9 import always fails the guard: 10.9's dyld aborts on a
 missing hard lazy symbol, and also on a missing weak lazy symbol that is actually called. The default denylist
-is _clock_gettime, _clock_gettime_nsec_np, _os_unfair_lock_* and _os_log*; MAVERICKS_POST_10_9_SYMBOLS adds
-more as a grep alternation. MAVERICKS_ALLOW_GUARDED_WEAK permits listed symbols only when imported weak, for a
+is _clock_gettime, _clock_gettime_nsec_np, _os_unfair_lock_* and _os_log*; MAVERGREEN_POST_10_9_SYMBOLS adds
+more as a grep alternation. MAVERGREEN_ALLOW_GUARDED_WEAK permits listed symbols only when imported weak, for a
 runtime that weak-links a post-10.9 SPI and NULL-checks it first (swift's runtime); that is an assertion that
 the call is guarded. This is the in-CI proof of native-10.9 equivalence, since no 10.9 runner validates a
 cross build's output. A reader that is missing or fails fails the check, naming the variable to set (OTOOL,
@@ -26,7 +26,7 @@ not check where a binary's load commands point, so a binary that loads host libr
 A deviations/compat-imports/<label>/ with a scope (<glob>), a reason and a revisit excuses this id for the binaries whose path the glob matches: under shipyard-check --dist, the
 path inside the pkg or tarball (usr/local/mavergreen/<product>/...). That is how one binary in a dist keeps
 the allowance its CMake target passes in a knob, since --dist applies one environment to every binary. The knobs are per-build
-environment variables (MAVERICKS_POST_10_9_SYMBOLS, MAVERICKS_ALLOW_GUARDED_WEAK) that
+environment variables (MAVERGREEN_POST_10_9_SYMBOLS, MAVERGREEN_ALLOW_GUARDED_WEAK) that
 mavericks_assert_binary_compatible passes. A good use of the weak allowance names the runtime that guards the
 call.
 
