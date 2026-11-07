@@ -36,7 +36,6 @@ macos-runner python-315 release.yml:build-x86_64
 macos-runner python-315 release.yml:installed-arm64
 macos-runner python-315 release.yml:package
 macos-runner python-315 release.yml:tests
-macos-runner recaulk release.yml:build
 macos-runner rg release.yml:build
 macos-runner rust release.yml:build
 macos-runner rust release.yml:collect
@@ -65,7 +64,6 @@ packager golang-126 build/package-pkg.sh
 packager golang-127 build/package-cross-pkg.sh
 packager golang-127 build/package-pkg.sh
 packager openssh build/package-pkg.sh
-packager recaulk build/package-pkg.sh
 packager rust build/package-lib.sh
 packager signal-desktop .github/workflows/release.yml
 packager signal-desktop packaging/macos/build_pkg.sh

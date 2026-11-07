@@ -372,8 +372,10 @@ carries it -- golang just *links* it (now through Recaulk). Our *own* back-fill 
    Every back-fill defers to the system's implementation when the running macOS has one, through a
    generated forwarding layer, so a back-fill source holds only the 10.9 implementation; header-inline
    functions and data symbols are not forwarded. A back-fill matches the real API's documented behaviour;
-   a deviation is a bug. Recaulk builds with the runner's clang and the pinned SDK, never clang22's
-   compiler, to avoid a cycle.
+   a deviation is a bug. Recaulk builds with clang22 and the pinned SDK, and its Linux and native 10.9
+   builds are byte-identical. clang-22 ships Recaulk, so Recaulk keeps its clang22 pin out of its declared
+   state and its repackage trigger: a clang22 bump reaches Recaulk at its next release for another
+   reason, and the two never release each other.
 3. **Per-repo** -- a last resort, only for a genuinely repo-specific quirk (a header one product's build
    alone needs), recorded in that repo's `INGREDIENTS.md` as a baked-in input. Delete it when Recaulk
    gains the symbol.
