@@ -109,6 +109,7 @@ install(FILES
   MavericksVersion.cmake
   MavericksDecisions.cmake
   MavericksSDKMetadata.cmake
+  MavericksHostTools.cmake
   default.json
   DESTINATION "${_dest}")
 
@@ -150,6 +151,9 @@ install(CODE "${_msc_presets_code}")
 install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
 # Sparkle updater templates (configure_file'd per product by MavericksSparkle.cmake).
 install(DIRECTORY updater DESTINATION "${_dest}")
+# spec: MavericksHostTools.cmake -- it builds tools/ against the exporter pin installed beside it.
+install(DIRECTORY tools DESTINATION "${_dest}")
+install(FILES components/mulle-xcode-to-cmake/version DESTINATION "${_dest}/components/mulle-xcode-to-cmake")
 
 # spec: tests/payload-cmake-independent-test.sh -- configured from our own template, not CMake's,
 #       so the payload does not depend on which cmake stages it.

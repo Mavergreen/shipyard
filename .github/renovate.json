@@ -22,6 +22,14 @@
     },
     {
       "customType": "regex",
+      "description": "The Xcode-project source exporter MavericksHostTools.cmake builds for the host (components/mulle-xcode-to-cmake/version): REF is the upstream branch tracked, DIGEST its pinned commit, TARBALL_SHA256 the digest of GitHub's tarball of that commit, which fetch_pinned_source.sh verifies.",
+      "managerFilePatterns": ["/^components/mulle-xcode-to-cmake/version$/"],
+      "matchStrings": ["REPO=(?<packageName>\\S+)\\s+REF=(?<currentValue>\\S+)\\s+DIGEST=(?<currentDigest>[0-9a-f]{40})"],
+      "depNameTemplate": "mulle-xcode-to-cmake",
+      "datasourceTemplate": "git-refs"
+    },
+    {
+      "customType": "regex",
       "description": "The ed25519-sign that signs every family release (scripts/ed25519.pin). sign_and_appcast.sh verifies the pkg against the release's SHA256SUMS.",
       "managerFilePatterns": ["/^scripts/ed25519\\.pin$/"],
       "matchStrings": ["ED25519_VERSION=(?<currentValue>\\S+)"],
@@ -64,6 +72,11 @@
       "description": "Renovate moves components/clang22/version but cannot write the Linux archive's digest beside it, so the Linux job fails on the bump until components/clang22/linux-sha256 names the new release's archive.",
       "matchDepNames": ["Mavergreen/clang-22"],
       "prBodyNotes": ["Before this can merge, replace components/clang22/linux-sha256 with the `clang22-<version>-linux-x86_64.tar.gz` line of the new release's SHA256SUMS: `gh release download <version> -R Mavergreen/clang-22 -p SHA256SUMS -O - | grep linux-x86_64.tar.gz > components/clang22/linux-sha256`."]
+    },
+    {
+      "description": "Renovate moves DIGEST in components/mulle-xcode-to-cmake/version but cannot write TARBALL_SHA256 beside it, so the host-tool build refuses the bump until that digest names GitHub's tarball of the new commit, checked against the commit's tree.",
+      "matchDepNames": ["mulle-xcode-to-cmake"],
+      "prBodyNotes": ["Before this can merge, set TARBALL_SHA256 in components/mulle-xcode-to-cmake/version to the SHA-256 of `https://codeload.github.com/mulle-nat/mulle-xcode-to-cmake/tar.gz/<new DIGEST>`, after checking that the tarball's files are that commit's tree (`git archive` of the commit compared with the extracted tarball)."]
     },
     {
       "description": "The renovate pin moves at most monthly: each bump costs macOS runner time in shipyard's CI and then its release, and the validator gains nothing from tracking Renovate's every release.",

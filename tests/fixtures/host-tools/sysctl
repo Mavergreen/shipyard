@@ -1,0 +1,7 @@
+#!/bin/sh
+# platform: host-agnostic
+case "$*" in
+  *hw.optional.arm64*) echo "${FAKE_ARM64:-0}" ;;
+  *sysctl.proc_translated*) echo "${FAKE_TRANSLATED:-0}" ;;
+  *) exit 1 ;;
+esac

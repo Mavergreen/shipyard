@@ -238,6 +238,34 @@ extra on 10.9. The compiler must read clang VFS overlays (clang22 does); the rec
 Recaulk ships, and `tests/sdk-metadata-consumer-test.sh` (run by hand on each box, see
 `tests/maintainer-tests`) is the evidence for the import orders it checks.
 
+## Build-input host tools
+
+Some build inputs come from tools that run on the build machine, never on 10.9: the pinned
+[mulle-xcode-to-cmake](https://github.com/mulle-nat/mulle-xcode-to-cmake) exporter
+(`components/mulle-xcode-to-cmake/version`, GPL-3.0, never shipped in a pkg). `MavericksHostTools`
+builds them for the host in a configure of their own:
+
+```cmake
+include(MavericksHostTools)
+mavericks_build_host_tools(tools_bin
+  OUTPUT_ROOT "${MAVERICKS_BUILD_ROOT}/host-tools"
+  COMPILER    /usr/local/mavergreen/bin/clang-22-cross)   # clang-22 on 10.9
+```
+
+On Apple Silicon the tools are arm64, against the pinned 11.3 SDK for macOS 11.0, even when CMake
+itself runs under Rosetta; elsewhere they are x86_64, against the pinned 10.9 SDK for 10.9. The
+compiler runs with `--no-default-config` and an explicit target, so clang22's product defaults
+(Recaulk, its libc++, the 10.9 target) never reach a host link, and links with lld. An x86_64 host
+link also passes `-Wl,-U,__availability_version_check`, as clang22's own config does: compiler-rt's
+version-check helper names that libSystem function, which 10.9 lacks and never calls.
+
+The tools land in `OUTPUT_ROOT/<key>/bin`, keyed by host arch, compiler, SDK pin, exporter pin and
+this module's own files, beside a stamp of each file's SHA-256. The same inputs reuse the entry once
+it matches its stamp; an entry that does not (changed, unstamped, or left by an interrupted build) is
+set aside as `.rejected-*` and rebuilt, never run. One writer builds per key at a time, and an
+`OUTPUT_ROOT` inside shipyard or the exporter source is refused. The first build fetches the
+exporter's tarball (verified) and the host's pinned SDK.
+
 ## Conventions for Claude Code
 
 The family's conventions ship as the `mavergreen` Claude Code plugin, from this repo's
