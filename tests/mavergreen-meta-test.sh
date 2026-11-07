@@ -18,12 +18,12 @@ printf 'lone\n' > "$m/ingredients/abc/role"
 fail() { echo "FAIL $*"; exit 1; }
 eq() { [ "$2" = "$3" ] || fail "$1: got '$2', want '$3'"; }
 
-MAVERGREEN_ROOT="$w"; export MAVERGREEN_ROOT
-MAVERICKS_ROOT="$w/other"; export MAVERICKS_ROOT
+MAVERGREEN_REPO_ROOT="$w"; export MAVERGREEN_REPO_ROOT
 . "$here/../scripts/mavergreen-meta.sh"
 
 eq mg_dir "$(mg_dir)" "$m"
-eq "mg_dir default" "$(MAVERGREEN_ROOT= ; unset MAVERGREEN_ROOT; mg_dir)" "$w/other/.mavergreen"
+mkdir -p "$w/other"
+eq "mg_dir default" "$(cd "$w/other" && unset MAVERGREEN_REPO_ROOT; mg_dir)" "$(cd "$w/other" && pwd)/.mavergreen"
 eq value "$(mg_value identifier)" mavergreen-go
 eq "value with line 2" "$(mg_value upstream/VERSION)" 1.26.5
 eq "no final newline" "$(mg_value nonewline)" bare

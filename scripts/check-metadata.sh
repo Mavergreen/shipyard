@@ -8,7 +8,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib/name-rules.sh"
 . "$SELF/lib/vercmp.sh"
 . "$SELF/deviation-reason.sh"
-MAVERGREEN_ROOT="$(pwd)"
+MAVERGREEN_REPO_ROOT="$(pwd)"
 shipyard_deviations . >/dev/null 2>&1 || :
 REL=.github/workflows/release.yml
 TAB="$(printf '\t')"

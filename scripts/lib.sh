@@ -1,9 +1,10 @@
 # platform: host-agnostic
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Consolidation
 #       backlog" -- promoted here from three byte-identical per-repo copies (golang,
-#       macports-legacy-support, ed25519); sourced, no side effects. $MAVERICKS_ROOT defaults to the
+#       macports-legacy-support, ed25519); sourced, no side effects. $MAVERGREEN_REPO_ROOT defaults to the
 #       git toplevel so a plain `sh build/version.sh` still works from anywhere in a repo.
-: "${MAVERICKS_ROOT:=$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+: "${MAVERGREEN_REPO_ROOT:=$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+export MAVERGREEN_REPO_ROOT
 
 upstream_version() {
   if ! _uv_kind="$(mg_upstream_kind)"; then
@@ -19,7 +20,7 @@ upstream_version() {
     echo "upstream_version: upstream/$_uv_kind is not a version, and there is no $_uv_hook to derive one" >&2
     return 1
   }
-  _uv="$(cd "$MAVERICKS_ROOT" && sh "$_uv_hook")" || {
+  _uv="$(cd "$MAVERGREEN_REPO_ROOT" && sh "$_uv_hook")" || {
     echo "upstream_version: $_uv_hook failed" >&2
     return 1
   }

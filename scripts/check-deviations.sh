@@ -9,7 +9,7 @@ chk_ran deviation-complete
 chk_ran deviation-known-check
 chk_ran deviation-scope-matches
 [ -d .mavergreen/deviations ] || exit 0
-MAVERGREEN_ROOT="$(pwd)"
+MAVERGREEN_REPO_ROOT="$(pwd)"
 
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/check-deviations.XXXXXX")"

@@ -7,7 +7,7 @@ w="$(mktemp -d "${TMPDIR:-/tmp}/ingredients-table-test.XXXXXX")"; trap 'rm -rf "
 fail() { echo "FAIL $*"; exit 1; }
 i="$w/.mavergreen/ingredients"
 
-out="$(cd "$w" && MAVERGREEN_ROOT="$w" sh "$S")"
+out="$(cd "$w" && MAVERGREEN_REPO_ROOT="$w" sh "$S")"
 [ -z "$out" ] || fail "no ingredients prints nothing: '$out'"
 
 mkdir -p "$i/cmake" "$i/gha" "$i/libgit" "$i/child" "$i/pipe" "$i/frozen" "$i/self-child"
@@ -36,7 +36,7 @@ printf 'reference\n' > "$i/frozen/role"
 printf 'a commit, for want of tags\n' > "$i/frozen/description"
 printf 'upstream has no tags\n' > "$i/frozen/untracked"
 
-out="$(cd / && MAVERGREEN_ROOT="$w" sh "$S")"
+out="$(cd / && MAVERGREEN_REPO_ROOT="$w" sh "$S")"
 cat > "$w/want" <<'EOF'
 | Ingredient | Role | Description | Value | Tracking |
 | --- | --- | --- | --- | --- |

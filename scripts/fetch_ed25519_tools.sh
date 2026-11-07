@@ -11,7 +11,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 [ $# -eq 1 ] || { echo "usage: fetch_ed25519_tools.sh DIR" >&2; exit 2; }
 _dl="$1"
 . "$SELF/mavergreen-meta.sh"
-_v="$(MAVERGREEN_ROOT="$SELF/.." mg_value ingredients/ed25519/VERSION)" || _v=
+_v="$(MAVERGREEN_REPO_ROOT="$SELF/.." mg_value ingredients/ed25519/VERSION)" || _v=
 [ -n "$_v" ] || { echo "fetch_ed25519_tools: $SELF/../.mavergreen/ingredients/ed25519/VERSION names no ed25519 release" >&2; exit 1; }
 mkdir -p "$_dl/x"
 if [ "${ED25519_HOST:-$(uname -s)}" = Linux ]; then

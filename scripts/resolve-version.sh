@@ -11,10 +11,10 @@
 #       VERSION) impossible to satisfy.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/lib.sh"          # MAVERICKS_ROOT, mg_dir
+. "$SELF/lib.sh"          # MAVERGREEN_REPO_ROOT, mg_dir
 
 mode="${1:-auto}"
-vfile="$MAVERICKS_ROOT/VERSION"
+vfile="$MAVERGREEN_REPO_ROOT/VERSION"
 
 if [ -f "$vfile" ]; then
   ver="$(tr -d '[:space:]' < "$vfile")"

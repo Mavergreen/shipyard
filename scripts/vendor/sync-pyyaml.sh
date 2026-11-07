@@ -16,8 +16,8 @@ list="$here/yaml.sha256"
 mode="${1:-sync}"
 case "$mode" in sync|--check|--verify) ;; *) echo "usage: sync-pyyaml.sh [--check | --verify]" >&2; exit 2 ;; esac
 
-PYYAML_VERSION="$(MAVERGREEN_ROOT="$here/../.." mg_value ingredients/pyyaml/VERSION)" || PYYAML_VERSION=
-PYYAML_SHA256="$(MAVERGREEN_ROOT="$here/../.." mg_value ingredients/pyyaml/SHA256)" || PYYAML_SHA256=
+PYYAML_VERSION="$(MAVERGREEN_REPO_ROOT="$here/../.." mg_value ingredients/pyyaml/VERSION)" || PYYAML_VERSION=
+PYYAML_SHA256="$(MAVERGREEN_REPO_ROOT="$here/../.." mg_value ingredients/pyyaml/SHA256)" || PYYAML_SHA256=
 
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1

@@ -22,7 +22,7 @@ prev="${1:-}"
 [ -n "$prev" ] || exit 0
 git rev-parse -q --verify "$prev^{commit}" >/dev/null \
   || { echo "ingredient-notes: cannot read $prev, so what moved since it is unknown" >&2; exit 1; }
-MAVERGREEN_ROOT="$(git rev-parse --show-toplevel)"
+MAVERGREEN_REPO_ROOT="$(git rev-parse --show-toplevel)"
 if ! git cat-file -e "$prev:.mavergreen" 2>/dev/null; then
   [ -z "$(mg_list ingredients)" ] \
     || echo '- Ingredients moved to .mavergreen/; no per-pin changes listed for this release.'
@@ -45,7 +45,7 @@ is_value() { case "$1" in [A-Z]*|from) return 0 ;; esac; return 1; }
 old_names() { git ls-tree "$prev:$I" 2>/dev/null | awk -F'\t' '$1 ~ / tree / { print $2 }'; }
 old_keys() { git ls-tree "$prev:$I/$1" 2>/dev/null | awk -F'\t' '$1 ~ / blob / { print $2 }'; }
 old_value() { git show "$prev:$I/$1/$2" 2>/dev/null | first_line; }
-new_keys() { for _k in $(mg_list "ingredients/$1"); do [ ! -f "$MAVERGREEN_ROOT/$I/$1/$_k" ] || printf '%s\n' "$_k"; done; }
+new_keys() { for _k in $(mg_list "ingredients/$1"); do [ ! -f "$MAVERGREEN_REPO_ROOT/$I/$1/$_k" ] || printf '%s\n' "$_k"; done; }
 
 show() {
   case "$1" in
@@ -149,7 +149,7 @@ primary() {
 while IFS= read -r n; do
   in_old=no; in_new=no
   old_names | grep -qxF -- "$n" && in_old=yes
-  [ -d "$MAVERGREEN_ROOT/$I/$n" ] && in_new=yes
+  [ -d "$MAVERGREEN_REPO_ROOT/$I/$n" ] && in_new=yes
   : > "$tmp/mine"
   if [ "$in_new" = no ]; then
     printf -- '- **%s**: removed\n' "$n" >> "$tmp/bullets"

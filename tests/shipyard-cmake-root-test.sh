@@ -16,9 +16,9 @@ include("$root/MavericksVersion.cmake")
 mavericks_resolve_version(V)
 message(STATUS "resolved=\${V}")
 EOF
-out="$(MAVERGREEN_ROOT="$work/other" cmake -S "$work/a" -B "$work/b" 2>&1)" || { echo "FAIL: configure failed: $out"; exit 1; }
+out="$(MAVERGREEN_REPO_ROOT="$work/other" cmake -S "$work/a" -B "$work/b" 2>&1)" || { echo "FAIL: configure failed: $out"; exit 1; }
 case "$out" in
   *"resolved=1.0-"*) ;;
-  *) echo "FAIL: an inherited MAVERGREEN_ROOT must not change the version resolved for the configured repo: $out"; exit 1 ;;
+  *) echo "FAIL: an inherited MAVERGREEN_REPO_ROOT must not change the version resolved for the configured repo: $out"; exit 1 ;;
 esac
 echo "PASS: shipyard-cmake-root"

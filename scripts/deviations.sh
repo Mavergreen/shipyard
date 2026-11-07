@@ -12,7 +12,7 @@ LC_ALL=C; export LC_ALL
 root="${1:-.}"
 _here="$(cd "$(dirname "$0")" && pwd)"
 . "$_here/mavergreen-meta.sh"
-MAVERGREEN_ROOT="$root"
+MAVERGREEN_REPO_ROOT="$root"
 base="$(mg_dir)"
 tab="$(printf '\t')"
 bad=0

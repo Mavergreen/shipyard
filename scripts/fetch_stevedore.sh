@@ -19,7 +19,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
-V="$(MAVERGREEN_ROOT="$SELF/.." mg_value ingredients/stevedore/VERSION)" || V=
+V="$(MAVERGREEN_REPO_ROOT="$SELF/.." mg_value ingredients/stevedore/VERSION)" || V=
 case "$V" in ''|latest|*/*|*[!0-9A-Za-z._-]*) echo "fetch_stevedore: $SELF/../.mavergreen/ingredients/stevedore/VERSION names no stevedore release" >&2; exit 1 ;; esac
 
 confirm() {

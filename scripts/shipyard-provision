@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: shipyard-provision [--role R[,R...]] [--only NAME...] [--into DIR] [--install] [--env-file FILE]
 #                             [--product P] [--asset A]
-#          For each ingredient of the repo (MAVERGREEN_ROOT, else the git root, else .) that has a
+#          For each ingredient of the repo (MAVERGREEN_REPO_ROOT, else the git root, else .) that has a
 #          `product`, filtered by --role and --only, prints NAME=<path> to a pinned copy of that
 #          product, and with --env-file writes MAVERGREEN_INGREDIENT_<name>=<path> lines (a name's
 #          non-alphanumerics become _). The copy is, in order: the installed one, when

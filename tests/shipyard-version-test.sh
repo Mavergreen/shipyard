@@ -54,7 +54,7 @@ fi
 sh scripts/shipyard-version.sh 2>&1 | grep -qi 'shallow' \
   || { echo "FAIL: the refusal should say the clone is shallow"; exit 1; }
 
-own="$(MAVERGREEN_ROOT="$here/.." sh -c '. "$1"; mg_value upstream/VERSION' sh "$here/../scripts/mavergreen-meta.sh")"
+own="$(MAVERGREEN_REPO_ROOT="$here/.." sh -c '. "$1"; mg_value upstream/VERSION' sh "$here/../scripts/mavergreen-meta.sh")"
 case "$own" in
   [0-9]*.[0-9]*.*|'') echo "FAIL: shipyard's own .mavergreen/upstream/VERSION holds the line (major.minor), got '$own'"; exit 1 ;;
   [0-9]*.[0-9]*) : ;;

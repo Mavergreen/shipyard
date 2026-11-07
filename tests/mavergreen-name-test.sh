@@ -15,7 +15,7 @@ fail() { echo "FAIL $*"; exit 1; }
 eq() { [ "$2" = "$3" ] || fail "$1: got '$2', want '$3'"; }
 status() { _st=0; "$@" >/dev/null 2>&1 || _st=$?; printf '%s\n' "$_st"; }
 
-MAVERGREEN_ROOT="$w"; export MAVERGREEN_ROOT
+MAVERGREEN_REPO_ROOT="$w"; export MAVERGREEN_REPO_ROOT
 . "$here/../scripts/mavergreen-meta.sh"
 
 eq name-go "$(mavergreen_name name go127)" "Go 1.27"
@@ -55,7 +55,7 @@ eq "mg_repo env" "$(GITHUB_REPOSITORY=Mavergreen/x mg_repo)" Mavergreen/x
 
 if command -v git >/dev/null 2>&1; then
   g="$w/repo"; mkdir -p "$g"; git init -q "$g"
-  MAVERGREEN_ROOT="$g"; export MAVERGREEN_ROOT
+  MAVERGREEN_REPO_ROOT="$g"; export MAVERGREEN_REPO_ROOT
   unset GITHUB_REPOSITORY || :
   eq "mg_repo no origin status" "$(cd "$g" && status mg_repo)" 1
   eq "mg_repo no origin output" "$(cd "$g" && mg_repo 2>/dev/null || :)" ""

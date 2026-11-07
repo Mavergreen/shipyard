@@ -19,7 +19,7 @@
 # spec: tests/upstream-notes-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/lib.sh"          # sets MAVERICKS_ROOT if unset; mg_dir
+. "$SELF/lib.sh"          # sets MAVERGREEN_REPO_ROOT if unset; mg_dir
 
 url_only=no
 if [ "${1:-}" = "--url-only" ]; then url_only=yes; shift; fi
@@ -34,11 +34,11 @@ bail() {  # $1 = --url-only exit code, $2 = message
 # platform: a pre-2.15 (2017) git does not recognize `--is-shallow-repository` and echoes the flag
 #           back literally, so the comparison below tests for the literal string "true", never
 #           merely a nonempty answer.
-if [ "$(cd "$MAVERICKS_ROOT" && git rev-parse --is-shallow-repository 2>/dev/null)" = true ]; then
-  bail 5 "$MAVERICKS_ROOT is a shallow clone, so its release tags are unknown (use fetch-depth: 0)"
+if [ "$(cd "$MAVERGREEN_REPO_ROOT" && git rev-parse --is-shallow-repository 2>/dev/null)" = true ]; then
+  bail 5 "$MAVERGREEN_REPO_ROOT is a shallow clone, so its release tags are unknown (use fetch-depth: 0)"
 fi
-if ! tags="$(cd "$MAVERICKS_ROOT" && git tag --list "$up-mavericks.*")"; then
-  bail 5 "cannot list release tags in $MAVERICKS_ROOT"
+if ! tags="$(cd "$MAVERGREEN_REPO_ROOT" && git tag --list "$up-mavericks.*")"; then
+  bail 5 "cannot list release tags in $MAVERGREEN_REPO_ROOT"
 fi
 for t in $tags; do
   [ "$t" = "$ver" ] || bail 3 "$ver is a repackage of $up; no upstream link is due"
@@ -47,7 +47,7 @@ done
 hook="$(mg_dir)/hooks/upstream-release-notes-url"
 [ -f "$hook" ] || bail 4 "no $hook"
 
-if ! url="$(cd "$MAVERICKS_ROOT" && sh "$hook" "$up")"; then
+if ! url="$(cd "$MAVERGREEN_REPO_ROOT" && sh "$hook" "$up")"; then
   bail 5 "$hook failed for $up; omitting the upstream section"
 fi
 case "$url" in

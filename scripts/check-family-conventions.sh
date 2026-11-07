@@ -1076,7 +1076,7 @@ fi
 #       12.3 is not found inside 112.34, ABC12.3 or 12.3.1, and v12.3 is. tests/ may name it; a test
 #       that does so reads the file.
 chk_ran no-hardcoded-version
-if [ "$HAVE_TRACKED" -eq 1 ] && _uv="$(MAVERGREEN_ROOT=. mg_value upstream/VERSION)"; then
+if [ "$HAVE_TRACKED" -eq 1 ] && _uv="$(MAVERGREEN_REPO_ROOT=. mg_value upstream/VERSION)"; then
   case "$_uv" in
     ''|*[!0-9A-Za-z._-]*) ;;
     *.*|?????*)

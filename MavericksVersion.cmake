@@ -26,7 +26,7 @@ function(mavericks_resolve_version outvar)
   get_filename_component(A_ROOT "${A_ROOT}" ABSOLUTE)
 
   execute_process(
-    COMMAND ${CMAKE_COMMAND} -E env "MAVERICKS_ROOT=${A_ROOT}" "MAVERGREEN_ROOT=${A_ROOT}"
+    COMMAND ${CMAKE_COMMAND} -E env "MAVERGREEN_REPO_ROOT=${A_ROOT}"
             sh "${MAVERICKS_SHARED_DIR}/scripts/resolve-version.sh" "${A_MODE}"
     OUTPUT_VARIABLE _ver
     ERROR_VARIABLE  _err

@@ -25,7 +25,7 @@ STUB
   chmod +x "$WORK/bin/sudo"
   export STUB_LOG="$WORK/log"; : > "$STUB_LOG"
   export PATH="$WORK/bin:$PATH"
-  export MAVERGREEN_ROOT="$WORK/repo" MAVERGREEN_PREFIX="$WORK/prefix" MAVERGREEN_PKG_CACHE="$WORK/cache"
+  export MAVERGREEN_REPO_ROOT="$WORK/repo" MAVERGREEN_PREFIX="$WORK/prefix" MAVERGREEN_PKG_CACHE="$WORK/cache"
   export SHIPYARD_PROVISION_OS=Darwin
   unset CI
   P="sh $S/shipyard-provision"

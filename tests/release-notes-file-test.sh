@@ -17,7 +17,7 @@ git add -A; git commit -qm base
 # spec: tests/release-notes-test.sh "m4" -- 20260911.2 and later claim earlier releases, so their tag
 #       must be visible or the generator stops rather than call them first releases.
 git tag 20260911.1
-export MAVERICKS_ROOT="$w"
+export MAVERGREEN_REPO_ROOT="$w"
 
 # spec: release-notes-file.sh -- the calls below use a SELF-upstream tag (TAG == FULL, no
 #       "-mavericks." axis) so as to sidestep the generator's hook/tag/ingredient machinery
@@ -66,7 +66,7 @@ mkdir -p "$w2/.mavergreen/hooks" "$w2/.mavergreen/upstream"
    && printf '9.9p2\n' > .mavergreen/upstream/VERSION \
    && printf '#!/bin/sh\nprintf "https://example.com/%%s\\n" "$1"\n' > .mavergreen/hooks/upstream-release-notes-url \
    && git add -A && git commit -qm base && git tag 9.9p2-mavericks.1 )
-p="$(cd "$w2" && MAVERICKS_ROOT="$w2" sh "$here/../scripts/release-notes-file.sh" 9.9p2-mavericks.1 9.9p2-mavericks.1 OpenSSH)"
+p="$(cd "$w2" && MAVERGREEN_REPO_ROOT="$w2" sh "$here/../scripts/release-notes-file.sh" 9.9p2-mavericks.1 9.9p2-mavericks.1 OpenSSH)"
 [ -s "$p" ] || { echo "FAIL delegate: empty file at '$p'"; exit 1; }
 sh "$here/../scripts/check-release-notes.sh" "$p" 9.9p2-mavericks.1 >/dev/null \
   || { echo "FAIL: the wrapper now delegates to release-notes.sh, so a repo that has not migrated must still get the family shape: wrapper output is not the family shape"; cat "$p"; exit 1; }
@@ -79,14 +79,14 @@ lw="$(mktemp -d "${TMPDIR:-/tmp}/rnf-line.XXXXXX")"
     && git add -A && git commit -qm base \
     && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 )
 
-p="$(cd "$lw" && MAVERICKS_ROOT="$lw" GITHUB_SERVER_URL=https://github.com \
+p="$(cd "$lw" && MAVERGREEN_REPO_ROOT="$lw" GITHUB_SERVER_URL=https://github.com \
     GITHUB_REPOSITORY=Mavergreen/mavericks-golang \
     sh "$here/../scripts/release-notes-file.sh" 1.26.7-mavericks.1 1.26.7-mavericks.1 Go 2>/dev/null)"
 grep -q 'was 1.27.0' "$p" \
   || { echo "FAIL: MAVERICKS_NOTES_LINE forwards to the generator's --line, the wrapper's only call path -- unset must add no --line (today's behavior), so the baseline is the numerically highest tag across ALL lines (1.27.0)"; cat "$p"; exit 1; }
 rm -f "$p"
 
-p="$(cd "$lw" && MAVERICKS_ROOT="$lw" MAVERICKS_NOTES_LINE=1.26 \
+p="$(cd "$lw" && MAVERGREEN_REPO_ROOT="$lw" MAVERICKS_NOTES_LINE=1.26 \
     GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=Mavergreen/mavericks-golang \
     sh "$here/../scripts/release-notes-file.sh" 1.26.7-mavericks.1 1.26.7-mavericks.1 Go 2>/dev/null)"
 grep -q 'was 1.26.5' "$p" \
@@ -103,10 +103,10 @@ echo "PASS: release-notes-file (--line pass-through)"
 #       zero-byte temp file behind forever.
 tw="$(mktemp -d "${TMPDIR:-/tmp}/rnf-trap.XXXXXX")"
 nogit="$tw/nogit-root"; mkdir -p "$nogit"
-if ( cd "$nogit" && MAVERICKS_ROOT="$nogit" TMPDIR="$tw" \
+if ( cd "$nogit" && MAVERGREEN_REPO_ROOT="$nogit" TMPDIR="$tw" \
        sh "$here/../scripts/release-notes-file.sh" 9.9p2-mavericks.1 9.9p2-mavericks.1 OpenSSH \
      ) >/dev/null 2>"$tw/err.log"; then
-  echo "FAIL trap: generator should have failed (MAVERICKS_ROOT is not a git repo)"; exit 1
+  echo "FAIL trap: generator should have failed (MAVERGREEN_REPO_ROOT is not a git repo)"; exit 1
 fi
 grep -qi 'shallow\|git' "$tw/err.log" || { echo "FAIL trap: unexpected failure cause"; cat "$tw/err.log"; exit 1; }
 leaked="$(find "$tw" -maxdepth 1 -type f -name 'release-notes-file.*' | wc -l | tr -d ' ')"

@@ -1,10 +1,8 @@
 # platform: host-agnostic
 
 mg_dir() {
-  if [ -n "${MAVERGREEN_ROOT:-}" ]; then
-    printf '%s/.mavergreen\n' "$MAVERGREEN_ROOT"
-  elif [ -n "${MAVERICKS_ROOT:-}" ]; then
-    printf '%s/.mavergreen\n' "$MAVERICKS_ROOT"
+  if [ -n "${MAVERGREEN_REPO_ROOT:-}" ]; then
+    printf '%s/.mavergreen\n' "$MAVERGREEN_REPO_ROOT"
   else
     printf '%s/.mavergreen\n' "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
   fi

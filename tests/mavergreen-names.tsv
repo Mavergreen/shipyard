@@ -1,0 +1,12 @@
+MAVERGREEN_CLANG22_CACHE	directory where fetch_clang22.sh caches the clang22 archive
+MAVERGREEN_INGREDIENT_	prefix of the per-ingredient override variables the fetch scripts read
+MAVERGREEN_PKG_CACHE	directory where fetched product pkgs are cached
+MAVERGREEN_PREFIX	directory the family's products install under
+MAVERGREEN_PRODUCT	the short name of the product a helper hook runs for
+MAVERGREEN_PRODUCT_NAMES	path of the product-names registry file
+MAVERGREEN_PROGRESS	1 makes the fetch scripts report progress on stderr
+MAVERGREEN_RELEASES	the releases URL release-needed.sh queries
+MAVERGREEN_REPO_ROOT	the root of the repo being built or checked
+MAVERGREEN_ROOT	the helper's install root, the volume it manages
+MAVERGREEN_TAR_CACHE	directory where fetched tarballs are cached
+MAVERGREEN_VERSION	the shipyard version the base component is built with

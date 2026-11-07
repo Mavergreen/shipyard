@@ -23,7 +23,7 @@
 # spec: tests/release-notes-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/lib.sh"          # MAVERICKS_ROOT
+. "$SELF/lib.sh"          # MAVERGREEN_REPO_ROOT
 . "$SELF/deviation-reason.sh"
 
 TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""; SHORT=""; SHORT_SET=no
@@ -68,11 +68,11 @@ if [ "$SHORT_SET" = yes ]; then
   registered "$SHORT" || die "$(registry_complaint "--short '$SHORT'")"
 fi
 
-cd "$MAVERICKS_ROOT"
+cd "$MAVERGREEN_REPO_ROOT"
 
 [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = false ] \
-  || die "$MAVERICKS_ROOT is a shallow clone, so release tags are unknown and the release kind cannot be decided (use fetch-depth: 0)"
-git tag --list >/dev/null 2>&1 || die "cannot list release tags in $MAVERICKS_ROOT"
+  || die "$MAVERGREEN_REPO_ROOT is a shallow clone, so release tags are unknown and the release kind cannot be decided (use fetch-depth: 0)"
+git tag --list >/dev/null 2>&1 || die "cannot list release tags in $MAVERGREEN_REPO_ROOT"
 
 UP="${VER%%-mavericks.*}"
 SELF_UPSTREAM=no
@@ -99,7 +99,7 @@ if [ "$SELF_UPSTREAM" = no ]; then
     N="${VER##*-mavericks.}"
     case "$N" in
       1) ;;
-      *) die "$VER is -mavericks.$N but no $UP-mavericks.* tags are visible in $MAVERICKS_ROOT, so it is unknown whether this is a first release or a repackage (tags may not be fetched -- use fetch-tags: true or fetch-depth: 0)" ;;
+      *) die "$VER is -mavericks.$N but no $UP-mavericks.* tags are visible in $MAVERGREEN_REPO_ROOT, so it is unknown whether this is a first release or a repackage (tags may not be fetched -- use fetch-tags: true or fetch-depth: 0)" ;;
     esac
   fi
 fi
@@ -139,8 +139,8 @@ fi
 # spec: SKILL.md "Release notes" -- a tag that names a commit other than HEAD is already minted; its
 #       committed prose publishes as is.
 minted() {
-  _t="$(git -C "$MAVERICKS_ROOT" rev-parse -q --verify "refs/tags/$TAG^{commit}")" || return 1
-  [ "$_t" != "$(git -C "$MAVERICKS_ROOT" rev-parse HEAD)" ]
+  _t="$(git -C "$MAVERGREEN_REPO_ROOT" rev-parse -q --verify "refs/tags/$TAG^{commit}")" || return 1
+  [ "$_t" != "$(git -C "$MAVERGREEN_REPO_ROOT" rev-parse HEAD)" ]
 }
 
 # spec: SKILL.md "Release notes" -- committed .md prose publishes only for a minted tag; a new
@@ -149,7 +149,7 @@ minted() {
 readable_dir() {
   { [ -r "$1" ] && [ -x "$1" ]; } || die "$1 cannot be read; fix its permissions"
 }
-ROOT="$MAVERICKS_ROOT/.mavergreen/release-notes"
+ROOT="$MAVERGREEN_REPO_ROOT/.mavergreen/release-notes"
 if [ -d "$ROOT" ]; then
   readable_dir "$ROOT"
   if [ -n "$SHORT" ] && [ -d "$ROOT/$SHORT" ]; then ROOT="$ROOT/$SHORT"; readable_dir "$ROOT"; fi
@@ -238,7 +238,7 @@ fi
 PSHORT="$SHORT"
 if [ -z "$PSHORT" ]; then
   _p="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
-  _all="$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_list products)"
+  _all="$(mg_list products)"
   if [ -d ".mavergreen/products/$_p" ]; then PSHORT="$_p"
   elif [ -n "$_all" ] && [ "$(printf '%s\n' "$_all" | wc -l | tr -d ' ')" -eq 1 ]; then PSHORT="$_all"
   fi
@@ -246,11 +246,11 @@ fi
 PD=".mavergreen/products/$PSHORT"
 REQS=""
 if [ -n "$PSHORT" ] && [ -n "$PREV" ] && git cat-file -e "$PREV:.mavergreen" 2>/dev/null; then
-  for dep in $(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_list "products/$PSHORT/requires"); do
-    f="$MAVERICKS_ROOT/$PD/requires/$dep/min"
+  for dep in $(mg_list "products/$PSHORT/requires"); do
+    f="$MAVERGREEN_REPO_ROOT/$PD/requires/$dep/min"
     { [ -e "$f" ] || [ -L "$f" ]; } || continue
     { [ -f "$f" ] && [ -r "$f" ]; } || die "cannot read $f"
-    v="$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_value "products/$PSHORT/requires/$dep/min")" || die "cannot read $f"
+    v="$(mg_value "products/$PSHORT/requires/$dep/min")" || die "cannot read $f"
     case "$v" in
       [0-9]*[!0-9A-Za-z.+-]*|[!0-9]*|'') die "$f: line 1 must be a minimum version ([0-9][0-9A-Za-z.+-]*), not '$v'" ;;
     esac
@@ -268,9 +268,9 @@ if [ -n "$REQS" ] || [ -f "$DIR/rebuild" ]; then
   fi
 fi
 NOTICE=""
-if [ -n "$PSHORT" ] && { [ -e "$MAVERICKS_ROOT/$PD/notice" ] || [ -L "$MAVERICKS_ROOT/$PD/notice" ]; }; then
-  sentence "$MAVERICKS_ROOT/$PD/notice"
-  NOTICE="$(line1 "$MAVERICKS_ROOT/$PD/notice")"
+if [ -n "$PSHORT" ] && { [ -e "$MAVERGREEN_REPO_ROOT/$PD/notice" ] || [ -L "$MAVERGREEN_REPO_ROOT/$PD/notice" ]; }; then
+  sentence "$MAVERGREEN_REPO_ROOT/$PD/notice"
+  NOTICE="$(line1 "$MAVERGREEN_REPO_ROOT/$PD/notice")"
 fi
 HAS_CHANGES=""; if [ -d "$DIR/changes" ]; then HAS_CHANGES=yes; fi
 
@@ -291,7 +291,7 @@ fi
 #       guessing. tests/release-notes-test.sh's badcaller/nopins/unwired/decoytrap/foldedcaller/
 #       commentonly/twocallers cases are this rule's regression suite.
 CALLER=""
-default_caller="$MAVERICKS_ROOT/.github/workflows/repackage-on-ingredient-bump.yml"
+default_caller="$MAVERGREEN_REPO_ROOT/.github/workflows/repackage-on-ingredient-bump.yml"
 is_caller() {
   grep -v '^[[:space:]]*#' "$1" 2>/dev/null | grep -Fq 'repackage-on-ingredient-bump.yml'
 }
@@ -299,7 +299,7 @@ if [ -f "$default_caller" ] && is_caller "$default_caller"; then
   CALLER="$default_caller"
 else
   ncand=0; candidates=""
-  for f in "$MAVERICKS_ROOT"/.github/workflows/*.yml "$MAVERICKS_ROOT"/.github/workflows/*.yaml; do
+  for f in "$MAVERGREEN_REPO_ROOT"/.github/workflows/*.yml "$MAVERGREEN_REPO_ROOT"/.github/workflows/*.yaml; do
     [ -f "$f" ] || continue
     is_caller "$f" || continue
     ncand=$((ncand + 1)); CALLER="$f"
@@ -309,7 +309,7 @@ else
     || die "more than one workflow names repackage-on-ingredient-bump.yml and none of them is at the conventional path .github/workflows/repackage-on-ingredient-bump.yml, so which one defines this repo's ingredient pins is ambiguous: $candidates (rename the real caller to the conventional path, or drop the mention from the other)"
 fi
 if [ -n "$CALLER" ]; then
-  [ -n "$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" sh "$SELF/ingredient-pins.sh")" ] \
+  [ -n "$(sh "$SELF/ingredient-pins.sh")" ] \
     || die "$CALLER calls repackage-on-ingredient-bump.yml but .mavergreen/ingredients/ holds no ingredient"
 fi
 # spec: tests/release-notes-test.sh "r3new"/"r1d" -- this repo's owner/repo names its own compare
@@ -422,7 +422,7 @@ else
       fi
       ;;
     4)  # no hook -- allowed ONLY where the repo declares why
-      shipyard_deviations "$MAVERICKS_ROOT" >/dev/null 2>&1 || :
+      shipyard_deviations "$MAVERGREEN_REPO_ROOT" >/dev/null 2>&1 || :
       shipyard_deviated upstream-notes >/dev/null \
         || die "$VER ships a new upstream but this repo has no .mavergreen/hooks/upstream-release-notes-url, and no .mavergreen/deviations/upstream-notes/ says why (add the hook, or that deviation)"
       printf -- '- New upstream: %s %s.\n' "$PRODUCT" "$UP" >> "$tmp"

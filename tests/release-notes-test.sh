@@ -39,7 +39,7 @@ bump() {
 
 gen() {  # $1 = repo, $2 = tag/version, rest = extra args
   r="$1"; v="$2"; shift 2
-  ( cd "$r" && MAVERICKS_ROOT="$r" \
+  ( cd "$r" && MAVERGREEN_REPO_ROOT="$r" \
       GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=Mavergreen/mavericks-openssh \
       sh "$S" --tag "$v" --version "$v" \
       --product OpenSSH --min-os 10.9.5 --out "$r/OUT.md" "$@" )
@@ -470,7 +470,7 @@ done
 r="$work/self"; mkrepo "$r"; rm "$r/.mavergreen/hooks/upstream-release-notes-url"
 deviation "$r" upstream-notes self '*' 'this repo is its own upstream.'
 ( cd "$r" && git add -A && git commit -qm self && git tag 20260802.5 )
-( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag 20260802.6 --version 20260802.6 \
+( cd "$r" && MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag 20260802.6 --version 20260802.6 \
     --product Porthole --out "$r/OUT.md" ) >/dev/null
 grep -q '^## Porthole 20260802.6$' "$r/OUT.md" || { echo "FAIL self: title"; cat "$r/OUT.md"; exit 1; }
 grep -q 'for Mavericks (' "$r/OUT.md" && { echo "FAIL self: port-shaped title"; exit 1; }
@@ -566,11 +566,11 @@ r="$work/shallow"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 )
 sr="$work/shallow-clone"
 git clone -q --depth 1 "file://$r" "$sr" 2>/dev/null || git clone -q --depth 1 "$r" "$sr"
-if ( cd "$sr" && MAVERICKS_ROOT="$sr" sh "$S" --tag 9.9p2-mavericks.2 --version 9.9p2-mavericks.2 \
+if ( cd "$sr" && MAVERGREEN_REPO_ROOT="$sr" sh "$S" --tag 9.9p2-mavericks.2 --version 9.9p2-mavericks.2 \
        --product OpenSSH --out "$sr/OUT.md" ) >/dev/null 2>&1; then
   echo "FAIL shallow: should be fatal (this is signal-desktop's silent-drop shape)"; exit 1
 fi
-shallow_out="$(cd "$sr" && MAVERICKS_ROOT="$sr" sh "$S" --tag 9.9p2-mavericks.2 --version 9.9p2-mavericks.2 \
+shallow_out="$(cd "$sr" && MAVERGREEN_REPO_ROOT="$sr" sh "$S" --tag 9.9p2-mavericks.2 --version 9.9p2-mavericks.2 \
        --product OpenSSH --out "$sr/OUT.md" 2>&1 || true)"
 printf '%s\n' "$shallow_out" | grep -qi shallow \
   || { echo "FAIL shallow: cause not named as shallow: $shallow_out"; exit 1; }
@@ -582,14 +582,14 @@ r="$work/notags"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 )
 nr="$work/notags-clone"
 git clone -q --no-tags "$r" "$nr" 2>/dev/null
-if ( cd "$nr" && MAVERICKS_ROOT="$nr" sh "$S" --tag 9.9p2-mavericks.2 --version 9.9p2-mavericks.2 \
+if ( cd "$nr" && MAVERGREEN_REPO_ROOT="$nr" sh "$S" --tag 9.9p2-mavericks.2 --version 9.9p2-mavericks.2 \
        --product OpenSSH --out "$nr/OUT.md" ) >/dev/null 2>&1; then
   echo "FAIL notags: -mavericks.2 with no visible upstream tags should be fatal"; exit 1
 fi
 # spec: scripts/release-notes.sh -- but -mavericks.1 with no visible tags stays a legitimate
 #       first release (or a not-yet-tagged dispatch-cut build): the plan accepts that false
 #       negative rather than block every real first release.
-if ! ( cd "$nr" && MAVERICKS_ROOT="$nr" GITHUB_SERVER_URL=https://github.com \
+if ! ( cd "$nr" && MAVERGREEN_REPO_ROOT="$nr" GITHUB_SERVER_URL=https://github.com \
        GITHUB_REPOSITORY=Mavergreen/mavericks-openssh sh "$S" \
        --tag 9.9p2-mavericks.1 --version 9.9p2-mavericks.1 \
        --product OpenSSH --out "$nr/OUT.md" ) >/dev/null 2>&1; then
@@ -605,7 +605,7 @@ r="$work/golang"; mkrepo "$r"
 ( cd "$r" && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 )
 for line in "1.26" "1.26.*"; do
   ( cd "$r" && GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=Mavergreen/mavericks-golang \
-      MAVERICKS_ROOT="$r" sh "$S" --tag 1.26.7-mavericks.1 --version 1.26.7-mavericks.1 \
+      MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag 1.26.7-mavericks.1 --version 1.26.7-mavericks.1 \
       --product Go --line "$line" --out "$r/OUT.md" ) >/dev/null \
     || { echo "FAIL golang ($line): should succeed"; exit 1; }
   grep -q 'was 1.26.5' "$r/OUT.md" \
@@ -822,17 +822,17 @@ cp -R "$here/../scripts" "$scripts_stub"
 printf '#!/bin/sh\necho "previous-release-tag.sh: boom, cannot list tags" >&2\nexit 7\n' \
   > "$scripts_stub/previous-release-tag.sh"
 chmod +x "$scripts_stub/previous-release-tag.sh"
-if ( cd "$r" && MAVERICKS_ROOT="$r" sh "$scripts_stub/release-notes.sh" --tag 9.9p2-mavericks.1 \
+if ( cd "$r" && MAVERGREEN_REPO_ROOT="$r" sh "$scripts_stub/release-notes.sh" --tag 9.9p2-mavericks.1 \
        --version 9.9p2-mavericks.1 --product OpenSSH --out "$r/OUT.md" ) >/dev/null 2>&1; then
   echo "FAIL prevtagfails: a failing previous-release-tag.sh must be fatal, not read as no baseline"; exit 1
 fi
-prevtag_out="$(cd "$r" && MAVERICKS_ROOT="$r" sh "$scripts_stub/release-notes.sh" --tag 9.9p2-mavericks.1 \
+prevtag_out="$(cd "$r" && MAVERGREEN_REPO_ROOT="$r" sh "$scripts_stub/release-notes.sh" --tag 9.9p2-mavericks.1 \
        --version 9.9p2-mavericks.1 --product OpenSSH --out "$r/OUT.md" 2>&1 || true)"
 printf '%s\n' "$prevtag_out" | grep -qi 'previous-release-tag' \
   || { echo "FAIL prevtagfails: cause not named: $prevtag_out"; exit 1; }
 
 r="$work/args"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 )
-if ( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag 9.9p2-mavericks.1 --version 9.9p2-mavericks.1 \
+if ( cd "$r" && MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag 9.9p2-mavericks.1 --version 9.9p2-mavericks.1 \
        --out "$r/OUT.md" ) >/dev/null 2>&1; then echo "FAIL args: --product must be required"; exit 1; fi
 
 # spec: scripts/release-notes.sh -- a release with no --min-os floor and no compare link (e.g.,
@@ -843,7 +843,7 @@ if ( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag 9.9p2-mavericks.1 --version 9.
 r="$work/nofooter"; mkdir -p "$r/.mavergreen/release-notes"
 ( cd "$r" && git init -q -b main . && git config user.email t@example.com && git config user.name tester )
 ( cd "$r" && echo x > README.md && git add -A && git commit -qm base && git tag v1.0.0 )
-( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag v1.0.0 --version 1.0.0 \
+( cd "$r" && MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag v1.0.0 --version 1.0.0 \
     --product Shipyard --out "$r/OUT.md" ) >/dev/null
 grep -q -- '^---$' "$r/OUT.md" \
   && { echo "FAIL G3: a footer rule with nothing after it was emitted"; cat "$r/OUT.md"; exit 1; }
@@ -1010,11 +1010,11 @@ r="$work/patchfails"; mkrepo "$r"
 pstub="$work/scripts-pstub"
 cp -R "$here/../scripts" "$pstub"
 printf '#!/bin/sh\necho "patch-notes.sh: boom" >&2\nexit 5\n' > "$pstub/patch-notes.sh"
-if ( cd "$r" && MAVERICKS_ROOT="$r" sh "$pstub/release-notes.sh" --tag 9.9p2-mavericks.2 \
+if ( cd "$r" && MAVERGREEN_REPO_ROOT="$r" sh "$pstub/release-notes.sh" --tag 9.9p2-mavericks.2 \
        --version 9.9p2-mavericks.2 --product OpenSSH --out "$r/OUT.md" ) >/dev/null 2>&1; then
   echo "FAIL patchfails: a failing patch-notes.sh must be fatal"; exit 1
 fi
-out="$(cd "$r" && MAVERICKS_ROOT="$r" sh "$pstub/release-notes.sh" --tag 9.9p2-mavericks.2 \
+out="$(cd "$r" && MAVERGREEN_REPO_ROOT="$r" sh "$pstub/release-notes.sh" --tag 9.9p2-mavericks.2 \
        --version 9.9p2-mavericks.2 --product OpenSSH --out "$r/OUT.md" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'patches' || { echo "FAIL patchfails: cause not named: $out"; exit 1; }
 
@@ -1023,7 +1023,7 @@ printf '%s\n' "$out" | grep -q 'patches' || { echo "FAIL patchfails: cause not n
 #       like new code.
 selfgen() {  # $1 = repo, $2 = tag/version, rest = extra env assignments
   r="$1"; v="$2"; shift 2
-  ( cd "$r" && env MAVERICKS_ROOT="$r" "$@" sh "$S" --tag "$v" --version "$v" --product Porthole \
+  ( cd "$r" && env MAVERGREEN_REPO_ROOT="$r" "$@" sh "$S" --tag "$v" --version "$v" --product Porthole \
       --out "$r/OUT.md" ) >/dev/null
 }
 r="$work/r3first"; mkrepo "$r"
@@ -1058,7 +1058,7 @@ grep -qx -- '  \[Changes since 20260802.3\](https://github.com/Mavergreen/portho
 selfgen "$r" 20260815.1 GITHUB_REPOSITORY=
 grep -qx -- '  \[Changes since 20260802.3\](https://github.com/Mavergreen/porthole/compare/20260802.3...20260815.1)' "$r/OUT.md" \
   || { echo "FAIL r3new: the registry names the compare"; cat "$r/OUT.md"; exit 1; }
-( cd "$r" && env MAVERICKS_ROOT="$r" GITHUB_REPOSITORY= sh "$S" --tag 20260815.1 --version 20260815.1 \
+( cd "$r" && env MAVERGREEN_REPO_ROOT="$r" GITHUB_REPOSITORY= sh "$S" --tag 20260815.1 --version 20260815.1 \
     --product Unregistered --out "$r/OUT.md" ) >/dev/null
 grep -qx -- '- New release of Unregistered 20260815.1 (was 20260802.3)\.' "$r/OUT.md" \
   || { echo "FAIL r3new: unregistered"; cat "$r/OUT.md"; exit 1; }
@@ -1068,7 +1068,7 @@ grep -q 'Changes since' "$r/OUT.md" && { echo "FAIL r3new: no repo, so no guesse
 #       the compare names the tags.
 r="$work/r3v"; mkrepo "$r"
 ( cd "$r" && git tag v1.0.208 && echo x >> README.md && git add -A && git commit -qm code )
-( cd "$r" && env MAVERICKS_ROOT="$r" GITHUB_REPOSITORY=Mavergreen/shipyard sh "$S" --tag v1.0.209 \
+( cd "$r" && env MAVERGREEN_REPO_ROOT="$r" GITHUB_REPOSITORY=Mavergreen/shipyard sh "$S" --tag v1.0.209 \
     --version 1.0.209 --product Shipyard --out "$r/OUT.md" ) >/dev/null
 grep -qx -- '- New release of Shipyard 1.0.209 (was 1.0.208)\.' "$r/OUT.md" \
   || { echo "FAIL r3v"; cat "$r/OUT.md"; exit 1; }
@@ -1093,7 +1093,7 @@ grep -q '### Our patches' "$r/OUT.md" && { echo "FAIL r1d: a watched patch is re
 #       simply lacks its tags must not make it: YYYYMMDD.N with N > 1 says earlier releases exist, and
 #       in CI the repo's own releases say so for any scheme.
 r="$work/m4"; mkrepo "$r"
-if out="$(cd "$r" && env MAVERICKS_ROOT="$r" sh "$S" --tag 20260802.3 --version 20260802.3 \
+if out="$(cd "$r" && env MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag 20260802.3 --version 20260802.3 \
     --product Porthole --out "$r/OUT.md" 2>&1)"; then
   echo "FAIL m4: 20260802.3 with no tags visible is not a first release"; cat "$r/OUT.md"; exit 1
 fi
@@ -1101,20 +1101,20 @@ printf '%s\n' "$out" | grep -q 'fetch-depth: 0' || { echo "FAIL m4: name the fix
 stub="$work/m4-bin"; mkdir -p "$stub"
 printf '#!/bin/sh\nprintf "%%s\\n" "${M4_RELEASE:-}"\n' > "$stub/gh"; chmod +x "$stub/gh"
 if out="$(cd "$r" && env PATH="$stub:$PATH" M4_RELEASE=v1.0.208 GITHUB_ACTIONS=true \
-    GITHUB_REPOSITORY=Mavergreen/shipyard MAVERICKS_ROOT="$r" sh "$S" --tag v1.0.209 \
+    GITHUB_REPOSITORY=Mavergreen/shipyard MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag v1.0.209 \
     --version 1.0.209 --product Shipyard --out "$r/OUT.md" 2>&1)"; then
   echo "FAIL m4: the repo has releases, so no tags here means unfetched tags"; cat "$r/OUT.md"; exit 1
 fi
 printf '%s\n' "$out" | grep -q 'fetch-depth: 0' || { echo "FAIL m4: name the fix: $out"; exit 1; }
 ( cd "$r" && env PATH="$stub:$PATH" M4_RELEASE= GITHUB_ACTIONS=true GITHUB_REPOSITORY=Mavergreen/shipyard \
-    MAVERICKS_ROOT="$r" sh "$S" --tag v1.0.0 --version 1.0.0 --product Shipyard --out "$r/OUT.md" ) >/dev/null \
+    MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag v1.0.0 --version 1.0.0 --product Shipyard --out "$r/OUT.md" ) >/dev/null \
   || { echo "FAIL m4: a repo with no releases yet is a first release"; exit 1; }
 grep -qx -- '- First release of Shipyard 1.0.0\.' "$r/OUT.md" || { echo "FAIL m4: first"; cat "$r/OUT.md"; exit 1; }
 # spec: tests/release-notes-test.sh "m4" -- a gh that cannot list (no GH_TOKEN on the step) proves
 #       nothing, so it warns and trusts the checkout rather than refusing a first release.
 printf '#!/bin/sh\necho "gh: To use GitHub CLI in a GitHub Actions workflow, set the GH_TOKEN environment variable" >&2\nexit 4\n' > "$stub/gh"; chmod +x "$stub/gh"
 ( cd "$r" && env PATH="$stub:$PATH" GITHUB_ACTIONS=true GITHUB_REPOSITORY=Mavergreen/shipyard \
-    MAVERICKS_ROOT="$r" sh "$S" --tag v1.0.0 --version 1.0.0 --product Shipyard --out "$r/OUT.md" ) > "$work/m4-gh.out" 2>&1 \
+    MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag v1.0.0 --version 1.0.0 --product Shipyard --out "$r/OUT.md" ) > "$work/m4-gh.out" 2>&1 \
   || { echo "FAIL m4: a gh that cannot list must not refuse a first release: $(cat "$work/m4-gh.out")"; exit 1; }
 grep -q 'cannot list' "$work/m4-gh.out" || { echo "FAIL m4: say that the releases could not be checked: $(cat "$work/m4-gh.out")"; exit 1; }
 

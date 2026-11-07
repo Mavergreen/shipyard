@@ -4,7 +4,7 @@
 #                                  --out PKG [--scripts DIR]
 #          Prints the output .pkg path on stdout (everything else goes to stderr), matching
 #          set_install_floor.sh. Files are stamped with $SOURCE_DATE_EPOCH, or when unset the commit
-#          time of $MAVERICKS_ROOT when that is a git work tree, else of the repo at the caller's current
+#          time of $MAVERGREEN_REPO_ROOT when that is a git work tree, else of the repo at the caller's current
 #          directory; a caller without git must export SOURCE_DATE_EPOCH.
 # platform: builds a flat component .pkg with stevedore, whose bundles install EXACTLY where
 #           declared and ALWAYS overwrite. stevedore writes every component install-in-place, so

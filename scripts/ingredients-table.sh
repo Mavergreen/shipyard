@@ -3,7 +3,7 @@
 #   usage: ingredients-table.sh
 #          Prints .mavergreen/ingredients/ as a Markdown table: name, roles, description, value (the
 #          VERSION, the PIN's ref, or the COMMIT) and how it is tracked, with the reason when it is
-#          not. Reads $MAVERGREEN_ROOT, else the git checkout around the working directory. Prints
+#          not. Reads $MAVERGREEN_REPO_ROOT, else the git checkout around the working directory. Prints
 #          nothing when there are no ingredients.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"

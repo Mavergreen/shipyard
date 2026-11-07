@@ -197,10 +197,10 @@ updaters, signing, or compat checks:**
 run on any host, through stevedore, the C packager that `fetch_stevedore.sh` fetches at the version
 `.mavergreen/ingredients/stevedore/VERSION` names. None of them needs `pkgbuild`, `productbuild`, `pkgutil` or `PlistBuddy`, or a
 macOS host. A pkg's bytes depend only on the staged tree, the arguments and the mtime. The mtime is
-`SOURCE_DATE_EPOCH`, else the commit time of `$MAVERICKS_ROOT` when that is a git work tree, else the current
+`SOURCE_DATE_EPOCH`, else the commit time of `$MAVERGREEN_REPO_ROOT` when that is a git work tree, else the current
 directory's repo (saying on stderr which one), else the seam fails (`source-date-epoch.sh`). A 10.9 box
 without the Command Line Tools has no git, so a caller there sets `SOURCE_DATE_EPOCH`; one that runs a seam
-from outside the product repo sets `SOURCE_DATE_EPOCH` or `MAVERICKS_ROOT`. `MAVERICKS_ROOT` must be exported to reach the seams; a bare shell variable does not. As root (euid 0, so `sudo` too)
+from outside the product repo sets `SOURCE_DATE_EPOCH` or `MAVERGREEN_REPO_ROOT`. `MAVERGREEN_REPO_ROOT` must be exported to reach the seams; a bare shell variable does not. As root (euid 0, so `sudo` too)
 `fetch_stevedore.sh` caches in root's own home (from the passwd entry, not the caller's `$HOME`) unless `STEVEDORE_CACHE` is given. Reading a Mach-O
 off macOS takes `LIPO`, `OTOOL` and `NM` overrides (`macho-slices.sh`, `macho-cxxabi.sh`). The seams fetch stevedore over the
 network on first use, cached, unless `STEVEDORE` names a binary of the pinned version;
@@ -963,7 +963,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   implementation. Only the product name passed to the notes builder is genuinely per-repo.
 - Wrapping rather than deleting keeps every call site working: `sh build/version.sh auto` on a dev
   box, the repo's own tests, `versions.sh`, and the release workflow.
-- **`$MAVERICKS_ROOT` is the family-wide root variable** the shared logic reads. The wrapper sets it
+- **`$MAVERGREEN_REPO_ROOT` is the family-wide root variable** the shared logic reads. The wrapper sets it
   from its own location (a wrapper knows its repo definitively); `lib.sh` only defaults it, since it
   may be sourced where the root is already established. Repo-specific helpers go in the repo's
   `lib.sh` *after* sourcing the shared one — never as a copy of a shared function.
@@ -1070,7 +1070,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   lines (golang's `1.26`); it is normalized internally, so both `1.26` and `1.26.*` work.
   The generator `cd`s to the repo root before it runs, so **`--out` resolves against the repo root**,
   not the caller's cwd — a relative path from a subdirectory (a `build/` step, say) will not land where
-  you typed it; pass an absolute path or one rooted at `$MAVERICKS_ROOT` from anywhere but the root.
+  you typed it; pass an absolute path or one rooted at `$MAVERGREEN_REPO_ROOT` from anywhere but the root.
 - **`release-notes-file.sh` is now legacy — no product repo calls it.** It was kept as a thin
   back-compat wrapper (positional `<TAG> <FULL_VERSION> [PRODUCT_NAME]`, `MAVERICKS_NOTES_LINE`
   forwarded to `--line`) specifically so the repos still on the old signature would get the standard

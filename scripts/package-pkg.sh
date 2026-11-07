@@ -47,7 +47,7 @@ APP_NAME="${APP_REL##*/}"
 [ "$(basename "$APP")" = "$APP_NAME" ] \
   || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
 [ -d "$APP" ] || { echo "package-pkg: no such app: $APP" >&2; exit 1; }
-cmake_min="$(MAVERGREEN_ROOT="$SELF/.." mg_value products/shipyard/requires/cmake/min 2>/dev/null || true)"
+cmake_min="$(MAVERGREEN_REPO_ROOT="$SELF/.." mg_value products/shipyard/requires/cmake/min 2>/dev/null || true)"
 [ -n "$cmake_min" ] || { echo "package-pkg: no cmake minimum in $SELF/../.mavergreen/products/shipyard/requires/cmake/min" >&2; exit 1; }
 require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-separated
   _flag="$1"; _dir="$2"; _allowed="$3"

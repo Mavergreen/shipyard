@@ -9,7 +9,7 @@ here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 _tmp="${TMPDIR:-/tmp}"
 w="$(cd -P "$(mktemp -d "${_tmp%/}/shipyard-provision-on-target.XXXXXX")" && pwd)"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $*"; exit 1; }
-out="$(CI= MAVERGREEN_ROOT="$root" MAVERGREEN_PREFIX="$w/no-prefix" MAVERGREEN_PKG_CACHE="$w/cache" \
+out="$(CI= MAVERGREEN_REPO_ROOT="$root" MAVERGREEN_PREFIX="$w/no-prefix" MAVERGREEN_PKG_CACHE="$w/cache" \
   sh "$root/scripts/shipyard-provision" --only cmake --into "$w/into" 2>"$w/err")" \
   || { cat "$w/err"; fail "shipyard-provision --only cmake failed"; }
 case "$out" in

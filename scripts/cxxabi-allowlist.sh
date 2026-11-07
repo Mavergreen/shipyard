@@ -22,9 +22,9 @@ if [ $# -eq 1 ]; then
   archive="$1"
 else
   . "$SELF/mavergreen-meta.sh"
-  version="$(MAVERGREEN_ROOT="$SELF/.." mg_value ingredients/recaulk/VERSION)" || version=
+  version="$(MAVERGREEN_REPO_ROOT="$SELF/.." mg_value ingredients/recaulk/VERSION)" || version=
   [ -n "$version" ] || die "$SELF/../.mavergreen/ingredients/recaulk/VERSION names no Recaulk release"
-  recaulk="$(MAVERGREEN_ROOT="$SELF/.." CI= sh "$SELF/shipyard-provision" --only recaulk --into "$t")" || die "could not fetch recaulk $version"
+  recaulk="$(MAVERGREEN_REPO_ROOT="$SELF/.." CI= sh "$SELF/shipyard-provision" --only recaulk --into "$t")" || die "could not fetch recaulk $version"
   archive="${recaulk#recaulk=}/lib/librecaulk.a"
 fi
 [ -f "$archive" ] || die "no archive at $archive"

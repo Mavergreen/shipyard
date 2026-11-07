@@ -70,7 +70,7 @@ entry_bytes() {   # $1 = declared path, relative to the repo root
 }
 
 assert_upstream_is_version_sh_input() {   # $1 = the declared path
-  if ! kind="$(MAVERGREEN_ROOT="$ROOT" mg_upstream_kind)"; then
+  if ! kind="$(MAVERGREEN_REPO_ROOT="$ROOT" mg_upstream_kind)"; then
     echo "release-state: $ROOT/.mavergreen/upstream/ needs exactly one of VERSION, COMMIT or PIN" >&2
     exit 2
   fi

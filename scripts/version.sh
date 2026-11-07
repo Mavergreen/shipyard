@@ -11,7 +11,7 @@
 # spec: tests/version-lib-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/lib.sh"          # sets MAVERICKS_ROOT if unset; provides upstream_version()
+. "$SELF/lib.sh"          # sets MAVERGREEN_REPO_ROOT if unset; provides upstream_version()
 
 mode="${1:-auto}"
 U="$(upstream_version)"
@@ -19,7 +19,7 @@ U="$(upstream_version)"
 if [ -n "${MAVERICKS_TAGS+x}" ]; then
   tags="$MAVERICKS_TAGS"
 else
-  tags="$(git -C "$MAVERICKS_ROOT" tag --list "${U}-mavericks.*" 2>/dev/null || true)"
+  tags="$(git -C "$MAVERGREEN_REPO_ROOT" tag --list "${U}-mavericks.*" 2>/dev/null || true)"
 fi
 
 maxN=0

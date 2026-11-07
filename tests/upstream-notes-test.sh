@@ -11,7 +11,7 @@ git config user.email t@example.com; git config user.name tester
 printf 'x\n' > README
 git add -A; git commit -qm base
 git tag 1.0.0-mavericks.1; git tag 1.0.0-mavericks.2
-export MAVERICKS_ROOT="$w"
+export MAVERGREEN_REPO_ROOT="$w"
 
 out="$(sh "$S" 1.1.0-mavericks.1)"
 [ -z "$out" ] || { echo "FAIL: no hook (a repo that has not adopted it, or a self-upstream repo) must produce nothing, successfully: got '$out'"; exit 1; }
@@ -49,11 +49,11 @@ git commit -q --allow-empty -m later     # releases are tagged BEHIND the tip, a
 git clone -q --depth 1 "file://$w" "$w/shallow"
 [ -z "$(git -C "$w/shallow" tag)" ] || { echo "FAIL fixture: shallow clone carried tags"; exit 1; }
 mkdir -p "$w/shallow/.mavergreen/hooks"; cp .mavergreen/hooks/upstream-release-notes-url "$w/shallow/.mavergreen/hooks/"
-out="$(MAVERICKS_ROOT="$w/shallow" sh "$S" 1.0.0-mavericks.3 2>"$w/err")"
+out="$(MAVERGREEN_REPO_ROOT="$w/shallow" sh "$S" 1.0.0-mavericks.3 2>"$w/err")"
 [ -z "$out" ] || { echo "FAIL: tags a shallow clone cannot see must not read as \"no earlier release\", or it calls every repackage new: $out"; exit 1; }
 grep -q 'upstream-notes' "$w/err" || { echo "FAIL shallow not warned"; exit 1; }
 mkdir -p "$w/not-a-repo/.mavergreen/hooks"; cp .mavergreen/hooks/upstream-release-notes-url "$w/not-a-repo/.mavergreen/hooks/"
-out="$(cd "$w/not-a-repo" && MAVERICKS_ROOT="$w/not-a-repo" GIT_CEILING_DIRECTORIES="$w" \
+out="$(cd "$w/not-a-repo" && MAVERGREEN_REPO_ROOT="$w/not-a-repo" GIT_CEILING_DIRECTORIES="$w" \
         sh "$S" 1.0.0-mavericks.3 2>"$w/err")"
 [ -z "$out" ] || { echo "FAIL: a git that refuses the repo lists no tags, which must not read as \"no earlier release\" either: $out"; exit 1; }
 grep -q 'upstream-notes' "$w/err" || { echo "FAIL unlistable tags not warned"; exit 1; }
@@ -92,12 +92,12 @@ u1="$work/u-new"
 mk_repo_with_hook "$u1" '#!/bin/sh
 printf "https://example.com/notes/%s\n" "$1"'
 ( cd "$u1" && git tag 1.2.3-mavericks.1 )
-out="$(cd "$u1" && MAVERICKS_ROOT="$u1" sh "$S" --url-only 1.2.3-mavericks.1)" && rc=0 || rc=$?
+out="$(cd "$u1" && MAVERGREEN_REPO_ROOT="$u1" sh "$S" --url-only 1.2.3-mavericks.1)" && rc=0 || rc=$?
 [ "$rc" = 0 ] && [ "$out" = "https://example.com/notes/1.2.3" ] \
   || { echo "FAIL --url-only new upstream: rc=$rc out='$out'"; exit 1; }
 
 ( cd "$u1" && git tag 1.2.3-mavericks.2 )
-out="$(cd "$u1" && MAVERICKS_ROOT="$u1" sh "$S" --url-only 1.2.3-mavericks.2 2>/dev/null)" && rc=0 || rc=$?
+out="$(cd "$u1" && MAVERGREEN_REPO_ROOT="$u1" sh "$S" --url-only 1.2.3-mavericks.2 2>/dev/null)" && rc=0 || rc=$?
 [ "$rc" = 3 ] && [ -z "$out" ] || { echo "FAIL: a repackage (an earlier -mavericks.N of the same upstream exists) must exit 3 with no output: rc=$rc out='$out'"; exit 1; }
 
 u2="$work/u-nohook"
@@ -105,17 +105,17 @@ mk_repo_with_hook "$u2" '#!/bin/sh
 exit 0'
 rm "$u2/.mavergreen/hooks/upstream-release-notes-url"
 ( cd "$u2" && git tag 1.2.3-mavericks.1 )
-( cd "$u2" && MAVERICKS_ROOT="$u2" sh "$S" --url-only 1.2.3-mavericks.1 >/dev/null 2>&1 ) && rc=0 || rc=$?
+( cd "$u2" && MAVERGREEN_REPO_ROOT="$u2" sh "$S" --url-only 1.2.3-mavericks.1 >/dev/null 2>&1 ) && rc=0 || rc=$?
 [ "$rc" = 4 ] || { echo "FAIL: no hook at all must exit 4: rc=$rc"; exit 1; }
 
 u3="$work/u-junk"
 mk_repo_with_hook "$u3" '#!/bin/sh
 echo not-a-url'
 ( cd "$u3" && git tag 1.2.3-mavericks.1 )
-( cd "$u3" && MAVERICKS_ROOT="$u3" sh "$S" --url-only 1.2.3-mavericks.1 >/dev/null 2>&1 ) && rc=0 || rc=$?
+( cd "$u3" && MAVERGREEN_REPO_ROOT="$u3" sh "$S" --url-only 1.2.3-mavericks.1 >/dev/null 2>&1 ) && rc=0 || rc=$?
 [ "$rc" = 5 ] || { echo "FAIL: a hook that prints junk must exit 5, NOT 0 -- a broken link must be distinguishable from no link: rc=$rc"; exit 1; }
 
-out="$(cd "$u3" && MAVERICKS_ROOT="$u3" sh "$S" 1.2.3-mavericks.1 2>/dev/null)" && rc=0 || rc=$?
+out="$(cd "$u3" && MAVERGREEN_REPO_ROOT="$u3" sh "$S" 1.2.3-mavericks.1 2>/dev/null)" && rc=0 || rc=$?
 [ "$rc" = 0 ] && [ -z "$out" ] || { echo "FAIL: the DEFAULT mode is unchanged by --url-only -- section or nothing, always 0: rc=$rc out='$out'"; exit 1; }
 
 # spec: SKILL.md "Release notes" -- a shallow clone hides the tags, so an unknown tag list must
@@ -132,10 +132,10 @@ git clone -q --depth 1 "file://$u4" "$u4s"
 [ -z "$(git -C "$u4s" tag)" ] || { echo "FAIL fixture: shallow clone carried tags"; exit 1; }
 mkdir -p "$u4s/.mavergreen/hooks"; cp "$u4/.mavergreen/hooks/upstream-release-notes-url" "$u4s/.mavergreen/hooks/"
 
-( cd "$u4s" && MAVERICKS_ROOT="$u4s" sh "$S" --url-only 1.2.3-mavericks.1 >/dev/null 2>&1 ) && rc=0 || rc=$?
+( cd "$u4s" && MAVERGREEN_REPO_ROOT="$u4s" sh "$S" --url-only 1.2.3-mavericks.1 >/dev/null 2>&1 ) && rc=0 || rc=$?
 [ "$rc" = 5 ] || { echo "FAIL --url-only shallow clone: rc=$rc"; exit 1; }
 
-out="$(cd "$u4s" && MAVERICKS_ROOT="$u4s" sh "$S" 1.2.3-mavericks.1 2>/dev/null)" && rc=0 || rc=$?
+out="$(cd "$u4s" && MAVERGREEN_REPO_ROOT="$u4s" sh "$S" 1.2.3-mavericks.1 2>/dev/null)" && rc=0 || rc=$?
 [ "$rc" = 0 ] && [ -z "$out" ] || { echo "FAIL default mode shallow clone changed: rc=$rc out='$out'"; exit 1; }
 
 echo "PASS: upstream-notes"

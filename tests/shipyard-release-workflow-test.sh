@@ -318,7 +318,7 @@ cm_steps = [i for i, st in enumerate(steps)
             if "runner.os == 'macOS'" in str(st.get("if", "")) and "fetch-release-pkg.sh\" cmake " in (st.get("run") or "")]
 sy_steps = [i for i, st in enumerate(steps)
             if "runner.os == 'macOS'" in str(st.get("if", "")) and "fetch-release-pkg.sh\" shipyard " in (st.get("run") or "")]
-for pat, why in ((r'^v="\$\(\. "\$root/scripts/mavergreen-meta\.sh" && MAVERGREEN_ROOT="\$root" mg_value ingredients/cmake/VERSION\)" \|\| v=$',
+for pat, why in ((r'^v="\$\(\. "\$root/scripts/mavergreen-meta\.sh" && MAVERGREEN_REPO_ROOT="\$root" mg_value ingredients/cmake/VERSION\)" \|\| v=$',
                   "install@v1 never reads the cmake pin from its own checkout ($root/.mavergreen/ingredients/cmake/VERSION)"),
                  (r'^pkg="\$\(sh "\$root/scripts/fetch-release-pkg\.sh" cmake "\$v" "cmake-\$v\.pkg" "\$d"\)"$',
                   "install@v1 never fetches cmake-<pin>.pkg from the Mavergreen/cmake release <pin> through "

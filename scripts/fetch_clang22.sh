@@ -17,9 +17,9 @@ S="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "fetch_clang22: $*" >&2; exit 1; }
 [ $# -eq 1 ] && [ -d "$1" ] || { echo "usage: fetch_clang22.sh ROOT (a repo holding .mavergreen/ingredients/clang22)" >&2; exit 2; }
 . "$S/mavergreen-meta.sh"
-MAVERGREEN_ROOT="$(cd "$1" && pwd)"
-export MAVERGREEN_ROOT
-P="$MAVERGREEN_ROOT/.mavergreen/ingredients/clang22"
+MAVERGREEN_REPO_ROOT="$(cd "$1" && pwd)"
+export MAVERGREEN_REPO_ROOT
+P="$MAVERGREEN_REPO_ROOT/.mavergreen/ingredients/clang22"
 V="$(mg_value ingredients/clang22/VERSION)" || { echo "fetch_clang22: $P has no VERSION" >&2; exit 2; }
 case "$V" in ''|.|..|*[!a-zA-Z0-9._-]*) echo "fetch_clang22: $P/VERSION holds '$V', not a release tag" >&2; exit 2 ;; esac
 host="${CLANG22_HOST:-}"

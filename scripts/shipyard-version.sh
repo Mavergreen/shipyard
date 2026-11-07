@@ -14,7 +14,7 @@
 set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
 . "$root/scripts/mavergreen-meta.sh"
-MAVERGREEN_ROOT="$root"
+MAVERGREEN_REPO_ROOT="$root"
 line="$(mg_value upstream/VERSION)" || { echo "shipyard-version: no $root/.mavergreen/upstream/VERSION" >&2; exit 1; }
 
 case "$line" in

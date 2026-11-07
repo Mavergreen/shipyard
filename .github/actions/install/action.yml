@@ -64,7 +64,7 @@ runs:
       run: |
         set -eu
         root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
-        v="$(. "$root/scripts/mavergreen-meta.sh" && MAVERGREEN_ROOT="$root" mg_value ingredients/cmake/VERSION)" || v=
+        v="$(. "$root/scripts/mavergreen-meta.sh" && MAVERGREEN_REPO_ROOT="$root" mg_value ingredients/cmake/VERSION)" || v=
         [ -n "$v" ] || { echo "::error::$root/.mavergreen/ingredients/cmake/VERSION names no cmake release"; exit 1; }
         d="$RUNNER_TEMP/cmake-pkg"; mkdir -p "$d"
         pkg="$(sh "$root/scripts/fetch-release-pkg.sh" cmake "$v" "cmake-$v.pkg" "$d")"

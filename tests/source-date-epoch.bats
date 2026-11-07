@@ -4,7 +4,7 @@
 setup() {
   EPOCHSH="$BATS_TEST_DIRNAME/../scripts/source-date-epoch.sh"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/source-date-epoch-test.XXXXXX")" && pwd)"
-  unset SOURCE_DATE_EPOCH MAVERICKS_ROOT
+  unset SOURCE_DATE_EPOCH MAVERGREEN_REPO_ROOT
   export GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
   commit_at "$WORK/product" 1700000000
   commit_at "$WORK/other" 1600000000
@@ -19,21 +19,21 @@ commit_at() {
 }
 
 @test "SOURCE_DATE_EPOCH wins" {
-  SOURCE_DATE_EPOCH=42 MAVERICKS_ROOT="$WORK/product" run sh "$EPOCHSH"
+  SOURCE_DATE_EPOCH=42 MAVERGREEN_REPO_ROOT="$WORK/product" run sh "$EPOCHSH"
   [ "$status" -eq 0 ]
   [ "$output" = 42 ]
 }
 
-@test "seam run from / with MAVERICKS_ROOT set takes that repo's time" {
+@test "seam run from / with MAVERGREEN_REPO_ROOT set takes that repo's time" {
   cd /
-  MAVERICKS_ROOT="$WORK/product" run sh "$EPOCHSH"
+  MAVERGREEN_REPO_ROOT="$WORK/product" run sh "$EPOCHSH"
   [ "$status" -eq 0 ]
   [ "$output" = 1700000000 ]
 }
 
-@test "MAVERICKS_ROOT beats the cwd's repo, and says nothing on stderr" {
+@test "MAVERGREEN_REPO_ROOT beats the cwd's repo, and says nothing on stderr" {
   cd "$WORK/other"
-  MAVERICKS_ROOT="$WORK/product" sh "$EPOCHSH" > "$WORK/out" 2> "$WORK/err"
+  MAVERGREEN_REPO_ROOT="$WORK/product" sh "$EPOCHSH" > "$WORK/out" 2> "$WORK/err"
   [ "$(cat "$WORK/out")" = 1700000000 ]
   [ ! -s "$WORK/err" ]
 }
@@ -45,17 +45,17 @@ commit_at() {
   [ "$(cat "$WORK/err")" = "source-date-epoch: no SOURCE_DATE_EPOCH; using the commit time of $WORK/other" ]
 }
 
-@test "a MAVERICKS_ROOT that is not a work tree falls back to the cwd's repo" {
+@test "a MAVERGREEN_REPO_ROOT that is not a work tree falls back to the cwd's repo" {
   cd "$WORK/other"
-  MAVERICKS_ROOT="$WORK/plain" run sh "$EPOCHSH"
+  MAVERGREEN_REPO_ROOT="$WORK/plain" run sh "$EPOCHSH"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"using the commit time of $WORK/other"* ]] || falsen  [[ "$output" == *"MAVERICKS_ROOT=$WORK/plain is not a git work tree"* ]] || false
+  [[ "$output" == *"using the commit time of $WORK/other"* ]] || falsen  [[ "$output" == *"MAVERGREEN_REPO_ROOT=$WORK/plain is not a git work tree"* ]] || false
   [[ "$output" == *1600000000 ]] || false
 }
 
 @test "no SOURCE_DATE_EPOCH and no repo anywhere fails naming it" {
   cd "$WORK/plain"
-  MAVERICKS_ROOT="$WORK/plain" run sh "$EPOCHSH"
+  MAVERGREEN_REPO_ROOT="$WORK/plain" run sh "$EPOCHSH"
   [ "$status" -eq 1 ]
   [[ "$output" == *SOURCE_DATE_EPOCH* ]] || false
 }

@@ -11,7 +11,7 @@ printf '1.0\n' > "$M/upstream/VERSION"
 printf '1.26.1\n' > "$M/ingredients/golang/VERSION"
 printf 'patches/**\nsrc/a b/*.c\n' > "$M/ingredients/patches/watch"
 
-decide() { CHANGED="$1" MAVERGREEN_ROOT="$work" sh "$S"; }
+decide() { CHANGED="$1" MAVERGREEN_REPO_ROOT="$work" sh "$S"; }
 
 out="$(decide '.mavergreen/upstream/VERSION')"
 [ "$out" = "SKIP=own-upstream-changed" ] || { echo "FAIL own-upstream: $out"; exit 1; }

@@ -8,7 +8,7 @@ SHIPYARD_SCRIPTS="$here/../scripts"; export SHIPYARD_SCRIPTS   # how a consumer 
 w="$(mktemp -d "${TMPDIR:-/tmp}/version-lib-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 mkdir -p "$w/.mavergreen/upstream"
 printf '1.26.5\n' > "$w/.mavergreen/upstream/VERSION"
-export MAVERICKS_ROOT="$w"
+export MAVERGREEN_REPO_ROOT="$w"
 
 got="$(. "$L"; upstream_version)"
 [ "$got" = 1.26.5 ] || { echo "FAIL upstream_version: '$got'"; exit 1; }
@@ -44,36 +44,36 @@ printf '%s\n' "$out" | grep -qx 'FULL=1.26.5-mavericks.9' || { echo "FAIL: with 
 c="$w/commit"; mkdir -p "$c/.mavergreen/upstream" "$c/.mavergreen/hooks"
 printf '0123456789abcdef0123456789abcdef01234567\n# renovate: datasource=git-refs depName=https://example.com/x\n' > "$c/.mavergreen/upstream/COMMIT"
 printf '#!/bin/sh\nprintf "20260727\\n"\n' > "$c/.mavergreen/hooks/derive-upstream-version"
-out="$(MAVERICKS_ROOT="$c" MAVERICKS_TAGS='20260727-mavericks.2' sh "$V" auto)"
+out="$(MAVERGREEN_REPO_ROOT="$c" MAVERICKS_TAGS='20260727-mavericks.2' sh "$V" auto)"
 printf '%s\n' "$out" | grep -qx 'FULL=20260727-mavericks.2' \
   || { echo "FAIL: a COMMIT upstream takes its version from hooks/derive-upstream-version: $out"; exit 1; }
 
 p="$w/pin"; mkdir -p "$p/.mavergreen/upstream" "$p/.mavergreen/hooks" "$p/sub"
 printf 'v1.5.7@f8745da0123456789abcdef0123456789abcdef0\n' > "$p/.mavergreen/upstream/PIN"
 printf '#!/bin/sh\nIFS= read -r r < .mavergreen/upstream/PIN\nr="${r%%%%@*}"\nprintf "%%s\\n" "${r#v}"\n' > "$p/.mavergreen/hooks/derive-upstream-version"
-out="$(cd "$p/sub" && MAVERICKS_ROOT="$p" MAVERICKS_TAGS='' sh "$V" auto)"
+out="$(cd "$p/sub" && MAVERGREEN_REPO_ROOT="$p" MAVERICKS_TAGS='' sh "$V" auto)"
 printf '%s\n' "$out" | grep -qx 'FULL=1.5.7-mavericks.1' \
   || { echo "FAIL: a PIN upstream takes its version from hooks/derive-upstream-version, run at the repo root: $out"; exit 1; }
 
 rm "$p/.mavergreen/hooks/derive-upstream-version"
-if out="$(MAVERICKS_ROOT="$p" MAVERICKS_TAGS='' sh "$V" auto 2>&1)"; then
+if out="$(MAVERGREEN_REPO_ROOT="$p" MAVERICKS_TAGS='' sh "$V" auto 2>&1)"; then
   echo "FAIL: a PIN upstream with no derive hook must fail, not invent a version: $out"; exit 1
 fi
 printf '%s\n' "$out" | grep -q 'hooks/derive-upstream-version' || { echo "FAIL: the refusal names the missing hook: $out"; exit 1; }
 
 printf '#!/bin/sh\nexit 0\n' > "$p/.mavergreen/hooks/derive-upstream-version"
-if out="$(MAVERICKS_ROOT="$p" MAVERICKS_TAGS='' sh "$V" auto 2>&1)"; then
+if out="$(MAVERGREEN_REPO_ROOT="$p" MAVERICKS_TAGS='' sh "$V" auto 2>&1)"; then
   echo "FAIL: a derive hook that prints nothing must fail, not yield '-mavericks.1': $out"; exit 1
 fi
 
 l="$w/legacy"; mkdir -p "$l"; printf '1.0.0\n' > "$l/UPSTREAM_VERSION"
-if out="$(MAVERICKS_ROOT="$l" MAVERICKS_TAGS='' sh "$V" auto 2>&1)"; then
+if out="$(MAVERGREEN_REPO_ROOT="$l" MAVERICKS_TAGS='' sh "$V" auto 2>&1)"; then
   echo "FAIL: a root UPSTREAM_VERSION is no longer read: $out"; exit 1
 fi
 printf '%s\n' "$out" | grep -q '.mavergreen/upstream' || { echo "FAIL: the refusal names .mavergreen/upstream/: $out"; exit 1; }
 
 t="$w/two"; mkdir -p "$t/.mavergreen/upstream"; printf '1.0.0\n' > "$t/.mavergreen/upstream/VERSION"; printf 'v1@0123456789abcdef0123456789abcdef01234567\n' > "$t/.mavergreen/upstream/PIN"
-if MAVERICKS_ROOT="$t" MAVERICKS_TAGS='' sh "$V" auto >/dev/null 2>&1; then
+if MAVERGREEN_REPO_ROOT="$t" MAVERICKS_TAGS='' sh "$V" auto >/dev/null 2>&1; then
   echo "FAIL: an upstream with both VERSION and PIN is ambiguous and must fail"; exit 1
 fi
 

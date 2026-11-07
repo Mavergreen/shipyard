@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: repackage-decision.sh
 #          env in:  CHANGED (newline-separated paths changed this push)
-#                   MAVERGREEN_ROOT (the repo; default: the git top level)
+#                   MAVERGREEN_REPO_ROOT (the repo; default: the git top level)
 #          stdout:  DISPATCH  or  SKIP=<reason>
 #          SKIP=own-upstream-changed when any path is under .mavergreen/upstream/ (a new own upstream
 #          is the release's job, not a repackage's); else DISPATCH when any path is under
