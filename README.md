@@ -186,6 +186,59 @@ mavericks_add_updater_app(
 `foo` is the product's short name in shipyard's `scripts/product-names`; the app (`foo-updater.app`),
 its bundle id and its feed are derived from that line.
 
+## SDK declaration metadata
+
+Some Objective-C source needs a declaration the 10.9 SDK lacks, such as `NSArray`'s lightweight
+generic parameter. Recaulk ships recipes for those edits as data
+(`/usr/local/mavergreen/recaulk/share/sdk-metadata/recipes.json`, schema 1); `MavericksSDKMetadata`
+applies them without touching the SDK:
+
+```cmake
+include(MavericksSDKMetadata)
+mavericks_materialize_sdk_metadata(overlay
+  SDK        "${CMAKE_OSX_SYSROOT}"
+  RECIPES    "${recipes_json}"
+  IDS        foundation-array-generics-v1
+  OUTPUT_DIR "${fresh_dir}")
+```
+
+It refuses, before writing anything, a recipe file of another schema, SDK name or SDK archive than
+the pinned one; an unknown, repeated or overlapping recipe; a header whose SHA-256 is not the
+recipe's; a header or alias that resolves outside the SDK, or an alias that is not the same file; a
+replacement whose text does not occur exactly once; and an `OUTPUT_DIR` that exists or resolves into
+the SDK. Otherwise `OUTPUT_DIR` appears whole, holding the edited headers and `overlay.json`, a clang
+VFS overlay that maps each header's path and its aliases (under the SDK path as given and as
+resolved) onto the edited copy; `overlay` is set to its path. Every `old` is found in the SDK's own
+text, never in another replacement's output, and two replacements may not overlap. The overlay
+matches paths exactly: a spelling it does not list (`Versions/Current/Headers/NSArray.h`, or another
+case) reaches the SDK's own header.
+
+A product opts one target in, explicitly:
+
+```cmake
+mavericks_target_sdk_metadata(TARGET iTerm2
+  SDK        "${CMAKE_OSX_SYSROOT}"
+  RECIPES    "${recipes_json}"
+  IDS        foundation-array-generics-v1
+  OUTPUT_DIR "${CMAKE_BINARY_DIR}/sdk-metadata")
+```
+
+That target's Objective-C and Objective-C++ compiles get `-ivfsoverlay <overlay>` beside their
+unchanged `-isysroot`; its C and C++ compiles, every other target and every link are untouched. The
+overlay lives in a generation under `OUTPUT_DIR` named for its inputs: the SDK path, the recipe
+file's bytes, the ids, the Objective-C compilers and this module's own bytes. A reconfigure with the
+same inputs reuses the generation once its recipes validate again against the SDK's current bytes
+and pin, and every file in it matches the stamp written beside it; a
+generation without that stamp, or with a changed, added or missing file, is refused and left as it
+is (remove it to regenerate). `SDK` must be the configure's `CMAKE_OSX_SYSROOT`, or the overlay
+could never apply.
+
+What it does not do: an overlay changes declarations only, so a recipe can make generic syntax
+compile but adds no methods, classes or runtime behaviour, and a binary built with it needs nothing
+extra on 10.9. The compiler must read clang VFS overlays (clang22 does); the recipes cover only what
+Recaulk ships, and `tests/sdk-metadata-consumer-test.sh` (run by hand on each box, see
+`tests/maintainer-tests`) is the evidence for the import orders it checks.
+
 ## Conventions for Claude Code
 
 The family's conventions ship as the `mavergreen` Claude Code plugin, from this repo's

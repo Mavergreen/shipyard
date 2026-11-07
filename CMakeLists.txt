@@ -114,6 +114,7 @@ install(FILES
   MavericksSparkle.cmake
   MavericksVersion.cmake
   MavericksDecisions.cmake
+  MavericksSDKMetadata.cmake
   default.json
   DESTINATION "${_dest}")
 
