@@ -7,7 +7,6 @@
 # spec: tests/ingredients-settled.bats
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/registry-lookup.sh"
 . "$SELF/lib.sh"
 
 work=""; _decided=""
@@ -69,26 +68,28 @@ work="$(mktemp -d "${_tmp%/}/ingredients-settled.XXXXXX")"
 mkdir -p "$work/cache"
 TAB="$(printf '\t')"
 
-value_of() {
-  if [ -n "$2" ]; then pin_value "$1" "$2"; else tr -d '[:space:]' < "$1"; fi
+value_of() { head -n 1 "$1" | tr -d '[:space:]'; }
+
+ingredients_at() {
+  git cat-file -e "$1:.mavergreen/ingredients" 2>/dev/null || return 1
+  git ls-tree -d --name-only "$1:.mavergreen/ingredients" || fail "cannot list .mavergreen/ingredients at $1"
 }
 
-declared_at() {
-  mkdir -p "$work/$1"
-  if git cat-file -e "$2:INGREDIENTS.md" 2>/dev/null; then
-    git show "$2:INGREDIENTS.md" > "$work/$1/INGREDIENTS.md"
-  fi
-  sh "$SELF/declared-state.sh" "$work/$1" > "$work/$1.decl" 2> "$work/$1.err" \
-    || fail "$repo's Declared state at $2: $(tr '\n' ' ' < "$work/$1.err")"
+ingredient_file() {
+  git cat-file -e "$1:.mavergreen/ingredients/$2/$3" 2>/dev/null || return 1
+  git show "$1:.mavergreen/ingredients/$2/$3" > "$work/if" 2>/dev/null || fail "cannot read .mavergreen/ingredients/$2/$3 at $1"
+  IF="$(value_of "$work/if")"
+  [ -n "$IF" ]
 }
 
-spec_of() { awk -F "$TAB" -v n="$1" '$1 == n { print $2; exit }' "$2"; }
-
-local_value() {
-  LV=""
-  git show "$1:${2%%:*}" > "$work/lv" 2>/dev/null || return 1
-  case "$2" in *:*) LV="$(value_of "$work/lv" "${2##*:}")" ;; *) LV="$(value_of "$work/lv" "")" ;; esac
-  [ -n "$LV" ]
+local_pin() {
+  LPIN=""
+  ingredient_file "$1" "$2" product || return 1
+  ingredient_file "$1" "$2" REPO || return 2
+  case "$IF" in Mavergreen/?*) ;; *) fail "$2's REPO at $1 is '$IF', not Mavergreen/<repo>" ;; esac
+  LREPO="${IF#*/}"
+  ingredient_file "$1" "$2" VERSION || fail "$2 has a product and a REPO at $1, but no VERSION"
+  LPIN="$IF"
 }
 
 is_version() { _iv=0; mavergreen_vercmp "$1" "$1" >/dev/null || _iv=$?; [ "$_iv" -ne 2 ]; }
@@ -134,28 +135,42 @@ print("%s %d" % (tag, epoch))
 PY
 }
 
-declared_at base "$base"
-declared_at head "$head"
+dir_names() {
+  python3 - "$1" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1]) as f:
+        d = json.load(f)
+except ValueError:
+    sys.exit("not JSON")
+if not isinstance(d, list):
+    sys.exit("not a directory listing")
+for e in d:
+    if isinstance(e, dict) and e.get("type") == "dir" and isinstance(e.get("name"), str):
+        print(e["name"])
+PY
+}
 
 : > "$work/bumped"; : > "$work/pinned"
-while IFS="$TAB" read -r name spec; do
-  [ -n "$name" ] && [ "$name" != upstream ] || continue
-  rc=0; registry_lookup repo "$name" || rc=$?
-  case "$rc" in
+if ingredients_at "$base" > "$work/base.names"; then :; else
+  echo "::notice::ingredients-settled: no family pin at $base"
+fi
+ingredients_at "$head" > "$work/head.names" || : > "$work/head.names"
+while IFS= read -r name; do
+  [ -n "$name" ] || continue
+  _lp=0; local_pin "$head" "$name" || _lp=$?
+  case "$_lp" in
     0) ;;
-    1) continue ;;
-    *) fail "cannot look up $name in shipyard's registry: $REG_WHY" ;;
+    2) echo "::warning::ingredients-settled: $name has a product and no REPO at $head; not checked"; continue ;;
+    *) continue ;;
   esac
-  nrepo="$REG_V"
-  local_value "$head" "$spec" || fail "$name is declared from $spec, which $head cannot read"
-  new="$LV"
+  nrepo="$LREPO"; new="$LPIN"
   printf '%s\t%s\t%s\n' "$name" "$nrepo" "$new" >> "$work/pinned"
-  old_spec="$(spec_of "$name" "$work/base.decl")"
-  local_value "$base" "${old_spec:-$spec}" || continue
-  [ "$LV" != "$new" ] || continue
+  local_pin "$base" "$name" || continue
+  [ "$LPIN" != "$new" ] || continue
   is_version "$new" || fail "$name is pinned at '$new' in $head, which is not a version"
   printf '%s\t%s\t%s\n' "$name" "$nrepo" "$new" >> "$work/bumped"
-done < "$work/head.decl"
+done < "$work/head.names"
 
 [ -s "$work/bumped" ] || { echo "SETTLED no Mavergreen ingredient changed"; finish 0; }
 
@@ -172,37 +187,36 @@ YPIN=""; YPIN_NAME=""
 y_pin() {
   YPIN=""; YPIN_NAME=""
   _d="$work/y-$1"
-  if [ ! -f "$_d.repos" ]; then
-    mkdir -p "$_d"
-    if gh_get raw "repos/Mavergreen/$1/contents/INGREDIENTS.md?ref=$YTAG"; then cp "$GH_OUT" "$_d/INGREDIENTS.md"; fi
-    sh "$SELF/declared-state.sh" "$_d" < /dev/null > "$_d.decl" 2> "$_d.err" \
-      || fail "Mavergreen/$1's Declared state at $YTAG: $(tr '\n' ' ' < "$_d.err")"
-    : > "$_d.repos.part"
-    while IFS="$TAB" read -r _n _s; do
-      [ "$_n" != upstream ] || continue
-      _rc=0; registry_lookup repo "$_n" < /dev/null || _rc=$?
-      case "$_rc" in
-        0) printf '%s\t%s\t%s\n' "$_n" "$_s" "$REG_V" >> "$_d.repos.part" ;;
-        1) echo "::warning::$1: Declared state names $_n, which the registry doesn't know; its pins are not checked" ;;
-        *) fail "cannot look up $_n in shipyard's registry: $REG_WHY" ;;
-      esac
-    done < "$_d.decl"
-    mv "$_d.repos.part" "$_d.repos"
+  if [ ! -f "$_d.pins" ]; then
+    : > "$_d.pins.part"
+    if gh_get json "repos/Mavergreen/$1/contents/.mavergreen/ingredients?ref=$YTAG"; then
+      dir_names "$GH_OUT" > "$_d.names" 2> "$_d.err" || fail "Mavergreen/$1's .mavergreen/ingredients at $YTAG: $(tr '\n' ' ' < "$_d.err")"
+      while IFS= read -r _n; do
+        _b="repos/Mavergreen/$1/contents/.mavergreen/ingredients/$_n"
+        gh_get raw "$_b/product?ref=$YTAG" < /dev/null || continue
+        _r=""
+        if gh_get raw "$_b/REPO?ref=$YTAG" < /dev/null; then _r="$(value_of "$GH_OUT")"; fi
+        if [ -z "$_r" ]; then
+          echo "::warning::$1: ingredient $_n has a product and no REPO; its pin is not checked"
+          continue
+        fi
+        case "$_r" in Mavergreen/?*) ;; *) fail "Mavergreen/$1's ingredient $_n at $YTAG has REPO '$_r', not Mavergreen/<repo>" ;; esac
+        gh_get raw "$_b/VERSION?ref=$YTAG" < /dev/null \
+          || fail "Mavergreen/$1's ingredient $_n at $YTAG has a REPO but no VERSION"
+        _v="$(value_of "$GH_OUT")"
+        [ -n "$_v" ] || fail "Mavergreen/$1's ingredient $_n at $YTAG has an empty VERSION"
+        is_version "$_v" || fail "Mavergreen/$1's $YTAG pins $_n at '$_v', which is not a version"
+        printf '%s\t%s\t%s\n' "$_n" "${_r#*/}" "$_v" >> "$_d.pins.part"
+      done < "$_d.names"
+    else
+      echo "::notice::ingredients-settled: no family pin at $YTAG ($1)"
+    fi
+    mv "$_d.pins.part" "$_d.pins"
   fi
-  awk -F "$TAB" -v r="$3" '$3 == r { print $1 "\t" $2 }' "$_d.repos" > "$_d.match"
-  while IFS="$TAB" read -r _n _s; do
-    gh_get raw "repos/Mavergreen/$1/contents/${_s%%:*}?ref=$YTAG" \
-      || fail "Mavergreen/$1 declares $_n from $_s, which $YTAG does not have"
-    case "$_s" in *:*) _v="$(value_of "$GH_OUT" "${_s##*:}")" ;; *) _v="$(value_of "$GH_OUT" "")" ;; esac
-    [ -n "$_v" ] || fail "Mavergreen/$1 declares $_n from $_s, which is empty at $YTAG"
-    is_version "$_v" || fail "Mavergreen/$1's $YTAG pins $_n at '$_v', which is not a version"
+  while IFS="$TAB" read -r _n _pr _v; do
+    [ "$_pr" = "$2" ] || continue
     if [ -z "$YPIN" ] || [ "$(mavergreen_vercmp "$_v" "$YPIN")" -lt 0 ]; then YPIN="$_v"; YPIN_NAME="$_n"; fi
-  done < "$_d.match"
-  [ -z "$YPIN" ] || return 0
-  if gh_get raw "repos/Mavergreen/$1/contents/components/$2/version?ref=$YTAG"; then
-    YPIN="$(value_of "$GH_OUT" "")"; YPIN_NAME="$2"
-    [ -n "$YPIN" ] || fail "Mavergreen/$1's components/$2/version is empty at $YTAG"
-  fi
+  done < "$_d.pins"
   return 0
 }
 
@@ -214,7 +228,7 @@ while IFS="$TAB" read -r x xrepo xv; do
     case "$seen" in *" $yrepo "*) continue ;; esac
     seen="$seen$yrepo "
     y_release "$yrepo"
-    y_pin "$yrepo" "$x" "$xrepo"
+    y_pin "$yrepo" "$xrepo"
     [ -n "$YPIN" ] || continue
     c=0; cmp="$(mavergreen_vercmp "$YPIN" "$xv")" || c=$?
     [ "$c" -eq 0 ] || fail "$y's $YTAG pins $YPIN_NAME at '$YPIN', which is not a version"

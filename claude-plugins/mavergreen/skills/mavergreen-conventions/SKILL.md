@@ -2643,7 +2643,7 @@ jobs:
 - **The status is `ingredients-settled`**, posted on the PR's head commit. `success`: nothing to wait
   for (not a Renovate branch, no Mavergreen ingredient changed, every other product between has caught
   up, or the PR is labelled). `pending`: waiting, and the description says on whom and for how long.
-  `failure`: it could not tell (a registry or Declared state it cannot read, or the job itself could not
+  `failure`: it could not tell (an ingredient it cannot read, or the job itself could not
   run). Never a silent pass.
 - **A PR labelled `urgent` or `security` is settled at once.**
 - **The 24h backstop:** a bump waits at most 24 hours after the newest bumped ingredient was published,
@@ -2656,9 +2656,15 @@ jobs:
 - **`settle` requires the status** once this caller exists, via `required-checks.sh`.
 - **The caller needs no `required` job**: a workflow whose every job is this call is exempt from the gate.
 
+A family pin is an ingredient (`.mavergreen/ingredients/<n>/`) holding `product`, `REPO`
+(`Mavergreen/<repo>`) and `VERSION`; the settled check reads them at the PR's two revisions and at
+each dependency's latest release tag. A tag with no `.mavergreen/ingredients` has no family pin, and
+is never read as a bump.
+
 `sh "$SHIPYARD_SCRIPTS/family-graph.sh" [--from-dir DIR]` prints the family's ingredient graph
-(`consumer -> ingredient`, then `DIAMOND` and `CYCLE` lines); it exits 3 when the graph is incomplete
-(a repo skipped or a name unmapped, listed on stderr), though the graph still prints.
+(`consumer -> ingredient repo`, then `DIAMOND` and `CYCLE` lines) from those pins; it exits 3 when
+the graph is incomplete (a repo skipped, or an ingredient with a `product` and no `REPO`, listed on
+stderr), though the graph still prints.
 
 **Cannot-verify is a FAILURE, never a pass.** Where a check needs something the environment may not
 have — a git checkout to ask what is tracked, `python3`, PyYAML — it fails and names what to install,

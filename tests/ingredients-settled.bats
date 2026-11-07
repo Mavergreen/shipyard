@@ -9,7 +9,6 @@ setup() {
   SCRIPT="$BATS_TEST_DIRNAME/../scripts/ingredients-settled.sh"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/ingredients-settled-test.XXXXXX")" && pwd)"
   export GH_FIX="$WORK/gh" GH_LOG="$WORK/gh.log"
-  export MAVERGREEN_PRODUCT_NAMES="$BATS_TEST_DIRNAME/fixtures/ingredients-settled/product-names"
   cp -R "$BATS_TEST_DIRNAME/fixtures/ingredients-settled/gh" "$GH_FIX"
   : > "$GH_LOG"
   mkdir -p "$WORK/bin"
@@ -32,37 +31,55 @@ EOF
   git -C "$R" init -q
   git -C "$R" config user.email t@example.com
   git -C "$R" config user.name t
-  declared clang22 rust recaulk
   echo 1.0 > "$R/UPSTREAM_VERSION"
-  pin clang22 22.1.0-mavericks.3
-  pin rust 1.92.0-mavericks.1
-  pin recaulk 20261020.1
+  pin clang22 clang-22 22.1.0-mavericks.3
+  pin rust rust 1.92.0-mavericks.1
+  pin recaulk recaulk 20261020.1
   git -C "$R" add -A
   git -C "$R" commit -qm base
   git -C "$R" tag pr-base
 }
 teardown() { rm -rf "$WORK"; }
 
-declared() {
-  { printf '# porthole ingredients\n\n## Declared state\n- upstream: UPSTREAM_VERSION\n'
-    for n in "$@"; do
-      case "$n" in
-        *=*) printf -- '- %s: components/%s/version\n' "${n%%=*}" "${n#*=}" ;;
-        *) printf -- '- %s: components/%s/version\n' "$n" "$n" ;;
-      esac
-    done
-    printf '\n## Notes\n'; } > "$R/INGREDIENTS.md"
+pin() {
+  mkdir -p "$R/.mavergreen/ingredients/$1"
+  echo "$1" > "$R/.mavergreen/ingredients/$1/product"
+  echo "Mavergreen/$2" > "$R/.mavergreen/ingredients/$1/REPO"
+  echo "$3" > "$R/.mavergreen/ingredients/$1/VERSION"
 }
-pin() { mkdir -p "$R/components/$1"; echo "$2" > "$R/components/$1/version"; }
+bump() { echo "$2" > "$R/.mavergreen/ingredients/$1/VERSION"; }
 head_commit() { git -C "$R" add -A; git -C "$R" commit -qm "${1:-pr-head}"; git -C "$R" tag -f "${1:-pr-head}" >/dev/null; }
 fx() { mkdir -p "$(dirname "$GH_FIX/repos/Mavergreen/$1")"; printf '%s\n' "$2" > "$GH_FIX/repos/Mavergreen/$1"; }
+ylist() {
+  b="$GH_FIX/repos/Mavergreen/$1/contents/.mavergreen/ingredients"
+  mkdir -p "$b"
+  j="["; sep=""
+  for f in "$b"/*/product@"$2"; do
+    [ -f "$f" ] || continue
+    n="$(basename "$(dirname "$f")")"
+    j="$j$sep{\"name\":\"$n\",\"type\":\"dir\"}"; sep=","
+  done
+  printf '%s]\n' "$j" > "$b@$2"
+}
+ypin() {
+  b="$GH_FIX/repos/Mavergreen/$1/contents/.mavergreen/ingredients/$3"
+  mkdir -p "$b"
+  echo "$3" > "$b/product@$2"
+  echo "Mavergreen/$4" > "$b/REPO@$2"
+  echo "$5" > "$b/VERSION@$2"
+  ylist "$1" "$2"
+}
+yrm() {
+  rm -f "$GH_FIX/repos/Mavergreen/$1/contents/.mavergreen/ingredients/$3/"*@"$2"
+  ylist "$1" "$2"
+}
 settled() {
   local now="$1"; shift
   cd "$R"
   run sh "$SCRIPT" --repo Mavergreen/porthole --base pr-base --head pr-head \
     --branch renovate/mavergreen-ingredients --now "$now" "$@"
 }
-recaulk_bump() { pin recaulk 20261025.1; head_commit; }
+recaulk_bump() { bump recaulk 20261025.1; head_commit; }
 
 @test "no Mavergreen bump is settled" {
   echo 1.1 > "$R/UPSTREAM_VERSION"
@@ -83,7 +100,7 @@ recaulk_bump() { pin recaulk 20261025.1; head_commit; }
 
 @test "upstream caught up is settled" {
   recaulk_bump
-  fx clang-22/contents/components/recaulk/version@22.1.0-mavericks.3 20261025.1
+  ypin clang-22 22.1.0-mavericks.3 recaulk recaulk 20261025.1
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
   [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1"* ]] || false
@@ -91,61 +108,71 @@ recaulk_bump() { pin recaulk 20261025.1; head_commit; }
 
 @test "upstream ahead is settled" {
   recaulk_bump
-  fx clang-22/contents/components/recaulk/version@22.1.0-mavericks.3 20261026.1
+  ypin clang-22 22.1.0-mavericks.3 recaulk recaulk 20261026.1
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
   [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1"* ]] || false
   [[ "$output" != *WAITING* ]] || false
 }
 
-@test "an unmapped name in Y's Declared state warns once and does not change the decision" {
+@test "an ingredient of Y with a product and no REPO warns once and does not change the decision" {
   recaulk_bump
-  fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.3 "## Declared state
-- upstream: UPSTREAM_VERSION
-- recaulk: components/recaulk/version
-- mystery: components/mystery/version"
+  b="$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/mystery"
+  mkdir -p "$b"
+  echo mystery > "$b/product@22.1.0-mavericks.3"
+  ylist clang-22 22.1.0-mavericks.3
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
   [[ "$output" == *"WAITING clang22 for recaulk 20261025.1"* ]] || false
-  [ "$(printf '%s\n' "$output" | grep -c '^::warning::clang-22: Declared state names mystery, which the registry doesn.t know; its pins are not checked$')" -eq 1 ]
+  [ "$(printf '%s\n' "$output" | grep -c '^::warning::clang-22: ingredient mystery has a product and no REPO; its pin is not checked$')" -eq 1 ]
 }
 
 @test "Y without the pin is settled" {
   recaulk_bump
-  fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.3 "## Declared state
-- upstream: UPSTREAM_VERSION"
-  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/components/recaulk/version@22.1.0-mavericks.3"
+  yrm clang-22 22.1.0-mavericks.3 recaulk
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
   [[ "$output" == SETTLED* ]] || false
   [[ "$output" != *WAITING* ]] || false
 }
 
-@test "components fallback when Declared state lacks X" {
+@test "an ingredient of Y without a product is not a pin of X" {
   recaulk_bump
-  fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.3 "## Declared state
-- upstream: UPSTREAM_VERSION"
-  settled $((RECAULK_PUB + 3600))
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"WAITING clang22 for recaulk 20261025.1"* ]] || false
-}
-
-@test "components fallback when Y has no INGREDIENTS.md" {
-  recaulk_bump
-  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.3"
-  fx clang-22/contents/components/recaulk/version@22.1.0-mavericks.3 20261025.1
+  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/product@22.1.0-mavericks.3"
+  ylist clang-22 22.1.0-mavericks.3
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
-  [[ "$output" == *"SETTLED clang22 for recaulk 20261025.1"* ]] || false
+  [[ "$output" != *WAITING* ]] || false
 }
 
-@test "a Declared-state entry with a KEY is read from the file at the tag" {
+@test "Y's tag with no .mavergreen reports no family pin and is never a bump" {
   recaulk_bump
-  fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.3 "## Declared state
-- upstream: UPSTREAM_VERSION
-- recaulk: build/pins.env:RECAULK_VERSION"
-  fx clang-22/contents/build/pins.env@22.1.0-mavericks.3 'OTHER=1
-RECAULK_VERSION="20261020.1"'
+  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients@22.1.0-mavericks.3"
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no family pin at 22.1.0-mavericks.3"* ]] || false
+  [[ "$output" != *WAITING* ]] || false
+  [[ "$output" == *SETTLED* ]] || false
+}
+
+@test "a base with no .mavergreen has no family pin and nothing bumps" {
+  git -C "$R" rm -q -r .mavergreen
+  git -C "$R" commit -qm no-mavergreen
+  git -C "$R" tag -f pr-base >/dev/null
+  pin clang22 clang-22 22.1.0-mavericks.3
+  pin rust rust 1.92.0-mavericks.1
+  pin recaulk recaulk 20261025.1
+  head_commit
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no family pin at "* ]] || false
+  [[ "$output" == *"SETTLED no Mavergreen ingredient changed"* ]] || false
+}
+
+@test "only the first line of a VERSION is read" {
+  recaulk_bump
+  b="$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk"
+  printf '20261020.1\nnot read\n' > "$b/VERSION@22.1.0-mavericks.3"
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
   [[ "$output" == *"WAITING clang22 for recaulk 20261025.1"* ]] || false
@@ -153,10 +180,7 @@ RECAULK_VERSION="20261020.1"'
 
 clang_caught_up() {
   fx clang-22/releases/latest '{"tag_name":"22.1.0-mavericks.4","draft":false,"prerelease":false,"published_at":"2026-10-25T18:00:00Z"}'
-  fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.4 "## Declared state
-- upstream: UPSTREAM_VERSION
-- recaulk: components/recaulk/version"
-  fx clang-22/contents/components/recaulk/version@22.1.0-mavericks.4 20261025.1
+  ypin clang-22 22.1.0-mavericks.4 recaulk recaulk 20261025.1
 }
 
 @test "upstream caught up but PR pins old Y waits" {
@@ -169,8 +193,8 @@ clang_caught_up() {
 }
 
 @test "upstream caught up and PR takes it is settled" {
-  pin recaulk 20261025.1
-  pin clang22 22.1.0-mavericks.4
+  bump recaulk 20261025.1
+  bump clang22 22.1.0-mavericks.4
   head_commit
   clang_caught_up
   settled $((RECAULK_PUB + 3600))
@@ -189,13 +213,13 @@ clang_caught_up() {
 
 @test "both ends of a diamond in one PR" {
   clang_caught_up
-  pin recaulk 20261025.1
+  bump recaulk 20261025.1
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
   [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavericks.4"* ]] || false
 
-  pin clang22 22.1.0-mavericks.4
+  bump clang22 22.1.0-mavericks.4
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
@@ -204,23 +228,20 @@ clang_caught_up() {
   [[ "$output" != *"recaulk for clang22"* ]] || false
 }
 
-@test "rename is not a bump (same path, same value)" {
-  fx rust/contents/INGREDIENTS.md@1.92.0-mavericks.1 "## Declared state
-- upstream: UPSTREAM_VERSION
-- clang22: components/clang22/version"
-  fx rust/contents/components/clang22/version@1.92.0-mavericks.1 22.1.0-mavericks.2
-  declared clang=clang22 rust recaulk
-  git -C "$R" add -A
+@test "rename is not a bump (same repo, same value)" {
+  git -C "$R" mv .mavergreen/ingredients/clang22 .mavergreen/ingredients/clang
   git -C "$R" commit -qm base-renamed
   git -C "$R" tag -f pr-base >/dev/null
-  declared clang22 rust recaulk
+  git -C "$R" mv .mavergreen/ingredients/clang .mavergreen/ingredients/clang22
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
   [[ "$output" == SETTLED* ]] || false
   [[ "$output" != *WAITING* ]] || false
 
-  pin clang22 22.1.0-mavericks.4
+  git -C "$R" tag -f pr-base pr-head >/dev/null
+  bump clang22 22.1.0-mavericks.4
+  ypin rust 1.92.0-mavericks.1 clang22 clang-22 22.1.0-mavericks.2
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
@@ -228,8 +249,7 @@ clang_caught_up() {
 }
 
 @test "a newly declared ingredient is not a bump" {
-  pin make 4.4.1-mavericks.1
-  declared clang22 rust recaulk make
+  pin make make 4.4.1-mavericks.1
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 0 ]
@@ -269,8 +289,8 @@ clang_caught_up() {
 }
 
 @test "release boundary" {
-  pin recaulk 20261025.1
-  pin rust 1.93.0-mavericks.1
+  bump recaulk 20261025.1
+  bump rust 1.93.0-mavericks.1
   head_commit
 
   settled $((RECAULK_PUB + DAY))
@@ -288,13 +308,14 @@ clang_caught_up() {
 }
 
 @test "each release and file is read once per run" {
-  pin recaulk 20261025.1
-  pin rust 1.93.0-mavericks.1
+  bump recaulk 20261025.1
+  bump rust 1.93.0-mavericks.1
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
   [ "$(grep -c 'repos/Mavergreen/clang-22/releases/latest' "$GH_LOG")" -eq 1 ]
-  [ "$(grep -c 'repos/Mavergreen/clang-22/contents/INGREDIENTS.md' "$GH_LOG")" -eq 1 ]
+  [ "$(grep -c 'repos/Mavergreen/clang-22/contents/.mavergreen/ingredients?ref=' "$GH_LOG")" -eq 1 ]
+  [ "$(grep -c 'repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/VERSION' "$GH_LOG")" -eq 1 ]
 }
 
 @test "api failure is failure" {
@@ -310,9 +331,7 @@ clang_caught_up() {
 @test "server error reading a file is failure" {
   recaulk_bump
   printf 'gh: Bad Gateway (HTTP 502)\n' \
-    > "$GH_FIX/repos/Mavergreen/clang-22/contents/components/recaulk/version@22.1.0-mavericks.3.error"
-  fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.3 "## Declared state
-- upstream: UPSTREAM_VERSION"
+    > "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/VERSION@22.1.0-mavericks.3.error"
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 2 ]
   [[ "$output" == *"HTTP 502"* ]] || false
@@ -333,24 +352,31 @@ clang_caught_up() {
   [ "$status" -eq 2 ]
 }
 
-@test "a malformed Declared state at Y's tag is failure" {
+@test "a malformed REPO at Y's tag is failure" {
   recaulk_bump
-  fx clang-22/contents/INGREDIENTS.md@22.1.0-mavericks.3 "## Declared state
-- recaulk: components/recaulk/version"
+  echo elsewhere/recaulk > "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/REPO@22.1.0-mavericks.3"
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 2 ]
 }
 
+@test "a Y ingredient with a REPO and no VERSION is failure" {
+  recaulk_bump
+  rm "$GH_FIX/repos/Mavergreen/clang-22/contents/.mavergreen/ingredients/recaulk/VERSION@22.1.0-mavericks.3"
+  settled $((RECAULK_PUB + 3600))
+  [ "$status" -eq 2 ]
+  [[ "$output" == *VERSION* ]] || false
+}
+
 @test "non-version pin fails" {
   recaulk_bump
-  fx clang-22/contents/components/recaulk/version@22.1.0-mavericks.3 latest
+  ypin clang-22 22.1.0-mavericks.3 recaulk recaulk latest
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 2 ]
   [[ "$output" == *latest* ]] || false
 }
 
 @test "a non-version pin in the PR fails" {
-  pin recaulk main
+  bump recaulk main
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 2 ]
@@ -365,11 +391,8 @@ clang_caught_up() {
 }
 
 @test "a sibling product's pin counts as a pin of X" {
-  fx rust/contents/INGREDIENTS.md@1.92.0-mavericks.1 "## Declared state
-- upstream: UPSTREAM_VERSION
-- clang22-cross: components/clang22-cross/version"
-  fx rust/contents/components/clang22-cross/version@1.92.0-mavericks.1 22.1.0-mavericks.3
-  pin clang22 22.1.0-mavericks.4
+  ypin rust 1.92.0-mavericks.1 clang22-cross clang-22 22.1.0-mavericks.3
+  bump clang22 22.1.0-mavericks.4
   head_commit
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
@@ -380,7 +403,7 @@ clang_caught_up() {
   recaulk_bump
   cat > "$WORK/bin/git" <<'EOF2'
 #!/bin/sh
-case "$1 $2" in "show "*:INGREDIENTS.md) echo "fatal: simulated" >&2; exit 1 ;; esac
+case "$1 $2" in "show "*:.mavergreen/ingredients/*/VERSION) echo "fatal: simulated" >&2; exit 1 ;; esac
 exec "$REAL_GIT" "$@"
 EOF2
   chmod +x "$WORK/bin/git"
@@ -411,7 +434,7 @@ EOF2
 @test "Y ahead while the PR pins an old Y waits" {
   recaulk_bump
   clang_caught_up
-  fx clang-22/contents/components/recaulk/version@22.1.0-mavericks.4 20261026.1
+  ypin clang-22 22.1.0-mavericks.4 recaulk recaulk 20261026.1
   settled $((RECAULK_PUB + 3600))
   [ "$status" -eq 1 ]
   [[ "$output" == *"WAITING Mavergreen/porthole to take clang22 22.1.0-mavericks.4 (it carries recaulk 20261025.1)"* ]] || false

@@ -1,19 +1,22 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: family-graph.sh [--from-dir DIR]
-#          Prints the family's ingredient graph: "<consumer> -> <ingredient>" for each repo that declares a
-#          registered product of another repo in its "## Declared state", then "DIAMOND <consumer>: <X> via
-#          <Y>" where the consumer declares both X and Y and Y reaches X, then "CYCLE a -> b -> ... -> a",
-#          each cycle once, starting at its smallest name. Each group is sorted. Nodes are registry repos.
-#          Default: reads every registry repo's INGREDIENTS.md at its default branch with read-only
-#          `gh api` (needs gh and python3). --from-dir DIR reads DIR/<repo>/INGREDIENTS.md instead.
+#          Prints the family's ingredient graph: "<consumer> -> <ingredient>" for each repo that has a
+#          family pin (an ingredient holding "product" and "REPO") on another repo, then "DIAMOND
+#          <consumer>: <X> via <Y>" where the consumer pins both X and Y and Y reaches X, then
+#          "CYCLE a -> b -> ... -> a", each cycle once, starting at its smallest name. Each group is
+#          sorted. Nodes are repos.
+#          Default: reads each repo of the Mavergreen org at its default branch with read-only `gh api`
+#          (needs gh). --from-dir DIR reads DIR/<repo>/.mavergreen/ingredients instead, for each
+#          subdirectory of DIR that holds a .mavergreen.
 #          stderr names what could not be read: "SKIP <repo>: <reason>" for a repo with no clone or no
-#          INGREDIENTS.md, "UNMAPPED <repo>: <name>" for a declared name the registry does not know.
-#          Exit 0 when everything was read; 3 when anything was skipped or unmapped (the graph still
-#          prints); 1 when a Declared state is malformed; 2 on a usage error or when gh fails.
-# spec: scripts/declared-state.sh; scripts/product-names
+#          .mavergreen/ingredients, "UNMAPPED <repo>: <name>" for an ingredient with a product and no
+#          REPO. Exit 0 when everything was read; 3 when anything was skipped or unmapped (the graph
+#          still prints); 1 when a REPO is malformed; 2 on a usage error or when gh fails.
+# spec: tests/family-graph.bats
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
 dir=""
 case "$#:${1:-}" in
   0:) ;;
@@ -21,111 +24,124 @@ case "$#:${1:-}" in
   *) echo "usage: family-graph.sh [--from-dir DIR]" >&2; exit 2 ;;
 esac
 [ -z "$dir" ] || dir="$(cd "$dir" && pwd)"
-exec python3 - "$SELF" "$dir" <<'PY'
-import os, subprocess, sys, tempfile
 
-self_dir, src = sys.argv[1], sys.argv[2]
-reg = os.environ.get("MAVERGREEN_PRODUCT_NAMES") or os.path.join(self_dir, "product-names")
-repo_of = {}
-try:
-    with open(reg) as f:
-        for line in f:
-            w = line.split()
-            if len(w) >= 3 and not w[0].startswith("#"):
-                repo_of.setdefault(w[0], w[2])
-except OSError as e:
-    sys.exit("family-graph: cannot read the registry: %s" % e)
-repos = sorted(set(repo_of.values()))
+_tmp="${TMPDIR:-/tmp}"
+tmp="$(mktemp -d "${_tmp%/}/family-graph.XXXXXX")"
+trap 'rm -rf "$tmp"' EXIT
+: > "$tmp/edges"; : > "$tmp/nodes"
+bad=""; partial=""
 
-def fetch(repo, into):
-    r = subprocess.run(["gh", "api", "-H", "Accept: application/vnd.github.raw",
-                        "repos/Mavergreen/%s/contents/INGREDIENTS.md" % repo],
-                       stdin=subprocess.DEVNULL, capture_output=True, text=True)
-    if r.returncode == 0:
-        with open(os.path.join(into, "INGREDIENTS.md"), "w") as f:
-            f.write(r.stdout)
-        return True
-    if "HTTP 404" in r.stderr:
-        return False
-    print("family-graph: gh api for %s: %s" % (repo, r.stderr.strip().replace("\n", " ")), file=sys.stderr)
-    sys.exit(2)
+skip() { partial=1; echo "SKIP $1: $2" >&2; }
 
-edges = {}
-bad = False
-partial = False
+gh_read() {
+  _rc=0
+  gh api "$@" < /dev/null > "$tmp/gh.out" 2> "$tmp/gh.err" || _rc=$?
+  [ "$_rc" -ne 0 ] || return 0
+  if grep -q 'HTTP 404' "$tmp/gh.err"; then return 1; fi
+  echo "family-graph: gh api $*: $(tr '\n' ' ' < "$tmp/gh.err")" >&2
+  exit 2
+}
 
-def skip(repo, why):
-    global partial
-    partial = True
-    print("SKIP %s: %s" % (repo, why), file=sys.stderr)
+fetch() {
+  gh_read "repos/Mavergreen/$1/contents/.mavergreen/ingredients" --jq '.[] | select(.type == "dir") | .name' || return 1
+  cp "$tmp/gh.out" "$tmp/names"
+  mkdir -p "$tmp/clone/$1/.mavergreen/ingredients"
+  while IFS= read -r _n; do
+    [ -n "$_n" ] || continue
+    mkdir -p "$tmp/clone/$1/.mavergreen/ingredients/$_n"
+    for _f in product REPO; do
+      if gh_read -H 'Accept: application/vnd.github.raw' "repos/Mavergreen/$1/contents/.mavergreen/ingredients/$_n/$_f"; then
+        cp "$tmp/gh.out" "$tmp/clone/$1/.mavergreen/ingredients/$_n/$_f"
+      fi
+    done
+  done < "$tmp/names"
+}
 
-with tempfile.TemporaryDirectory() as tmp:
-    for repo in repos:
-        d = os.path.join(src, repo) if src else os.path.join(tmp, repo)
-        if not src:
-            os.mkdir(d)
-            if not fetch(repo, d):
-                skip(repo, "no INGREDIENTS.md (HTTP 404)")
-                continue
-        elif not os.path.isdir(d):
-            skip(repo, "no clone in %s" % src)
-            continue
-        elif not os.path.isfile(os.path.join(d, "INGREDIENTS.md")):
-            skip(repo, "no INGREDIENTS.md")
-            continue
-        r = subprocess.run(["sh", os.path.join(self_dir, "declared-state.sh"), d],
-                           stdin=subprocess.DEVNULL, capture_output=True, text=True)
-        if r.returncode != 0:
-            print("family-graph: %s: %s" % (repo, r.stderr.strip().replace("\n", " ")), file=sys.stderr)
-            bad = True
-            continue
-        for line in r.stdout.splitlines():
-            name = line.split("\t")[0]
-            if name == "upstream":
-                continue
-            if name in repo_of:
-                edges.setdefault(repo, set()).add(repo_of[name])
-            else:
-                partial = True
-                print("UNMAPPED %s: %s" % (repo, name), file=sys.stderr)
-if bad:
-    sys.exit(1)
+read_pins() {
+  MAVERGREEN_REPO_ROOT="$2"; export MAVERGREEN_REPO_ROOT
+  for _n in $(mg_list ingredients); do
+    [ -d "$2/.mavergreen/ingredients/$_n" ] || continue
+    mg_has "ingredients/$_n/product" || continue
+    _r=""
+    if mg_has "ingredients/$_n/REPO"; then _r="$(mg_value "ingredients/$_n/REPO")"; fi
+    if [ -z "$_r" ]; then
+      partial=1
+      echo "UNMAPPED $1: $_n" >&2
+      continue
+    fi
+    case "$_r" in
+      Mavergreen/?*) ;;
+      *) echo "family-graph: $1: ingredient $_n: REPO '$_r' is not Mavergreen/<repo>" >&2; bad=1; continue ;;
+    esac
+    case "${_r#Mavergreen/}" in */*) echo "family-graph: $1: ingredient $_n: REPO '$_r' is not Mavergreen/<repo>" >&2; bad=1; continue ;; esac
+    printf '%s %s\n' "$1" "${_r#Mavergreen/}" >> "$tmp/edges"
+  done
+}
 
-def reach(a, b):
-    seen, todo = set(), [a]
-    while todo:
-        n = todo.pop()
-        for m in edges.get(n, ()):
-            if m == b:
-                return True
-            if m not in seen:
-                seen.add(m)
-                todo.append(m)
-    return False
+if [ -n "$dir" ]; then
+  for d in "$dir"/*/; do
+    [ -d "${d}.mavergreen" ] || continue
+    r="$(basename "$d")"
+    echo "$r" >> "$tmp/nodes"
+    read_pins "$r" "${d%/}"
+  done
+else
+  _rc=0
+  gh api --paginate orgs/Mavergreen/repos --jq '.[].name' < /dev/null > "$tmp/repos" 2> "$tmp/gh.err" || _rc=$?
+  if [ "$_rc" -ne 0 ]; then
+    echo "family-graph: gh api orgs/Mavergreen/repos: $(tr '\n' ' ' < "$tmp/gh.err")" >&2
+    exit 2
+  fi
+  while IFS= read -r r; do
+    [ -n "$r" ] || continue
+    echo "$r" >> "$tmp/nodes"
+    if fetch "$r"; then read_pins "$r" "$tmp/clone/$r"; else skip "$r" "no .mavergreen/ingredients (HTTP 404)"; fi
+  done < "$tmp/repos"
+fi
+[ -z "$bad" ] || exit 1
 
-for c in sorted(edges):
-    for x in sorted(edges[c]):
-        print("%s -> %s" % (c, x))
-diamonds = set()
-for c, deps in edges.items():
-    for x in deps:
-        for y in deps:
-            if y != x and y != c and x != c and reach(y, x):
-                diamonds.add("DIAMOND %s: %s via %s" % (c, x, y))
-for d in sorted(diamonds):
-    print(d)
+LC_ALL=C sort -u "$tmp/nodes" -o "$tmp/nodes"
+while read -r _c _x; do
+  grep -qx "$_x" "$tmp/nodes" && continue
+  grep -qx "$_x" "$tmp/skipped" 2>/dev/null && continue
+  echo "$_x" >> "$tmp/skipped"
+  if [ -n "$dir" ]; then skip "$_x" "no clone in $dir"; else skip "$_x" "not a repo of the Mavergreen org"; fi
+done < "$tmp/edges"
 
-cycles = set()
-for start in sorted(set(edges) | {m for v in edges.values() for m in v}):
-    stack = [(start, [start])]
-    while stack:
-        n, path = stack.pop()
-        for m in edges.get(n, ()):
-            if m == start:
-                cycles.add(" -> ".join(path + [start]))
-            elif m > start and m not in path:
-                stack.append((m, path + [m]))
-for c in sorted(cycles):
-    print("CYCLE " + c)
-sys.exit(3 if partial else 0)
-PY
+LC_ALL=C sort -u "$tmp/edges" | LC_ALL=C awk '
+function reach(a, b,   i, n, m, ms) {
+  if (seen[a]++) return 0
+  n = split(adj[a], ms, " ")
+  for (i = 1; i <= n; i++) {
+    m = ms[i]
+    if (m == b) return 1
+    if (reach(m, b)) return 1
+  }
+  return 0
+}
+function reaches(a, b,   k) {
+  split("", seen)
+  return reach(a, b)
+}
+function walk(n, pl, disp, start,   i, k, ms, m) {
+  k = split(adj[n], ms, " ")
+  for (i = 1; i <= k; i++) {
+    m = ms[i] ""
+    if (m == start) cyc[disp " -> " start] = 1
+    else if (m > start && index(pl, " " m " ") == 0) walk(m, pl m " ", disp " -> " m, start)
+  }
+}
+{ adj[$1] = adj[$1] " " $2; deps[$1] = deps[$1] " " $2; nodes[$1] = 1; nodes[$2] = 1; print "1\t" $1 " -> " $2 }
+END {
+  for (c in deps) {
+    n = split(deps[c], d, " ")
+    for (i = 1; i <= n; i++) for (j = 1; j <= n; j++) {
+      x = d[i]; y = d[j]
+      if (y != x && y != c && x != c && reaches(y, x)) print "2\tDIAMOND " c ": " x " via " y
+    }
+  }
+  for (s in nodes) walk(s, " " s " ", s, s)
+  for (c in cyc) print "3\tCYCLE " c
+}' | LC_ALL=C sort -u | cut -f2-
+[ -z "$partial" ] || exit 3
+exit 0
