@@ -12,7 +12,8 @@
 #   writer at a time per key. <out_var> is set to the bin directory.
 include_guard(GLOBAL)
 set(_MHT_DIR "${CMAKE_CURRENT_LIST_DIR}")
-set(_MHT_TOOLS "mulle-xcode-to-cmake=mulle/mulle-xcode-to-cmake" "mavericks-xcode-inputs=mavericks-xcode-inputs")
+set(_MHT_TOOLS "mulle-xcode-to-cmake=mulle/mulle-xcode-to-cmake" "mavericks-xcode-inputs=mavericks-xcode-inputs"
+  "mavericks-resource-extract=mavericks-resource-extract")
 
 function(_mht_fail msg)
   message(FATAL_ERROR "mavericks_build_host_tools: ${msg}")

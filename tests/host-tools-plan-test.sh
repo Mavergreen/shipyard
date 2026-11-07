@@ -81,7 +81,8 @@ echo "== installed_layout"
 if "$SC" -S "$root" -B "$w/ib" -DCMAKE_INSTALL_PREFIX="$w/inst" > "$w/ib.log" 2>&1 \
    && "$SC" --install "$w/ib" > "$w/inst.log" 2>&1; then
   d="$(dirname "$(find "$w/inst" -name MavericksShipyardConfig.cmake | head -1)")"
-  for f in MavericksHostTools.cmake MavericksXcodeInputs.cmake tools/CMakeLists.txt tools/xcode-project-inputs.m \
+  for f in MavericksHostTools.cmake MavericksXcodeInputs.cmake MavericksResourceInputs.cmake tools/CMakeLists.txt \
+           tools/xcode-project-inputs.m tools/resource-extract.m \
            components/mulle-xcode-to-cmake/version scripts/sdk-pins.sh \
            scripts/fetch_pinned_source.sh scripts/fetch_sdk.sh; do
     [ -f "$d/$f" ] || bad "installed_layout: the install lacks $f beside the module"

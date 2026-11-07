@@ -298,6 +298,36 @@ project runs, and no link, ARC or bundle setting is translated: those belong to 
 CMake. The same inputs reuse the export while it matches its stamp; a changed or unstamped export is
 refused and left as it is (remove it to export again).
 
+`MavericksResourceInputs` stages a chosen subset of a pinned zip archive, such as compiled nibs from an
+upstream release, without unpacking or running the rest:
+
+```cmake
+include(MavericksResourceInputs)
+mavericks_extract_resource_members(resources_dir
+  ARCHIVE        "${zip}"                       # fetched beforehand, e.g. shipyard_fetch_verified
+  SHA256         90e6f2bd3eb2d245f4ab2c9f856c627c8a1536bac024fb3989db417bc3147565
+  MANIFEST       "${CMAKE_SOURCE_DIR}/resources/compiled.tsv"
+  MEMBER_PREFIX  "iTerm.app/Contents/Resources/"
+  VERSION_MEMBER "iTerm.app/Contents/Info.plist"
+  EXPECT_VERSION 3.0.15
+  HOST_COMPILER  /usr/local/mavergreen/bin/clang-22-cross
+  OUTPUT_DIR     "${CMAKE_BINARY_DIR}/resources")
+```
+
+The manifest's header is `member`, `destination`, `kind`, `bytes`, `sha256` (tab-separated); each line
+names a regular file under `MEMBER_PREFIX`, where it goes, `file`, and its exact size and SHA-256.
+`mavericks-resource-extract` checks the archive's SHA-256 before reading any member, reads it with the
+system's libarchive, and stages each selected member only after its type, size and SHA-256 hold while
+it streams (written mode 0644, never as a link). `VERSION_MEMBER` must say `EXPECT_VERSION` as both
+`CFBundleVersion` and `CFBundleShortVersionString`; it is read, not staged. It refuses an unsafe path
+(absolute, `.`, `..`, empty segments), two members with one destination or one inside another, a name
+the archive holds twice, a missing member, a damaged, truncated or encrypted archive, and an output
+directory that exists or whose parent is a link. The output appears complete or not at all, and
+nothing outside it is written. On 10.9, libarchive 2.8.3 reads a zip's symbolic link as a regular file
+holding the link's text; such a member is still refused, because its bytes are not the manifest's.
+The same inputs reuse the staged members while each still has its manifest size, SHA-256 and mode and
+nothing else is there; anything else is refused and left as it is.
+
 ## Conventions for Claude Code
 
 The family's conventions ship as the `mavergreen` Claude Code plugin, from this repo's

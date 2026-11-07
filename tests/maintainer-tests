@@ -6,6 +6,7 @@
 10.9 tests/sdk-metadata-consumer-test.sh
 10.9 tests/host-tools-bootstrap-test.sh
 10.9 tests/xcode-inputs-test.sh
+10.9 tests/resource-inputs-test.sh
 golden-gate tests/installed-shipyard-test.sh
 golden-gate tests/fetch_stevedore_darwin.bats
 golden-gate tests/updater-clang22-darwin-test.sh
@@ -13,3 +14,4 @@ golden-gate tests/umbrella-langs.sh
 golden-gate tests/sdk-metadata-consumer-test.sh
 golden-gate tests/host-tools-bootstrap-test.sh
 golden-gate tests/xcode-inputs-test.sh
+golden-gate tests/resource-inputs-test.sh

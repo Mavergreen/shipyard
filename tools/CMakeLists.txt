@@ -10,3 +10,7 @@ add_subdirectory("${MULLE_SOURCE}" mulle)
 add_executable(mavericks-xcode-inputs xcode-project-inputs.m)
 target_compile_options(mavericks-xcode-inputs PRIVATE -fobjc-arc -Wall -Werror)
 target_link_libraries(mavericks-xcode-inputs PRIVATE "-framework Foundation")
+
+add_executable(mavericks-resource-extract resource-extract.m)
+target_compile_options(mavericks-resource-extract PRIVATE -fobjc-arc -Wall -Werror)
+target_link_libraries(mavericks-resource-extract PRIVATE "-framework Foundation" archive)
