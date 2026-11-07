@@ -59,6 +59,7 @@ while IFS= read -r key; do
   [ "$(awk -F'\t' -v k="$key" '$1 == k { print $2 }' "$SHIPYARD_CHECK_REGISTRY")" = checkout ] || continue
   while IFS= read -r glob; do
     [ -n "$glob" ] && [ "$glob" != '*' ] || continue
+    [ "$key" != retired-name ] || glob="${glob%%#*}"
     [ -n "$(mg_glob_hits "$glob" "$w/tracked")" ] || chk_fail deviation-scope-matches "the \"$key\" deviation scopes itself to \"$glob\", which matches no tracked file" \
       "an exception that covers nothing is stale or mistyped" \
       "correct the scope to match a tracked path, or delete the deviation's directory"

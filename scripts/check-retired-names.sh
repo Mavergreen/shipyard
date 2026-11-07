@@ -12,13 +12,13 @@ cut -f1 "$SELF/retired-names" > "$tmp/tokens"
 [ -s "$tmp/tokens" ] || exit 0
 while IFS= read -r p; do
   case "$p" in
-    scripts/retired-names|.mavergreen/release-notes/*|tests/fixtures/checks/*) continue ;;
+    scripts/retired-names|.mavergreen/release-notes/*|.mavergreen/deviations/retired-name/*/scope|tests/fixtures/checks/*) continue ;;
   esac
   [ -f "$p" ] || continue
   grep -I -o -F -f "$tmp/tokens" "$p" 2>/dev/null | sort -u > "$tmp/hits" || :
   [ -s "$tmp/hits" ] || continue
   while IFS= read -r tok; do
-    chk_deviated retired-name "$p" >/dev/null && continue
+    chk_deviated retired-name "$p#$tok" >/dev/null && continue
     repl="$(awk -F'\t' -v t="$tok" '$1 == t { print $2; exit }' "$SELF/retired-names")"
     chk_fail retired-name "$p uses $tok, a retired family name" \
       '"Mavericks" names only the OS an artifact targets' \

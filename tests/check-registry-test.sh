@@ -114,4 +114,20 @@ while IFS="$(printf '\t')" read -r id mode script old fate; do
         || fail "$id: the last line starts 'Formerly' and names $key, got: $last" ;;
   esac
 done < "$reg"
+kept="MacOSX10.9.sdk
+POST_10_9
+Requires Mac OS X 10.9.5 or later
+mavericks-vm
+MAVERICKS_VM_KEY
+VoodooInputMavericks.kext
+MavericksMultitouch.plugin
+build-from-mavericks
+on-mavericks"
+while IFS="$(printf '\t')" read -r tok repl; do
+  [ -n "$tok" ] || fail "scripts/retired-names has no empty token"
+  [ -n "$repl" ] || fail "retired token $tok names what replaces it"
+  printf '%s\n' "$kept" | while IFS= read -r k; do
+    case "$k" in *"$tok"*) echo "FAIL retired token $tok is a substring of the kept name $k, so the denylist would refuse the OS name"; exit 1 ;; esac
+  done || exit 1
+done < "$here/scripts/retired-names"
 echo "PASS check-registry"

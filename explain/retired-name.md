@@ -7,9 +7,9 @@ The family was named for the OS it targets, and the names that said so are being
 2026-10-13: the names survey found 1,994 "mavericks" occurrences in shipyard, most of them meaning the family rather than the OS.
 
 ## Limits
-It reads text, never meaning: a retired token quoted to explain its retirement is still a hit. It skips scripts/retired-names, published release notes under .mavergreen/release-notes/, and the check fixtures under tests/fixtures/checks/. Binary files are skipped. A token spelled differently (another case, a split word) is not seen.
+It reads text, never meaning: a retired token quoted to explain its retirement is still a hit. It skips scripts/retired-names, the scope files of its own deviations (they spell the tokens they excuse), published release notes under .mavergreen/release-notes/, and the check fixtures under tests/fixtures/checks/. Binary files are skipped. A token spelled differently (another case, a split word) is not seen.
 
 ## Deviating
-Write .mavergreen/deviations/retired-name/<label>/ with a scope (the file's path, or a glob of paths), a reason and a revisit. A good reason says why the file must name the retired token, as a detector or a record of history does, and the revisit says what removes the need. A scope of * switches the check off for the whole repo and is not a reason anyone should accept.
+Write .mavergreen/deviations/retired-name/<label>/ with a scope, a reason and a revisit. The scope is one glob matched against <path>#<token>, so it names both the file and the retired token it may spell: tests/x-test.sh#msc.sh excuses that token in that file and no other, and a different retired token in the same file, or one a later task adds, still fails. A file that needs several tokens takes one deviation per token. A path glob with a * after the # excuses every token and is for dated history only (explain/*#*). A good reason says why the file must name the token, as a detector or a record of history does, and the revisit says what removes the need.
 
 New in the flag day (P3, the denylist every rename task reads)
