@@ -294,6 +294,21 @@ for _s in $_prods; do
       "every name the product shows is derived from its display noun" \
       "add $_at/noun holding the display noun, as in OpenSSH, Go or Porthole"
   fi
+  case "$(mg_value "$_d/noun" 2>/dev/null)" in
+    *'('*|*')'*) chk_fail product-complete "$_at/noun holds parentheses" \
+      "every name the product shows is derived from the noun, and names carry no parentheses (names spec N1)" \
+      "remove the parentheses; names carry no parentheses (names spec N1)" ;;
+  esac
+  if mg_has "$_d/line"; then
+    _v="$(mg_value "$_d/line" 2>/dev/null)" || _v=""
+    _lineok=1
+    case "$_v" in
+      ''|.*|*.|*..*|*[!0123456789.]*) _lineok= ;;
+    esac
+    [ -n "$_lineok" ] || chk_fail product-complete "$_at/line holds \"$_v\", which is not dotted digits" \
+      "the line is part of the product's name and its link suffix, and both read it as dotted digits" \
+      "write the line as digits and dots, like 1.27 or 22"
+  fi
   if mg_has "$_d/app"; then
     _v="$(mg_value "$_d/app" 2>/dev/null)" || _v=""
     case "$_v" in

@@ -86,3 +86,79 @@ mg_renovate() {
   [ "$#" -gt 0 ] || return 1
   printf '%s\n' "$@"
 }
+
+mg_repo() {
+  if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+    printf '%s\n' "$GITHUB_REPOSITORY"
+    return 0
+  fi
+  _mg_root="$(mg_dir)"
+  _mg_u="$(cd "${_mg_root%/.mavergreen}" 2>/dev/null && git config --get remote.origin.url 2>/dev/null)" || return 1
+  _mg_u="${_mg_u%/}"
+  _mg_u="${_mg_u%.git}"
+  case "$_mg_u" in
+    https://github.com/*) _mg_u="${_mg_u#https://github.com/}" ;;
+    ssh://git@github.com/*) _mg_u="${_mg_u#ssh://git@github.com/}" ;;
+    git@github.com:*) _mg_u="${_mg_u#git@github.com:}" ;;
+    *) return 1 ;;
+  esac
+  case "$_mg_u" in
+    ''|/*|*/|*/*/*|*[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/-]*) return 1 ;;
+    */*) ;;
+    *) return 1 ;;
+  esac
+  printf '%s\n' "$_mg_u"
+}
+
+mavergreen_name() {
+  _mn_surface="${1:-}"
+  _mn_short="${2:-}"
+  _mn_version="${3:-}"
+  case "$_mn_short" in
+    ''|-*|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*)
+      echo "mavergreen_name: \"$_mn_short\" is not a short name (lowercase ASCII letters, digits and hyphens)" >&2
+      return 2 ;;
+  esac
+  case "$_mn_surface" in
+    name|installer-title|channel-title|manifest-name|link-suffix|component|feed|identifier) ;;
+    title|pkg|release-title|item-title|notes-heading)
+      if [ -z "$_mn_version" ]; then
+        echo "mavergreen_name: $_mn_surface needs a version" >&2
+        return 2
+      fi ;;
+    *)
+      echo "mavergreen_name: \"$_mn_surface\" is not a name surface" >&2
+      return 2 ;;
+  esac
+  _mn_noun="$(mg_value "products/$_mn_short/noun" 2>/dev/null)" || _mn_noun=
+  if [ -z "$_mn_noun" ]; then
+    echo "mavergreen_name: .mavergreen/products/$_mn_short/noun is missing or empty" >&2
+    return 1
+  fi
+  _mn_line="$(mg_value "products/$_mn_short/line" 2>/dev/null)" || _mn_line=
+  _mn_name="$_mn_noun"
+  [ -z "$_mn_line" ] || _mn_name="$_mn_noun $_mn_line"
+  _mn_bare="${_mn_version#v}"
+  _mn_upstream="$_mn_bare"
+  case "$_mn_upstream" in *-mavergreen.*) _mn_upstream="${_mn_upstream%-mavergreen.*}" ;; esac
+  case "$_mn_surface" in
+    name|channel-title|manifest-name) printf '%s\n' "$_mn_name" ;;
+    installer-title) printf 'Mavergreen %s\n' "$_mn_name" ;;
+    title|release-title|item-title) printf '%s %s\n' "$_mn_noun" "$_mn_upstream" ;;
+    notes-heading) printf '## %s %s\n' "$_mn_noun" "$_mn_upstream" ;;
+    pkg) printf '%s-%s.pkg\n' "$_mn_short" "$_mn_bare" ;;
+    component) printf '%s.pkg\n' "$_mn_short" ;;
+    feed) printf '%s.xml\n' "$_mn_short" ;;
+    identifier) printf 'dev.mavergreen.%s\n' "$_mn_short" ;;
+    link-suffix)
+      _mn_s=
+      _mn_rest="$_mn_line"
+      while [ -n "$_mn_rest" ]; do
+        case "$_mn_rest" in
+          .*) _mn_rest="${_mn_rest#.}" ;;
+          *) _mn_s="$_mn_s${_mn_rest%"${_mn_rest#?}"}"; _mn_rest="${_mn_rest#?}" ;;
+        esac
+      done
+      printf '%s\n' "$_mn_s" ;;
+  esac
+}

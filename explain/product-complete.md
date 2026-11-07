@@ -1,4 +1,4 @@
-product-complete: every product directory has a noun, a short name the name rules allow, known app and edition values, and a kind and a why for each requirement, with a where for an external one.
+product-complete: every product directory has a noun with no parentheses, a line, when it has one, of dotted digits, a short name the name rules allow, known app and edition values, and a kind and a why for each requirement, with a where for an external one.
 
 ## Why
 A product's directory under .mavergreen/products/ is where its names, its install layout and its requirements

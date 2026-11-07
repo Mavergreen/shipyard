@@ -9,6 +9,7 @@
 10.9 tests/shipyard-pins-test.sh
 10.9 tests/vercmp-test.sh
 10.9 tests/name-rules-test.sh
+10.9 tests/mavergreen-name-test.sh
 10.9 tests/shipyard-provision-on-target-test.sh
 10.9 tests/compat-guard-native-test.sh
 10.9 tests/sdk-metadata-consumer-test.sh
