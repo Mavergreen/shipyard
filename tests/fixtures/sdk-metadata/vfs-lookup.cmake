@@ -1,0 +1,15 @@
+# usage: cmake -DOVERLAY=<json> -DNAME=<abs path> -P vfs-lookup.cmake
+#        prints the external-contents the overlay maps NAME to, or fails when it maps it to nothing
+cmake_minimum_required(VERSION 3.19)
+file(READ "${OVERLAY}" j)
+string(JSON n LENGTH "${j}" roots)
+math(EXPR last "${n} - 1")
+foreach(i RANGE ${last})
+  string(JSON name GET "${j}" roots ${i} name)
+  if(name STREQUAL NAME)
+    string(JSON ext GET "${j}" roots ${i} external-contents)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -E echo "${ext}")
+    return()
+  endif()
+endforeach()
+message(FATAL_ERROR "the overlay maps nothing at ${NAME}")

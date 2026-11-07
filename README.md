@@ -185,6 +185,30 @@ mavericks_add_updater_app(
 `foo` is the product's short name in shipyard's `scripts/product-names`; the app (`foo-updater.app`),
 its bundle id and its feed are derived from that line.
 
+## SDK declaration metadata
+
+Some Objective-C source needs a declaration the 10.9 SDK lacks, such as `NSArray`'s lightweight
+generic parameter. Recaulk ships recipes for those edits as data
+(`/usr/local/mavergreen/recaulk/share/sdk-metadata/recipes.json`, schema 1); `MavericksSDKMetadata`
+applies them without touching the SDK:
+
+```cmake
+include(MavericksSDKMetadata)
+mavericks_materialize_sdk_metadata(overlay
+  SDK        "${CMAKE_OSX_SYSROOT}"
+  RECIPES    "${recipes_json}"
+  IDS        foundation-array-generics-v1
+  OUTPUT_DIR "${fresh_dir}")
+```
+
+It refuses, before writing anything, a recipe file of another schema, SDK name or SDK archive than
+the pinned one; an unknown, repeated or overlapping recipe; a header whose SHA-256 is not the
+recipe's; a header or alias that resolves outside the SDK, or an alias that is not the same file; a
+replacement whose text does not occur exactly once; and an `OUTPUT_DIR` that exists or resolves into
+the SDK. Otherwise `OUTPUT_DIR` appears whole, holding the edited headers and `overlay.json`, a clang
+VFS overlay that maps each header's path and its aliases (under the SDK path as given and as
+resolved) onto the edited copy; `overlay` is set to its path.
+
 ## Conventions for Claude Code
 
 The family's conventions ship as the `mavergreen` Claude Code plugin, from this repo's
