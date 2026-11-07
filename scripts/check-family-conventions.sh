@@ -1220,7 +1220,7 @@ while IFS= read -r f; do
   awk -v f="$f" '{ print f "\t" $0 }' "$f"
 done < "$tmp/shfiles" >> "$tmp/pmlines"
 : > "$tmp/fetchers"
-printf 'scripts/mavergreen_fetch.sh\nscripts/mavergreen_fetch.sh\n' >> "$tmp/fetchers"
+printf 'scripts/mavergreen_fetch.sh\n' >> "$tmp/fetchers"
 if [ "$PY_OK" -eq 1 ]; then
   _acts="$(grep -E '^\.github/actions/[^/]+/action\.ya?ml$' "$TF" || :)"
   rc=0

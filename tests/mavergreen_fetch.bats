@@ -457,7 +457,7 @@ calls() { wc -l < "$WORK/stub/calls" | tr -d ' '; }
 }
 
 
-# spec: tests/mavericks_fetch.bats "sha256 tool" -- a Linux without perl has sha256sum but no shasum, and
+# spec: tests/mavergreen_fetch.bats "sha256 tool" -- a Linux without perl has sha256sum but no shasum, and
 #       a missing hasher used to read as a pin mismatch ("is sha256 , not the pinned ...").
 bare_path() {  # $1 = dir: the tools a fetch uses, without shasum or sha256sum
   mkdir -p "$1"

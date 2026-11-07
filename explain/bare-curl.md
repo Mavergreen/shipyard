@@ -7,7 +7,7 @@ cover it: --retry treats a reset mid-transfer (error 56) as non-transient, --ret
 helper, shipyard_curl, a loop around single attempts that retries curl exits 6, 7, 18, 28, 35, 52, 55 and 56 and
 HTTP 429 and 5xx (never a 404), restarts from scratch, and never retries a checksum mismatch. The check scans
 tracked shell scripts and every run: block of every workflow and composite action, Linux jobs included. Only
-the fetch library itself (mavergreen_fetch.sh, later mavergreen_fetch.sh) may call curl.
+the fetch library itself (mavergreen_fetch.sh) may call curl.
 
 ## Incident
 2026-10-14 (designed then, from rust-link-backfill): rust PR #9, run 38547677558, job build-native. The first

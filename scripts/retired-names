@@ -34,3 +34,5 @@ Caches/mavericks-sdk	Caches/mavergreen/sdk
 Caches/mavericks-sources	Caches/mavergreen/sources
 key=mavericks-sdk-	key=mavergreen-sdk-
 key: mavericks-sdk-	key: mavergreen-sdk-
+mavericks_fetch.bats	mavergreen_fetch.bats
+mavericks-fetch	mavergreen-fetch
