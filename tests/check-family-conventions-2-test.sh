@@ -47,7 +47,7 @@ signs "$work/sa1" "$SA --product w --feed-dir dist --pkg dist/x.pkg"
 (cd "$work/sa1" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 12: a one-line call with --product and --feed-dir passes: $(cd "$work/sa1" && sh "$S" 2>&1)"; exit 1; }
 signs "$work/sa2" "# $SA --pkg x > dist/appcast.xml
 $SA \\
-  --product w --channel-title W \\
+  --product w \\
   --feed-dir dist --pkg dist/x.pkg 2>&1
 echo signed > dist/log.txt"
 (cd "$work/sa2" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: check 12: a call continued over lines passes, and a later command's redirect is not its: $(cd "$work/sa2" && sh "$S" 2>&1)"; exit 1; }
