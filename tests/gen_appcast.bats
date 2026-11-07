@@ -1,7 +1,16 @@
 #!/usr/bin/env bats
 # platform: host-agnostic
 
-setup() { SCRIPT="${BATS_TEST_DIRNAME}/../scripts/gen_appcast.sh"; }
+setup() {
+  SCRIPT="${BATS_TEST_DIRNAME}/../scripts/gen_appcast.sh"
+  REPO="$BATS_TMPDIR/gen-appcast-repo"
+  rm -rf "$REPO"
+  mkdir -p "$REPO/.mavergreen/products/go127" "$REPO/.mavergreen/products/p"
+  echo Go > "$REPO/.mavergreen/products/go127/noun"
+  echo 1.27 > "$REPO/.mavergreen/products/go127/line"
+  echo P > "$REPO/.mavergreen/products/p/noun"
+  export MAVERGREEN_REPO_ROOT="$REPO"
+}
 
 @test "render-notes converts markdown subset to html" {
   printf '## Head\n\n- one\n- two\n\n**bold** and *em*\n' > "$BATS_TMPDIR/n.md"
@@ -54,12 +63,28 @@ setup() { SCRIPT="${BATS_TEST_DIRNAME}/../scripts/gen_appcast.sh"; }
   [[ "$output" != *"<p>---</p>"* ]] || false
 }
 
-@test "channel title is parameterized" {
+@test "channel and item titles are derived from the product directory" {
   printf 'notes\n' > "$BATS_TMPDIR/n.md"
-  run sh "$SCRIPT" "My Product" "1.2.3" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
+  run sh "$SCRIPT" go127 "1.27.2-mavergreen.1" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"<title>My Product</title>"* ]] || false
-  [[ "$output" == *"<sparkle:version>1.2.3</sparkle:version>"* ]] || false
+  [[ "$output" == *"<channel>"*"<title>Go 1.27</title>"*"<item>"*"<title>Go 1.27.2</title>"* ]] || false
+  [[ "$output" == *"<sparkle:version>1.27.2.1</sparkle:version>"* ]] || false
+}
+
+@test "XML-special characters in a noun are escaped in both titles" {
+  printf 'notes\n' > "$BATS_TMPDIR/n.md"
+  echo 'A&B <x>' > "$REPO/.mavergreen/products/p/noun"
+  run sh "$SCRIPT" p "1.2.3-mavergreen.1" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"<channel>"*"<title>A&amp;B &lt;x&gt;</title>"*"<item>"*"<title>A&amp;B &lt;x&gt; 1.2.3</title>"* ]] || false
+  [[ "$output" != *"A&B"* ]] || false
+}
+
+@test "a product with no noun is refused" {
+  printf 'notes\n' > "$BATS_TMPDIR/n.md"
+  run sh "$SCRIPT" nosuch "1.2.3-mavergreen.1" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *".mavergreen/products/nosuch/noun"* ]] || false
 }
 
 # Sparkle's comparator can't order "-mavergreen.N", so <sparkle:version> (the compared value) must be
@@ -67,7 +92,7 @@ setup() { SCRIPT="${BATS_TEST_DIRNAME}/../scripts/gen_appcast.sh"; }
 # repackages are invisible to auto-update. Regression guard for that bug.
 @test "sparkle:version is numeric-only for a -mavergreen.N version; short string stays pretty" {
   printf 'notes\n' > "$BATS_TMPDIR/n.md"
-  run sh "$SCRIPT" "P" "1.102.0-mavergreen.4" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
+  run sh "$SCRIPT" p "1.102.0-mavergreen.4" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
   [ "$status" -eq 0 ]
   [[ "$output" == *"<sparkle:version>1.102.0.4</sparkle:version>"* ]] || false
   [[ "$output" == *"<sparkle:shortVersionString>1.102.0-mavergreen.4</sparkle:shortVersionString>"* ]] || false
@@ -79,7 +104,7 @@ setup() { SCRIPT="${BATS_TEST_DIRNAME}/../scripts/gen_appcast.sh"; }
 # letter-in-upstream case.)
 @test "sparkle:version normalizes an OpenSSH-portable pN patch to dotted-numeric" {
   printf 'notes\n' > "$BATS_TMPDIR/n.md"
-  run sh "$SCRIPT" "P" "9.9p2-mavergreen.1" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
+  run sh "$SCRIPT" p "9.9p2-mavergreen.1" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
   [ "$status" -eq 0 ]
   [[ "$output" == *"<sparkle:version>9.9.2.1</sparkle:version>"* ]] || false
   [[ "$output" == *"<sparkle:shortVersionString>9.9p2-mavergreen.1</sparkle:shortVersionString>"* ]] || false
@@ -89,7 +114,7 @@ setup() { SCRIPT="${BATS_TEST_DIRNAME}/../scripts/gen_appcast.sh"; }
 # -- the gate still fails closed so a human maps it into a lower numeric band instead.
 @test "a non-monotonic prerelease letter still fails closed" {
   printf 'notes\n' > "$BATS_TMPDIR/n.md"
-  run sh "$SCRIPT" "P" "1.2.3rc1-mavergreen.1" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
+  run sh "$SCRIPT" p "1.2.3rc1-mavergreen.1" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
   [ "$status" -ne 0 ]
   [[ "$output" == *"not purely dotted-numeric"* ]] || false
 }

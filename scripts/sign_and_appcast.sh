@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: sign_and_appcast.sh --product P --feed-dir DIR --channel-title T --version V --pkg-url URL \
+#   usage: sign_and_appcast.sh --product P --feed-dir DIR --version V --pkg-url URL \
 #            --notes-file FILE --pkg PKG [--signer BIN] [--verifier BIN] [--min-os 10.9.5] \
 #            [--pubkey B64] [--allow-key-change]
 #          (SPARKLE_PRIVATE_KEY must be in the environment)
@@ -35,7 +35,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
 
 PRODUCT=""; FEEDDIR=""
-SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; CHANNEL=""; VER=""; URL=""; NOTES=""; PKG=""; MINOS="${MAVERGREEN_MIN_OS:-10.9.5}"
+SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; VER=""; URL=""; NOTES=""; PKG=""; MINOS="${MAVERGREEN_MIN_OS:-10.9.5}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --product) PRODUCT="$2"; shift 2;;
@@ -44,7 +44,7 @@ while [ $# -gt 0 ]; do
     --verifier) VERIFIER="$2"; shift 2;;
     --pubkey) PUBKEY="$2"; shift 2;;
     --allow-key-change) ALLOW_CHANGE=yes; shift;;
-    --channel-title) CHANNEL="$2"; shift 2;;
+    --channel-title) echo "sign_and_appcast: --channel-title is refused; the channel title is derived (fix: write .mavergreen/products/<short>/noun)" >&2; exit 2;;
     --version) VER="$2"; shift 2;;
     --pkg-url) URL="$2"; shift 2;;
     --notes-file) NOTES="$2"; shift 2;;
@@ -53,8 +53,8 @@ while [ $# -gt 0 ]; do
     *) echo "sign_and_appcast: unknown arg: $1" >&2; exit 2;;
   esac
 done
-[ -n "$PRODUCT" ] && [ -n "$FEEDDIR" ] && [ -n "$CHANNEL" ] && [ -n "$VER" ] && [ -n "$URL" ] && [ -n "$NOTES" ] && [ -n "$PKG" ] \
-  || { echo "sign_and_appcast: need --product --feed-dir --channel-title --version --pkg-url --notes-file --pkg" >&2; exit 2; }
+[ -n "$PRODUCT" ] && [ -n "$FEEDDIR" ] && [ -n "$VER" ] && [ -n "$URL" ] && [ -n "$NOTES" ] && [ -n "$PKG" ] \
+  || { echo "sign_and_appcast: need --product --feed-dir --version --pkg-url --notes-file --pkg" >&2; exit 2; }
 mavergreen_name identifier "$PRODUCT" >/dev/null || exit 2
 [ -f "$PKG" ] || { echo "sign_and_appcast: no pkg: $PKG" >&2; exit 1; }
 printenv SPARKLE_PRIVATE_KEY | grep -q . \
@@ -83,7 +83,7 @@ ENC="sparkle:edSignature=\"$SIG\" length=\"$LEN\""
 
 mkdir -p "$FEEDDIR"
 _feed="$(mktemp "$FEEDDIR/.$PRODUCT.xml.XXXXXX")"
-sh "$SELF/gen_appcast.sh" "$CHANNEL" "$VER" "$URL" "$MINOS" "$NOTES" "$ENC" > "$_feed" \
+sh "$SELF/gen_appcast.sh" "$PRODUCT" "$VER" "$URL" "$MINOS" "$NOTES" "$ENC" > "$_feed" \
   || { rm -f "$_feed"; echo "sign_and_appcast: gen_appcast.sh failed; no feed written" >&2; exit 1; }
 chmod 644 "$_feed"
 mv "$_feed" "$FEEDDIR/$PRODUCT.xml"

@@ -124,7 +124,6 @@ jobs:
           set -eu
           v='${{ steps.ver.outputs.version }}'
           sh scripts/sign_and_appcast.sh --product shipyard --feed-dir dist \
-            --channel-title "Shipyard" \
             --version "$v" \
             --pkg-url "https://github.com/Mavergreen/shipyard/releases/download/v$v/shipyard-$v.pkg" \
             --notes-file dist/RELEASE_NOTES.md \

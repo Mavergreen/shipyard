@@ -29,7 +29,6 @@ EOF
 
 sign_and_appcast() {  # [sh flags...] -- the rest of the args are sign_and_appcast.sh's
   sh "$@" "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds" \
-    --channel-title "Test Channel" \
     --version 1.2.3 --pkg-url "https://example.invalid/x.pkg" --notes-file "$T/notes.md" \
     --pkg "$T/x.pkg" --pubkey stub < /dev/null
 }
@@ -62,7 +61,7 @@ refute_key_in() {  # TEXT
 @test "an unset key is refused, before anything is signed" {
   run env -i PATH="$PATH" MAVERGREEN_REPO_ROOT="$MAVERGREEN_REPO_ROOT" sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" \
     --product openssh --feed-dir "$T/feeds" \
-    --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
+    --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
     --notes-file "$T/notes.md" --pkg "$T/x.pkg"
   [ "$status" -ne 0 ]
   [[ "$output" == *"SPARKLE_PRIVATE_KEY"* ]] || false

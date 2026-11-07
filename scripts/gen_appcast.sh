@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: gen_appcast.sh <channel-title> <version> <pkg-url> <min-os> <notes-file> <enclosure-attrs>
+#   usage: gen_appcast.sh <short> <version> <pkg-url> <min-os> <notes-file> <enclosure-attrs>
 #          gen_appcast.sh --render-notes <notes-file>      # emit just the HTML fragment (test seam)
 #          Generates the Sparkle feed (<short name>.xml) for ONE release, to stdout. Fails if the notes file is
 #          missing or empty: the notes ARE the release's <description>.
@@ -112,8 +112,10 @@ fi
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # comparison_key()
 
-[ $# -eq 6 ] || { echo "usage: gen_appcast.sh <channel-title> <version> <pkg-url> <min-os> <notes-file> <enclosure-attrs>" >&2; exit 2; }
-CHANNEL_TITLE="$1"; VER="$2"; URL="$3"; MINOS="$4"; NOTES_FILE="$5"; ENCLOSURE_ATTRS="$6"
+[ $# -eq 6 ] || { echo "usage: gen_appcast.sh <short> <version> <pkg-url> <min-os> <notes-file> <enclosure-attrs>" >&2; exit 2; }
+SHORT="$1"; VER="$2"; URL="$3"; MINOS="$4"; NOTES_FILE="$5"; ENCLOSURE_ATTRS="$6"
+CHANNEL_TITLE="$(mavergreen_name channel-title "$SHORT")" || exit 1
+ITEM_TITLE="$(mavergreen_name item-title "$SHORT" "$VER")" || exit 1
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "The Sparkle
 #       comparison version must be dotted-numeric AND monotonic" -- SUStandardVersionComparator can't
@@ -144,9 +146,9 @@ cat <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>$CHANNEL_TITLE</title>
+    <title>$(mg_xml_text "$CHANNEL_TITLE")</title>
     <item>
-      <title>Version $VER</title>
+      <title>$(mg_xml_text "$ITEM_TITLE")</title>
       <pubDate>$PUBDATE</pubDate>
       <sparkle:version>$BUILD_VER</sparkle:version>
       <sparkle:shortVersionString>$VER</sparkle:shortVersionString>

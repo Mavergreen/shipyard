@@ -32,7 +32,7 @@ printf '## Notes\n\n- thing one\n- thing two\n' > "$T/notes.md"
 LEN=$(wc -c < "$T/x.pkg" | tr -d '[:space:]')
 
 SPARKLE_PRIVATE_KEY="ignored-by-stub" sh "$ROOT/scripts/sign_and_appcast.sh" \
-  --signer "$T/sign" --product openssh --feed-dir "$T/feeds" --channel-title "Test Channel" --version 1.2.3 \
+  --signer "$T/sign" --product openssh --feed-dir "$T/feeds" --version 1.2.3 \
   --pkg-url "https://example.invalid/x.pkg" --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub > "$T/stdout"
 OUT="$(cat "$T/feeds/openssh.xml")"
 
@@ -40,17 +40,25 @@ fail() { echo "sign_and_appcast test: $1" >&2; exit 1; }
 printf '%s\n' "$OUT" | grep -q "sparkle:edSignature=\"$SIG\"" || fail "signer's signature not in the enclosure"
 printf '%s\n' "$OUT" | grep -q "length=\"$LEN\"" || fail "pkg length not in the enclosure"
 printf '%s\n' "$OUT" | grep -q '<sparkle:version>1.2.3</sparkle:version>' || fail "version missing"
-printf '%s\n' "$OUT" | grep -q 'https://example.invalid/x.pkg' || fail "enclosure url missing"
+printf '%s\n' "$OUT" | grep -q '<channel>$' || fail "no channel"
+printf '%s\n' "$OUT" | grep -q '^    <title>OpenSSH</title>$' || fail "channel title is the noun from products/openssh"
+printf '%s\n' "$OUT" | grep -q '^      <title>OpenSSH 1.2.3</title>$' || fail "item title is the noun and the upstream version"printf '%s\n' "$OUT" | grep -q 'https://example.invalid/x.pkg' || fail "enclosure url missing"
 printf '%s\n' "$OUT" | grep -q '<li>thing one</li>' || fail "notes not rendered"
 [ ! -s "$T/stdout" ] || fail "the feed goes to --feed-dir as <product>.xml, never to stdout, where a caller could name it anything"
 [ "$(ls -A "$T/feeds")" = openssh.xml ] || fail "only the feed is left in --feed-dir: $(ls -A "$T/feeds")"
 rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product no-such-product \
-  --feed-dir "$T/feeds2" --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
+  --feed-dir "$T/feeds2" --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
   --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "a --product the repo does not declare has no feed; expected exit 2, got $rc"
 [ ! -e "$T/feeds2" ] || fail "a refused call writes no feed"
-rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh \
+rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds4" \
   --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
+  --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2> "$T/err4" || rc=$?
+[ "$rc" -eq 2 ] || fail "--channel-title is derived, not passed; expected exit 2, got $rc"
+grep -q ".mavergreen/products/<short>/noun" "$T/err4" || fail "the refusal says where the title comes from: $(cat "$T/err4")"
+[ ! -e "$T/feeds4" ] || fail "a refused call writes no feed"
+rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh \
+  --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
   --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "--feed-dir is required; expected exit 2, got $rc"
 
@@ -62,7 +70,7 @@ mkdir -p "$T/rel/Mavergreen/ed25519/releases/download/$pin"
 printf 'not the pkg\n' > "$T/rel/Mavergreen/ed25519/releases/download/$pin/ed25519-$pin.pkg"
 : > "$T/rel/Mavergreen/ed25519/releases/download/$pin/SHA256SUMS"
 rc=0; SPARKLE_PRIVATE_KEY=x MAVERGREEN_RELEASES="file://$T/rel" SHIPYARD_FETCH_BACKOFF=0 sh "$ROOT/scripts/sign_and_appcast.sh" \
-  --product openssh --feed-dir "$T/feeds3" --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
+  --product openssh --feed-dir "$T/feeds3" --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
   --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2> "$T/err3" || rc=$?
 [ "$rc" -ne 0 ] || fail "an ed25519 pkg its SHA256SUMS does not list must be refused"
 grep -q "ed25519 $pin" "$T/err3" || fail "the refusal names the pinned ed25519 release: $(cat "$T/err3")"

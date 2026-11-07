@@ -27,7 +27,7 @@ sign_and_appcast() {  # sign_and_appcast PRIVATE_KEY_NAME [extra args]
   local k="$1"; shift
   SPARKLE_PRIVATE_KEY="$(cat "$BATS_FILE_TMPDIR/keys/$k")" sh "$ROOT/scripts/sign_and_appcast.sh" \
     --signer "$TOOLS/ed25519-sign" --product openssh --feed-dir "$T/feeds" \
-    --channel-title C --version 1.2.3 --pkg-url https://example.invalid/new.pkg \
+    --version 1.2.3 --pkg-url https://example.invalid/new.pkg \
     --notes-file "$T/notes.md" --pkg "$T/new.pkg" "$@"
 }
 

@@ -46,7 +46,7 @@ sums() { ( cd "$REL" && shasum -a 256 "$@" > SHA256SUMS ); }
 
 sign() {  # sign HOST
   ED25519_HOST="$1" PATH="$WORK/shims:$PATH" SPARKLE_PRIVATE_KEY=x \
-    sh "$ROOT/scripts/sign_and_appcast.sh" --product openssh --feed-dir "$WORK/feeds" --channel-title C \
+    sh "$ROOT/scripts/sign_and_appcast.sh" --product openssh --feed-dir "$WORK/feeds" \
     --version 1.2.3 --pkg-url https://example.invalid/x.pkg --notes-file "$WORK/notes.md" \
     --pkg "$WORK/x.pkg" --pubkey stub
 }
@@ -88,7 +88,7 @@ sign() {  # sign HOST
 @test "an explicit --signer still wins over the pinned release" {
   signer_tree "$WORK/mine" mine
   run env ED25519_HOST=Linux SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$WORK/mine/bin/ed25519-sign" \
-    --product openssh --feed-dir "$WORK/feeds" --channel-title C --version 1.2.3 \
+    --product openssh --feed-dir "$WORK/feeds" --version 1.2.3 \
     --pkg-url https://example.invalid/x.pkg --notes-file "$WORK/notes.md" --pkg "$WORK/x.pkg" --pubkey stub
   [ "$status" -eq 0 ]
   [ "$(cat "$WORK/signed-by")" = mine ]

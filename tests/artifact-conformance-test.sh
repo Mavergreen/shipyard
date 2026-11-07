@@ -513,7 +513,7 @@ Some bug fixes.
 
 Requires 10.9.5 or later.
 NOTES
-sh "$GA" "Test Channel" "9.9p2-mavergreen.6" "https://example.com/x.pkg" "10.9.5" \
+MAVERGREEN_REPO_ROOT="$here/.." sh "$GA" shipyard "9.9p2-mavergreen.6" "https://example.com/x.pkg" "10.9.5" \
   "$_nr/dist/RELEASE_NOTES.md" 'sparkle:edSignature="x" length="10"' > "$_nr/dist/appcast.xml"
 _facts="$(sh "$AF" "$_nr/dist" 9.9p2-mavergreen.6 "$_nr")"
 _render_digest="$(printf '%s\n' "$_facts" | sed -n 's/^notes-render [^ ]* \(..*\)$/\1/p')"
@@ -560,7 +560,7 @@ Some bug fixes.
 
 Requires 10.9.5 or later.
 NOTES
-sh "$GA" "Test Channel" "9.9p2-mavergreen.6" "https://example.com/x.pkg" "10.9.5" \
+MAVERGREEN_REPO_ROOT="$here/.." sh "$GA" shipyard "9.9p2-mavergreen.6" "https://example.com/x.pkg" "10.9.5" \
   "$_nr/dist/RELEASE_NOTES_B.md" 'sparkle:edSignature="x" length="10"' > "$_nr/dist/appcast-b.xml"
 mkdir -p "$_nr/dist-mismatch"
 cp "$_nr/dist/RELEASE_NOTES.md" "$_nr/dist-mismatch/RELEASE_NOTES.md"     # notes-render from A
@@ -807,7 +807,7 @@ printf 'payload\n' > "$_e2e/good-src/payload.txt"
 ( cd "$_e2e/good-src" && tar -czf "$_e2e/good/thing-9.9p2-mavergreen.6.tgz" payload.txt )
 rm -rf "$_e2e/good-src"
 _good_len="$(wc -c < "$_e2e/good/thing-9.9p2-mavergreen.6.tgz" | tr -d ' ')"
-sh "$GA" "Test Channel" "9.9p2-mavergreen.6" \
+MAVERGREEN_REPO_ROOT="$here/.." sh "$GA" shipyard "9.9p2-mavergreen.6" \
   "https://github.com/Mavergreen/openssh/releases/download/9.9p2-mavergreen.6/thing-9.9p2-mavergreen.6.tgz" \
   "10.9.5" "$_e2e/good/RELEASE_NOTES.md" "sparkle:edSignature=\"x\" length=\"$_good_len\"" \
   > "$_e2e/good/appcast.xml"
@@ -1390,16 +1390,18 @@ PLIST
   _f="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"
   printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"
   _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavergreen.1.pkg" | tr -d ' ')"
-  sh "$GA" X 1.0.0-mavergreen.1 https://github.com/Mavergreen/x/releases/download/1.0.0-mavergreen.1/x-1.0.0-mavergreen.1.pkg \
+  MAVERGREEN_REPO_ROOT="$_pk" sh "$GA" x 1.0.0-mavergreen.1 https://github.com/Mavergreen/x/releases/download/1.0.0-mavergreen.1/x-1.0.0-mavergreen.1.pkg \
     10.9.5 "$_pk/archive/RELEASE_NOTES.md" "sparkle:edSignature=\"x\" length=\"$_alen\"" > "$_pk/archive/x.xml"
   _fa="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/archive" 1.0.0-mavergreen.1 "$_pk")"
   mkdir -p "$_pk/rehearsal"; cp "$_pk/archive/x-1.0.0-mavergreen.1.pkg" "$_pk/rehearsal/"
-  GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavergreen.1 2>/dev/null \
+  MAVERGREEN_REPO_ROOT="$_pk" GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavergreen.1 2>/dev/null \
     || { echo "FAIL: stand-in-feeds.sh must stage a feed for a build that signs nothing"; exit 1; }
   [ -f "$_pk/rehearsal/x.xml" ] && [ -s "$_pk/rehearsal/RELEASE_NOTES.md" ] \
     || { echo "FAIL: stand-in-feeds.sh writes x.xml for x's updater, and stand-in notes for its description"; exit 1; }
+  grep -q "^    <title>X</title>$" "$_pk/rehearsal/x.xml" && grep -q "^      <title>X 1.0.0</title>$" "$_pk/rehearsal/x.xml" \
+  || { echo "FAIL: stand-in-feeds.sh writes the derived channel and item titles (they used to be the bare short name): $(grep "<title>" "$_pk/rehearsal/x.xml")"; exit 1; }
   _sum="$(cksum < "$_pk/rehearsal/x.xml")"
-  GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavergreen.1 2>/dev/null
+  MAVERGREEN_REPO_ROOT="$_pk" GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavergreen.1 2>/dev/null
   [ "$(cksum < "$_pk/rehearsal/x.xml")" = "$_sum" ] || { echo "FAIL: stand-in-feeds.sh never overwrites a feed"; exit 1; }
   _fr="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/rehearsal" 1.0.0-mavergreen.1 "$_pk")"
   _fq="$(sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"

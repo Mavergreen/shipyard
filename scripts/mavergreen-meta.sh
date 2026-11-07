@@ -170,3 +170,5 @@ mg_port_or_own() {
     echo own
   fi
 }
+
+mg_xml_text() { printf '%s\n' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }

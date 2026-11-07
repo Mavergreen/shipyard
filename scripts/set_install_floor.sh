@@ -101,7 +101,6 @@ got_id="$(sed -n 's/.*<pkg-info[^>]*[[:space:]]identifier="\([^"]*\)".*/\1/p' "$
 mkdir -p "$BASEDIR/comp"
 cp "$COMPONENT" "$BASEDIR/comp/$COMP_BASE"
 COMPONENT="$BASEDIR/comp/$COMP_BASE"
-xml_text() { printf '%s\n' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 
 BASE="$BASEDIR/mavergreen-base.pkg"
 if [ -n "$BASEVER" ]; then
@@ -116,7 +115,7 @@ _opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\""
 {
   echo '<?xml version="1.0" encoding="utf-8"?>'
   echo '<installer-gui-script minSpecVersion="1">'
-  echo "    <title>$(xml_text "$TITLE")</title>"
+  echo "    <title>$(mg_xml_text "$TITLE")</title>"
   [ -n "$WELCOME" ] && echo "    <welcome file=\"$(basename "$WELCOME")\" mime-type=\"text/html\"/>"
   [ -n "$LICENSE" ] && echo "    <license file=\"$(basename "$LICENSE")\"/>"
   [ -n "$CONCLUSION" ] && echo "    <conclusion file=\"$(basename "$CONCLUSION")\" mime-type=\"text/html\"/>"

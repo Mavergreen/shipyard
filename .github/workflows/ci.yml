@@ -118,7 +118,7 @@ jobs:
             --product Shipyard --min-os 10.9.5 --out "$d/RELEASE_NOTES.md"
           pkg="$d/shipyard-$SHIPYARD_CHECK_VERSION.pkg"
           len="$(wc -c < "$pkg" | tr -d ' ')"
-          sh scripts/gen_appcast.sh "Shipyard" "$SHIPYARD_CHECK_VERSION" \
+          sh scripts/gen_appcast.sh shipyard "$SHIPYARD_CHECK_VERSION" \
             "https://github.com/Mavergreen/shipyard/releases/download/v$SHIPYARD_CHECK_VERSION/shipyard-$SHIPYARD_CHECK_VERSION.pkg" \
             10.9.5 "$d/RELEASE_NOTES.md" "sparkle:edSignature=\"rehearsal\" length=\"$len\"" > "$d/shipyard.xml"
           sh scripts/shipyard-check --dist "$d"
