@@ -21,6 +21,7 @@ MAVERGREEN_REPO_ROOT="$w"; export MAVERGREEN_REPO_ROOT
 eq name-go "$(mavergreen_name name go127)" "Go 1.27"
 eq installer-title "$(mavergreen_name installer-title go127)" "Mavergreen Go 1.27"
 eq link-suffix "$(mavergreen_name link-suffix go127)" 127
+printf '1.27\n' > "$p/go127/line"
 eq title "$(mavergreen_name title go127 1.27.2-mavergreen.1)" "Go 1.27.2"
 eq pkg "$(mavergreen_name pkg go127 1.27.2-mavergreen.1)" "go127-1.27.2-mavergreen.1.pkg"
 eq name-libcxx "$(mavergreen_name name libcxx22)" "libc++ 22"

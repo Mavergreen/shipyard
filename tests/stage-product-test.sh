@@ -117,8 +117,11 @@ grep -q 'dev.mavergreen.openssh.updater' "$w/err" || fail "the refusal names the
 rm -rf "$w/undeclared"; mkdir -p "$w/undeclared/.mavergreen/products"
 rc=0; MAVERGREEN_REPO_ROOT="$w/undeclared" sh "$S" --stage "$st" --product openssh --version 1 \
   --scripts-out "$w/scr-undeclared" --updater-app "$APP" 2>"$w/err" || rc=$?
-[ "$rc" -eq 1 ] || fail "an updater for a product the repo does not declare must be refused (1), got $rc"
-grep -q '.mavergreen/products/openssh/' "$w/err" || fail "the refusal says where to declare the product: $(cat "$w/err")"
+[ "$rc" -eq 1 ] || fail "a product the repo does not declare must be refused (1), got $rc"
+grep -q '.mavergreen/products/openssh/noun' "$w/err" || fail "the refusal says where to write the noun: $(cat "$w/err")"
+rc=0; MAVERGREEN_REPO_ROOT="$w/undeclared" sh "$here/../scripts/updater-identity.sh" bundle-id openssh 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "an updater identity for a product the repo does not declare must be refused (1), got $rc"
+grep -q 'not a product of this repo' "$w/err" || fail "the updater-identity refusal says where to declare the product: $(cat "$w/err")"
 rc=0; ( cd "$w" && GITHUB_REPOSITORY= sh "$S" --stage "$st" --product openssh --version 1 \
   --scripts-out "$w/scr-norepo" --updater-app "$APP" ) 2>"$w/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "an updater whose feed's repo cannot be learned must be refused (2), got $rc"
@@ -225,6 +228,8 @@ for o in name:noun line:line; do
   [ "$rc" -eq 2 ] || fail "--${o%%:*} must be refused with exit 2, got $rc"
   grep -qF ".mavergreen/products/<P>/${o#*:}" "$w/err" || fail "the refusal of --${o%%:*} names products/<P>/${o#*:}: $(cat "$w/err")"
 done
+rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-refuse" --name 2>"$w/err" || rc=$?
+[ "$rc" -eq 2 ] && grep -qF ".mavergreen/products/<P>/noun" "$w/err" || fail "--name with no value must hit the refusal, not 'needs a value': $(cat "$w/err")"
 [ "$("$SD" plist get "$w/stage-go127/usr/local/mavergreen/go127/mavergreen.plist" name)" = "Go 1.27" ] \
   || fail "staging go127 (noun Go, line 1.27) writes the name 'Go 1.27'"
 [ "$("$SD" plist get "$w/stage-go127/usr/local/mavergreen/go127/mavergreen.plist" line)" = 1.27 ] \

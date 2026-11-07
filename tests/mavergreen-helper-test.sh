@@ -40,6 +40,17 @@ mg link go127
 [ "$(target share/man/man1/go-127.1.gz)" = ../../../go127/share/man/man1/go.1.gz ] \
   || fail "a line spelled 1.27 links its manpage with the dots removed: go-127.1.gz"
 
+mkdir -p "$w/suffix/.mavergreen/products/sfx"; echo Sfx > "$w/suffix/.mavergreen/products/sfx/noun"
+for l in 1.27 1.26 22 126 1.2.3 9; do
+  printf '%s\n' "$l" > "$w/suffix/.mavergreen/products/sfx/line"
+  want="$(MAVERGREEN_REPO_ROOT="$w/suffix" sh -c '. "$1/scripts/mavergreen-meta.sh"; mavergreen_name link-suffix sfx' sh "$here/..")"
+  rm -rf "$T/sfx" "$T"/bin/tool*
+  mkproduct sfx sfxgrp "$l" bin/tool
+  mg link sfx
+  [ -L "$T/bin/tool-$want" ] || fail "the helper's links for a line spelled $l must be tool-$want, the link-suffix mavergreen_name derives (the two implementations must agree): $(ls "$T/bin")"
+done
+rm -rf "$T/sfx" "$T"/bin/tool*; mg unlink sfx 2>/dev/null || true
+
 mg unlink go126
 [ "$(mg select go)" = go126 ] || fail "unlink never changes a selection: an upgrade's preinstall runs it on the selected line"
 mg link go126

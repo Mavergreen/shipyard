@@ -36,7 +36,7 @@ ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; REQ=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
-    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--line|--version|--group|--exclude|--replaces|--generated|--requires)
+    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--version|--group|--exclude|--replaces|--generated|--requires)
       [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in

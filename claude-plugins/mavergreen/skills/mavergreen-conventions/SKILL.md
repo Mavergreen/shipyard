@@ -705,7 +705,7 @@ that line's, so no line needs a fixed per-line feed release. Renaming a line rep
 and is asked for, never done in passing.
 
 **The lines of one upstream share a group.** Each line repo stages with the same `--group` (`go`)
-and its own `--line` (`126`, `127`). Every member always exports `<cmd>-<line>` (`go-126`,
+and its own `.mavergreen/products/<short>/line` (`1.26`, `1.27`; `--line` is refused). Every member always exports `<cmd>-<line>` (`go-126`,
 `gofmt-127`); the bare names (`go`, `gofmt`) belong to the one member the group has **selected**.
 The first member installed is selected; installing another never takes the selection, and neither
 does upgrading one; `mavergreen select go go127` moves it. The mechanism is in "Install layout and
