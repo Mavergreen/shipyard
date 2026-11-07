@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.19)
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+project(sdk_metadata_consumer LANGUAGES C OBJC)
+list(APPEND CMAKE_MODULE_PATH "${MODULE_DIR}")
+include(MavericksSDKMetadata)
+add_library(opted_objc OBJECT opted.m)
+target_compile_options(opted_objc PRIVATE -fobjc-arc)
+add_library(plain_objc OBJECT plain.m)
+add_library(plain_c OBJECT plain.c)
+mavericks_target_sdk_metadata(TARGET opted_objc SDK "${CMAKE_OSX_SYSROOT}" RECIPES "${RECIPES}"
+  IDS foundation-array-generics-v1 OUTPUT_DIR "${GENERATION_ROOT}")

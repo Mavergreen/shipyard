@@ -3,7 +3,9 @@
 10.9 tests/assert-installed-shipyard-test.sh
 10.9 tests/installed-updater-launch-test.sh
 10.9 tests/compat-guard-native-test.sh
+10.9 tests/sdk-metadata-consumer-test.sh
 golden-gate tests/installed-shipyard-test.sh
 golden-gate tests/fetch_stevedore_darwin.bats
 golden-gate tests/updater-clang22-darwin-test.sh
 golden-gate tests/umbrella-langs.sh
+golden-gate tests/sdk-metadata-consumer-test.sh

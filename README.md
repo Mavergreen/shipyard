@@ -209,6 +209,31 @@ the SDK. Otherwise `OUTPUT_DIR` appears whole, holding the edited headers and `o
 VFS overlay that maps each header's path and its aliases (under the SDK path as given and as
 resolved) onto the edited copy; `overlay` is set to its path.
 
+A product opts one target in, explicitly:
+
+```cmake
+mavericks_target_sdk_metadata(TARGET iTerm2
+  SDK        "${CMAKE_OSX_SYSROOT}"
+  RECIPES    "${recipes_json}"
+  IDS        foundation-array-generics-v1
+  OUTPUT_DIR "${CMAKE_BINARY_DIR}/sdk-metadata")
+```
+
+That target's Objective-C and Objective-C++ compiles get `-ivfsoverlay <overlay>` beside their
+unchanged `-isysroot`; its C and C++ compiles, every other target and every link are untouched. The
+overlay lives in a generation under `OUTPUT_DIR` named for its inputs: the SDK path, the recipe
+file's bytes, the ids, the Objective-C compilers and this module's own bytes. A reconfigure with the
+same inputs reuses the generation once every file in it matches the stamp written beside it; a
+generation without that stamp, or with a changed, added or missing file, is refused and left as it
+is (remove it to regenerate). `SDK` must be the configure's `CMAKE_OSX_SYSROOT`, or the overlay
+could never apply.
+
+What it does not do: an overlay changes declarations only, so a recipe can make generic syntax
+compile but adds no methods, classes or runtime behaviour, and a binary built with it needs nothing
+extra on 10.9. The compiler must read clang VFS overlays (clang22 does); the recipes cover only what
+Recaulk ships, and `tests/sdk-metadata-consumer-test.sh` (run by hand on each box, see
+`tests/maintainer-tests`) is the evidence for the import orders it checks.
+
 ## Conventions for Claude Code
 
 The family's conventions ship as the `mavergreen` Claude Code plugin, from this repo's

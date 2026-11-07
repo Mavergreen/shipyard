@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "sdk": "MacOSX10.9",
+  "sdk_archive_sha256": "fcf88ce8ff0dd3248b97f4eb81c7909f2cc786725de277f4d05a2b935cc49de0",
+  "recipes": [
+    {
+      "id": "foundation-array-generics-v1",
+      "header": "System/Library/Frameworks/Foundation.framework/Versions/C/Headers/NSArray.h",
+      "sha256": "62c14ca4c2ab6fc0194328585cce9d18aab0b65338bd0aab2146ad9b0053c585",
+      "aliases": [
+        "System/Library/Frameworks/Foundation.framework/Headers/NSArray.h"
+      ],
+      "replacements": [
+        {
+          "old": "@interface NSArray : NSObject",
+          "new": "@interface NSArray<__covariant ObjectType> : NSObject"
+        },
+        {
+          "old": "@interface NSMutableArray : NSArray",
+          "new": "@interface NSMutableArray<ObjectType> : NSArray<ObjectType>"
+        }
+      ]
+    }
+  ]
+}
