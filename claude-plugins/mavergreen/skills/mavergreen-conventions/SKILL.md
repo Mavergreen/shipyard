@@ -181,7 +181,7 @@ updaters, signing, or compat checks:**
 |---|---|---|
 | `mavericks_build_mode` · `MavericksMode` · `mavericks_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
 | `mavericks_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
-| `RequireAppleClang` | enforces Apple `/usr/bin/clang` (cgo/ObjC), except for the Sparkle updater, which builds with clang22 | assuming the toolchain |
+| `RequireAppleClang` | enforces Apple `/usr/bin/clang` for a configure that still declares it; every caller is a leftover, not an exception (see "The compiler: clang22 on every host") | assuming the toolchain |
 | `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set) | a bespoke compat check |
 | `mavericks_add_updater_app` · `MavericksSparkle` · `stage_updater.sh` | builds/stages the Sparkle updater (self-fetches the framework) | wiring Sparkle by hand |
 | `apply_patches.sh SRC PATCHDIR` | applies `PATCHDIR/*.patch` to an unpacked source once, in name order with no fuzz; records their SHA-256s in `SRC/.mavergreen-patches`, no-ops on the same set, refuses a tree patched with another | a hand-rolled `patch` loop |
@@ -220,6 +220,22 @@ exactly what it was, so CI logs and every existing consumer see no change. Stdou
 retried download says so on stderr whatever the setting: one `shipyard_curl:` line per retry, and one
 when it gives up. A product that drives a fetch for a person at a terminal (Longboat) sets it; a build
 script does not.
+
+## The compiler: clang22 on every host
+
+**Products build with clang22 on every host, and nothing a build needs comes from the Command Line
+Tools.** `fetch_clang22.sh` gives the host's clang22: the pinned Linux archive on Linux, `clang22-cross`
+on a modern Mac, the native `clang22` on 10.9. Its `clang.cfg` is part of the compiler: it places
+`librecaulk.a` at the tail of the inputs, before the driver's `-lSystem`, so a Recaulk fix to a 10.9
+function (posix_spawn; pselect in 20261107.1) reaches every product at its next build, with no
+per-product plumbing. clang22's `llvm-*` tools stand in for Xcode's: no `xcrun`, no Command Line Tools
+`ld64`, `libtool`, `ar`, `otool`, `lipo` or `nm`, on any host. This is the step toward a family-owned
+distribution that replaces the Command Line Tools.
+
+**Apple's clang is a declared deviation, never a default.** `/usr/bin/clang`, AppleClang, or a configure
+that keeps `RequireAppleClang`, is allowed only where clang22 cannot do the job. Its comment names that
+reason and the shared fix that would retire it, and INGREDIENTS.md declares it. The products that use it
+today are leftovers from before this rule, queued to move, not exceptions to copy.
 
 ## The build must also run natively ON 10.9
 
