@@ -5,7 +5,10 @@
 #          $MAVERICKS_DEVIATIONS_ROOT/INGREDIENTS.md (default: the current directory), for the
 #          minos/sdk rule ONLY. The Mach-O readers are stubbed: a fixture "binary" is the slice
 #          lines macho-slices.sh would print, so the guard's own logic runs on any host;
-#          tests/compat_guard.bats covers the same cases on real binaries.
+#          tests/compat_guard.bats covers the same cases on real binaries. The Objective-C analyzer
+#          is stubbed too (OBJC_COMPAT): it writes a complete strict report and passes or, while
+#          bin/objc-blocks exists, names one blocking finding and exits 1. tests/objc-guard-test.sh
+#          runs the real one. It runs opted in to the analyzer (MAVERGREEN_OBJC_STRICT=1) throughout.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/guard-exempt-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
@@ -21,10 +24,20 @@ cat > "$w/bin/shasum" <<'EOF'
 echo "0000000000000000000000000000000000000000000000000000000000000000  $3"
 EOF
 printf '#!/bin/sh\nexit 0\n' > "$w/bin/nm"
-printf '#!/bin/sh\nexit 0\n' > "$w/bin/strings"
-chmod +x "$w/bin/shasum" "$w/bin/nm" "$w/bin/strings"
-PATH="$w/bin:$PATH"; export PATH
-unset MAVERICKS_DEVIATIONS_ROOT MAVERICKS_ALLOW_ARCHS MAVERICKS_ALLOW_SELECTORS MAVERICKS_ALLOW_GUARDED_WEAK
+# spec: scripts/assert_binary_compatible.sh OBJC_COMPAT knob -- the strict analyzer's contract, a report at --report.
+cat > "$w/bin/objc-compat" <<'EOF'
+#!/bin/sh
+while [ $# -gt 0 ]; do [ "$1" = --report ] && rep=$2; shift 2; done
+printf '{"schema": 1, "mode": "strict", "complete_within_boundary": true, "findings": []}\n' > "$rep"
+[ -e "$(dirname "$0")/objc-blocks" ] || exit 0
+echo 'objc-compat: blocking: x86_64@0x1:+[NSColor labelColor] unsupported: introduced 10.10' >&2
+exit 1
+EOF
+chmod +x "$w/bin/shasum" "$w/bin/nm" "$w/bin/objc-compat"
+PATH="$w/bin:$PATH"; OBJC_COMPAT="$w/bin/objc-compat"; export PATH OBJC_COMPAT
+unset MAVERICKS_DEVIATIONS_ROOT MAVERICKS_ALLOW_ARCHS MAVERICKS_ALLOW_SELECTORS MAVERICKS_POST_10_9_SELECTORS MAVERICKS_ALLOW_GUARDED_WEAK \
+  MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT MAVERGREEN_OBJC_REPORT_DIR
+MAVERGREEN_OBJC_STRICT=1; export MAVERGREEN_OBJC_STRICT
 G="$w/scripts/assert_binary_compatible.sh"
 
 echo 'x86_64 EXECUTE 10.9 26.5' > "$w/build/bin/tool"
@@ -88,10 +101,10 @@ printf '#!/bin/sh\necho "                 (undefined) external _clock_gettime (f
 fails "$w/build/bin/tool"; says '_clock_gettime'
 printf '#!/bin/sh\nexit 0\n' > "$w/bin/nm"
 
-label="an excuse covers only the sdk rule: a post-10.9 selector still fails"
-printf '#!/bin/sh\necho labelColor\n' > "$w/bin/strings"
+label="an excuse covers only the sdk rule: a blocking Objective-C send still fails"
+: > "$w/bin/objc-blocks"
 fails "$w/build/bin/tool"; says 'labelColor'
-printf '#!/bin/sh\nexit 0\n' > "$w/bin/strings"
+rm "$w/bin/objc-blocks"
 
 label="an excused file does not excuse its neighbour on the same command line"
 fails "$w/build/bin/tool" "$w/build/bin/armtool"; says 'armtool'

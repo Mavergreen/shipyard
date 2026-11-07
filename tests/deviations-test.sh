@@ -76,6 +76,20 @@ for bad in '- self-upstream-exclude: no own code' '- self-upstream-exclude:*: x'
   if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: '$bad' must be refused; got: $out"; exit 1; fi
   printf '%s\n' "$out" | grep -q 'self-upstream-exclude' || { echo "FAIL: '$bad': the refusal names self-upstream-exclude: $out"; exit 1; }
 done
+# spec: scripts/assert_binary_compatible.sh header -- objc-api:<artifact glob> names one artifact scope and points at
+#       one reviewed evidence record, evidence=<repo-relative file>#<record id>, then gives the review reason; an
+#       unscoped, all-wildcard, evidence-less, record-less or reasonless one would excuse sends in silence.
+printf '## Conformance deviations\n- objc-api:bin/codex: evidence=compat/objc-exceptions.json#ws-launch guarded by respondsToSelector:\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'objc-api bin/codex evidence=compat/objc-exceptions.json#ws-launch guarded by respondsToSelector:' \
+  || { echo "FAIL: an objc-api entry must parse; got: $(sh "$S" "$w" 2>&1)"; exit 1; }
+for bad in '- objc-api: evidence=compat/x.json#r every artifact' '- objc-api:*: evidence=compat/x.json#r every artifact' \
+  '- objc-api:*/**: evidence=compat/x.json#r every artifact' '- objc-api:bin/codex: reviewed by hand' \
+  '- objc-api:bin/codex: evidence=compat/x.json no record' '- objc-api:bin/codex: evidence=compat/x.json#r' \
+  '- objc-api:bin/codex: evidence=#r no file' '- objc-api:bin/codex: evidence=compat/x.json#a#b two records'; do
+  printf '## Conformance deviations\n%s\n' "$bad" > "$w/INGREDIENTS.md"
+  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: '$bad' must be refused; got: $out"; exit 1; fi
+  printf '%s\n' "$out" | grep -q 'objc-api' || { echo "FAIL: '$bad': the refusal names objc-api: $out"; exit 1; }
+done
 printf '## Conformance deviations\n- unlinked:components/*: a glob covers every KEY of every file under it\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'unlinked components/\* a glob covers every KEY of every file under it' \
   || { echo "FAIL: a file glob is a scope"; exit 1; }

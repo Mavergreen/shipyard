@@ -182,7 +182,7 @@ updaters, signing, or compat checks:**
 | `mavericks_build_mode` · `MavericksMode` · `mavericks_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
 | `mavericks_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
 | `RequireAppleClang` | enforces Apple `/usr/bin/clang` for a configure that still declares it; every caller is a leftover, not an exception (see "The compiler: clang22 on every host") | assuming the toolchain |
-| `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set) | a bespoke compat check |
+| `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set; with `OBJC_STRICT`, every Objective-C send) | a bespoke compat check |
 | `mavericks_add_updater_app` · `MavericksSparkle` · `stage_updater.sh` | builds/stages the Sparkle updater (self-fetches the framework) | wiring Sparkle by hand |
 | `apply_patches.sh SRC PATCHDIR` | applies `PATCHDIR/*.patch` to an unpacked source once, in name order with no fuzz; records their SHA-256s in `SRC/.mavergreen-patches`, no-ops on the same set, refuses a tree patched with another | a hand-rolled `patch` loop |
 | `build_component_pkg.sh` · `set_install_floor.sh` | builds a component `.pkg`; stamps the 10.9.5 install floor on a product `.pkg` (see "Seam hosts", below) | `pkgbuild`, `productbuild`, editing the pkg Distribution |
@@ -258,7 +258,7 @@ Practically, for anything a **native 10.9 build executes** — `versions.sh`, `v
   `make` and `clang` are stubs that need them (Xcode 6.2's, which takes an Apple ID to download). A
   native build that must not need them fetches its sources with `fetch_pinned_source.sh`, and reads
   Mach-O with mavericks-clang-22's `llvm-otool`, `llvm-lipo`, `llvm-nm` and `llvm-strings` (the compat
-  guard takes them as `OTOOL`, `LIPO`, `NM` and `STRINGS`). The OS itself has `curl` (7.30, TLS that
+  guard takes them as `OTOOL`, `LIPO`, `NM` and `STRINGS`). Opted in (`MAVERGREEN_OBJC_STRICT=1`), the guard's Objective-C analyzer is built on first use with the pinned mavericks-clang-22 package (fetched and verified, never installed) and Drydock's pinned, SHA-256-verified commit tarball, so a guarded native build needs neither git nor the Command Line Tools; a prerequisite it cannot fetch or verify makes the guard fail (exit 4), never skip. The OS itself has `curl` (7.30, TLS that
   reaches GitHub), `tar` (bsdtar 2.8.3, which reads `.tar.gz` and `.tar.xz`), `patch`, `shasum` and
   `python` 2.7.
 - Otherwise prefer plain shell over anything that arrived with Homebrew.
@@ -344,6 +344,20 @@ shipyard's facilities rather than trusting the runner:
 - **Gate on the compat guard** (`mavericks_assert_binary_compatible`): fail the build if any shipped binary
   declares a floor above 10.9 or links a symbol 10.9 lacks. This is the in-CI equivalence proof — every
   project needs it (or an equivalent gate), since no 10.9 runner validates the output.
+  - **Objective-C sends are measured, not listed (opt-in until every product is measured).** By default
+    the guard's Objective-C check is a short selector list (`labelColor` and friends): it catches only what
+    it names, and Codex 0.165.0 aborted on 10.9 on a send no list held. A repo opts in with
+    `mavericks_assert_binary_compatible(<target> OBJC_STRICT)`, or `MAVERGREEN_OBJC_STRICT=1` for
+    `assert_binary_compatible.sh`: the guard then runs the strict analyzer (`scripts/objc-compat.sh`) on each
+    binary's x86_64 slice against the versioned reference set (`reference/objc`), and any send it finds
+    unsupported or unresolved fails, and one it cannot examine fails as cannot-measure. A binary whose
+    receivers need build evidence (a Rust objc2 binding, an Objective-C provider such as Recaulk's) passes it
+    through `MAVERGREEN_OBJC_BUILD_EVIDENCE`, `MAVERGREEN_OBJC_PROVIDER_PREFIX` and
+    `MAVERGREEN_OBJC_SOURCE_RECEIPT`. Opted in, `MAVERICKS_POST_10_9_SELECTORS` and
+    `MAVERICKS_ALLOW_SELECTORS` fail when set (a selector string neither proves a send nor proves a guard), and
+    a guarded send is excused only by a reviewed `- objc-api:<glob>: evidence=<file>#<record id> <reason>`
+    deviation; not opted in, an analyzer knob fails rather than be ignored. The default flips once every family
+    product's binaries have been measured, with today's findings grandfathered (maintainer, 2026-11-07).
   - **`MAVERICKS_REQUIRE_DEFINED_SYMBOLS` is product-specific — do NOT copy golang's blindly.** The guard
     already denies the common post-10.9 symbols (`_clock_gettime`, `_os_unfair_lock_*`, `_os_log*`, …) as
     *undefined imports* by default. `REQUIRE_DEFINED` is the opposite assertion — "this symbol MUST be
@@ -1831,7 +1845,7 @@ restores a stale SDK.
   with a leading `*/`**, as in `- sdk-pin:*/lib/libswiftCore.dylib: <reason>`, so that one glob matches
   both the payload path and the staged or build path the guard sees. `*` spans `/`.
 - An excuse covers the minos/SDK rule only. The guard still checks the file's arches and its post-10.9
-  imports and selectors. A malformed entry fails the guard, as it fails packaging.
+  imports and its Objective-C sends (by list, or measured when opted in). A malformed entry fails the guard, as it fails packaging.
 
 **A vendor's prebuilt C++ archive may carry its own C++ runtime.** The family allows one libc++abi per
 process, the system's. Before linking a prebuilt `.a` that holds C++ (rusty_v8's V8, say), check it

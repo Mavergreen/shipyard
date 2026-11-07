@@ -33,3 +33,5 @@ golden-gate tests/objc-reference-set-test.sh
 golden-gate tests/objc-report-test.sh
 golden-gate tests/objc-sdk-inventory-test.sh
 golden-gate tests/objc-sdk-signatures-test.sh
+10.9 tests/objc-guard-test.sh
+golden-gate tests/objc-guard-test.sh

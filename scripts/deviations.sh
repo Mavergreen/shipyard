@@ -81,6 +81,19 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       bad = 1; next
     }
     sub(/^ */, "", rest)
+    # spec: scripts/assert_binary_compatible.sh header -- objc-api:<artifact glob> excuses reviewed findings of one
+    #       artifact scope, each through one evidence record, evidence=<file>#<record id>, then the review reason.
+    #       Unscoped or wildcards alone it would excuse every artifact; without its record, nothing names the finding.
+    if (check == "objc-api") {
+      if (!scoped || glob ~ /^[*?\/]+$/) {
+        print "deviations.sh: \"objc-api\" must name the artifact it excuses: \"- objc-api:<artifact path>: evidence=<file>#<record id> <review reason>\"" > "/dev/stderr"
+        bad = 1; next
+      }
+      if (rest !~ /^evidence=[^ #]+#[A-Za-z0-9._-]+ +[^ ]/) {
+        print "deviations.sh: \"objc-api:" glob "\" needs evidence=<file>#<record id>, one record, and then the review reason" > "/dev/stderr"
+        bad = 1; next
+      }
+    }
     if (rest == "") { print "deviations.sh: \"" check "\" declares no reason" > "/dev/stderr"; bad = 1; next }
     print check " " glob " " rest
   }

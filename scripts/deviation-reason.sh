@@ -8,6 +8,11 @@
 #                                                        prints the reason a deviation in <facts> (a file of
 #                                                        those lines) gives to excuse <check> for
 #                                                        <subject>; prints nothing when none does
+#          shipyard_deviation_reasons <facts> <check> <subject>
+#                                                        prints, one per line in declaration order, the
+#                                                        reason of EVERY scoped deviation in <facts> whose
+#                                                        glob matches <subject>, for a check whose subject
+#                                                        may carry several (objc-api: one per finding)
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Conformance deviations" and
 #       "SDK pinning" -- ONE matcher, because check-artifact-conformance.sh (package time) and
 #       assert_binary_compatible.sh (build time) must excuse exactly the same files: an unscoped
@@ -39,4 +44,19 @@ $(grep "^deviation ${2}:" "$1" || true)
 EOF
   fi
   printf '%s' "$_mdr"
+}
+
+shipyard_deviation_reasons() {  # $1 = facts file, $2 = check, $3 = the subject it concerns
+  while IFS= read -r _mdr_line; do
+    [ -n "$_mdr_line" ] || continue
+    _mdr_rest="${_mdr_line#deviation ${2}:}"
+    _mdr_glob="${_mdr_rest%% *}"
+    _mdr_why="${_mdr_rest#* }"
+    [ "$_mdr_why" != "$_mdr_rest" ] || continue      # a glob with no reason is not a deviation
+    case "$3" in
+      $_mdr_glob) printf '%s\n' "$_mdr_why" ;;
+    esac
+  done <<EOF2
+$(grep "^deviation ${2}:" "$1" || true)
+EOF2
 }
