@@ -340,7 +340,7 @@ shipyard's facilities rather than trusting the runner:
     not DEFINED"). Decide it from *your* build (do you link a legacy-support shim?), not from the template.
 - Where a stronger proof fits, keep a **characterization reference**: commit a trusted native-10.9 artifact
   and compare the cross-build against it (magic-trackpad2's kext characterization), and/or an emulated
-  smoke (golang's best-effort Rosetta self-test).
+  smoke on real 10.9 in the acceptance job (see "Acceptance on real 10.9").
 - Back it with **out-of-band re-validation on real 10.9 hardware** before trusting a release.
 
 ## Where family-authored 10.9 back-fills live (headers + polyfill symbols)
@@ -1839,74 +1839,50 @@ release at build time, which is how codex-cli's two-runtime `codex-code-mode-hos
   records neither minos nor SDK is accepted. Every modern toolchain writes one, so only a 10.9-era build
   produces that absence.
 
-## Rosetta: declared wherever used, never avoided at the cost of a test
+## Rosetta: none, CI included; x86_64 runs on 10.9
 
-**The family is transitioning off Rosetta.** macOS 28 removes it — the cmake product's `build/build-cmake.sh` drops its
-`./bootstrap` stage-0 rather than working around the loss: "macOS 28 removes Rosetta, so the stage-0 is
-gone from this recipe rather than worked around." The maintainer's rule: every use of Rosetta is
-declared, so the family can take inventory and sweep the remainders before it goes.
+**The family is getting rid of Rosetta before Apple does.** macOS 28 removes it. The maintainer's
+rule: **no new use of Rosetta, in a build or in a test, on a developer's Mac or on a CI runner.**
+x86_64 code runs in exactly two places: natively on a 10.9 box, and in the mavericks-vm guest of the
+acceptance job (see "Acceptance on real 10.9", below), which is the family's high-fidelity on-target
+test. A translated run on an arm64 runner is lower fidelity than either: it is not 10.9's kernel,
+libSystem or frameworks, so it proves less than the guest does and adds a dependency the family is
+removing.
 
-**Sweep BUILD uses; keep TEST uses running.** The two kinds are not equally worth removing:
+**A test of the shipped x86_64 product belongs in the acceptance job.** Whatever a test asserts by
+executing the product (it starts, its defaults, what its own tools read), assert it in the guest,
+against the INSTALLED product, in the script the acceptance job runs. The same test on a modern host
+runs its static half and SKIPs (77) the half that executes.
 
-- **A build or packaging step that runs translated** (an x86_64 code generator, a host tool, a stage-0)
-  has an arm64-native alternative that produces the same output — nodejs's host toolset, below. Find
-  it; that is the sweep.
-- **A test that executes the SHIPPED x86_64 product** has no native alternative on an arm64 runner: the
-  thing under test IS x86_64. Run it — under Rosetta, declared — and **never skip it in CI to avoid
-  Rosetta.** A skipped test verifies nothing, and a release whose x86_64 binaries were never executed
-  before they shipped is worse than one that used Rosetta to execute them. The CI job primes Rosetta
-  (`softwareupdate --install-rosetta --agree-to-license`, porthole's "Ensure this runner can run x86_64
-  (Rosetta)" step), so on a CI runner the test runs and its 77 never fires. The 77 is for a DEVELOPER's
-  Apple-Silicon Mac without Rosetta installed, where "cannot run here" is true (see "Running a repo's
-  tests" below); on a CI runner it would be a test the job chose not to run.
-- **Losing Rosetta moves a test; it never deletes one.** When macOS 28 arrives, each declared test use
-  moves to an x86_64 host (the 10.9 box, an Intel runner) — that is its declaration's exit, not
-  "made to SKIP without Rosetta".
+**A test decides "cannot execute x86_64 here" from the host's CPU, never by trying.** GitHub's arm64
+macOS runners have Rosetta installed, so a probe that runs the binary and SKIPs on "Bad CPU type"
+silently runs it translated there. Ask the hardware: `sysctl -n hw.optional.arm64` is `1` on Apple
+Silicon, including inside a translated process, whose `uname -m` says `x86_64`. The sysctl is absent
+on 10.9 and on Intel Macs, so absent on Darwin means a native x86_64 host; off Darwin (a Linux job),
+nothing executes a Mach-O, so the executing half SKIPs there too.
 
-**What counts as a use that needs declaring:** anything a build, packaging step, or CI job runs
-TRANSLATED — an x86_64 host tool executed as part of an arm64 cross build (a code generator, e.g.),
-`arch -x86_64 …`, or an x86_64-only helper binary run on Apple Silicon. **The build need not spell
-`arch -x86_64` for this rule to apply:** `make` running an x86_64 binary that was itself built earlier
-in the same job is still Rosetta, and the declaration rule holds whether or not any gate can see the
-use.
+**A build step that runs translated** (an x86_64 code generator, a host tool, a stage-0) has an
+arm64-native alternative that produces the same output; find it. A Rosetta dependency need not spell
+`arch -x86_64` anywhere: a cross build whose `make` executes x86_64 host tools it compiled runs them
+translated without saying so where a gate can read. nodejs removed exactly this kind by building its
+gyp host toolset for arm64 (`CC_host`/`CXX_host` set to Apple's clang, the build machine's SDK); V8's
+`mksnapshot` does not execute target code, so its output stayed byte-identical to the native 10.9
+build's. It guards the result with `tests/rosetta-free-test.sh`, as golang does with
+`tests/rosetta-free-guard.sh`.
 
-**Every use is declared, tests included.** A test that exercises the SHIPPED x86_64 product under
-Rosetta runs translated, so it needs a `rosetta:<path>` entry like any other use — and so does the CI
-step that primes Rosetta for it. The reason says what the test covers, that CI runs it, and its exit:
-the x86_64 host it moves to when Rosetta goes.
-
-**How to declare:** an `INGREDIENTS.md` entry under `## Conformance deviations`, key `rosetta:<scope>`
-(the build leg or file, e.g. `rosetta:build/cross.sh`), whose text says what runs translated, why it
-can't be native yet, and when to reconsider — a decision record needs a revisit trigger, not just
-what/why/cost. porthole's real declaration:
-
-```markdown
-- rosetta:.github/workflows/release.yml: the release job runs on an Apple Silicon (arm64) runner and primes + uses Rosetta ("Ensure this runner can run x86_64 (Rosetta)") so the `transport` CMake target's `build/check-transport.sh` can execute the cross-built x86_64/10.9 skalibs/s6 binaries before they ship. It cannot run natively: the binaries under test are the shipped x86_64 ones, and the release runner is arm64 with no Intel runner to use instead. Native 10.9 users run these binaries natively; only this arm64 CI leg is translated. Reconsider when the check can move to an x86_64 host (the 10.9 box or an Intel runner), or when check-transport.sh is made to SKIP without Rosetta; at the latest before macOS 28 removes it.
-```
-
-Its shape is the model: what runs translated, why it cannot be native, the exit. Its second exit is
-not one — "made to SKIP without Rosetta" trades the test away (see "Sweep BUILD uses; keep TEST uses
-running", above); the move to an x86_64 host is the exit.
-
-A Rosetta dependency need not spell `arch -x86_64` anywhere: a cross build whose `make` executes x86_64
-host tools it compiled runs them translated without saying so where a gate can read. The declaration
-rule applies to that use exactly as to a spelled one. **Sweeping one:** nodejs removed exactly this
-kind by building its gyp host toolset for arm64 (`CC_host`/`CXX_host` set to Apple's clang, the
-build machine's SDK); V8's `mksnapshot` does not execute target code, so its output stayed
-byte-identical to the native 10.9 build's. It guards the result with `tests/rosetta-free-test.sh`, as
-golang does with `tests/rosetta-free-guard.sh`.
+**Existing uses are debt, declared until they are gone.** A repo that still runs something
+translated declares it in `INGREDIENTS.md` under `## Conformance deviations` as
+`- rosetta:<scope>: <what runs translated>; exit: <where it moves>`, and check 25 refuses an
+undeclared spelled use. The exit for a test use is the acceptance job's guest, now, not "before macOS
+28"; the exit for a build use is its arm64-native alternative. A new `rosetta:` declaration is not a
+way to add a use: it needs the maintainer's explicit OK, and its reason names why neither the guest
+nor a native alternative can serve yet.
 
 **Inventory:** list every declaration family-wide with `grep -h '^- rosetta:' */INGREDIENTS.md` across
-the family's checkouts, or read check 25's own output (see the family-conventions checks table,
-further below) — it names each file with an undeclared use, and says nothing about a declared one.
+the family's checkouts, or read check 25's output. When the inventory is empty, make any Rosetta use a
+hard failure, not just an undeclared one.
 
-**Parity:** the native 10.9 leg never uses Rosetta, because it already targets and runs x86_64 — this
-rule is about modern-host (arm64 runner) legs only.
-
-**Revisit the rule's shape** — a declared exception per use, gated only where the gate can see one —
-when the family-wide inventory above is empty (then make any Rosetta use a hard failure, not just an
-undeclared one), or when macOS 28 ships, whichever comes first. Declared test uses keep the inventory
-non-empty until they have moved to an x86_64 host; that is expected, and not a reason to skip them.
+**Parity:** the native 10.9 leg never uses Rosetta, because it already targets and runs x86_64.
 
 ## Acceptance on real 10.9
 
@@ -2626,7 +2602,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **22.** Every tracked script declares its host in its header — `# platform: host-agnostic` or `# platform: macOS-only -- <why>` — and a host-agnostic one runs no macOS-only tool at command position (`check-host-tools.sh`); **opt-in**, in a repo where at least one script declares | Nothing stopped a script that a Linux job depends on from growing an `otool` or `sw_vers`: it passed every gate and broke on the runner. `check-shell-portability.sh` cannot see it — flawless POSIX sh can still call `lipo`. An undeclared script **fails** rather than defaulting to host-agnostic, because a default makes the gate silently incomplete. Opt-in, like 15, so `@v1` reaching fourteen consumers reddens none of them |
 | **23.** A repo that builds a `.pkg` (the same test as 21) calls `stage_product.sh`, on a non-comment line of a tracked, non-test `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt`, at command position — line start, after `;` `&` `\|` or a backtick, after `$(`, `then`, `do` or `exec`, after a YAML `run:` or a CMake `COMMAND`, any of these optionally followed by `if`, `elif`, `while`, `until` or `!` — spelled `sh` or `/bin/sh` (with any option flags, `sh -e`) and a word ending `stage_product.sh`, or a word ending `/stage_product.sh` (`"$SHIPYARD_SCRIPTS"/stage_product.sh`, `./stage_product.sh`); or declares `- product-layout: <reason>` | Conformance enforces the install layout, and `stage_product.sh` is what produces it: the manifest, and the unlink–remove–link install scripts that make an upgrade replace the tree while keeping the selection. A hand-rolled pkg fails `manifest` only at package time; this finds it on the PR. A mention is not a call — `echo "sh stage_product.sh"` does not count, and neither does an assignment (`SP="$S/stage_product.sh"`: a word holding `=`). **Known false negatives:** a bare `stage_product.sh` found on `PATH`; `bash` or `.` instead of `sh`; a call behind a prefix command (`sudo`, `env`, `time`, `command`) or opening a `{ … }` group or a `( … )` subshell; a path with a space or `=` in it (`"$(dirname "$0")"/stage_product.sh`); and a call followed directly by `;` or `)` (`then sh "$S/stage_product.sh"; fi`, `$(sh …/stage_product.sh)`) — give the call its own line, or at least a space before the separator |
 | **24.** A repo that builds a `.pkg` (the same test as 21), where `$GITHUB_REPOSITORY` is set, is the repo of at least one short name in shipyard's `scripts/product-names` (by name, not owner); a `product-layout` deviation exempts it | Every feed URL and updater identity is derived from the registry's repo, so a repo the registry does not name publishes feeds no installed updater polls. The short names themselves are known only at package time, where conformance's `repository` check holds each to its registered repo; this finds an unregistered or renamed repo on the PR |
-| **25.** A tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt` or `*.bats` file, `tests/` included, whose content — outside a whole comment line or a trailing ` #…` remark — contains `arch -x86_64`, `arch -arch x86_64`, `/usr/bin/arch -x86_64` or `softwareupdate --install-rosetta`, carries a matching `rosetta:<path>` deviation | The family is retiring Rosetta (see "Rosetta", above) — an undeclared use is invisible until someone has to sweep every repo by hand the day macOS 28 ships. There is no exemption for `tests/`: a test that runs the shipped x86_64 product under Rosetta, which CI runs rather than skips, still runs translated, so it still needs a declaration. This is a text match, not a command-position check like 23's: a quoted MENTION on an otherwise-unrelated line (`echo "… arch -x86_64 …"`) still counts, because excluding quotes reliably is not practical in BWK awk/sed. **Known limits:** `arch -e VAR=… -x86_64` (something between `arch` and its flag) and `arch "-x86_64"` (the flag itself quoted) are both invisible, since the match needs the literal flag text directly after `arch`; so is a build that runs an x86_64 binary it built earlier some other way (a cross build whose `make` just executes x86_64 host tools it compiled). Both still need a declaration and rely on it alone, not on being caught |
+| **25.** A tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt` or `*.bats` file, `tests/` included, whose content — outside a whole comment line or a trailing ` #…` remark — contains `arch -x86_64`, `arch -arch x86_64`, `/usr/bin/arch -x86_64` or `softwareupdate --install-rosetta`, carries a matching `rosetta:<path>` deviation | The family is retiring Rosetta (see "Rosetta", above) — an undeclared use is invisible until someone has to sweep every repo by hand the day macOS 28 ships. There is no exemption for `tests/`: a test that still runs the shipped x86_64 product under Rosetta runs translated, so it needs a declaration until it moves to the acceptance job. This is a text match, not a command-position check like 23's: a quoted MENTION on an otherwise-unrelated line (`echo "… arch -x86_64 …"`) still counts, because excluding quotes reliably is not practical in BWK awk/sed. **Known limits:** `arch -e VAR=… -x86_64` (something between `arch` and its flag) and `arch "-x86_64"` (the flag itself quoted) are both invisible, since the match needs the literal flag text directly after `arch`; so is a build that runs an x86_64 binary it built earlier some other way (a cross build whose `make` just executes x86_64 host tools it compiled). Both still need a declaration and rely on it alone, not on being caught |
 | **26.** No tracked Renovate config other than `.github/renovate.json` (`renovate.json`, `renovate.json5`, `.renovaterc`, `.renovaterc.json`, `.renovaterc.json5`, `.github/renovate.json5`, `.gitlab/renovate.json`, `.gitlab/renovate.json5`), alone **or** beside it; a path is excused by `- renovate-path:<path>: <reason>` | Checks 4, 4b and 13 read only `.github/renovate.json`, and shipyard's configure step scaffolds it when absent, so a config kept elsewhere exempts its repo from them without anyone deciding it should, and beside the scaffold is dead config (Renovate takes one by precedence). Fix: `git mv <path> .github/renovate.json` |
 | **27.** `.gitignore` has a line ignoring `.superpowers/` and one ignoring `.idea/` (`.superpowers/`, `/.superpowers/`, `.superpowers` or `/.superpowers`, likewise for `.idea`), no file is tracked under `.superpowers/`, `docs/superpowers/` or `.idea/`, and no backlog is tracked anywhere (a file named `BACKLOG`, `QUEUE` or `TODO`, any case, bare or `.md`, `.markdown` or `.txt`), and no tracked line cites a queue entry by number (`QUEUE #n`, `BACKLOG #n`, also when a line break splits the name from the number) | Superpowers specs, plans, ledgers and backlogs are ephemeral: a plan describes a transition, not a system, and once the transition lands the plan is wrong about the system it produced. Committed, it reads as documentation and misleads the next reader (and `docs/superpowers/` is not a place the family uses at all). An IDE's per-user state is the user's, not the project's: committed, it churns on every checkout and fights each contributor's own settings. Both belong in the working tree and out of history, and an ignore line alone is not enough, since it does nothing for a file already tracked, so the check asks git as well. A backlog is the same kind of file under another name: two repos kept theirs as a tracked `BACKLOG.md`, and a code comment cited an entry by number. A citation resolves only in the checkout that has the queue, so a reader elsewhere gets a number and no reason |
 | **28.** Nothing a build or test fetches is taken as whatever is newest: no tagless `gh release download`, no `gh release view` of another repo without a tag, no fetch command (`curl`, `wget`, `shipyard_curl`) or `gh api` on a `/releases/latest` URL, no `@latest` install (`npm install`, `npx`, `go install`, `pipx`, `cargo install`, `uvx`), no `:latest` image (`FROM`, `image:`, `docker pull/run`) — in `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt`, `*.bats` and Dockerfiles, tests included, comments excepted — unless INGREDIENTS.md's `## Conformance deviations` declares `- unpinned:<path>: <why it must be the newest, and when to reconsider>` | A pin in a file a Renovate manager tracks makes every change a commit with CI attached; "latest" lets someone else's release change this repo's results with no commit to blame. It drifted exactly that way: python-315's CI installed longboat's latest, shipyard's on-target job python-315's latest, and `sign_and_appcast.sh` signed every family release with the latest `ed25519` pkg, unverified (all 2026-10-18). A feed URL, an install hint or an end-user `install.sh` names a newest-release URL without fetching it at build time, so only a fetch command's line counts |
@@ -2877,8 +2853,8 @@ in the same commit.
 - **A test that cannot run yet exits 77 to SKIP**, the same idiom as ctest's `SKIP_RETURN_CODE 77`.
   Guard on the artifact you need (`[ -d "$OUT" ] || { echo "not built — skipping"; exit 77; }`) rather
   than failing a CI run that was never going to have it. **"Cannot run" is a fact about the host, never
-  a choice CI makes:** a test that executes x86_64 binaries SKIPs on a developer's Mac without Rosetta,
-  but CI primes Rosetta and runs it (see "Rosetta", above).
+  a choice CI makes:** a test that executes x86_64 binaries SKIPs that half on any arm64 host,
+  decided from the CPU and never by trying (see "Rosetta", above), and the acceptance job runs it on 10.9.
 - **A test declares where it can run** (check 22's header line). One declared `# platform: macOS-only --
   <why>` is not run off macOS: the runner prints `SKIP <file> (macOS-only)` instead.
   `run-repo-tests.sh --strict-host` is for a job whose purpose is proving the host-agnostic half works
