@@ -2889,6 +2889,13 @@ in the same commit.
   test, and on any bash a bare `! cmd` never trips errexit: both read as checks and check nothing.
   End them `|| false` (or use `run ! cmd`). `check-shell-portability.sh` bans the bare forms; it found
   seventeen in shipyard and fourteen in ed25519, all green on 10.9 whatever the code did.
+- **A crash is not a pass, even when it exits 0.** On 10.9, whose `sh` is bash 3.2, a script under
+  `set -eu` that dies on an unset variable (or a null `${x:?}`, or a bad substitution) exits **0** if
+  an EXIT trap then succeeds, as every test's `trap 'rm -rf "$T"' EXIT` does. So the runner does not
+  believe a `*.sh` test's status alone: when bash says the file's own shell died that way (the line
+  names the file, or a `tests/lib` helper it sources), the file FAILS. A child that died, and whose
+  status the test checked, is not the test's death. The runner holds itself to the same rule. A test
+  run by hand outside the runner has no such net: read its last line, not only its exit status.
 - **Never hand-enumerate test files in CI.** That is how `macports-legacy-support` ended up with nine
   test files it had not run since each was written — two of which had rotted: one asserting Renovate's
   pre-migration `fileMatch` key, one checking an `.icns` filename that changed when the repo was
