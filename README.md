@@ -207,7 +207,10 @@ recipe's; a header or alias that resolves outside the SDK, or an alias that is n
 replacement whose text does not occur exactly once; and an `OUTPUT_DIR` that exists or resolves into
 the SDK. Otherwise `OUTPUT_DIR` appears whole, holding the edited headers and `overlay.json`, a clang
 VFS overlay that maps each header's path and its aliases (under the SDK path as given and as
-resolved) onto the edited copy; `overlay` is set to its path.
+resolved) onto the edited copy; `overlay` is set to its path. Every `old` is found in the SDK's own
+text, never in another replacement's output, and two replacements may not overlap. The overlay
+matches paths exactly: a spelling it does not list (`Versions/Current/Headers/NSArray.h`, or another
+case) reaches the SDK's own header.
 
 A product opts one target in, explicitly:
 
@@ -223,7 +226,8 @@ That target's Objective-C and Objective-C++ compiles get `-ivfsoverlay <overlay>
 unchanged `-isysroot`; its C and C++ compiles, every other target and every link are untouched. The
 overlay lives in a generation under `OUTPUT_DIR` named for its inputs: the SDK path, the recipe
 file's bytes, the ids, the Objective-C compilers and this module's own bytes. A reconfigure with the
-same inputs reuses the generation once every file in it matches the stamp written beside it; a
+same inputs reuses the generation once its recipes validate again against the SDK's current bytes
+and pin, and every file in it matches the stamp written beside it; a
 generation without that stamp, or with a changed, added or missing file, is refused and left as it
 is (remove it to regenerate). `SDK` must be the configure's `CMAKE_OSX_SYSROOT`, or the overlay
 could never apply.

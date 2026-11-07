@@ -145,5 +145,29 @@ refuse_case relative_output "$(setup relative_output "$GOOD")" arr-v1 relative/o
 echo "== failure_no_partial_output"
 refuse_case failure_no_partial_output "$(setup partial "$GOOD,$(recipe set-v1 "$FW/Versions/C/Headers/NSSet.h" "$HSHA" "" "$R1")")" "arr-v1;set-v1"
 
+echo "== replacements_see_only_sdk_text"
+refuse_case chained_replacement "$(setup chained "$(recipe arr-v1 "$CANON" "$HSHA" "" '{"old":"@class NSString;","new":"@class NSString; QQQ"},{"old":"QQQ","new":"ZZZ"}')")" arr-v1
+grep -q "'QQQ' does not occur" "$w/log" || bad "chained_replacement: refused for another reason: $(cat "$w/log")"
+refuse_case overlapping_replacements "$(setup overlapping "$(recipe arr-v1 "$CANON" "$HSHA" "" "$R1"',{"old":"NSObject <NSCopying>","new":"NSObject"}')")" arr-v1
+grep -q 'overlap' "$w/log" || bad "overlapping_replacements: refused for another reason: $(cat "$w/log")"
+
+echo "== reuse_rechecks_sdk"
+b="$(setup reuse "$GOOD")"
+gen() {
+  "$SC" -DMODULE_DIR="$root" -DSDK="$b/sdk/MacOSX10.9.sdk" -DRECIPES="$b/recipes.json" -DIDS=arr-v1 \
+    -DOUTPUT_DIR="$b/scratch/gens" -DRESULT="$w/result" -P "$fx/generation.cmake" > "$w/log" 2>&1
+}
+if gen; then
+  first="$(cat "$w/result")"
+  gen && [ "$(cat "$w/result")" = "$first" ] || bad "reuse: the same inputs did not reuse the generation: $(cat "$w/log")"
+  chmod u+w "$b/sdk/MacOSX10.9.sdk/$CANON"
+  printf '@interface NSSwapped : NSObject\n@end\n' >> "$b/sdk/MacOSX10.9.sdk/$CANON"
+  if gen; then bad "reuse: a generation was reused after the SDK's header changed"; fi
+  grep -q 'SHA-256' "$w/log" || bad "reuse: refused for another reason: $(cat "$w/log")"
+  cmp -s "$(dirname "$first")/headers/$CANON" "$fx/NSArray.expected.h" || bad "reuse: the refused generation was changed"
+else
+  bad "reuse: the first generation failed: $(cat "$w/log")"
+fi
+
 [ "$fail" -eq 0 ] && echo "sdk-metadata-test: OK"
 exit "$fail"
