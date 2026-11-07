@@ -115,7 +115,7 @@ jobs:
           export SHIPYARD_CHECK_VERSION
           d="$RUNNER_TEMP/dist"
           sh scripts/release-notes.sh --tag "v$SHIPYARD_CHECK_VERSION" --version "$SHIPYARD_CHECK_VERSION" \
-            --product Shipyard --min-os 10.9.5 --out "$d/RELEASE_NOTES.md"
+            --short shipyard --min-os 10.9.5 --out "$d/RELEASE_NOTES.md"
           pkg="$d/shipyard-$SHIPYARD_CHECK_VERSION.pkg"
           len="$(wc -c < "$pkg" | tr -d ' ')"
           sh scripts/gen_appcast.sh shipyard "$SHIPYARD_CHECK_VERSION" \

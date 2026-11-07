@@ -421,7 +421,7 @@ if rel_ran release-notes-generated && [ -n "$CI_FILES" ]; then
   ci_mentions '[/ ]release-notes\.sh' \
     || chk_fail release-notes-generated "no workflow builds the release body with the shared generator (release-notes.sh)" \
          "the release body comes from one generator, so every consumer reads the same file" \
-         "call \$SHIPYARD_SCRIPTS/release-notes.sh --tag/--version/--product --out dist/RELEASE_NOTES.md"
+         "call \$SHIPYARD_SCRIPTS/release-notes.sh --tag/--version/--short --out dist/RELEASE_NOTES.md"
 
   if ci_mentions '>[[:space:]]*[^ ]*RELEASE_NOTES\.md' \
      || ci_mentions '[[:space:]]cp[[:space:]][^;&|]*[[:space:]][^ ;&|]*RELEASE_NOTES\.md'; then

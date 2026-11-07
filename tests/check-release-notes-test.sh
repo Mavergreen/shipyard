@@ -7,38 +7,45 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/check-release-notes.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/check-release-notes.XXXXXX")"; trap 'rm -rf "$work"' EXIT
+for pn in openssh:OpenSSH porthole:Porthole shipyard:Shipyard container-tools:"Container Tools" go127:Go; do
+  mkdir -p "$work/.mavergreen/products/${pn%%:*}"; printf '%s\n' "${pn#*:}" > "$work/.mavergreen/products/${pn%%:*}/noun"
+done
+printf '1.27\n' > "$work/.mavergreen/products/go127/line"
+SHORT=openssh; TAG=""
+run() { MAVERGREEN_REPO_ROOT="$work" sh "$S" "$work/n.md" "$1" --short "$SHORT" --tag "${TAG:-$1}"; }
 
 ok() {  # $1 = version, $2 = label; file content on stdin
   cat > "$work/n.md"
-  sh "$S" "$work/n.md" "$1" >/dev/null 2>&1 || { echo "FAIL should pass: $2"; exit 1; }
+  run "$1" >/dev/null 2>&1 || { echo "FAIL should pass: $2"; exit 1; }
 }
 no() {  # $1 = version, $2 = label, $3 = expected substring of the complaint; content on stdin
   cat > "$work/n.md"
-  if out="$(sh "$S" "$work/n.md" "$1" 2>&1)"; then echo "FAIL should fail: $2"; exit 1; fi
+  if out="$(run "$1" 2>&1)"; then echo "FAIL should fail: $2"; exit 1; fi
   printf '%s\n' "$out" | grep -q "$3" || { echo "FAIL $2: complaint lacked '$3': $out"; exit 1; }
   [ "$(printf '%s\n' "$out" | sed -n 1p | cut -d: -f1)" = notes-shape ] || { echo "FAIL $2: the complaint should open with its id, notes-shape: $out"; exit 1; }
 }
 
 ok 9.9p2-mavergreen.6 "the family shape" <<'EOF'
-## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6 · Requires Mac OS X 10.9.5 or later
 
 ### What changed
 - Repackage of upstream OpenSSH 9.9p2; packaging changes only.
 
 ### Build ingredients
 - **libressl**: 3.8.2 -> 3.9.2 ([release notes](https://github.com/libressl/portable/releases/tag/v3.9.2))
-
----
-Requires Mac OS X 10.9.5 or later.
 EOF
 
+SHORT=porthole
 ok 20260802.6 "self-upstream title" <<'EOF'
 ## Porthole 20260802.6
+Release 20260802.6
 
 ### What changed
 - Release of Porthole 20260802.6.
 EOF
 
+SHORT=openssh
 no 9.9p2-mavergreen.6 "empty file" "empty" </dev/null
 no 9.9p2-mavergreen.6 "whitespace only" "empty" <<'EOF'
 
@@ -46,7 +53,8 @@ no 9.9p2-mavergreen.6 "whitespace only" "empty" <<'EOF'
 EOF
 
 no 9.9p2-mavergreen.6 "stale version in title" "9.9p2-mavergreen.6" <<'EOF'
-## OpenSSH 9.9p2 (9.9p2-mavergreen.5)
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.5
 
 ### What changed
 - Repackage.
@@ -57,42 +65,49 @@ EOF
 #       (the title is built from the bare "$v"). previous-release-tag.sh already strips "v"
 #       before keying, for the same reason: "v" and bare are one version spelled two ways, not
 #       two versions.
+SHORT=shipyard
 ok v1.0.209 "title bare, checked version v-prefixed" <<'EOF'
 ## Shipyard 1.0.209
+Release v1.0.209
 
 ### What changed
 - Release of Shipyard 1.0.209.
 EOF
 
-no v1.0.208 "stale version, v-prefixed check version" "v1.0.208" <<'EOF'
+no v1.0.208 "stale version, v-prefixed check version" "1.0.208" <<'EOF'
 ## Shipyard 1.0.209
+Release v1.0.209
 
 ### What changed
 - Release of Shipyard 1.0.209.
 EOF
 
-no v "degenerate version \"v\" must not match every title" "does not name v" <<'EOF'
+no v "degenerate version \"v\" must not match every title" "first line" <<'EOF'
 ## Something Unrelated
 
 ### What changed
 - Whatever.
 EOF
 
+SHORT=openssh
 ok 9.9p2-mavergreen.6 "no leading v anywhere, unaffected" <<'EOF'
-## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6
 
 ### What changed
 - Repackage.
 EOF
 
 no 9.9p2-mavergreen.6 "no What changed" "What changed" <<'EOF'
-## Mavericks OpenSSH 9.9p2 (9.9p2-mavergreen.6)
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6
 
 Automated release for Mac OS X 10.9 (Mavericks).
 EOF
 
 no 9.9p2-mavergreen.6 "empty What changed" "empty" <<'EOF'
-## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6
 
 ### What changed
 
@@ -104,7 +119,8 @@ EOF
 #       must still be caught: the ## branch that resets tracking for a new top-level heading
 #       must not skip the pending-empty-section check.
 no 9.9p2-mavergreen.6 "empty section before a further ## heading" "empty" <<'EOF'
-## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6
 
 ### What changed
 - Repackage.
@@ -118,14 +134,17 @@ EOF
 no 9.9p2-mavergreen.6 "title not first" "first line" <<'EOF'
 Some prose first.
 
-## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6
 
 ### What changed
 - Repackage.
 EOF
 
+SHORT=container-tools
 ok 20260727-mavergreen.37 "a bullet of an untracked ingredient, with no link" <<'EOF'
-## Container Tools 20260727 (20260727-mavergreen.37)
+## Container Tools 20260727
+Release 20260727-mavergreen.37
 
 ### What changed
 - Repackage of upstream Container Tools 20260727, rebuilt because build ingredients moved (below).
@@ -138,6 +157,83 @@ Changed since 20260727-mavergreen.36:
   The docker CLI
 EOF
 
-printf '## OpenSSH 9.9p2 (9.9p2-mavergreen.1)\n\nWords.\n<!-- edited by a human -->\n\n### What changed\n\n- a change\n' \
+SHORT=openssh
+printf '## OpenSSH 9.9p2\nRelease 9.9p2-mavergreen.1\n\nWords.\n<!-- edited by a human -->\n\n### What changed\n\n- a change\n' \
   | no 9.9p2-mavergreen.1 "a body carrying the mark is refused" 'edited by a human'
+
+SHORT=go127
+ok 1.27.2-mavergreen.1 "a line is not part of the heading" <<'EOF'
+## Go 1.27.2
+Release 1.27.2-mavergreen.1 · Requires Mac OS X 10.9.5 or later
+
+### What changed
+- Repackage.
+EOF
+
+SHORT=openssh
+no 9.9p2-mavergreen.6 "a hand-written heading" "first line" <<'EOF'
+## OpenSSH 9.9p2 for Mavericks (9.9p2-mavergreen.6)
+Release 9.9p2-mavergreen.6
+
+### What changed
+- Repackage.
+EOF
+no 9.9p2-mavergreen.6 "a parenthesised version" "first line" <<'EOF'
+## OpenSSH 9.9p2 (9.9p2-mavergreen.6)
+Release 9.9p2-mavergreen.6
+
+### What changed
+- Repackage.
+EOF
+no 9.9p2-mavergreen.6 "the wrong noun" "first line" <<'EOF'
+## Openssh 9.9p2
+Release 9.9p2-mavergreen.6
+
+### What changed
+- Repackage.
+EOF
+no 9.9p2-mavergreen.6 "no Release line" "second line" <<'EOF'
+## OpenSSH 9.9p2
+
+### What changed
+- Repackage.
+EOF
+no 9.9p2-mavergreen.6 "a Release line for another tag" "second line" <<'EOF'
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.5
+
+### What changed
+- Repackage.
+EOF
+no 9.9p2-mavergreen.6 "a floor with the wrong separator" "second line" <<'EOF'
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6 - Requires Mac OS X 10.9.5 or later
+
+### What changed
+- Repackage.
+EOF
+no 9.9p2-mavergreen.6 "a floor that is not a version" "install floor" <<'EOF'
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6 · Requires Mac OS X ten or later
+
+### What changed
+- Repackage.
+EOF
+cat > "$work/n.md" <<'EOF'
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6
+
+### What changed
+- Repackage.
+EOF
+rc=0; MAVERGREEN_REPO_ROOT="$work" sh "$S" "$work/n.md" 9.9p2-mavergreen.6 --short openssh >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL a missing --tag is a usage error (exit 2), got $rc"; exit 1; }
+SHORT=nonesuch
+no 9.9p2-mavergreen.6 "a product with no noun" "noun" <<'EOF'
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6
+
+### What changed
+- Repackage.
+EOF
 echo "PASS: check-release-notes"

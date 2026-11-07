@@ -113,7 +113,7 @@ jobs:
           set -eu
           v='${{ steps.ver.outputs.version }}'
           sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "v$v" --version "$v" \
-            --product Shipyard --min-os 10.9.5 --out dist/RELEASE_NOTES.md
+            --short shipyard --min-os 10.9.5 --out dist/RELEASE_NOTES.md
           [ -s dist/RELEASE_NOTES.md ] || { echo "::error::release notes came back empty"; exit 1; }
 
       - name: Sign + appcast
@@ -178,6 +178,7 @@ jobs:
     with:
       version: v${{ needs.build.outputs.version }}
       artifact: shipyard-dist
+      short: shipyard
       shipyard-ref: ${{ github.sha }}
 
   major-tag:

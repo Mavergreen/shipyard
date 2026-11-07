@@ -128,8 +128,8 @@ need(r"^sh scripts/assert_appcast_upgradeable\.sh .*--appcast dist/shipyard\.xml
 # dist/RELEASE_NOTES.md. shipyard's own .pkg IS floored at 10.9.5 (package-pkg.sh builds it through
 # set_install_floor.sh, whose default MIN_OS is 10.9.5 and which self-checks that floor lands in the
 # built pkg), so the notes must pass --min-os 10.9.5 like every other repo's own release.
-need(r"^sh \"\$SHIPYARD_SCRIPTS/release-notes\.sh\" --tag \"v\$v\" --version \"\$v\" --product Shipyard --min-os 10\.9\.5 --out dist/RELEASE_NOTES\.md$",
-     "release.yml must call release-notes.sh directly with --product Shipyard --min-os 10.9.5 --out dist/RELEASE_NOTES.md")
+need(r"^sh \"\$SHIPYARD_SCRIPTS/release-notes\.sh\" --tag \"v\$v\" --version \"\$v\" --short shipyard --min-os 10\.9\.5 --out dist/RELEASE_NOTES\.md$",
+     "release.yml must call release-notes.sh directly with --short shipyard --min-os 10.9.5 --out dist/RELEASE_NOTES.md")
 need(r"^\[ -s dist/RELEASE_NOTES\.md \] \|\| \{ echo \"::error::release notes came back empty\"; exit 1; \}$",
      "release.yml lost the empty-release-notes guard")
 

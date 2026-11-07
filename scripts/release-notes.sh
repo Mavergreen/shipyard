@@ -1,15 +1,12 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: release-notes.sh --tag T --version V --product P --out FILE [--line L] [--min-os M]
-#                           [--short S]
+#   usage: release-notes.sh --tag T --version V --out FILE [--short S] [--line L] [--min-os M]
 #     --tag/--version   the release tag and full version (equal for most repos; golang's differ)
-#     --product         the BARE product noun ("OpenSSH", "Go", "Signal Desktop"). This composes the
-#                       family's prose register: "OpenSSH 9.9p2 (9.9p2-mavergreen.6)".
+#     --short           this product's short name; defaults to the repo's only product. The noun is
+#                       derived from .mavergreen/products/<short>/noun, never passed.
 #     --line            upstream-line prefix for a repo shipping parallel lines (golang: "1.26";
 #                       "1.26.*" also accepted -- both are normalized to a glob before use)
-#     --min-os          emits the install floor line; omit for a product that is not a 10.9 .pkg
-#     --short           this product's short name, in a repo whose .mavergreen/release-notes/<short>/
-#                       nests its tree
+#     --min-os          adds the install floor to line 2; omit for a product that is not a 10.9 .pkg
 #     Generates ONE product's release notes: the Sparkle appcast <description> and the GitHub
 #     Release body, which are the same bytes by construction. Sections, in order: title, committed
 #     prose (verbatim, never rewritten), Before you update (only with requires/ or rebuild), What
@@ -26,12 +23,12 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # MAVERGREEN_REPO_ROOT
 . "$SELF/deviation-reason.sh"
 
-TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""; SHORT=""; SHORT_SET=no
+TAG=""; VER=""; OUT=""; LINE=""; MINOS=""; SHORT=""; SHORT_SET=no
 while [ $# -gt 0 ]; do
   case "$1" in
     --tag) TAG="$2"; shift 2;;
     --version) VER="$2"; shift 2;;
-    --product) PRODUCT="$2"; shift 2;;
+    --product) echo "release-notes: --product is refused (fix: the noun is derived: write .mavergreen/products/<short>/noun and pass --short)" >&2; exit 2;;
     --out) OUT="$2"; shift 2;;
     --line) LINE="$2"; shift 2;;
     --min-os) MINOS="$2"; shift 2;;
@@ -42,7 +39,6 @@ done
 die() { echo "release-notes: $1" >&2; exit 1; }
 [ -n "$TAG" ] || die "--tag is required"
 [ -n "$VER" ] || die "--version is required"
-[ -n "$PRODUCT" ] || die "--product is required (the bare product noun, e.g. OpenSSH)"
 [ -n "$OUT" ] || die "--out is required"
 
 if [ -n "$LINE" ]; then
@@ -59,6 +55,19 @@ if [ "$SHORT_SET" = yes ]; then
   [ -d "$MAVERGREEN_REPO_ROOT/.mavergreen/products/$SHORT" ] \
     || die "--short '$SHORT' is not a product of this repo; declare it in .mavergreen/products/$SHORT/"
 fi
+
+if [ "$SHORT_SET" = no ]; then
+  _all="$(mg_list products)"
+  case "$_all" in
+    '') die "this repo declares no product; write .mavergreen/products/<short>/noun and pass --short" ;;
+    *"
+"*) die "this repo declares several products ($(printf '%s' "$_all" | tr '\n' ' ')); pass --short" ;;
+  esac
+  SHORT="$_all"
+fi
+PRODUCT="$(mg_value "products/$SHORT/noun" 2>/dev/null)" \
+  || die ".mavergreen/products/$SHORT/noun is missing or empty; write the product's noun there"
+HEADING="$(mavergreen_name notes-heading "$SHORT" "$VER")" || die "cannot derive the notes heading for $SHORT"
 
 cd "$MAVERGREEN_REPO_ROOT"
 
@@ -122,11 +131,7 @@ footer_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-footer.XXXXXX")"
 watched_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-watched.XXXXXX")"
 trap 'rm -f "$tmp" "$footer_tmp" "$watched_tmp"' EXIT
 
-if [ "$SELF_UPSTREAM" = yes ]; then
-  printf '## %s %s\n' "$PRODUCT" "$VER" > "$tmp"
-else
-  printf '## %s %s (%s)\n' "$PRODUCT" "$UP" "$VER" > "$tmp"
-fi
+printf '%s\nRelease %s%s\n' "$HEADING" "$TAG" "${MINOS:+ · Requires Mac OS X $MINOS or later}" > "$tmp"
 
 # spec: SKILL.md "Release notes" -- a tag that names a commit other than HEAD is already minted; its
 #       committed prose publishes as is.
@@ -185,7 +190,7 @@ if [ "$MINTED" = no ]; then
     die "$e is release notes for $b, which is not an existing tag; this release is $TAG, so rename it $DIR (see SKILL.md \"Release notes\")"
   done
 fi
-ALLOW=""; if [ "$PRODUCT" = Shipyard ]; then ALLOW="--allow shipyard"; fi
+ALLOW=""; if [ "$SHORT" = shipyard ]; then ALLOW="--allow shipyard"; fi
 line1() {
   awk 'NR == 1 { gsub(/\r/, ""); sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit }' "$1" \
     || die "could not read $1"
@@ -224,17 +229,7 @@ if [ -d "$DIR" ]; then
   fi
 fi
 
-# spec: SKILL.md "Release notes" -- the product is --short's, else the one whose short name is the
-#       noun lowercased, else the repo's only product. A requirement is listed when its min differs
-#       from the previous release's; a previous release from before .mavergreen/ lists none.
 PSHORT="$SHORT"
-if [ -z "$PSHORT" ]; then
-  _p="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
-  _all="$(mg_list products)"
-  if [ -d ".mavergreen/products/$_p" ]; then PSHORT="$_p"
-  elif [ -n "$_all" ] && [ "$(printf '%s\n' "$_all" | wc -l | tr -d ' ')" -eq 1 ]; then PSHORT="$_all"
-  fi
-fi
 PD=".mavergreen/products/$PSHORT"
 REQS=""
 if [ -n "$PSHORT" ] && [ -n "$PREV" ] && git cat-file -e "$PREV:.mavergreen" 2>/dev/null; then
@@ -428,10 +423,6 @@ fi
 #       separately and emitted only when at least one footer line follows it; swift-toolchain has
 #       neither a --min-os floor nor (in a fixture with no remote) a compare link.
 [ -z "$NOTICE" ] || printf '%s\n' "$NOTICE" >> "$footer_tmp"
-if [ -n "$MINOS" ]; then
-  if [ -s "$footer_tmp" ]; then printf '\n' >> "$footer_tmp"; fi
-  printf 'Requires Mac OS X %s or later.\n' "$MINOS" >> "$footer_tmp"
-fi
 
 if [ -n "$PREV" ]; then
   if [ -n "${GITHUB_SERVER_URL:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
@@ -464,7 +455,7 @@ if [ -s "$footer_tmp" ]; then
   cat "$footer_tmp" >> "$tmp"
 fi
 
-if ! shape="$(sh "$SELF/check-release-notes.sh" "$tmp" "$VER" 2>&1 >/dev/null)"; then
+if ! shape="$(sh "$SELF/check-release-notes.sh" "$tmp" "$VER" --short "$SHORT" --tag "$TAG" 2>&1 >/dev/null)"; then
   printf '%s\n' "$shape" >&2
   if [ -f "$notes" ] && [ -s "$notes" ]; then
     die "the generated body failed the family shape check (see the complaint above); likely cause: the committed prose at $notes"

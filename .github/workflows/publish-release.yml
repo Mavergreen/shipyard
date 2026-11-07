@@ -33,6 +33,10 @@ on:
         type: boolean
         required: false
         default: true
+      short:
+        description: "The product's short name: .mavergreen/products/<short>/noun and line, read at the release commit, name the Release and the notes heading."
+        type: string
+        required: true
       shipyard-ref:
         description: "shipyard ref to take release-assets.sh from."
         type: string
@@ -51,6 +55,21 @@ jobs:
           repository: Mavergreen/shipyard
           ref: ${{ inputs.shipyard-ref }}
           path: .shipyard
+
+      - name: Fetch the product's names at the release commit
+        id: names
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ inputs.target-commitish || github.sha }}
+          SHORT: ${{ inputs.short }}
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          root="$RUNNER_TEMP/names"
+          sh .shipyard/scripts/fetch-product-names.sh "$REPO" "$SHA" "$SHORT" "$root"
+          title="$(MAVERGREEN_REPO_ROOT="$root" sh -c '. "$1"; mavergreen_name release-title "$2" "$3"' sh .shipyard/scripts/mavergreen-meta.sh "$SHORT" "$VERSION")"
+          { echo "root=$root"; echo "title=$title"; } >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v8
         with:
@@ -78,6 +97,8 @@ jobs:
           CHECKSUMS: ${{ inputs.checksums }}
           VERSION: ${{ inputs.version }}
           ASSETS: ${{ inputs.assets }}
+          SHORT: ${{ inputs.short }}
+          MAVERGREEN_REPO_ROOT: ${{ steps.names.outputs.root }}
         run: |
           set -eu
           case "$ASSETS" in
@@ -86,7 +107,7 @@ jobs:
             *) echo "::error::assets: want required or none (got '$ASSETS')"; exit 1 ;;
           esac
           files="$(sh .shipyard/scripts/release-assets.sh $only dist "$NOTES")"
-          sh .shipyard/scripts/check-release-notes.sh "dist/$NOTES" "$VERSION"
+          sh .shipyard/scripts/check-release-notes.sh "dist/$NOTES" "$VERSION" --short "$SHORT" --tag "$VERSION"
           if [ "$CHECKSUMS" = true ] && [ -n "$files" ]; then
             ( cd dist && printf '%s\n' "$files" | sed 's|^dist/||' | xargs shasum -a 256 > SHA256SUMS )
             ( cd dist && shasum -a 256 -c SHA256SUMS ) \
@@ -147,6 +168,7 @@ jobs:
         continue-on-error: true
         uses: softprops/action-gh-release@v3
         with:
+          name: ${{ steps.names.outputs.title }}
           tag_name: ${{ inputs.version }}
           target_commitish: ${{ inputs.target-commitish || github.sha }}
           body_path: dist/${{ inputs.notes-file }}
@@ -169,6 +191,7 @@ jobs:
         continue-on-error: true
         uses: softprops/action-gh-release@v3
         with:
+          name: ${{ steps.names.outputs.title }}
           tag_name: ${{ inputs.version }}
           target_commitish: ${{ inputs.target-commitish || github.sha }}
           body_path: dist/${{ inputs.notes-file }}
@@ -190,6 +213,7 @@ jobs:
         if: steps.publish2.outcome == 'failure'
         uses: softprops/action-gh-release@v3
         with:
+          name: ${{ steps.names.outputs.title }}
           tag_name: ${{ inputs.version }}
           target_commitish: ${{ inputs.target-commitish || github.sha }}
           body_path: dist/${{ inputs.notes-file }}

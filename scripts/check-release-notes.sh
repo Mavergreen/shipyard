@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: check-release-notes.sh <file> <version>
+#   usage: check-release-notes.sh <file> <version> --short <short> --tag <tag>
 #          Is this file the family's release body for this exact version? Used twice: release-notes.sh
 #          self-checks what it just generated, and publish-release.yml checks what it is about to
 #          publish -- so a repo that regresses to a hand-rolled body still cannot ship one.
@@ -13,9 +13,20 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
+. "$SELF/lib.sh"
 chk_ran notes-shape
-f="${1:?check-release-notes: notes file required}"
-ver="${2:?check-release-notes: version required}"
+usage() { echo "usage: check-release-notes.sh <file> <version> --short <short> --tag <tag>" >&2; exit 2; }
+[ $# -ge 2 ] || usage
+f="$1"; ver="$2"; shift 2
+short=""; tag=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --short) [ $# -ge 2 ] || usage; short="$2"; shift 2 ;;
+    --tag) [ $# -ge 2 ] || usage; tag="$2"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+[ -n "$short" ] && [ -n "$tag" ] && [ -n "$ver" ] || usage
 
 fail() {  # $1 = what is wrong, $2 = the fix (default: regenerate)
   chk_fail notes-shape "the release body is not the family shape" "$1" \
@@ -30,26 +41,20 @@ fail() {  # $1 = what is wrong, $2 = the fix (default: regenerate)
 awk '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l == "<!-- edited by a human -->") f = 1 } END { exit !f }' "$f" \
   && fail "$f still carries the human-edit mark '<!-- edited by a human -->'; release-notes.sh strips it, so this body was not composed by release-notes.sh"
 
+want="$(mavergreen_name notes-heading "$short" "$ver" 2>&1)" \
+  || fail "cannot derive the heading for $short: $want" "write .mavergreen/products/$short/noun"
 first="$(sed -n '1p' "$f")"
-case "$first" in
-  '## '*) ;;
-  *) fail "the first line of $f is not a '## ' title: $first" ;;
+[ "$first" = "$want" ] \
+  || fail "the first line of $f is not the derived heading '$want': $first" \
+          "generate the body with release-notes.sh; the heading is derived from .mavergreen/products/$short/noun"
+second="$(sed -n '2p' "$f")"
+case "$second" in
+  "Release $tag") ;;
+  "Release $tag · Requires Mac OS X "*" or later")
+    floor="${second#"Release $tag · Requires Mac OS X "}"; floor="${floor% or later}"
+    case "$floor" in ''|*[!0-9.]*) fail "the second line of $f has no install floor: $second" ;; esac ;;
+  *) fail "the second line of $f is not 'Release $tag' (optionally with ' · Requires Mac OS X <x> or later'): $second" ;;
 esac
-
-# spec: tests/check-release-notes-test.sh -- the title must name THIS version, or a copied file
-#       under a new tag is invisible (every other check passes, and the release announces its
-#       predecessor). A leading "v" is not part of the version -- shipyard's tag is v1.0.209 but its
-#       generated title reads "## Shipyard 1.0.209" -- so either spelling is accepted; a stale
-#       version still fails either way. Guarded with [ -n "$bare" ]: a glob alternative built from an
-#       empty string, `*""*`, matches ANY string in every shell tested here, so a degenerate "v"
-#       version would silently turn this whole check into a no-op instead of failing loudly.
-named=false
-case "$first" in *"$ver"*) named=true ;; esac
-bare="${ver#v}"
-if [ "$named" = false ] && [ -n "$bare" ] && [ "$bare" != "$ver" ]; then
-  case "$first" in *"$bare"*) named=true ;; esac
-fi
-[ "$named" = true ] || fail "the title does not name $ver: $first"
 
 grep -q '^### What changed[[:space:]]*$' "$f" \
   || fail "$f has no '### What changed' section; every release says what changed, even a repackage"

@@ -25,13 +25,14 @@ PY
 # spec: SKILL.md "Publishing a release" -- the step's run: block, against a stand-in shipyard checkout and dist,
 #       as the runner would run it
 mkdir -p "$w/run/.shipyard"; cp -R "$root/scripts" "$w/run/.shipyard/scripts"
-notes="$(printf '%s\n\n%s\n%s' '## thing 1.0.0' '### What changed' '- a change')"
+mkdir -p "$w/root/.mavergreen/products/thing"; printf 'Thing\n' > "$w/root/.mavergreen/products/thing/noun"
+notes="$(printf '%s\n%s\n\n%s\n%s' '## Thing 1.0.0' 'Release 1.0.0' '### What changed' '- a change')"
 step() {  # $1 = ASSETS, $2.. = files to put in dist besides the notes
   a="$1"; shift
   rm -rf "$w/run/dist"; mkdir -p "$w/run/dist"; printf '%s\n' "$notes" > "$w/run/dist/RELEASE_NOTES.md"
   for f in "$@"; do printf 'x\n' > "$w/run/dist/$f"; done
   : > "$w/run/out"
-  (cd "$w/run" && ASSETS="$a" NOTES=RELEASE_NOTES.md CHECKSUMS=true VERSION=1.0.0 GITHUB_OUTPUT="$w/run/out" \
+  (cd "$w/run" && ASSETS="$a" NOTES=RELEASE_NOTES.md CHECKSUMS=true VERSION=1.0.0 SHORT=thing MAVERGREEN_REPO_ROOT="$w/root" GITHUB_OUTPUT="$w/run/out" \
      sh -e "$w/assets-step.sh") > "$w/run/log" 2>&1
 }
 
