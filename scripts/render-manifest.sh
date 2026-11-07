@@ -4,11 +4,12 @@
 #            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]... [--has-updater]
 #          Writes ROOT/usr/local/mavergreen/P/mavergreen.plist. Run it LAST: `outside` is read from
 #          whatever is staged at that moment.
-#          With --has-updater the manifest's appcast is the product's feed, from scripts/product-names; else empty.
+#          Its identifier is derived from .mavergreen/products/P/. With --has-updater the manifest's
+#          appcast is the product's feed (scripts/updater-identity.sh feed P); else empty.
 # spec: tests/render-manifest-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/registry-lookup.sh"
+. "$SELF/mavergreen-meta.sh"
 ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; HASUPD=""; EXCL=""; REPL=""; GEN=""
 nl='
 '
@@ -23,7 +24,7 @@ while [ $# -gt 0 ]; do
     --version) VER="$2"; shift 2 ;;
     --group) G="$2"; shift 2 ;;
     --line) L="$2"; shift 2 ;;
-    --appcast) echo "render-manifest: --appcast is derived from shipyard's scripts/product-names; stop passing it" >&2; exit 2 ;;
+    --appcast) echo "render-manifest: --appcast is derived from --product; stop passing it" >&2; exit 2 ;;
     --has-updater) HASUPD=1; shift ;;
     --exclude) EXCL="$EXCL$2$nl"; shift 2 ;;
     --replaces)
@@ -49,9 +50,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$ST" ] && [ -n "$P" ] && [ -n "$NAME" ] && [ -n "$VER" ] || { echo "render-manifest: need --stage --product --name --version" >&2; exit 2; }
-registry_need render-manifest identifier "$P"; ID="$REG_V"
+ID="$(mavergreen_name identifier "$P")" || exit $?
 if [ -n "$HASUPD" ]; then
-  registry_need render-manifest feed "$P"; AC="$REG_V"
+  AC="$(sh "$SELF/updater-identity.sh" feed "$P")" || exit $?
 fi
 case "${G:-$P}" in *[!a-z0-9-]*|-*) echo "render-manifest: bad group ${G:-$P}" >&2; exit 2 ;; esac
 case "$L" in *[!0-9a-z.-]*) echo "render-manifest: bad line $L" >&2; exit 2 ;; esac

@@ -8,7 +8,7 @@
 # spec: tests/artifact-conformance-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/registry-lookup.sh"
+. "$SELF/mavergreen-meta.sh"
 . "$SELF/stand-in-marker.sh"
 dist="${1:?stand-in-feeds: dist directory required}"
 ver="${2:?stand-in-feeds: version required}"
@@ -21,10 +21,10 @@ while IFS= read -r pk; do
   P="$(awk -v p="$pk" '$1 == "manifest" && $2 == p { print $3; exit }' "$_t/facts")"
   [ -n "$P" ] || continue
   [ ! -e "$dist/$P.xml" ] || continue
-  registry_need stand-in-feeds repo "$P"; repo="$REG_V"
+  repo="$(mg_repo)" || { echo "stand-in-feeds: cannot tell which repo $P's release is in; set GITHUB_REPOSITORY (OWNER/REPO)" >&2; exit 2; }
   [ -s "$dist/RELEASE_NOTES.md" ] || printf '%s\n\n- nothing is published from it\n' "$STAND_IN_NOTES_HEADING" > "$dist/RELEASE_NOTES.md"
   len="$(wc -c < "$dist/$pk" | tr -d ' ')"
-  sh "$SELF/gen_appcast.sh" "$P" "$ver" "https://github.com/Mavergreen/$repo/releases/download/$ver/$pk" 10.9.5 \
+  sh "$SELF/gen_appcast.sh" "$P" "$ver" "https://github.com/Mavergreen/${repo#*/}/releases/download/$ver/$pk" 10.9.5 \
     "$dist/RELEASE_NOTES.md" "sparkle:edSignature=\"$STAND_IN_SIGNATURE\" length=\"$len\"" > "$dist/$P.xml"
   echo "stand-in-feeds: wrote an unsigned $dist/$P.xml" >&2
 done < "$_t/pkgs"

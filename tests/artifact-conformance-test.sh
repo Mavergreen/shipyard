@@ -1295,12 +1295,12 @@ PLIST
     10.9.5 "$_pk/archive/RELEASE_NOTES.md" "sparkle:edSignature=\"x\" length=\"$_alen\"" > "$_pk/archive/x.xml"
   _fa="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/archive" 1.0.0-mavericks.1 "$_pk")"
   mkdir -p "$_pk/rehearsal"; cp "$_pk/archive/x-1.0.0-mavericks.1.pkg" "$_pk/rehearsal/"
-  MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null \
+  GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null \
     || { echo "FAIL: stand-in-feeds.sh must stage a feed for a build that signs nothing"; exit 1; }
   [ -f "$_pk/rehearsal/x.xml" ] && [ -s "$_pk/rehearsal/RELEASE_NOTES.md" ] \
     || { echo "FAIL: stand-in-feeds.sh writes x.xml for x's updater, and stand-in notes for its description"; exit 1; }
   _sum="$(cksum < "$_pk/rehearsal/x.xml")"
-  MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null
+  GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null
   [ "$(cksum < "$_pk/rehearsal/x.xml")" = "$_sum" ] || { echo "FAIL: stand-in-feeds.sh never overwrites a feed"; exit 1; }
   _fr="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/rehearsal" 1.0.0-mavericks.1 "$_pk")"
   _nr=0; _fn="$(MAVERGREEN_PRODUCT_NAMES="$_pk/absent-registry" sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk" 2>"$_pk/err")" || _nr=$?

@@ -17,7 +17,7 @@
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
 #            registered    <product> <identifier|none> <repo|none>     what scripts/product-names registers the product to
-#            derived       <product> <bundle-id> <label> <app> <feed>  the updater identity product-name.sh derives for it
+#            derived       <product> <bundle-id> <label> <app> <feed>  the updater identity derived for it
 #            manifest-line <file> <line|none>                     that manifest's line
 #            manifest-appcast <file> <url|none>                   that manifest's appcast
 #            sparkle       <file> <path> <SUFeedURL>              one per top-level bundle carrying a Sparkle feed

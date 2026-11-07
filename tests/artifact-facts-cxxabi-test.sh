@@ -31,7 +31,7 @@ build vtable.c -o src/bin/vtable
 build hidden.c -o src/bin/hidden
 build codex.c -o src/bin/codex
 pin="$(sed -n 1p "$here/../.mavergreen/ingredients/recaulk/VERSION")"
-sh "$here/../scripts/fetch_product_pkg.sh" recaulk "$pin" "$w/recaulk" > /dev/null 2>&1 || fail "cannot fetch Recaulk $pin"
+sh "$here/../scripts/fetch_product_pkg.sh" --repo "$(sed -n 1p "$here/../.mavergreen/ingredients/recaulk/REPO")" recaulk "$pin" "$w/recaulk" > /dev/null 2>&1 || fail "cannot fetch Recaulk $pin"
 build withrecaulk.c "$w/recaulk/lib/librecaulk.a" -lc++abi -o src/bin/withrecaulk
 build -c throw-member.c -o throw-member.o
 build -c back-member.c -o back-member.o

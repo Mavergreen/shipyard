@@ -32,6 +32,7 @@ YML
   printf '#!/bin/sh\nprintf "https://example.com/notes/%%s\\n" "$1"\n' > "$1/.mavergreen/hooks/upstream-release-notes-url"
   ( cd "$1" && git add -A && git commit -qm base )
 }
+decl() { mkdir -p "$1/.mavergreen/products/$2"; printf '%s\n' "$2" > "$1/.mavergreen/products/$2/noun"; }
 L2='# renovate: datasource=github-releases depName=libressl/portable extractVersion=^v(?<version>.+)$'
 bump() {
   printf '%s\n%s\n' "$2" "$L2" > "$1/.mavergreen/ingredients/libressl/VERSION"
@@ -97,7 +98,7 @@ r="$work/prose-short"; mkrepo "$r"
 mkdir -p "$r/.mavergreen/release-notes/openssh" "$r/.mavergreen/release-notes"
 printf 'Per-product prose.\n' > "$r/.mavergreen/release-notes/openssh/9.9p2-mavericks.1.md"
 printf 'Repo-wide prose.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
-printf 'Legacy prose.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
+printf 'Legacy prose.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"; decl "$r" openssh
 ( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 && git commit -q --allow-empty -m later )
 gen "$r" 9.9p2-mavericks.1 --short openssh >/dev/null
 grep -q '^Per-product prose\.$' "$r/OUT.md" || { echo "FAIL prose-short: a product tagged separately reads release-notes/<short>/"; cat "$r/OUT.md"; exit 1; }
@@ -319,7 +320,7 @@ done
 
 dset short; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n/$T/changes" "$d"
 printf 'Runtime loads faster.\n' > "$n/$T/changes/x"; notice "$r" swift-runtime 'Use the runtime from here.'
-printf 'Stray.\n' > "$d/notes.md"; notice "$r" openssh 'Top-level notice.'
+printf 'Stray.\n' > "$d/notes.md"; notice "$r" openssh 'Top-level notice.'; decl "$r" swift-runtime
 dgen new --short swift-runtime
 [ "$rc" -eq 0 ] || { echo "FAIL dir-short: ships"; cat "$r/ERR"; exit 1; }
 grep -q '^- Runtime loads faster\.$' "$r/OUT.md" && grep -q '^Use the runtime from here\.$' "$r/OUT.md" \
@@ -336,7 +337,7 @@ gen "$r" 20260802.6 --product Porthole --min-os 10.9 >/dev/null 2>"$r/ERR" || { 
   || { echo "FAIL dir-changes-self-ing: changes are a change to the product itself"; cat "$r/OUT.md"; exit 1; }
 
 for m in new minted; do
-  dset "short-md-$m"; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n"
+  dset "short-md-$m"; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n"; decl "$r" swift-runtime
   printf 'Nested prose.\n' > "$n/$T.md"
   dgen "$m" --short swift-runtime
   if [ "$m" = new ]; then
@@ -356,13 +357,13 @@ dset wrongtag; w="$r/.mavergreen/release-notes/9.9p2-mavericks.9"; mkdir -p "$w/
 dgen new
 refused dir-wrongtag "$w"
 grep -qF "$T" "$r/ERR" || { echo "FAIL dir-wrongtag: the complaint names the expected $T"; cat "$r/ERR"; exit 1; }
-dset wrongtag-short; w="$r/.mavergreen/release-notes/swift-runtime/9.9p2-mavericks.9"; mkdir -p "$w/changes"; printf 'Keys load again.\n' > "$w/changes/keys"
+dset wrongtag-short; w="$r/.mavergreen/release-notes/swift-runtime/9.9p2-mavericks.9"; mkdir -p "$w/changes"; decl "$r" swift-runtime; printf 'Keys load again.\n' > "$w/changes/keys"
 dgen new --short swift-runtime
 refused dir-wrongtag-short "$w"
 dset wrongtag-minted; mkdir -p "$r/.mavergreen/release-notes/9.9p2-mavericks.9/changes"; printf 'Keys load again.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.9/changes/keys"
 dgen minted
 [ "$rc" -eq 0 ] || { echo "FAIL dir-wrongtag-minted: regenerating a published release ignores notes staged for a later one"; cat "$r/ERR"; exit 1; }
-dset oldtag; mkdir -p "$r/.mavergreen/release-notes/9.9p2-mavericks.1/changes" "$r/.mavergreen/release-notes/swift-runtime"
+dset oldtag; decl "$r" swift-runtime; mkdir -p "$r/.mavergreen/release-notes/9.9p2-mavericks.1/changes" "$r/.mavergreen/release-notes/swift-runtime"
 printf 'Old news.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1/changes/old"
 mkdir -p "$r/.mavergreen/release-notes/swift-runtime/$T/changes"; printf 'Use the runtime from here.\n' > "$r/.mavergreen/release-notes/swift-runtime/$T/changes/x"
 dgen new
@@ -389,7 +390,7 @@ if [ "$(id -u)" != 0 ]; then
     for level in top nest; do
       dset "unreadable-$level-$mode"; n="$r/.mavergreen/release-notes"
       mkdir -p "$d/changes" "$n/swift-runtime/$T/changes"
-      printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Runtime loads faster.\n' > "$n/swift-runtime/$T/changes/x"
+      printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Runtime loads faster.\n' > "$n/swift-runtime/$T/changes/x"; decl "$r" swift-runtime
       ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
       if [ "$level" = top ]; then victim="$n"; extra=""; else victim="$n/swift-runtime"; extra="--short swift-runtime"; fi
       chmod "$mode" "$victim"
@@ -407,15 +408,12 @@ if [ "$(id -u)" != 0 ]; then
   grep -q 'integer expression' "$r/ERR" && { echo "FAIL dir-requires-unreadable: a shell error leaked"; cat "$r/ERR"; exit 1; }
 fi
 
-# spec: scripts/release-notes.sh -- a registry that cannot be read is said so, not called "not registered".
-dset registry-short; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n/$T/changes"; printf 'Runtime loads faster.\n' > "$n/$T/changes/x"
-dgen new --short swift-runtime --out "$r/OUT.md"
-[ "$rc" -eq 0 ] || { echo "FAIL registry-short: baseline ships"; cat "$r/ERR"; exit 1; }
-rm -f "$r/OUT.md"; rc=0; ( MAVERGREEN_PRODUCT_NAMES="$work/no-such-registry"; export MAVERGREEN_PRODUCT_NAMES; gen "$r" "$T" --short swift-runtime ) >/dev/null 2>"$r/ERR" || rc=$?
-refused dir-registry-short "registry"
-grep -q 'not a registered' "$r/ERR" && { echo "FAIL dir-registry-short: calls an unreadable registry 'not registered'"; cat "$r/ERR"; exit 1; }
+# spec: scripts/release-notes.sh -- --short names a product this repo declares.
+dset short-undeclared; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n/$T/changes"; printf 'Runtime loads faster.\n' > "$n/$T/changes/x"
+dgen new --short swift-runtime
+refused dir-short-undeclared ".mavergreen/products/swift-runtime/"
 
-# spec: scripts/release-notes.sh -- --short names a registered product, in the form a short name takes.
+# spec: scripts/release-notes.sh -- --short names a declared product, in the form a short name takes.
 for sv in .. a/b '' Foo -x swift-runtime-other; do
   dset "short-bad-$(printf %s "$sv" | tr -c a-z0-9 -)"; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n/$T/changes"
   printf 'Runtime loads faster.\n' > "$n/$T/changes/x"
@@ -1053,11 +1051,13 @@ grep -qx -- '- New release of Porthole 20260815.1 (was 20260802.3)\.' "$r/OUT.md
 grep -qx -- '  \[Changes since 20260802.3\](https://github.com/Mavergreen/porthole-fork/compare/20260802.3...20260815.1)' "$r/OUT.md" \
   || { echo "FAIL r3new: GITHUB_REPOSITORY names the compare"; cat "$r/OUT.md"; exit 1; }
 
-# spec: SKILL.md "Release notes" -- with no GITHUB_REPOSITORY, the registry names the repo; with
+# spec: SKILL.md "Release notes" -- with no GITHUB_REPOSITORY, the origin remote names the repo; with
 #       neither, the link line is left out rather than guessed.
+( cd "$r" && git remote add origin https://github.com/Someone/porthole.git )
 selfgen "$r" 20260815.1 GITHUB_REPOSITORY=
-grep -qx -- '  \[Changes since 20260802.3\](https://github.com/Mavergreen/porthole/compare/20260802.3...20260815.1)' "$r/OUT.md" \
-  || { echo "FAIL r3new: the registry names the compare"; cat "$r/OUT.md"; exit 1; }
+grep -qx -- '  \[Changes since 20260802.3\](https://github.com/Someone/porthole/compare/20260802.3...20260815.1)' "$r/OUT.md" \
+  || { echo "FAIL r3new: the origin remote names the compare"; cat "$r/OUT.md"; exit 1; }
+( cd "$r" && git remote remove origin )
 ( cd "$r" && env MAVERGREEN_REPO_ROOT="$r" GITHUB_REPOSITORY= sh "$S" --tag 20260815.1 --version 20260815.1 \
     --product Unregistered --out "$r/OUT.md" ) >/dev/null
 grep -qx -- '- New release of Unregistered 20260815.1 (was 20260802.3)\.' "$r/OUT.md" \

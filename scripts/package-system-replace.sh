@@ -11,7 +11,7 @@
 set -eu
 umask 022
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/registry-lookup.sh"
+. "$SELF/mavergreen-meta.sh"
 P=""; TITLE=""; VER=""; OUT=""; BASEVER=""; EMIT=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,7 +31,7 @@ done
 case "$P" in
   ''|-*|*[!a-z0-9-]*) echo "package-system-replace: not a product name: '$P'" >&2; exit 2 ;;
 esac
-registry_need package-system-replace identifier "$P"; ID="$REG_V"
+ID="$(mavergreen_name identifier "$P")" || exit $?
 emit() {
   { printf '#!/bin/sh\n'
     printf '[ -n "${3:-}" ] || { echo "%s: system-replace got no target volume" >&2; exit 1; }\n' "$P"

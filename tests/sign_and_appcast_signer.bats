@@ -14,6 +14,7 @@ setup() {
   PIN="$(sed -n 1p "$ROOT/.mavergreen/ingredients/ed25519/VERSION")"
   REL="$WORK/rel/Mavergreen/ed25519/releases/download/$PIN"
   mkdir -p "$REL" "$WORK/shims"
+  mkdir -p "$WORK/repo/.mavergreen/products/openssh"; echo OpenSSH > "$WORK/repo/.mavergreen/products/openssh/noun"; export MAVERGREEN_REPO_ROOT="$WORK/repo"
   printf '#!/bin/sh\necho "$0 $*" >> "%s/forbidden"\nexit 1\n' "$WORK" > "$WORK/shims/pkgutil"
   chmod +x "$WORK/shims/pkgutil"
   printf 'dummy pkg bytes\n' > "$WORK/x.pkg"

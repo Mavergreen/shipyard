@@ -10,6 +10,7 @@ set -eu
 ROOT="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 T=$(mktemp -d "${TMPDIR:-/tmp}/mav-signappcast.XXXXXX")
 trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/repo/.mavergreen/products/openssh"; echo OpenSSH > "$T/repo/.mavergreen/products/openssh/noun"; export MAVERGREEN_REPO_ROOT="$T/repo"
 
 # spec: tests/sign_and_appcast_key.bats -- how the key reaches the signer (-f - <file>, key on
 #       stdin) is that file's concern; this stub only returns a fixed, well-formed base64
@@ -46,7 +47,7 @@ printf '%s\n' "$OUT" | grep -q '<li>thing one</li>' || fail "notes not rendered"
 rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product no-such-product \
   --feed-dir "$T/feeds2" --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
   --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
-[ "$rc" -eq 2 ] || fail "an unregistered --product has no feed; expected exit 2, got $rc"
+[ "$rc" -eq 2 ] || fail "a --product the repo does not declare has no feed; expected exit 2, got $rc"
 [ ! -e "$T/feeds2" ] || fail "a refused call writes no feed"
 rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh \
   --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \

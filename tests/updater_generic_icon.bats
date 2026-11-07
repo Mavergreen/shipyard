@@ -6,6 +6,7 @@ SHARED="${BATS_TEST_DIRNAME}/.."
 mk() {
   d="$(mktemp -d "${TMPDIR:-/tmp}/updgen.XXXXXX")"
   mkdir -p "$d/Fake.framework"
+  if [ -z "${MK_UNDECLARED:-}" ]; then mkdir -p "$d/.mavergreen/products/$1"; echo "$1" > "$d/.mavergreen/products/$1/noun"; fi
   cat > "$d/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
 project(t LANGUAGES OBJC)
@@ -18,7 +19,7 @@ mavericks_add_updater_app(
 ${3:-}
 EOF
   objc_cmake_args "$SHARED"
-  [ -z "${MK_REGISTRY:-}" ] || export MAVERGREEN_PRODUCT_NAMES="$MK_REGISTRY"
+  export GITHUB_REPOSITORY="${MK_REPO-Mavergreen/openssh}"
   run objc_cmake -S "$d" -B "$d/b"
 }
 
@@ -39,7 +40,7 @@ EOF
   rm -rf "$d"
 }
 
-@test "add_updater_app: the name, bundle id and feed come from the registry" {
+@test "add_updater_app: the name, bundle id and feed are derived from PRODUCT" {
   mk openssh "ALLOW_GENERIC"
   [ "$status" -eq 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
   p="$d/b/openssh-updater-Info.plist"
@@ -55,30 +56,30 @@ EOF
 @test "add_updater_app: the target and bundle id are published to the caller, for product code that names the updater" {
   mk go126 "ALLOW_GENERIC" 'message(STATUS "updater=[${MAVERICKS_UPDATER_TARGET}] id=[${MAVERICKS_UPDATER_BUNDLE_ID}]")'
   [ "$status" -eq 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
-  [[ "$output" == *"updater=[go126-updater] id=[dev.mavergreen.golang.go126.updater]"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
+  [[ "$output" == *"updater=[go126-updater] id=[dev.mavergreen.go126.updater]"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
   rm -rf "$d"
 }
 
-@test "add_updater_app: NAME, BUNDLE_ID and FEED_URL are refused -- the registry owns them" {
+@test "add_updater_app: NAME, BUNDLE_ID and FEED_URL are refused -- they are derived" {
   for a in "NAME U" "BUNDLE_ID com.example.U" "FEED_URL http://x/appcast.xml"; do
     mk openssh "ALLOW_GENERIC $a"
     [ "$status" -ne 0 ] || { echo "$a was accepted: $output"; rm -rf "$d"; return 1; }
-    [[ "$output" == *"derived from shipyard's scripts/product-names"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
+    [[ "$output" == *"derived from PRODUCT"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
     rm -rf "$d"
   done
 }
 
-@test "add_updater_app: an unregistered PRODUCT is refused" {
-  mk no-such-product "ALLOW_GENERIC"
+@test "add_updater_app: a PRODUCT the repo does not declare is refused" {
+  MK_UNDECLARED=1 mk no-such-product "ALLOW_GENERIC"
   [ "$status" -ne 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
-  [[ "$output" == *"not in shipyard's scripts/product-names"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
+  [[ "$output" == *".mavergreen/products/no-such-product/"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
   rm -rf "$d"
 }
 
-@test "add_updater_app: an unreadable registry is refused, naming the product" {
-  MK_REGISTRY="${TMPDIR:-/tmp}/no-such-registry.$$" mk openssh "ALLOW_GENERIC"
+@test "add_updater_app: a feed whose repo cannot be learned is refused, naming the product" {
+  MK_REPO= mk openssh "ALLOW_GENERIC"
   [ "$status" -ne 0 ] || { echo "$output"; rm -rf "$d"; return 1; }
   [[ "$output" == *"PRODUCT 'openssh'"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
-  [[ "$output" == *"cannot read the registry"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
+  [[ "$output" == *"GITHUB_REPOSITORY"* ]] || { echo "$output"; rm -rf "$d"; return 1; }
   rm -rf "$d"
 }

@@ -52,20 +52,12 @@ if [ -n "$LINE" ]; then
   esac
 fi
 
-registered() {
-  rc=0; sh "$SELF/product-name.sh" repo "$1" >/dev/null 2>&1 || rc=$?
-  [ "$rc" -eq 2 ] && REGISTRY_BROKEN=yes || REGISTRY_BROKEN=no
-  [ "$rc" -eq 0 ]
-}
-registry_complaint() {
-  if [ "$REGISTRY_BROKEN" = yes ]; then echo "$1: the product registry could not be read (scripts/product-name.sh)"
-  else echo "$1 is not a registered product short name (scripts/product-name.sh)"; fi
-}
 if [ "$SHORT_SET" = yes ]; then
   case "$SHORT" in
     ''|-*|*[!a-z0-9-]*) die "--short '$SHORT' is not a short name ([a-z0-9][a-z0-9-]*)" ;;
   esac
-  registered "$SHORT" || die "$(registry_complaint "--short '$SHORT'")"
+  [ -d "$MAVERGREEN_REPO_ROOT/.mavergreen/products/$SHORT" ] \
+    || die "--short '$SHORT' is not a product of this repo; declare it in .mavergreen/products/$SHORT/"
 fi
 
 cd "$MAVERGREEN_REPO_ROOT"
@@ -189,7 +181,7 @@ if [ "$MINTED" = no ]; then
     [ "$b" = "$TAG" ] && continue
     [ "$b" = "$SHORT" ] && continue
     git rev-parse -q --verify "refs/tags/$b^{commit}" >/dev/null && continue
-    sh "$SELF/product-name.sh" repo "$b" >/dev/null 2>&1 && continue
+    [ -d "$MAVERGREEN_REPO_ROOT/.mavergreen/products/$b" ] && continue
     die "$e is release notes for $b, which is not an existing tag; this release is $TAG, so rename it $DIR (see SKILL.md \"Release notes\")"
   done
 fi
@@ -313,12 +305,8 @@ if [ -n "$CALLER" ]; then
     || die "$CALLER calls repackage-on-ingredient-bump.yml but .mavergreen/ingredients/ holds no ingredient"
 fi
 # spec: tests/release-notes-test.sh "r3new"/"r1d" -- this repo's owner/repo names its own compare
-#       view; with neither source, a link is left out rather than guessed.
-SLUG="${GITHUB_REPOSITORY:-}"
-if [ -z "$SLUG" ]; then
-  short="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
-  if own="$(sh "$SELF/product-name.sh" repo "$short" 2>/dev/null)"; then SLUG="Mavergreen/$own"; fi
-fi
+#       view; with no repo to learn, a link is left out rather than guessed.
+SLUG="$(mg_repo)" || SLUG=""
 
 INGREDIENTS=""
 WATCHED=""

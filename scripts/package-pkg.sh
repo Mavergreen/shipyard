@@ -21,8 +21,8 @@
 # spec: tests/shipyard-package-pkg-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/registry-lookup.sh"
 . "$SELF/mavergreen-meta.sh"
+MAVERGREEN_REPO_ROOT="$SELF/.."; export MAVERGREEN_REPO_ROOT
 SPREFIX=""; APP=""; VER=""; OUT=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -34,9 +34,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-registry_need package-pkg identifier shipyard; ID="$REG_V"
+ID="$(mavergreen_name identifier shipyard)" || exit $?
 PREFIX_DIR="/usr/local/mavergreen/shipyard"
-registry_need package-pkg updater-app shipyard; APP_REL="$REG_V"
+APP_REL="$(sh "$SELF/updater-identity.sh" app shipyard)" || exit $?
 APP_NAME="${APP_REL##*/}"
 
 : "${SPREFIX:?package-pkg: --shipyard-prefix required}"
@@ -47,7 +47,7 @@ APP_NAME="${APP_REL##*/}"
 [ "$(basename "$APP")" = "$APP_NAME" ] \
   || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
 [ -d "$APP" ] || { echo "package-pkg: no such app: $APP" >&2; exit 1; }
-cmake_min="$(MAVERGREEN_REPO_ROOT="$SELF/.." mg_value products/shipyard/requires/cmake/min 2>/dev/null || true)"
+cmake_min="$(mg_value products/shipyard/requires/cmake/min 2>/dev/null || true)"
 [ -n "$cmake_min" ] || { echo "package-pkg: no cmake minimum in $SELF/../.mavergreen/products/shipyard/requires/cmake/min" >&2; exit 1; }
 require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-separated
   _flag="$1"; _dir="$2"; _allowed="$3"

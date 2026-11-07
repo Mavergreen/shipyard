@@ -4,10 +4,10 @@
 #          Stages product P's Sparkle updater and its daily-check LaunchAgent into a pkg payload root,
 #          and emits the postinstall logic that loads the agent, rendered from the shared updater/*.in
 #          templates. Where the app goes, what it is called and the agent's label are P's, derived by
-#          product-name.sh from shipyard's scripts/product-names; --app-dir and --agent-label are refused.
+#          updater-identity.sh from .mavergreen/products/P/; --app-dir and --agent-label are refused.
 #            --stage        payload root that pkgbuild --root will package
 #            --app          the built updater, P-updater.app (mavericks_add_updater_app(PRODUCT P))
-#            --product      P, a registered short name
+#            --product      P, a short name this repo declares
 #            --scripts-out  dir to write a complete `postinstall` into (pass as --scripts to pkgbuild)
 #            --snippet-out  file to write JUST the agent-load fragment into, for a postinstall to source
 #          Both outputs are optional. There is deliberately NO manual-trigger shim in /usr/local/bin:
@@ -16,7 +16,6 @@
 set -eu
 umask 022
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/registry-lookup.sh"
 TPL="$SELF/../updater"
 
 STAGE=""; APP=""; P=""; SCRIPTSOUT=""; SNIPPETOUT=""
@@ -27,15 +26,15 @@ while [ $# -gt 0 ]; do
     --product) P="$2"; shift 2;;
     --scripts-out) SCRIPTSOUT="$2"; shift 2;;
     --snippet-out) SNIPPETOUT="$2"; shift 2;;
-    --app-dir|--agent-label) echo "stage_updater: $1 is derived from shipyard's scripts/product-names; pass --product" >&2; exit 2;;
+    --app-dir|--agent-label) echo "stage_updater: $1 is derived from --product; pass --product" >&2; exit 2;;
     *) echo "stage_updater: unknown arg: $1" >&2; exit 2;;
   esac
 done
 [ -n "$STAGE" ] && [ -n "$APP" ] && [ -n "$P" ] \
   || { echo "stage_updater: need --stage --app --product" >&2; exit 2; }
 [ -d "$APP" ] || { echo "stage_updater: no updater .app: $APP" >&2; exit 1; }
-registry_need stage_updater updater-app "$P"; REL="$REG_V"
-registry_need stage_updater agent-label "$P"; LABEL="$REG_V"
+REL="$(sh "$SELF/updater-identity.sh" app "$P")" || exit $?
+LABEL="$(sh "$SELF/updater-identity.sh" agent-label "$P")" || exit $?
 APPDIR="/${REL%/*}"
 appbase="${REL##*/}"
 [ "${APP##*/}" = "$appbase" ] \

@@ -5,9 +5,9 @@
 #            [--pubkey B64] [--allow-key-change]
 #          (SPARKLE_PRIVATE_KEY must be in the environment)
 #          Signs a .pkg with the native EdDSA signer and writes its Sparkle feed to DIR/P.xml, in one
-#          call. P.xml is the file P's updater polls (scripts/product-name.sh feed P), so its name is
+#          call. P.xml is the file P's updater polls (scripts/updater-identity.sh feed P), so its name is
 #          P's, never the caller's; nothing goes to stdout.
-#            --product   the registered short name the pkg ships
+#            --product   the short name, declared in .mavergreen/products/, of the product the pkg ships
 #            --feed-dir  where P.xml is written; nothing is written when the run refuses
 #            --signer    the ed25519-sign binary; OPTIONAL -- defaults to the prebuilt ed25519-sign
 #                        fetched from the ed25519 release .mavergreen/ingredients/ed25519/VERSION names, verified against its SHA256SUMS:
@@ -32,7 +32,7 @@
 #       (`printenv SPARKLE_PRIVATE_KEY |`), never expanded into a command.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/registry-lookup.sh"
+. "$SELF/mavergreen-meta.sh"
 
 PRODUCT=""; FEEDDIR=""
 SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; CHANNEL=""; VER=""; URL=""; NOTES=""; PKG=""; MINOS="${MAVERGREEN_MIN_OS:-10.9.5}"
@@ -55,7 +55,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$PRODUCT" ] && [ -n "$FEEDDIR" ] && [ -n "$CHANNEL" ] && [ -n "$VER" ] && [ -n "$URL" ] && [ -n "$NOTES" ] && [ -n "$PKG" ] \
   || { echo "sign_and_appcast: need --product --feed-dir --channel-title --version --pkg-url --notes-file --pkg" >&2; exit 2; }
-(registry_need sign_and_appcast identifier "$PRODUCT") || exit 2
+mavergreen_name identifier "$PRODUCT" >/dev/null || exit 2
 [ -f "$PKG" ] || { echo "sign_and_appcast: no pkg: $PKG" >&2; exit 1; }
 printenv SPARKLE_PRIVATE_KEY | grep -q . \
   || { echo "sign_and_appcast: SPARKLE_PRIVATE_KEY not set" >&2; exit 1; }

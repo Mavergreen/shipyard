@@ -219,13 +219,14 @@ if [ -x /usr/libexec/PlistBuddy ]; then
   check "an installed helper whose check fails fails the assertion (farm links into a product with no manifest)" 1 "mavergreen check failed" \
     assert --cmake-version "$ver"
   ms="$w/manifest-stage"; mkdir -p "$ms/usr/local/mavergreen/shipyard"
-  sh "$root/scripts/render-manifest.sh" --stage "$ms" --product shipyard --name "Mavericks Shipyard" --version 0.0.0 \
+  for p in shipyard cmake; do mkdir -p "$w/mrepo/.mavergreen/products/$p"; echo "$p" > "$w/mrepo/.mavergreen/products/$p/noun"; done
+  MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product shipyard --name "Mavericks Shipyard" --version 0.0.0 \
     --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
   cp "$ms/usr/local/mavergreen/shipyard/mavergreen.plist" "$prefix/mavergreen.plist"
   mkdir -p "$fx/usr/local/mavergreen/var/mavergreen/selections"
   echo shipyard > "$fx/usr/local/mavergreen/var/mavergreen/selections/shipyard"
   mkdir -p "$ms/usr/local/mavergreen/cmake"
-  sh "$root/scripts/render-manifest.sh" --stage "$ms" --product cmake --name "CMake for Mavericks" --version 4.4.4-mavericks.1 \
+  MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product cmake --name "CMake for Mavericks" --version 4.4.4-mavericks.1 \
     --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
   cp "$ms/usr/local/mavergreen/cmake/mavergreen.plist" "$product/mavergreen.plist"
   echo cmake > "$fx/usr/local/mavergreen/var/mavergreen/selections/cmake"

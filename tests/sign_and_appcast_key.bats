@@ -12,6 +12,7 @@ bats_require_minimum_version 1.5.0
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
   T="$BATS_TEST_TMPDIR"
+  mkdir -p "$T/repo/.mavergreen/products/openssh"; echo OpenSSH > "$T/repo/.mavergreen/products/openssh/noun"; export MAVERGREEN_REPO_ROOT="$T/repo"
   KEY="$(head -c 96 /dev/urandom | base64 | tr -d '\n')"
   cat > "$T/sign" <<EOF
 #!/bin/sh
@@ -59,7 +60,7 @@ refute_key_in() {  # TEXT
 }
 
 @test "an unset key is refused, before anything is signed" {
-  run env -i PATH="$PATH" sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" \
+  run env -i PATH="$PATH" MAVERGREEN_REPO_ROOT="$MAVERGREEN_REPO_ROOT" sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" \
     --product openssh --feed-dir "$T/feeds" \
     --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
     --notes-file "$T/notes.md" --pkg "$T/x.pkg"

@@ -4,6 +4,8 @@ set -eu
 ROOT="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
 T=$(mktemp -d "${TMPDIR:-/tmp}/mav-stageupd.XXXXXX")
 trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/repo/.mavergreen/products/openssh"; echo OpenSSH > "$T/repo/.mavergreen/products/openssh/noun"
+MAVERGREEN_REPO_ROOT="$T/repo"; export MAVERGREEN_REPO_ROOT
 
 # platform: the install dir contains a SPACE, as the real one does -- this pins that the
 #           rendered paths survive it.
@@ -81,7 +83,7 @@ rc=0; sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s6" --app "$T/other/OpenSS
 [ "$rc" -eq 2 ] || fail "an updater not named openssh-updater.app would install where its LaunchAgent does not look; got $rc"
 [ ! -e "$T/s6" ] || fail "a refused updater stages nothing"
 sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s7" --app "$APP" --product no-such-product 2>/dev/null \
-  && fail "an unregistered product has no updater identity to stage"
+  && fail "a product the repo does not declare has no updater identity to stage"
 
 if sh "$ROOT/scripts/stage_updater.sh" --stage "$T/s4" --app "$APP" --product openssh \
      --no-such-flag whatever 2>/dev/null; then

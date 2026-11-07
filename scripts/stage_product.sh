@@ -6,22 +6,32 @@
 #            [--postinstall-hook FILE]
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
 #          staged its files under ROOT/usr/local/mavergreen/P/ (and anything the OS dictates elsewhere).
-#          The updater's place, label and feed are P's, from scripts/product-names: an updater built
-#          for anything else is refused, and so are --appcast, --app-dir and --agent-label.
+#          The updater's place, label and feed are P's, from scripts/updater-identity.sh: an updater
+#          built for anything else is refused, and so are --appcast, --app-dir and --agent-label.
 #          --requires SHORT (repeatable) makes the generated preinstall refuse to run, before
 #          anything is removed, when SHORT's product is not installed on the target volume. SHORT
-#          must be a different, registered product; stage_product refuses otherwise. With
+#          must be a different product, the `product` of an ingredient of this repo that has a REPO,
+#          whose releases the refusal names; stage_product refuses otherwise. With
 #          >=VERSION it also refuses when the installed SHORT is older than VERSION, or its version
 #          cannot be compared; VERSION must be orderable by scripts/lib/vercmp.sh.
 # spec: tests/stage-product-test.sh
 set -eu
 umask 022
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/registry-lookup.sh"
+. "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/vercmp.sh"
 nl='
 '
 shq() { printf '%s' "$1" | sed "s/'/'\\\\''/g"; }
+requires_repo() {
+  for _ri in $(mg_list ingredients); do
+    [ "$(mg_value "ingredients/$_ri/product" 2>/dev/null || :)" = "$1" ] || continue
+    _rr="$(mg_value "ingredients/$_ri/REPO" 2>/dev/null || :)"
+    [ -n "$_rr" ] || continue
+    printf '%s\n' "$_rr"; return 0
+  done
+  return 1
+}
 ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; NAME=""; REQ=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
@@ -39,7 +49,7 @@ while [ "$1" != --end ]; do
     --name) NAME="$2"; set -- "$@" "$1" "$2"; shift 2 ;;
     --requires) REQ="$REQ$2$nl"; shift 2 ;;
     --version|--group|--line|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
-    --appcast|--app-dir|--agent-label) echo "stage_product: $1 is derived from shipyard's scripts/product-names; stop passing it" >&2; exit 2 ;;
+    --appcast|--app-dir|--agent-label) echo "stage_product: $1 is derived from --product; stop passing it" >&2; exit 2 ;;
     *) echo "stage_product: unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -61,13 +71,8 @@ for r in $REQ; do
     '') echo "stage_product: --requires $r names no product" >&2; exit 2 ;;
     "$P") echo "stage_product: --requires $r: a product cannot require itself" >&2; exit 2 ;;
   esac
-  _rlrc=0
-  registry_lookup repo "$_rs" || _rlrc=$?
-  case "$_rlrc" in
-    0) : ;;
-    1) echo "stage_product: --requires $r: $_rs is not in shipyard's scripts/product-names -- register it there first" >&2; exit 2 ;;
-    *) printf 'stage_product: cannot look up %s in shipyard'"'"'s registry\n%s\n' "$_rs" "$REG_WHY" >&2; exit 2 ;;
-  esac
+  requires_repo "$_rs" >/dev/null \
+    || { echo "stage_product: --requires $r: this repo has no ingredient whose product is $_rs and which has a REPO; declare it in .mavergreen/ingredients/$_rs/ (product, REPO)" >&2; exit 2; }
   IFS="$nl"
 done
 IFS="$_ifs"
@@ -80,13 +85,13 @@ mkdir -p "$ST/usr/local/mavergreen/$P"
 mkdir -p "$SCR"
 snippet=""
 if [ -n "$APP" ]; then
-  registry_need stage_product updater-bundle-id "$P"; _want_id="$REG_V"
-  registry_need stage_product feed "$P"; _want_feed="$REG_V"
+  _want_id="$(sh "$SELF/updater-identity.sh" bundle-id "$P")" || exit $?
+  _want_feed="$(sh "$SELF/updater-identity.sh" feed "$P")" || exit $?
   STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"; export STEVEDORE
   _got_id="$("$STEVEDORE" plist get "$APP/Contents/Info.plist" CFBundleIdentifier 2>/dev/null)" || _got_id=""
   _got_feed="$("$STEVEDORE" plist get "$APP/Contents/Info.plist" SUFeedURL 2>/dev/null)" || _got_feed=""
   [ "$_got_id" = "$_want_id" ] && [ "$_got_feed" = "$_want_feed" ] \
-    || { echo "stage_product: $APP was not built for $P: it is '${_got_id:-none}' polling '${_got_feed:-none}', and the registry says $_want_id polling $_want_feed -- build it with mavericks_add_updater_app(PRODUCT $P)" >&2; exit 1; }
+    || { echo "stage_product: $APP was not built for $P: it is '${_got_id:-none}' polling '${_got_feed:-none}', and $P's is $_want_id polling $_want_feed -- build it with mavericks_add_updater_app(PRODUCT $P)" >&2; exit 1; }
   snippet="$SCR/.agent-load"
   sh "$SELF/stage_updater.sh" --stage "$ST" --app "$APP" --product "$P" --snippet-out "$snippet"
   set -- "$@" --has-updater
@@ -104,8 +109,8 @@ sh "$SELF/render-manifest.sh" "$@"
     for r in $REQ; do
       IFS="$_ifs"
       _rs="${r%%>=*}"
-      registry_need stage_product repo "$_rs"; _reqrepo="$REG_V"
-      _requrl="https://github.com/Mavergreen/$_reqrepo/releases/latest"
+      _reqrepo="$(requires_repo "$_rs")"
+      _requrl="https://github.com/$_reqrepo/releases"
       _reqmsg="$NAME needs $_rs installed first: $_requrl -- install it, then run this installer again."
       printf 'if [ ! -f "$ROOT/usr/local/mavergreen/%s/mavergreen.plist" ]; then\n' "$_rs"
       printf "  echo '%s' >&2\n" "$(shq "$_reqmsg")"

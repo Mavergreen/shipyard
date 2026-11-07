@@ -255,9 +255,9 @@ version, so every push to `main` is an update.
 ### Linux product archives
 
 For a product that publishes a Linux x86_64 archive, use
-`sh "$SHIPYARD_SCRIPTS/fetch_product_tar.sh" SHORT VERSION SHA256 DEST`.
+`sh "$SHIPYARD_SCRIPTS/fetch_product_tar.sh" --repo OWNER/REPO SHORT VERSION SHA256 DEST`.
 Pin the version and archive SHA-256 together in the consuming repository. The helper
-uses the product registry to find its release, verifies cached downloads and extracted
+fetches OWNER/REPO's release (the ingredient's `REPO`), verifies cached downloads and extracted
 files, and prints the user-owned prefix on stdout. It requires Python 3.9 or newer,
 curl, and either shasum or sha256sum. Override `MAVERGREEN_TAR_CACHE` to choose a
 local-disk cache; no root installation is required.

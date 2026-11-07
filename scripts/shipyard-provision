@@ -9,7 +9,7 @@
 #          $MAVERGREEN_PREFIX/<product>/mavergreen.plist (default prefix /usr/local/mavergreen) holds
 #          the pinned version; on Linux, when the ingredient has a LINUX_SHA256, the release's
 #          linux-x86_64 archive (fetch_product_tar.sh); else the pinned release's pkg
-#          <product>-<version>.pkg (fetch_product_pkg.sh), extracted under DIR/<product>-<version>
+#          <product>-<version, any leading v dropped>.pkg (fetch_product_pkg.sh), extracted under DIR/<product>-<version>
 #          (default $MAVERGREEN_PKG_CACHE/extracted). A `from` ingredient takes the repo and version of
 #          the ingredient it names. With --install, and always when CI=true, a pkg is installed with
 #          `sudo installer` and the printed path is the installed copy; Linux installs nothing.
@@ -132,7 +132,7 @@ for name in $(mg_list ingredients); do
       path="$(sh "$SELF/fetch_product_tar.sh" --repo "$slug" "$product" "$version" "$sha" "$dest")" \
         || die "could not fetch and verify $product-$version-linux-x86_64.tar.gz against ingredients/$name/LINUX_SHA256"
     else
-      asset="${asset_arg:-$product-$version.pkg}"
+      asset="${asset_arg:-$product-${version#v}.pkg}"
       if [ -n "$asset_arg" ]; then
         path="$(sh "$SELF/fetch_product_pkg.sh" --repo "$slug" --asset "$asset" "$product" "$version" "$dest")"
       else

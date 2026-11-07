@@ -6,7 +6,7 @@ S="$here/../scripts/product-name.sh"
 fail() { echo "FAIL: $1"; exit 1; }
 
 sh "$S" check || fail "the committed registry must be valid"
-[ "$(sh "$S" identifier shipyard)" = dev.mavergreen.mavericks-shipyard ] \
+[ "$(sh "$S" identifier shipyard)" = dev.mavergreen.shipyard ] \
   || fail "shipyard must be registered to the pkg identifier its receipt carries"
 [ "$(sh "$S" identifier node24)" = dev.mavergreen.nodejs.node24 ] \
   || fail "node24 must be registered to the pkg identifier its receipt carries"

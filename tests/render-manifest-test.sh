@@ -6,6 +6,8 @@ S="$here/../scripts/render-manifest.sh"
 SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed"; exit 1; }; export STEVEDORE="$SD"
 w="$(mktemp -d "${TMPDIR:-/tmp}/render-manifest.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
+mkdir -p "$w/repo/.mavergreen/products/openssh"; echo OpenSSH > "$w/repo/.mavergreen/products/openssh/noun"
+MAVERGREEN_REPO_ROOT="$w/repo"; GITHUB_REPOSITORY=Someone/openssh; export MAVERGREEN_REPO_ROOT GITHUB_REPOSITORY
 st="$w/stage"
 mkdir -p "$st/usr/local/mavergreen/openssh/bin" "$st/Applications/Mavericks X.app/Contents/MacOS" \
          "$st/Library/LaunchAgents" "$st/Library/Application Support/Mavergreen/OpenSSHUpdater.app/Contents" \
@@ -19,16 +21,16 @@ sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version
   --replaces /usr/bin/ssh=bin/ssh
 M="$st/usr/local/mavergreen/openssh/mavergreen.plist"
 p() { "$SD" plist get "$M" "$1"; }
-[ "$(p identifier)" = dev.mavergreen.openssh ] || fail "the identifier comes from the registry"
+[ "$(p identifier)" = dev.mavergreen.openssh ] || fail "the identifier is derived: dev.mavergreen.<short>"
 [ "$(p group)" = openssh ] && [ "$(p line)" = "" ] || fail "group defaults to the product, line to empty"
 [ "$(p replaces:/usr/bin/ssh)" = bin/ssh ] || fail "replaces is carried"
 [ "$(p appcast)" = "" ] || fail "a manifest rendered without --has-updater names no feed: the product has no updater"
 sh "$S" --stage "$st" --product openssh --name "OpenSSH for Mavericks" --version 10.5p1-mavericks.5 \
   --replaces /usr/bin/ssh=bin/ssh --has-updater
 [ "$(p appcast)" = https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml ] \
-  || fail "with an updater, the feed comes from the registry: openssh's repo, openssh.xml"
+  || fail "with an updater, the feed is derived: this repo's name under Mavergreen, openssh.xml"
 sh "$S" --stage "$st" --product openssh --name x --version 1 --appcast https://example/appcast.xml 2>/dev/null \
-  && fail "--appcast must be refused: the registry, not the repo, names the feed"
+  && fail "--appcast must be refused: the feed is derived, never chosen"
 outside="$(i=0; while v="$("$SD" plist get "$M" "outside:$i" 2>/dev/null)"; do echo "$v"; i=$((i+1)); done)"
 [ "$outside" = "$(printf '%s\n' 'Applications/Mavericks X.app' 'Library/Application Support/Mavergreen/OpenSSHUpdater.app' 'Library/Java/JavaVirtualMachines/x.jdk' 'Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist')" ] \
   || fail "outside lists what is installed outside the tree, bundles (a .jdk among them) collapsed, spaces intact: $outside"
@@ -36,11 +38,9 @@ nasty_name='O'\''Brien "quoted" \back & <angle>'
 sh "$S" --stage "$st" --product openssh --name "$nasty_name" --version 1
 [ "$(p name)" = "$nasty_name" ] \
   || fail "name must round-trip exactly through the plist reader, including apostrophe/quotes/backslash/ampersand/angle-brackets"
-sh "$S" --stage "$st" --product not-registered --name x --version 1 2>/dev/null && fail "an unregistered product must be refused"
-MAVERGREEN_PRODUCT_NAMES="$w/absent-registry" sh "$S" --stage "$st" --product openssh --name x --version 1 2>"$w/err" \
-  && fail "an unreadable registry must refuse the manifest"
-grep -q "cannot look up openssh in shipyard's registry" "$w/err" && grep -q absent-registry "$w/err" \
-  || fail "an unreadable registry is reported as such, with product-name.sh's reason: $(cat "$w/err")"
+rc=0; sh "$S" --stage "$st" --product not-declared --name x --version 1 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "a product the repo does not declare must be refused (1), got $rc"
+grep -q '.mavergreen/products/not-declared/' "$w/err" || fail "the refusal names where to declare it: $(cat "$w/err")"
 sh "$S" --stage "$st" --product openssh --name x --version 1 --replaces usr/bin/ssh=bin/ssh 2>/dev/null \
   && fail "a replaces target must be an absolute system path"
 sh "$S" --stage "$st" --product openssh --name x --version 1 --replaces /usr/bin/ssh=../bin/ssh 2>/dev/null \

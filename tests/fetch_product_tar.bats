@@ -3,8 +3,7 @@
 setup() {
   HELPER="$BATS_TEST_DIRNAME/../scripts/fetch_product_tar.sh"
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/linux-host.XXXXXX")"
-  printf 'widget dev.mavergreen.widget widget-repo\n' > "$WORK/names"
-  export MAVERGREEN_PRODUCT_NAMES="$WORK/names" MAVERGREEN_RELEASES="file://$WORK/releases" MAVERGREEN_TAR_CACHE="$WORK/cache"
+  export MAVERGREEN_RELEASES="file://$WORK/releases" MAVERGREEN_TAR_CACHE="$WORK/cache"
   REL="$WORK/releases/Mavergreen/widget-repo/releases/download/1.0"
   mkdir -p "$REL"
   ASSET="$REL/widget-1.0-linux-x86_64.tar.gz"
@@ -35,55 +34,61 @@ PY
 }
 @test 'fetches by pinned hash, preserves links/modes and returns only prefix' {
   fixture
-  out="$(sh "$HELPER" widget 1.0 "$SHA" "$DEST" 2>/dev/null)"
+  out="$(sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST" 2>/dev/null)"
   [ "$out" = "$(cd "$DEST" && pwd -P)" ]
   [ "$(cat "$DEST/bin/tool")" = W ]
   [ -x "$DEST/bin/tool" ] && [ -L "$DEST/bin/alias" ]
 }
 @test 'rejects wrong digest and poisoned cached archive' {
   fixture
-  run sh "$HELPER" widget 1.0 "$(printf '%064d' 0)" "$DEST"; [ "$status" -ne 0 ]
-  run sh "$HELPER" widget 1.0 "$SHA" "$DEST"; [ "$status" -eq 0 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$(printf '%064d' 0)" "$DEST"; [ "$status" -ne 0 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"; [ "$status" -eq 0 ]
   printf poison >> "$WORK/cache/widget-repo/1.0/widget-1.0-linux-x86_64.tar.gz"
-  run sh "$HELPER" widget 1.0 "$SHA" "$DEST"; [ "$status" -ne 0 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"; [ "$status" -ne 0 ]
 }
 @test 'validates cached executable contents and retains an unchanged prefix' {
   fixture
-  run sh "$HELPER" widget 1.0 "$SHA" "$DEST"; [ "$status" -eq 0 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"; [ "$status" -eq 0 ]
   echo kept > "$DEST/marker"
-  run sh "$HELPER" widget 1.0 "$SHA" "$DEST"; [ "$status" -eq 0 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"; [ "$status" -eq 0 ]
   [ -f "$DEST/marker" ]
   echo corrupt > "$DEST/bin/tool"
-  run sh "$HELPER" widget 1.0 "$SHA" "$DEST"; [ "$status" -ne 0 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"; [ "$status" -ne 0 ]
 }
 @test 'rejects unsafe archives and preserves an existing destination' {
   for kind in absolute traversal duplicate escape parent-link special; do
     fixture "$kind"
     rm -rf "$WORK/cache"
     mkdir -p "$DEST"; echo kept > "$DEST/marker"
-    run sh "$HELPER" widget 1.0 "$SHA" "$DEST"; [ "$status" -ne 0 ]
+    run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"; [ "$status" -ne 0 ]
     [ "$(cat "$DEST/marker")" = kept ]
   done
 }
 @test 'concurrent fetches return one complete unchanged prefix' {
   fixture
-  for i in 1 2 3; do sh "$HELPER" widget 1.0 "$SHA" "$DEST" > "$WORK/out$i" 2> "$WORK/err$i" & done
+  for i in 1 2 3; do sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST" > "$WORK/out$i" 2> "$WORK/err$i" & done
   wait
   for i in 1 2 3; do [ "$(cat "$WORK/out$i")" = "$(cd "$DEST" && pwd -P)" ]; done
   [ "$(cat "$DEST/bin/tool")" = W ]
 }
 @test 'rejects a cached implicit parent replaced with a symlink' {
   fixture
-  run sh "$HELPER" widget 1.0 "$SHA" "$DEST"; [ "$status" -eq 0 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"; [ "$status" -eq 0 ]
   mv "$DEST/bin" "$DEST/other"
   ln -s other "$DEST/bin"
-  run sh "$HELPER" widget 1.0 "$SHA" "$DEST"; [ "$status" -ne 0 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"; [ "$status" -ne 0 ]
 }
-@test '--repo OWNER/REPO names the release and the registry is not read' {
+@test '--repo OWNER/REPO names the release' {
   fixture
-  MAVERGREEN_PRODUCT_NAMES="$WORK/no-such-registry" run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$SHA" "$DEST"
   [ "$status" -eq 0 ]
   [ "$(cat "$DEST/bin/tool")" = W ]
   run sh "$HELPER" --repo widget-repo widget 1.0 "$SHA" "$DEST"
   [ "$status" -eq 2 ]
+}
+@test 'no --repo is a usage error naming --repo' {
+  fixture
+  run sh "$HELPER" widget 1.0 "$SHA" "$DEST"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--repo"* ]] || false
 }

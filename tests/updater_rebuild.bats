@@ -6,7 +6,8 @@ SHARED="${BATS_TEST_DIRNAME}/.."
 setup() {
   objc_cmake_args "$SHARED"
   d="$BATS_TEST_TMPDIR/p"
-  mkdir -p "$d"
+  mkdir -p "$d/.mavergreen/products/openssh"; echo OpenSSH > "$d/.mavergreen/products/openssh/noun"
+  export GITHUB_REPOSITORY=Mavergreen/openssh
   cat > "$d/CMakeLists.txt" <<EOF
 cmake_minimum_required(VERSION 3.16)
 project(t LANGUAGES OBJC)

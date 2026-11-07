@@ -25,7 +25,7 @@ function(mavericks_fetch_sparkle out_var)
 endfunction()
 
 # mavericks_add_updater_app(
-#   PRODUCT <short name>                      # registered in shipyard's scripts/product-names
+#   PRODUCT <short name>                      # declared in .mavergreen/products/<short name>/
 #   CONFIRM_TITLE <str>  CONFIRM_BODY <str>   # ^ the required (per-project) values
 #   [ICON <path/to.icns> | ALLOW_GENERIC]   # a real icon (placeholder-gated), OR the generic macOS
 #                                            # app icon on purpose (empty CFBundleIconFile, no artwork)
@@ -38,7 +38,7 @@ endfunction()
 #   [ED_PUBKEY <base64> | ED_PUBKEY_FILE <path>]   # default: updater/ed25519_key.pub -> Info.plist SUPublicEDKey
 #   [PANE_HINT_KEY <str>]  [POST_UPDATE_HELPER <abs path>])
 # Builds ${CMAKE_BINARY_DIR}/<PRODUCT>-updater.app hosting Sparkle. Cocoa-only; links NO libswiftCore.
-# Its bundle id and SUFeedURL are the ones scripts/product-name.sh derives for PRODUCT, so the app,
+# Its bundle id and SUFeedURL are the ones scripts/updater-identity.sh derives for PRODUCT, so the app,
 # stage_product.sh and conformance cannot disagree; NAME, BUNDLE_ID and FEED_URL are refused.
 # Sets MAVERICKS_UPDATER_TARGET (<PRODUCT>-updater, the target and the app's name) and
 # MAVERICKS_UPDATER_BUNDLE_ID (also the updater's defaults domain) in the caller's scope, for product
@@ -46,28 +46,13 @@ endfunction()
 # PANE_HINT_KEY omitted/empty => background-found updates post an NSUserNotification (no-pane products).
 # POST_UPDATE_HELPER: absolute path to an executable the updater runs (as the user) after a successful
 # install + the confirmation -- for product-specific follow-up (e.g. offer to roll a VM onto a new image).
-function(_mavericks_registry_fact out_var fact short)
-  set(_script "${MAVERGREEN_SHARED_DIR}/scripts/product-name.sh")
-  if(NOT EXISTS "${_script}")
-    message(FATAL_ERROR "mavericks_add_updater_app: PRODUCT '${short}' cannot be looked up.\n ${_script} is missing")
-  endif()
-  execute_process(
-    COMMAND sh "${_script}" "${fact}" "${short}"
-    OUTPUT_VARIABLE _v ERROR_VARIABLE _e RESULT_VARIABLE _rc OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(_rc EQUAL 1)
-    message(FATAL_ERROR "mavericks_add_updater_app: PRODUCT '${short}' is refused.\n '${short}' is not in shipyard's scripts/product-names -- register it there first\n ${_e}")
-  elseif(NOT _rc EQUAL 0 OR _v STREQUAL "")
-    message(FATAL_ERROR "mavericks_add_updater_app: PRODUCT '${short}' cannot be looked up.\n product-name.sh ${fact} ${short} exited ${_rc}\n ${_e}")
-  endif()
-  set(${out_var} "${_v}" PARENT_SCOPE)
-endfunction()
 
 function(mavericks_add_updater_app)
   cmake_parse_arguments(A "ALLOW_GENERIC"
     "PRODUCT;NAME;PRODUCT_NAME;BUNDLE_ID;FEED_URL;ED_PUBKEY;ED_PUBKEY_FILE;ICON;VERSION;AUTO_CHECK;SPARKLE_FRAMEWORK;LOG_PREFIX;CONFIRM_TITLE;CONFIRM_BODY;RELAUNCH_MARKER;PANE_HINT_KEY;POST_UPDATE_HELPER" "" ${ARGN})
   foreach(derived NAME BUNDLE_ID FEED_URL)
     if(DEFINED A_${derived} OR derived IN_LIST A_KEYWORDS_MISSING_VALUES)
-      message(FATAL_ERROR "mavericks_add_updater_app: ${derived} is refused.\n ${derived} is derived from shipyard's scripts/product-names; pass PRODUCT <short name> instead")
+      message(FATAL_ERROR "mavericks_add_updater_app: ${derived} is refused.\n ${derived} is derived from PRODUCT; pass PRODUCT <short name> instead")
     endif()
   endforeach()
   foreach(req PRODUCT CONFIRM_TITLE CONFIRM_BODY)
@@ -75,8 +60,20 @@ function(mavericks_add_updater_app)
       message(FATAL_ERROR "mavericks_add_updater_app: ${req} required")
     endif()
   endforeach()
-  _mavericks_registry_fact(A_BUNDLE_ID updater-bundle-id "${A_PRODUCT}")
-  _mavericks_registry_fact(A_FEED_URL feed "${A_PRODUCT}")
+  foreach(_fact bundle-id feed)
+    execute_process(
+      COMMAND sh "${MAVERGREEN_SHARED_DIR}/scripts/updater-identity.sh" "${_fact}" "${A_PRODUCT}"
+      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+      OUTPUT_VARIABLE _v ERROR_VARIABLE _e RESULT_VARIABLE _rc OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT _rc EQUAL 0 OR _v STREQUAL "")
+      message(FATAL_ERROR "mavericks_add_updater_app: PRODUCT '${A_PRODUCT}' is refused.\n updater-identity.sh ${_fact} ${A_PRODUCT} exited ${_rc}\n ${_e}")
+    endif()
+    if(_fact STREQUAL "bundle-id")
+      set(A_BUNDLE_ID "${_v}")
+    else()
+      set(A_FEED_URL "${_v}")
+    endif()
+  endforeach()
   set(A_NAME "${A_PRODUCT}-updater")
   set(MAVERICKS_UPDATER_TARGET "${A_NAME}" PARENT_SCOPE)
   set(MAVERICKS_UPDATER_BUNDLE_ID "${A_BUNDLE_ID}" PARENT_SCOPE)

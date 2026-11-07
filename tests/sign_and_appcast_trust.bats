@@ -15,6 +15,7 @@ setup_file() {
 setup() {
   ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
   T="$BATS_TEST_TMPDIR"
+  mkdir -p "$T/repo/.mavergreen/products/openssh"; echo OpenSSH > "$T/repo/.mavergreen/products/openssh/noun"; export MAVERGREEN_REPO_ROOT="$T/repo"
   KOLD="$(cat "$BATS_FILE_TMPDIR/keys/old.pub")"
   KNEW="$(cat "$BATS_FILE_TMPDIR/keys/new.pub")"
   KOTHER="$(cat "$BATS_FILE_TMPDIR/keys/other.pub")"

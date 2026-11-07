@@ -7,6 +7,13 @@ SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedor
 [ -x /usr/libexec/PlistBuddy ] || { echo "no PlistBuddy for the generated preinstall to run under -- skipping"; exit 77; }
 w="$(mktemp -d "${TMPDIR:-/tmp}/stage-product.XXXXXX")"; trap 'chmod -R u+w "$w" 2>/dev/null; rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
+repo="$w/repo"
+for s in openssh swift-runtime go126 go127 porthole; do mkdir -p "$repo/.mavergreen/products/$s"; echo "$s" > "$repo/.mavergreen/products/$s/noun"; done
+for s in container-tools openssh; do
+  mkdir -p "$repo/.mavergreen/ingredients/$s"; echo "$s" > "$repo/.mavergreen/ingredients/$s/product"
+  echo "Mavergreen/$s" > "$repo/.mavergreen/ingredients/$s/REPO"
+done
+MAVERGREEN_REPO_ROOT="$repo"; GITHUB_REPOSITORY=Mavergreen/openssh; export MAVERGREEN_REPO_ROOT GITHUB_REPOSITORY
 xplist() {
   _xf="$1"; shift
   { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>\n'
@@ -104,21 +111,19 @@ sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 --scripts-out
   --updater-app "$WRONG" 2>"$w/err" \
   && fail "an updater built with another bundle id or feed than the registry's must be refused -- the app and its stage would disagree"
 grep -q 'dev.mavergreen.openssh.updater' "$w/err" || fail "the refusal names the identity the registry expects: $(cat "$w/err")"
-MAVERGREEN_PRODUCT_NAMES="$w/absent-registry" sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 \
-  --scripts-out "$w/scr-noreg" --updater-app "$APP" 2>"$w/err" \
-  && fail "an unreadable registry must refuse staging an updater"
-grep -q "cannot look up openssh in shipyard's registry" "$w/err" && grep -q absent-registry "$w/err" \
-  || fail "an unreadable registry is reported as such, with product-name.sh's reason: $(cat "$w/err")"
-printf 'openssh dev.mavergreen.openssh Bad_Repo\n' > "$w/badrepo-names"
-MAVERGREEN_PRODUCT_NAMES="$w/badrepo-names" sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 \
-  --scripts-out "$w/scr-badrepo" --updater-app "$APP" 2>"$w/err" \
-  && fail "a registry row with a malformed repo must refuse staging an updater"
-grep -q "cannot look up openssh in shipyard's registry" "$w/err" \
-  || fail "the feed lookup's failure is reported, not silent: [$(cat "$w/err")]"
+rm -rf "$w/undeclared"; mkdir -p "$w/undeclared/.mavergreen/products"
+rc=0; MAVERGREEN_REPO_ROOT="$w/undeclared" sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 \
+  --scripts-out "$w/scr-undeclared" --updater-app "$APP" 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "an updater for a product the repo does not declare must be refused (1), got $rc"
+grep -q '.mavergreen/products/openssh/' "$w/err" || fail "the refusal says where to declare the product: $(cat "$w/err")"
+rc=0; ( cd "$w" && GITHUB_REPOSITORY= sh "$S" --stage "$st" --product openssh --name OpenSSH --version 1 \
+  --scripts-out "$w/scr-norepo" --updater-app "$APP" ) 2>"$w/err" || rc=$?
+[ "$rc" -eq 2 ] || fail "an updater whose feed's repo cannot be learned must be refused (2), got $rc"
+grep -q GITHUB_REPOSITORY "$w/err" || fail "the refusal says to set GITHUB_REPOSITORY: $(cat "$w/err")"
 ol() { _i=0; while _v="$("$SD" plist get "$1" "outside:$_i" 2>/dev/null)"; do echo "$_v"; _i=$((_i + 1)); done; }
 for s in go126 go127; do
   a="$w/lines/$s-updater.app"; mkdir -p "$a/Contents/MacOS"; printf '#!/bin/sh\n' > "$a/Contents/MacOS/$s-updater"
-  xplist "$a/Contents/Info.plist" CFBundleIdentifier "$(sh "$here/../scripts/product-name.sh" updater-bundle-id "$s")" SUFeedURL "$(sh "$here/../scripts/product-name.sh" feed "$s")"
+  xplist "$a/Contents/Info.plist" CFBundleIdentifier "$(sh "$here/../scripts/updater-identity.sh" bundle-id "$s")" SUFeedURL "$(sh "$here/../scripts/updater-identity.sh" feed "$s")"
   sl="$w/stage-$s"; mkdir -p "$sl/usr/local/mavergreen/$s/bin"; echo go > "$sl/usr/local/mavergreen/$s/bin/go"
   sh "$S" --stage "$sl" --product "$s" --name Go --version 1 --group go --line "${s#go}" \
     --scripts-out "$w/scr-$s" --updater-app "$a" || fail "staging $s with its own updater must succeed"
@@ -160,7 +165,7 @@ grep -q '^launchctl bootstrap gui/501 ' "$alog" \
 
 fake="$w/fake/scripts"; mkdir -p "$fake" "$w/fake/.mavergreen/ingredients"
 cp "$S" "$fake/stage_product.sh"
-cp "$here/../scripts/product-name.sh" "$here/../scripts/registry-lookup.sh" "$here/../scripts/product-names" "$here/../scripts/fetch_stevedore.sh" "$here/../scripts/mavergreen-meta.sh" "$fake/"
+cp "$here/../scripts/updater-identity.sh" "$here/../scripts/fetch_stevedore.sh" "$here/../scripts/mavergreen-meta.sh" "$fake/"
 cp -R "$here/../.mavergreen/ingredients/stevedore" "$w/fake/.mavergreen/ingredients/"
 mkdir -p "$fake/lib"; cp "$here/../scripts/lib/vercmp.sh" "$here/../scripts/lib/name-rules.sh" "$fake/lib/"
 RM_LOG="$w/rm.log"; export RM_LOG
@@ -433,7 +438,7 @@ rc=0; sh "$SCRP/preinstall" /x.pkg "$Vmiss/" "$Vmiss/" 2>"$w/req-err" || rc=$?
 [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when a required product is missing, got $rc"
 grep -q "Porthole needs container-tools installed first" "$w/req-err" \
   || fail "the refusal names this product's display name and the missing requirement: $(cat "$w/req-err")"
-grep -q "https://github.com/Mavergreen/container-tools/releases/latest" "$w/req-err" \
+grep -q "https://github.com/Mavergreen/container-tools/releases " "$w/req-err" \
   || fail "the refusal names the missing requirement's releases URL: $(cat "$w/req-err")"
 [ -f "$Vmiss/usr/local/mavergreen/porthole/bin/porthole" ] \
   || fail "a missing requirement must leave the existing installed tree untouched"
@@ -452,8 +457,13 @@ grep -q "openssh" "$w/req-err2" && fail "the satisfied requirement (openssh) mus
 
 rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-badreq" \
   --requires nonexistent-product 2>"$w/err" || rc=$?
-[ "$rc" -eq 2 ] || fail "staging with an unregistered --requires must exit 2, got $rc"
-grep -q nonexistent-product "$w/err" || fail "the refusal names the unregistered requirement: $(cat "$w/err")"
+[ "$rc" -eq 2 ] || fail "staging with a --requires the repo has no ingredient for must exit 2, got $rc"
+grep -q '.mavergreen/ingredients/nonexistent-product' "$w/err" || fail "the refusal says where to declare the requirement: $(cat "$w/err")"
+mkdir -p "$repo/.mavergreen/ingredients/norepo"; echo norepo > "$repo/.mavergreen/ingredients/norepo/product"
+rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-norepo-req" \
+  --requires norepo 2>"$w/err" || rc=$?
+[ "$rc" -eq 2 ] || fail "staging with a --requires whose ingredient has no REPO must exit 2, got $rc"
+grep -q '.mavergreen/ingredients/norepo' "$w/err" || fail "the refusal names the ingredient missing its REPO: $(cat "$w/err")"
 
 rc=0; sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$w/scr-selfreq" \
   --requires porthole 2>"$w/err" || rc=$?
@@ -494,7 +504,7 @@ done
 V="$w/vol min old"; : > "$mglog"; reqvol "$V" container-tools 20261018.9
 rc=0; sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when the required product is older than the minimum, got $rc"
-[ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again." ] \
+[ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases -- update it, then run this installer again." ] \
   || fail "the refusal names the requirement, its minimum and the installed version: $(cat "$w/err")"
 [ -f "$V/usr/local/mavergreen/porthole/bin/porthole" ] \
   || fail "an unmet minimum must leave the existing installed tree untouched"
@@ -512,7 +522,7 @@ for v in - 1.0-rc1 dict; do
   esac
   rc=0; sh "$SCRM/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
   [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when the installed version ($v) cannot be compared, got $rc"
-  [ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer, but its installed version ($shown) cannot be compared: https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again." ] \
+  [ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer, but its installed version ($shown) cannot be compared: https://github.com/Mavergreen/container-tools/releases -- update it, then run this installer again." ] \
     || fail "the refusal says the installed version ($v) cannot be compared: $(cat "$w/err")"
   [ -f "$V/usr/local/mavergreen/porthole/bin/porthole" ] \
     || fail "an uncomparable installed version ($v) must leave the existing installed tree untouched"
@@ -527,13 +537,13 @@ sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-
 V="$w/vol-min-one-unmet"; reqvol "$V" container-tools 20261019.1 openssh 9.9p1
 rc=0; sh "$SCRM2/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when one of two minimums is unmet, got $rc"
-[ "$(cat "$w/err")" = "Porthole needs openssh 9.9p2 or newer (installed: 9.9p1): https://github.com/Mavergreen/openssh/releases/latest -- update it, then run this installer again." ] \
+[ "$(cat "$w/err")" = "Porthole needs openssh 9.9p2 or newer (installed: 9.9p1): https://github.com/Mavergreen/openssh/releases -- update it, then run this installer again." ] \
   || fail "only the unmet minimum (openssh) is named: $(cat "$w/err")"
 V="$w/vol-min-both-unmet"; reqvol "$V" container-tools 20261018.9 openssh 9.9p1
 rc=0; sh "$SCRM2/preinstall" /x.pkg "$V/" "$V/" 2>"$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "preinstall must exit 1 when both minimums are unmet, got $rc"
-[ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases/latest -- update it, then run this installer again.
-Porthole needs openssh 9.9p2 or newer (installed: 9.9p1): https://github.com/Mavergreen/openssh/releases/latest -- update it, then run this installer again." ] \
+[ "$(cat "$w/err")" = "Porthole needs container-tools 20261019.1 or newer (installed: 20261018.9): https://github.com/Mavergreen/container-tools/releases -- update it, then run this installer again.
+Porthole needs openssh 9.9p2 or newer (installed: 9.9p1): https://github.com/Mavergreen/openssh/releases -- update it, then run this installer again." ] \
   || fail "both unmet minimums must be named: $(cat "$w/err")"
 
 V="$w/vol-nomin-any"; reqvol "$V" container-tools 1.0-rc1

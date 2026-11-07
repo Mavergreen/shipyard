@@ -9,13 +9,11 @@ mkcomp() {  # mkcomp IDENTIFIER ROOT OUT
 setup() {
   HELPER="$BATS_TEST_DIRNAME/../scripts/fetch_product_pkg.sh"
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/fetch_product_pkg_test.XXXXXX")" && pwd)"
-  printf 'widget dev.mavergreen.widget widget-repo\n' > "$WORK/product-names"
   export SOURCE_DATE_EPOCH=1700000000
   if [ -z "${STEVEDORE:-}" ]; then
     STEVEDORE="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")" || { echo "fetch_stevedore.sh failed" >&2; return 1; }
   fi
   export STEVEDORE
-  export MAVERGREEN_PRODUCT_NAMES="$WORK/product-names"
   export MAVERGREEN_RELEASES="file://$WORK/rel" MAVERGREEN_PKG_CACHE="$WORK/cache"
   REL="$WORK/rel/Mavergreen/widget-repo/releases/download/1.0"
   mkdir -p "$REL" "$WORK/base/usr/local/mavergreen/.base" "$WORK/prod/usr/local/mavergreen/widget/lib" \
@@ -47,7 +45,7 @@ DIST
 
 @test "extracts the named component's tree; stdout is DEST only" {
   serve widget-1.0.pkg
-  out="$(sh "$HELPER" widget 1.0 "$DEST" 2>/dev/null)"
+  out="$(sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST" 2>/dev/null)"
   [ "$out" = "$DEST" ]
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
   [ -f "$DEST/include/widget/w.h" ]
@@ -58,17 +56,17 @@ DIST
   mkdir -p "$WORK/base/usr/local/mavergreen/widget/lib"
   printf BASE > "$WORK/base/usr/local/mavergreen/widget/lib/libwidget.a"
   serve widget-1.0.pkg
-  run sh "$HELPER" widget 1.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 0 ]
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
 }
 
 @test "a second call for the same pkg keeps DEST in place, so a build using it is not pulled from under" {
   serve widget-1.0.pkg
-  run sh "$HELPER" widget 1.0 "$DEST"; [ "$status" -eq 0 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"; [ "$status" -eq 0 ]
   echo kept > "$DEST/marker"
   rm "$REL/widget-1.0.pkg"
-  run sh "$HELPER" widget 1.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 0 ]
   [ "$(cat "$DEST/marker")" = kept ]
 }
@@ -76,7 +74,7 @@ DIST
 @test "a tree with no record of its pkg, or another release's, is replaced afresh" {
   serve widget-1.0.pkg
   mkdir -p "$DEST"; echo stray > "$DEST/stray"
-  run sh "$HELPER" widget 1.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 0 ]
   [ ! -e "$DEST/stray" ]
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
@@ -84,7 +82,7 @@ DIST
   printf 'X' >> "$WORK/prod/usr/local/mavergreen/widget/lib/libwidget.a"
   REL="$WORK/rel/Mavergreen/widget-repo/releases/download/2.0"; mkdir -p "$REL"
   serve widget-2.0.pkg
-  run sh "$HELPER" widget 2.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 2.0 "$DEST"
   [ "$status" -eq 0 ]
   [ ! -e "$DEST/stray" ]
   [ "$(cat "$DEST/lib/libwidget.a")" = WX ]
@@ -92,7 +90,7 @@ DIST
 
 @test "concurrent calls for the same pkg and DEST all succeed, with one whole tree" {
   serve widget-1.0.pkg
-  for i in 1 2 3 4; do ( sh "$HELPER" widget 1.0 "$DEST" > "$WORK/out$i" 2> "$WORK/err$i"; echo $? > "$WORK/rc$i" ) & done
+  for i in 1 2 3 4; do ( sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST" > "$WORK/out$i" 2> "$WORK/err$i"; echo $? > "$WORK/rc$i" ) & done
   wait
   for i in 1 2 3 4; do
     [ "$(cat "$WORK/rc$i")" = 0 ] || { cat "$WORK/err$i"; false; }
@@ -105,7 +103,7 @@ DIST
 @test "a lock nobody releases fails after SHIPYARD_LOCK_WAIT seconds, naming it" {
   serve widget-1.0.pkg
   mkdir -p "$DEST.lock"
-  SHIPYARD_LOCK_WAIT=1 run sh "$HELPER" widget 1.0 "$DEST"
+  SHIPYARD_LOCK_WAIT=1 run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 1 ]
   [[ "$output" == *"$DEST.lock"* ]] || false
 }
@@ -113,7 +111,7 @@ DIST
 @test "a pkg whose SHA-256 does not match fails 1 and leaves no cached pkg" {
   serve widget-1.0.pkg
   printf '%064d  widget-1.0.pkg\n' 0 > "$REL/SHA256SUMS"
-  run sh "$HELPER" widget 1.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 1 ]
   [ ! -e "$DEST" ]
   [ -z "$(find "$WORK/cache" -name '*.pkg*' 2>/dev/null)" ]
@@ -122,65 +120,50 @@ DIST
 @test "an asset SHA256SUMS does not list fails 1, naming the asset" {
   serve widget-1.0.pkg
   printf '%064d  other.pkg\n' 0 > "$REL/SHA256SUMS"
-  run sh "$HELPER" widget 1.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 1 ]
   case "$output" in *"widget-1.0.pkg is not listed"*) : ;; *) false ;; esac
 }
 
-@test "a pkg without the registry's identifier fails 1, naming the identifier" {
-  serve widget-1.0.pkg dev.mavergreen.gadget
-  run sh "$HELPER" widget 1.0 "$DEST"
-  [ "$status" -eq 1 ]
-  case "$output" in *dev.mavergreen.widget*) : ;; *) false ;; esac
-  [ ! -e "$DEST" ]
-}
-
-@test "an unregistered short name fails, naming it" {
-  serve widget-1.0.pkg
-  run sh "$HELPER" gizmo 1.0 "$DEST"
-  [ "$status" -ne 0 ]
-  case "$output" in *gizmo*) : ;; *) false ;; esac
-}
-
 @test "--asset overrides the default filename" {
   serve mavericks-widget-x-1.0.pkg
-  run sh "$HELPER" --asset mavericks-widget-x-1.0.pkg widget 1.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo --asset mavericks-widget-x-1.0.pkg widget 1.0 "$DEST"
   [ "$status" -eq 0 ]
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
 }
 
 @test "wrong argument count exits 2" {
-  run sh "$HELPER" widget 1.0; [ "$status" -eq 2 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0; [ "$status" -eq 2 ]
   run sh "$HELPER" --asset; [ "$status" -eq 2 ]
-  run sh "$HELPER" widget 1.0 "$DEST" extra; [ "$status" -eq 2 ]
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST" extra; [ "$status" -eq 2 ]
 }
 
 @test "a relative DEST is extracted and printed as an absolute path" {
   serve widget-1.0.pkg
   cd "$WORK"
-  run sh "$HELPER" widget 1.0 out/rel
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 out/rel
   [ "$status" -eq 0 ]
   [ "${lines[${#lines[@]}-1]}" = "$WORK/out/rel" ]
   [ "$(cat "$WORK/out/rel/lib/libwidget.a")" = W ]
 }
 
-@test "--repo OWNER/REPO names the release and the registry is not read" {
+@test "--repo OWNER/REPO names the release" {
   serve widget-1.0.pkg
-  MAVERGREEN_PRODUCT_NAMES="$WORK/no-such-registry" run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 0 ]
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
 }
 
 @test "--repo picks the component whose identifier ends in .SHORT" {
   serve widget-1.0.pkg dev.mavergreen.family.widget
-  MAVERGREEN_PRODUCT_NAMES="$WORK/no-such-registry" run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 0 ]
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
 }
 
 @test "--repo with no component for SHORT fails 1, naming the identifier it wanted" {
   serve widget-1.0.pkg dev.mavergreen.gadget
-  MAVERGREEN_PRODUCT_NAMES="$WORK/no-such-registry" run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 1 ]
   [[ "$output" == *"dev.mavergreen.widget"* ]] || false
   [ ! -e "$DEST" ]
@@ -189,4 +172,20 @@ DIST
 @test "--repo that is not OWNER/REPO is a usage error" {
   run sh "$HELPER" --repo widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 2 ]
+}
+
+@test "no --repo is a usage error naming --repo" {
+  serve widget-1.0.pkg
+  run sh "$HELPER" widget 1.0 "$DEST"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--repo"* ]] || false
+  [ ! -e "$DEST" ]
+}
+
+@test "a tag with a leading v defaults to the asset without it" {
+  REL="$WORK/rel/Mavergreen/widget-repo/releases/download/v1.0.3"; mkdir -p "$REL"
+  serve widget-1.0.3.pkg
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget v1.0.3 "$DEST"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(cat "$DEST/lib/libwidget.a")" = W ]
 }

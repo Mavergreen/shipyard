@@ -5,10 +5,13 @@ here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/package-system-replace.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/system-replace-pkg.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
+R="$w/repo/.mavergreen/products"
+for n in openssh Bad_Name 'ab;id' 'ab$(x)cd'; do mkdir -p "$R/$n"; echo "$n" > "$R/$n/noun"; done
+MAVERGREEN_REPO_ROOT="$w/repo"; export MAVERGREEN_REPO_ROOT
 
 sh "$S" --emit-postinstall "$w/post" --product openssh
 grep -q 'system-replace openssh' "$w/post" || fail "the postinstall runs the helper's system-replace for this product"
-sh "$S" --emit-postinstall "$w/post" --product no-such 2>/dev/null && fail "an unregistered product must be refused"
+sh "$S" --emit-postinstall "$w/post" --product no-such 2>/dev/null && fail "a product the repo does not declare must be refused"
 out="$(sh "$w/post" 2>&1)" && fail "no target volume must fail: $out"
 
 sh "$S" --emit-postinstall "$w/post" --product openssh
@@ -25,37 +28,30 @@ rc=0
 sh "$S" --product openssh --title x --version 1 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "an option given without a value at the end of the argument list must be a usage error, exit 2 (got $rc)"
 
-reg="$w/product-names"
-printf 'Bad_Name dev.mavergreen.bad-name\n' > "$reg"
 rc=0
-MAVERGREEN_PRODUCT_NAMES="$reg" sh "$S" --emit-postinstall "$w/post2" --product Bad_Name 2>/dev/null || rc=$?
-[ "$rc" -eq 2 ] || fail "a registered but malformed short name (not matching ^[a-z0-9][a-z0-9-]*\$) must still be refused before anything is emitted, exit 2 (got $rc)"
+sh "$S" --emit-postinstall "$w/post2" --product Bad_Name 2>/dev/null || rc=$?
+[ "$rc" -eq 2 ] || fail "a declared but malformed short name (not matching ^[a-z0-9][a-z0-9-]*\$) must still be refused before anything is emitted, exit 2 (got $rc)"
 [ ! -e "$w/post2" ] || fail "a refused product name must not emit a postinstall"
 
-reg2="$w/product-names-inject"
-: > "$reg2"
-printf 'ab;id dev.mavergreen.semicolon\n' >> "$reg2"
-printf 'ab$(x)cd dev.mavergreen.subshell\n' >> "$reg2"
-printf 'ab/cd dev.mavergreen.slash\n' >> "$reg2"
 
 rc=0
-MAVERGREEN_PRODUCT_NAMES="$reg2" sh "$S" --emit-postinstall "$w/inject1" --product 'ab;id' 2>/dev/null || rc=$?
-[ "$rc" -eq 2 ] || fail "a disallowed character past position 2 ('ab;id') must be refused by the shape check, exit 2, even though it IS registered -- a case pattern's trailing * matches anything, so [a-z0-9][a-z0-9-]* only constrains the first two characters (got $rc)"
+sh "$S" --emit-postinstall "$w/inject1" --product 'ab;id' 2>/dev/null || rc=$?
+[ "$rc" -eq 2 ] || fail "a disallowed character past position 2 ('ab;id') must be refused by the shape check, exit 2, even though the repo declares it -- a case pattern's trailing * matches anything, so [a-z0-9][a-z0-9-]* only constrains the first two characters (got $rc)"
 [ ! -e "$w/inject1" ] || fail "a refused product name must not emit a postinstall (ab;id)"
 
 rc=0
-MAVERGREEN_PRODUCT_NAMES="$reg2" sh "$S" --emit-postinstall "$w/inject2" --product 'ab$(x)cd' 2>/dev/null || rc=$?
+sh "$S" --emit-postinstall "$w/inject2" --product 'ab$(x)cd' 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "a disallowed character past position 2 ('ab\$(x)cd') must be refused by the shape check, exit 2 -- \$P is interpolated unquoted into the generated postinstall's exec line, which runs as root, so this is the injection shape (got $rc)"
 [ ! -e "$w/inject2" ] || fail "a refused product name must not emit a postinstall (ab\$(x)cd)"
 
 rc=0
-MAVERGREEN_PRODUCT_NAMES="$reg2" sh "$S" --emit-postinstall "$w/inject3" --product 'ab/cd' 2>/dev/null || rc=$?
+sh "$S" --emit-postinstall "$w/inject3" --product 'ab/cd' 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "a disallowed character past position 2 ('ab/cd') must be refused by the shape check, exit 2 (got $rc)"
 [ ! -e "$w/inject3" ] || fail "a refused product name must not emit a postinstall (ab/cd)"
 
 rc=0
 sh "$S" --emit-postinstall "$w/inject4" --product 'ab cd' 2>/dev/null || rc=$?
-[ "$rc" -eq 2 ] || fail "a disallowed character past position 2 ('ab cd') must be refused by the shape check, exit 2; a space cannot be represented as a single field in the two-column registry format, so this name is refused unregistered too, but exit 2 (not 1) still proves the SHAPE check, not the registry lookup, is what caught it (got $rc)"
+[ "$rc" -eq 2 ] || fail "a disallowed character past position 2 ('ab cd') must be refused by the shape check, exit 2; exit 2 (not 1) proves the SHAPE check, not the declaration lookup, is what caught it (got $rc)"
 [ ! -e "$w/inject4" ] || fail "a refused product name must not emit a postinstall (ab cd)"
 
 SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
