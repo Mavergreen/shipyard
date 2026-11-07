@@ -12,7 +12,7 @@
 #   writer at a time per key. <out_var> is set to the bin directory.
 include_guard(GLOBAL)
 set(_MHT_DIR "${CMAKE_CURRENT_LIST_DIR}")
-set(_MHT_TOOLS "mulle-xcode-to-cmake=mulle/mulle-xcode-to-cmake")
+set(_MHT_TOOLS "mulle-xcode-to-cmake=mulle/mulle-xcode-to-cmake" "mavericks-xcode-inputs=mavericks-xcode-inputs")
 
 function(_mht_fail msg)
   message(FATAL_ERROR "mavericks_build_host_tools: ${msg}")
@@ -51,7 +51,9 @@ function(_mht_configure_args out_var)
   set(args "-S${A_SOURCE}" "-B${A_BUILD_DIR}" "-GUnix Makefiles"
     "-DCMAKE_MAKE_PROGRAM=${A_MAKE}" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     "-DCMAKE_C_COMPILER=${A_COMPILER}" "-DCMAKE_C_COMPILER_TARGET=${A_TARGET}"
-    -DCMAKE_C_FLAGS=--no-default-config "-DCMAKE_EXE_LINKER_FLAGS=${link}"
+    -DCMAKE_C_FLAGS=--no-default-config
+    "-DCMAKE_OBJC_COMPILER=${A_COMPILER}" "-DCMAKE_OBJC_COMPILER_TARGET=${A_TARGET}"
+    -DCMAKE_OBJC_FLAGS=--no-default-config "-DCMAKE_EXE_LINKER_FLAGS=${link}"
     "-DCMAKE_OSX_ARCHITECTURES=${A_ARCH}" "-DCMAKE_OSX_SYSROOT=${A_SDK}"
     "-DCMAKE_OSX_DEPLOYMENT_TARGET=${A_MIN}")
   if(A_MULLE)

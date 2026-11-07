@@ -1,0 +1,58 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+		B0000000000000000000000A /* main.m */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000A; };
+		B0000000000000000000000B /* Thing.m */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000B; };
+		B0000000000000000000000C /* Thing.m */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000C; };
+		B0000000000000000000000D /* Spaced.m */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000D; };
+		B0000000000000000000000E /* util.c */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000E; };
+		B0000000000000000000000F /* util.c again */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000E; };
+		B00000000000000000000010 /* Model */ = {isa = PBXBuildFile; fileRef = V00000000000000000000001; };
+		B00000000000000000000011 /* Main.xib */ = {isa = PBXBuildFile; fileRef = W00000000000000000000001; };
+		B00000000000000000000012 /* README.txt */ = {isa = PBXBuildFile; fileRef = F00000000000000000000012; };
+		B00000000000000000000013 /* util.h */ = {isa = PBXBuildFile; fileRef = F00000000000000000000013; };
+		B00000000000000000000014 /* lib.m */ = {isa = PBXBuildFile; fileRef = F00000000000000000000014; };
+		B00000000000000000000015 /* lib.h */ = {isa = PBXBuildFile; fileRef = F00000000000000000000015; };
+		B00000000000000000000016 /* libLibThing.a in Resources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001A; };
+		F0000000000000000000001A = {isa = PBXFileReference; explicitFileType = archive.ar; path = libLibThing.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0000000000000000000000A = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		F0000000000000000000000B = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Thing.m; sourceTree = "<group>"; };
+		F0000000000000000000000C = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Thing.m; sourceTree = "<group>"; };
+		F0000000000000000000000D = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = Spaced.m; path = "With Space/Spaced.m"; sourceTree = "<group>"; };
+		F0000000000000000000000E = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = util.c; sourceTree = "<group>"; };
+		F00000000000000000000012 = {isa = PBXFileReference; lastKnownFileType = text; path = README.txt; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000013 = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = util.h; sourceTree = "<group>"; };
+		F00000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = lib.m; sourceTree = "<group>"; };
+		F00000000000000000000015 = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lib.h; sourceTree = "<group>"; };
+		F00000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = file.xib; name = en; path = en.lproj/Main.xib; sourceTree = "<group>"; };
+		F00000000000000000000017 = {isa = PBXFileReference; lastKnownFileType = file.xib; name = fr; path = fr.lproj/Main.xib; sourceTree = "<group>"; };
+		F00000000000000000000018 = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = Model.xcdatamodel; sourceTree = "<group>"; };
+		F00000000000000000000019 = {isa = PBXFileReference; explicitFileType = wrapper.application; path = fx.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		V00000000000000000000001 = {isa = XCVersionGroup; children = (F00000000000000000000018, ); currentVersion = F00000000000000000000018; path = Model.xcdatamodeld; sourceTree = "<group>"; versionGroupType = wrapper.xcdatamodel; };
+		W00000000000000000000001 = {isa = PBXVariantGroup; children = (F00000000000000000000016, F00000000000000000000017, ); name = Main.xib; sourceTree = "<group>"; };
+		G00000000000000000000001 /* main */ = {isa = PBXGroup; children = (G00000000000000000000002, G00000000000000000000005, G00000000000000000000006, G00000000000000000000007, V00000000000000000000001, F00000000000000000000012, G00000000000000000000008, ); sourceTree = "<group>"; };
+		G00000000000000000000002 /* Sources */ = {isa = PBXGroup; children = (F0000000000000000000000A, G00000000000000000000003, G00000000000000000000004, F0000000000000000000000D, ); path = Sources; sourceTree = "<group>"; };
+		G00000000000000000000003 /* a */ = {isa = PBXGroup; children = (F0000000000000000000000B, ); path = a; sourceTree = "<group>"; };
+		G00000000000000000000004 /* b */ = {isa = PBXGroup; children = (F0000000000000000000000C, ); path = b; sourceTree = "<group>"; };
+		G00000000000000000000005 /* Shared */ = {isa = PBXGroup; children = (F0000000000000000000000E, F00000000000000000000013, ); path = Shared; sourceTree = "<group>"; };
+		G00000000000000000000006 /* Resources */ = {isa = PBXGroup; children = (W00000000000000000000001, ); path = Resources; sourceTree = "<group>"; };
+		G00000000000000000000007 /* Lib, a named group with no path */ = {isa = PBXGroup; children = (G00000000000000000000009, ); name = "Library Code"; sourceTree = "<group>"; };
+		G00000000000000000000009 /* Lib */ = {isa = PBXGroup; children = (F00000000000000000000014, F00000000000000000000015, ); path = Lib; sourceTree = "<group>"; };
+		G00000000000000000000008 /* Products */ = {isa = PBXGroup; children = (F00000000000000000000019, F0000000000000000000001A, ); name = Products; sourceTree = "<group>"; };
+		S00000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B0000000000000000000000A, B0000000000000000000000B, B0000000000000000000000C, B0000000000000000000000D, B0000000000000000000000E, B0000000000000000000000F, B00000000000000000000010, ); runOnlyForDeploymentPostprocessing = 0; };
+		R00000000000000000000001 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000011, B00000000000000000000012, B00000000000000000000016, ); runOnlyForDeploymentPostprocessing = 0; };
+		H00000000000000000000001 = {isa = PBXHeadersBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000013, ); runOnlyForDeploymentPostprocessing = 0; };
+		X00000000000000000000001 = {isa = PBXShellScriptBuildPhase; buildActionMask = 2147483647; files = (); inputPaths = (); outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = "touch /tmp/never-run"; };
+		S00000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000014, ); runOnlyForDeploymentPostprocessing = 0; };
+		H00000000000000000000002 = {isa = PBXHeadersBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000015, ); runOnlyForDeploymentPostprocessing = 0; };
+		T00000000000000000000001 /* App */ = {isa = PBXNativeTarget; buildConfigurationList = C00000000000000000000001; buildPhases = (S00000000000000000000001, R00000000000000000000001, H00000000000000000000001, X00000000000000000000001, ); buildRules = (); dependencies = (); name = App; productName = App; productReference = F00000000000000000000019; productType = "com.apple.product-type.application"; };
+		T00000000000000000000002 /* Lib */ = {isa = PBXNativeTarget; buildConfigurationList = C00000000000000000000001; buildPhases = (S00000000000000000000002, H00000000000000000000002, ); buildRules = (); dependencies = (); name = "Lib Thing"; productName = LibThing; productReference = F0000000000000000000001A; productType = "com.apple.product-type.library.static"; };
+		C00000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (); defaultConfigurationIsVisible = 0; };
+		P00000000000000000000001 = {isa = PBXProject; buildConfigurationList = C00000000000000000000001; compatibilityVersion = "Xcode 3.2"; mainGroup = G00000000000000000000001; productRefGroup = G00000000000000000000008; projectDirPath = ""; projectRoot = ""; targets = (T00000000000000000000001, T00000000000000000000002, ); };
+	};
+	rootObject = P00000000000000000000001;
+}

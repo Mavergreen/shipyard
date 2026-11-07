@@ -266,6 +266,38 @@ set aside as `.rejected-*` and rebuilt, never run. One writer builds per key at 
 `OUTPUT_ROOT` inside shipyard or the exporter source is refused. The first build fetches the
 exporter's tarball (verified) and the host's pinned SDK.
 
+`MavericksXcodeInputs` uses them to read an upstream Xcode project's source lists without Xcode:
+
+```cmake
+include(MavericksXcodeInputs)
+mavericks_export_xcode_sources(sources_cmake
+  PROJECT       "${src}/iTerm2.xcodeproj"
+  TARGETS       iTerm2 iTerm2Shared image_decoder SSKeychain
+  PREFIXES      ITERM2 ITERM2_SHARED IMAGE_DECODER SSKEYCHAIN
+  HOST_COMPILER /usr/local/mavergreen/bin/clang-22-cross
+  OUTPUT_DIR    "${CMAKE_BINARY_DIR}/xcode-inputs")
+include("${sources_cmake}")   # ITERM2_SHARED_SOURCES, ITERM2_MODELS, ...
+```
+
+`PREFIXES` are the variable prefixes the exporter gives each target, in `TARGETS`' order; with two or
+more targets, one it does not use is an error (a lone target's variables take its prefix). The
+exporter's `sexport -r` output is read as data, never `include()`d: every line must have the shape it
+writes, and every path must be plain (no `[ ] ; $ " \ ( )`, no `..`, nothing absolute) and lead to
+something inside the project's directory. Each target's list is checked, entry for entry and
+duplicate for duplicate, against `mavericks-xcode-inputs`, which reads the same build phases through
+Foundation's property-list reader and the project's group tree. Only then does the generated file
+appear, defining for each prefix:
+
+- `<P>_SOURCES`: the code files its sources phase compiles;
+- `<P>_MODELS`: the Core Data models that phase lists, which are not compiled;
+- `<P>_PRODUCT_RESOURCES`: other targets' built products its resources phase copies, by product name;
+- the exporter's `<P>_INCLUDE_DIRS`, `<P>_*_HEADERS` and `<P>_*RESOURCES`.
+
+Every path is relative to the project's directory, written as a bracket argument. Nothing in the
+project runs, and no link, ARC or bundle setting is translated: those belong to the product's own
+CMake. The same inputs reuse the export while it matches its stamp; a changed or unstamped export is
+refused and left as it is (remove it to export again).
+
 ## Conventions for Claude Code
 
 The family's conventions ship as the `mavergreen` Claude Code plugin, from this repo's

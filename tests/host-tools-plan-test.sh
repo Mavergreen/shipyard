@@ -32,6 +32,7 @@ has native -DCMAKE_OSX_ARCHITECTURES=x86_64
 has native -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9
 has native -DCMAKE_OSX_SYSROOT=/sdk/for/x86_64
 has native -DCMAKE_C_COMPILER_TARGET=x86_64-apple-macos10.9
+has native -DCMAKE_OBJC_COMPILER_TARGET=x86_64-apple-macos10.9
 
 echo "== arm64_hardware_from_translated_caller"
 FAKE_ARM64=1 FAKE_TRANSLATED=1 plan arm64
@@ -41,6 +42,7 @@ has arm64 min=11.0
 has arm64 -DCMAKE_OSX_ARCHITECTURES=arm64
 has arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
 has arm64 -DCMAKE_OSX_SYSROOT=/sdk/for/arm64
+has arm64 -DCMAKE_OBJC_COMPILER_TARGET=arm64-apple-macos11.0
 lacks arm64 x86_64
 lacks arm64 availability_version_check
 
@@ -62,6 +64,8 @@ grep -qi recaulk "$w/native" "$w/arm64" && bad "a host configure names Recaulk"
 echo "== compiler_default_config_disabled"
 for p in native arm64; do
   has "$p" -DCMAKE_C_FLAGS=--no-default-config
+  has "$p" -DCMAKE_OBJC_FLAGS=--no-default-config
+  has "$p" -DCMAKE_OBJC_COMPILER=/opt/clang22/bin/clang
 done
 grep -q -- '-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld' "$w/native" || bad "native: not linked with lld"
 grep -q -- '-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld' "$w/arm64" || bad "arm64: not linked with lld"
@@ -77,7 +81,8 @@ echo "== installed_layout"
 if "$SC" -S "$root" -B "$w/ib" -DCMAKE_INSTALL_PREFIX="$w/inst" > "$w/ib.log" 2>&1 \
    && "$SC" --install "$w/ib" > "$w/inst.log" 2>&1; then
   d="$(dirname "$(find "$w/inst" -name MavericksShipyardConfig.cmake | head -1)")"
-  for f in MavericksHostTools.cmake tools/CMakeLists.txt components/mulle-xcode-to-cmake/version scripts/sdk-pins.sh \
+  for f in MavericksHostTools.cmake MavericksXcodeInputs.cmake tools/CMakeLists.txt tools/xcode-project-inputs.m \
+           components/mulle-xcode-to-cmake/version scripts/sdk-pins.sh \
            scripts/fetch_pinned_source.sh scripts/fetch_sdk.sh; do
     [ -f "$d/$f" ] || bad "installed_layout: the install lacks $f beside the module"
   done

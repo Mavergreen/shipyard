@@ -110,6 +110,7 @@ install(FILES
   MavericksDecisions.cmake
   MavericksSDKMetadata.cmake
   MavericksHostTools.cmake
+  MavericksXcodeInputs.cmake
   default.json
   DESTINATION "${_dest}")
 
