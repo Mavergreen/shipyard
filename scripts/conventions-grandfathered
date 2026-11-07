@@ -9,7 +9,6 @@ macos-runner clang-22 release.yml:build-cross
 macos-runner clang-22 release.yml:build-native
 macos-runner clang-22 release.yml:collect
 macos-runner claude-code release.yml:build
-macos-runner cmake release.yml:build
 macos-runner codex-cli builds.yml:codex-build
 macos-runner codex-cli release.yml:build
 macos-runner container-tools release.yml:build-macos
@@ -19,7 +18,6 @@ macos-runner fd release.yml:build
 macos-runner gh release.yml:build
 macos-runner golang-126 release.yml:build
 macos-runner golang-127 release.yml:build
-macos-runner icu release.yml:build
 macos-runner longboat release.yml:build
 macos-runner longboat release.yml:collect
 macos-runner magic-trackpad2 release.yml:build-macos
@@ -28,7 +26,6 @@ macos-runner make release.yml:build-x86_64
 macos-runner make release.yml:installed-arm64
 macos-runner make release.yml:package
 macos-runner make release.yml:tests
-macos-runner ninja release.yml:build
 macos-runner nodejs-24 release.yml:build
 macos-runner openssh release.yml:build
 macos-runner packer-plugin-macosx ci.yml:go-macos
@@ -39,7 +36,6 @@ macos-runner python-315 release.yml:build-x86_64
 macos-runner python-315 release.yml:installed-arm64
 macos-runner python-315 release.yml:package
 macos-runner python-315 release.yml:tests
-macos-runner recaulk release.yml:build
 macos-runner rg release.yml:build
 macos-runner rust release.yml:build
 macos-runner rust release.yml:collect
@@ -53,12 +49,10 @@ macos-runner tailscale release.yml:build-macos
 macos-runner tailscale release.yml:package
 modern-smoke clang-22 release.yml:modern-smoke
 modern-smoke claude-code release.yml:modern-smoke
-modern-smoke cmake release.yml:modern-smoke
 modern-smoke drydock release.yml:modern-smoke
 modern-smoke golang-126 release.yml:modern-smoke
 modern-smoke golang-127 release.yml:modern-smoke
 modern-smoke make release.yml:modern-smoke
-modern-smoke ninja release.yml:modern-smoke
 modern-smoke python-315 release.yml:modern-smoke
 modern-smoke rust release.yml:modern-smoke
 modern-smoke stevedore release.yml:modern-smoke
@@ -70,7 +64,6 @@ packager golang-126 build/package-pkg.sh
 packager golang-127 build/package-cross-pkg.sh
 packager golang-127 build/package-pkg.sh
 packager openssh build/package-pkg.sh
-packager recaulk build/package-pkg.sh
 packager rust build/package-lib.sh
 packager signal-desktop .github/workflows/release.yml
 packager signal-desktop packaging/macos/build_pkg.sh

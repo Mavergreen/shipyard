@@ -106,7 +106,7 @@ if chk_selected legacy-top-level; then
     done
     if _ltd release-notes; then
       _legacy release-notes/ "it belongs in .mavergreen/release-notes/" "$_moved" \
-        "move each release-notes/<tag>.md to .mavergreen/release-notes/<tag>.md (.mavergreen/release-notes/<short>/<tag>.md where products are tagged apart), and delete release-notes/README.md"
+        "git mv release-notes .mavergreen/release-notes: each <tag>.md, <tag>/ and notice keeps its path below it (<short>/ included where products are tagged apart); delete release-notes/README.md"
     fi
   fi
 fi

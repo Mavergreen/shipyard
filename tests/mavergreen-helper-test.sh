@@ -107,15 +107,19 @@ mkproduct go127 go 127 bin/go bin/gofmt
 
 stub="$w/stub"; mkdir -p "$stub"
 for c in launchctl pkgutil sudo; do printf '#!/bin/sh\necho "%s $*" >> "%s/calls"\n' "$c" "$w" > "$stub/$c"; chmod +x "$stub/$c"; done
-mkdir -p "$V/Applications/Go.app/Contents" "$V/Library/LaunchAgents" "$T/var/go127"
+mkdir -p "$V/Applications/Go.app/Contents" "$V/Library/LaunchAgents" "$T/var/go127" "$V/Library/Java/JavaVirtualMachines/go.jdk/Contents"
+ln -s "$T/go127" "$V/Library/Java/JavaVirtualMachines/go.jdk/Contents/Home"
 touch "$V/Library/LaunchAgents/dev.mavergreen.go127-updatecheck.plist"
 "$PB" -c "Add :outside array" -c "Add :outside:0 string Applications/Go.app" \
-      -c "Add :outside:1 string Library/LaunchAgents/dev.mavergreen.go127-updatecheck.plist" "$T/go127/mavergreen.plist"
+      -c "Add :outside:1 string Library/LaunchAgents/dev.mavergreen.go127-updatecheck.plist" \
+      -c "Add :outside:2 string Library/Java/JavaVirtualMachines/go.jdk" "$T/go127/mavergreen.plist"
 : > "$w/calls"
 PATH="$stub:$PATH" mg uninstall go127 || fail "uninstall must succeed"
 [ ! -e "$T/go127" ] && [ ! -e "$T/var/go127" ] || fail "uninstall removes the tree and its var/"
 [ ! -e "$V/Applications/Go.app" ] && [ ! -e "$V/Library/LaunchAgents/dev.mavergreen.go127-updatecheck.plist" ] \
   || fail "uninstall removes everything the manifest lists outside the tree"
+[ ! -e "$V/Library/Java/JavaVirtualMachines/go.jdk" ] && [ ! -L "$V/Library/Java/JavaVirtualMachines/go.jdk" ] \
+  || fail "uninstall removes an outside .jdk bundle whole"
 [ "$(target bin/go)" = ../go126/bin/go ] || fail "uninstalling the selected member selects the one member left"
 grep -q "pkgutil --volume $V --forget dev.mavergreen.go127" "$w/calls" || fail "uninstall forgets the receipt on the named volume: $(cat "$w/calls")"
 grep -q launchctl "$w/calls" && fail "uninstall on a non-boot volume must not touch launchd: $(cat "$w/calls")"

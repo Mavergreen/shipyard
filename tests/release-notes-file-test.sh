@@ -36,6 +36,7 @@ rm -f "$p"
 
 printf '## Hand-written\n\nProse that must survive.\n<!-- edited by a human -->\n' > .mavergreen/release-notes/20260911.2.md
 git add -A; git commit -qm notes
+git tag 20260911.2; git commit -q --allow-empty -m later
 before="$(git hash-object .mavergreen/release-notes/20260911.2.md)"
 p="$(sh "$S" 20260911.2 20260911.2 Porthole 2>/dev/null)"
 case "$p" in */release-notes/*) echo "FAIL: a committed note must be returned as a TEMP copy, never the committed path: $p"; exit 1;; esac

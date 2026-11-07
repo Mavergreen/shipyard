@@ -129,9 +129,9 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     ( cd "$_root" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | enc \
       | awk -v pkg="$1" -v loc="$(printf '%s' "$_loc" | enc)" '{ print "installs " pkg " " loc $0 }'
     ( cd "$_root" && find . -type d \( -name '*.app' -o -name '*.prefPane' -o -name '*.kext' -o -name '*.bundle' \
-        -o -name '*.plugin' -o -name '*.framework' -o -name '*.appex' -o -name '*.xpc' \) ) | sed 's|^\./||' \
+        -o -name '*.plugin' -o -name '*.framework' -o -name '*.appex' -o -name '*.xpc' -o -name '*.jdk' \) ) | sed 's|^\./||' \
       | awk '{ n = split($0, c, "/"); nested = 0
-               for (i = 1; i < n; i++) if (c[i] ~ /\.(app|prefPane|kext|bundle|plugin|framework|appex|xpc)$/) nested = 1
+               for (i = 1; i < n; i++) if (c[i] ~ /\.(app|prefPane|kext|bundle|plugin|framework|appex|xpc|jdk)$/) nested = 1
                if (!nested) print }' \
       | while IFS= read -r _bd; do
           _id=none; _feed=""

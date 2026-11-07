@@ -1,16 +1,19 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: release-notes.sh --tag T --version V --product P --out FILE [--line L] [--min-os M]
+#                           [--short S]
 #     --tag/--version   the release tag and full version (equal for most repos; golang's differ)
 #     --product         the BARE product noun ("OpenSSH", "Go", "Signal Desktop"). This composes the
 #                       family's prose register: "OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)".
 #     --line            upstream-line prefix for a repo shipping parallel lines (golang: "1.26";
 #                       "1.26.*" also accepted -- both are normalized to a glob before use)
 #     --min-os          emits the install floor line; omit for a product that is not a 10.9 .pkg
+#     --short           this product's short name, in a repo whose .mavergreen/release-notes/<short>/
+#                       nests its tree
 #     Generates ONE product's release notes: the Sparkle appcast <description> and the GitHub
 #     Release body, which are the same bytes by construction. Sections, in order: title, committed
-#     prose (verbatim, never rewritten), What changed, Our patches (only when one changed), Build
-#     ingredients (only when a pin moved), footer.
+#     prose (verbatim, never rewritten), Before you update (only with requires/ or rebuild), What
+#     changed, Our patches (only when one changed), Build ingredients (only when a pin moved), footer.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes" --
 #       NOTES ARE PART OF THE RELEASE CONTRACT: every gap here is fatal and names its cause. The old
 #       doctrine -- prose must never fail a release -- meant every section was appended with
@@ -23,7 +26,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # MAVERICKS_ROOT
 . "$SELF/deviation-reason.sh"
 
-TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""
+TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""; SHORT=""; SHORT_SET=no
 while [ $# -gt 0 ]; do
   case "$1" in
     --tag) TAG="$2"; shift 2;;
@@ -32,6 +35,7 @@ while [ $# -gt 0 ]; do
     --out) OUT="$2"; shift 2;;
     --line) LINE="$2"; shift 2;;
     --min-os) MINOS="$2"; shift 2;;
+    --short) SHORT="$2"; SHORT_SET=yes; shift 2;;
     *) echo "release-notes: unknown argument: $1" >&2; exit 2;;
   esac
 done
@@ -46,6 +50,22 @@ if [ -n "$LINE" ]; then
     *'*') ;;                      # already a glob
     *) LINE="$LINE.*" ;;
   esac
+fi
+
+registered() {
+  rc=0; sh "$SELF/product-name.sh" repo "$1" >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 2 ] && REGISTRY_BROKEN=yes || REGISTRY_BROKEN=no
+  [ "$rc" -eq 0 ]
+}
+registry_complaint() {
+  if [ "$REGISTRY_BROKEN" = yes ]; then echo "$1: the product registry could not be read (scripts/product-name.sh)"
+  else echo "$1 is not a registered product short name (scripts/product-name.sh)"; fi
+}
+if [ "$SHORT_SET" = yes ]; then
+  case "$SHORT" in
+    ''|-*|*[!a-z0-9-]*) die "--short '$SHORT' is not a short name ([a-z0-9][a-z0-9-]*)" ;;
+  esac
+  registered "$SHORT" || die "$(registry_complaint "--short '$SHORT'")"
 fi
 
 cd "$MAVERICKS_ROOT"
@@ -116,18 +136,29 @@ else
   printf '## %s %s for Mavericks (%s)\n' "$PRODUCT" "$UP" "$VER" > "$tmp"
 fi
 
-# spec: SKILL.md "Release notes" -- committed prose
-#       publishes only once a human has marked it edited; the mark never reaches readers.
-MARK='<!-- edited by a human -->'
-short="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
-if [ -d "$MAVERICKS_ROOT/.mavergreen/release-notes/$short" ]; then
-  notes="$MAVERICKS_ROOT/.mavergreen/release-notes/$short/${TAG}.md"
-else
-  notes="$MAVERICKS_ROOT/.mavergreen/release-notes/${TAG}.md"
+# spec: SKILL.md "Release notes" -- a tag that names a commit other than HEAD is already minted; its
+#       committed prose publishes as is.
+minted() {
+  _t="$(git -C "$MAVERICKS_ROOT" rev-parse -q --verify "refs/tags/$TAG^{commit}")" || return 1
+  [ "$_t" != "$(git -C "$MAVERICKS_ROOT" rev-parse HEAD)" ]
+}
+
+# spec: SKILL.md "Release notes" -- committed .md prose publishes only for a minted tag; a new
+#       release writes .mavergreen/release-notes/<TAG>/ instead (both under <short>/ there when
+#       --short names a nested tree). Any mark line is stripped, never shown to readers.
+readable_dir() {
+  { [ -r "$1" ] && [ -x "$1" ]; } || die "$1 cannot be read; fix its permissions"
+}
+ROOT="$MAVERICKS_ROOT/.mavergreen/release-notes"
+if [ -d "$ROOT" ]; then
+  readable_dir "$ROOT"
+  if [ -n "$SHORT" ] && [ -d "$ROOT/$SHORT" ]; then ROOT="$ROOT/$SHORT"; readable_dir "$ROOT"; fi
 fi
+DIR="$ROOT/$TAG"
+MARK='<!-- edited by a human -->'
+notes="$ROOT/${TAG}.md"
 if [ -f "$notes" ] && [ -s "$notes" ]; then
-  awk -v m="$MARK" '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l == m) f = 1 } END { exit !f }' "$notes" \
-    || die "$notes has no line '$MARK'. Committed prose publishes only after a human has edited it: once you have, add that line to the file. An agent never adds it."
+  minted || die "$notes is prose for a release not yet published. Write $DIR/changes/<slug> files instead; see SKILL.md \"Release notes\"."
   awk -v m="$MARK" '{ l = $0; sub(/\r$/, "", l); sub(/[ \t]+$/, "", l); if (l != m) print }' "$notes" > "$tmp.prose" \
     || die "could not read $notes"
   if [ -s "$tmp.prose" ]; then
@@ -136,7 +167,120 @@ if [ -f "$notes" ] && [ -s "$notes" ]; then
   rm -f "$tmp.prose"
 fi
 
+# spec: SKILL.md "Release notes" -- .mavergreen/release-notes/<TAG>/ holds changes/<slug> and
+#       rebuild; a repo tagging products separately nests them under .mavergreen/release-notes/<short>/.
+#       Anything else there fails, naming it. A minted tag skips only the sentence check, so a later
+#       rule never reddens its regeneration. The requirements and the standing notice are the
+#       product's: .mavergreen/products/<short>/requires/<dep>/min and .mavergreen/products/<short>/notice.
+MINTED=no; if minted; then MINTED=yes; fi
+# spec: SKILL.md "Release notes" -- a directory named for any other tag would be silently dropped, so
+#       a new release refuses one that is not an existing tag or a product's nest. A minted tag's
+#       regeneration leaves alone notes staged for the release after it.
+if [ "$MINTED" = no ]; then
+  for e in "$ROOT"/*; do
+    b="${e##*/}"
+    if [ -f "$e" ] || [ -L "$e" ]; then
+      case "$b" in
+        *.md) continue ;;
+        *) die "$e is not a release-notes entry; a standing footer line is .mavergreen/products/<short>/notice (see SKILL.md \"Release notes\")" ;;
+      esac
+    fi
+    [ -d "$e" ] || continue
+    [ "$b" = "$TAG" ] && continue
+    [ "$b" = "$SHORT" ] && continue
+    git rev-parse -q --verify "refs/tags/$b^{commit}" >/dev/null && continue
+    sh "$SELF/product-name.sh" repo "$b" >/dev/null 2>&1 && continue
+    die "$e is release notes for $b, which is not an existing tag; this release is $TAG, so rename it $DIR (see SKILL.md \"Release notes\")"
+  done
+fi
+ALLOW=""; if [ "$PRODUCT" = Shipyard ]; then ALLOW="--allow shipyard"; fi
+line1() {
+  awk 'NR == 1 { gsub(/\r/, ""); sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit }' "$1" \
+    || die "could not read $1"
+}
+sentence() {
+  { [ -f "$1" ] && [ -r "$1" ]; } || die "cannot read $1"
+  [ "$MINTED" = yes ] && return 0
+  # shellcheck disable=SC2086  # ALLOW is empty or one flag and its word
+  sh "$SELF/check-release-sentence.sh" $ALLOW "$1" \
+    || die "$1 is not one release-note sentence (see the complaint above); see SKILL.md \"Release notes\""
+}
+if [ -d "$DIR" ]; then
+  readable_dir "$DIR"
+  for e in "$DIR"/* "$DIR"/.*; do
+    case "${e##*/}" in .|..) continue ;; esac
+    { [ -e "$e" ] || [ -L "$e" ]; } || continue
+    case "${e##*/}" in
+      changes) { [ -d "$e" ] && [ ! -L "$e" ]; } || die "$e must be a directory" ;;
+      rebuild) sentence "$e" ;;
+      *) die "$e is not a release-notes entry (only changes/ and rebuild are; a requirement is .mavergreen/products/<short>/requires/<dep>/min); see SKILL.md \"Release notes\"" ;;
+    esac
+  done
+  if [ -d "$DIR/changes" ]; then
+    readable_dir "$DIR/changes"
+    n=0
+    for e in "$DIR/changes"/* "$DIR/changes"/.*; do
+      b="${e##*/}"
+      case "$b" in .|..) continue ;; esac
+      { [ -e "$e" ] || [ -L "$e" ]; } || continue
+      n=$((n + 1))
+      [ -f "$e" ] || die "$e must be a file"
+      case "$b" in *[!a-z0-9-]*) die "$e: a change's name is [a-z0-9-]+ (the names order the bullets)" ;; esac
+      sentence "$e"
+    done
+    [ "$n" -gt 0 ] || die "$DIR/changes is empty; remove it or add an entry"
+  fi
+fi
+
+# spec: SKILL.md "Release notes" -- the product is --short's, else the one whose short name is the
+#       noun lowercased, else the repo's only product. A requirement is listed when its min differs
+#       from the previous release's; a previous release from before .mavergreen/ lists none.
+PSHORT="$SHORT"
+if [ -z "$PSHORT" ]; then
+  _p="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
+  _all="$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_list products)"
+  if [ -d ".mavergreen/products/$_p" ]; then PSHORT="$_p"
+  elif [ -n "$_all" ] && [ "$(printf '%s\n' "$_all" | wc -l | tr -d ' ')" -eq 1 ]; then PSHORT="$_all"
+  fi
+fi
+PD=".mavergreen/products/$PSHORT"
+REQS=""
+if [ -n "$PSHORT" ] && [ -n "$PREV" ] && git cat-file -e "$PREV:.mavergreen" 2>/dev/null; then
+  for dep in $(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_list "products/$PSHORT/requires"); do
+    f="$MAVERICKS_ROOT/$PD/requires/$dep/min"
+    { [ -e "$f" ] || [ -L "$f" ]; } || continue
+    { [ -f "$f" ] && [ -r "$f" ]; } || die "cannot read $f"
+    v="$(MAVERGREEN_ROOT="$MAVERICKS_ROOT" mg_value "products/$PSHORT/requires/$dep/min")" || die "cannot read $f"
+    case "$v" in
+      [0-9]*[!0-9A-Za-z.+-]*|[!0-9]*|'') die "$f: line 1 must be a minimum version ([0-9][0-9A-Za-z.+-]*), not '$v'" ;;
+    esac
+    old="$(git show "$PREV:$PD/requires/$dep/min" 2>/dev/null | awk 'NR == 1 { gsub(/\r/, ""); print; exit }')" || old=""
+    [ "$v" = "$old" ] || REQS="$REQS- Install $dep $v or later first.
+"
+  done
+fi
+if [ -n "$REQS" ] || [ -f "$DIR/rebuild" ]; then
+  printf '\n### Before you update\n' >> "$tmp"
+  printf '%s' "$REQS" >> "$tmp"
+  if [ -f "$DIR/rebuild" ]; then
+    v="$(line1 "$DIR/rebuild")"
+    printf -- '- %s\n' "$v" >> "$tmp"
+  fi
+fi
+NOTICE=""
+if [ -n "$PSHORT" ] && { [ -e "$MAVERICKS_ROOT/$PD/notice" ] || [ -L "$MAVERICKS_ROOT/$PD/notice" ]; }; then
+  sentence "$MAVERICKS_ROOT/$PD/notice"
+  NOTICE="$(line1 "$MAVERICKS_ROOT/$PD/notice")"
+fi
+HAS_CHANGES=""; if [ -d "$DIR/changes" ]; then HAS_CHANGES=yes; fi
+
 printf '\n### What changed\n' >> "$tmp"
+if [ -n "$HAS_CHANGES" ]; then
+  for b in $(LC_ALL=C ls "$DIR/changes"); do
+    v="$(line1 "$DIR/changes/$b")"
+    printf -- '- %s\n' "$v" >> "$tmp"
+  done
+fi
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Consuming a
 #       Mavergreen toolchain + auto-propagation" -- "Name that caller
@@ -172,6 +316,7 @@ fi
 #       view; with neither source, a link is left out rather than guessed.
 SLUG="${GITHUB_REPOSITORY:-}"
 if [ -z "$SLUG" ]; then
+  short="$(printf '%s' "$PRODUCT" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ ' 'abcdefghijklmnopqrstuvwxyz-')"
   if own="$(sh "$SELF/product-name.sh" repo "$short" 2>/dev/null)"; then SLUG="Mavergreen/$own"; fi
 fi
 
@@ -229,9 +374,14 @@ if [ "$SELF_UPSTREAM" = yes ]; then
   fi
   if [ -z "$PREV" ]; then
     printf -- '- First release of %s %s.\n' "$PRODUCT" "$VER" >> "$tmp"
-  elif [ -n "$(date_of "$VER")" ] && [ "$(date_of "$VER")" = "$(date_of "$PREV")" ]; then
+  elif [ -n "$(date_of "$VER")" ] && [ "$(date_of "$VER")" = "$(date_of "$PREV")" ] \
+       && { [ -n "$INGREDIENTS" ] || [ -z "$HAS_CHANGES" ]; }; then
     if [ -n "$INGREDIENTS" ]; then
-      printf -- '- Rebuilt because build ingredients moved (below); no change to %s itself.\n' "$PRODUCT" >> "$tmp"
+      if [ -n "$HAS_CHANGES" ]; then
+        printf -- '- Rebuilt because build ingredients moved (below).\n' >> "$tmp"
+      else
+        printf -- '- Rebuilt because build ingredients moved (below); no change to %s itself.\n' "$PRODUCT" >> "$tmp"
+      fi
     else
       printf -- '- Repackage of %s %s; packaging changes only.\n' "$PRODUCT" "$(date_of "$VER")" >> "$tmp"
     fi
@@ -265,6 +415,8 @@ else
       elif [ -n "$PATCHES" ]; then
         printf -- '- Repackage of upstream %s %s with changes to our patches (below).\n  No upstream change.\n' \
           "$PRODUCT" "$UP" >> "$tmp"
+      elif [ -n "$HAS_CHANGES" ]; then
+        printf -- '- Built on upstream %s %s (no upstream change).\n' "$PRODUCT" "$UP" >> "$tmp"
       else
         printf -- '- Repackage of upstream %s %s; packaging changes only.\n' "$PRODUCT" "$UP" >> "$tmp"
       fi
@@ -287,7 +439,11 @@ fi
 # spec: tests/release-notes-test.sh "nofooter"/"withfooter" -- the footer's '---' rule is buffered
 #       separately and emitted only when at least one footer line follows it; swift-toolchain has
 #       neither a --min-os floor nor (in a fixture with no remote) a compare link.
-[ -z "$MINOS" ] || printf 'Requires Mac OS X %s or later.\n' "$MINOS" >> "$footer_tmp"
+[ -z "$NOTICE" ] || printf '%s\n' "$NOTICE" >> "$footer_tmp"
+if [ -n "$MINOS" ]; then
+  if [ -s "$footer_tmp" ]; then printf '\n' >> "$footer_tmp"; fi
+  printf 'Requires Mac OS X %s or later.\n' "$MINOS" >> "$footer_tmp"
+fi
 
 if [ -n "$PREV" ]; then
   if [ -n "${GITHUB_SERVER_URL:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then

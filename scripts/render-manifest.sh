@@ -86,7 +86,7 @@ PLIST_HEADER
   printf '  <key>outside</key>\n  <array>\n'
   ( cd "$ST" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | grep -v "^usr/local/mavergreen/$P/" \
     | awk '{ n = split($0, c, "/"); out = $0
-             for (k = 1; k <= n; k++) if (c[k] ~ /\.(app|kext|prefPane|plugin|bundle|framework)$/) { out = c[1]; for (j = 2; j <= k; j++) out = out "/" c[j]; break }
+             for (k = 1; k <= n; k++) if (c[k] ~ /\.(app|kext|prefPane|plugin|bundle|framework|jdk)$/) { out = c[1]; for (j = 2; j <= k; j++) out = out "/" c[j]; break }
              print out }' | sort -u \
     | while IFS= read -r o; do printf '    <string>%s</string>\n' "$(xesc "$o")"; done
   printf '  </array>\n</dict>\n</plist>\n'

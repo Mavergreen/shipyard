@@ -93,23 +93,13 @@ gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q 'packaging changes only' "$r/OUT.md" || { echo "FAIL pkgonly: kind"; cat "$r/OUT.md"; exit 1; }
 grep -q '### Build ingredients' "$r/OUT.md" && { echo "FAIL pkgonly: no pin moved, no section"; exit 1; }
 
-# spec: scripts/release-notes.sh -- committed prose must be slotted in verbatim, never
-#       rewritten.
-r="$work/prose"; mkrepo "$r"
-printf 'Hand-written paragraph.\n\n- a bullet a human wrote\n<!-- edited by a human -->\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
-( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
-gen "$r" 9.9p2-mavericks.1 >/dev/null
-grep -q 'Hand-written paragraph.' "$r/OUT.md" || { echo "FAIL prose: not included"; exit 1; }
-grep -q '^- a bullet a human wrote$' "$r/OUT.md" || { echo "FAIL prose: mangled"; exit 1; }
-grep -q '^### What changed$' "$r/OUT.md" || { echo "FAIL prose: generated sections dropped"; exit 1; }
-
 r="$work/prose-short"; mkrepo "$r"
-mkdir -p "$r/.mavergreen/release-notes/openssh" "$r/release-notes"
-printf 'Per-product prose.\n<!-- edited by a human -->\n' > "$r/.mavergreen/release-notes/openssh/9.9p2-mavericks.1.md"
-printf 'Repo-wide prose.\n<!-- edited by a human -->\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
-printf 'Legacy prose.\n<!-- edited by a human -->\n' > "$r/release-notes/9.9p2-mavericks.1.md"
-( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
-gen "$r" 9.9p2-mavericks.1 >/dev/null
+mkdir -p "$r/.mavergreen/release-notes/openssh" "$r/.mavergreen/release-notes"
+printf 'Per-product prose.\n' > "$r/.mavergreen/release-notes/openssh/9.9p2-mavericks.1.md"
+printf 'Repo-wide prose.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
+printf 'Legacy prose.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
+( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 && git commit -q --allow-empty -m later )
+gen "$r" 9.9p2-mavericks.1 --short openssh >/dev/null
 grep -q '^Per-product prose\.$' "$r/OUT.md" || { echo "FAIL prose-short: a product tagged separately reads release-notes/<short>/"; cat "$r/OUT.md"; exit 1; }
 grep -q 'Repo-wide prose' "$r/OUT.md" && { echo "FAIL prose-short: only the product's own prose"; cat "$r/OUT.md"; exit 1; }
 grep -q 'Legacy prose' "$r/OUT.md" && { echo "FAIL prose-short: a top-level release-notes/ is not read"; cat "$r/OUT.md"; exit 1; }
@@ -150,49 +140,330 @@ grep -qx -- '- Changed `patches/x.patch`' "$r/OUT.md" \
 r="$work/prose-ing"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 )
 bump "$r" 3.9.2
-printf 'Why this release matters.\n<!-- edited by a human -->\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.2.md"
-( cd "$r" && git add -A && git commit -qm "bump libressl, with prose" && git tag 9.9p2-mavericks.2 )
+printf 'Why this release matters.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.2.md"
+( cd "$r" && git add -A && git commit -qm "bump libressl, with prose" && git tag 9.9p2-mavericks.2 \
+    && git commit -q --allow-empty -m later )
 gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL prose-ing: prose and a described ingredient bullet pass the shape check"; exit 1; }
 grep -q '^Why this release matters\.$' "$r/OUT.md" || { echo "FAIL prose-ing: prose"; cat "$r/OUT.md"; exit 1; }
 grep -qx -- '  LibreSSL' "$r/OUT.md" || { echo "FAIL prose-ing: description"; cat "$r/OUT.md"; exit 1; }
 sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL prose-ing: shape"; cat "$r/OUT.md"; exit 1; }
 
-# spec: SKILL.md "Release notes" -- committed prose
-#       publishes only once a human has added the mark, and readers never see the mark.
+# spec: scripts/release-notes.sh -- committed prose for an already-minted tag (a non-publishing run
+#       regenerating a published release) is published verbatim with any mark line
+#       stripped and no mark required; for a tag not yet minted it is refused, naming the directory form.
 M='<!-- edited by a human -->'
-hp() {  # $1 = case, $2 = printf format of .mavergreen/release-notes/9.9p2-mavericks.1.md; leaves $r and $rc
+hp() {
   r="$work/hp-$1"; mkrepo "$r"
-  printf "$2" > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
+  printf "$3" > "$r/.mavergreen/release-notes/9.9p2-mavericks.1.md"
   ( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
+  if [ "$2" = minted ]; then ( cd "$r" && echo x >> README.md && git add -A && git commit -qm later ); fi
   rc=0; gen "$r" 9.9p2-mavericks.1 >/dev/null 2>"$r/ERR" || rc=$?
 }
-hp unmarked 'Some prose.\n'
-[ "$rc" -ne 0 ] || { echo "FAIL unmarked prose is refused"; exit 1; }
-[ ! -e "$r/OUT.md" ] || { echo "FAIL unmarked prose is refused: --out was written"; exit 1; }
-grep -qF "$M" "$r/ERR" && grep -qF '.mavergreen/release-notes/9.9p2-mavericks.1.md' "$r/ERR" \
-  || { echo "FAIL unmarked prose is refused: the complaint names the file and the line"; cat "$r/ERR"; exit 1; }
-hp marked "Some prose.\n$M\n"
-[ "$rc" -eq 0 ] || { echo "FAIL marked prose ships"; cat "$r/ERR"; exit 1; }
-grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL marked prose ships without the mark"; exit 1; }
-grep -q '^Some prose\.$' "$r/OUT.md" || { echo "FAIL marked prose ships its prose"; exit 1; }
-[ "$(awk 'f{print;n++} /^Some prose\.$/{f=1} n==2{exit}' "$r/OUT.md")" = "$(printf '\n### What changed')" ] \
-  || { echo "FAIL marked prose ships: the mark's line leaves no trace"; cat "$r/OUT.md"; exit 1; }
-hp crlf "Some prose.\n$M  \r\n"
-[ "$rc" -eq 0 ] || { echo "FAIL mark with CR or trailing spaces counts"; cat "$r/ERR"; exit 1; }
-grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL mark with CR or trailing spaces is stripped"; exit 1; }
-hp indented "Some prose.\n    $M\n"
-[ "$rc" -ne 0 ] || { echo "FAIL indented mark does not count"; exit 1; }
-hp nearmiss 'Some prose.\n<!-- Edited by a human -->\n'
-[ "$rc" -ne 0 ] || { echo "FAIL near-miss mark is refused"; exit 1; }
-grep -qF "$M" "$r/ERR" || { echo "FAIL near-miss mark is refused: the complaint prints the exact line"; exit 1; }
-hp markonly "$M\n"
-[ "$rc" -eq 0 ] || { echo "FAIL mark-only file inserts nothing"; cat "$r/ERR"; exit 1; }
-r1="$r"; r="$work/hp-none"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 ); gen "$r" 9.9p2-mavericks.1 >/dev/null
-[ "$(cat "$r1/OUT.md")" = "$(cat "$r/OUT.md")" ] || { echo "FAIL mark-only file inserts nothing: body differs from no prose"; diff "$r/OUT.md" "$r1/OUT.md"; exit 1; }
-hp twice "$M\nSome prose.\n$M\n"
+hp legacy-minted minted "Some prose.\n$M\nMore.\n"
+[ "$rc" -eq 0 ] || { echo "FAIL legacy-minted: ships"; cat "$r/ERR"; exit 1; }
+grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL legacy-minted: the mark is stripped"; exit 1; }
+grep -q '^Some prose\.$' "$r/OUT.md" && grep -q '^More\.$' "$r/OUT.md" \
+  || { echo "FAIL legacy-minted: prose verbatim"; cat "$r/OUT.md"; exit 1; }
+[ "$(awk 'f{print;n++} /^More\.$/{f=1} n==2{exit}' "$r/OUT.md")" = "$(printf '\n### What changed')" ] \
+  || { echo "FAIL legacy-minted: the mark's line leaves no trace"; cat "$r/OUT.md"; exit 1; }
+hp legacy-minted-unmarked minted 'Some prose.\n'
+[ "$rc" -eq 0 ] || { echo "FAIL legacy-minted-unmarked: #123 needs no mark"; cat "$r/ERR"; exit 1; }
+grep -q '^Some prose\.$' "$r/OUT.md" || { echo "FAIL legacy-minted-unmarked: prose included"; exit 1; }
+hp legacy-verbatim minted 'Hand-written paragraph.\n\n- a bullet a human wrote\n'
+[ "$rc" -eq 0 ] || { echo "FAIL legacy-verbatim: ships"; cat "$r/ERR"; exit 1; }
+grep -q 'Hand-written paragraph.' "$r/OUT.md" || { echo "FAIL legacy-verbatim: not included"; exit 1; }
+grep -q '^- a bullet a human wrote$' "$r/OUT.md" || { echo "FAIL legacy-verbatim: mangled"; exit 1; }
+grep -q '^### What changed$' "$r/OUT.md" || { echo "FAIL legacy-verbatim: generated sections dropped"; exit 1; }
+hp legacy-crlf minted "Some prose.\n$M  \r\n"
+[ "$rc" -eq 0 ] || { echo "FAIL legacy-crlf: ships"; cat "$r/ERR"; exit 1; }
+grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL legacy-crlf: mark with CR or trailing spaces is stripped"; exit 1; }
+hp twice minted "$M\nSome prose.\n$M\n"
 [ "$rc" -eq 0 ] || { echo "FAIL every mark line is stripped"; cat "$r/ERR"; exit 1; }
 grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL every mark line is stripped"; exit 1; }
+hp markonly minted "$M\n"
+[ "$rc" -eq 0 ] || { echo "FAIL mark-only file inserts nothing"; cat "$r/ERR"; exit 1; }
+r1="$r"; r="$work/hp-none"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 && echo x >> README.md && git add -A && git commit -qm later ); gen "$r" 9.9p2-mavericks.1 >/dev/null
+[ "$(cat "$r1/OUT.md")" = "$(cat "$r/OUT.md")" ] || { echo "FAIL mark-only file inserts nothing: body differs from no prose"; diff "$r/OUT.md" "$r1/OUT.md"; exit 1; }
+for c in legacy-new legacy-new-marked; do
+  case "$c" in legacy-new) f='Some prose.\n' ;; *) f="Some prose.\n$M\n" ;; esac
+  hp "$c" new "$f"
+  [ "$rc" -ne 0 ] || { echo "FAIL $c: refused"; exit 1; }
+  [ ! -e "$r/OUT.md" ] || { echo "FAIL $c: --out was written"; exit 1; }
+  grep -qF '.mavergreen/release-notes/9.9p2-mavericks.1.md' "$r/ERR" && grep -qF '.mavergreen/release-notes/9.9p2-mavericks.1/' "$r/ERR" \
+    || { echo "FAIL $c: the complaint names the file and the directory"; cat "$r/ERR"; exit 1; }
+done
+
+# spec: SKILL.md "Release notes" -- a new release says what changed in
+#       .mavergreen/release-notes/<TAG>/ files: changes/<slug> bullets lead What changed; a
+#       product's requires/<dep>/min that moved and rebuild make Before you update; and the
+#       product's standing notice opens the footer. Each sentence is checked unless the tag is
+#       minted; the tree's shape is checked always.
+T=9.9p2-mavericks.2
+dset() {  # $1 = case; leaves $r with tag 9.9p2-mavericks.1 and $d = its .mavergreen/release-notes/$T
+  r="$work/dir-$1"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 ); d="$r/.mavergreen/release-notes/$T"
+}
+dgen() {  # $1 = minted|new, rest = extra args; tags $T, generates $T, leaves $rc and $r/ERR
+  m="$1"; shift
+  ( cd "$r" && git add -A && git commit -q --allow-empty -m notes && git tag "$T" )
+  if [ "$m" = minted ]; then ( cd "$r" && echo x >> README.md && git add -A && git commit -qm later ); fi
+  rc=0; gen "$r" "$T" "$@" >/dev/null 2>"$r/ERR" || rc=$?
+}
+req() {  # $1 = repo, $2 = product, $3 = dependency, $4 = its min
+  mkdir -p "$1/.mavergreen/products/$2/requires/$3"; printf '%s\n' "$4" > "$1/.mavergreen/products/$2/requires/$3/min"
+}
+notice() {  # $1 = repo, $2 = product, $3 = the notice
+  mkdir -p "$1/.mavergreen/products/$2"; printf '%s\n' "$3" > "$1/.mavergreen/products/$2/notice"
+}
+refused() {  # $1 = label, $2 = text the complaint must carry
+  [ "$rc" -ne 0 ] || { echo "FAIL $1: refused"; cat "$r/OUT.md"; exit 1; }
+  [ ! -e "$r/OUT.md" ] || { echo "FAIL $1: --out was written"; exit 1; }
+  grep -qF -- "$2" "$r/ERR" || { echo "FAIL $1: the complaint names $2"; cat "$r/ERR"; exit 1; }
+}
+
+dset changes; mkdir -p "$d/changes"
+printf 'Stop now stays stopped.\n' > "$d/changes/a-first"
+printf 'Keys load again.\n' > "$d/changes/b-second"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-changes: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==3{exit}' "$r/OUT.md")" = "$(printf -- '- Stop now stays stopped.\n- Keys load again.\n- Built on upstream OpenSSH 9.9p2 (no upstream change).')" ] \
+  || { echo "FAIL dir-changes: change bullets lead What changed"; cat "$r/OUT.md"; exit 1; }
+grep -q 'packaging changes only' "$r/OUT.md" && { echo "FAIL dir-changes: changes are not packaging only"; cat "$r/OUT.md"; exit 1; }
+grep -q '### Before you update' "$r/OUT.md" && { echo "FAIL dir-changes: no requirement or rebuild, no section"; exit 1; }
+r="$work/dir-changes-self"; mkrepo "$r"
+( cd "$r" && git tag 20260802.4 && git tag 20260802.5 )
+mkdir -p "$r/.mavergreen/release-notes/20260802.6/changes"; printf 'Pure-Go programs now run on Mavericks.\n' > "$r/.mavergreen/release-notes/20260802.6/changes/go"
+( cd "$r" && git add -A && git commit -qm notes )
+gen "$r" 20260802.6 --product Porthole --min-os 10.9 >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==3{exit}' "$r/OUT.md")" = "$(printf -- '- Pure-Go programs now run on Mavericks.\n- New release of Porthole 20260802.6 (was 20260802.5).\n  [Changes since 20260802.5](https://github.com/Mavergreen/mavericks-openssh/compare/20260802.5...20260802.6)')" ] \
+  || { echo "FAIL dir-changes-self: a same-date release with changes is a new release"; cat "$r/OUT.md"; exit 1; }
+
+dset before; mkdir -p "$d/changes"
+printf 'Keys load again.\n' > "$d/changes/keys"
+req "$r" openssh clang22 22.1.8
+printf 'Rebuild your Go programs to use the new SDK.\n' > "$d/rebuild"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-before: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### /{print}' "$r/OUT.md" | sed -n 1,2p)" = "$(printf '### Before you update\n### What changed')" ] \
+  || { echo "FAIL dir-before: Before you update comes first"; cat "$r/OUT.md"; exit 1; }
+[ "$(awk '/^### Before you update$/{f=1; next} f&&/^$/{exit} f{print}' "$r/OUT.md")" = "$(printf -- '- Install clang22 22.1.8 or later first.\n- Rebuild your Go programs to use the new SDK.')" ] \
+  || { echo "FAIL dir-before: requirements, then rebuild"; cat "$r/OUT.md"; exit 1; }
+r="$work/dir-req-same"; mkrepo "$r"; req "$r" openssh clang22 22.1.8; req "$r" openssh libressl 3.8.2
+( cd "$r" && git add -A && git commit -qm req && git tag 9.9p2-mavericks.1 )
+req "$r" openssh libressl 3.9.2; req "$r" openssh zlib 1.3
+( cd "$r" && git add -A && git commit -qm raise && git tag "$T" )
+gen "$r" "$T" >/dev/null 2>"$r/ERR" || { echo "FAIL dir-req-same: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### Before you update$/{f=1; next} f&&/^$/{exit} f{print}' "$r/OUT.md")" = "$(printf -- '- Install libressl 3.9.2 or later first.\n- Install zlib 1.3 or later first.')" ] \
+  || { echo "FAIL dir-req-same: a raised or new min is listed, an unchanged one is not"; cat "$r/OUT.md"; exit 1; }
+r="$work/dir-req-landing"; mkrepo "$r"
+( cd "$r" && git rm -rq .mavergreen && git commit -qm legacy && git tag 9.9p2-mavericks.1 \
+    && git checkout -q HEAD~1 -- .mavergreen && git commit -qm "the flag day" )
+req "$r" openssh clang22 22.1.8
+( cd "$r" && git add -A && git commit -qm req && git tag "$T" )
+gen "$r" "$T" >/dev/null 2>"$r/ERR" || { echo "FAIL dir-req-landing: ships"; cat "$r/ERR"; exit 1; }
+grep -q '### Before you update' "$r/OUT.md" && { echo "FAIL dir-req-landing: a release from before .mavergreen/ lists no requirement"; cat "$r/OUT.md"; exit 1; }
+
+dset notice; notice "$r" openssh 'Never publish an image that contains macOS.'
+dgen new --min-os ''
+[ "$rc" -eq 0 ] || { echo "FAIL dir-notice: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^---$/{f=1; next} f' "$r/OUT.md")" = "$(printf 'Never publish an image that contains macOS.\n\n[All changes since 9.9p2-mavericks.1](https://github.com/Mavergreen/mavericks-openssh/compare/9.9p2-mavericks.1...9.9p2-mavericks.2)')" ] \
+  || { echo "FAIL dir-notice: the notice opens the footer"; cat "$r/OUT.md"; exit 1; }
+gen "$r" "$T" >/dev/null 2>"$r/ERR" || { echo "FAIL dir-notice: ships with a floor"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^---$/{f=1; next} f' "$r/OUT.md" | sed -n 1,3p)" = "$(printf 'Never publish an image that contains macOS.\n\nRequires Mac OS X 10.9.5 or later.')" ] \
+  || { echo "FAIL dir-notice: a blank line before each later footer line"; cat "$r/OUT.md"; exit 1; }
+notice "$r" openssh 'See https://x.org now.'
+rm -f "$r/OUT.md"; rc=0; gen "$r" "$T" >/dev/null 2>"$r/ERR" || rc=$?
+refused dir-notice-checked 'release-sentence: '
+
+for m in new minted; do
+  dset "bad-sentence-$m"; mkdir -p "$d/changes"; printf 'Cut to exercise the shared publish-release.yml.\n' > "$d/changes/x"
+  dgen "$m"
+  if [ "$m" = new ]; then
+    refused dir-bad-sentence 'release-sentence: '
+    grep -qF "$d/changes/x" "$r/ERR" || { echo "FAIL dir-bad-sentence: names the file"; cat "$r/ERR"; exit 1; }
+  else
+    [ "$rc" -eq 0 ] || { echo "FAIL dir-bad-sentence: a minted tag regenerates without the sentence check"; cat "$r/ERR"; exit 1; }
+    grep -q '^- Cut to exercise' "$r/OUT.md" || { echo "FAIL dir-bad-sentence: minted renders"; cat "$r/OUT.md"; exit 1; }
+  fi
+done
+
+for c in notes.md .DS_Store 'changes/Foo Bar' changes/ requires/; do
+  for m in new minted; do
+    dset "stray-$m-$(printf %s "$c" | tr -c a-zA-Z -)"; mkdir -p "$d/changes"
+    case "$c" in
+      */) rm -rf "$d/changes"; mkdir -p "$d/$c"; printf 'Keep going.\n' > "$d/rebuild"; ( cd "$r" && git add -A && git commit -qm keep ); want="$d/${c%/}" ;;
+      *) printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Stray.\n' > "$d/$c"; want="$d/$c" ;;
+    esac
+    dgen "$m"
+    refused "dir-stray $c $m" "$want"
+  done
+done
+
+dset crlf; mkdir -p "$d/changes"; printf 'Works now.  \r' > "$d/changes/w"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-crlf: ships"; cat "$r/ERR"; exit 1; }
+grep -q '^- Works now\.$' "$r/OUT.md" || { echo "FAIL dir-crlf: rendered without the CR"; od -c "$r/OUT.md" | head -20; exit 1; }
+
+dset both; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Prose.\n' > "$r/.mavergreen/release-notes/$T.md"
+dgen new
+refused dir-both ".mavergreen/release-notes/$T.md"
+
+for c in 'clang22 1 .0' 'clang22 v1.0' 'clang22 \f22.1.8\f'; do
+  dset "requires-bad-$(printf %s "$c" | tr -c a-z0-9 -)"; req "$r" openssh "${c%% *}" "$(printf "${c#* }")"
+  for m in new minted; do
+    [ "$m" = new ] || { rm -f "$r/OUT.md"; ( cd "$r" && git tag -d "$T" >/dev/null ); }
+    dgen "$m"
+    refused "dir-requires-bad $c $m" "$r/.mavergreen/products/openssh/requires/${c%% *}/min"
+  done
+done
+
+dset short; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n/$T/changes" "$d"
+printf 'Runtime loads faster.\n' > "$n/$T/changes/x"; notice "$r" swift-runtime 'Use the runtime from here.'
+printf 'Stray.\n' > "$d/notes.md"; notice "$r" openssh 'Top-level notice.'
+dgen new --short swift-runtime
+[ "$rc" -eq 0 ] || { echo "FAIL dir-short: ships"; cat "$r/ERR"; exit 1; }
+grep -q '^- Runtime loads faster\.$' "$r/OUT.md" && grep -q '^Use the runtime from here\.$' "$r/OUT.md" \
+  || { echo "FAIL dir-short: the nested tree is read"; cat "$r/OUT.md"; exit 1; }
+grep -q 'Top-level' "$r/OUT.md" && { echo "FAIL dir-short: the top-level tree is ignored"; exit 1; }
+rm -f "$r/OUT.md"; rc=0; gen "$r" "$T" --short openssh >/dev/null 2>"$r/ERR" || rc=$?
+refused dir-short-fallback "$d/notes.md"
+r="$work/dir-changes-self-ing"; mkrepo "$r"
+( cd "$r" && git tag 20260802.5 ); bump "$r" 3.9.2
+mkdir -p "$r/.mavergreen/release-notes/20260802.6/changes"; printf 'Pure-Go programs now run on Mavericks.\n' > "$r/.mavergreen/release-notes/20260802.6/changes/go"
+( cd "$r" && git add -A && git commit -qm "bump libressl" )
+gen "$r" 20260802.6 --product Porthole --min-os 10.9 >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self-ing: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- Pure-Go programs now run on Mavericks.\n- Rebuilt because build ingredients moved (below).')" ] \
+  || { echo "FAIL dir-changes-self-ing: changes are a change to the product itself"; cat "$r/OUT.md"; exit 1; }
+
+for m in new minted; do
+  dset "short-md-$m"; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n"
+  printf 'Nested prose.\n' > "$n/$T.md"
+  dgen "$m" --short swift-runtime
+  if [ "$m" = new ]; then
+    refused dir-short-md "$n/$T.md"
+  else
+    [ "$rc" -eq 0 ] || { echo "FAIL dir-short-md: minted nested prose ships"; cat "$r/ERR"; exit 1; }
+    grep -q '^Nested prose\.$' "$r/OUT.md" || { echo "FAIL dir-short-md: minted nested prose publishes"; cat "$r/OUT.md"; exit 1; }
+  fi
+done
+
+dset vt; mkdir -p "$d/changes"; printf 'Works now.\v\n' > "$d/changes/w"
+dgen minted
+[ "$rc" -eq 0 ] || { echo "FAIL dir-vt: minted ships"; cat "$r/ERR"; exit 1; }
+grep -q '^- Works now\.$' "$r/OUT.md" || { echo "FAIL dir-vt: line 1 is stripped as the checker strips it"; od -c "$r/OUT.md" | head -20; exit 1; }
+
+dset wrongtag; w="$r/.mavergreen/release-notes/9.9p2-mavericks.9"; mkdir -p "$w/changes"; printf 'Keys load again.\n' > "$w/changes/keys"
+dgen new
+refused dir-wrongtag "$w"
+grep -qF "$T" "$r/ERR" || { echo "FAIL dir-wrongtag: the complaint names the expected $T"; cat "$r/ERR"; exit 1; }
+dset wrongtag-short; w="$r/.mavergreen/release-notes/swift-runtime/9.9p2-mavericks.9"; mkdir -p "$w/changes"; printf 'Keys load again.\n' > "$w/changes/keys"
+dgen new --short swift-runtime
+refused dir-wrongtag-short "$w"
+dset wrongtag-minted; mkdir -p "$r/.mavergreen/release-notes/9.9p2-mavericks.9/changes"; printf 'Keys load again.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.9/changes/keys"
+dgen minted
+[ "$rc" -eq 0 ] || { echo "FAIL dir-wrongtag-minted: regenerating a published release ignores notes staged for a later one"; cat "$r/ERR"; exit 1; }
+dset oldtag; mkdir -p "$r/.mavergreen/release-notes/9.9p2-mavericks.1/changes" "$r/.mavergreen/release-notes/swift-runtime"
+printf 'Old news.\n' > "$r/.mavergreen/release-notes/9.9p2-mavericks.1/changes/old"
+mkdir -p "$r/.mavergreen/release-notes/swift-runtime/$T/changes"; printf 'Use the runtime from here.\n' > "$r/.mavergreen/release-notes/swift-runtime/$T/changes/x"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-oldtag: an existing tag's directory and a product's nest are not strays"; cat "$r/ERR"; exit 1; }
+grep -q 'Old news\|runtime from here' "$r/OUT.md" && { echo "FAIL dir-oldtag: neither is read"; cat "$r/OUT.md"; exit 1; }
+
+# spec: scripts/release-notes.sh -- a notes directory that cannot be read is refused, not read as absent.
+if [ "$(id -u)" != 0 ]; then
+  for mode in 000 644; do
+    for sub in "" changes; do
+      dset "unreadable-$mode-$sub"; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/keys"
+      ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
+      chmod "$mode" "$d${sub:+/$sub}"
+      rc=0; gen "$r" "$T" >/dev/null 2>"$r/ERR" || rc=$?
+      chmod 755 "$d${sub:+/$sub}"
+      refused "dir-unreadable $mode $sub" "$d${sub:+/$sub}"
+    done
+  done
+fi
+
+# spec: scripts/release-notes.sh -- the .mavergreen/release-notes/ tree itself, and a --short nest, are refused when unreadable.
+if [ "$(id -u)" != 0 ]; then
+  for mode in 000 644; do
+    for level in top nest; do
+      dset "unreadable-$level-$mode"; n="$r/.mavergreen/release-notes"
+      mkdir -p "$d/changes" "$n/swift-runtime/$T/changes"
+      printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Runtime loads faster.\n' > "$n/swift-runtime/$T/changes/x"
+      ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
+      if [ "$level" = top ]; then victim="$n"; extra=""; else victim="$n/swift-runtime"; extra="--short swift-runtime"; fi
+      chmod "$mode" "$victim"
+      rc=0; gen "$r" "$T" $extra >/dev/null 2>"$r/ERR" || rc=$?
+      chmod 755 "$victim"
+      refused "dir-unreadable-$level $mode" "$victim"
+    done
+  done
+  dset requires-unreadable; req "$r" openssh clang22 22.1.8; m="$r/.mavergreen/products/openssh/requires/clang22/min"
+  ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
+  chmod 000 "$m"
+  rc=0; gen "$r" "$T" >/dev/null 2>"$r/ERR" || rc=$?
+  chmod 644 "$m"
+  refused dir-requires-unreadable "$m"
+  grep -q 'integer expression' "$r/ERR" && { echo "FAIL dir-requires-unreadable: a shell error leaked"; cat "$r/ERR"; exit 1; }
+fi
+
+# spec: scripts/release-notes.sh -- a registry that cannot be read is said so, not called "not registered".
+dset registry-short; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n/$T/changes"; printf 'Runtime loads faster.\n' > "$n/$T/changes/x"
+dgen new --short swift-runtime --out "$r/OUT.md"
+[ "$rc" -eq 0 ] || { echo "FAIL registry-short: baseline ships"; cat "$r/ERR"; exit 1; }
+rm -f "$r/OUT.md"; rc=0; ( MAVERGREEN_PRODUCT_NAMES="$work/no-such-registry"; export MAVERGREEN_PRODUCT_NAMES; gen "$r" "$T" --short swift-runtime ) >/dev/null 2>"$r/ERR" || rc=$?
+refused dir-registry-short "registry"
+grep -q 'not a registered' "$r/ERR" && { echo "FAIL dir-registry-short: calls an unreadable registry 'not registered'"; cat "$r/ERR"; exit 1; }
+
+# spec: scripts/release-notes.sh -- --short names a registered product, in the form a short name takes.
+for sv in .. a/b '' Foo -x swift-runtime-other; do
+  dset "short-bad-$(printf %s "$sv" | tr -c a-z0-9 -)"; n="$r/.mavergreen/release-notes/swift-runtime"; mkdir -p "$n/$T/changes"
+  printf 'Runtime loads faster.\n' > "$n/$T/changes/x"
+  dgen new --short "$sv"
+  refused "dir-short-bad '$sv'" "--short"
+done
+
+# spec: SKILL.md "Release notes" -- Before you update with only the rebuild bullet; a first release
+#       whose footer is only the notice; a port repackage that has changes/ and moved ingredients.
+dset rebuild-only; mkdir -p "$d"; printf 'Rebuild your Go programs to use the new SDK.\n' > "$d/rebuild"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-rebuild-only: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### Before you update$/{f=1; next} f&&/^$/{exit} f{print}' "$r/OUT.md")" = '- Rebuild your Go programs to use the new SDK.' ] \
+  || { echo "FAIL dir-rebuild-only: only the rebuild bullet"; cat "$r/OUT.md"; exit 1; }
+r="$work/dir-notice-first"; mkrepo "$r"; notice "$r" openssh 'Never publish an image that contains macOS.'
+( cd "$r" && git add -A && git commit -qm notice && git tag 9.9p2-mavericks.1 )
+gen "$r" 9.9p2-mavericks.1 --min-os '' >/dev/null 2>"$r/ERR" || { echo "FAIL dir-notice-first: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^---$/{f=1; next} f' "$r/OUT.md")" = 'Never publish an image that contains macOS.' ] \
+  || { echo "FAIL dir-notice-first: the footer is the notice alone"; cat "$r/OUT.md"; exit 1; }
+dset changes-ing; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/keys"
+bump "$r" 3.9.2
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-changes-ing: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==3{exit}' "$r/OUT.md")" = "$(printf -- '- Keys load again.\n- Repackage of upstream OpenSSH 9.9p2, rebuilt because build ingredients moved (below).\n  No upstream change.')" ] \
+  || { echo "FAIL dir-changes-ing: changes lead, then the ingredient repackage line"; cat "$r/OUT.md"; exit 1; }
+grep -q '^### Build ingredients$' "$r/OUT.md" || { echo "FAIL dir-changes-ing: ingredients listed"; exit 1; }
+grep -q 'Built on upstream' "$r/OUT.md" && { echo "FAIL dir-changes-ing: not 'Built on upstream'"; exit 1; }
+
+# spec: scripts/release-notes.sh -- bullets order by slug in the C locale: '-' before a letter, which a
+#       dictionary collation reverses. Capitals are not slugs, so a-z and aa stand in for B-x and a-x.
+dset slug-order; mkdir -p "$d/changes"; printf 'Second thing.\n' > "$d/changes/aa"; printf 'First thing.\n' > "$d/changes/a-z"
+( LC_ALL=en_US.UTF-8; export LC_ALL; dgen new; echo "$rc" > "$r/RC" )
+rc="$(cat "$r/RC")"
+[ "$rc" -eq 0 ] || { echo "FAIL dir-slug-order: ships"; cat "$r/ERR"; exit 1; }
+[ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- First thing.\n- Second thing.')" ] \
+  || { echo "FAIL dir-slug-order: C-locale order"; cat "$r/OUT.md"; exit 1; }
+
+for p in Shipyard Porthole; do
+  r="$work/dir-shipyard-$p"; mkrepo "$r"; ( cd "$r" && git tag v1.0.1 )
+  mkdir -p "$r/.mavergreen/release-notes/v1.0.2/changes"; printf 'Shipyard now installs beside cmake.\n' > "$r/.mavergreen/release-notes/v1.0.2/changes/x"
+  ( cd "$r" && git add -A && git commit -qm notes )
+  rc=0; gen "$r" v1.0.2 --product "$p" >/dev/null 2>"$r/ERR" || rc=$?
+  if [ "$p" = Shipyard ]; then
+    [ "$rc" -eq 0 ] || { echo "FAIL dir-shipyard: shipyard's own notes may name it"; cat "$r/ERR"; exit 1; }
+  else
+    refused dir-shipyard-other 'internal term'
+  fi
+done
 
 # spec: scripts/release-notes.sh -- self-upstream has no -mavericks axis, so no upstream claim
 #       and a plain title.
@@ -569,7 +840,7 @@ if ( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag 9.9p2-mavericks.1 --version 9.
 #       unconditionally and then
 #       conditionally appended the floor/link, so a body with neither ended in a dangling <hr>
 #       and nothing after it -- the footer '---' must not be emitted with nothing after it.
-r="$work/nofooter"; mkdir -p "$r/release-notes"
+r="$work/nofooter"; mkdir -p "$r/.mavergreen/release-notes"
 ( cd "$r" && git init -q -b main . && git config user.email t@example.com && git config user.name tester )
 ( cd "$r" && echo x > README.md && git add -A && git commit -qm base && git tag v1.0.0 )
 ( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag v1.0.0 --version 1.0.0 \
@@ -710,10 +981,10 @@ gen "$r" 9.9p2-mavericks.1 >/dev/null
 grep -q 'New upstream: OpenSSH 9.9p2 (was 9.9p1)' "$r/OUT.md" || { echo "FAIL patchnewup: kind"; cat "$r/OUT.md"; exit 1; }
 grep -q '^- Changed `patches/fix.patch`$' "$r/OUT.md" || { echo "FAIL patchnewup: section"; cat "$r/OUT.md"; exit 1; }
 
-# spec: scripts/patch-notes.sh -- committed prose under release-notes/ is not a modification of
+# spec: scripts/patch-notes.sh -- committed prose under .mavergreen/release-notes/ is not a modification of
 #       upstream.
 r="$work/patchprose"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 && printf 'Words.\n<!-- edited by a human -->\n' > .mavergreen/release-notes/9.9p2-mavericks.2.md \
+( cd "$r" && git tag 9.9p2-mavericks.1 && printf 'Words.\n<!-- edited by a human -->\n' > .mavergreen/release-notes/README.md \
     && git add -A && git commit -qm prose && git tag 9.9p2-mavericks.2 )
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q '^- Repackage of upstream OpenSSH 9.9p2; packaging changes only\.$' "$r/OUT.md" \

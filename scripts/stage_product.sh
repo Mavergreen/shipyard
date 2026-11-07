@@ -155,7 +155,7 @@ while [ -n "$_rr" ] && _o="$(/usr/libexec/PlistBuddy -c "Print :outside:$_i" "$_
   _i=$((_i + 1))
   case "$_o" in ''|/*|*/|*//*|usr/local/mavergreen|usr/local/mavergreen/*) continue ;; esac
   case "/$_o/" in *"/./"*|*"/../"*) continue ;; esac
-  case "${_o##*/}" in *.app|*.kext|*.prefPane|*.plugin|*.bundle|*.framework) ;; *) continue ;; esac
+  case "${_o##*/}" in *.app|*.kext|*.prefPane|*.plugin|*.bundle|*.framework|*.jdk) ;; *) continue ;; esac
   _b="$ROOT/$_o"
   if [ -L "$_b" ] || [ ! -d "$_b" ]; then continue; fi
   _pd="$(cd -P "$(dirname "$_b")" 2>/dev/null && pwd -P)" || continue

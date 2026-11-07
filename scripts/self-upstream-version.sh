@@ -7,10 +7,11 @@
 #          REV, if own code never changed), .1. When own code changed since the last tag: that day
 #          .1 if it is later than the tag's date, else the tag's date .N+1. Otherwise the tag's date
 #          .N+1. Own code is every path except .mavergreen/upstream/**, .mavergreen/ingredients/**,
-#          .mavergreen/deviations/**, .github/**, tests/**, top-level *.md, each file
-#          declared-state.sh names, and the scope of each .mavergreen/deviations/self-upstream-exclude/
-#          deviation, a git pathspec glob (`*` stays within one directory, `**/` spans any). Exit 2 on
-#          a usage error, a non-repo, an unknown REV, a shallow clone, or metadata the readers refuse.
+#          .mavergreen/deviations/**, .mavergreen/release-notes/**, .github/**, tests/**, top-level
+#          *.md, each file declared-state.sh names, and the scope of each
+#          .mavergreen/deviations/self-upstream-exclude/ deviation, a git pathspec glob (`*` stays
+#          within one directory, `**/` spans any). Exit 2 on a usage error, a non-repo, an unknown
+#          REV, a shallow clone, or metadata the readers refuse.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning" -- the
 #       version only: whether to publish stays with release-state.sh and release-needed.sh.
 # spec: tests/self-upstream-version-test.sh
@@ -49,7 +50,7 @@ rev="$(git -C "$ROOT" rev-parse --verify -q "$REF^{commit}" 2>/dev/null)" || {
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/self-upstream-version.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
-for p in '.mavergreen/upstream/**' '.mavergreen/ingredients/**' '.mavergreen/deviations/**' '.github/**' 'tests/**' '*.md'; do
+for p in '.mavergreen/upstream/**' '.mavergreen/ingredients/**' '.mavergreen/deviations/**' '.mavergreen/release-notes/**' '.github/**' 'tests/**' '*.md'; do
   printf ':(exclude,glob)%s\n' "$p"
 done > "$work/exclude"
 

@@ -290,7 +290,7 @@ EOF
       else {
         n = split($3, c, "/"); s = c[1]
         for (i = 1; i < n && hit == ""; i++) {
-          if ((s in o) && c[i] ~ /\.(app|kext|prefPane|plugin|bundle|framework)$/) hit = s
+          if ((s in o) && c[i] ~ /\.(app|kext|prefPane|plugin|bundle|framework|jdk)$/) hit = s
           s = s "/" c[i + 1]
         }
       }
@@ -302,7 +302,7 @@ EOF
     case "$why" in
       unlisted) unlisted=$((unlisted + 1)); [ "$unlisted" -le 20 ] || continue
         fail manifest "$pk installs $(dec "$op") outside its tree, and its manifest's outside list does not name it -- uninstall would leave it behind" "$pk" ;;
-      unused) fail manifest "$pk's manifest lists $(dec "$op") in outside, but the pkg installs nothing it would remove -- uninstall deletes an entry only as that exact file or link, or as a whole .app, .kext, .prefPane, .plugin, .bundle or .framework directory" "$pk" ;;
+      unused) fail manifest "$pk's manifest lists $(dec "$op") in outside, but the pkg installs nothing it would remove -- uninstall deletes an entry only as that exact file or link, or as a whole .app, .kext, .prefPane, .plugin, .bundle, .framework or .jdk directory" "$pk" ;;
       badshape) fail manifest "$pk's manifest lists outside entry '$(dec "$op")' in a shape the helper refuses to uninstall -- empty, absolute, ending in /, an empty, . or .. segment, or under usr/local/mavergreen" "$pk" ;;
     esac
   done < "$tmp/outside-$pk"
