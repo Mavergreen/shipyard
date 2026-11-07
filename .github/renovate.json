@@ -4,6 +4,23 @@
   "customManagers": [
     {
       "customType": "regex",
+      "managerFilePatterns": ["/^components/objc-reference-clang/version$/"],
+      "matchStrings": ["(?<currentValue>[^\\s]+)"],
+      "depNameTemplate": "Mavergreen/clang-22",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v?(?<version>.+)$",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "The read-only Drydock core the Objective-C artifact reader compiles (components/objc-reader-drydock/version). scripts/objc-compat-build.sh fetches GitHub's tarball of exactly DIGEST through fetch_pinned_source.sh and verifies it against ARCHIVE_SHA256, which this manager does not move: a bump fails closed until ARCHIVE_SHA256 is rewritten after checking with git that the tarball holds exactly the commit's tree. A bump must pass tests/objc-reader-test.sh and tests/objc-binding-test.sh.",
+      "managerFilePatterns": ["/^components/objc-reader-drydock/version$/"],
+      "matchStrings": ["REPO=(?<packageName>\\S+?)\\.git\\s+REF=(?<currentValue>\\S+)\\s+DIGEST=(?<currentDigest>[0-9a-f]{40})"],
+      "depNameTemplate": "Mavergreen/drydock",
+      "datasourceTemplate": "git-refs"
+    },
+    {
+      "customType": "regex",
       "description": "The cmake product shipyard's launchers run and its pkg requires (components/cmake/version). install@v1 installs this release, verified against its SHA256SUMS; a bump releases shipyard on green.",
       "managerFilePatterns": ["/^components/cmake/version$/"],
       "matchStrings": ["^(?<currentValue>\\S+)\\s*$"],

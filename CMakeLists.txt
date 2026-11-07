@@ -151,6 +151,19 @@ install(CODE "${_msc_presets_code}")
 # Scripts keep their executable bit (they are run via `sh` but stay +x for direct use).
 # scripts/ carries the Sparkle fetch scripts + native signer/keygen sources too.
 install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
+install(FILES tools/objc-sdk-inventory.c tools/README.objc-sdk-inventory.md tools/objc-runtime-inventory.m
+  tools/objc-source-inventory.c
+  DESTINATION "${_dest}/tools")
+# spec: scripts/assert_binary_compatible.sh header -- the guard's strict Objective-C analyzer is built on
+#       first use, from these sources (scripts/objc-compat-build.sh: tools/objc-compat, the source-receipt
+#       tool whose hash it embeds, the Drydock pin whose tarball it fetches and verifies, and the clang22
+#       pin it compiles with), and reads the versioned
+#       reference set beside them. Nothing here is compiled at install time, and no libclang is staged:
+#       only the reference-set and source-receipt producers use it, never the analyzer.
+install(DIRECTORY tools/objc-compat DESTINATION "${_dest}/tools")
+install(FILES components/objc-reader-drydock/version DESTINATION "${_dest}/components/objc-reader-drydock")
+install(FILES components/objc-reference-clang/version DESTINATION "${_dest}/components/objc-reference-clang")
+install(DIRECTORY reference/objc DESTINATION "${_dest}/reference")
 # Sparkle updater templates (configure_file'd per product by MavericksSparkle.cmake).
 install(DIRECTORY updater DESTINATION "${_dest}")
 # spec: MavericksHostTools.cmake -- it builds tools/ against the exporter pin installed beside it.
