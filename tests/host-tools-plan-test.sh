@@ -17,7 +17,7 @@ fail=0
 bad() { echo "FAIL: $*"; fail=1; }
 
 plan() {
-  "$SC" -DMODULE_DIR="$root" -DSYSCTL="$fx/sysctl" -DCOMPILER=/opt/clang22/bin/clang -DOUT="$w/$1" \
+  "$SC" -DMODULE_DIR="$root" -DSYSCTL="$fx/sysctl" -DUNAME="$fx/uname" -DCOMPILER=/opt/clang22/bin/clang -DOUT="$w/$1" \
     -P "$fx/plan.cmake" > "$w/$1.log" 2>&1 || { bad "$1: plan failed: $(cat "$w/$1.log")"; : > "$w/$1"; }
 }
 has() { grep -qxF -- "$2" "$w/$1" || bad "$1: no line '$2'"; }
@@ -45,6 +45,21 @@ has arm64 -DCMAKE_OSX_SYSROOT=/sdk/for/arm64
 has arm64 -DCMAKE_OBJC_COMPILER_TARGET=arm64-apple-macos11.0
 lacks arm64 x86_64
 lacks arm64 availability_version_check
+
+has native launch=
+has arm64 "launch=/usr/bin/arch;-arm64"
+FAKE_ARM64=1 FAKE_TRANSLATED=0 plan arm64native
+has arm64native arch=arm64
+has arm64native launch=
+
+echo "== failed_hardware_probe_on_apple_silicon"
+if FAKE_SYSCTL_FAILS=1 FAKE_UNAME_M=arm64 "$SC" -DMODULE_DIR="$root" -DSYSCTL="$fx/sysctl" -DUNAME="$fx/uname" \
+     -DCOMPILER=/opt/clang22/bin/clang -DOUT="$w/probefail" -P "$fx/plan.cmake" > "$w/probefail.log" 2>&1; then
+  bad "an arm64 machine whose hardware probe failed was planned as $(sed -n 's/^arch=//p' "$w/probefail")"
+fi
+grep -q 'mavericks_build_host_tools' "$w/probefail.log" || bad "the failed probe was refused without naming the function: $(cat "$w/probefail.log")"
+FAKE_SYSCTL_FAILS=1 FAKE_UNAME_M=x86_64 plan old_intel
+has old_intel arch=x86_64
 
 echo "== separate_target_config"
 for p in native arm64; do

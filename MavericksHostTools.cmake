@@ -29,13 +29,31 @@ function(_mht_host_plan prefix)
   #           such key and fails, which means Intel
   execute_process(COMMAND "${sysctl}" -n hw.optional.arm64 OUTPUT_VARIABLE arm RESULT_VARIABLE rc
     OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+  set(launch "")
   if(rc EQUAL 0 AND arm STREQUAL "1")
     set(arch arm64)
     set(min 11.0)
+    execute_process(COMMAND "${sysctl}" -n sysctl.proc_translated OUTPUT_VARIABLE translated
+      OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(translated STREQUAL "1")
+      # platform: a process Rosetta translates starts universal children as x86_64 too, so the host
+      #           tools' own cmake and make are started as arm64 explicitly
+      set(launch /usr/bin/arch -arm64)
+    endif()
   else()
+    set(uname "${MAVERICKS_HOST_TOOLS_UNAME}")
+    if(NOT uname)
+      set(uname /usr/bin/uname)
+    endif()
+    execute_process(COMMAND "${uname}" -m OUTPUT_VARIABLE machine OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(machine STREQUAL "arm64")
+      _mht_fail("sysctl cannot say whether this Mac is Apple Silicon, but uname says arm64; refusing to "
+        "build x86_64 tools that would run under Rosetta")
+    endif()
     set(arch x86_64)
     set(min 10.9)
   endif()
+  set(${prefix}_LAUNCH "${launch}" PARENT_SCOPE)
   set(${prefix}_ARCH "${arch}" PARENT_SCOPE)
   set(${prefix}_MIN "${min}" PARENT_SCOPE)
   set(${prefix}_TARGET "${arch}-apple-macos${min}" PARENT_SCOPE)
@@ -259,8 +277,8 @@ function(mavericks_build_host_tools out_var)
   endif()
   _mht_configure_args(args ARCH "${host_ARCH}" TARGET "${host_TARGET}" MIN "${host_MIN}" SDK "${sdk}"
     COMPILER "${cc_real}" SOURCE "${_MHT_DIR}/tools" BUILD_DIR "${stage}/build" MAKE "${make}" MULLE "${mulle}")
-  _mht_run("configuring the host tools" "${stage}/configure.log" "${CMAKE_COMMAND}" ${args})
-  _mht_run("building the host tools" "${stage}/build.log" "${CMAKE_COMMAND}" --build "${stage}/build")
+  _mht_run("configuring the host tools" "${stage}/configure.log" ${host_LAUNCH} "${CMAKE_COMMAND}" ${args})
+  _mht_run("building the host tools" "${stage}/build.log" ${host_LAUNCH} "${CMAKE_COMMAND}" --build "${stage}/build")
 
   set(stamp "{\"schema\":1,\"files\":{}}")
   foreach(k key host_ARCH sdk_pin source_id)

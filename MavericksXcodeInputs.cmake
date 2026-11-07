@@ -10,8 +10,8 @@
 #   error, never a guess (it names a lone target's variables with no prefix, so those take PREFIXES).
 #   The exporter's output is read as data, never run: every line must have the shape it writes, every
 #   path must be a plain relative path to something inside the project's directory with no CMake syntax
-#   in it, and each target's sources must be exactly the files (with their multiplicity) its sources
-#   phase lists. Only then is <OUTPUT_DIR>/<key>/sources.cmake written, defining for each prefix
+#   in it, and each target's sources, headers and resources must be exactly the entries (with their
+#   multiplicity) its sources, headers and resources phases list. Only then is <OUTPUT_DIR>/<key>/sources.cmake written, defining for each prefix
 #   <P>_SOURCES (code only), <P>_MODELS (Core Data models, which are not compiled), and the exporter's
 #   <P>_INCLUDE_DIRS, <P>_*_HEADERS and <P>_*RESOURCES, each a list of paths relative to the project's
 #   directory, as bracket arguments. <out_var> is set to that file. The same inputs reuse it while it
@@ -137,7 +137,7 @@ function(mavericks_export_xcode_sources out_var)
   file(SHA256 "${project}/project.pbxproj" pbx)
   file(SHA256 "${_MXI_DIR}/MavericksXcodeInputs.cmake" module_sha)
   string(JOIN "\n" identity "schema 1" "project ${pbx}" "targets ${A_TARGETS}" "prefixes ${A_PREFIXES}"
-    "module ${module_sha}" "tools ${tools_key}")
+    "module ${module_sha}" "tools ${tools_key}" "exporter-wrapper ${_MXI_TEST_EXPORTER_WRAPPER}")
   string(SHA256 key "${identity}")
   string(SUBSTRING "${key}" 0 16 short)
   set(entry "${out_real}/${short}")
@@ -168,7 +168,7 @@ function(mavericks_export_xcode_sources out_var)
   foreach(t IN LISTS A_TARGETS)
     list(APPEND mulle_args -t "${t}")
   endforeach()
-  execute_process(COMMAND "${bin}/mulle-xcode-to-cmake" -r ${mulle_args} sexport "${project}"
+  execute_process(COMMAND ${_MXI_TEST_EXPORTER_WRAPPER} "${bin}/mulle-xcode-to-cmake" -r ${mulle_args} sexport "${project}"
     WORKING_DIRECTORY "${src_real}" RESULT_VARIABLE rc OUTPUT_FILE "${stage}/out/sexport.txt"
     ERROR_VARIABLE err)
   if(NOT rc EQUAL 0)
@@ -291,10 +291,41 @@ function(mavericks_export_xcode_sources out_var)
     set(got ${v_${p}_SOURCES})
     list(SORT want)
     list(SORT got)
-    if(NOT want STREQUAL got)
+    if(NOT "${want}" STREQUAL "${got}")
       _mxi_fail("the exporter's ${p}_SOURCES is not ${t}'s sources phase: exporter has [${got}], "
         "the phase lists [${want}]")
     endif()
+    foreach(phase headers resources)
+      set(want)
+      string(JSON nph LENGTH "${audit}" targets "${t}" ${phase})
+      if(nph GREATER 0)
+        math(EXPR phl "${nph} - 1")
+        foreach(s RANGE ${phl})
+          string(JSON path GET "${audit}" targets "${t}" ${phase} ${s} path)
+          list(APPEND want "${path}")
+        endforeach()
+      endif()
+      set(got)
+      if(phase STREQUAL "headers")
+        foreach(kind PUBLIC PROJECT PRIVATE)
+          list(APPEND got ${v_${p}_${kind}_HEADERS})
+        endforeach()
+      elseif("${p}_RESOURCES" IN_LIST vars)
+        set(got ${v_${p}_RESOURCES})
+      else()
+        foreach(v IN LISTS vars)
+          if(v MATCHES "^${p}_([A-Z]+_)?RESOURCES$")
+            list(APPEND got ${v_${v}})
+          endif()
+        endforeach()
+      endif()
+      list(SORT want)
+      list(SORT got)
+      if(NOT "${want}" STREQUAL "${got}")
+        _mxi_fail("the exporter's ${p} ${phase} is not ${t}'s ${phase} phase: exporter has [${got}], "
+          "the phase lists [${want}]")
+      endif()
+    endforeach()
     set(code ${v_${p}_SOURCES})
     list(REMOVE_DUPLICATES models)
     foreach(m IN LISTS models)

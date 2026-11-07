@@ -1,0 +1,8 @@
+#!/bin/sh
+# platform: host-agnostic
+# usage: drop-line LINE EXPORTER ARGS... -- runs the real exporter and drops one output line equal to
+#        LINE, to stand in for an exporter that disagrees with the project's build phases
+line="$1"; shift
+"$@" > "${TMPDIR:-/tmp}/drop-line.$$" || { rc=$?; rm -f "${TMPDIR:-/tmp}/drop-line.$$"; exit "$rc"; }
+awk -v l="$line" 'BEGIN{d=0} $0==l && !d {d=1; next} {print}' "${TMPDIR:-/tmp}/drop-line.$$"
+rm -f "${TMPDIR:-/tmp}/drop-line.$$"

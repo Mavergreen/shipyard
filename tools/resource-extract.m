@@ -8,7 +8,9 @@
  * member ARCHIVE_PREFIX+member (a regular file; kind "file") and stages it at FRESH_DIR/destination,
  * mode 0644, after checking its size and SHA-256 while streaming it. The archive's own SHA-256 is
  * checked before any member is read. PATH, a property list in the archive, must say VERSION as both
- * CFBundleVersion and CFBundleShortVersionString; it is read, never staged. Nothing in the archive is
+ * CFBundleVersion and CFBundleShortVersionString; it is read, never staged. A member that starts like
+ * a Mach-O file (thin or fat, either byte order) is refused: resources never carry upstream code.
+ * Nothing in the archive is
  * run, and no link, directory or mode in it is created. FRESH_DIR must not exist, and its parent must
  * be a real directory, not a link; FRESH_DIR appears complete or not at all. Exit 0 staged, 1 refused (the reason on stderr), 2 on a usage error.
  */
@@ -87,6 +89,10 @@ static BOOL plainRelative(NSString *p)
         return NO;
     if ([p rangeOfCharacterFromSet:[NSCharacterSet controlCharacterSet]].location != NSNotFound)
         return NO;
+    /* platform: CMake reads ; as a list separator and [ ] as bracket syntax, so a name holding one
+     *           could not pass through the CMake wrapper intact */
+    if ([p rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@";[]"]].location != NSNotFound)
+        return NO;
     for (NSString *c in [p componentsSeparatedByString:@"/"])
         if ([c length] == 0 || [c isEqualToString:@"."] || [c isEqualToString:@".."])
             return NO;
@@ -126,6 +132,8 @@ int main(int argc, char **argv)
             die(@"--sha256 is not 64 lowercase hex digits");
         if ([prefix length] && ![prefix hasSuffix:@"/"])
             die(@"--prefix '%@' must end in /", prefix);
+        versionMember = [versionMember precomposedStringWithCanonicalMapping];
+        prefix = [prefix precomposedStringWithCanonicalMapping];
         if (!plainRelative(versionMember))
             die(@"--version-member '%@' is not a plain relative path", versionMember);
 
@@ -145,7 +153,10 @@ int main(int argc, char **argv)
             NSArray *f = [lines[n] componentsSeparatedByString:@"\t"];
             if ([f count] != 5)
                 die(@"manifest line %lu has %lu fields, want 5", (unsigned long)n + 1, (unsigned long)[f count]);
-            NSString *member = f[0], *dest = f[1], *kind = f[2], *bytes = f[3], *sum = f[4];
+            /* platform: macOS stores names decomposed (NFD) in a zip it makes, while a manifest is often
+             *           typed composed (NFC), so names are compared composed */
+            NSString *member = [f[0] precomposedStringWithCanonicalMapping], *dest = f[1], *kind = f[2],
+                     *bytes = f[3], *sum = f[4];
             if (!plainRelative(member) || !plainRelative(dest))
                 die(@"manifest line %lu: '%@' -> '%@' is not a plain relative path", (unsigned long)n + 1, member, dest);
             if (![kind isEqualToString:@"file"])
@@ -216,7 +227,7 @@ int main(int argc, char **argv)
         int rc;
         while ((rc = archive_read_next_header(ar, &e)) == ARCHIVE_OK) {
             const char *raw = archive_entry_pathname(e);
-            NSString *name = raw ? [NSString stringWithUTF8String:raw] : nil;
+            NSString *name = raw ? [[NSString stringWithUTF8String:raw] precomposedStringWithCanonicalMapping] : nil;
             if (name == nil)
                 die(@"the archive has an entry whose name is not UTF-8");
             while ([name hasSuffix:@"/"])
@@ -256,6 +267,8 @@ int main(int argc, char **argv)
             }
             CC_SHA256_Init(&ctx);
             long long total = 0;
+            unsigned char head[4];
+            size_t headLen = 0;
             for (;;) {
                 ssize_t got = archive_read_data(ar, buf, sizeof buf);
                 if (got < 0)
@@ -266,6 +279,8 @@ int main(int argc, char **argv)
                 if (total > limit)
                     die(@"%@ is longer than the manifest's %lld bytes", name, limit);
                 CC_SHA256_Update(&ctx, buf, (CC_LONG)got);
+                for (ssize_t h = 0; h < got && headLen < sizeof head; h++)
+                    head[headLen++] = buf[h];
                 if (isVersion)
                     [versionBytes appendBytes:buf length:(NSUInteger)got];
                 else if (write(out, buf, (size_t)got) != got)
@@ -282,6 +297,14 @@ int main(int argc, char **argv)
                     die(@"%@ says CFBundleVersion %@ and CFBundleShortVersionString %@, not %@", name, v, sv, expect);
                 versionOk = YES;
                 continue;
+            }
+            if (headLen == sizeof head) {
+                uint32_t magic = (uint32_t)head[0] << 24 | (uint32_t)head[1] << 16 | (uint32_t)head[2] << 8 | head[3];
+                uint32_t machO[] = {0xfeedface, 0xfeedfacf, 0xcefaedfe, 0xcffaedfe, 0xcafebabe, 0xbebafeca,
+                                    0xcafebabf, 0xbfbafeca};
+                for (size_t k = 0; k < sizeof machO / sizeof machO[0]; k++)
+                    if (magic == machO[k])
+                        die(@"%@ is a Mach-O executable or library; resources never carry upstream code", name);
             }
             if (fchmod(out, 0644) != 0 || close(out) != 0)
                 die(@"cannot finish %@: %s", dest, strerror(errno));

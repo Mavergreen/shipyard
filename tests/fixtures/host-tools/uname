@@ -1,0 +1,3 @@
+#!/bin/sh
+# platform: host-agnostic
+echo "${FAKE_UNAME_M:-x86_64}"

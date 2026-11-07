@@ -125,6 +125,16 @@ else
   bad "exporter failed on the fixture: $(cat "$w/export.log")"
 fi
 
+echo "== exporter_disagrees (sources, headers, resources)"
+for drop in "Sources/main.m" "Shared/util.h" "README.txt" "Resources/fr.lproj/Main.xib"; do
+  if "$SC" -DMODULE_DIR="$root" -DCOMPILER="$CC" -DPROJECT="$P" "-DTARGETS=App;Lib Thing" "-DPREFIXES=APP;LIB__THING" \
+       -DOUT="$w/out-drop" "-DDROP=$drop" -DRESULT="$w/result" -P "$fx/export.cmake" > "$w/export.log" 2>&1; then
+    bad "exporter_disagrees: an export missing $drop was accepted"
+  fi
+  grep -q 'is not' "$w/export.log" || bad "exporter_disagrees: missing $drop refused for another reason: $(cat "$w/export.log")"
+  rm -rf "$w/out-drop"
+done
+
 echo "== wrong_prefix, unknown_target"
 if export_ "$P" "App;Lib Thing" "APPLICATION;LIB__THING" "$w/out3"; then bad "exporter: a prefix the exporter does not use was accepted"; fi
 if export_ "$P" "Lib Thing" "LIBRARY" "$w/out3b"; then

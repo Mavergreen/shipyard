@@ -252,8 +252,11 @@ mavericks_build_host_tools(tools_bin
   COMPILER    /usr/local/mavergreen/bin/clang-22-cross)   # clang-22 on 10.9
 ```
 
-On Apple Silicon the tools are arm64, against the pinned 11.3 SDK for macOS 11.0, even when CMake
-itself runs under Rosetta; elsewhere they are x86_64, against the pinned 10.9 SDK for 10.9. The
+On Apple Silicon the tools are arm64, against the pinned 11.3 SDK for macOS 11.0. When CMake itself
+runs under Rosetta, the tools' own configure and build are started with `/usr/bin/arch -arm64`, so
+neither they nor the tools run translated; if `sysctl` cannot tell but `uname -m` says arm64, it
+refuses rather than build x86_64 tools. Elsewhere the tools are x86_64, against the pinned 10.9 SDK
+for 10.9. Building them needs `/usr/bin/make`, which is a Command Line Tools stub on every macOS. The
 compiler runs with `--no-default-config` and an explicit target, so clang22's product defaults
 (Recaulk, its libc++, the 10.9 target) never reach a host link, and links with lld. An x86_64 host
 link also passes `-Wl,-U,__availability_version_check`, as clang22's own config does: compiler-rt's
@@ -262,7 +265,8 @@ version-check helper names that libSystem function, which 10.9 lacks and never c
 The tools land in `OUTPUT_ROOT/<key>/bin`, keyed by host arch, compiler, SDK pin, exporter pin and
 this module's own files, beside a stamp of each file's SHA-256. The same inputs reuse the entry once
 it matches its stamp; an entry that does not (changed, unstamped, or left by an interrupted build) is
-set aside as `.rejected-*` and rebuilt, never run. One writer builds per key at a time, and an
+set aside as `.rejected-*` and rebuilt, never run. The stamp guards against accidents, not against
+someone who can write `OUTPUT_ROOT`: keep it private to the build. One writer builds per key at a time, and an
 `OUTPUT_ROOT` inside shipyard or the exporter source is refused. The first build fetches the
 exporter's tarball (verified) and the host's pinned SDK.
 
@@ -283,8 +287,8 @@ include("${sources_cmake}")   # ITERM2_SHARED_SOURCES, ITERM2_MODELS, ...
 more targets, one it does not use is an error (a lone target's variables take its prefix). The
 exporter's `sexport -r` output is read as data, never `include()`d: every line must have the shape it
 writes, and every path must be plain (no `[ ] ; $ " \ ( )`, no `..`, nothing absolute) and lead to
-something inside the project's directory. Each target's list is checked, entry for entry and
-duplicate for duplicate, against `mavericks-xcode-inputs`, which reads the same build phases through
+something inside the project's directory. Each target's sources, headers and resources are checked, entry
+for entry and duplicate for duplicate, against `mavericks-xcode-inputs`, which reads the same build phases through
 Foundation's property-list reader and the project's group tree. Only then does the generated file
 appear, defining for each prefix:
 
@@ -319,8 +323,11 @@ names a regular file under `MEMBER_PREFIX`, where it goes, `file`, and its exact
 `mavericks-resource-extract` checks the archive's SHA-256 before reading any member, reads it with the
 system's libarchive, and stages each selected member only after its type, size and SHA-256 hold while
 it streams (written mode 0644, never as a link). `VERSION_MEMBER` must say `EXPECT_VERSION` as both
-`CFBundleVersion` and `CFBundleShortVersionString`; it is read, not staged. It refuses an unsafe path
-(absolute, `.`, `..`, empty segments), two members with one destination or one inside another, a name
+`CFBundleVersion` and `CFBundleShortVersionString`; it is read, not staged. A member that is a Mach-O
+file (thin or fat) is refused, so upstream code cannot ride in as a resource, and `MEMBER_PREFIX` must
+name a directory. Names are compared in Unicode composed form (a zip made on macOS stores them
+decomposed). It refuses an unsafe path (absolute, `.`, `..`, empty segments, or `;`, `[`, `]`, which
+CMake would read as syntax), two members with one destination or one inside another, a name
 the archive holds twice, a missing member, a damaged, truncated or encrypted archive, and an output
 directory that exists or whose parent is a link. The output appears complete or not at all, and
 nothing outside it is written. On 10.9, libarchive 2.8.3 reads a zip's symbolic link as a regular file

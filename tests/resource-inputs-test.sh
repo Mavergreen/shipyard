@@ -141,6 +141,13 @@ for bad_path in "/etc/passwd" "../Main Menu.nib" "en.lproj/../Main Menu.nib" "./
 done
 { head -1 "$w/good.tsv"; printf 'Main Menu.nib\tMain Menu.nib\tlink\t15\t%s\n' "$(sha "$R/Main Menu.nib")"; } > "$w/kind.tsv"
 refused unknown_kind "MAN=$w/kind.tsv" "WHY=is not file"
+echo "== executable_member"
+mkdir -p "$w/exetree/My App.app/Contents/Resources"
+cp "$w/tree/My App.app/Contents/Info.plist" "$w/exetree/My App.app/Contents/"
+cp "$X" "$w/exetree/My App.app/Contents/Resources/helper"
+(cd "$w/exetree" && zip -qr "$w/exe.zip" "My App.app")
+{ head -1 "$w/good.tsv"; printf 'helper\thelper\tfile\t%s\t%s\n' "$(size "$X")" "$(sha "$X")"; } > "$w/exe.tsv"
+refused executable_member "ARCHIVE=$w/exe.zip" "ASHA=$(sha "$w/exe.zip")" "MAN=$w/exe.tsv" "WHY=is a Mach-O executable or library"
 echo "== duplicate_archive_name"
 mkdir -p "$w/duptree/My App.app/Contents/Resources"
 cp "$w/tree/My App.app/Contents/Info.plist" "$w/duptree/My App.app/Contents/"
@@ -162,6 +169,37 @@ ln -s "$w/tree/My App.app/Contents/Resources" "$w/into-tree"
 if run "$w/into-tree/out"; then bad "escaping_output_parent: accepted"; fi
 [ ! -e "$R/out" ] || bad "escaping_output_parent: wrote into the linked directory"
 if run "relative/out"; then bad "relative_output: accepted"; fi
+
+echo "== utf8_names_and_list_separators"
+mkdir -p "$w/utftree/My App.app/Contents/Resources"
+cp "$w/tree/My App.app/Contents/Info.plist" "$w/utftree/My App.app/Contents/"
+U="$w/utftree/My App.app/Contents/Resources"
+utf="$(printf 'Pr\303\251f.nib')"
+printf 'pref\n' > "$U/$utf"
+printf 'semi\n' > "$U/a;b.nib"
+(cd "$w/utftree" && zip -qr "$w/utf.zip" "My App.app")
+{ head -1 "$w/good.tsv"; printf '%s\t%s\tfile\t%s\t%s\n' "$utf" "$utf" "$(size "$U/$utf")" "$(sha "$U/$utf")"; } > "$w/utf.tsv"
+{ head -1 "$w/good.tsv"; printf 'a;b.nib\ta;b.nib\tfile\t5\t%s\n' "$(sha "$U/a;b.nib")"; } > "$w/semi.tsv"
+refused list_separator_name "ARCHIVE=$w/utf.zip" "ASHA=$(sha "$w/utf.zip")" "MAN=$w/semi.tsv" "WHY=is not a plain relative path"
+utf_ex() {
+  "$SC" -DMODULE_DIR="$root" -DCOMPILER="$CC" -DARCHIVE="$w/utf.zip" -DSHA="$(sha "$w/utf.zip")" -DMANIFEST="$w/utf.tsv" \
+    "-DPREFIX=$PREFIX" "-DVERSION_MEMBER=$VER" -DEXPECT=3.0.15 -DOUT="$w/res-utf" -DRESULT="$w/result" \
+    -P "$fx/extract.cmake" > "$w/ex.log" 2>&1
+}
+if utf_ex; then
+  cmp -s "$(cat "$w/result")/$utf" "$U/$utf" || bad "utf8: the wrapper staged the UTF-8 name wrongly"
+  utf_ex || bad "utf8: reusing a UTF-8 name failed: $(cat "$w/ex.log")"
+else
+  bad "utf8: the wrapper refused a UTF-8 member name: $(cat "$w/ex.log")"
+fi
+
+echo "== wrapper: empty_member_prefix"
+if "$SC" -DMODULE_DIR="$root" -DCOMPILER="$CC" -DARCHIVE="$w/app.zip" -DSHA="$ZSHA" -DMANIFEST="$w/good.tsv" \
+     "-DPREFIX=" "-DVERSION_MEMBER=$VER" -DEXPECT=3.0.15 -DOUT="$w/res-noprefix" -DRESULT="$w/result" \
+     -P "$fx/extract.cmake" > "$w/ex.log" 2>&1; then
+  bad "wrapper: an empty MEMBER_PREFIX was accepted"
+fi
+grep -q 'MEMBER_PREFIX must name' "$w/ex.log" || bad "wrapper: empty MEMBER_PREFIX refused for another reason: $(cat "$w/ex.log")"
 
 echo "== wrapper: same_input_reconfigure, tampered_output_refused"
 ex() {
