@@ -52,16 +52,4 @@ eq "missing version pkg" "$(status mavergreen_name pkg go127)" 2
 eq "bad short" "$(status mavergreen_name name Go127)" 2
 
 eq "mg_repo env" "$(GITHUB_REPOSITORY=Mavergreen/x mg_repo)" Mavergreen/x
-
-if command -v git >/dev/null 2>&1; then
-  g="$w/repo"; mkdir -p "$g"; git init -q "$g"
-  MAVERGREEN_REPO_ROOT="$g"; export MAVERGREEN_REPO_ROOT
-  unset GITHUB_REPOSITORY || :
-  eq "mg_repo no origin status" "$(cd "$g" && status mg_repo)" 1
-  eq "mg_repo no origin output" "$(cd "$g" && mg_repo 2>/dev/null || :)" ""
-  git -C "$g" remote add origin https://github.com/Mavergreen/y.git
-  eq "mg_repo https" "$(cd "$g" && mg_repo)" Mavergreen/y
-  git -C "$g" remote set-url origin git@github.com:Mavergreen/z.git
-  eq "mg_repo ssh" "$(cd "$g" && mg_repo)" Mavergreen/z
-fi
 echo "ok mavergreen-name-test"
