@@ -45,16 +45,16 @@ for _pd in "$root"/.mavergreen/products/*/; do
   printf 'product %s\n' "$_p"
   _dv=""
   for _q in bundle-id agent-label app feed; do
-    _rc=0; _v="$(sh "$SELF/updater-identity.sh" "$_q" "$_p" 2>/dev/null)" || _rc=$?
+    _rc=0; _v="$(sh "$SELF/updater-identity.sh" "$_q" "$_p" 2>&1)" || _rc=$?
     case "$_q.$_rc" in
       *.0) ;;
       feed.2) _v=none ;;
-      *) _dv=""; break ;;
+      *) abort "cannot derive $_p's updater identity: $(printf '%s' "$_v" | tr '\n' ' ')" ;;
     esac
     [ "$_q" != app ] || _v="$(printf '%s' "$_v" | af_enc)"
     _dv="$_dv $_v"
   done
-  [ -z "$_dv" ] || printf 'derived %s%s\n' "$_p" "$_dv"
+  printf 'derived %s%s\n' "$_p" "$_dv"
 done
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and

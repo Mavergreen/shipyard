@@ -358,7 +358,7 @@ EOF
       want_ma=none
     fi
     ma="$(awk -v p="$pk" '$1 == "manifest-appcast" && $2 == p { print $3; exit }' "$facts")"
-    [ -z "$ma" ] || [ "$ma" = "$want_ma" ] \
+    [ -z "$ma" ] || [ "$ma" = "$want_ma" ] || { [ "$want_ma" = none ] && [ -s "$tmp/sparkle-$pk" ]; } \
       || fail feed "$pk's manifest names the feed '$ma'; it should name '$want_ma' (a product with no updater names none)" "$pk"
     awk -v p="$pk" '$1 == "launchd" && $2 == p && index($4, "updatecheck") { print $4 }' "$facts" > "$tmp/uc-$pk"
     while read -r ul; do
@@ -526,8 +526,8 @@ done < "$facts"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Family conventions" check 37 --
 #       a pkg ships x86_64 unless .mavergreen/deviations/arm64/ declares a scope for the install
-#       path; a Sparkle updater's slices are exempt, and where the registry derives the product's
-#       updater, only that bundle's. A repo grandfathered as modern-smoke is warned.
+#       path; a Sparkle updater's slices are exempt, and where the product's updater is derived,
+#       only that bundle's. A repo grandfathered as modern-smoke is warned.
 arm_gf=no
 [ -n "$repository" ] && [ -f "$SELF/conventions-grandfathered" ] \
   && grep -qxF "modern-smoke ${repository#*/} release.yml:modern-smoke" "$SELF/conventions-grandfathered" && arm_gf=yes

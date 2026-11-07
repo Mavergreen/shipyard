@@ -9,7 +9,8 @@ helper; its product equal to its directory; its identifier dev.mavergreen.<produ
 of the pkg's components; its outside list naming every file installed outside the tree, exactly as
 uninstall would remove it (the entry, or a bundle directory and what is inside it), with no entry left
 unused and none in a shape the helper refuses; and every generated entry in a shape the helper accepts.
-stage_product.sh writes the manifest; never write it by hand.
+stage_product.sh writes the manifest; never write it by hand. Whether the product is one this repo
+declares in .mavergreen/products/ is the repository check's to say, not this one's.
 
 ## Incident
 None recorded.

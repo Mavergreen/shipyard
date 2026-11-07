@@ -1178,6 +1178,9 @@ $(printf '%s\n' "$UPD" | sed '/^derived /s| [^ ]*$| none|')"
 alone "feed: an updater whose repo is unknown fails only feed" "feed" "$REL
 $FEED
 $(printf '%s\n' "$UPD" | sed '/^derived /s| [^ ]*$| none|')"
+_none="$(printf '%s\n%s\n%s\nend-of-facts\n' "$REL" "$FEED" "$(printf '%s\n' "$UPD" | sed '/^derived /s| [^ ]*$| none|')" | sh "$S" 2>&1)" || :
+printf '%s\n' "$_none" | grep -q "should name 'none'" \
+  && { echo "FAIL: an underivable feed is one failure, not also a manifest that 'should name none': $_none"; exit 1; }
 alone "feed: a release with feeds but not this updater's" "feed" "$REL
 asset y.xml 700
 appcast y.xml 1.0.0-mavericks.1 p.pkg 10 10.9.5
@@ -1340,6 +1343,11 @@ PLIST
   printf '%s\n' "$_fq" | grep -qxF 'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app none' \
     || { echo "FAIL: with no repo to name, the updater's identity is still derived and its feed is none: $_fq"; exit 1; }
   printf '%s\n' "$_fq" | grep -q '^abort' && { echo "FAIL: an unknown repo is not a reason to stop the stream: $_fq"; exit 1; }
+  rm -f "$_pk/.mavergreen/products/w/noun"
+  _nn=0; _fw="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk" 2>"$_pk/err")" || _nn=$?
+  [ "$_nn" -ne 0 ] && printf '%s\n' "$_fw" | grep -q '^abort cannot derive w' && grep -q 'noun' "$_pk/err" \
+    || { echo "FAIL: a declared product whose identity cannot be derived stops the stream, saying why: $_fw $(cat "$_pk/err")"; exit 1; }
+  printf 'W\n' > "$_pk/.mavergreen/products/w/noun"
   rm -rf "$_pk/.mavergreen/products/x"
   _fn="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
   printf '%s\n' "$_fn" | grep -q '^derived x ' \
