@@ -8,7 +8,7 @@
 #       an earlier verdict. MAVERGREEN_OBJC_CODEX_ARTIFACT, when set, is the original Codex 0.165.0
 #       binary, which must fail on its NSWorkspace launch. MAVERGREEN_OBJC_RECAULK_PREFIX and
 #       MAVERGREEN_OBJC_RECAULK_RECEIPT, when both set, are a staged Recaulk provider and its source
-#       receipt (tests/objc-provider-test.sh header): the guard on a consumer linked with it must
+#       receipt (Drydock's tests/objc/objc-provider-test.sh header): the guard on a consumer linked with it must
 #       agree with its report, passing exactly when no finding blocks and otherwise naming each
 #       one. A consumer linked with the fixture provider (tests/lib/objc_fixture_provider.sh) must
 #       pass on every host. Nothing built here is executed.
@@ -24,7 +24,10 @@ unset MAVERICKS_ALLOW_SELECTORS MAVERICKS_POST_10_9_SELECTORS MAVERICKS_ALLOW_AR
   MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT \
   MAVERGREEN_OBJC_REPORT_DIR MAVERGREEN_OBJC_REFERENCES OBJC_COMPAT MAVERICKS_DEVIATIONS_ROOT MAVERGREEN_OBJC_STRICT
 
+unset MAVERGREEN_DRYDOCK_PREFIX
 SDK=$(sh "$ROOT/scripts/fetch_sdk.sh" --arch x86_64)
+# spec: scripts/objc-reference-dir.sh header -- the reference set the guard defaults to, named where a test needs it.
+REFS=$(sh "$ROOT/scripts/objc-reference-dir.sh")
 # platform: env -i keeps CPATH and SDKROOT from steering the fixtures away from the pinned SDK.
 cc() { env -i PATH=/usr/bin:/bin /usr/bin/clang -arch x86_64 -isysroot "$SDK" -mmacosx-version-min=10.9 -O1 "$@"; }
 sha() { shasum -a 256 "$1" | cut -c1-64; }
@@ -121,13 +124,14 @@ passes MAVERGREEN_OBJC_ROOT="$T/root"
 BIN="$q/bin x"; want=1
 fails MAVERGREEN_OBJC_ROOT="$T/root"; says 'openURLs:'
 
-# spec: scripts/assert_binary_compatible.sh header -- an analyzer that is missing or cannot be built is cannot-measure, never a skip.
+# spec: scripts/assert_binary_compatible.sh header -- an analyzer or a reference set that is missing or cannot be fetched is
+#       cannot-measure, never a skip.
 label='missing analyzer'; BIN="$T/root/bin/consumer"; want=4
 fails OBJC_COMPAT="$T/no-analyzer"; says 'CANNOT MEASURE'
-label='analyzer that cannot be built'; want=4
-fails MAVERICKS_SOURCE_CACHE="$T/no-sources" MAVERICKS_CODELOAD="file://$T/no-codeload" MAVERGREEN_OBJC_COMPAT_CACHE="$T/no-cache"; says 'CANNOT MEASURE'
-label='analyzer with no toolchain'
-fails MAVERGREEN_OBJC_CLANG_PREFIX="$T/no-clang" MAVERGREEN_OBJC_COMPAT_CACHE="$T/no-cache"; says 'CANNOT MEASURE'
+label='an analyzer that cannot be fetched'; want=4
+fails MAVERGREEN_OBJC_REFERENCES="$REFS" MAVERGREEN_DRYDOCK_PREFIX="$T/no-drydock"; says 'CANNOT MEASURE'; says 'the pinned Drydock could not be had'
+label='no reference set to be had'
+fails MAVERGREEN_DRYDOCK_PREFIX="$T/no-drydock"; says 'CANNOT MEASURE'; says 'no Objective-C reference set'
 
 # spec: scripts/assert_binary_compatible.sh header -- every run measures afresh: a kept clean report is never reused, and the
 #       same path holding new bytes gets the new verdict.
@@ -137,6 +141,11 @@ label='kept report'; BIN="$T/root/swap/tool"
 passes MAVERGREEN_OBJC_REPORT_DIR="$T/reports"
 ls "$T/reports"/* >/dev/null 2>&1 || fail 'kept report: MAVERGREEN_OBJC_REPORT_DIR holds no report'
 grep -F "\"sha256\": \"$(sha "$BIN")\"" "$T/reports"/* >/dev/null || fail 'kept report: it does not name the binary'
+# spec: scripts/objc-compat.sh header -- the analyzer is the pinned Drydock's drydock-objc, and its report says so.
+DRYDOCK_V=$(sed 's/^v//' "$ROOT/components/drydock/version")
+grep -F "\"analyzer\": \"drydock-$DRYDOCK_V-objc-src-" "$T/reports"/* >/dev/null ||
+  fail "kept report: its analyzer is not drydock-$DRYDOCK_V's ($(grep -o '"analyzer": "[^"]*"' "$T/reports"/* | head -1))"
+grep -o '"analyzer": "[^"]*"' "$T/reports"/* | head -1 | sed 's/^/objc-guard: /'
 cp "$T/root/bin/consumer" "$T/root/swap/tool"
 label='the same path, new bytes'; want=1
 fails X=1; says 'openURLs:'
@@ -230,7 +239,7 @@ linked_consumer() {
   cc "$FX/provider-consumer.m" "$@" -o "$lc_dir/root/bin/rooted"
   set --
   sh "$ROOT/scripts/objc-build-evidence.sh" --artifact "$lc_dir/root/bin/rooted" --prestrip "$lc_dir/root/bin/rooted" --source-root "$FX" \
-    --link-map "$lc_dir/rooted.map" --provider-prefix "$lc_pfx" --references "$ROOT/reference/objc" --output "$lc_dir/ev.json"
+    --link-map "$lc_dir/rooted.map" --provider-prefix "$lc_pfx" --references "$REFS" --output "$lc_dir/ev.json"
 }
 # spec: tests/lib/objc_fixture_provider.sh -- fixture_prefix DIR [CC-FLAGS] and declare_prefix DIR RECEIPT.
 . "$HERE/lib/objc_fixture_provider.sh"

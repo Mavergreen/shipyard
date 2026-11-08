@@ -1,6 +1,6 @@
 # platform: macOS-only -- libtool and the caller's pinned-SDK cc
 # spec: tests/fixtures/objc-api/provider-register.c header -- the fixture Objective-C provider, shared by
-#       objc-provider-test.sh and objc-guard-test.sh; tests/lib/ is not itself run, since
+#       Drydock's tests/objc/objc-provider-test.sh and objc-guard-test.sh; tests/lib/ is not itself run, since
 #       run-repo-tests.sh takes top-level tests only. The caller defines cc (the pinned-SDK compiler),
 #       sha (a file's SHA-256), SDK, FX (tests/fixtures/objc-api) and T (its scratch directory).
 # spec: tests/fixtures/objc-api/provider-register.c header -- fixture_prefix DIR [CC-FLAGS]: the fixture provider at

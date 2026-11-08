@@ -11,13 +11,13 @@
 #          (2) is a selector list unless the caller opts in with MAVERGREEN_OBJC_STRICT=1. Opted in, (2) is
 #          the strict Objective-C analyzer (scripts/objc-compat.sh) run on the binary as shipped: every
 #          send it finds unsupported or unresolved against the versioned reference set
-#          (reference/objc) fails, with no selector list anywhere, and one it cannot measure is
+#          (scripts/objc-reference-dir.sh) fails, with no selector list anywhere, and one it cannot measure is
 #          cannot-measure. Each run measures afresh; no earlier report is an input. Opted in, a declared
 #          "- objc-api:<glob>: evidence=<file>#<record id> <review reason>" deviation whose glob matches
 #          the file's path RELATIVE TO MAVERGREEN_OBJC_ROOT hands that reviewed record (a plain file
 #          inside MAVERICKS_DEVIATIONS_ROOT) to the analyzer, which excuses the one blocking finding the
 #          record names exactly -- artifact, site, receiver, kind, selector, digests, basis, reviewer,
-#          the declared reason and a retirement condition (tools/objc-compat/main.m "objc-api scoped
+#          the declared reason and a retirement condition (Drydock's src/objc/main.m "objc-api scoped
 #          deviations"); the finding stays in the report, and the guard says which deviation applied.
 #          Exit 0 clean, 1 a check failed, 2 misuse (MAVERGREEN_OBJC_STRICT neither 1 nor unset, an
 #          analyzer knob without it, a selector knob with it, evidence for more than one binary, a
@@ -41,8 +41,8 @@
 #                                               dependencies in, and names it relative to (default:
 #                                               the binary's own directory). Every binary must be
 #                                               inside it.
-#            MAVERGREEN_OBJC_REFERENCES         the reference set (default: this shipyard's
-#                                               reference/objc).
+#            MAVERGREEN_OBJC_REFERENCES         the reference set (default: the pinned Drydock's,
+#                                               scripts/objc-reference-dir.sh).
 #            MAVERGREEN_OBJC_BUILD_EVIDENCE     schema-1 build evidence (scripts/objc-build-evidence.sh),
 #            MAVERGREEN_OBJC_PROVIDER_PREFIX    an Objective-C provider prefix, and
 #            MAVERGREEN_OBJC_SOURCE_RECEIPT     the provider body's source receipt, each passed to the
@@ -53,8 +53,9 @@
 #                                               N.<basename>.objc-compat.json; one already there is
 #                                               never replaced (the guard fails instead).
 #            OBJC_COMPAT                       the analyzer command (default: sh objc-compat.sh beside
-#                                               this script). An analyzer that is missing, fails to
-#                                               build or cannot measure is fail-closed.
+#                                               this script, the pinned Drydock's drydock-objc). An
+#                                               analyzer that is missing, cannot be fetched or cannot
+#                                               measure is fail-closed.
 #          Shared:
 #            MAVERICKS_REQUIRE_DEFINED_SYMBOLS symbols that MUST be DEFINED (a project's 10.9 shims).
 #            LIPO, NM, STRINGS, OTOOL          the Mach-O readers (default: lipo, nm, strings and
@@ -129,7 +130,12 @@ POST_10_9_SEL='labelColor|secondaryLabelColor|tertiaryLabelColor|quaternaryLabel
 [ -n "${MAVERICKS_POST_10_9_SELECTORS:-}" ] && POST_10_9_SEL="$POST_10_9_SEL|$MAVERICKS_POST_10_9_SELECTORS"
 ALLOW_SEL="${MAVERICKS_ALLOW_SELECTORS:-}"
 ALLOW_ARCHS="$(printf '%s\n' ${MAVERICKS_ALLOW_ARCHS:-x86_64} | sort -u | xargs)"
-OBJC_REFS="${MAVERGREEN_OBJC_REFERENCES:-$SELF/../reference/objc}"
+OBJC_REFS="${MAVERGREEN_OBJC_REFERENCES:-}"
+# spec: scripts/objc-reference-dir.sh header -- the default reference set is the pinned Drydock's, resolved only when the
+#       analyzer will run; one that cannot be had is cannot-measure.
+if [ -n "$OBJC_STRICT" ] && [ -z "$OBJC_REFS" ]; then
+  OBJC_REFS="$(sh "$SELF/objc-reference-dir.sh")" || shipyard_die "no Objective-C reference set: objc-reference-dir.sh said why above"
+fi
 if [ -n "${MAVERGREEN_OBJC_BUILD_EVIDENCE:-}" ] && [ "$#" -ne 1 ]; then
   shipyard_misuse "MAVERGREEN_OBJC_BUILD_EVIDENCE is bound to one artifact: give exactly one binary, not $#"
 fi
@@ -180,7 +186,7 @@ shipyard_objc() {  # $1 binary, $2 report
     [ -x "$OBJC_COMPAT" ] || { echo "OBJC_COMPAT $OBJC_COMPAT is not an executable" >"$work/objc.err"; objc_rc=4; return; }
     "$OBJC_COMPAT" "$@" >"$work/objc.err" 2>&1 || objc_rc=$?
   else sh "$SELF/objc-compat.sh" "$@" >"$work/objc.err" 2>&1 || objc_rc=$?; fi
-  # spec: tools/objc-compat/main.m header -- a verdict comes with its strict report: 0 only from a complete one, 1
+  # spec: Drydock's src/objc/main.m header -- a verdict comes with its strict report: 0 only from a complete one, 1
   #       only with the blocking findings it names. Anything else is not a measurement.
   case "$objc_rc" in
     0) grep -F '"mode": "strict", "complete_within_boundary": true,' "$_objc_report" >/dev/null 2>&1 ||

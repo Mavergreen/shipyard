@@ -348,8 +348,9 @@ shipyard's facilities rather than trusting the runner:
     the guard's Objective-C check is a short selector list (`labelColor` and friends): it catches only what
     it names, and Codex 0.165.0 aborted on 10.9 on a send no list held. A repo opts in with
     `mavericks_assert_binary_compatible(<target> OBJC_STRICT)`, or `MAVERGREEN_OBJC_STRICT=1` for
-    `assert_binary_compatible.sh`: the guard then runs the strict analyzer (`scripts/objc-compat.sh`) on each
-    binary's x86_64 slice against the versioned reference set (`reference/objc`), and any send it finds
+    `assert_binary_compatible.sh`: the guard then runs the strict analyzer (`scripts/objc-compat.sh`, the pinned
+    Drydock's `drydock-objc`) on each binary's x86_64 slice against that release's reference set
+    (`scripts/objc-reference-dir.sh`), and any send it finds
     unsupported or unresolved fails, and one it cannot examine fails as cannot-measure. A binary whose
     receivers need build evidence (a Rust objc2 binding, an Objective-C provider such as Recaulk's) passes it
     through `MAVERGREEN_OBJC_BUILD_EVIDENCE`, `MAVERGREEN_OBJC_PROVIDER_PREFIX` and

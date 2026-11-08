@@ -12,8 +12,9 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/guard-exempt-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
-mkdir -p "$w/scripts" "$w/bin" "$w/repo" "$w/build/bin"
-for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh; do
+# spec: scripts/objc-reference-dir.sh header -- laid out as an install, with a staged reference set, so nothing is fetched.
+mkdir -p "$w/scripts" "$w/bin" "$w/repo" "$w/build/bin" "$w/reference/objc"
+for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh objc-reference-dir.sh; do
   cp "$here/../scripts/$s" "$w/scripts/"
 done
 cat > "$w/scripts/macho-slices.sh" <<'EOF'
