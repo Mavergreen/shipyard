@@ -10,20 +10,26 @@
 #            expected      <version>                              the version this release claims to be
 #            upstream-kind <port|own>                             whether the repo ports an upstream or is its own
 #            pkg           <file> <version> <floor> <identifier>  one per shipped .pkg
-#            component     <file> <identifier>                    one per component, in Distribution order
+#            pkg-title     <file> <title|none>                    a product archive's Distribution title (%20-encoded)
+#            component     <file> <identifier> <name|none>        one per component, in Distribution order; its pkg-ref name
 #            installs      <file> <path>                          one per installed file or link (%20-encoded)
 #            bundle        <file> <path> <CFBundleIdentifier>     one per top-level bundle
+#            bundle-name   <file> <path> <CFBundleName|none> <CFBundleDisplayName|none>  one per top-level bundle (%20-encoded)
 #            launchd       <file> <path> <Label>                  one per launchd job
 #            manifest      <file> <product> <identifier> <dir>    one per usr/local/mavergreen/<dir>/mavergreen.plist
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
 #            product       <product>                              one per directory in the repo's .mavergreen/products/
 #            derived       <product> <bundle-id> <label> <app> <feed|none>  the updater identity derived for it
+#            name          <product> <surface> <value>            mavergreen_name's value, at the expected version (%20-encoded)
+#            app           <product> <noun|upstream|none>         how the product's .app is named
+#            manifest-name <file> <name|none>                     that manifest's name (%20-encoded)
 #            manifest-line <file> <line|none>                     that manifest's line
 #            manifest-appcast <file> <url|none>                   that manifest's appcast
 #            sparkle       <file> <path> <SUFeedURL>              one per top-level bundle carrying a Sparkle feed
 #            repository    <owner/name>                           the repo the release is built in (mg_repo), when known
 #            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
+#            appcast-title <file> <channel|none> <item|none>      that feed's channel and first item titles (%20-encoded)
 #            asset         <file> <bytes>                         one per file that will be published
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
 #            cxxabi-defines <artifact> <path> <arch> <symbol> <visible|hidden>  one per C++ runtime symbol a slice defines beyond Recaulk's back-fills
@@ -95,8 +101,9 @@ kind_ran() {  # $1 = the fact kind the ids read, $2 = what it is called, then th
 }
 chk_ran version-scheme
 if has pkg || has appcast; then chk_ran version; else chk_notrun version "no .pkg or appcast in this release"; fi
-kind_ran pkg .pkg floor identifier bundle-id launchd-label manifest base line install-path feed updater repository arm64
-kind_ran appcast appcast enclosure length enclosure-url notes
+kind_ran pkg .pkg floor identifier bundle-id launchd-label manifest base line install-path feed updater repository arm64 \
+  pkg-name installer-title manifest-name app-name
+kind_ran appcast appcast enclosure length enclosure-url notes feed-title
 kind_ran build-info "build record" variant-build-info
 kind_ran macho Mach-O sdk-pin cxxabi
 
@@ -105,8 +112,13 @@ rule_of() {
     version-scheme) echo "a port's release version is <upstream>-mavergreen.N, and an own-upstream repo's is YYYYMMDD.N" ;;
     version) echo "every artifact names the version the release claims" ;;
     floor) echo "a product archive declares an install floor of 10.9.5, and a component package an appcast that declares its minimum" ;;
-    identifier) echo "a pkg identifier is inside dev.mavergreen.*" ;;
+    identifier) echo "a pkg identifier is inside dev.mavergreen.*, and a product's is its derived one" ;;
     bundle-id) echo "an installed bundle's identifier is inside dev.mavergreen.*" ;;
+    pkg-name) echo "a product's pkg and its component are named as derived from the product" ;;
+    installer-title) echo "a product's Installer title is the one derived from the product" ;;
+    feed-title) echo "a product's feed carries the channel and item titles derived from the product" ;;
+    manifest-name) echo "a product's manifest carries the name derived from the product" ;;
+    app-name) echo "a product's .app is named as its app file says, and its bundle name agrees with its filename" ;;
     launchd-label) echo "a launchd job's Label is inside dev.mavergreen.* and names its plist" ;;
     manifest) echo "a pkg that installs a product carries exactly one valid manifest, and installs only what it lists" ;;
     base) echo "a pkg that installs a product has dev.mavergreen.base as its first component" ;;
@@ -130,12 +142,17 @@ fix_of() {
     version-scheme) echo "version a port <upstream>-mavergreen.N (1.2.3-mavergreen.1) and an own-upstream repo YYYYMMDD.N (20261006.1), or declare .mavergreen/deviations/version-scheme/<label>/ (scope *, a reason, a revisit)" ;;
     version) echo "rebuild the artifact with the release version, or remove the stale one from dist/" ;;
     floor) echo "wrap the component with set_install_floor.sh (10.9.5), or have the appcast declare sparkle:minimumSystemVersion; or declare .mavergreen/deviations/floor/<label>/ (scope <glob>, a reason, a revisit)" ;;
-    identifier) echo "give the pkg an identifier beginning dev.mavergreen., or declare .mavergreen/deviations/identifier/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    identifier) echo "build the pkg with set_install_floor.sh --short <short>, whose identifier is dev.mavergreen.<short>, or declare .mavergreen/deviations/identifier/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    pkg-name) echo "build the pkg with set_install_floor.sh --short <short> --dist DIR (or package-system-replace.sh), which derive both names, and do not rename it" ;;
+    installer-title) echo "build the pkg with set_install_floor.sh --short <short>, which titles it Mavergreen <name> from .mavergreen/products/<short>/" ;;
+    feed-title) echo "generate the feed with gen_appcast.sh <short>, which derives both titles from .mavergreen/products/<short>/" ;;
+    manifest-name) echo "write the manifest with render-manifest.sh --product <short>, which derives its name from .mavergreen/products/<short>/" ;;
+    app-name) echo "name an app = noun bundle <noun>.app with CFBundleName and CFBundleDisplayName the noun and CFBundleIdentifier dev.mavergreen.<short>; keep an app = upstream bundle's CFBundleName equal to its filename, with no other CFBundleDisplayName" ;;
     bundle-id) echo "give the bundle a CFBundleIdentifier beginning dev.mavergreen., or declare .mavergreen/deviations/bundle-id/<label>/ (scope <its identifier>, a reason, a revisit)" ;;
     launchd-label) echo "name the job dev.mavergreen.<name> and its plist <Label>.plist, or declare .mavergreen/deviations/launchd-label/<label>/ (scope <its Label>, a reason, a revisit)" ;;
     manifest) echo "install usr/local/mavergreen/<product>/mavergreen.plist (render-manifest.sh writes it), listing every file outside the product's tree under outside" ;;
     base) echo "build the product archive with set_install_floor.sh, which lists dev.mavergreen.base first" ;;
-    line) echo "declare the product's line in its manifest and release it from the repo named for that line, or fix the version" ;;
+    line) echo "write .mavergreen/products/<short>/line (dotted, like 1.27), render the manifest from it with render-manifest.sh, and release from the repo whose suffix is that line without dots, or fix the version" ;;
     install-path) echo "install under usr/local/mavergreen/<product> (list the exceptions in the manifest's outside), or declare .mavergreen/deviations/install-path/<label>/ (scope <glob>, a reason, a revisit)" ;;
     feed) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>), name the feed <product>.xml, and point the manifest's appcast at it" ;;
     updater) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>) and ship its LaunchAgent" ;;
@@ -243,8 +260,15 @@ done < "$facts"
 #       identity" -- SIBLINGS: what a pkg installs carries the family's identity. A deviation for these
 #       is scoped to the bundle identifier or Label it excuses, not to the pkg that ships it.
 dec() { printf '%s' "$1" | sed -e 's/%20/ /g' -e 's/%25/%/g'; }
+awk '$1 == "app" && $3 == "upstream" { up[$2] = 1 }
+     $1 == "manifest" { m[$2] = $5 }
+     $1 == "bundle" { b[++n] = $2 " " $3 }
+     END { for (i = 1; i <= n; i++) { split(b[i], f, " ")
+             if ((f[1] in m) && (m[f[1]] in up) && f[2] ~ /\.app$/ && index(f[2], "Library/Application%20Support/Mavergreen/") != 1) print b[i] } }' \
+  "$facts" > "$tmp/upstream-apps"
 while read -r kind file path id; do
   [ "$kind" = bundle ] || continue
+  ! grep -qxF "$file $path" "$tmp/upstream-apps" || continue
   case "$id" in
     dev.mavergreen.*) : ;;
     *) fail bundle-id "$file installs $(dec "$path") as '$id', outside dev.mavergreen.*" "$id" ;;
@@ -340,10 +364,14 @@ done
 #       feed are the derived record's, a lined product's line is its version and its repo's suffix,
 #       and every product a release ships is one this repo declares.
 repository="$(sed -n 's/^repository \([^ ][^ ]*\)$/\1/p' "$facts" | head -1)"
-up="${expected%%-mavergreen.*}"; up="${up#v}"
-c1="${up%%.*}"; c12=""
-case "$up" in *.*) _r="${up#*.}"; c12="$c1${_r%%.*}" ;; esac
+up="${expected#v}"; up="${up%-mavergreen.*}"
 repo="${repository#*/}"
+nm() { awk -v p="$1" -v s="$2" '$1 == "name" && $2 == p && $3 == s { print $4; exit }' "$facts"; }
+noun_of() { _it="$(nm "$1" item-title)"; printf '%s' "${_it%"%20$up"}"; }
+line_of() {
+  _no="$(noun_of "$1")"; _mn="$(nm "$1" manifest-name)"
+  [ "$_mn" = "$_no" ] || printf '%s' "${_mn#"$_no%20"}"
+}
 while read -r pk P; do
   awk -v m="$P" '$1 == "product" && $2 == m { f = 1 } END { exit !f }' "$facts" \
     || fail repository "$pk ships $P, which this repo does not declare in .mavergreen/products/$P/" "$pk"
@@ -385,22 +413,112 @@ EOF
   fi
   ml="$(awk -v p="$pk" '$1 == "manifest-line" && $2 == p { print $3; exit }' "$facts")"
   case "$ml" in ''|none|cross) lv="" ;; *-cross) lv="${ml%-cross}" ;; *) lv="$ml" ;; esac
+  if [ -n "$(nm "$P" item-title)" ]; then
+    pl="$(line_of "$P")"
+    [ "$lv" = "$pl" ] \
+      || fail line "$pk's manifest declares line '${ml:-none}', but .mavergreen/products/$P/line is '${pl:-none}'" "$pk"
+  fi
   case "$repo" in
     *-*) case "${repo##*-}" in
            ''|*[!0-9]*) : ;;
-           *) [ -n "$lv" ] || fail line "$pk ships $P from the line repo $repo, so its manifest must declare line ${repo##*-} (or ${repo##*-}-cross); it declares '${ml:-none}'" "$pk" ;;
+           *) [ -n "$lv" ] || fail line "$pk ships $P from the line repo $repo, so its manifest must declare the line whose digits are ${repo##*-}; it declares '${ml:-none}'" "$pk" ;;
          esac ;;
   esac
   if [ -n "$lv" ]; then
+    ls_="$(printf '%s' "$lv" | tr -d .)"
     case "$repo" in
-      *-"$lv") : ;;
+      *-"$ls_") : ;;
       '') : ;;
-      *) fail line "$pk is line $ml, so its repo is <product>-$lv, but this release is built in $repository" "$pk" ;;
+      *) fail line "$pk is line $lv, so its repo is <product>-$ls_, but this release is built in $repository" "$pk" ;;
     esac
-    [ "$lv" = "$c1" ] || [ "$lv" = "$c12" ] \
-      || fail line "$pk is line $ml, but version $expected is line $c1${c12:+ or $c12}" "$pk"
+    case "$up" in
+      "$lv"|"$lv".*) : ;;
+      *) fail line "$pk is line $lv, but version $expected is not $lv or $lv.<more>" "$pk" ;;
+    esac
   fi
 done < "$tmp/prod-of"
+
+nonbase() { awk -v p="$1" '$1 == "component" && $2 == p && $3 != "dev.mavergreen.base" { print $3, ($4 == "" ? "none" : $4) }' "$facts"; }
+while read -r pk P; do
+  want_id="$(nm "$P" identifier)"
+  [ -n "$want_id" ] || continue
+  want_pkg="$(nm "$P" pkg)"; want_comp="$(nm "$P" component)"
+  [ "$pk" = "$want_pkg" ] || fail pkg-name "$pk carries $P's manifest, so it is named $(dec "$want_pkg")" "$pk"
+  nonbase "$pk" > "$tmp/nonbase"
+  while read -r cid cname; do
+    [ "$cname" = none ] || [ "$cname" = "$want_comp" ] \
+      || fail pkg-name "$pk names $P's component $(dec "$cname"); it is $(dec "$want_comp")" "$pk"
+  done < "$tmp/nonbase"
+  want_t="$(nm "$P" installer-title)"
+  t="$(awk -v p="$pk" '$1 == "pkg-title" && $2 == p { print $3; exit }' "$facts")"
+  [ -z "$t" ] || [ "$t" = "$want_t" ] \
+    || fail installer-title "$pk is titled '$(dec "$t")'; $P's title is '$(dec "$want_t")'" "$pk"
+  want_mn="$(nm "$P" manifest-name)"
+  mn="$(awk -v p="$pk" '$1 == "manifest-name" && $2 == p { print $3; exit }' "$facts")"
+  [ -z "$mn" ] || [ "$mn" = "$want_mn" ] \
+    || fail manifest-name "$pk's manifest is named '$(dec "$mn")'; $P's name is '$(dec "$want_mn")'" "$pk"
+  pid="$(awk -v p="$pk" '$1 == "pkg" && $2 == p { print $5; exit }' "$facts")"
+  case "$pid" in
+    dev.mavergreen.*) [ "$pid" = "$want_id" ] || fail identifier "$pk carries $P's manifest but is identified as $pid; $P's identifier is $want_id" "$pk" ;;
+  esac
+  while read -r cid cname; do
+    [ "$cid" = "$want_id" ] || [ "$cid" = "$pid" ] \
+      || fail identifier "$pk's component $cid carries $P; $P's identifier is $want_id" "$pk"
+  done < "$tmp/nonbase"
+  case "$(awk -v p="$P" '$1 == "app" && $2 == p { print $3; exit }' "$facts")" in
+    noun)
+      noun="$(noun_of "$P")"
+      awk -v p="$pk" -v n="$noun.app" '$1 == "bundle-name" && $2 == p { k = split($3, c, "/"); if (c[k] == n) print $3, $4, $5 }' "$facts" > "$tmp/noun-app"
+      [ -s "$tmp/noun-app" ] \
+        || fail app-name "$P's app is noun, but $pk installs no top-level $(dec "$noun").app" "$pk"
+      while read -r ap bn bdn; do
+        [ "$bn" = "$noun" ] && [ "$bdn" = "$noun" ] \
+          || fail app-name "$pk installs $(dec "$ap") with CFBundleName '$(dec "$bn")' and CFBundleDisplayName '$(dec "$bdn")'; both are '$(dec "$noun")'" "$pk"
+        bid="$(awk -v p="$pk" -v b="$ap" '$1 == "bundle" && $2 == p && $3 == b { print $4; exit }' "$facts")"
+        [ "$bid" = "$want_id" ] \
+          || fail app-name "$pk installs $(dec "$ap") as '$bid'; $P's app is $want_id" "$pk"
+      done < "$tmp/noun-app"
+      ;;
+    upstream)
+      awk -v p="$pk" '$1 == "bundle-name" && $2 == p && $3 ~ /\.app$/ && index($3, "Library/Application%20Support/Mavergreen/") != 1 { print $3, $4, $5 }' "$facts" > "$tmp/up-app"
+      while read -r ap bn bdn; do
+        stem="${ap##*/}"; stem="${stem%.app}"
+        [ "$bn" = "$stem" ] && { [ "$bdn" = none ] || [ "$bdn" = "$stem" ]; } \
+          || fail app-name "$pk installs $(dec "$ap") with CFBundleName '$(dec "$bn")' and CFBundleDisplayName '$(dec "$bdn")'; an upstream app's CFBundleName is its filename, '$(dec "$stem")', and its display name is that or absent" "$pk"
+      done < "$tmp/up-app"
+      ;;
+  esac
+done < "$tmp/prod-of"
+
+while read -r kind pk _ _ pid; do
+  [ "$kind" = pkg ] || continue
+  case "$pid" in dev.mavergreen.*.system-replace) : ;; *) continue ;; esac
+  P="${pid#dev.mavergreen.}"; P="${P%.system-replace}"
+  [ "$(nm "$P" identifier)" = "dev.mavergreen.$P" ] || continue
+  want_pkg="$(nm "$P" pkg)"; want_pkg="$P-system-replace-${want_pkg#"$P"-}"
+  want_comp="$(nm "$P" component)"; want_comp="${want_comp%.pkg}-system-replace.pkg"
+  [ "$pk" = "$want_pkg" ] || fail pkg-name "$pk is $P's System Replace, so it is named $(dec "$want_pkg")" "$pk"
+  nonbase "$pk" | while read -r cid cname; do
+    [ "$cname" = none ] || [ "$cname" = "$want_comp" ] || echo "$cname"
+  done > "$tmp/sr-comp"
+  while read -r cname; do
+    fail pkg-name "$pk names $P's System Replace component $(dec "$cname"); it is $(dec "$want_comp")" "$pk"
+  done < "$tmp/sr-comp"
+  want_t="$(nm "$P" installer-title)%20System%20Replace"
+  t="$(awk -v p="$pk" '$1 == "pkg-title" && $2 == p { print $3; exit }' "$facts")"
+  [ -z "$t" ] || [ "$t" = "$want_t" ] \
+    || fail installer-title "$pk is titled '$(dec "$t")'; $P's System Replace is titled '$(dec "$want_t")'" "$pk"
+done < "$facts"
+
+while read -r kind af ch it; do
+  [ "$kind" = appcast-title ] || continue
+  P="${af%.xml}"
+  want_ch="$(nm "$P" channel-title)"
+  [ -n "$want_ch" ] || continue
+  want_it="$(nm "$P" item-title)"
+  [ "$ch" = "$want_ch" ] || fail feed-title "$af's channel is titled '$(dec "$ch")'; $P's is '$(dec "$want_ch")'" "$af"
+  [ "$it" = "$want_it" ] || fail feed-title "$af's item is titled '$(dec "$it")'; $P's is '$(dec "$want_it")'" "$af"
+done < "$facts"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
 #       identity" -- where a family product may put files by default. Anything else is a declared

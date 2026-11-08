@@ -56,6 +56,13 @@ for _pd in "$root"/.mavergreen/products/*/; do
     _dv="$_dv $_v"
   done
   printf 'derived %s%s\n' "$_p" "$_dv"
+  _app="$(mg_value "products/$_p/app" 2>/dev/null)" || _app=""
+  printf 'app %s %s\n' "$_p" "${_app:-none}"
+  for _s in pkg component installer-title channel-title item-title manifest-name identifier; do
+    _rc=0; _v="$(mavergreen_name "$_s" "$_p" "$version" 2>&1)" || _rc=$?
+    [ "$_rc" -eq 0 ] || abort "cannot derive $_p's $_s: $(printf '%s' "$_v" | tr '\n' ' ')"
+    printf 'name %s %s %s\n' "$_p" "$_s" "$(printf '%s' "$_v" | af_enc)"
+  done
 done
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
@@ -64,6 +71,8 @@ done
 #       every launchd job's Label (launchd). Paths are relative to "/" and carry spaces as %20, since
 #       the stream is whitespace-delimited and "Application Support" is in nearly every product.
 enc() { af_enc; }
+xml_dec() { sed -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&quot;/"/g' -e "s/&apos;/'/g" -e 's/&amp;/\&/g'; }
+field() { if [ -n "$1" ]; then printf '%s' "$1" | tr '\n' ' ' | enc; else printf none; fi; }
 cxxabi_tmp=""
 cxxabi_allowlist() {  # the allow-list, fetched at most once per run, into $cxxabi_tmp/allow as "<name> <visible|hidden>". Non-zero, the reason in _mf_why, when unavailable.
   [ ! -f "$cxxabi_tmp/allow" ] || return 0
@@ -153,13 +162,17 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
                for (i = 1; i < n; i++) if (c[i] ~ /\.(app|prefPane|kext|bundle|plugin|framework|appex|xpc|jdk)$/) nested = 1
                if (!nested) print }' \
       | while IFS= read -r _bd; do
-          _id=none; _feed=""
+          _id=none; _feed=""; _bn=""; _bdn=""
           for _ip in Contents/Info.plist Resources/Info.plist Info.plist; do
             [ -f "$_root/$_bd/$_ip" ] || continue
             _id="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" CFBundleIdentifier 2>/dev/null || echo none)"
+            _bn="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" CFBundleName 2>/dev/null || true)"
+            _bdn="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" CFBundleDisplayName 2>/dev/null || true)"
             _feed="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" SUFeedURL 2>/dev/null || true)"; break
           done
           printf 'bundle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" "$(printf '%s' "$_bd" | enc)" "${_id:-none}"
+          printf 'bundle-name %s %s%s %s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" "$(printf '%s' "$_bd" | enc)" \
+            "$(field "$_bn")" "$(field "$_bdn")"
           [ -z "$_feed" ] || printf 'sparkle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" \
             "$(printf '%s' "$_bd" | enc)" "$(printf '%s' "$_feed" | tr -s '[:space:]' '_')"
         done
@@ -183,10 +196,12 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       _mi="$("$STEVEDORE" plist get "$_mf" identifier 2>/dev/null)" || _mi=""
       _ml="$("$STEVEDORE" plist get "$_mf" line 2>/dev/null)" || _ml=""
       _ma="$("$STEVEDORE" plist get "$_mf" appcast 2>/dev/null)" || _ma=""
+      _mnm="$("$STEVEDORE" plist get "$_mf" name 2>/dev/null)" || _mnm=""
       _mp="$(printf '%s' "${_mp:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest %s %s %s %s\n' "$1" "$_mp" "$(printf '%s' "${_mi:-none}" | tr -s '[:space:]' '_')" "$_dir"
       printf 'manifest-line %s %s\n' "$1" "$(printf '%s' "${_ml:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest-appcast %s %s\n' "$1" "$(printf '%s' "${_ma:-none}" | tr -s '[:space:]' '_')"
+      printf 'manifest-name %s %s\n' "$1" "$(field "$_mnm")"
       _k=0
       while _o="$("$STEVEDORE" plist get "$_mf" "outside:$_k" 2>/dev/null)"; do
         printf 'manifest-outside %s %s\n' "$1" "$(printf '%s' "$_o" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
@@ -231,6 +246,12 @@ for f in "$dist"/*; do
           floor="$(sed -n 's/.*<os-version[^>]*min="\([^"]*\)".*/\1/p' "$AF_TREE/Distribution" | head -1)"
           ident="$(printf '%s\n' "$nb" | sed -n 's/.*<pkg-ref[^>]*id="\([^"]*\)".*/\1/p' | head -1)"
           comps="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$AF_TREE/Distribution" | grep -v '^default$' || true)"
+          title="$(sed -n 's|.*<title>\(.*\)</title>.*|\1|p' "$AF_TREE/Distribution" | head -1 | xml_dec)"
+          printf 'pkg-title %s %s\n' "$b" "$(field "$title")"
+          awk 'match($0, /<pkg-ref [^>]*>[^<]+<\/pkg-ref>/) {
+                 s = substr($0, RSTART, RLENGTH); i = s; sub(/.*[ \t]id="/, "", i); sub(/".*/, "", i)
+                 t = s; sub(/^[^>]*>/, "", t); sub(/<\/pkg-ref>$/, "", t); sub(/^#/, "", t); print i "\t" t }' \
+            "$AF_TREE/Distribution" > "$x/names"
         else
           # platform: a component package: PackageInfo carries version and identity, and there is NO
           #           floor to read -- that is structural, not a defect (the checker requires an
@@ -243,6 +264,7 @@ for f in "$dist"/*; do
           ident="$(sed -n '/<pkg-info/ s/.*[[:space:]]identifier="\([^"]*\)".*/\1/p' "$AF_TREE/PackageInfo" 2>/dev/null | head -1)"
           floor=""
           comps="$ident"
+          : > "$x/names"
         fi
         # spec: tests/artifact-conformance-test.sh -- the fact stream is whitespace-delimited, so a
         #       value containing a space would silently shift the fields after it; collapsed to
@@ -252,7 +274,9 @@ for f in "$dist"/*; do
           "$(printf '%s' "${floor:-none}" | tr -s '[:space:]' '_')" \
           "$(printf '%s' "${ident:-none}" | tr -s '[:space:]' '_')"
         printf '%s\n' "$comps" | while IFS= read -r c; do
-          [ -z "$c" ] || printf 'component %s %s\n' "$b" "$(printf '%s' "$c" | tr -s '[:space:]' '_')"
+          [ -n "$c" ] || continue
+          cn="$(awk -F '\t' -v i="$c" '$1 == i { print $2; exit }' "$x/names")"
+          printf 'component %s %s %s\n' "$b" "$(printf '%s' "$c" | tr -s '[:space:]' '_')" "$(field "$cn")"
         done
         payload_facts "$b" "$AF_TREE" || { af_rm "$x"; abort "${_pf_why:-cannot read the payload of $b}"; }
       else
@@ -297,6 +321,13 @@ for f in "$dist"/*; do
       url="$(sed -n 's/.*<enclosure[^>]*url="\([^"]*\)".*/\1/p' "$f" | head -1)"
       len="$(sed -n 's/.*<enclosure[^>]*length="\([^"]*\)".*/\1/p' "$f" | head -1)"
       printf 'appcast %s %s %s %s %s\n' "$b" "${ver:-unknown}" "${url##*/}" "${len:-0}" "${minos:-none}"
+      titles="$(awk '/<item[ >]/ { item = 1 }
+           match($0, /<title>[^<]*<\/title>/) {
+             t = substr($0, RSTART + 7, RLENGTH - 15)
+             if (item && !it) { it = 1; print "item " t } else if (!item && !ch) { ch = 1; print "channel " t } }' "$f")"
+      ch="$(printf '%s\n' "$titles" | sed -n 's/^channel //p' | xml_dec)"
+      it="$(printf '%s\n' "$titles" | sed -n 's/^item //p' | xml_dec)"
+      printf 'appcast-title %s %s %s\n' "$b" "$(field "$ch")" "$(field "$it")"
       [ -z "$url" ] || printf 'enclosure-url %s %s\n' "$b" "$url"
       # platform: a CDATA body spans lines, and sed is line-oriented, so it cannot isolate one.
       # spec: tests/artifact-conformance-test.sh -- the <description> CDATA, digested. gen_appcast.sh

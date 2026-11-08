@@ -3,7 +3,9 @@ bundle-id: every top-level installed bundle has a CFBundleIdentifier inside dev.
 ## Why
 Same reason as identifier: a bundle identity that is not ours can collide with an upstream's. Top-level
 means a bundle (.app, .prefPane, .kext, .bundle, .framework and so on) not nested inside another, so
-Sparkle.framework inside an updater is not asked.
+Sparkle.framework inside an updater is not asked. A product whose .mavergreen/products/<short>/app is
+upstream keeps upstream's identifier, so its top-level .app bundles outside Library/Application
+Support/Mavergreen/ are not asked either; app-name checks their names.
 
 ## Incident
 None recorded.

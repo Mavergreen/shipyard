@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Go 1.27</title>
+    <item>
+      <title>Version 1.27.0-mavergreen.1</title>
+      <pubDate>Sat, 07 Nov 2026 22:22:45 +0000</pubDate>
+      <sparkle:version>1.27.0.1</sparkle:version>
+      <sparkle:shortVersionString>1.27.0-mavergreen.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>10.9.5</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<style>body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:13px;}</style>
+<h2>Go 1.27.0</h2>
+<ul>
+<li>a fix</li>
+</ul>
+]]></description>
+      <enclosure url="https://github.com/Mavergreen/golang-127/releases/download/1.27.0-mavergreen.1/go127-1.27.0-mavergreen.1.pkg" type="application/octet-stream" sparkle:edSignature="x" length="9630" />
+    </item>
+  </channel>
+</rss>

@@ -50,6 +50,11 @@ sdk-pin	dist	scripts/check-artifact-conformance.sh	conformance sdk-pin	P1
 base	dist	scripts/check-artifact-conformance.sh	conformance base	P1
 updater	dist	scripts/check-artifact-conformance.sh	conformance updater	P6
 repository	dist	scripts/check-artifact-conformance.sh	conformance repository	P3
+pkg-name	dist	scripts/check-artifact-conformance.sh	new	P3
+installer-title	dist	scripts/check-artifact-conformance.sh	new	P3
+feed-title	dist	scripts/check-artifact-conformance.sh	new	P3
+manifest-name	dist	scripts/check-artifact-conformance.sh	new	P3
+app-name	dist	scripts/check-artifact-conformance.sh	new	P3
 variant-build-info	dist	scripts/check-artifact-conformance.sh	conformance ingredients	P1
 tree-clean	only	scripts/assert-tree-clean.sh	assert-tree-clean.sh	P1
 compat-imports	dist	scripts/assert_binary_compatible.sh	compat guard imports	P1

@@ -1265,7 +1265,7 @@ component go126.pkg dev.mavergreen.base
 component go126.pkg dev.mavergreen.go126
 manifest go126.pkg go126 dev.mavergreen.go126 go126
 product go126
-manifest-line go126.pkg 126
+manifest-line go126.pkg 1.26
 installs go126.pkg usr/local/mavergreen/go126/mavergreen.plist
 pkg go126-cross.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go126-cross
 asset go126-cross.pkg 10
@@ -1273,7 +1273,7 @@ component go126-cross.pkg dev.mavergreen.base
 component go126-cross.pkg dev.mavergreen.go126-cross
 manifest go126-cross.pkg go126-cross dev.mavergreen.go126-cross go126-cross
 product go126-cross
-manifest-line go126-cross.pkg 126-cross
+manifest-line go126-cross.pkg 1.26-cross
 installs go126-cross.pkg usr/local/mavergreen/go126-cross/mavergreen.plist
 asset go126.xml 700
 appcast go126.xml 1.26.8-mavergreen.7 go126-cross.pkg 10 10.9.5
@@ -1293,13 +1293,13 @@ installs go.pkg usr/local/mavergreen/go126/mavergreen.plist'
 G126='repository Mavergreen/golang-126'
 ok "line: go126 is Go 1.26, built in golang-126" "$GO
 $G126
-manifest-line go.pkg 126"
+manifest-line go.pkg 1.26"
 ok "line: the cross variant's line is the version plus -cross" "$GO
 $G126
-manifest-line go.pkg 126-cross"
+manifest-line go.pkg 1.26-cross"
 alone "line: a line the version does not carry" "line" "$GO
 $G126
-manifest-line go.pkg 127"
+manifest-line go.pkg 1.27"
 alone "line: a product of a line repo whose manifest declares no line" "line" "$GO
 $G126
 manifest-line go.pkg none"
@@ -1310,14 +1310,14 @@ $G126
 manifest-line go.pkg cross"
 alone "line: a lined product in a repo not named for its line" "line" "$GO
 repository Mavergreen/golang
-manifest-line go.pkg 126"
+manifest-line go.pkg 1.26"
 ok "line: the owner is not compared -- a fork runs the same check" "$GO
 repository someone/golang-126
-manifest-line go.pkg 126"
+manifest-line go.pkg 1.26"
 ok "line: with no repository known, only the version is compared" "$GO
-manifest-line go.pkg 126"
+manifest-line go.pkg 1.26"
 alone "line: with no repository known, the version still carries the line" "line" "$GO
-manifest-line go.pkg 127"
+manifest-line go.pkg 1.27"
 ok "line: one component can be the line (22.1.1 is clang 22)" 'expected 22.1.1-mavergreen.5
 upstream-kind port
 pkg c.pkg 22.1.1-mavergreen.5 10.9.5 dev.mavergreen.clang22
@@ -1333,11 +1333,112 @@ ok "line: a variant-only line carries no version, so the product is not lined" "
 $LAYOUT
 manifest-line p.pkg cross"
 ok "repository: every product the release ships is one of this repo's, with no repository fact" "$GO
-manifest-line go.pkg 126"
+manifest-line go.pkg 1.26"
 alone "repository: a product this repo does not declare" "repository" "$(printf '%s\n' "$GO" | grep -v '^product ')
-manifest-line go.pkg 126"
+manifest-line go.pkg 1.26"
 no "repository: says which product and where to declare it" "repository|.mavergreen/products/go126/" "$(printf '%s\n' "$GO" | sed 's/^product go126$/product go127/')
+manifest-line go.pkg 1.26"
+
+GONAMES='app go126 none
+name go126 pkg go.pkg
+name go126 component go126.pkg
+name go126 installer-title Mavergreen%20Go%201.26
+name go126 channel-title Go%201.26
+name go126 item-title Go%201.26.8
+name go126 manifest-name Go%201.26
+name go126 identifier dev.mavergreen.go126'
+ok "line: the manifest's line is products/<short>/line" "$GO
+$G126
+$GONAMES
+manifest-line go.pkg 1.26"
+no "line: a line written without its dot is not the product's" "line|products/go126/line is '1.26'" "$GO
+$G126
+$GONAMES
 manifest-line go.pkg 126"
+alone "line: a manifest with no line for a lined product" "line" "$GO
+$GONAMES
+manifest-line go.pkg none"
+alone "line: a manifest's line for a product that has none" "line" "$GO
+$(printf '%s\n' "$GONAMES" | sed 's/Go%201.26$/Go/')
+manifest-line go.pkg 1.26"
+ok "line: the line's version may be the line itself" "$(printf '%s\n' "$GO" | sed 's/1\.26\.8-/1.26-/')
+$G126
+$(printf '%s\n' "$GONAMES" | sed 's/Go%201.26.8$/Go%201.26/')
+manifest-line go.pkg 1.26"
+alone "line: 1.2 is not the line of 1.26.8" "line" "$GO
+repository Mavergreen/golang-12
+manifest-line go.pkg 1.2"
+
+NM="$GO
+$G126
+$GONAMES
+manifest-line go.pkg 1.26
+pkg-title go.pkg Mavergreen%20Go%201.26
+manifest-name go.pkg Go%201.26"
+NMC="$(printf '%s\n' "$NM" | sed 's/^component go.pkg \([^ ]*\)$/component go.pkg \1 none/; s/^component go.pkg dev.mavergreen.go126 none$/component go.pkg dev.mavergreen.go126 go126.pkg/; s/^component go.pkg dev.mavergreen.base none$/component go.pkg dev.mavergreen.base mavergreen-base.pkg/')"
+ok "names: a pkg named, titled and manifested as derived" "$NMC"
+alone "pkg-name: a pkg not named <short>-<version>.pkg" "pkg-name" "$(printf '%s\n' "$NMC" | sed 's/^name go126 pkg go.pkg$/name go126 pkg go126-1.26.8-mavergreen.7.pkg/')"
+no "pkg-name: says the derived name" "pkg-name|go126-1.26.8-mavergreen.7.pkg" "$(printf '%s\n' "$NMC" | sed 's/^name go126 pkg go.pkg$/name go126 pkg go126-1.26.8-mavergreen.7.pkg/')"
+alone "pkg-name: a component not named <short>.pkg" "pkg-name" "$(printf '%s\n' "$NMC" | sed '/^component /s/ go126.pkg$/ golang.pkg/')"
+ok "pkg-name: a component package has no component name to check" "$NM"
+alone "installer-title: a hand-set title" "installer-title" "$(printf '%s\n' "$NMC" | sed 's/^pkg-title go.pkg .*/pkg-title go.pkg Mavericks%20Go%201.27/')"
+alone "installer-title: no title at all" "installer-title" "$(printf '%s\n' "$NMC" | sed 's/^pkg-title go.pkg .*/pkg-title go.pkg none/')"
+alone "manifest-name: a hand-set name" "manifest-name" "$(printf '%s\n' "$NMC" | sed 's/^manifest-name go.pkg .*/manifest-name go.pkg Go/')"
+has "identifier: a nested identifier carrying a product" "identifier" "$(printf '%s\n' "$NMC" | sed '/^name /!s/dev\.mavergreen\.go126$/dev.mavergreen.golang.go126/; s/dev\.mavergreen\.go126 go126\.pkg$/dev.mavergreen.golang.go126 go126.pkg/')"
+alone "identifier: a component carrying a product under another identifier" "identifier" "$NMC
+component go.pkg dev.mavergreen.go126.extra go126.pkg"
+ok "names: a product this repo does not declare is the repository check's alone" "$(printf '%s\n' "$NMC" | grep -v '^name ')"
+SR='expected 1.26.8-mavergreen.7
+upstream-kind port
+pkg go126-system-replace-1.26.8-mavergreen.7.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go126.system-replace
+asset go126-system-replace-1.26.8-mavergreen.7.pkg 10
+component go126-system-replace-1.26.8-mavergreen.7.pkg dev.mavergreen.base mavergreen-base.pkg
+component go126-system-replace-1.26.8-mavergreen.7.pkg dev.mavergreen.go126.system-replace go126-system-replace.pkg
+pkg-title go126-system-replace-1.26.8-mavergreen.7.pkg Mavergreen%20Go%201.26%20System%20Replace
+product go126'
+SRN="$(printf '%s\n' "$GONAMES" | sed 's/^name go126 pkg go.pkg$/name go126 pkg go126-1.26.8-mavergreen.7.pkg/')"
+ok "pkg-name: a System Replace pkg has its own forms" "$SR
+$SRN"
+alone "pkg-name: a System Replace pkg named like the product's" "pkg-name" "$(printf '%s\n' "$SR" | sed 's/go126-system-replace-1\.26\.8-mavergreen\.7\.pkg/go126-1.26.8-mavergreen.7.pkg/g')
+$SRN"
+alone "pkg-name: a System Replace component named like the product's" "pkg-name" "$(printf '%s\n' "$SR" | sed 's/ go126-system-replace\.pkg$/ go126.pkg/')
+$SRN"
+alone "installer-title: a System Replace pkg titled like the product's" "installer-title" "$(printf '%s\n' "$SR" | sed 's/%20System%20Replace$//')
+$SRN"
+FT='asset go126.xml 700
+appcast go126.xml 1.26.8-mavergreen.7 go.pkg 10 10.9.5'
+ok "feed-title: the derived channel and item titles" "$NMC
+$FT
+appcast-title go126.xml Go%201.26 Go%201.26.8"
+alone "feed-title: a hand-set channel title" "feed-title" "$NMC
+$FT
+appcast-title go126.xml Go Go%201.26.8"
+alone "feed-title: an item titled with the tag" "feed-title" "$NMC
+$FT
+appcast-title go126.xml Go%201.26 Version%201.26.8-mavergreen.7"
+ok "feed-title: a feed named for no declared product is the feed check's" "$GOOD
+appcast-title appcast.xml Anything Anything"
+APP="$(printf '%s\n' "$NMC" | sed 's/^app go126 none$/app go126 noun/')
+bundle go.pkg Applications/Go.app dev.mavergreen.go126
+bundle-name go.pkg Applications/Go.app Go Go"
+ok "app-name: a noun app named, displayed and identified as derived" "$APP"
+alone "app-name: a noun app whose display name disagrees" "app-name" "$(printf '%s\n' "$APP" | sed 's/^bundle-name go.pkg Applications\/Go.app Go Go$/bundle-name go.pkg Applications\/Go.app Go Mavericks%20Go/')"
+alone "app-name: a noun app with no display name" "app-name" "$(printf '%s\n' "$APP" | sed 's/ Go Go$/ Go none/')"
+alone "app-name: a noun app under another identifier" "app-name" "$(printf '%s\n' "$APP" | sed 's/^bundle go.pkg Applications\/Go.app .*/bundle go.pkg Applications\/Go.app dev.mavergreen.go126.app/')"
+alone "app-name: a noun product that installs no <noun>.app" "app-name" "$(printf '%s\n' "$APP" | sed 's/Applications\/Go\.app/Applications\/Golang.app/')"
+UPA="$(printf '%s\n' "$NMC" | sed 's/^app go126 none$/app go126 upstream/')
+bundle go.pkg Applications/Foo%20Bar.app org.example.foo
+bundle-name go.pkg Applications/Foo%20Bar.app Foo%20Bar none
+bundle go.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.go126.updater
+bundle-name go.pkg Library/Application%20Support/Mavergreen/x-updater.app Updater none"
+ok "app-name: an upstream app keeps its name and identifier" "$UPA"
+ok "app-name: an upstream app's display name may equal its filename" "$(printf '%s\n' "$UPA" | sed 's/ Foo%20Bar none$/ Foo%20Bar Foo%20Bar/')"
+alone "app-name: an upstream app whose bundle name is not its filename" "app-name" "$(printf '%s\n' "$UPA" | sed 's/ Foo%20Bar none$/ Foo none/')"
+alone "app-name: an upstream app whose display name differs" "app-name" "$(printf '%s\n' "$UPA" | sed 's/ Foo%20Bar none$/ Foo%20Bar Linux%20Foo/')"
+alone "bundle-id: an upstream product's other bundles are still asked" "bundle-id" "$UPA
+bundle go.pkg Library/PreferencePanes/Foo.prefPane org.example.foo.pane"
+alone "bundle-id: a product with no app = upstream keeps every bundle in dev.mavergreen.*" "bundle-id" "$(printf '%s\n' "$UPA" | sed 's/^app go126 upstream$/app go126 none/')"
+
 
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
@@ -1366,6 +1467,7 @@ export STEVEDORE="$SD"
 <plist version="1.0"><dict>
 <key>product</key><string>x</string>
 <key>identifier</key><string>dev.mavergreen.x</string>
+<key>name</key><string>X</string>
 <key>outside</key><array>
 <string>Library/Application Support/Mavergreen/x-updater.app</string>
 <string>Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist</string>
@@ -1404,6 +1506,8 @@ PLIST
   MAVERGREEN_REPO_ROOT="$_pk" GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavergreen.1 2>/dev/null
   [ "$(cksum < "$_pk/rehearsal/x.xml")" = "$_sum" ] || { echo "FAIL: stand-in-feeds.sh never overwrites a feed"; exit 1; }
   _fr="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/rehearsal" 1.0.0-mavergreen.1 "$_pk")"
+  printf '%s\n' "$_fr" | grep -qxF 'appcast-title x.xml X X%201.0.0' \
+    || { echo "FAIL: a feed's channel and item titles are facts: $_fr"; exit 1; }
   _fq="$(sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"
   printf '%s\n' "$_fq" | grep -qxF 'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app none' \
     || { echo "FAIL: with no repo to name, the updater's identity is still derived and its feed is none: $_fq"; exit 1; }
@@ -1431,7 +1535,17 @@ PLIST
     'bundle x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.x.updater' \
     'launchd x-1.0.0-mavergreen.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck' \
     'manifest x-1.0.0-mavergreen.1.pkg x dev.mavergreen.x x' \
-    'component x-1.0.0-mavergreen.1.pkg dev.mavergreen.x' \
+    'component x-1.0.0-mavergreen.1.pkg dev.mavergreen.x none' \
+    'bundle-name x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app none none' \
+    'manifest-name x-1.0.0-mavergreen.1.pkg X' \
+    'app x none' \
+    'name x pkg x-1.0.0-mavergreen.1.pkg' \
+    'name x component x.pkg' \
+    'name x installer-title Mavergreen%20X' \
+    'name x channel-title X' \
+    'name x item-title X%201.0.0' \
+    'name x manifest-name X' \
+    'name x identifier dev.mavergreen.x' \
     'product x' \
     'manifest-outside x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app' \
     'manifest-outside x-1.0.0-mavergreen.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist' \
@@ -1459,12 +1573,13 @@ PLIST
     && { echo "FAIL: a manifest is read only from a payload installed at /, where a product tree always lands: $_f"; exit 1; }
   for want in \
     'pkg x-1.0.0-mavergreen.1.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x' \
+    'pkg-title x-1.0.0-mavergreen.1.pkg Mavergreen%20X' \
     'installs x-1.0.0-mavergreen.1.pkg usr/local/mavergreen/.base/1.0.9/mavergreen'
   do
     printf '%s\n' "$_fa" | grep -qxF "$want" \
       || { echo "FAIL: a product archive's version and identity are the product's, not the base component's that precedes it: want $want -- got: $_fa"; exit 1; }
   done
-  [ "$(printf '%s\n' "$_fa" | sed -n 's/^component x-1.0.0-mavergreen.1.pkg //p' | tr '\n' ' ')" = 'dev.mavergreen.base dev.mavergreen.x ' ] \
+  [ "$(printf '%s\n' "$_fa" | sed -n 's/^component x-1.0.0-mavergreen.1.pkg //p' | tr '\n' ' ')" = 'dev.mavergreen.base mavergreen-base.pkg dev.mavergreen.x x.pkg ' ] \
     || { echo "FAIL: an archive's components are reported in Distribution order, base first: $_fa"; exit 1; }
   _ca="$(printf '%s\n' "$_fa" | sh "$S" 2>&1)" \
     || { echo "FAIL: an archive set_install_floor.sh built from a laid-out stage must pass conformance: $_ca"; exit 1; }
@@ -1483,5 +1598,12 @@ PLIST
     && printf "%s\n" "$_fu" | grep -q "^pkg good.pkg 1 none dev.mavergreen.ok$" \
     || { echo "FAIL: unreadable pkg is a fact, not an abort: $_fu"; exit 1; }
 }
+
+_xe="$(mktemp -d "${TMPDIR:-/tmp}/conformance-titles.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+printf '<rss><channel>\n<title>A &amp; B</title>\n<item>\n<title>A &lt;1&gt; 2</title>\n</item>\n</channel></rss>\n' > "$_xe/a.xml"
+_fx="$(sh "$AF" "$_xe" 1.0.0-mavergreen.1 "$_xe")"
+rm -rf "$_xe"
+printf '%s\n' "$_fx" | grep -qxF 'appcast-title a.xml A%20&%20B A%20<1>%202' \
+  || { echo "FAIL: a feed's titles are read with their XML entities decoded and spaces encoded: $_fx"; exit 1; }
 
 echo "PASS: artifact-conformance"
