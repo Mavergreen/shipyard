@@ -8,7 +8,7 @@
 #          (components/objc-receipt-clang: the first clang22 whose Linux archive ships libclang), fetched
 #          through fetch_clang22.sh when not given; the
 #          tool is built here against its libclang (on a Mac with /usr/bin/clang and the pinned host
-#          SDK, on Linux with PREFIX's clang) and parses against the pinned floor SDK. Generation only: the
+#          SDK, on Linux with the host's cc) and parses against the pinned floor SDK. Generation only: the
 #          analyzer reads the receipt and never loads libclang. Nothing supplied is executed.
 #          Exit 0 written, 2 usage or an existing destination, 4 a prerequisite, an unverifiable
 #          input or a parse failure.
@@ -64,8 +64,11 @@ if [ "$host" = mac ]; then
     -isysroot "$host_sdk" -I"$prefix/include" "$src" \
     -L"$prefix/lib" -Xlinker -rpath -Xlinker "$prefix/lib" -lclang -o "$build/objc-source-inventory" || fail 'host producer build failed'
 else
-  # platform: the archive's libclang.so links LLVM statically and needs only glibc; the rpath finds it.
-  env -i PATH=/usr/bin:/bin "$prefix/bin/clang" -std=c99 -Wall -Wextra -Werror -I"$prefix/include" "$src" \
+  # platform: clang22's Linux clang is a Mavericks cross compiler (its default config names the 10.9 SDK), so the
+  #   host's cc builds this host tool. The archive's libclang.so links LLVM statically and needs only glibc 2.35;
+  #   the rpath finds it. No -Werror: the tool's bytes are its receipt identity, so a new gcc warning could not be fixed.
+  command -v cc >/dev/null 2>&1 || fail 'missing host C compiler: cc'
+  env -i PATH=/usr/bin:/bin cc -std=c99 -Wall -Wextra -I"$prefix/include" "$src" \
     -L"$prefix/lib" -Wl,-rpath,"$prefix/lib" -lclang -o "$build/objc-source-inventory" || fail 'host producer build failed'
 fi
 rc=0
