@@ -969,7 +969,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 - **`version.sh` and `lib.sh` live in shipyard.** A repo carries only
   thin wrappers: `shipyard-scripts` locates the installed scripts (`$SHIPYARD_SCRIPTS` → CMake user package
   registry → sibling checkout), and `build/version.sh` execs the shared
-  implementation. Only the product name passed to the notes builder is genuinely per-repo.
+  implementation. The per-repo part is the repo's `.mavergreen/products/<short>/` files; nothing is passed.
 - Wrapping rather than deleting keeps every call site working: `sh build/version.sh auto` on a dev
   box, the repo's own tests, `versions.sh`, and the release workflow.
 - **`$MAVERGREEN_REPO_ROOT` is the family-wide root variable** the shared logic reads. The wrapper sets it
@@ -1319,7 +1319,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   to publish "Automated release for Mac OS X 10.9 (Mavericks)." as their entire notes, tailscale shipped
   an empty body, and a 10.9 user's update dialog could quietly show different words than the Release
   page. Each layer sits at the one point in the pipeline where its failure is visible.
-- **`check-release-notes.sh <file> <version>`** is the publisher's shape check: a title naming this
+- **`check-release-notes.sh <file> <version> --short <short> --tag <tag>`** is the publisher's shape check: a title naming this
   exact version, a `### What changed`, no empty section, a non-empty body. **A leading `v` is not part
   of the version** — shipyard tags `v1.0.209` but its generated title reads `## Shipyard 1.0.209` — so
   the check strips a leading `v` before comparing (guarded against the degenerate case where the

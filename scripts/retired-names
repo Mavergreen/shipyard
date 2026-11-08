@@ -67,4 +67,4 @@ Mavericks Shipyard	Shipyard
 product-names	products/<short>/noun and line
 product-name.sh	mavergreen_name
 registry-lookup	mg_repo and ingredients/<dep>/REPO
-MAVERGREEN_PRODUCT_NAMES	mg_value products/<short>/noun
+MAVERGREEN_PRODUCT_NAMES	MAVERGREEN_REPO_ROOT (its .mavergreen/products/)

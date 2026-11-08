@@ -83,7 +83,7 @@ appcast() {
 }
 
 @test "default scope still skips a stray v-prefixed twin of a -mavergreen.N tag" {
-  # legacysupport really has v1.5.2-mavericks.1 beside 1.5.2-mavericks.1. Re-running the release it
+  # legacysupport really had v1.5.2-mavericks.1 beside 1.5.2-mavericks.1; this models it with the new suffix. Re-running the release it
   # names must still compare against the PREDECESSOR, not against its own twin.
   git -C "$REPO" tag v1.102.0-mavergreen.8
   run sh -c "cd '$REPO' && sh '$GATE' --appcast '$(appcast 1.102.0.8)' --version 1.102.0-mavergreen.8"
