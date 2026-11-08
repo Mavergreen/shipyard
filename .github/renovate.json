@@ -93,7 +93,7 @@
     {
       "description": "Renovate moves components/drydock/version but cannot write the Linux archive's digest beside it, so the Linux job fails on the bump until components/drydock/linux-sha256 names the new release's archive.",
       "matchDepNames": ["Mavergreen/drydock"],
-      "prBodyNotes": ["Before this can merge, replace components/drydock/linux-sha256 with the `drydock-<version without v>-linux-x86_64.tar.gz` line of the new release's SHA256SUMS: `gh release download <tag> -R Mavergreen/drydock -p SHA256SUMS -O - | grep linux-x86_64.tar.gz > components/drydock/linux-sha256`. The bump must pass tests/objc-guard-test.sh on 10.9 (its report's analyzer names the new release) and tests/objc-source-inventory-host-test.sh on a Mac and in the Linux job."]
+      "prBodyNotes": ["Before this can merge, replace components/drydock/linux-sha256 with the `drydock-<version without v>-linux-x86_64.tar.gz` line of the new release's SHA256SUMS: `gh release download <tag> -R Mavergreen/drydock -p SHA256SUMS -O - | grep linux-x86_64.tar.gz > components/drydock/linux-sha256`. Also rewrite tests/fixtures/objc-api/provider-body.tool with the new release's receipt tool digest (the `tools/objc-source-inventory.c` line of Drydock's tests/objc/IMPORTED.sha256 at the new tag). The bump must pass tests/objc-guard-test.sh on 10.9 (its report's analyzer names the new release) and tests/objc-source-inventory-host-test.sh on a Mac and in the Linux job."]
     },
     {
       "description": "Renovate moves DIGEST in components/mulle-xcode-to-cmake/version but cannot write TARBALL_SHA256 beside it, so the host-tool build refuses the bump until that digest names GitHub's tarball of the new commit, checked against the commit's tree.",

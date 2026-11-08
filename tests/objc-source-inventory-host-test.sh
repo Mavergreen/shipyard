@@ -3,7 +3,8 @@
 # spec: scripts/objc-source-inventory.sh header -- the receipt is the pinned Drydock's `drydock-objc receipt`, given the clang
 #       and the floor SDK the wrapper fetched; with no --clang-prefix the pinned receipt clang is fetched, and the receipt of
 #       one prepared source is the same on every host: tests/fixtures/objc-api/provider-body.receipt, apart from its libclang
-#       line (the pinned release's own version string) and its tool line (the digest of Drydock's receipt tool). Any exit of
+#       line (the pinned release's own version string) and its tool line (the digest of Drydock's receipt tool source,
+#       recorded in tests/fixtures/objc-api/provider-body.tool). Any exit of
 #       drydock-objc's but 0, 2 and 4, a death by signal included, is 4.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -62,14 +63,15 @@ if [ "$rc" = 0 ]; then
   else fail "the receipt differs from tests/fixtures/objc-api/provider-body.receipt on $(uname -s) $(uname -m):"; diff "$FX/provider-body.receipt" "$T/fetched.body" | head -20; fi
   grep -q '^libclang	clang version 22\.' "$T/fetched.receipt" && pass 'the receipt names clang 22' ||
     fail "the receipt's libclang line: $(grep '^libclang' "$T/fetched.receipt")"
-  grep -Eq '^tool	[0-9a-f]{64}$' "$T/fetched.receipt" && pass "the receipt names Drydock's receipt tool by its digest" ||
+  grep -Fxq "$(printf 'tool\t%s' "$(cat "$FX/provider-body.tool")")" "$T/fetched.receipt" &&
+    pass "the receipt names Drydock's receipt tool by the digest recorded in provider-body.tool" ||
     fail "the receipt's tool line: $(grep '^tool' "$T/fetched.receipt")"
 else
   fail "inventory with the fetched clang exits $rc"
 fi
 
 rc=0; inventory --clang-prefix "$T/no-such-clang" --output "$T/named.receipt" 2>"$T/err" || rc=$?
-[ "$rc" = 4 ] && [ ! -e "$T/named.receipt" ] &&
+[ "$rc" = 4 ] && [ ! -e "$T/named.receipt" ] && grep -qF "$T/no-such-clang" "$T/err" &&
   pass 'a named --clang-prefix is used, not replaced by the fetched one' || fail "a missing named prefix exits $rc"
 
 [ "$fails" = 0 ] && echo 'objc-source-inventory-host-test: all passed' || { echo "objc-source-inventory-host-test: $fails failed"; exit 1; }

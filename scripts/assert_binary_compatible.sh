@@ -131,11 +131,6 @@ POST_10_9_SEL='labelColor|secondaryLabelColor|tertiaryLabelColor|quaternaryLabel
 ALLOW_SEL="${MAVERICKS_ALLOW_SELECTORS:-}"
 ALLOW_ARCHS="$(printf '%s\n' ${MAVERICKS_ALLOW_ARCHS:-x86_64} | sort -u | xargs)"
 OBJC_REFS="${MAVERGREEN_OBJC_REFERENCES:-}"
-# spec: scripts/objc-reference-dir.sh header -- the default reference set is the pinned Drydock's, resolved only when the
-#       analyzer will run; one that cannot be had is cannot-measure.
-if [ -n "$OBJC_STRICT" ] && [ -z "$OBJC_REFS" ]; then
-  OBJC_REFS="$(sh "$SELF/objc-reference-dir.sh")" || shipyard_die "no Objective-C reference set: objc-reference-dir.sh said why above"
-fi
 if [ -n "${MAVERGREEN_OBJC_BUILD_EVIDENCE:-}" ] && [ "$#" -ne 1 ]; then
   shipyard_misuse "MAVERGREEN_OBJC_BUILD_EVIDENCE is bound to one artifact: give exactly one binary, not $#"
 fi
@@ -173,6 +168,13 @@ command -v shasum >/dev/null 2>&1 \
 #       objc_rc; the analyzer's stderr, which names each blocking finding, is in $work/objc.err.
 shipyard_objc() {  # $1 binary, $2 report
   _objc_report=$2
+  # spec: scripts/objc-reference-dir.sh header -- the default reference set is the pinned Drydock's, resolved (and perhaps
+  #       fetched) only when the analyzer first runs, after every misuse check and this binary's other checks; one that
+  #       cannot be had is cannot-measure.
+  if [ -z "$OBJC_REFS" ]; then
+    OBJC_REFS="$(sh "$SELF/objc-reference-dir.sh" 2>"$work/objc.err")" || {
+      OBJC_REFS=; echo "no Objective-C reference set (scripts/objc-reference-dir.sh)" >>"$work/objc.err"; objc_rc=4; return; }
+  fi
   set -- --artifact "$1" --root "${MAVERGREEN_OBJC_ROOT:-$(dirname "$1")}" --references "$OBJC_REFS" \
     --report "$2" --mode strict
   [ -z "${MAVERGREEN_OBJC_BUILD_EVIDENCE:-}" ] || set -- "$@" --build-evidence "$MAVERGREEN_OBJC_BUILD_EVIDENCE"

@@ -76,14 +76,18 @@ unset MAVERICKS_POST_10_9_SELECTORS
 #       stages the pinned Drydock's reference set, byte for byte, as reference/objc, where objc-reference-dir.sh looks first.
 b="$w/build"; p="$w/prefix"
 cmake -S "$root" -B "$b" >"$w/configure.log" 2>&1 || { echo "FAIL: shipyard did not configure:"; tail -20 "$w/configure.log"; exit 1; }
-cmake --install "$b" --prefix "$p" >"$w/install.log" 2>&1 || { echo "FAIL: shipyard did not install:"; tail -20 "$w/install.log"; exit 1; }
+# spec: CMakeLists.txt -- an unverified Drydock in the environment is never what the install stages.
+mkdir -p "$w/fake-drydock/bin" "$w/fake-drydock/share/drydock/objc/reference"
+printf '#!/bin/sh\n' >"$w/fake-drydock/bin/drydock-objc"; chmod +x "$w/fake-drydock/bin/drydock-objc"
+echo fake >"$w/fake-drydock/share/drydock/objc/reference/fake.tsv"
+MAVERGREEN_DRYDOCK_PREFIX="$w/fake-drydock" cmake --install "$b" --prefix "$p" >"$w/install.log" 2>&1 || { echo "FAIL: shipyard did not install:"; tail -20 "$w/install.log"; exit 1; }
 d="$p/share/cmake/MavericksShipyard"
 for f in components/drydock/version components/drydock/linux-sha256 components/objc-receipt-clang/version \
   components/objc-receipt-clang/linux-sha256 scripts/objc-compat.sh scripts/objc-build-evidence.sh scripts/objc-provider-link-args.sh \
   scripts/objc-source-inventory.sh scripts/objc-reference-dir.sh scripts/fetch_drydock.sh scripts/fetch_product_pkg.sh; do
   cmp -s "$root/$f" "$d/$f" || { echo "FAIL: the install does not stage $f"; exit 1; }
 done
-refs="$(sh "$root/scripts/fetch_drydock.sh" "$root/components/drydock")/share/drydock/objc/reference" \
+refs="$(env -u MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED=/nonexistent sh "$root/scripts/fetch_drydock.sh" "$root/components/drydock")/share/drydock/objc/reference" \
   || { echo "FAIL: the pinned Drydock could not be fetched to compare with"; exit 1; }
 diff -r "$refs" "$d/reference/objc" >"$w/refs.diff" 2>&1 \
   || { echo "FAIL: the staged reference/objc is not the pinned Drydock's:"; cat "$w/refs.diff"; exit 1; }

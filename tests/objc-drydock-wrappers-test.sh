@@ -22,6 +22,8 @@ exit "\${STUB_RC:-0}"
 EOF
 chmod +x "$T/drydock/bin/drydock-objc"
 MAVERGREEN_DRYDOCK_PREFIX="$T/drydock"; export MAVERGREEN_DRYDOCK_PREFIX
+# spec: scripts/objc-compat.sh header -- the stub stands in for a Mac's drydock-objc on every host.
+MAVERGREEN_DRYDOCK_HOST=mac; export MAVERGREEN_DRYDOCK_HOST
 # spec: scripts/objc-compat.sh header -- wrap SCRIPT RC ARGS...: SCRIPT run with ARGS while the stub exits RC; sets rc.
 wrap() { s=$1 STUB_RC=$2; export STUB_RC; shift 2; rm -f "$T/argv"; rc=0; sh "$ROOT/scripts/$s" "$@" 2>"$T/err" || rc=$?; }
 argv_is() { for a in "$@"; do printf '%s\n' "$a"; done >"$T/want"; cmp -s "$T/want" "$T/argv" 2>/dev/null; }
@@ -54,6 +56,19 @@ wrap objc-provider-link-args.sh 0 --prefix /x --link-map /m
 wrap objc-provider-link-args.sh 0 --prefix /x --output /m
 [ "$rc" = 2 ] && [ ! -e "$T/argv" ] && pass 'objc-provider-link-args.sh refuses a malformed call' || fail "link-args malformed: exit $rc"
 
+# spec: scripts/objc-compat.sh header -- on a host other than macOS, drydock-objc's analyze, evidence and link-args exit 2, so
+#       each wrapper is cannot-measure (4) there, before it fetches or runs anything.
+MAVERGREEN_DRYDOCK_HOST=linux
+for s in "objc-compat.sh analyze --artifact /a --root /r --references /refs --report /rep" \
+         "objc-build-evidence.sh evidence --artifact /a --prestrip /p --source-root /s --references /refs --output /o" \
+         "objc-provider-link-args.sh link-args --prefix /x --link-map /m"; do
+  # shellcheck disable=SC2086
+  set -- $s; script=$1; cmd=$2; shift 2
+  wrap "$script" 0 "$@"
+  [ "$rc" = 4 ] && [ ! -e "$T/argv" ] && grep -qF "drydock-objc $cmd runs on macOS only" "$T/err" &&
+    pass "$script on Linux is cannot-measure (4), saying $cmd runs on macOS only" || fail "$script on Linux: exit $rc, want 4"
+done
+MAVERGREEN_DRYDOCK_HOST=mac
 MAVERGREEN_DRYDOCK_PREFIX="$T/no-drydock"
 for s in "objc-compat.sh --artifact /a --root /r --references /refs --report /rep" \
          "objc-build-evidence.sh --artifact /a --prestrip /p --source-root /s --references /refs --output /o" \

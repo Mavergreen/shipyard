@@ -11,7 +11,7 @@
 #          provider, give neither --link-map nor --provider-prefix; one without the other is a usage error. The
 #          evidence is never an approval: scripts/objc-compat.sh re-verifies it against the artifact every run.
 #          Exit 0 written, 2 usage or an existing destination, 4 a mismatch, an unreadable or invalid input,
-#          or a Drydock that could not be fetched.
+#          a Drydock that could not be fetched, or a host other than macOS.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() { echo "usage: objc-build-evidence.sh --artifact FILE --prestrip FILE --source-root DIR [--link-map FILE --provider-prefix DIR] --references REF_DIR --output NEW_FILE" >&2; exit 2; }
@@ -24,5 +24,11 @@ for a in "$@"; do
     case "$a" in --artifact|--prestrip|--source-root|--link-map|--provider-prefix|--references|--output) ;; *) usage ;; esac
   fi
 done
+# platform: drydock-objc's evidence is built for macOS only; on Linux it exits 2, which the guard would read as misuse, so
+#   another host is cannot-measure here, before any fetch. MAVERGREEN_DRYDOCK_HOST (linux or mac) replaces the host's answer.
+case "${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" in
+  mac|Darwin) ;;
+  *) echo "objc-build-evidence: drydock-objc evidence runs on macOS only, not on ${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" >&2; exit 4 ;;
+esac
 D=$(sh "$HERE/fetch_drydock.sh" "$HERE/../components/drydock") || { echo "objc-build-evidence: the pinned Drydock could not be had" >&2; exit 4; }
 exec "$D/bin/drydock-objc" evidence "$@"

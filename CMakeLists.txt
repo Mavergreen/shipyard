@@ -164,8 +164,12 @@ set(_msc_objc_refs_code [[
   else()
     set(_msc_to "${CMAKE_INSTALL_PREFIX}/@_dest@")
   endif()
+  # spec: scripts/fetch_drydock.sh header -- the pkg stages only a verified fetch of the pinned release: never an installed
+  #       Drydock (MAVERGREEN_DRYDOCK_INSTALLED, pointed at nothing) or a caller's MAVERGREEN_DRYDOCK_PREFIX, both
+  #       unverified, which would put whatever a build machine holds into every shipyard pkg.
   execute_process(
-    COMMAND sh "@CMAKE_CURRENT_SOURCE_DIR@/scripts/fetch_drydock.sh" "@CMAKE_CURRENT_SOURCE_DIR@/components/drydock"
+    COMMAND "${CMAKE_COMMAND}" -E env --unset=MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED=/nonexistent
+      sh "@CMAKE_CURRENT_SOURCE_DIR@/scripts/fetch_drydock.sh" "@CMAKE_CURRENT_SOURCE_DIR@/components/drydock"
     OUTPUT_VARIABLE _msc_drydock RESULT_VARIABLE _msc_drydock_rc OUTPUT_STRIP_TRAILING_WHITESPACE)
   if(NOT _msc_drydock_rc EQUAL 0)
     message(FATAL_ERROR "the pinned Drydock (components/drydock) could not be fetched, so its Objective-C reference set cannot be staged")
