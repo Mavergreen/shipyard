@@ -19,7 +19,7 @@ unset MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED
 MAVERGREEN_DRYDOCK_CACHE="$T/cache"; MAVERGREEN_TAR_CACHE="$T/tars"; MAVERGREEN_RELEASES="file://$T/rel"
 export MAVERGREEN_DRYDOCK_CACHE MAVERGREEN_TAR_CACHE MAVERGREEN_RELEASES
 
-# A release v9.9.9 whose Linux archive is laid out as Drydock's: drydock-9.9.9/{bin,share}.
+# spec: scripts/fetch_drydock.sh header -- a release v9.9.9 whose Linux archive is laid out as Drydock's: drydock-9.9.9/{bin,share}.
 mkdir -p "$T/a/drydock-9.9.9/bin" "$T/a/drydock-9.9.9/share/drydock/objc/reference" "$T/rel/Mavergreen/drydock/releases/download/v9.9.9"
 printf '#!/bin/sh\necho fixture drydock-objc\n' >"$T/a/drydock-9.9.9/bin/drydock-objc"; chmod +x "$T/a/drydock-9.9.9/bin/drydock-objc"
 echo '{}' >"$T/a/drydock-9.9.9/share/drydock/objc/reference/manifest.json"

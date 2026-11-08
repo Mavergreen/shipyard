@@ -14,7 +14,7 @@ fails=0
 pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*"; [ ! -f "$T/err" ] || sed 's/^/    | /' "$T/err"; fails=$((fails + 1)); }
 mkdir -p "$T/drydock/bin"
-# The stub records its arguments one per line and exits with $STUB_RC.
+# spec: scripts/objc-compat.sh header -- the stub records its arguments one per line and exits with $STUB_RC.
 cat >"$T/drydock/bin/drydock-objc" <<EOF
 #!/bin/sh
 for a in "\$@"; do printf '%s\n' "\$a"; done >"$T/argv"
