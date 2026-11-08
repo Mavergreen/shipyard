@@ -21,6 +21,6 @@ the release; notes-shape and notes check those later. It does not read a call hi
 
 ## Deviating
 No deviation is read for this id. Call it: sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag --version
---product <noun> --out dist/RELEASE_NOTES.md, and give the appcast and the publish step that same path.
+--short <short> --out dist/RELEASE_NOTES.md, and give the appcast and the publish step that same path.
 
 Formerly gate check 14

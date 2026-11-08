@@ -78,7 +78,7 @@ out="$(sh "$S" 3.0.0-mavergreen.1 2>"$w/err")"
 [ -z "$out" ] || { echo "FAIL: a hook with empty output must also drop the section: $out"; exit 1; }
 grep -q 'upstream-notes' "$w/err" || { echo "FAIL empty not warned"; exit 1; }
 
-# spec: SKILL.md "Release notes" -- signal-desktop's 8.27.0-mavergreen.1 shipped a NEW upstream
+# spec: SKILL.md "Release notes" -- signal-desktop's 8.27.0-mavericks.1 shipped a NEW upstream
 #       with no link and nothing red, because everything returned 0. --url-only distinguishes
 #       "no link is due" from "the link is broken" so a caller that cares can tell them apart.
 mk_repo_with_hook() {   # $1 = dir, $2 = hook body

@@ -112,7 +112,7 @@ if str(names[0].get("continue-on-error", "")).strip().lower() == "true":
 ncmd = names[0].get("run") or ""
 if re.search(r"\bgit\b", ncmd):
     fail("the names step uses git; it fetches through the API")
-if "fetch-product-names.sh" not in ncmd or "release-title" not in ncmd:
+if "fetch-name-inputs.sh" not in ncmd or "release-title" not in ncmd:
     fail("the names step must fetch the names and derive the release-title")
 if "target-commitish" not in str(names[0].get("env", {}).get("SHA", "")):
     fail("the names step reads the names at the release commit (target-commitish, else the caller's SHA)")

@@ -538,8 +538,8 @@ gen "$r" 9.9p2-mavergreen.1 >/dev/null || { echo "FAIL nohook+declared: should p
 #       this RELEASE is even due an upstream link are independent questions, and the second is
 #       answerable from the tags alone. Resolving the hook first conflated them: every hookless
 #       repo reported "new
-#       upstream" regardless of its tags, so the fleet preview found 1password's -mavergreen.2,
-#       swift-toolchain's -mavergreen.4 and container-tools' -mavergreen.23 -- all of them the Nth
+#       upstream" regardless of its tags, so the fleet preview found 1password's -mavericks.2,
+#       swift-toolchain's -mavericks.4 and container-tools' -mavericks.23 -- all of them the Nth
 #       repackage of an upstream already shipped N-1 times -- classified as brand-new upstreams.
 #       That surfaced two ways: without a declared reason, a FALSE REFUSAL (a legitimate
 #       repackage cannot be published at all, demanding a hook for an upstream link this release
@@ -910,7 +910,7 @@ grep -q '^## Go 1.27.0$' "$r/OUT.md" \
 #       Markdown joins consecutive lines into ONE <p> (that is correct Markdown), but
 #       release-notes.sh used to emit the floor line and the compare link back-to-back with no
 #       blank line between them. Rendered, that is one run-on sentence whose second half is a
-#       link ("Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavergreen.5"). An
+#       link ("Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5"). An
 #       assertion on the MARKDOWN would pass whether or not this is fixed -- the markdown was
 #       never the problem -- so this asserts on the rendered HTML, via gen_appcast.sh
 #       --render-notes, not on OUT.md: the footer's lines are separate statements and must
@@ -936,7 +936,7 @@ printf '%s\n' "$html" | grep -q 'or later\..*sha256' \
   && { echo "FAIL footerpara: a state marker must not render inside the install-floor sentence"; printf '%s\n' "$html"; exit 1; }
 
 # spec: scripts/patch-notes.sh -- a repackage that changes OUR modifications to the upstream source
-#       is a behaviour change: tailscale 1.102.4-mavergreen.7 added patches/darwin-exit-nodes.patch
+#       is a behaviour change: tailscale 1.102.4-mavericks.7 added patches/darwin-exit-nodes.patch
 #       (exit nodes on macOS) and its notes called it "packaging changes only". Patches are the
 #       behaviour change, so their section comes FIRST, before any ingredient section.
 r="$work/patchadd"; mkrepo "$r"

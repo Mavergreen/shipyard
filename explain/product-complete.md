@@ -14,7 +14,7 @@ None recorded.
 
 ## Limits
 It reads the directories, not what they describe: it does not check that a noun is the product's real name,
-or that a where names a place that exists. The name rules are product-name.sh's, from one shared file.
+or that a where names a place that exists. The name rules are lib/name-rules.sh's, shared with the helper.
 
 ## Deviating
 No deviation is read for this id. Add the missing file, correct the value, or rename the directory.

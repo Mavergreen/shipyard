@@ -10,7 +10,7 @@ TAB="$(printf '\t')"
 dups="$(cut -f1 "$T" | sort | uniq -d)"
 [ -z "$dups" ] || fail "names with two rows in $T: $dups. A name has one meaning."
 
-used="$(git ls-files | grep -v -E '^(tests/|explain/)|[.]md$' | tr '\n' '\0' | xargs -0 grep -h -o 'MAVERGREEN_[A-Z0-9_]*' 2>/dev/null | sort -u)"
+used="$(git ls-files | grep -v -E '^(tests/|explain/|scripts/retired-names$)|[.]md$' | tr '\n' '\0' | xargs -0 grep -h -o 'MAVERGREEN_[A-Z0-9_]*' 2>/dev/null | sort -u)"
 for n in $used; do
   grep -q "^$n$TAB" "$T" || fail "$n is used in a tracked file but has no row in $T. Add '<name><TAB><its one meaning>'."
 done

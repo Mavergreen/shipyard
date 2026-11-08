@@ -10,7 +10,7 @@ release whose tag is already taken. So the group is keyed on github.run_id for e
 request, and cancel-in-progress names pull_request. Both halves are checked, because either alone lets the
 old shape back in: a group that mentions github.event_name looks keyed per event and is not.
 
-Two dispatches can now compute the same -mavericks.(N+1). Nothing replaces the old lock, on purpose:
+Two dispatches can now compute the same -mavergreen.(N+1). Nothing replaces the old lock, on purpose:
 publish-release.yml refuses the loser at publish time with a message naming the tag, and the loser
 re-dispatches. A wasted build with a red X is better than a release that silently never happened.
 

@@ -67,7 +67,7 @@ jobs:
         run: |
           set -eu
           root="$RUNNER_TEMP/names"
-          sh .shipyard/scripts/fetch-product-names.sh "$REPO" "$SHA" "$SHORT" "$root"
+          sh .shipyard/scripts/fetch-name-inputs.sh "$REPO" "$SHA" "$SHORT" "$root"
           title="$(MAVERGREEN_REPO_ROOT="$root" sh -c '. "$1"; mavergreen_name release-title "$2" "$3"' sh .shipyard/scripts/mavergreen-meta.sh "$SHORT" "$VERSION")"
           { echo "root=$root"; echo "title=$title"; } >> "$GITHUB_OUTPUT"
 

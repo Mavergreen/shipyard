@@ -2,7 +2,7 @@ automerge-described: a packageRules entry that touches automerge carries a descr
 
 ## Why
 The family default is ship-if-green: patch, minor and major automerge once the build passes, and breakage
-that gets through is fixed forward in the next -mavericks.N. A restriction is legitimate only where a bad
+that gets through is fixed forward in the next -mavergreen.N. A restriction is legitimate only where a bad
 bump would build fine and be wrong, which a green build cannot catch. Written down in the rule's
 description, an exception is a decision; unexplained, it is indistinguishable from drift. The live example
 is swift-toolchain, which gates minor and major Swift bumps because LLVM_BRANCH is swift/release/<minor> and

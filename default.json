@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": [
-    "Shared Renovate policy for mavericks-* projects. A consumer's entire .github/renovate.json is:",
+    "Shared Renovate policy for Mavergreen projects. A consumer's entire .github/renovate.json is:",
     "{ \"$schema\": \"https://docs.renovatebot.com/renovate-schema.json\", \"extends\": [\"github>Mavergreen/shipyard\"] }",
     "Provides config:recommended + automerge. shipyard is a versioned GitHub Action: consumers pin",
     "'uses: Mavergreen/shipyard/...@v1' and Renovate's native github-actions manager tracks it",

@@ -66,7 +66,7 @@ sa_refused "$work/sa6" "a second call without --feed-dir"
 # spec: SKILL.md "Renovate & automerge" -- a pin on a -mavergreen.N release must be read with
 #       versioning that COMPARES N. Renovate's default coerces the suffix away, so .1 and .4
 #       compare equal and the bot proposes nothing: swift-runtime's swift-toolchain pin sat at
-#       6.3.3-mavergreen.1 while .4 shipped, with a manager wired and green.
+#       6.3.3-mavericks.1 while .4 shipped, with a manager wired and green.
 MMVER='regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavergreen\.(?<build>\d+)$'
 mkrepo "$work/mv"
 printf '6.3.3-mavergreen.1\n# renovate: datasource=github-releases depName=Mavergreen/swift-toolchain\n' > "$work/mv/.mavergreen/upstream/VERSION"

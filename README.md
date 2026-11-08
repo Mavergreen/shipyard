@@ -183,8 +183,8 @@ mavericks_add_updater_app(
 )
 ```
 
-`foo` is the product's short name in shipyard's `scripts/product-names`; the app (`foo-updater.app`),
-its bundle id and its feed are derived from that line.
+`foo` is the product's short name, the directory `.mavergreen/products/foo/`; the app (`foo-updater.app`),
+its bundle id and its feed are derived from it and the repo.
 
 ## SDK declaration metadata
 

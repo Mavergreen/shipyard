@@ -145,7 +145,7 @@ printf 'name: CI\njobs:\n  build:\n    steps:\n      - run: shipyard-ctest --pre
 
 # spec: SKILL.md "Versioning" -- VERSION must not be committed. The shipped state lives in tags; a
 #       committed VERSION is a second answer to "what version is this?", and it drifts --
-#       container-tools built -mavergreen.14 from a file that still said .2, which also made its
+#       container-tools built -mavericks.14 from a file that still said .2, which also made its
 #       tag-triggered publish path (tag must equal VERSION) unsatisfiable. .mavergreen/upstream/ is
 #       the committed input; VERSION is derived from it plus the tags.
 mkrepo "$work/v1"

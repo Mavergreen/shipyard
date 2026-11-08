@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 # spec: SKILL.md "Versioning" -- release-mode.sh exists because container-tools built one .pkg
-#       from two jobs that disagreed (build-macos resolved -mavergreen.15, build-iso .14, same run,
+#       from two jobs that disagreed (build-macos resolved -mavericks.15, build-iso .14, same run,
 #       same commit); every job in one run must answer identically, not guess per-job.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"

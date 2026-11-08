@@ -1,7 +1,7 @@
 tag-publishable: the tag being published is free, or is the one that triggered this run.
 
 ## Why
-Two runs can compute the same -mavericks.(N+1) and both build it. The loser must not publish and must not
+Two runs can compute the same -mavergreen.(N+1) and both build it. The loser must not publish and must not
 relabel, since the version is baked into the pkg filename, pkgbuild --version and the appcast; it re-dispatches
 and rebuilds. So an existing tag refuses the publish, with one exception: a run started by a pushed tag always
 finds its own tag. The exception holds only when the run's ref is this version's tag and the tag names the
@@ -19,7 +19,7 @@ public for every family repo, so it needs no token. It checks the tag at the mom
 created a moment later is the next run's problem, and the publisher's own refusal is the backstop.
 
 ## Deviating
-No deviation is read for this id. Re-dispatch the release so it computes the next -mavericks.N, or move the
+No deviation is read for this id. Re-dispatch the release so it computes the next -mavergreen.N, or move the
 tag to the commit being published, or publish from a branch.
 
 Formerly assert_tag_publishable.sh

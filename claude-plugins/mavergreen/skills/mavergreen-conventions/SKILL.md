@@ -46,7 +46,7 @@ following a retired direction (universal-by-default never landed); correct the s
 The glob is matched against the install path in the pkg (`usr/local/mavergreen/cmake/bin/*`), never a
 build script's path; a bare `- arm64: <reason>`, or a glob of nothing but wildcards, is refused.
 Conformance fails a pkg whose Mach-O carries an arm64 slice that no declaration covers; the Sparkle
-updater's slices are exempt (only the registry's updater bundle, where the registry derives one). A repo that declares one has a `modern-smoke` job in
+updater's slices are exempt (only the product's updater bundle, whose identity is derived). A repo that declares one has a `modern-smoke` job in
 `release.yml`, on a `macos-*` runner, that runs the arm64 slice and that publish needs (check 37).
 
 **A repo has no secrets to set. Never list one as a setup or release step.** `SPARKLE_PRIVATE_KEY`,
@@ -377,7 +377,7 @@ carries it -- golang just *links* it (now through Recaulk). Our *own* back-fill 
    symbol back-fill.
 2. **Recaulk** (`Mavergreen/recaulk`, `src/backfills/` or `src/overrides/`) -- the family's home for its
    **own** 10.9 back-fills, replacing `mavericks-compat`; a **self-upstream** product (`YYYYMMDD.N`, no
-   `-mavericks`). The **default** home for anything ours that isn't yet, or won't be, upstream.
+   `-mavergreen`). The **default** home for anything ours that isn't yet, or won't be, upstream.
    Back-fills go into `librecaulk.a`, which every family product links plainly; overrides go only into
    `libRecaulkSystem.dylib`. Two rules, each enforced by a Recaulk test:
    - **Rule 1:** `librecaulk.a` defines no symbol the pinned 10.9 SDK's libraries already export; such code
@@ -491,7 +491,7 @@ other than what the pin names. Both swift repos learned this the same way.
 
 **Automerge policy: if it builds and passes, it ships** — patch, minor **and** major alike. The build
 is the gate (`ignoreTests: false`), and breakage that gets through is fixed forward in a
-`-mavericks.N+1` release, which costs less than a human reviewing every routine bump. Most repos
+`-mavergreen.N+1` release, which costs less than a human reviewing every routine bump. Most repos
 therefore need **no `packageRules` at all**.
 
 **Restrict automerge only where a bad bump would BUILD FINE AND BE WRONG** — the case a green build
@@ -520,13 +520,13 @@ never reaches this repo's automerge at all; it becomes a new repo (`golang-127`)
   `golang-version`, a `COMMIT` for a raw commit, etc.
 - Track the pin in a dedicated bare file (`.mavergreen/upstream/VERSION` = `1.4.2`, then line 2). A pin that lives in a shared
   file is tracked where it lives, by a built-in Renovate manager, and its ingredient says so with `tracked-by`.
-- **A pin on a sibling's `-mavericks.N` release needs versioning that compares N:**
-  `versioning=regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$` on line 2.
+- **A pin on a sibling's `-mavergreen.N` release needs versioning that compares N:**
+  `versioning=regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavergreen\\.(?<build>\\d+)$` on line 2.
   Renovate's default versioning coerces the suffix away, so `.1` and `.4` compare **equal** and the bot
   proposes nothing — no PR, no error, and the Dashboard still lists the dep as tracked. swift-runtime's
   swift-toolchain pin sat at `6.3.3-mavericks.1` through `.2`, `.3` and `.4` this way, *after* its
   manager was wired. The golang consumers (container-tools, tailscale) do this; `check-family-conventions.sh` fails a line 2 whose
-  pin ends in `-mavericks.N` without it.
+  pin ends in `-mavergreen.N` without it.
 
 **The preset's manager is the release trigger** — it's how the package auto-updates when upstream does:
 Renovate bumps the pin → the green-gated build merges → the workflow cuts the release. Write line 2 to fit how
@@ -571,49 +571,56 @@ separate, deliberate grant. Decide per person:
 
 ## Product naming
 
-Two registers, so the app reads as a recognizable "Mavericks ___" product while longer strings stay
-natural (and, for a repackaged third-party product, nominative rather than co-branded):
+Names are derived, never typed. `mavergreen_name <surface> <short> [<version>]` (shipyard's
+`mavergreen-meta.sh`) reads `.mavergreen/products/<short>/` and is the only place a display string is built.
 
-- **App identity — "Mavericks Foo"** (brand-forward, discoverable, matches the `mavericks-foo` repo name).
-  Use for: the `.app` bundle filename, `CFBundleName`/`CFBundleDisplayName`, the Sparkle updater
-  `PRODUCT_NAME` (drives "A new version of ___ is available"), and the updater `CONFIRM_TITLE`.
-- **Prose / longer strings — "Foo for Mavericks"** (descriptive; reads as "the real Foo, for the
-  Mavericks OS"). Use for: the `.pkg` installer `--title`, the appcast `--channel-title`, README prose,
-  and release notes.
+- `noun` (required, line 1): the product as upstream spells it (`OpenSSH`, `Go`), or the product's own name
+  when the repo is its own upstream. No parentheses, and the OS is not part of the name.
+- `line` (optional, line 1): the line as upstream spells it (`1.27`), for a product that is one of several
+  parallel lines.
 
-**A line's display names carry its line version.** Prose: "Go 1.27 for Mavericks". The updater's
-`CFBundleName` (`PRODUCT_NAME`): "Mavericks Go 1.27", with " (cross)" appended for the cross variant.
-Not gated.
+| Surface | Value |
+|---|---|
+| `name` | `<noun>`, then ` <line>` when `line` exists |
+| `title` | `<noun> <v>`, where `<v>` is the version without a leading `v` or a `-mavergreen.<N>` suffix |
+| `pkg` | `<short>-<version without a leading v>.pkg` |
+| `component` | `<short>.pkg` |
+| `installer-title` | `Mavergreen <name>` |
+| `release-title`, `item-title` | `title` |
+| `notes-heading` | `## <title>` |
+| `channel-title`, `manifest-name` | `name` |
+| `feed` | `<short>.xml` |
+| `identifier` | `dev.mavergreen.<short>` |
+| `link-suffix` | `line` with every `.` removed (`1.27` becomes `127`); empty without a line |
 
-"Mavericks" here is the **OS** (10.9), so "Mavericks Tailscale" = "the Mavericks build of Tailscale" —
-which helps rather than hurts on the trademark front; keep the "unofficial community build, not affiliated
-with <upstream>" disclaimer regardless. Where the product name is a third-party trademark used
-nominatively (Tailscale), this is fine; where you can't use the upstream noun at all (Docker → "Container
-Tools"), the descriptor already IS your name, so "Mavericks Container Tools" is simply your product line.
+The OS is named once, on the notes line: `Release <tag> · Requires Mac OS X <floor> or later` (U+00B7 with a
+space on each side; the floor part only when a floor is given). An app the product ships follows its
+`products/<short>/app` file: `noun` means the bundle's filename, `CFBundleName` and
+`CFBundleDisplayName` equal the noun and `CFBundleIdentifier` is `dev.mavergreen.<short>`; `upstream` means
+upstream's own names, kept by declaration. Keep the "unofficial community build, not affiliated with
+<upstream>" disclaimer in README prose.
 
-Never rename **functional identifiers** to match the display name: bundle IDs, executable names,
-`launchd` labels, `hostinfo.SetPackage`/equivalent, internal helper bundles, and asset filenames stay
-as they are. A Sparkle updater's functional identifiers are not chosen at all: its bundle id, app name,
-update-check label and feed are derived from the product's registry line (see "Sparkle updater").
-A `.app` name with a space is fine; quote the path in shell/plists.
-What those identifiers must LOOK like — `dev.mavergreen.*`, and where a product may install — is
-checked at package time: see "Install layout and identity" below. A product's registered **short
-name** (`go126`, `openssh`, `shipyard`) is a third register, and a functional one: it names the
-product's directory and is what people type to the `mavergreen` helper.
+Never rename **functional identifiers** to match a display name: bundle IDs, executable names, `launchd`
+labels, `hostinfo.SetPackage`/equivalent, internal helper bundles and asset filenames stay as they are. A
+Sparkle updater's functional identifiers are not chosen at all: its bundle id, app name, update-check
+label and feed are derived from the product's identifier and repo (see "Sparkle updater"). What those
+identifiers must LOOK like, and where a product may install, is checked at package time: see "Install
+layout and identity" below. A product's **short name** (`go126`, `openssh`, `shipyard`) is a functional
+register: it names the product's directory and is what people type to the `mavergreen` helper.
 
 ## Versioning
 
-**First decide: does this repo PORT an external upstream, or is it its OWN upstream?** The `-mavericks.N`
+**First decide: does this repo PORT an external upstream, or is it its OWN upstream?** The `-mavergreen.N`
 suffix means "our Nth repackage of *someone else's* thing." Most repos port an upstream and use the
-`<upstream>-mavericks.N` machinery below (including date-versioned ports — `mavericks-ed25519`
-`20221003-mavericks.N`, where `.mavergreen/upstream/VERSION` is upstream's commit date but it is still repackaging
+`<upstream>-mavergreen.N` machinery below (including date-versioned ports — ed25519
+`20221003-mavergreen.N`, where `.mavergreen/upstream/VERSION` is upstream's commit date but it is still repackaging
 an upstream). A repo that is **its own upstream** — original
 Mavergreen code, not a port (porthole, longboat, recaulk; container-tools, which bundles others'
 components but whose product is its own code) — has no "repackage-of-someone-else" axis, so
-it **drops the `-mavericks` suffix** and versions itself directly:
+it **drops the `-mavergreen` suffix** and versions itself directly:
 
 - **date-based `YYYYMMDD.N`** (porthole, longboat) — the family's date form but *without*
-  `-mavericks`, precisely because it is not a port. The date is the UTC day the repo's own code last
+  `-mavergreen`, precisely because it is not a port. The date is the UTC day the repo's own code last
   changed, never earlier than the last release tag's: a release carrying an own-code change takes
   that day and starts again at `.1`; an ingredient-only release keeps the date and takes `.N+1`. `.N`
   is never omitted. `$SHIPYARD_SCRIPTS/self-upstream-version.sh` derives it from git history
@@ -630,34 +637,37 @@ it **drops the `-mavericks` suffix** and versions itself directly:
 
 Mechanics for a self-upstream repo: `.mavergreen/upstream/VERSION` (if used) is the repo's OWN version, with no
 Renovate datasource — nothing external to track. There is **no `resolve-version.sh`** (it hardcodes
-`-mavericks.`), so `release.yml` takes a date-based version from `self-upstream-version.sh` and computes a
+`-mavergreen.`), so `release.yml` takes a date-based version from `self-upstream-version.sh` and computes a
 semver one itself (`fetch-depth: 0` either way). `VERSION` stays a gitignored build product; the family-conventions
 gate still applies unchanged (committed `.mavergreen/upstream/VERSION` + uncommitted `VERSION` passes it), and you
 still publish via `publish-release.yml@v1`. **Everything below — the two bump axes, `resolve-version.sh`,
-`build/version.sh`, the `-mavericks.N` suffix — is for the PORT case.**
+`build/version.sh`, the `-mavergreen.N` suffix — is for the PORT case.**
+
+Releases before the flag day carry `-mavericks.N`. The counter restarts: the first release after it is
+`<upstream>-mavergreen.1`, and tag lookups match only `-mavergreen.*`.
 
 **Two independent bump axes.** The **upstream component** moves when upstream releases: Renovate edits
-`.mavergreen/upstream/VERSION`, and `version.sh auto` cuts `<new>-mavericks.1` (N resets to 1). The **`-mavericks.N`
+`.mavergreen/upstream/VERSION`, and `version.sh auto` cuts `<new>-mavergreen.1` (N resets to 1). The **`-mavergreen.N`
 suffix** moves for a packaging-only re-release (recipe/patch/updater/CA change, upstream unchanged): via
 `workflow_dispatch local_release=true`, which cuts N+1. Never hand-edit `VERSION` for either — it's computed.
 
 - **`.mavergreen/upstream/VERSION`** — committed, bare on line 1 (`1.4.2`, no `v`), Renovate-edits it. Read by `build/lib.sh`'s
   `upstream_version()`.
-- **`VERSION`** — `<upstream>-mavericks.N`, **a BUILD PRODUCT**: gitignored (`/VERSION`), written by
+- **`VERSION`** — `<upstream>-mavergreen.N`, **a BUILD PRODUCT**: gitignored (`/VERSION`), written by
   `resolve-version.sh`, never committed. `check-family-conventions.sh` fails a *tracked* one. In CMake
   use `mavergreen_resolve_version(MYVAR)` (from the package Config, so plain `find_package` is enough —
   no `include(Mavergreen)` needed) rather than `file(STRINGS VERSION …)`, which only ever worked because
   four repos committed the file.
 - **`scripts/resolve-version.sh [auto|local]`** — the one way to learn the version at build time. It
   reuses an existing `VERSION` so **every job in one run agrees**, and derives+writes one otherwise.
-  An empty `VERSION` fails loudly: artifacts named `-mavericks.` with nothing in front look almost right.
+  An empty `VERSION` fails loudly: artifacts named `-mavergreen.` with nothing in front look almost right.
 - **`scripts/release-mode.sh`** — answers "is this run a repackage?" once, from the event. Every job
   that resolves a version must use it. container-tools built one `.pkg` from two jobs that disagreed —
   `build-macos` resolved `-mavericks.15`, `build-iso` resolved `.14`, same run, same commit — because
   a parallel job has no way to know a repackage is in progress. Making one job `needs:` the other fixes
   it by serialising builds that have no reason to wait; a shared decision does not.
 - **Any job that resolves a version needs `fetch-depth: 0`** — N comes from the tags. Without them CI
-  labels every build `-mavericks.1` and hides what it is really building.
+  labels every build `-mavergreen.1` and hides what it is really building.
 - **Where the upstream comes from a pin rather than a committed version**, the repo has
   `.mavergreen/upstream/PIN` or `COMMIT` and a `.mavergreen/hooks/derive-upstream-version` that prints the version
   (ed25519: the pinned commit's date; tailscale: upstream's own `VERSION.txt`; the swift repos: their
@@ -672,7 +682,7 @@ suffix** moves for a packaging-only re-release (recipe/patch/updater/CA change, 
 - **Repackage ownership is the directory**: a change under `.mavergreen/upstream/` is a new own upstream and
   `repackage-decision.sh` skips it; a change under `.mavergreen/ingredients/` (or matching an ingredient's `watch`) is a
   repackage. Keeping the own-upstream pin and an ingredient pin in one file is not a shape any more — each is its own
-  file, so the push never publishes twice (`-mavericks.1` from the push, `.2` from the dispatched repackage).
+  file, so the push never publishes twice (`-mavergreen.1` from the push, `.2` from the dispatched repackage).
 - **A test that encodes the upstream version MUST read it from `.mavergreen/upstream/VERSION`, never hardcode** — a
   hardcoded version fails its own CI on the next Renovate bump and blocks the automerge.
 - **When upstream ships several concurrently-supported lines** users want independently (Go minors,
@@ -697,15 +707,15 @@ it stays in the product's repo (`Mavergreen/rust`). One line's native and cross 
 repo (`golang-126` ships `go126` and `go126-cross`). The line repo serves its line from the root:
 `.mavergreen/upstream/VERSION` and `patches/` live there, the line is *derived* from it, never a
 separate input, and Renovate caps the repo at the next line (`matchDepNames: ["go-126"]`,
-`allowedVersions: "<1.27"`). A lined product's pkg identifier is `dev.mavergreen.<product>.<short
-name>` (`product-name.sh check` enforces it), and its updater's bundle id, app, label and feed follow
-from its registry line, so two lines never share one. Every feed is
+`allowedVersions: "<1.27"`). A lined product's pkg identifier is `dev.mavergreen.<short
+name>`, derived, and its updater's bundle id, app, label and feed follow
+from it and the repo, so two lines never share one. Every feed is
 `/releases/latest/download/<short name>.xml` on the line's own repo, whose newest release is always
 that line's, so no line needs a fixed per-line feed release. Renaming a line repo is a flag-day step
 and is asked for, never done in passing.
 
 **The lines of one upstream share a group.** Each line repo stages with the same `--group` (`go`)
-and its own `.mavergreen/products/<short>/line` (`1.26`, `1.27`; `--line` is refused). Every member always exports `<cmd>-<line>` (`go-126`,
+and its own `.mavergreen/products/<short>/line` (`1.26`, `1.27`; `render-manifest.sh --line` is refused). Every member always exports `<cmd>-<line>` (`go-126`,
 `gofmt-127`); the bare names (`go`, `gofmt`) belong to the one member the group has **selected**.
 The first member installed is selected; installing another never takes the selection, and neither
 does upgrading one; `mavergreen select go go127` moves it. The mechanism is in "Install layout and
@@ -731,9 +741,8 @@ a new line repo is warranted.
 
 **Starting a new line.**
 1. Fork the previous line's repo as `<product>-<line>` (`golang-127`).
-2. Register its short names in shipyard's `scripts/product-names` with the new repo
-   (`go127 dev.mavergreen.golang.go127 golang-127`, and the `-cross` row), and push shipyard first:
-   nothing packages, and no updater builds, for an unregistered name.
+2. Write `.mavergreen/products/go127/noun` and `line` (`Go`, `1.27`), and the `-cross` product's. There is
+   nothing to register; uniqueness of the short name across the family is the catalog's check.
 3. Set the Renovate cap to the next line.
 4. Set the bootstrap cap, where the product has one.
 5. `sh scripts/setup-family-repo.sh settle <product>-<line>` once `main` has its workflows: auto-merge,
@@ -743,7 +752,7 @@ a new line repo is warranted.
 6. Nothing to set for `SPARKLE_PRIVATE_KEY`: it is an org secret every public repo already sees (see
    Sparkle updater).
 7. Get a README a human has read (`publish-release.yml` refuses a first release without one).
-8. Pass `--line <tag prefix>` to `release-notes.sh` (`--line 1.27`, the prefix the tags carry).
+8. Pass `--short <short>` and `--line <tag prefix>` to `release-notes.sh` (`--line 1.27`, the prefix the tags carry), and `short: <short>` to `publish-release.yml`.
 9. Consumers move by hand, repo and short name, when one of their own bumps needs the line.
 
 ## Pushing is a request for CI feedback, not a save button
@@ -785,7 +794,7 @@ cut and publish a release. Pushing is therefore a decision, not a reflex.
 Two release models — **pick by how you publish**:
 
 - **Auto-cut on main** — a push to `main` whose upstream has no release yet cuts
-  `<upstream>-mavericks.1` by itself. The publish decision lives in the build job
+  `<upstream>-mavergreen.1` by itself. The publish decision lives in the build job
   (`steps.ver.outputs.release`). Use this when Renovate merging the bump should *itself* release.
 - **Deliberate publish** — build and gate on every push/PR, but publish only from an explicit
   `workflow_dispatch` (or a legacy `tags:` trigger, where one remains). Use this when a human decides when to cut, or the build is too heavy or too risky
@@ -814,7 +823,7 @@ before you push to its `main` — in the left column, that push is a release.
   `workflow_dispatch` with a `local_release` boolean (repackage escape hatch). **A new repo adds no
   `tags:` trigger** — tags are retired as a release input; a `workflow_dispatch` covers every case a
   tag used to (`gh workflow run … --ref <any ref>`). Most existing product repos still carry a
-  `push: tags: ['*-mavericks.*']` trigger (checked 2026-09-26); it is legacy, to be removed, not a
+  `push: tags: ['*-mavergreen.*']` trigger (checked 2026-09-26); it is legacy, to be removed, not a
   pattern to copy.
 - `checkout` with `fetch-depth: 0` (version.sh counts tags).
 - A **`ver` step** (id `ver`) runs `version.sh auto|local`, then **forces `rel=no` unless this run is a
@@ -825,7 +834,7 @@ before you push to its `main` — in the left column, that push is a release.
   `softprops/action-gh-release` + a PAT; `gh release create` is the family way.)
 - **`concurrency` — a run that can publish is alone in its group and is cancelled by nothing.** Only a
   `pull_request` supersedes, keyed per ref so a force-push replaces its own predecessor. Everything else —
-  a branch push, a `*-mavericks.*` tag, a `workflow_dispatch` — is keyed on `github.run_id`, which puts it
+  a branch push, a `*-mavergreen.*` tag, a `workflow_dispatch` — is keyed on `github.run_id`, which puts it
   in a group of one: never queued, never evicted, never cancelled.
   ```yaml
   concurrency:
@@ -841,7 +850,7 @@ before you push to its `main` — in the left column, that push is a release.
   cancels the queued one while `cancel-in-progress` evaluates to `false`. A lock that only holds for two is
   not a lock.
 - **Nothing replaced that lock, and nothing needed to.** Two dispatches can now compute the same
-  `-mavericks.(N+1)`; both build, and shipyard's `publish-release.yml` refuses the loser at publish time
+  `-mavergreen.(N+1)`; both build, and shipyard's `publish-release.yml` refuses the loser at publish time
   with a message naming the tag. A wasted build with a red X beats a release that silently never happened.
   The version is baked into the pkg's version, the pkg filename and the appcast's `<sparkle:version>`,
   so a collision must **rebuild** — re-dispatch — and must never be relabeled.
@@ -980,7 +989,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
     if: needs.build.outputs.publish == 'true'
     permissions: { contents: write }
     uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
-    with: { version: "${{ needs.build.outputs.version }}", artifact: <artifact name> }
+    with: { version: "${{ needs.build.outputs.version }}", artifact: <artifact name>, short: <short name> }
   ```
 - **A repo's FIRST EVER release needs a README a human has read.** `publish-release.yml` refuses it
   while the README still carries the generated marker line — plain visible prose under the heading,
@@ -1046,7 +1055,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   defect in the tooling being shipped. The same reasoning applies to any repo whose release artifacts
   are what the release process runs on.
 - **An existing tag refuses the publish — except the tag that triggered the run.** Two runs can compute
-  the same `-mavericks.(N+1)` and both build it; the loser must not publish and must not relabel (the
+  the same `-mavergreen.(N+1)` and both build it; the loser must not publish and must not relabel (the
   version is already baked into the pkg and the appcast), so it re-dispatches. But a run started by a
   pushed tag always finds its own tag, and blanket refusal made the documented "publish from a tag"
   model impossible — clang had no working release path at all. `assert_tag_publishable.sh` allows
@@ -1061,50 +1070,33 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   `<description>` and the GitHub Release body, so the two cannot disagree:
   ```sh
   sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "$TAG" --version "$FULL" \
-     --product OpenSSH --min-os 10.9.5 --out dist/RELEASE_NOTES.md
+     --short openssh --min-os 10.9.5 --out dist/RELEASE_NOTES.md
   ```
-  `--product` is the BARE product noun; the script composes the family's prose register
-  (`## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)`, and `## Porthole 20260802.6` for a
-  self-upstream product that is its own upstream). `--min-os` emits the install-floor line — omit it
-  for a product that is not a 10.9 `.pkg`. `--line` scopes the baseline for a repo shipping parallel
-  lines (golang's `1.26`); it is normalized internally, so both `1.26` and `1.26.*` work.
+  The noun is never passed; the heading comes from `.mavergreen/products/<short>/noun` (see "Product
+  naming"): `## OpenSSH 9.9p2`, and `## Porthole 20260802.6` for a self-upstream product. Line 2 is
+  `Release <tag>`, with ` · Requires Mac OS X <floor> or later` when `--min-os` is given; omit it for a
+  product that is not a 10.9 `.pkg`. `--short` names the product and defaults to the repo's only product;
+  a repo with several products must pass it. `--product` is refused.
+  `--line` scopes the baseline for a repo shipping parallel lines (golang's `1.26`); it is normalized
+  internally, so both `1.26` and `1.26.*` work.
   The generator `cd`s to the repo root before it runs, so **`--out` resolves against the repo root**,
   not the caller's cwd — a relative path from a subdirectory (a `build/` step, say) will not land where
   you typed it; pass an absolute path or one rooted at `$MAVERGREEN_REPO_ROOT` from anywhere but the root.
+  `check-release-notes.sh <file> <version> --short <short> --tag <tag>` checks a body against the derived
+  heading and the `Release <tag>` line; `publish-release.yml` runs it on what it is about to publish.
 - **macho-tools is deliberately out of scope for this migration.** It has no release infrastructure at
   all (no `release.yml`, no `.pkg`, no updater) to point at the generator; its own plan needs
   correcting before any release-notes work applies to it.
-- **The per-repo `--product` noun is a DECISION, not a derivation.** The generator can't infer
-  register or brand from a bare upstream name, so each repo's choice is recorded here — read it before
-  re-litigating "Linux 1Password" or "Container Tools":
-
-  | Repo | `--product` | Why, where not obvious |
-  |---|---|---|
-  | openssh | `OpenSSH` | |
-  | 1password | `Linux 1Password` | Porthole preset — the Linux-ness IS the product |
-  | signal-desktop | `Linux Signal Desktop` | same shape as 1password |
-  | porthole | `Porthole` | self-upstream |
-  | container-tools | `Container Tools` (bare — no "for Mavericks") | its version is `<date>-mavericks.N`, which the generator's title logic reads as the PORT shape (it has a `-mavericks.` axis), and that template already appends " for Mavericks" itself — passing the longer descriptor would double it |
-  | clang | `Clang` | |
-  | golang | `Go` | |
-  | recaulk | `Recaulk` | self-upstream |
-  | ed25519 | `ed25519` (lowercase) | upstream's own spelling |
-  | tailscale | `Tailscale` | |
-  | swift | `Swift` | |
-  | magic-trackpad2 | `Mavericks Trackpad 2` | genuinely self-upstream (`vX.Y.Z`, no `-mavericks.N`) |
-  | ca-certs | `CA Certificates` | the version is NSS's (`3.130.0`); the roots are Mozilla's data, not a product of ours |
-
-  (shipyard itself, a caller but not a "product", passes `Shipyard`.)
 - **`--line` takes the prefix the TAGS carry, not the repo's own product id or any other per-repo
   identifier.** golang's product id is `126` (tree `/usr/local/mavergreen/go126`), but its release
-  tags are `1.26.7-mavericks.N`, so `--line` must be `1.26` (derived in `release.yml` as
+  tags are `1.26.7-mavergreen.N`, so `--line` must be `1.26` (derived in `release.yml` as
   `printf '%s' "$VER" | cut -d. -f1,2`) — the identifier used elsewhere (`126`) matches nothing against
-  `previous-release-tag.sh`'s glob (it compares to real tags like `1.26.*-mavericks.*`). **An unmatched
+  `previous-release-tag.sh`'s glob (it compares to real tags like `1.26.*-mavergreen.*`). **An unmatched
   glob is now fatal for a repackage**, not a silent drop: `release-notes.sh` refuses to ship a
   repackage with no compare link and no ingredient section, naming the fix in the failure ("pass the
   prefix the tags actually carry (1.26, not 126)") rather than publishing a body that only looks
   complete because the title and `### What changed` are still there. (A brand-new upstream,
-  `-mavericks.1`, has no baseline to be missing and is unaffected.) clang's `--line 22`
+  `-mavergreen.1`, has no baseline to be missing and is unaffected.) clang's `--line 22`
   (`${CLANG_LINE:-22}`) is correct only because its own tags happen to start `22.1.1-…` — the directory
   name and the version prefix coincide there by chance, not by rule. This bit the migration plan itself
   before it was corrected against the real tags; verify a line's actual tag shape, never assume it
@@ -1151,13 +1143,13 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   A repo that tags products separately (swift) nests `<TAG>/` under `.mavergreen/release-notes/<short>/`
   and passes `--short <short>` to `release-notes.sh`; given it, and when that directory exists, only
   the nested tree is read. The product whose `requires/` and `notice` are read is `--short`'s, else the
-  one whose short name is the noun lowercased, else the repo's only product. A requirement is listed
+  repo's only product. A requirement is listed
   under "Before you update" when its `min` differs from the previous release's, so a new or raised one
   is announced once; a previous release from before `.mavergreen/` lists none. An unknown entry in
   `.mavergreen/release-notes/<TAG>/` fails the release, naming it, as does any file beside it but a
   `.md`; nothing else from the directory reaches the body. A directory beside it named for any other
   tag fails a new release too, naming the tag it expected: only `<TAG>`, an existing tag's directory,
-  or a registered product's nest may sit there (a minted tag's regeneration leaves notes staged for a
+  or a product's nest may sit there (a minted tag's regeneration leaves notes staged for a
   later release alone).
 
   **Every sentence is checked by `check-release-sentence.sh`** (`changes/*`, `rebuild`, `notice`; its
@@ -1171,8 +1163,8 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 
   (shipyard's own notes add `--allow shipyard`). To see the whole body, render it from the repo root
   with tags fetched, as the release would: `sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag <TAG>
-  --version <VERSION> --product <noun> --out "$TMPDIR/notes.md"` (plus the `--line`, `--min-os` and
-  `--short` the repo's `release.yml` passes).
+  --version <VERSION> --short <short> --out "$TMPDIR/notes.md"` (plus the `--line` and `--min-os`
+  the repo's `release.yml` passes).
 
   **Naming `<TAG>` before the release exists**, by version scheme:
   - `vLINE.COUNT` (shipyard, `shipyard-version.sh`): the tag of the commit that will be released,
@@ -1184,8 +1176,8 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   - `vX.Y.Z` (magic-trackpad2): `v` plus the `MAVERICKS_VERSION` in `CMakeLists.txt` that the release will
     publish, such as `v0.5.6`. `publish-release.yml` mints the tag; never push it by hand (the pre-push
     hook refuses).
-  - `<upstream>-mavericks.N` (every port): N is 1 for a new upstream, else the highest
-    `<upstream>-mavericks.*` tag's N plus 1.
+  - `<upstream>-mavergreen.N` (every port): N is 1 for a new upstream, else the highest
+    `<upstream>-mavergreen.*` tag's N plus 1.
 
   **Legacy `.md` prose.** A tag is *minted* when it exists locally on a commit other than `HEAD`
   (checkouts are fetch-depth 0; publish-release.yml mints the tag after the notes are built). A
@@ -1274,7 +1266,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   (the changes say what changed in the product), and none gives the `New release` line below;
   otherwise `- New release of <product> <version> (was <prev>).` and a
   `[Changes since <prev>](https://github.com/<owner>/<repo>/compare/<prev tag>...<tag>)` line, the
-  repo from `GITHUB_REPOSITORY`, else the registry entry for the lowercased product noun; with
+  repo from `mg_repo` (`GITHUB_REPOSITORY`, else the `github.com` owner/name of `origin`); with
   neither, the link line is left out rather than guessed. It used to say "Release of <product>
   <version>." for every one, so an ingredient-only repackage read like new code. "First release" is
   a claim, so a checkout with no tags at all stops instead of making it when the repo evidently has
@@ -1282,12 +1274,12 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   A port with `changes/` and no moved pin or patch says
   `- Built on upstream <product> <upstream> (no upstream change).` instead.
 - **A self-upstream repo gets a real baseline too, via `--tag-glob`.**
-  `previous-release-tag.sh`'s default glob is `*-mavericks.*`, which never matches a self-upstream
+  `previous-release-tag.sh`'s default glob is `*-mavergreen.*`, which never matches a self-upstream
   repo's own tags — shipyard (`vX.Y.Z`), porthole (`YYYYMMDD.N`), magic-trackpad2 (`vX.Y.Z`) — so those
   three used to get neither a compare link nor a `### Build ingredients` section, even where a real one
   existed: porthole has four Renovate-tracked ingredient pins (skalibs, s6, the Debian base image,
   xpra — see its `.mavergreen/ingredients/`) its own generated notes could never have named. `--tag-glob PATTERN`
-  takes a tag shape verbatim instead of the `<upstream>-mavericks.*` shape every ported repo carries.
+  takes a tag shape verbatim instead of the `<upstream>-mavergreen.*` shape every ported repo carries.
   **No repo passes it for notes**: `release-notes.sh` derives the glob from the tag being published
   (`v*.*.*` for `vX.Y.Z`, `[0-9]*` for porthole's `YYYYMMDD.N`) and calls `previous-release-tag.sh`
   itself, so all three got a baseline with no per-repo change. The `--tag-glob 'v*.*.*'` you will find
@@ -1344,10 +1336,10 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 
 ### A new upstream links upstream's own notes
 
-A `-mavericks.1` exists to deliver someone else's changes, so its notes must say where to read them —
+A `-mavergreen.1` exists to deliver someone else's changes, so its notes must say where to read them —
 naming the new version is not enough. **Every port repo carries `.mavergreen/hooks/upstream-release-notes-url`,
 run with `<upstream-version>`**, which prints ONE URL: upstream's notes for exactly that version (the bare upstream version, `1.102.3`,
-not the `-mavericks.N` tag).
+not the `-mavergreen.N` tag).
 
 - **Shipyard turns it into a `### What changed` bullet; the repo only answers "where".**
   `release-notes.sh` calls this hook through `upstream-notes.sh --url-only`, whose exit code says
@@ -1357,7 +1349,7 @@ not the `-mavericks.N` tag).
   reason, and 5, into a stopped release. A repo not yet calling the generator can still get the older
   standalone `### Upstream` section by calling `sh "$SHIPYARD_SCRIPTS/upstream-notes.sh" "$VER"`
   (no `--url-only`) and appending what it prints (tailscale's `release.yml`).
-- **Only for a NEW upstream.** `upstream-notes.sh` links when no *other* `<upstream>-mavericks.*` tag
+- **Only for a NEW upstream.** `upstream-notes.sh` links when no *other* `<upstream>-mavergreen.*` tag
   exists, so a repackage gets nothing. It decides from the tags rather than the previous release,
   because with parallel lines the previous release can be another line's. A shallow clone or a repo
   whose tags it cannot list gets no section and a warning — never a false "new" — so the notes job
@@ -1419,10 +1411,10 @@ repo-local manager. Two things to wire deliberately:
   the consumer's `release.yml` via `gh workflow run … -f local_release=true`. It does NOT push a tag: a
   `GITHUB_TOKEN`-pushed tag can't trigger `release.yml` (GitHub's recursion guard), whereas
   `workflow_dispatch` IS `GITHUB_TOKEN`-triggerable. So the consumer's `release.yml` needs a
-  `workflow_dispatch` `local_release` input that computes `-mavericks.(N+1)` and **publishes inline** in
+  `workflow_dispatch` `local_release` input that computes `-mavergreen.(N+1)` and **publishes inline** in
   that same run (golang/legacysupport have it via `version.sh local`; dispatch-cut repos must add it —
   the same fix repairs any `release-on-bump.yml` that relies on a pushed tag). CI-only bumps (`.github/**` action
-  `uses:`) aren't under `.mavergreen/ingredients/`, so they never repackage. This automates the `-mavericks.N` axis,
+  `uses:`) aren't under `.mavergreen/ingredients/`, so they never repackage. This automates the `-mavergreen.N` axis,
   driven by a dependency instead of a hand-run `local_release`.
 - **Name that caller `.github/workflows/repackage-on-ingredient-bump.yml`.** The notes generator checks
   the caller to learn this repo is wired for its ingredients, and the conventional path wins outright — a repo
@@ -1439,7 +1431,7 @@ repo-local manager. Two things to wire deliberately:
   dispatch-cut version is published without being committed back (the tag is minted by
   `action-gh-release` via `tag_name` + `target_commitish`), so reading N from the file recomputes the
   same N+1 on the next ingredient bump and **overwrites that release** instead of cutting the next one.
-  Take the highest existing `<upstream>-mavericks.*` tag (needs `fetch-depth: 0`) — idempotent, no
+  Take the highest existing `<upstream>-mavergreen.*` tag (needs `fetch-depth: 0`) — idempotent, no
   commit-back. Repos deriving from tags already (`version.sh local`) are fine by construction.
 - **Say which ingredient moved.** A repackage exists to ship a new input, so its notes must name that
   input — "rebuilt with the current ingredients (see .mavergreen/ingredients/)" tells a reader nothing.
@@ -1501,7 +1493,7 @@ v1.2.3@<40-hex-commit-sha>
 There is deliberately **no separately-maintained artifact hash** (`golden.sha256`) and **no manual
 on-box "bless" step**: the commit digest *is* the reproducibility pin, Renovate bumps it, and a
 per-bump characterization/fingerprint of the *built* output only blocks merges without a shippability
-signal (see the auto-merge intent above — fix runtime regressions in `-mavericks.2`).
+signal (see the auto-merge intent above — fix runtime regressions in `-mavergreen.2`).
 
 ### Git sources a 10.9 build fetches: the commit's tarball, by SHA-256
 
@@ -1547,17 +1539,18 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   `gh api repos/Mavergreen/<repo>/actions/organization-secrets --jq '[.secrets[].name]'` lists it all
   the same: so check the repo is public (see "Creating a family repo"). Never add a
   repo-level secret of the same name: it shadows the org one, so a key rotation would miss that repo.
-- **An updater's identity is derived, never chosen.** From the product's registry line (`<short>
-  <pkg identifier> <repo>`), `product-name.sh` derives the bundle id `<pkg identifier>.updater`, the app
+- **An updater's identity is derived, never chosen.** From the product's identifier and repo
+  (`mg_repo`), `updater-identity.sh bundle-id|agent-label|app|feed <short>` derives the bundle id `<pkg identifier>.updater`, the app
   `Library/Application Support/Mavergreen/<short>-updater.app` (installed under `/`), the
   update-check LaunchAgent `<pkg identifier>-updatecheck` (plist `<label>.plist`), and the feed
-  `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`.
+  `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`. Where git is absent (10.9),
+  configuring an updater needs `GITHUB_REPOSITORY` exported.
   `mavericks_add_updater_app(PRODUCT <short> …)` builds the app with that bundle id and feed and refuses
   `NAME`, `BUNDLE_ID` and `FEED_URL`. Its CMake target and the app it builds are both `<short>-updater`,
   and the bundle id is also the updater's defaults (prefs) domain: product code that launches the
   updater, names its app path or reads its defaults takes them from `MAVERICKS_UPDATER_TARGET` and
   `MAVERICKS_UPDATER_BUNDLE_ID`, which `mavericks_add_updater_app` sets in the caller's scope (or from
-  `product-name.sh`), and never hardcodes them. `stage_product.sh --updater-app` stages it, refuses one built with
+  `updater-identity.sh`), and never hardcodes them. `stage_product.sh --updater-app` stages it, refuses one built with
   another identity, and refuses `--appcast`, `--app-dir` and `--agent-label`.
   `sign_and_appcast.sh --product <short> --feed-dir dist` writes the feed as `dist/<short>.xml`, and
   `publish-release.yml` attaches it with the other assets, publishing only after every upload, so
@@ -1654,13 +1647,13 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   runs a privileged install).
 - **The Sparkle comparison version must be dotted-numeric AND monotonic — the shared derivation makes
   it so; never hand-roll it per product.** `SUStandardVersionComparator` only totally orders `X.Y.Z.N`,
-  and it reads the `-mavericks.N` suffix (or any stray letter) as EQUAL — so a same-upstream repackage
-  would be invisible to auto-update ("you're up to date"). The human string (`9.9p2-mavericks.3`) stays
+  and it reads the `-mavergreen.N` suffix (or any stray letter) as EQUAL — so a same-upstream repackage
+  would be invisible to auto-update ("you're up to date"). The human string (`9.9p2-mavergreen.3`) stays
   in `<sparkle:shortVersionString>` / `CFBundleShortVersionString`; the *compared* value
   (`<sparkle:version>` / `CFBundleVersion`) is derived to a numeric-only form by **both**
   `scripts/gen_appcast.sh` and `MavericksSparkle.cmake`, which MUST stay identical (a mismatch means the
   updater silently believes it's current). The derivation, in order:
-  - `-mavericks.N` → `.N` (the packaging axis);
+  - `-mavergreen.N` → `.N` (the packaging axis; the comparison also reads a pre-flag-day `-mavericks.N` the same way);
   - a **monotonic** in-version patch letter → `.` — the only one in the family is OpenSSH-portable
     `X.YpZ` → `X.Y.Z` (`p2` is *newer* than `p1`, so `9.9p2` → `9.9.2` is order-preserving, and
     `9.9p2 < 9.10p1` stays `9.9.2 < 9.10.1`);
@@ -1927,7 +1920,7 @@ disagree is incoherent however it was built.
 |---|---|
 | Itself | `.pkg` / appcast / tag versions match; the enclosure names a published asset at its real length, and points into THIS release |
 | Neighbours | every `.pkg` of one release agrees on the version; **variants agree about their ingredients** |
-| Siblings | version scheme `<upstream>-mavericks.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a product archive declares the 10.9.5 floor; every shipped Mach-O slice records its arch's pinned SDK (see "SDK pinning"); no shipped Mach-O carries or loads a second C++ runtime (below) |
+| Siblings | version scheme `<upstream>-mavergreen.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a product archive declares the 10.9.5 floor; every shipped Mach-O slice records its arch's pinned SDK (see "SDK pinning"); no shipped Mach-O carries or loads a second C++ runtime (below) |
 
 **This constrains outputs, not methods.** Products here build in genuinely different ways — a Go
 toolchain, a boot2docker iso, libswiftCore, an openssh — and making those look alike would buy
@@ -1965,7 +1958,7 @@ meant to excuse.
 **The same tree, and the same parser (`deviations.sh`), covers the family-conventions
 checks** — name the check as the directory and scope it to the file: `registry-read` (check
 16), `shipyard-cmake-only` (check 18), `rosetta` (check 25, "Rosetta", above), `renovate-path` (check 26) and `unpinned` (check 28), `packager` (check 35) and
-`macos-runner` (check 36, a scope of `<workflow file>:<job>`), the last two refusing a wildcard; and, for the whole repo (a scope of `*`), `artifact-checks-wired` (check 21), `stage-product` (check 23), `registered` (check 24) and
+`macos-runner` (check 36, a scope of `<workflow file>:<job>`), the last two refusing a wildcard; and, for the whole repo (a scope of `*`), `artifact-checks-wired` (check 21), `stage-product` (check 23) and
 `on-target` (check 29, "Acceptance on real 10.9", above). An `on-target` deviation scoped to `<part>` is the one form
 no check acts on: it records a gap in the 10.9 job's coverage, and `deviations.sh` refuses a glob
 there, so it can never pass for the `*` form. Check 15's `comments` is the exception: the gate reads
@@ -2075,22 +2068,19 @@ it for a non-`/` root — so work that only makes sense on the running system st
 `[ "${MAVERGREEN_ROOT:-/}" = / ] || exit 0`. Like any tracked script it is host-declared on line 2,
 and it exits 0 when it has nothing to do.
 
-### Short names: the registry
+### Short names
 
-**Every product has a short name, registered once, family-wide, in shipyard's
-`scripts/product-names`** — one line, `<short name> <pkg identifier> <repo>`. It names the product's
-directory and is what people type (`mavergreen select go go126`), and the registry is the only place
-uniqueness can be checked: `product-name.sh check` refuses a duplicate name, a duplicate identifier,
-a name outside `[a-z0-9-]` (it becomes a path in a preinstall's `rm -rf`), a name the layout reserves
-(`var`, `bin`, `sbin`, `share`, `mavergreen`, `system-replace`, `base`), an identifier outside
-`dev.mavergreen.*`, and `dev.mavergreen.base`, which is the helper's component. The helper refuses the
-reserved names too, so a hand-made manifest cannot reach them. Many short names may
-share a repo (`golang-126` ships `go126` and `go126-cross`). `check` also refuses a row without a
-repo, and, in a line repo (`<product>-<digits>`), an identifier other than
-`dev.mavergreen.<product>.<short name>`. Every lookup — `identifier`, `repo`, `updater-bundle-id`,
-`agent-label`, `updater-app`, `feed`, and `shorts <repo>` — refuses a reserved or malformed name even
-where a hand-edited registry lists it. **A registered tree path can be a contract.** `ca-certs` is
-registered ahead of its repo, and its tree path
+**Every product has a short name: the directory `.mavergreen/products/<short>/` in the repo that ships it.**
+It names the product's directory on the target and is what people type (`mavergreen select go go126`). The
+pkg identifier is derived from it, `dev.mavergreen.<short>`, never written down, so a short name is a
+product's whole identity. Uniqueness across the family is the catalog's to check; nothing here compares
+repos. A short name is `[a-z0-9-]`, not starting with `-` (it becomes a path in a preinstall's `rm -rf`), and
+is not one the layout reserves (`var`, `bin`, `sbin`, `share`, `mavergreen`, `system-replace`, `base`);
+`lib/name-rules.sh` holds the rules, and `mavergreen_name`, `render-manifest.sh` and the helper refuse
+what breaks them, so a hand-made manifest cannot reach a reserved name. Many short names may share a repo
+(`golang-126` ships `go126` and `go126-cross`). A product's own repo comes from `mg_repo`, and a
+dependency's from `ingredients/<dep>/REPO`.
+**A tree path can be a contract.** `ca-certs`' tree path
 `/usr/local/mavergreen/ca-certs/etc/openssl/certs/ca-certificates.crt` is a contract, which nothing
 in code enforces: ca-certs installs its bundle exactly there, root-owned, and leaves out any root the
 running Mac's admin trust settings deny for TLS. golang-127's keychain-union patch (`0008`) already
@@ -2099,9 +2089,8 @@ paths, not this one. That's a union with the keychain, in which a
 keychain deny vetoes a root found anywhere, not a search order. The family's rule for trust on a Mac
 is that every consumer reaches the keychain's verdict: a consumer that can read the keychain takes
 its verdict, and the bundle serves those that can't.
-**Adding a product means adding its line there and pushing shipyard**:
-`render-manifest.sh` reads the registry beside it and refuses an unregistered name, so the product
-cannot package until it builds with a shipyard release that carries its line. A variant packaged separately is a product of its own (`go126-cross`).
+**Adding a product means writing `.mavergreen/products/<short>/noun`** (and `line` for a lined product);
+`render-manifest.sh` refuses a product the repo does not declare. A variant packaged separately is a product of its own (`go126-cross`).
 
 ### The manifest (`<product>/mavergreen.plist`)
 
@@ -2111,13 +2100,13 @@ has nothing left to prune.
 
 | Key | From | Notes |
 |---|---|---|
-| `identifier` | the registry | the pkg receipt; not a flag, so it cannot disagree with the registry |
-| `name` | `.mavergreen/products/<short>/noun`, then the line | display; `--name` is refused |
-| `product` | `--product` | the short name; must equal the tree's directory name |
+| `identifier` | `dev.mavergreen.<short>`, derived | the pkg receipt; not a flag, so it cannot disagree with the product |
+| `name` | `.mavergreen/products/<short>/noun`, then the line | display (`name` in "Product naming"); `--name` is refused |
+| `product` | `--product` | the short name (identity, so still a flag); must equal the tree's directory name |
 | `group` | `--group` | defaults to `product` |
 | `line` | line 1 of `.mavergreen/products/<short>/line`, as upstream spells it (`1.27`) | empty for a product with one line; `--line` is refused |
 | `version` | `--version` | |
-| `appcast` | the registry | the product's feed (`product-name.sh feed <product>`) when it stages an updater, else empty; `--appcast` is refused |
+| `appcast` | derived | the product's feed (`updater-identity.sh feed <product>`) when it stages an updater, else empty; `--appcast` is refused |
 | `exports-exclude` | `--exclude`, repeatable | tree-relative paths kept out of the farm |
 | `replaces` | `--replaces /abs/path=tree/path`, repeatable | system-replace, below |
 | `outside` | **the stage itself** | every file or link staged outside the tree, collapsed to its enclosing `.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework` or `.jdk` |
@@ -2212,10 +2201,12 @@ fails unless the product is installed.
 ### The base component, `dev.mavergreen.base`
 
 **Every product archive carries the helper, as the component `dev.mavergreen.base`, listed first**,
-so any single product installs on a clean box. `set_install_floor.sh` adds it — built by
+so any single product installs on a clean box. `set_install_floor.sh --short <short> --version <v> --component <comp>.pkg --dist <dir>` adds it — built by
 `build-base-component.sh` from the packaging shipyard's own copy of the helper, and versioned with
-that shipyard — checks that it came out first, and refuses `--identifier dev.mavergreen.base` for the
-product itself. First, for its postinstall: Installer lays down every payload before running any
+that shipyard — and checks that it came out first. The archive is `<dist>/<short>-<version>.pkg`, its
+component `<short>.pkg`, its identifier `dev.mavergreen.<short>` and its Installer title `Mavergreen <name>`,
+all derived; `--title`, `--out` and `--identifier` are refused, and the component's own identifier must be
+the derived one. First, for its postinstall: Installer lays down every payload before running any
 postinstall, then runs the postinstalls in Distribution order, so a base listed first has installed
 or upgraded `/usr/local/bin/mavergreen` before the product's postinstall runs it (a product's
 *preinstall* runs before the base's payload lands, so it uses the helper only if one is already
@@ -2239,7 +2230,7 @@ scripts:
 - **preinstall**: first, for every `--requires <short>` (repeatable), refuses to proceed — before
   `mavergreen unlink`, before anything else — if `usr/local/mavergreen/<short>/mavergreen.plist` is
   missing on the target volume, naming this product's display name, `<short>`, and its releases URL
-  (from the registry) on stderr, and exits 1 having changed nothing. `--requires <short>>=<version>`
+  (`https://github.com/<repo>/releases`, the repo from `mg_repo`) on stderr, and exits 1 having changed nothing. `--requires <short>>=<version>`
   also refuses when that manifest's `version` is older than `<version>`, or is missing or
   unorderable (`1.0-rc1`), naming the minimum and the installed version; every unmet requirement
   is reported before it exits. Then `mavergreen unlink
@@ -2254,12 +2245,12 @@ scripts:
   no bundle is removed. A bundle or tree it cannot remove is reported, never failing the install:
   files the new version dropped may linger.
 - **postinstall**: `mavergreen link <product>`, failing the install if it fails; then the updater's
-  agent load (`--updater-app`, whose place and label come from the registry); then the `--postinstall-hook`.
+  agent load (`--updater-app`, whose place and label are derived, above); then the `--postinstall-hook`.
 
 `--requires` replaces a hand-written "is product X installed?" or "is it new enough?" check in a
 preinstall hook: 1password once checked for Porthole and Container Tools, signal-desktop only for
 Porthole, and Porthole for nothing, and the three drifted. Each `--requires <short>` must name a
-different, registered product (`scripts/product-names`); an unregistered or self-naming
+different product, a short name the reserved list does not forbid; a self-naming
 `--requires` fails staging (exit 2). A minimum (`--requires container-tools>=20261019.1`) is
 compared by `scripts/lib/vercmp.sh`, the family's one comparator, which the preinstall carries
 inline; a minimum it cannot order (empty, `1.0-rc1`, `abc`) fails staging (exit 2). It does no
@@ -2304,16 +2295,21 @@ is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
 
 | Check | Default rule | Deviation scoped to |
 |---|---|---|
-| `identifier` | the pkg's identifier is `dev.mavergreen.*` | the pkg filename |
+| `identifier` | the pkg's identifier is `dev.mavergreen.*`, and a product's is `dev.mavergreen.<short>` | the pkg filename |
 | `bundle-id` | every TOP-LEVEL bundle (`.app`, `.prefPane`, `.kext`, `.bundle`, `.framework`, `.jdk`, …; not one nested inside another, so Sparkle.framework inside an updater is not asked) has a `CFBundleIdentifier` under `dev.mavergreen.*` | the identifier |
 | `launchd-label` | every `Library/Launch{Agents,Daemons}/*.plist` has a `Label` under `dev.mavergreen.*`, and is named `<Label>.plist` | the Label |
 | `install-path` | every installed file or link is under `usr/local/mavergreen/<the product its manifest names>/`, `Applications/` or `Library/Application Support/Mavergreen/`, or is a `dev.mavergreen.*` launchd plist — or is under `usr/local/mavergreen/.base/` in an archive that carries `dev.mavergreen.base` | the installed path (glob; `*` spans `/` and spaces) |
-| `manifest` | a pkg that installs anything besides the base's staged helper carries exactly one manifest; its `product` is its directory; its `identifier` is the one the registry gives that product, and one of the pkg's components; its `outside` names everything installed outside the tree, exactly as uninstall would remove it (the entry itself, or a bundle directory and what is inside it), with no entry left unused and none in a shape the helper refuses; every `generated` entry has a shape the helper accepts, and need not be in the payload | the pkg filename |
+| `manifest` | a pkg that installs anything besides the base's staged helper carries exactly one manifest; its `product` is its directory; its `identifier` is `dev.mavergreen.<short>`, and one of the pkg's components; its `outside` names everything installed outside the tree, exactly as uninstall would remove it (the entry itself, or a bundle directory and what is inside it), with no entry left unused and none in a shape the helper refuses; every `generated` entry has a shape the helper accepts, and need not be in the payload | the pkg filename |
 | `base` | a pkg carrying a manifest lists `dev.mavergreen.base` as its first component | the pkg filename |
 | `updater` | a Sparkle updater (a top-level bundle with `SUFeedURL`) is `Library/Application Support/Mavergreen/<short>-updater.app` with bundle id `<pkg identifier>.updater`; a pkg with an updater installs the LaunchAgent `<pkg identifier>-updatecheck`; every launchd Label containing `updatecheck` is that one | the pkg filename |
 | `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
-| `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
-| `repository` | with `$GITHUB_REPOSITORY` set, every product a release ships is registered to that repo (by name; the owner is not compared) | the pkg filename |
+| `line` | a product of a line repo (one whose repo ends in `-<number>`) declares a line; a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
+| `repository` | every product a release ships is one of this repo's `.mavergreen/products/` | the pkg filename |
+| `pkg-name` | the pkg is `<short>-<version without a leading v>.pkg` and its component `<short>.pkg` (System Replace: `<short>-system-replace-<version>.pkg`, `<short>-system-replace.pkg`) | the pkg filename |
+| `installer-title` | the Installer title is `Mavergreen <name>` (System Replace: `Mavergreen <name> System Replace`) | the pkg filename |
+| `feed-title` | the feed's channel title is the product's `name` and its item title is `<noun> <version>` | the feed's filename |
+| `manifest-name` | the manifest's `name` is the product's derived `name` | the pkg filename |
+| `app-name` | an app declared `noun` has its filename, `CFBundleName` and `CFBundleDisplayName` equal to the noun; one declared `upstream` has filename equal to `CFBundleName`, and `CFBundleDisplayName` absent or equal | the pkg filename |
 
 Paths are relative to `/`, after each component's `install-location`; a manifest is read only from a
 component installed at `/`, since a product tree always is.
@@ -2533,10 +2529,10 @@ pointing back into the row below — so this table, not the script, is where a c
 | **7.** `VERSION` is **not committed** (an untracked one is fine — it's a build product) | The committed copy drifts: container-tools built `-mavericks.14` from a file saying `.2`, which also made its tag path (`tag == VERSION`) impossible to satisfy |
 | **8.** Every workflow parses **with duplicate keys rejected** | A second `with:` on one step is legal YAML — last key wins — so ordinary parsers accept it and GitHub refuses to run the workflow. No other gate can catch it, because CI never starts |
 | **9.** Every ingredient has a Renovate line 2, a `tracked-by` file, or an `untracked` file saying why (`ingredient-complete`) | An ingredient nobody tracks goes stale silently; an absent decision reads as an oversight rather than a decision |
-| **11.** A **committed** `.mavergreen/hooks/upstream-release-notes-url`, or an `upstream-notes` deviation | A `-mavericks.1` exists to ship someone else's changes; notes that name the version without linking what changed leave the reader to go find it |
+| **11.** A **committed** `.mavergreen/hooks/upstream-release-notes-url`, or an `upstream-notes` deviation | A `-mavergreen.1` exists to ship someone else's changes; notes that name the version without linking what changed leave the reader to go find it |
 | **12.** A workflow that runs `sign_and_appcast.sh` has some workflow calling `scan-for-key.yml`, on a non-comment line; and every call to `sign_and_appcast.sh` passes `--product` and `--feed-dir` and redirects nothing (`>`, other than `2>`), read as one command across lines that end in `\` | A signing run's logs are public and GitHub masks only the literal secret; `publish-release.yml` refuses a signed release with no scan record, and this catches the missing job on a PR instead — a commented-out mention no longer vouches for the job existing. `sign_and_appcast.sh` writes `<feed-dir>/<product>.xml` itself, so the retired `--pkg … > dist/appcast.xml` call fails here on a PR rather than at signing time |
 | **7b.** No `lines/` directory exists at the repo root | `lines/<id>/` is the RETIRED per-line shape (see "Multiple upstream lines" above) — one repo per upstream line now. A reappearing `lines/` means the retired shape crept back |
-| **13.** A Renovate manager whose captured pin ends in `-mavericks.N` has a `regex:` versioning that captures N | Default versioning coerces `-mavericks.N` away, so every repackage compares equal and the pin never moves — silently, with the dep listed as tracked. swift-runtime missed three swift-toolchain releases this way |
+| **13.** A Renovate manager whose captured pin ends in `-mavergreen.N` has a `regex:` versioning that captures N | Default versioning coerces `-mavergreen.N` away, so every repackage compares equal and the pin never moves — silently, with the dep listed as tracked. swift-runtime missed three swift-toolchain releases this way |
 | **14.** Some workflow calls `release-notes.sh` (not just names it) to build the body, on a non-comment line; the body is never hand-written into `RELEASE_NOTES.md`; no workflow passes `--generate-notes` | This is the check that replaced five hand-rolled shapes: six products published "Automated release for Mac OS X 10.9 (Mavericks)." as their entire notes — every release, including Renovate repackages whose only reason to exist was an ingredient bump — and tailscale published an empty body. Check 5 above only asks whether *some* notes reached the release; this asks whether they came from the one shared generator, checked on the PR, where a human can still fix it cheaply. The publisher (`check-release-notes.sh`, below) checks the body's SHAPE at release time — this checks the WIRING before that |
 | **4b.** A `packageRules` entry touching `automerge` carries a `description` saying why | The family default is ship-if-green. An exception is legitimate only where a bad bump would BUILD FINE AND BE WRONG (swift-toolchain: a minor Swift bump needs `LLVM_BRANCH` to follow, which no regex can infer). Unexplained, an exception is indistinguishable from drift |
 | **7c.** `build/version.sh` is **not** git-ignored, where the repo uses the wrappers | The version wrappers live in COMMITTED `build/*.sh`. A too-broad ignore (`build/`, `build*/`) makes `git add` skip them without a word: everything works locally and only CI's fresh checkout fails, far from the cause. Ignore build OUTPUT dirs (`/_build/`, `build-*/`, `build/work/`) — never `build/` itself |
@@ -2549,7 +2545,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **18.** No plain `cmake` / `ctest` / `cpack` at command position — in workflow `run:` bodies or in committed `*.sh` outside `tests/` | `MavergreenShipyardConfig.cmake` refuses foreign or too-old cmakes on macOS; this finds the call in the PR instead of in the release. `tests/` is excluded because fixtures quote the command on purpose |
 | **22.** Every tracked script declares its host in its header — `# platform: host-agnostic` or `# platform: macOS-only -- <why>` — and a host-agnostic one runs no macOS-only tool at command position (`check-host-tools.sh`); **opt-in**, in a repo where at least one script declares | Nothing stopped a script that a Linux job depends on from growing an `otool` or `sw_vers`: it passed every gate and broke on the runner. `check-shell-portability.sh` cannot see it — flawless POSIX sh can still call `lipo`. An undeclared script **fails** rather than defaulting to host-agnostic, because a default makes the gate silently incomplete. Opt-in, like 15, so `@v1` reaching fourteen consumers reddens none of them |
 | **23.** A repo that builds a `.pkg` (the same test as 21) calls `stage_product.sh`, on a non-comment line of a tracked, non-test `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt`, at command position — line start, after `;` `&` `\|` or a backtick, after `$(`, `then`, `do` or `exec`, after a YAML `run:` or a CMake `COMMAND`, any of these optionally followed by `if`, `elif`, `while`, `until` or `!` — spelled `sh` or `/bin/sh` (with any option flags, `sh -e`) and a word ending `stage_product.sh`, or a word ending `/stage_product.sh` (`"$SHIPYARD_SCRIPTS"/stage_product.sh`, `./stage_product.sh`); or declares a `stage-product` deviation | Conformance enforces the install layout, and `stage_product.sh` is what produces it: the manifest, and the unlink–remove–link install scripts that make an upgrade replace the tree while keeping the selection. A hand-rolled pkg fails `manifest` only at package time; this finds it on the PR. A mention is not a call — `echo "sh stage_product.sh"` does not count, and neither does an assignment (`SP="$S/stage_product.sh"`: a word holding `=`). **Known false negatives:** a bare `stage_product.sh` found on `PATH`; `bash` or `.` instead of `sh`; a call behind a prefix command (`sudo`, `env`, `time`, `command`) or opening a `{ … }` group or a `( … )` subshell; a path with a space or `=` in it (`"$(dirname "$0")"/stage_product.sh`); and a call followed directly by `;` or `)` (`then sh "$S/stage_product.sh"; fi`, `$(sh …/stage_product.sh)`) — give the call its own line, or at least a space before the separator |
-| **24.** A repo that builds a `.pkg` (the same test as 21), where `$GITHUB_REPOSITORY` is set, is the repo of at least one short name in shipyard's `scripts/product-names` (by name, not owner); a `registered` deviation exempts it | Every feed URL and updater identity is derived from the registry's repo, so a repo the registry does not name publishes feeds no installed updater polls. The short names themselves are known only at package time, where conformance's `repository` check holds each to its registered repo; this finds an unregistered or renamed repo on the PR |
+| **24.** Retired (`registered`). A repo with a release workflow has at least one `.mavergreen/products/<short>/` (`release-has-product`) | A release ships products, and their names and identifiers are derived from their directories, so a repo that cuts releases with none has nothing to name. Conformance's `repository` check holds each shipped product to its repo's directories |
 | **25.** A tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt` or `*.bats` file, `tests/` included, whose content — outside a whole comment line or a trailing ` #…` remark — contains `arch -x86_64`, `arch -arch x86_64`, `/usr/bin/arch -x86_64` or `softwareupdate --install-rosetta`, carries a matching `rosetta:<path>` deviation | The family is retiring Rosetta (see "Rosetta", above) — an undeclared use is invisible until someone has to sweep every repo by hand the day macOS 28 ships. There is no exemption for `tests/`: a test that still runs the shipped x86_64 product under Rosetta runs translated, so it needs a declaration until it moves to the acceptance job. This is a text match, not a command-position check like 23's: a quoted MENTION on an otherwise-unrelated line (`echo "… arch -x86_64 …"`) still counts, because excluding quotes reliably is not practical in BWK awk/sed. **Known limits:** `arch -e VAR=… -x86_64` (something between `arch` and its flag) and `arch "-x86_64"` (the flag itself quoted) are both invisible, since the match needs the literal flag text directly after `arch`; so is a build that runs an x86_64 binary it built earlier some other way (a cross build whose `make` just executes x86_64 host tools it compiled). Both still need a declaration and rely on it alone, not on being caught |
 | **26.** No tracked Renovate config other than `.github/renovate.json` (`renovate.json`, `renovate.json5`, `.renovaterc`, `.renovaterc.json`, `.renovaterc.json5`, `.github/renovate.json5`, `.gitlab/renovate.json`, `.gitlab/renovate.json5`), alone **or** beside it; a path is excused by a `renovate-path` deviation scoped to it | Checks 4, 4b and 13 read only `.github/renovate.json`, and shipyard's configure step scaffolds it when absent, so a config kept elsewhere exempts its repo from them without anyone deciding it should, and beside the scaffold is dead config (Renovate takes one by precedence). Fix: `git mv <path> .github/renovate.json` |
 | **27.** `.gitignore` has a line ignoring `.superpowers/` and one ignoring `.idea/` (`.superpowers/`, `/.superpowers/`, `.superpowers` or `/.superpowers`, likewise for `.idea`), no file is tracked under `.superpowers/`, `docs/superpowers/` or `.idea/`, and no backlog is tracked anywhere (a file named `BACKLOG`, `QUEUE` or `TODO`, any case, bare or `.md`, `.markdown` or `.txt`), and no tracked line cites a queue entry by number (`QUEUE #n`, `BACKLOG #n`, also when a line break splits the name from the number) | Superpowers specs, plans, ledgers and backlogs are ephemeral: a plan describes a transition, not a system, and once the transition lands the plan is wrong about the system it produced. Committed, it reads as documentation and misleads the next reader (and `docs/superpowers/` is not a place the family uses at all). An IDE's per-user state is the user's, not the project's: committed, it churns on every checkout and fights each contributor's own settings. Both belong in the working tree and out of history, and an ignore line alone is not enough, since it does nothing for a file already tracked, so the check asks git as well. A backlog is the same kind of file under another name: two repos kept theirs as a tracked `BACKLOG.md`, and a code comment cited an entry by number. A citation resolves only in the checkout that has the queue, so a reader elsewhere gets a number and no reason |
@@ -2583,7 +2579,7 @@ Conformance knows the repo only from `$GITHUB_REPOSITORY`, so a local conformanc
 grandfathered repo's slices and paths rather than warning. A repo is its
 `$GITHUB_REPOSITORY`, else the name in `origin`'s URL (https or ssh), so a local run agrees with CI. It exists so moving `@v1` turns no repo red without a push per repo; converting a
 runner or a packager call deletes that repo's line. `tests/check-family-conventions-7-test.sh` asserts it
-is sorted, free of duplicates and well-formed (the repo set is every org repo whose workflows call `family-conventions.yml`, registered or not), and pins each check's line count as a
+is sorted, free of duplicates and well-formed (the repo set is every org repo whose workflows call `family-conventions.yml`), and pins each check's line count as a
 ceiling that may only go down. Regenerate with `sh scripts/gen-conventions-grandfathered.sh <clones-dir> > scripts/conventions-grandfathered`
 (an empty or new `<clones-dir>`, which it marks and owns; it lists the org's repos with `gh`, clones or refreshes each, keeps those calling `family-conventions.yml`, runs the gate
 without the file in each). For `modern-smoke` and `cxxabi` it also downloads each repo's latest release's pkgs into
@@ -2987,8 +2983,7 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
     documents this trap in `scan-for-key.yml`'s header; say it here too, because this is the caller
     people will copy); do not add a `tags:` trigger — tags are retired as an input, and dispatch
     covers every case they served (`gh workflow run … --ref <any ref>`).
-14. If it ships a `.pkg`: register its short name, pkg identifier and repo in shipyard's
-    `scripts/product-names` first; stage
+14. If it ships a `.pkg`: write `.mavergreen/products/<short>/noun` (and `line` for a lined product); stage
     everything under `usr/local/mavergreen/<short name>/`; get the install scripts and manifest from
     `stage_product.sh` (product-specific steps as hooks); wrap with `set_install_floor.sh`, which
     adds `dev.mavergreen.base`. See "Install layout and identity".
@@ -3014,7 +3009,7 @@ it here.** A silently dropped increment is how the family drifted in the first p
 - [x] One publisher — done 2026-07-30 with increment 2. The two version *models*
       (derive-from-tags vs committed `VERSION`) remain, and are a real design question, not drift
 - [x] Automerge policy stated in the preset — done 2026-07-30. **Ship-if-green**: patch, minor and
-      major automerge once the build passes; fix forward in a `-mavericks.N+1` release. Exceptions
+      major automerge once the build passes; fix forward in a `-mavergreen.N+1` release. Exceptions
       only where a bad bump would build fine and be wrong, and the gate demands the reason
 - [x] **Remove `ed25519-sign -s`** (the key as an argv) — done 2026-09-11 (mavericks-ed25519
       3efe029), once `sign_and_appcast.sh` passed the key with `-f -` on `main` (7369bd2) and
@@ -3030,7 +3025,7 @@ it here.** A silently dropped increment is how the family drifted in the first p
 - [x] Per-repo migration onto the generator (13 product repos plus shipyard itself, swift-runtime
       first) — done 2026-09-12. Every `release.yml` in the family now calls `release-notes.sh`
       directly; the legacy `release-notes-file.sh` wrapper is deleted. See Release notes,
-      above, for the per-repo `--product`/`--line`/`--min-os` decisions this migration recorded and the
+      above, for the `--line`/`--min-os` decisions this migration recorded and the
       three generator defects it found and fixed
 - [x] **The three enforcement layers** — gate (`check-family-conventions.sh` check 14: does a repo's
       PR actually wire `release-notes.sh`), publisher (`check-release-notes.sh` inside

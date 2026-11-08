@@ -1,7 +1,7 @@
 upstream-complete: a product repo has .mavergreen/upstream/ with exactly one of VERSION, COMMIT or PIN, and a description.
 
 ## Why
-Every release's version is <upstream>-mavericks.N, and the upstream comes from this directory: VERSION is the
+Every release's version is <upstream>-mavergreen.N, and the upstream comes from this directory: VERSION is the
 version itself, and a COMMIT or a PIN is turned into one by .mavergreen/hooks/derive-upstream-version. With
 none, there is no version to cut. With two, which one the version came from is a guess. A COMMIT or a PIN with
 no derive hook has nothing to turn it into a version. The description says, in one line, what the upstream is.
