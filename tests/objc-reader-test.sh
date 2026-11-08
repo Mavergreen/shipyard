@@ -326,15 +326,15 @@ row_is "$(at _open_urls_with_ops 0xa36)" 1 "* selref:*:setAttributeDescriptor:fo
 [ "$(unknown_in _open_urls_with_ops)" = 0 ] || fail "open_urls_with_ops: $(unknown_in _open_urls_with_ops) sends without their selector, want 0"
 
 # spec: scripts/objc-compat-build.sh header -- The analyzer needs neither the Command Line Tools nor git: it compiles with the
-#       pinned clang22 package (components/objc-reference-clang/version) and takes Drydock from the pinned commit's tarball,
-#       verified against ARCHIVE_SHA256 and extracted fresh and privately for every build, so a stale or edited tree is
+#       pinned clang22 package (.mavergreen/ingredients/objc-reference-clang/VERSION) and takes Drydock from the pinned commit's tarball,
+#       verified against its ingredient SHA256 and extracted fresh and privately for every build, so a stale or edited tree is
 #       never compiled. A 10.9 host without them is simulated: PATH holds only a wrapper directory whose git, clang, cc, ld,
 #       xcrun and friends are stubs that record a call and fail, and, where sandbox-exec works, the real ones (and the
 #       Command Line Tools and Xcode trees) cannot be executed at all. A missing prerequisite is cannot-measure, never a skip.
-PIN="$ROOT/components/objc-reader-drydock/version"
-DIGEST=$(sed -n 's/^DIGEST=//p' "$PIN")
-ARCHIVE_SHA=$(sed -n 's/^ARCHIVE_SHA256=//p' "$PIN")
-printf '%s\n' "$ARCHIVE_SHA" | grep -Eq '^[0-9a-f]{64}$' || fail 'the Drydock pin has no ARCHIVE_SHA256'
+PIN="$ROOT/.mavergreen/ingredients/objc-reader-drydock/PIN"
+DIGEST=$(sed -n '1s/^[^@]*@//p' "$PIN")
+ARCHIVE_SHA=$(sed -n 1p "$ROOT/.mavergreen/ingredients/objc-reader-drydock/SHA256")
+printf '%s\n' "$ARCHIVE_SHA" | grep -Eq '^[0-9a-f]{64}$' || fail 'the Drydock ingredient has no SHA256'
 NOCL="$T/nocl"
 mkdir -p "$NOCL/bin"
 DENY='git clang clang++ cc c++ gcc g++ cpp ld as xcrun xcodebuild xcode-select make libtool lipo otool nm strip ar ranlib'

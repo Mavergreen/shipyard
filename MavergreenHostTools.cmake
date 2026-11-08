@@ -5,7 +5,7 @@
 #   against the pinned 11.3 SDK for macOS 11.0 on Apple Silicon (even when the caller runs translated),
 #   x86_64 against the pinned 10.9 SDK for 10.9 otherwise. The compiler's default config is off, so no
 #   product setting (target, Recaulk, libc++) reaches the host link. The exporter source is the pinned,
-#   verified components/mulle-xcode-to-cmake; MULLE_SOURCE replaces it for tests only.
+#   verified .mavergreen/ingredients/mulle-xcode-to-cmake; MULLE_SOURCE replaces it for tests only.
 #   The tools land in OUTPUT_ROOT/<key>/bin, keyed by host arch, compiler, SDK pin, source and this
 #   implementation, beside a stamp of each file's SHA-256. Same inputs reuse the entry once it matches
 #   its stamp; a changed, unstamped or interrupted entry is set aside and rebuilt, never returned. One
@@ -102,14 +102,33 @@ function(_mht_tree_id dir out_var)
   set(${out_var} "${id}" PARENT_SCOPE)
 endfunction()
 
-function(_mht_pin key out_var)
-  file(STRINGS "${_MHT_DIR}/components/mulle-xcode-to-cmake/version" lines REGEX "^${key}=")
+# spec: SKILL.md "Git sources: digest-pin" -- the ingredient's PIN is <ref>@<commit> on line 1 and its
+#       '# renovate: ... depName=<repo>' on line 2; SHA256 is the digest of GitHub's tarball of that commit.
+function(_mht_pin repo_var digest_var tarball_var)
+  set(ing "${_MHT_DIR}/.mavergreen/ingredients/mulle-xcode-to-cmake")
+  file(STRINGS "${ing}/PIN" lines)
   list(LENGTH lines n)
-  if(NOT n EQUAL 1)
-    _mht_fail("components/mulle-xcode-to-cmake/version has ${n} ${key}= lines, want 1")
+  if(n LESS 2)
+    _mht_fail(".mavergreen/ingredients/mulle-xcode-to-cmake/PIN has ${n} lines, want <ref>@<commit> and its # renovate: line")
   endif()
-  string(REGEX REPLACE "^${key}=" "" v "${lines}")
-  set(${out_var} "${v}" PARENT_SCOPE)
+  list(GET lines 0 pin)
+  list(GET lines 1 renovate)
+  if(NOT pin MATCHES "^[^@ ]+@([0-9a-f]+)$")
+    _mht_fail(".mavergreen/ingredients/mulle-xcode-to-cmake/PIN line 1 is '${pin}', want <ref>@<commit>")
+  endif()
+  set(digest "${CMAKE_MATCH_1}")
+  if(NOT renovate MATCHES "^# renovate: .* depName=([^ ]+)")
+    _mht_fail(".mavergreen/ingredients/mulle-xcode-to-cmake/PIN line 2 names no depName")
+  endif()
+  set(repo "${CMAKE_MATCH_1}")
+  file(STRINGS "${ing}/SHA256" tarball)
+  list(LENGTH tarball n)
+  if(NOT n EQUAL 1)
+    _mht_fail(".mavergreen/ingredients/mulle-xcode-to-cmake/SHA256 has ${n} lines, want 1")
+  endif()
+  set(${repo_var} "${repo}" PARENT_SCOPE)
+  set(${digest_var} "${digest}" PARENT_SCOPE)
+  set(${tarball_var} "${tarball}" PARENT_SCOPE)
 endfunction()
 
 function(_mht_sdk_pin arch out_var)
@@ -231,9 +250,7 @@ function(mavergreen_build_host_tools out_var)
     _mht_tree_id("${src_real}" tree)
     set(source_id "test-supplied ${tree}")
   else()
-    _mht_pin(REPO repo)
-    _mht_pin(DIGEST digest)
-    _mht_pin(TARBALL_SHA256 tarball)
+    _mht_pin(repo digest tarball)
     set(source_id "pinned ${repo} ${digest} ${tarball}")
   endif()
   file(SHA256 "${_MHT_DIR}/MavergreenHostTools.cmake" module_sha)

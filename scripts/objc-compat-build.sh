@@ -7,13 +7,13 @@
 #          plus the read-only Drydock core modules it reuses (mi_*, mfat_*, mx_*, mo_bind_observe,
 #          mrb_*, mml_*). It needs neither git nor Xcode's Command Line Tools (a 10.9 build host has
 #          neither unless they are installed):
-#          - Drydock is GitHub's tarball of the pinned commit (components/objc-reader-drydock/version
-#            DIGEST), fetched by scripts/fetch_pinned_source.sh and verified against the pin's
-#            ARCHIVE_SHA256 (fail closed), then extracted fresh into a private directory for this
+#          - Drydock is GitHub's tarball of the pinned commit (.mavergreen/ingredients/objc-reader-drydock/PIN,
+#            <ref>@<commit>), fetched by scripts/fetch_pinned_source.sh and verified against the
+#            ingredient's SHA256 (fail closed), then extracted fresh into a private directory for this
 #            build alone and removed after it: no shared tree exists to go stale or be edited, and
 #            nothing else is ever compiled as Drydock. The tarball's tree is exactly the commit's
 #            (checked with git where git is, when the pin moves).
-#          - The compiler is the pinned clang22 package (components/objc-reference-clang/version:
+#          - The compiler is the pinned clang22 package (.mavergreen/ingredients/objc-reference-clang/VERSION:
 #            mavericks-clang-22-native on x86_64, -cross on arm64), fetched by
 #            scripts/fetch_product_pkg.sh, verified against its release's SHA256SUMS and extracted,
 #            never installed, under ${MAVERGREEN_BUILD_ROOT:-$TMPDIR/mavergreen-build}; it runs with
@@ -47,15 +47,17 @@ case "$1" in
 esac
 OUT=$2
 
-PIN="$ROOT/components/objc-reader-drydock/version"
+. "$ROOT/scripts/mavergreen-meta.sh"
+MAVERGREEN_REPO_ROOT=$ROOT
+PIN="$ROOT/.mavergreen/ingredients/objc-reader-drydock/PIN"
 [ -r "$PIN" ] || die "missing pin $PIN"
-REPO=$(sed -n 's/^REPO=//p' "$PIN")
-REF=$(sed -n 's/^REF=//p' "$PIN")
-DIGEST=$(sed -n 's/^DIGEST=//p' "$PIN")
-ARCHIVE_SHA256=$(sed -n 's/^ARCHIVE_SHA256=//p' "$PIN")
-printf '%s\n' "$DIGEST" | grep -Eq '^[0-9a-f]{40}$' || die "pin has no 40-hex DIGEST"
-printf '%s\n' "$ARCHIVE_SHA256" | grep -Eq '^[0-9a-f]{64}$' || die "pin has no 64-hex ARCHIVE_SHA256"
-[ -n "$REF" ] && [ -n "$REPO" ] || die "pin lacks REPO or REF"
+REPO=$(mg_renovate ingredients/objc-reader-drydock/PIN | sed -n 's/^depName=//p')
+REF=$(mg_pin_ref ingredients/objc-reader-drydock) || REF=
+DIGEST=$(mg_pin_commit ingredients/objc-reader-drydock) || DIGEST=
+ARCHIVE_SHA256=$(mg_value ingredients/objc-reader-drydock/SHA256) || ARCHIVE_SHA256=
+printf '%s\n' "$DIGEST" | grep -Eq '^[0-9a-f]{40}$' || die "pin $PIN has no <ref>@<40-hex commit>"
+printf '%s\n' "$ARCHIVE_SHA256" | grep -Eq '^[0-9a-f]{64}$' || die "the Drydock ingredient has no 64-hex SHA256"
+[ -n "$REF" ] && [ -n "$REPO" ] || die "pin $PIN lacks a ref or a line-2 depName"
 [ -z "${MAVERGREEN_OBJC_READER_SRC:-}" ] && [ -z "${MAVERGREEN_OBJC_READER_DRYDOCK_REPO:-}" ] ||
   die "MAVERGREEN_OBJC_READER_SRC and MAVERGREEN_OBJC_READER_DRYDOCK_REPO are retired: Drydock comes only from its pinned, verified tarball"
 BUILD_ROOT=${MAVERGREEN_BUILD_ROOT:-${TMPDIR:-/tmp}/mavergreen-build}
@@ -66,9 +68,9 @@ case "$(uname -m)" in
   arm64) sdk_arch=arm64; floor=11.0; short=clang22-cross; flavor=cross ;;
   *) die "unsupported host arch $(uname -m)" ;;
 esac
-CLANG_PIN="$ROOT/components/objc-reference-clang/version"
+CLANG_PIN="$ROOT/.mavergreen/ingredients/objc-reference-clang/VERSION"
 [ -r "$CLANG_PIN" ] || die "missing pin $CLANG_PIN"
-CLANG_VERSION=$(tr -d '[:space:]' <"$CLANG_PIN")
+CLANG_VERSION=$(mg_value ingredients/objc-reference-clang/VERSION | tr -d '[:space:]')
 [ -n "$CLANG_VERSION" ] || die "empty pin $CLANG_PIN"
 if [ -n "${MAVERGREEN_OBJC_CLANG_PREFIX:-}" ]; then PREFIX=$MAVERGREEN_OBJC_CLANG_PREFIX
 else

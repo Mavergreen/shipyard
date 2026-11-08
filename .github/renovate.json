@@ -1,33 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>Mavergreen/shipyard"],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["/^components/objc-reference-clang/version$/"],
-      "matchStrings": ["(?<currentValue>[^\\s]+)"],
-      "depNameTemplate": "Mavergreen/clang-22",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v?(?<version>.+)$",
-      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "description": "The read-only Drydock core the Objective-C artifact reader compiles (components/objc-reader-drydock/version). scripts/objc-compat-build.sh fetches GitHub's tarball of exactly DIGEST through fetch_pinned_source.sh and verifies it against ARCHIVE_SHA256, which this manager does not move: a bump fails closed until ARCHIVE_SHA256 is rewritten after checking with git that the tarball holds exactly the commit's tree. A bump must pass tests/objc-reader-test.sh and tests/objc-binding-test.sh.",
-      "managerFilePatterns": ["/^components/objc-reader-drydock/version$/"],
-      "matchStrings": ["REPO=(?<packageName>\\S+?)\\.git\\s+REF=(?<currentValue>\\S+)\\s+DIGEST=(?<currentDigest>[0-9a-f]{40})"],
-      "depNameTemplate": "Mavergreen/drydock",
-      "datasourceTemplate": "git-refs"
-    },
-    {
-      "customType": "regex",
-      "description": "The Xcode-project source exporter MavergreenHostTools.cmake builds for the host (components/mulle-xcode-to-cmake/version): REF is the upstream branch tracked, DIGEST its pinned commit, TARBALL_SHA256 the digest of GitHub's tarball of that commit, which fetch_pinned_source.sh verifies.",
-      "managerFilePatterns": ["/^components/mulle-xcode-to-cmake/version$/"],
-      "matchStrings": ["REPO=(?<packageName>\\S+)\\s+REF=(?<currentValue>\\S+)\\s+DIGEST=(?<currentDigest>[0-9a-f]{40})"],
-      "depNameTemplate": "mulle-xcode-to-cmake",
-      "datasourceTemplate": "git-refs"
-    }
-  ],
   "packageRules": [
     {
       "description": "Renovate moves .mavergreen/ingredients/clang22/VERSION but cannot write the Linux archive's digest beside it, so the Linux job fails on the bump until .mavergreen/ingredients/clang22/LINUX_SHA256 holds the new release's archive digest.",
@@ -35,9 +8,9 @@
       "prBodyNotes": ["Before this can merge, write the digest of `clang22-<version>-linux-x86_64.tar.gz` from the new release's SHA256SUMS, alone, to .mavergreen/ingredients/clang22/LINUX_SHA256: `gh release download <version> -R Mavergreen/clang-22 -p SHA256SUMS -O - | awk '$2 ~ /linux-x86_64[.]tar[.]gz$/ { print $1 }' > .mavergreen/ingredients/clang22/LINUX_SHA256`."]
     },
     {
-      "description": "Renovate moves DIGEST in components/mulle-xcode-to-cmake/version but cannot write TARBALL_SHA256 beside it, so the host-tool build refuses the bump until that digest names GitHub's tarball of the new commit, checked against the commit's tree.",
-      "matchDepNames": ["mulle-xcode-to-cmake"],
-      "prBodyNotes": ["Before this can merge, set TARBALL_SHA256 in components/mulle-xcode-to-cmake/version to the SHA-256 of `https://codeload.github.com/mulle-nat/mulle-xcode-to-cmake/tar.gz/<new DIGEST>`, after checking that the tarball's files are that commit's tree (`git archive` of the commit compared with the extracted tarball)."]
+      "description": "Renovate moves the commit in .mavergreen/ingredients/mulle-xcode-to-cmake/PIN but cannot write SHA256 beside it, so the host-tool build refuses the bump until that digest names GitHub's tarball of the new commit, checked against the commit's tree.",
+      "matchDepNames": ["https://github.com/mulle-nat/mulle-xcode-to-cmake"],
+      "prBodyNotes": ["Before this can merge, write to .mavergreen/ingredients/mulle-xcode-to-cmake/SHA256, alone, the SHA-256 of `https://codeload.github.com/mulle-nat/mulle-xcode-to-cmake/tar.gz/<new commit>`, after checking that the tarball's files are that commit's tree (`git archive` of the commit compared with the extracted tarball)."]
     },
     {
       "description": "The renovate pin moves at most monthly: each bump costs macOS runner time in shipyard's CI and then its release, and the validator gains nothing from tracking Renovate's every release.",

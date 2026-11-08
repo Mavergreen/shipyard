@@ -342,7 +342,7 @@ rm -f "$T/maps/big.map" "$T/maps/huge.map"
 
 # spec: scripts/objc-compat-build.sh header -- an unusable tool (a Drydock tarball that is not the pinned one, with no way to
 #       fetch the right one) is cannot-measure, for each script that builds it.
-DIGEST=$(sed -n 's/^DIGEST=//p' "$ROOT/components/objc-reader-drydock/version")
+DIGEST=$(sed -n '1s/^[^@]*@//p' "$ROOT/.mavergreen/ingredients/objc-reader-drydock/PIN")
 src_cache=${MAVERGREEN_SOURCE_CACHE:-$HOME/Library/Caches/mavergreen/sources}
 [ -f "$src_cache/drydock-$DIGEST.tar.gz" ] || fail "the verified Drydock tarball is not in $src_cache"
 mkdir -p "$T/tampered-sources" "$T/no-codeload"
@@ -383,7 +383,7 @@ old=$(sed -n 's/.*"inputs": {"artifact": {"path": "[^"]*", "sha256": "\([0-9a-f]
 CLANG=${MAVERGREEN_OBJC_CLANG_PREFIX:-}
 if [ -z "$CLANG" ]; then
   case "$(uname -m)" in x86_64) short=clang22; flavor=native ;; arm64) short=clang22-cross; flavor=cross ;; *) exit 4 ;; esac
-  version=$(tr -d '[:space:]' < "$ROOT/components/objc-reference-clang/version")
+  version=$(sed -n 1p "$ROOT/.mavergreen/ingredients/objc-reference-clang/VERSION" | tr -d '[:space:]')
   CLANG=$(sh "$ROOT/scripts/fetch_product_pkg.sh" --asset "mavericks-clang-22-$flavor-$version.pkg" "$short" "$version" "${MAVERGREEN_BUILD_ROOT:-${TMPDIR:-/tmp}/mavergreen-build}/objc-reference-$short-$version")
 fi
 

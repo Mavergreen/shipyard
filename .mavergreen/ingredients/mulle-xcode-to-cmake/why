@@ -1,0 +1,1 @@
+MavergreenHostTools.cmake builds it for the host and runs it only at build time; it is never shipped in a pkg

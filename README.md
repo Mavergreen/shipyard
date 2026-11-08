@@ -243,7 +243,7 @@ Recaulk ships, and `tests/sdk-metadata-consumer-test.sh` (run by hand on each bo
 
 Some build inputs come from tools that run on the build machine, never on 10.9: the pinned
 [mulle-xcode-to-cmake](https://github.com/mulle-nat/mulle-xcode-to-cmake) exporter
-(`components/mulle-xcode-to-cmake/version`, GPL-3.0, never shipped in a pkg). `MavergreenHostTools`
+(`.mavergreen/ingredients/mulle-xcode-to-cmake/`, GPL-3.0, never shipped in a pkg). `MavergreenHostTools`
 builds them for the host in a configure of their own:
 
 ```cmake
@@ -375,6 +375,11 @@ under `upstream/`, the product under `products/` and each declared deviation und
 `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` are launchers into the Mavergreen cmake product,
 which shipyard pins and its pkg requires. The only thing shipyard compiles is its Sparkle updater app,
 with clang22, alongside the CMake modules and shell scripts it has always shipped.
+The Objective-C reference producer is a generation/test-only host tool, not a packaged runtime.
+Its output, `reference/objc`, holds facts derived from the pinned SDKs and a floor runtime capture,
+with their identities in `manifest.json`; no Apple header or binary is copied into it.
+The Objective-C artifact reader (`tools/objc-compat`) is likewise built from source for tests and is
+not yet packaged; the Drydock core it compiles is the `objc-reader-drydock` ingredient.
 
 On a bump:
 

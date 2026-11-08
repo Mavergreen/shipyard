@@ -405,7 +405,7 @@ build() {
   sdk_facts arm64 newer "$work" "$tmpl/newer"
   resource=$("$prefix/bin/clang" -print-resource-dir) || fail 'cannot query the compiler resource directory'
   clang_version=$("$prefix/bin/clang" --version | head -1)
-  package=$(tr -d '[:space:]' <"$ROOT/components/objc-reference-clang/version")
+  package=$(sed -n 1p "$ROOT/.mavergreen/ingredients/objc-reference-clang/VERSION" | tr -d '[:space:]')
   if [ -n "$runtime" ]; then
     cp "$runtime/floor-runtime.tsv" "$runtime/cluster-witnesses.json" "$work/" || fail 'cannot copy the runtime capture'
   fi

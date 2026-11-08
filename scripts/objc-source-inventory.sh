@@ -5,7 +5,7 @@
 #          Writes the Objective-C source receipt (tools/objc-source-inventory.c header) for the
 #          prepared provider source FILE lists (`SHA256  LABEL` lines, as Recaulk's build records
 #          them), found under the --root directories, to NEW_FILE. PREFIX is the pinned clang
-#          (components/objc-reference-clang/version); the tool is built here against its libclang
+#          (.mavergreen/ingredients/objc-reference-clang/VERSION); the tool is built here against its libclang
 #          and the pinned host SDK, and parses against the pinned floor SDK. Generation only: the
 #          analyzer reads the receipt and never loads libclang. Nothing supplied is executed.
 #          Exit 0 written, 2 usage or an existing destination, 4 a prerequisite, an unverifiable

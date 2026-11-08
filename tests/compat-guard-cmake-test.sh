@@ -78,7 +78,7 @@ cmake -S "$root" -B "$b" >"$w/configure.log" 2>&1 || { echo "FAIL: shipyard did 
 cmake --install "$b" --prefix "$p" >"$w/install.log" 2>&1 || { echo "FAIL: shipyard did not install:"; tail -20 "$w/install.log"; exit 1; }
 d="$p/share/cmake/MavergreenShipyard"
 for f in reference/objc/manifest.json reference/objc/floor-runtime.tsv tools/objc-compat/main.m tools/objc-compat/report.h \
-  tools/objc-source-inventory.c components/objc-reader-drydock/version components/objc-reference-clang/version \
+  tools/objc-source-inventory.c .mavergreen/ingredients/objc-reader-drydock/PIN .mavergreen/ingredients/objc-reader-drydock/SHA256 .mavergreen/ingredients/objc-reference-clang/VERSION \
   scripts/objc-compat.sh scripts/objc-compat-build.sh scripts/fetch_pinned_source.sh scripts/fetch_product_pkg.sh; do
   cmp -s "$root/$f" "$d/$f" || { echo "FAIL: the install does not stage $f"; exit 1; }
 done

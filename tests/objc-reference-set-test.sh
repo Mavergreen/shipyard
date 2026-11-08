@@ -12,7 +12,7 @@ REFSET="$ROOT/scripts/objc-reference-set.sh"
 PREFIX=${MAVERGREEN_OBJC_CLANG_PREFIX:-}
 if [ -z "$PREFIX" ]; then
   case "$(uname -m)" in x86_64) short=clang22; flavor=native ;; arm64) short=clang22-cross; flavor=cross ;; *) exit 4 ;; esac
-  version=$(tr -d '[:space:]' < "$ROOT/components/objc-reference-clang/version")
+  version=$(sed -n 1p "$ROOT/.mavergreen/ingredients/objc-reference-clang/VERSION" | tr -d '[:space:]')
   PREFIX=$(sh "$ROOT/scripts/fetch_product_pkg.sh" --asset "mavericks-clang-22-$flavor-$version.pkg" "$short" "$version" "${MAVERGREEN_BUILD_ROOT:-${TMPDIR:-/tmp}/mavergreen-build}/objc-reference-$short-$version")
 fi
 fail() { echo "FAIL: $*" >&2; [ ! -f "$T/err" ] || tail -15 "$T/err" >&2; exit 1; }
@@ -360,7 +360,7 @@ pinsha() { . "$ROOT/scripts/sdk-pins.sh"; shipyard_sdk_pin "$1" | cut -d' ' -f2;
 [ "$(mget archive_sha256 | head -1)" = "$(pinsha x86_64)" ] && [ "$(mget archive_sha256 | tail -1)" = "$(pinsha arm64)" ] || fail 'SDK archive identities missing'
 mget header_tree_sha256 | grep -Eq '^[0-9a-f]{64}$' || fail 'no header tree digest'
 [ "$(mget producer_sha256)" = "$(shasum -a 256 "$ROOT/tools/objc-sdk-inventory.c" | cut -c1-64)" ] || fail 'producer identity missing'
-[ "$(mget clang_package)" = "$(tr -d '[:space:]' < "$ROOT/components/objc-reference-clang/version")" ] || fail 'clang package identity missing'
+[ "$(mget clang_package)" = "$(sed -n 1p "$ROOT/.mavergreen/ingredients/objc-reference-clang/VERSION" | tr -d '[:space:]')" ] || fail 'clang package identity missing'
 mget consumed_resource_headers_sha256 | grep -Eq '^[0-9a-f]{64}$' || fail 'no consumed resource header digest'
 [ "$(mget runtime_status)" = captured ] && [ "$(mget os)" = 10.9.5 ] && [ "$(mget build)" = 13F1911 ] && [ "$(mget arch)" = x86_64 ] || fail 'runtime identity missing'
 grep -F '"root_selectors": ["autorelease", "class", "conformsToProtocol:", "description", "hash", "isEqual:", "isKindOfClass:", "isMemberOfClass:", "performSelector:", "release", "respondsToSelector:", "retain", "self"],' "$M" >/dev/null || fail 'reviewed root selectors not in the manifest'

@@ -98,7 +98,7 @@ if "$SC" -S "$root" -B "$w/ib" -DCMAKE_INSTALL_PREFIX="$w/inst" > "$w/ib.log" 2>
   d="$(dirname "$(find "$w/inst" -name MavergreenShipyardConfig.cmake | head -1)")"
   for f in MavergreenHostTools.cmake MavergreenXcodeInputs.cmake MavergreenResourceInputs.cmake tools/CMakeLists.txt \
            tools/xcode-project-inputs.m tools/resource-extract.m \
-           components/mulle-xcode-to-cmake/version scripts/sdk-pins.sh \
+           .mavergreen/ingredients/mulle-xcode-to-cmake/PIN .mavergreen/ingredients/mulle-xcode-to-cmake/SHA256 scripts/sdk-pins.sh \
            scripts/fetch_pinned_source.sh scripts/fetch_sdk.sh; do
     [ -f "$d/$f" ] || bad "installed_layout: the install lacks $f beside the module"
   done

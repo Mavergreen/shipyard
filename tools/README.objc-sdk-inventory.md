@@ -17,7 +17,7 @@ x86_64-apple-macos10.9, including when running natively on Apple Silicon. Ambien
 paths, `SDKROOT` and `CCC_OVERRIDE_OPTIONS` are cleared; they cannot silently change the measurement.
 
 `tests/objc-sdk-inventory-test.sh` extracts the host package pinned by
-`components/objc-reference-clang/version`, verifies its published checksums through
+`.mavergreen/ingredients/objc-reference-clang/VERSION`, verifies its published checksums through
 `fetch_product_pkg.sh --asset mavericks-clang-22-{native,cross}-VERSION.pkg`, and never installs it globally. An explicitly supplied
 `MAVERGREEN_OBJC_CLANG_PREFIX` overrides extraction. A missing toolchain is a failure, not a skip.
 The producer source and wrapper ship for explicit reference generation; libclang and a compiled

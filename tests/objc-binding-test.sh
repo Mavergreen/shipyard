@@ -220,7 +220,7 @@ if [ -n "${MAVERGREEN_OBJC_CODEX_ARTIFACT:-}" ]; then
   PREFIX=${MAVERGREEN_OBJC_CLANG_PREFIX:-}
   if [ -z "$PREFIX" ]; then
     case "$(uname -m)" in x86_64) short=clang22; flavor=native ;; arm64) short=clang22-cross; flavor=cross ;; *) exit 4 ;; esac
-    version=$(tr -d '[:space:]' < "$ROOT/components/objc-reference-clang/version")
+    version=$(sed -n 1p "$ROOT/.mavergreen/ingredients/objc-reference-clang/VERSION" | tr -d '[:space:]')
     PREFIX=$(sh "$ROOT/scripts/fetch_product_pkg.sh" --asset "mavericks-clang-22-$flavor-$version.pkg" "$short" "$version" "${MAVERGREEN_BUILD_ROOT:-${TMPDIR:-/tmp}/mavergreen-build}/objc-reference-$short-$version")
   fi
   sh "$ROOT/scripts/objc-sdk-inventory.sh" --clang-prefix "$PREFIX" --sdk "$SDK" \
