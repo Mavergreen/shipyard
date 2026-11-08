@@ -3,6 +3,7 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/mavergreen-meta-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
+w="$(cd "$w" && pwd)"
 m="$w/.mavergreen"
 mkdir -p "$m/ingredients/go" "$m/ingredients/zlib" "$m/ingredients/abc" "$m/upstream" "$m/empty"
 printf 'mavergreen-go\n' > "$m/identifier"
@@ -23,7 +24,22 @@ MAVERGREEN_REPO_ROOT="$w"; export MAVERGREEN_REPO_ROOT
 
 eq mg_dir "$(mg_dir)" "$m"
 mkdir -p "$w/other"
-eq "mg_dir default" "$(cd "$w/other" && unset MAVERGREEN_REPO_ROOT; mg_dir)" "$(cd "$w/other" && pwd)/.mavergreen"
+eq "mg_dir walks up to the nearest .mavergreen" "$(cd "$w/other" && unset MAVERGREEN_REPO_ROOT; mg_dir)" "$m"
+mkdir -p "$w/sub/deep" "$w/nested/.mavergreen/products/inner" "$w/nested/x/y" "$w/nogit" "$w/bare/under"
+mkdir -p "$m/products/shipyard"; printf 'Shipyard\n' > "$m/products/shipyard/noun"
+printf 'Inner\n' > "$w/nested/.mavergreen/products/inner/noun"
+sub="$(cd "$w/sub/deep" && pwd)"
+r="$(cd "$w/sub/deep" && env -u MAVERGREEN_REPO_ROOT PATH="$w/nogit" /bin/sh -c '. "$1"; mavergreen_name name shipyard' sh "$here/../scripts/mavergreen-meta.sh")" \
+  || fail "mavergreen_name from a subdirectory with no git: $r"
+eq "name from a subdirectory with no git" "$r" Shipyard
+eq "the nearest ancestor wins" "$(cd "$w/nested/x/y" && env -u MAVERGREEN_REPO_ROOT PATH="$w/nogit" /bin/sh -c '. "$1"; mg_dir' sh "$here/../scripts/mavergreen-meta.sh")" "$w/nested/.mavergreen"
+eq "MAVERGREEN_REPO_ROOT still wins" "$(cd "$w/nested/x/y" && MAVERGREEN_REPO_ROOT="$w" PATH="$w/nogit" /bin/sh -c '. "$1"; mg_dir' sh "$here/../scripts/mavergreen-meta.sh")" "$m"
+n="$(mktemp -d "${TMPDIR:-/tmp}/mavergreen-meta-none.XXXXXX")"; mkdir -p "$n/under"
+nbase="$(cd "$n/under" && pwd)"
+rc=0; err="$(cd "$n/under" && env -u MAVERGREEN_REPO_ROOT PATH="$w/nogit" /bin/sh -c '. "$1"; mavergreen_name name shipyard' sh "$here/../scripts/mavergreen-meta.sh" 2>&1 >/dev/null)" || rc=$?
+rm -rf "$n"
+eq "no .mavergreen anywhere fails" "$rc" 1
+case "$err" in *"$nbase/.mavergreen/products/shipyard/noun"*) ;; *) fail "the message names the path it looked in: $err" ;; esac
 eq value "$(mg_value identifier)" mavergreen-go
 eq "value with line 2" "$(mg_value upstream/VERSION)" 1.26.5
 eq "no final newline" "$(mg_value nonewline)" bare

@@ -1,11 +1,21 @@
 # platform: host-agnostic
+# platform: 10.9 has no git, so .mavergreen/ is MAVERGREEN_REPO_ROOT, else the nearest ancestor of pwd holding one, else the git top level, else pwd
 
 mg_dir() {
   if [ -n "${MAVERGREEN_REPO_ROOT:-}" ]; then
     printf '%s/.mavergreen\n' "$MAVERGREEN_REPO_ROOT"
-  else
-    printf '%s/.mavergreen\n' "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+    return 0
   fi
+  _mg_w="$(pwd)"
+  while :; do
+    if [ -d "$_mg_w/.mavergreen" ]; then
+      printf '%s/.mavergreen\n' "$_mg_w"
+      return 0
+    fi
+    [ -n "$_mg_w" ] || break
+    _mg_w="${_mg_w%/*}"
+  done
+  printf '%s/.mavergreen\n' "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 }
 
 mg_value() {
@@ -130,7 +140,7 @@ mavergreen_name() {
   esac
   _mn_noun="$(mg_value "products/$_mn_short/noun" 2>/dev/null)" || _mn_noun=
   if [ -z "$_mn_noun" ]; then
-    echo "mavergreen_name: .mavergreen/products/$_mn_short/noun is missing or empty" >&2
+    echo "mavergreen_name: $(mg_dir)/products/$_mn_short/noun is missing or empty" >&2
     return 1
   fi
   _mn_line="$(mg_value "products/$_mn_short/line" 2>/dev/null)" || _mn_line=
