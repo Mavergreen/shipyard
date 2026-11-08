@@ -72,9 +72,10 @@ CLANG_PIN="$ROOT/.mavergreen/ingredients/objc-reference-clang/VERSION"
 [ -r "$CLANG_PIN" ] || die "missing pin $CLANG_PIN"
 CLANG_VERSION=$(mg_value ingredients/objc-reference-clang/VERSION | tr -d '[:space:]')
 [ -n "$CLANG_VERSION" ] || die "empty pin $CLANG_PIN"
+CLANG_REPO=$(mg_value ingredients/objc-reference-clang/REPO) || die "the objc-reference-clang ingredient has no REPO"
 if [ -n "${MAVERGREEN_OBJC_CLANG_PREFIX:-}" ]; then PREFIX=$MAVERGREEN_OBJC_CLANG_PREFIX
 else
-  PREFIX=$(sh "$ROOT/scripts/fetch_product_pkg.sh" --asset "mavericks-clang-22-$flavor-$CLANG_VERSION.pkg" "$short" "$CLANG_VERSION" \
+  PREFIX=$(sh "$ROOT/scripts/fetch_product_pkg.sh" --repo "$CLANG_REPO" --asset "mavericks-clang-22-$flavor-$CLANG_VERSION.pkg" "$short" "$CLANG_VERSION" \
            "$BUILD_ROOT/objc-reference-$short-$CLANG_VERSION") || die "cannot fetch and verify the pinned toolchain $short $CLANG_VERSION"
 fi
 [ -x "$PREFIX/bin/clang" ] || die "the toolchain $PREFIX has no bin/clang"

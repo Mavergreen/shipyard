@@ -384,7 +384,7 @@ CLANG=${MAVERGREEN_OBJC_CLANG_PREFIX:-}
 if [ -z "$CLANG" ]; then
   case "$(uname -m)" in x86_64) short=clang22; flavor=native ;; arm64) short=clang22-cross; flavor=cross ;; *) exit 4 ;; esac
   version=$(sed -n 1p "$ROOT/.mavergreen/ingredients/objc-reference-clang/VERSION" | tr -d '[:space:]')
-  CLANG=$(sh "$ROOT/scripts/fetch_product_pkg.sh" --asset "mavericks-clang-22-$flavor-$version.pkg" "$short" "$version" "${MAVERGREEN_BUILD_ROOT:-${TMPDIR:-/tmp}/mavergreen-build}/objc-reference-$short-$version")
+  CLANG=$(sh "$ROOT/scripts/fetch_product_pkg.sh" --repo "$(sed -n 1p "$ROOT/.mavergreen/ingredients/objc-reference-clang/REPO")" --asset "mavericks-clang-22-$flavor-$version.pkg" "$short" "$version" "${MAVERGREEN_BUILD_ROOT:-${TMPDIR:-/tmp}/mavergreen-build}/objc-reference-$short-$version")
 fi
 
 # spec: tools/objc-compat/provider.c obj_target -- a provider's 8-byte literal is matched where the linker merged it:
