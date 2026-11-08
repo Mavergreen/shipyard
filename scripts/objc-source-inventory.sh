@@ -67,8 +67,9 @@ else
   # platform: clang22's Linux clang is a Mavericks cross compiler (its default config names the 10.9 SDK), so the
   #   host's cc builds this host tool. The archive's libclang.so links LLVM statically and needs only glibc 2.35;
   #   the rpath finds it. No -Werror: the tool's bytes are its receipt identity, so a new gcc warning could not be fixed.
+  #   _GNU_SOURCE: glibc declares vasprintf only under it, and the tool's own _XOPEN_SOURCE hides it.
   command -v cc >/dev/null 2>&1 || fail 'missing host C compiler: cc'
-  env -i PATH=/usr/bin:/bin cc -std=c99 -Wall -Wextra -I"$prefix/include" "$src" \
+  env -i PATH=/usr/bin:/bin cc -std=c99 -D_GNU_SOURCE -Wall -Wextra -I"$prefix/include" "$src" \
     -L"$prefix/lib" -Wl,-rpath,"$prefix/lib" -lclang -o "$build/objc-source-inventory" || fail 'host producer build failed'
 fi
 rc=0
