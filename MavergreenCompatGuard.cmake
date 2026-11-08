@@ -20,10 +20,10 @@ set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyard r
 #   MAVERGREEN_REQUIRE_DEFINED_SYMBOLS symbols that MUST be present as defined (e.g. shims)
 # and, with OBJC_STRICT only:
 #   MAVERGREEN_OBJC_STRICT             1
-#   MAVERGREEN_OBJC_REFERENCES         the reference set; default this shipyard's reference/objc
-#   MAVERGREEN_OBJC_ROOT               the shipped root (default: the target's own directory)
-#   MAVERGREEN_OBJC_BUILD_EVIDENCE     each when set: the analyzer's build evidence, Objective-C
-#   MAVERGREEN_OBJC_PROVIDER_PREFIX    provider prefix and provider source receipt
+#   MAVERGREEN_OBJC_REFERENCES         each when set: the reference set (unset, the guard's default:
+#   MAVERGREEN_OBJC_ROOT               the pinned Drydock's), the shipped root (unset, the target's own
+#   MAVERGREEN_OBJC_BUILD_EVIDENCE     directory), the analyzer's build evidence, Objective-C provider
+#   MAVERGREEN_OBJC_PROVIDER_PREFIX    prefix and provider source receipt
 #   MAVERGREEN_OBJC_SOURCE_RECEIPT
 # With OBJC_STRICT, MAVERGREEN_POST_10_9_SELECTORS and MAVERGREEN_ALLOW_SELECTORS, raw selector
 # lists the analyzer replaces, stop the configure with what replaces them. Without it, an analyzer
@@ -40,7 +40,7 @@ function(mavergreen_assert_binary_compatible tgt)
     foreach(_retired MAVERGREEN_POST_10_9_SELECTORS MAVERGREEN_ALLOW_SELECTORS)
       if(NOT "${${_retired}}" STREQUAL "" OR NOT "$ENV{${_retired}}" STREQUAL "")
         message(FATAL_ERROR "${_retired} is retired under OBJC_STRICT: the compat guard's strict Objective-C "
-          "analyzer measures every send against the versioned reference set (reference/objc), and a selector "
+          "analyzer measures every send against the versioned reference set (Drydock's), and a selector "
           "string proves nothing about a send. Remove it. A send the analyzer blocks that your code guards needs "
           "a reviewed, scoped .mavergreen/deviations/objc-api/<label>/ deviation (scope <artifact path>, reason "
           "\"evidence=<file>#<record id> <review reason>\"; scripts/assert_binary_compatible.sh header).")
@@ -69,14 +69,9 @@ function(mavergreen_assert_binary_compatible tgt)
   endif()
   if(_mabc_OBJC_STRICT)
     list(APPEND _env "MAVERGREEN_OBJC_STRICT=1")
-    # The reference set is staged with the scripts (CMakeLists.txt installs reference/objc beside them);
-    # naming it here keeps a consumer's guard on the shipyard it configured with.
-    if(MAVERGREEN_OBJC_REFERENCES)
-      list(APPEND _env "MAVERGREEN_OBJC_REFERENCES=${MAVERGREEN_OBJC_REFERENCES}")
-    else()
-      list(APPEND _env "MAVERGREEN_OBJC_REFERENCES=${MAVERGREEN_SHARED_DIR}/reference/objc")
-    endif()
-    foreach(_objc MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT)
+    # spec: scripts/objc-reference-dir.sh header -- unset, the guard beside this module defaults the reference set
+    #       to the pinned Drydock's: an installed shipyard's staged reference/objc, a checkout's fetched one.
+    foreach(_objc MAVERGREEN_OBJC_REFERENCES MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT)
       if(${_objc})
         list(APPEND _env "${_objc}=${${_objc}}")
       endif()

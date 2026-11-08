@@ -96,3 +96,38 @@ teardown() { chmod -R u+rwx "$BATS_TEST_TMPDIR" 2>/dev/null || true; }
   [[ "$stderr" == *"cannot read"* ]] || false
   [ ! -e "$T/src/.mavergreen-patches" ]
 }
+
+@test "deleted_file_is_gone" {
+  printf 'x\n' > "$T/src/gone.txt"
+  cat > "$T/patches/03-rm.patch" <<'P'
+--- a/gone.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-x
+P
+  run --separate-stderr apply "$T/src" "$T/patches"
+  [ "$status" -eq 0 ]
+  [ ! -e "$T/src/gone.txt" ]
+}
+
+@test "deleted_file_is_gone_when_patch_leaves_a_stub" {
+  printf 'x\n' > "$T/src/gone.txt"
+  cat > "$T/patches/03-rm.patch" <<'P'
+--- a/gone.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-x
+P
+  mkdir "$T/bin"
+  real="$(command -v patch)"
+  cat > "$T/bin/patch" <<EOF2
+#!/bin/sh
+cat > ../stub.in
+"$real" "\$@" < ../stub.in || exit \$?
+if grep -q '^+++ /dev/null' ../stub.in; then : > gone.txt; fi
+EOF2
+  chmod +x "$T/bin/patch"
+  PATH="$T/bin:$PATH" run --separate-stderr apply "$T/src" "$T/patches"
+  [ "$status" -eq 0 ]
+  [ ! -e "$T/src/gone.txt" ]
+}

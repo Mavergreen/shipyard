@@ -1,1 +1,0 @@
-objc-compat-build.sh compiles the strict analyzer with it, and the reference-set and source-receipt producers read SDKs through its libclang; nothing ships it

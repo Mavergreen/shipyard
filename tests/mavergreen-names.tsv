@@ -8,6 +8,10 @@ MAVERGREEN_CLANG22_CACHE	directory where fetch_clang22.sh caches the clang22 arc
 MAVERGREEN_CODELOAD	the host fetch_pinned_source.sh downloads GitHub tarballs from
 MAVERGREEN_DECISIONS_DIR	the shipyard root MavergreenDecisions.cmake reads the placeholder-icon denylist from
 MAVERGREEN_DEVIATIONS_ROOT	the directory whose INGREDIENTS.md declares the compat guard's deviations
+MAVERGREEN_DRYDOCK_CACHE	directory where fetch_drydock.sh caches the fetched Drydock release
+MAVERGREEN_DRYDOCK_HOST	linux or mac, replacing the host fetch_drydock.sh and the objc-*.sh wrappers would otherwise detect (a test seam)
+MAVERGREEN_DRYDOCK_INSTALLED	the installed Drydock fetch_drydock.sh uses on a Mac when it is the pinned release
+MAVERGREEN_DRYDOCK_PREFIX	an already-unpacked Drydock fetch_drydock.sh answers with instead of fetching the pin
 MAVERGREEN_EXPECTED_MODE	the build mode a script asserts it is running in
 MAVERGREEN_HOST_TOOLS_SYSCTL	the sysctl mavergreen_build_host_tools asks whether the host is Apple Silicon (a test seam)
 MAVERGREEN_HOST_TOOLS_UNAME	the uname mavergreen_build_host_tools asks for an Intel host's machine (a test seam)
@@ -16,11 +20,7 @@ MAVERGREEN_MIN_OS	the install floor set_install_floor.sh and sign_and_appcast.sh
 MAVERGREEN_MODE	the build mode, native or cross
 MAVERGREEN_NO_RENOVATE_SCAFFOLD	opts a configure out of scaffolding .github/renovate.json
 MAVERGREEN_OBJC_BUILD_EVIDENCE	the build evidence the compat guard hands its strict Objective-C analyzer
-MAVERGREEN_OBJC_CLANG_PREFIX	an already-extracted clang22 package objc-compat-build.sh compiles the analyzer with
-MAVERGREEN_OBJC_COMPAT_CACHE	directory where objc-compat-build.sh caches the built analyzer
 MAVERGREEN_OBJC_PROVIDER_PREFIX	the Objective-C provider prefix the compat guard hands its strict analyzer
-MAVERGREEN_OBJC_READER_DRYDOCK_REPO	a retired Drydock checkout knob; objc-compat-build.sh fails when it is set
-MAVERGREEN_OBJC_READER_SRC	a retired reader-source knob; objc-compat-build.sh fails when it is set
 MAVERGREEN_OBJC_REFERENCES	the Objective-C reference set the strict analyzer measures against
 MAVERGREEN_OBJC_REPORT_DIR	directory where the compat guard keeps each strict analyzer report
 MAVERGREEN_OBJC_ROOT	the shipped root the strict analyzer resolves a binary's dependencies in

@@ -1,24 +1,17 @@
 #!/bin/sh
-# platform: macOS-only -- builds the host-native objc-compat helper against the pinned host SDK, then reads the link's outputs as data
+# platform: host-agnostic -- the wrapper; the pinned Drydock's drydock-objc writes evidence on macOS only (on Linux it exits 2)
 #   usage: objc-build-evidence.sh --artifact FILE --prestrip FILE --source-root DIR [--link-map FILE
 #                                 --provider-prefix DIR] --references REF_DIR --output NEW_FILE
-#          For an artifact that links no provider, give neither --link-map nor --provider-prefix: the
-#          evidence then records no link map and an empty provider list. One without the other is a
-#          usage error.
-#          Writes schema-1 Objective-C build evidence for the final artifact FILE to NEW_FILE, which
-#          must not exist in any form; it is written exclusively and atomically. The evidence
-#          records identities -- the final and prestrip images, the link map, the reference manifest,
-#          the prepared source tree under DIR (every entry but .git, by content) -- and, for each
-#          provider PREFIX declares, which members of its archive the link placed and where each of
-#          their atoms landed. That mapping is checked before it is written: the final and prestrip
-#          x86_64 slices must carry identical sections, the link map must list exactly the prestrip
-#          image's sections, and every placed atom must be a symbol its archive member defines and
-#          the prestrip image has at that address (tools/objc-compat/provider.c). A provider that
-#          was not linked gets an empty mapping, not an error. The evidence is never an approval:
-#          scripts/objc-compat.sh re-verifies it against the artifact's bytes every run, and guard
-#          or binding receipts still need their own review (it writes none).
-#          Exit 0 written, 2 usage or an existing destination, 4 a mismatch, an unreadable or
-#          invalid input, or a helper that did not build.
+#          Runs `drydock-objc evidence` from the pinned Drydock release (components/drydock, through
+#          scripts/fetch_drydock.sh) with these arguments, and exits with its status. It writes schema-1
+#          Objective-C build evidence for the final artifact FILE to NEW_FILE, which must not exist in any form:
+#          the identities of the final and prestrip images, the link map, the reference set and the prepared
+#          source tree under DIR, and, for each provider PREFIX declares, which members of its archive the link
+#          placed and where their atoms landed, checked before it is written. For an artifact that links no
+#          provider, give neither --link-map nor --provider-prefix; one without the other is a usage error. The
+#          evidence is never an approval: scripts/objc-compat.sh re-verifies it against the artifact every run.
+#          Exit 0 written, 2 usage or an existing destination, 4 a mismatch, an unreadable or invalid input,
+#          a Drydock that could not be fetched, or a host other than macOS.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() { echo "usage: objc-build-evidence.sh --artifact FILE --prestrip FILE --source-root DIR [--link-map FILE --provider-prefix DIR] --references REF_DIR --output NEW_FILE" >&2; exit 2; }
@@ -31,10 +24,11 @@ for a in "$@"; do
     case "$a" in --artifact|--prestrip|--source-root|--link-map|--provider-prefix|--references|--output) ;; *) usage ;; esac
   fi
 done
-T=$(mktemp -d "${TMPDIR:-/tmp}/objc-build-evidence.XXXXXX")
-trap 'rm -rf "$T"' EXIT
-sh "$HERE/objc-compat-build.sh" --analyzer "$T/objc-compat" 2>"$T/build.log" || {
-  cat "$T/build.log" >&2; echo "objc-build-evidence: the helper did not build" >&2; exit 4; }
-rc=0
-"$T/objc-compat" emit-build-evidence "$@" || rc=$?
-exit "$rc"
+# platform: drydock-objc's evidence is built for macOS only; on Linux it exits 2, which the guard would read as misuse, so
+#   another host is cannot-measure here, before any fetch. MAVERGREEN_DRYDOCK_HOST (linux or mac) replaces the host's answer.
+case "${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" in
+  mac|Darwin) ;;
+  *) echo "objc-build-evidence: drydock-objc evidence runs on macOS only, not on ${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" >&2; exit 4 ;;
+esac
+D=$(sh "$HERE/fetch_drydock.sh" "$HERE/../components/drydock") || { echo "objc-build-evidence: the pinned Drydock could not be had" >&2; exit 4; }
+exec "$D/bin/drydock-objc" evidence "$@"

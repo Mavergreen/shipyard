@@ -20,7 +20,12 @@ fi
 for p in "$dir"/*.patch; do
   [ -f "$p" ] || continue
   echo "applying ${p##*/}"
-  (cd "$src" && patch -p1 -F 0 -N -t -s -V none < "$p") \
+  (cd "$src" && patch -p1 -E -F 0 -N -t -s -V none < "$p") \
     || { echo "apply_patches.sh: ${p##*/} does not apply cleanly to $src" >&2; exit 1; }
+  awk '/^--- /{f=$2} /^\+\+\+ \/dev\/null/{print f}' "$p" | while IFS= read -r f; do
+    f="${f#*/}"
+    [ -f "$src/$f" ] && [ ! -s "$src/$f" ] && rm -f "$src/$f"
+    :
+  done
 done
 printf '%s\n' "$want" > "$src/.mavergreen-patches"

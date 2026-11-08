@@ -12,8 +12,10 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/guard-exempt-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
-mkdir -p "$w/scripts/lib" "$w/bin" "$w/repo" "$w/build/bin"
-for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh mavergreen-meta.sh check-lib.sh check-ids.tsv lib/macho-tools.sh lib/pkg-tree.sh; do
+# spec: scripts/objc-reference-dir.sh header -- laid out as an install, with a staged reference set, so nothing is fetched.
+mkdir -p "$w/scripts/lib" "$w/bin" "$w/repo" "$w/build/bin" "$w/reference/objc"
+for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh mavergreen-meta.sh check-lib.sh check-ids.tsv lib/macho-tools.sh lib/pkg-tree.sh \
+  objc-reference-dir.sh fetch_drydock.sh objc-compat.sh; do
   cp "$here/../scripts/$s" "$w/scripts/$s"
 done
 cat > "$w/scripts/macho-slices.sh" <<'EOF'
@@ -130,6 +132,28 @@ strict passes "$w/build/bin/tool"; says 'Objective-C sends measured floor-answer
 
 label="an excused file does not excuse its neighbour on the same command line"
 fails "$w/build/bin/tool" "$w/build/bin/armtool"; says 'armtool'
+# spec: scripts/assert_binary_compatible.sh header -- the reference set is resolved where the analyzer runs: misuse is still
+#       misuse (2) when no Drydock can be had, and a binary's other findings are still said before the guard fails closed
+#       as cannot-measure (1, "CANNOT MEASURE").
+rmdir "$w/reference/objc"
+MAVERGREEN_DRYDOCK_PREFIX="$w/no-drydock"; export MAVERGREEN_DRYDOCK_PREFIX
+label="evidence for two binaries, with no Drydock to be had, is misuse"; deviations_are
+MAVERGREEN_OBJC_BUILD_EVIDENCE="$w/ev.json"; export MAVERGREEN_OBJC_BUILD_EVIDENCE
+strict run "$w/build/bin/good" "$w/build/bin/tool"; unset MAVERGREEN_OBJC_BUILD_EVIDENCE
+[ "$rc" -eq 2 ] || { echo "FAIL ($label): exit $rc, want 2:"; echo "$out"; exit 1; }; says 'one binary'
+label="with no Drydock to be had, a binary's sdk finding is still said, and the guard cannot measure"
+strict run "$w/build/bin/tool"
+[ "$rc" -eq 1 ] || { echo "FAIL ($label): exit $rc, want 1:"; echo "$out"; exit 1; }
+says 'sdk 26.5'; says 'no Objective-C reference set'; says 'CANNOT MEASURE'
+unset MAVERGREEN_DRYDOCK_PREFIX
+mkdir "$w/reference/objc"
+# spec: scripts/objc-compat.sh header -- with the real wrapper on a host other than macOS, strict is cannot-measure.
+label="strict, with the real analyzer wrapper, on a host other than macOS"
+run_linux() { (MAVERGREEN_OBJC_STRICT=1; MAVERGREEN_DRYDOCK_HOST=linux; export MAVERGREEN_OBJC_STRICT MAVERGREEN_DRYDOCK_HOST; unset OBJC_COMPAT
+  run "$@"; echo "$rc"; printf '%s\n' "$out") > "$w/linux.out"; }
+run_linux "$w/build/bin/good"; rc="$(head -1 "$w/linux.out")"; out="$(tail -n +2 "$w/linux.out")"
+[ "$rc" -eq 1 ] || { echo "FAIL ($label): exit $rc, want 1:"; echo "$out"; exit 1; }
+says 'CANNOT MEASURE'; says 'drydock-objc analyze runs on macOS only'
 
 # spec: assert_binary_compatible.sh's usage -- under --dist one environment covers every Mach-O, so the
 #       per-binary allowance a CMake target passes in the knobs is a path-scoped deviation instead.

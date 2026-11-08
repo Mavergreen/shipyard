@@ -375,11 +375,12 @@ under `upstream/`, the product under `products/` and each declared deviation und
 `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` are launchers into the Mavergreen cmake product,
 which shipyard pins and its pkg requires. The only thing shipyard compiles is its Sparkle updater app,
 with clang22, alongside the CMake modules and shell scripts it has always shipped.
-The Objective-C reference producer is a generation/test-only host tool, not a packaged runtime.
-Its output, `reference/objc`, holds facts derived from the pinned SDKs and a floor runtime capture,
-with their identities in `manifest.json`; no Apple header or binary is copied into it.
-The Objective-C artifact reader (`tools/objc-compat`) is likewise built from source for tests and is
-not yet packaged; the Drydock core it compiles is the `objc-reader-drydock` ingredient.
+The compat guard's strict Objective-C analyzer is Drydock's `drydock-objc`, from a pinned Drydock release:
+shipyard's `objc-*.sh` scripts fetch it and run it, and its pkg stages that release's reference set
+(`share/drydock/objc/reference`, facts derived from the pinned SDKs and a floor runtime capture, with their
+identities in its `manifest.json`) as `reference/objc`. No analyzer source, reference producer or
+reference set lives in this repository any more; they are Drydock's. Drydock's `LICENSE` dedicates it to
+the public domain, so shipping its reference set carries no notice obligation.
 
 On a bump:
 

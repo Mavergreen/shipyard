@@ -19,7 +19,7 @@
 #          (2) is a selector list unless the caller opts in with MAVERGREEN_OBJC_STRICT=1. Opted in, (2) is
 #          the strict Objective-C analyzer (scripts/objc-compat.sh) run on the binary as shipped: every
 #          send it finds unsupported or unresolved against the versioned reference set
-#          (reference/objc) fails compat-selectors, with no selector list anywhere, and one it cannot
+#          (scripts/objc-reference-dir.sh) fails compat-selectors, with no selector list anywhere, and one it cannot
 #          measure is cannot-measure: exit 1 with a FAIL line containing "CANNOT MEASURE", the text
 #          callers tell it from a blocking finding by. Each run measures afresh; no earlier report is an input. Opted
 #          in, compat-selectors is excused only send by send: a declared
@@ -28,7 +28,7 @@
 #          that reviewed record (a plain file inside MAVERGREEN_DEVIATIONS_ROOT) to the analyzer, which
 #          excuses the one blocking finding the record names exactly -- artifact, site, receiver, kind,
 #          selector, digests, basis, reviewer, the declared reason and a retirement condition
-#          (tools/objc-compat/main.m "objc-api scoped deviations"); the finding stays in the report,
+#          (Drydock's src/objc/main.m "objc-api scoped deviations"); the finding stays in the report,
 #          and the guard says which deviation applied. Exit 2 is misuse (MAVERGREEN_OBJC_STRICT
 #          neither 1 nor unset, an analyzer knob without it, a selector knob with it, evidence for
 #          more than one binary, a binary outside MAVERGREEN_OBJC_ROOT).
@@ -52,8 +52,8 @@
 #                                               dependencies in, and names it relative to (default:
 #                                               the binary's own directory). Every binary must be
 #                                               inside it.
-#            MAVERGREEN_OBJC_REFERENCES         the reference set (default: this shipyard's
-#                                               reference/objc).
+#            MAVERGREEN_OBJC_REFERENCES         the reference set (default: the pinned Drydock's,
+#                                               scripts/objc-reference-dir.sh).
 #            MAVERGREEN_OBJC_BUILD_EVIDENCE     schema-1 build evidence (scripts/objc-build-evidence.sh),
 #            MAVERGREEN_OBJC_PROVIDER_PREFIX    an Objective-C provider prefix, and
 #            MAVERGREEN_OBJC_SOURCE_RECEIPT     the provider body's source receipt, each passed to the
@@ -64,8 +64,9 @@
 #                                               N.<basename>.objc-compat.json; one already there is
 #                                               never replaced (the guard fails instead).
 #            OBJC_COMPAT                       the analyzer command (default: sh objc-compat.sh beside
-#                                               this script). An analyzer that is missing, fails to
-#                                               build or cannot measure is fail-closed.
+#                                               this script, the pinned Drydock's drydock-objc). An
+#                                               analyzer that is missing, cannot be fetched or cannot
+#                                               measure is fail-closed.
 #          Shared:
 #            MAVERGREEN_REQUIRE_DEFINED_SYMBOLS symbols that MUST be DEFINED (a project's 10.9 shims).
 #            LIPO, NM, STRINGS, OTOOL          the Mach-O readers (default: LLVM's llvm-lipo, llvm-nm,
@@ -179,7 +180,7 @@ POST_10_9_SEL='labelColor|secondaryLabelColor|tertiaryLabelColor|quaternaryLabel
 [ -n "${MAVERGREEN_POST_10_9_SELECTORS:-}" ] && POST_10_9_SEL="$POST_10_9_SEL|$MAVERGREEN_POST_10_9_SELECTORS"
 ALLOW_SEL="${MAVERGREEN_ALLOW_SELECTORS:-}"
 ALLOW_ARCHS="$(printf '%s\n' ${MAVERGREEN_ALLOW_ARCHS:-x86_64} | sort -u | xargs)"
-OBJC_REFS="${MAVERGREEN_OBJC_REFERENCES:-$SELF/../reference/objc}"
+OBJC_REFS="${MAVERGREEN_OBJC_REFERENCES:-}"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the guard
 #       honours the same sdk-pin:<glob> exemptions as the package-time rule, parsed by the same
@@ -221,6 +222,13 @@ guard_fail() {  # $1 = id, $2 = the path deviations match, $3 = why; a deviation
 #       objc_rc; the analyzer's stderr, which names each blocking finding, is in $work/objc.err.
 objc_measure() {  # $1 binary, $2 report
   _objc_report=$2
+  # spec: scripts/objc-reference-dir.sh header -- the default reference set is the pinned Drydock's, resolved (and perhaps
+  #       fetched) only when the analyzer first runs, after every misuse check and this binary's other checks; one that
+  #       cannot be had is cannot-measure.
+  if [ -z "$OBJC_REFS" ]; then
+    OBJC_REFS="$(sh "$SELF/objc-reference-dir.sh" 2>"$work/objc.err")" || {
+      OBJC_REFS=; echo "no Objective-C reference set (scripts/objc-reference-dir.sh)" >>"$work/objc.err"; objc_rc=4; return; }
+  fi
   set -- --artifact "$1" --root "${MAVERGREEN_OBJC_ROOT:-$(dirname "$1")}" --references "$OBJC_REFS" \
     --report "$2" --mode strict
   [ -z "${MAVERGREEN_OBJC_BUILD_EVIDENCE:-}" ] || set -- "$@" --build-evidence "$MAVERGREEN_OBJC_BUILD_EVIDENCE"
@@ -234,7 +242,7 @@ objc_measure() {  # $1 binary, $2 report
     [ -x "$OBJC_COMPAT" ] || { echo "OBJC_COMPAT $OBJC_COMPAT is not an executable" >"$work/objc.err"; objc_rc=4; return; }
     "$OBJC_COMPAT" "$@" >"$work/objc.err" 2>&1 || objc_rc=$?
   else sh "$SELF/objc-compat.sh" "$@" >"$work/objc.err" 2>&1 || objc_rc=$?; fi
-  # spec: tools/objc-compat/main.m header -- a verdict comes with its strict report: 0 only from a complete one, 1
+  # spec: Drydock's src/objc/main.m header -- a verdict comes with its strict report: 0 only from a complete one, 1
   #       only with the blocking findings it names. Anything else is not a measurement.
   case "$objc_rc" in
     0) grep -F '"mode": "strict", "complete_within_boundary": true,' "$_objc_report" >/dev/null 2>&1 ||

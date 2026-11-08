@@ -1,1 +1,0 @@
-objc-compat-build.sh compiles the modules the strict analyzer reuses from this commit, unvendored and unmodified

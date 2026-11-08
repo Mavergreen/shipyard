@@ -159,17 +159,37 @@ install(CODE "${_msc_presets_code}")
 install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
 install(DIRECTORY explain DESTINATION "${_dest}")
 install(DIRECTORY .mavergreen/ingredients DESTINATION "${_dest}/.mavergreen")
-install(FILES tools/objc-sdk-inventory.c tools/README.objc-sdk-inventory.md tools/objc-runtime-inventory.m
-  tools/objc-source-inventory.c
-  DESTINATION "${_dest}/tools")
-# spec: scripts/assert_binary_compatible.sh header -- the guard's strict Objective-C analyzer is built on
-#       first use, from these sources (scripts/objc-compat-build.sh: tools/objc-compat, the source-receipt
-#       tool whose hash it embeds, and, in .mavergreen/ingredients above, the Drydock pin whose tarball it
-#       fetches and verifies and the clang22 pin it compiles with), and reads the versioned
-#       reference set beside them. Nothing here is compiled at install time, and no libclang is staged:
-#       only the reference-set and source-receipt producers use it, never the analyzer.
-install(DIRECTORY tools/objc-compat DESTINATION "${_dest}/tools")
-install(DIRECTORY reference/objc DESTINATION "${_dest}/reference")
+# spec: scripts/objc-reference-dir.sh header -- the guard's strict Objective-C analyzer is the pinned Drydock's
+#       drydock-objc, which the objc-*.sh wrappers fetch on first use (scripts/fetch_drydock.sh components/drydock),
+#       and an install stages that release's reference set beside the scripts, as reference/objc, so an installed
+#       guard measures against it with no fetch. It is fetched here, at install time, and verified as every
+#       Drydock fetch is (fetch_drydock.sh header); nothing is compiled.
+install(FILES components/drydock/version components/drydock/linux-sha256 DESTINATION "${_dest}/components/drydock")
+install(FILES components/objc-receipt-clang/version components/objc-receipt-clang/linux-sha256 DESTINATION "${_dest}/components/objc-receipt-clang")
+set(_msc_objc_refs_code [[
+  if(IS_ABSOLUTE "@_dest@")
+    set(_msc_to "@_dest@")
+  else()
+    set(_msc_to "${CMAKE_INSTALL_PREFIX}/@_dest@")
+  endif()
+  # spec: scripts/fetch_drydock.sh header -- the pkg stages only a verified fetch of the pinned release: never an installed
+  #       Drydock (MAVERGREEN_DRYDOCK_INSTALLED, pointed at nothing) or a caller's MAVERGREEN_DRYDOCK_PREFIX, both
+  #       unverified, which would put whatever a build machine holds into every shipyard pkg.
+  execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env --unset=MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED=/nonexistent
+      sh "@CMAKE_CURRENT_SOURCE_DIR@/scripts/fetch_drydock.sh" "@CMAKE_CURRENT_SOURCE_DIR@/components/drydock"
+    OUTPUT_VARIABLE _msc_drydock RESULT_VARIABLE _msc_drydock_rc OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT _msc_drydock_rc EQUAL 0)
+    message(FATAL_ERROR "the pinned Drydock (components/drydock) could not be fetched, so its Objective-C reference set cannot be staged")
+  endif()
+  set(_msc_refs "${_msc_drydock}/share/drydock/objc/reference")
+  if(NOT IS_DIRECTORY "${_msc_refs}")
+    message(FATAL_ERROR "the pinned Drydock at ${_msc_drydock} holds no share/drydock/objc/reference")
+  endif()
+  file(INSTALL DESTINATION "${_msc_to}/reference/objc" TYPE DIRECTORY FILES "${_msc_refs}/")
+]])
+string(CONFIGURE "${_msc_objc_refs_code}" _msc_objc_refs_code @ONLY)
+install(CODE "${_msc_objc_refs_code}")
 # Sparkle updater templates (configure_file'd per product by MavericksSparkle.cmake).
 install(DIRECTORY updater DESTINATION "${_dest}")
 # spec: MavergreenHostTools.cmake -- it builds tools/ against the exporter pin installed beside it.

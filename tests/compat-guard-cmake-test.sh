@@ -4,11 +4,11 @@
 #          mavergreen_assert_binary_compatible() hands the guard MAVERGREEN_DEVIATIONS_ROOT = the
 #          project's CMAKE_SOURCE_DIR. A POST_BUILD command runs in the build tree, so without it the
 #          guard would look there for .mavergreen/deviations/ and honour no sdk-pin exemption at all.
-#          With OBJC_STRICT it also sets MAVERGREEN_OBJC_STRICT=1, names the staged Objective-C
-#          reference set and forwards the analyzer's evidence knobs only when set, and a retired
+#          With OBJC_STRICT it also sets MAVERGREEN_OBJC_STRICT=1 and forwards the analyzer's reference
+#          set and evidence knobs only when set, and a retired
 #          selector knob stops the configure. Without it the guard is called as before, and an
 #          analyzer knob stops the configure rather than be ignored. An install stages
-#          what the guard's analyzer is built from and reads, byte for byte.
+#          the Drydock pin the guard's analyzer is fetched by and that release's reference set.
 # platform: script mode (cmake -P) sets CMAKE_SOURCE_DIR to the working directory and cannot run
 #           add_custom_command, so the probe stands its own in to record what the module asks for --
 #           no compiler, no project, and it runs wherever cmake does.
@@ -46,9 +46,10 @@ probe '' OBJC_STRICT
 [ "$rc" = 0 ] || { echo "FAIL: the OBJC_STRICT probe did not run:"; echo "$out"; exit 1; }
 printf '%s\n' "$out" | grep -q ";MAVERGREEN_OBJC_STRICT=1;" \
   || { echo "FAIL: OBJC_STRICT does not set MAVERGREEN_OBJC_STRICT=1:"; echo "$out"; exit 1; }
-# spec: MavergreenCompatGuard.cmake header -- with OBJC_STRICT, the reference set staged beside the scripts, by default.
-printf '%s\n' "$out" | grep -q ";MAVERGREEN_OBJC_REFERENCES=$root/reference/objc;" \
-  || { echo "FAIL: the guard is not given this shipyard's reference set:"; echo "$out"; exit 1; }
+# spec: MavergreenCompatGuard.cmake header -- with OBJC_STRICT and no reference set named, none is forwarded: the guard
+#       defaults to the pinned Drydock's (scripts/objc-reference-dir.sh).
+! printf '%s\n' "$out" | grep -q 'MAVERGREEN_OBJC_REFERENCES' \
+  || { echo "FAIL: a reference set was forwarded when none was set:"; echo "$out"; exit 1; }
 ! printf '%s\n' "$out" | grep -q 'MAVERGREEN_OBJC_BUILD_EVIDENCE' \
   || { echo "FAIL: build evidence forwarded when none was set:"; echo "$out"; exit 1; }
 probe 'set(MAVERGREEN_OBJC_BUILD_EVIDENCE "/e v/ev.json")
@@ -71,18 +72,29 @@ unset MAVERGREEN_POST_10_9_SELECTORS
 [ "$rc" != 0 ] && printf '%s\n' "$out" | grep -q 'MAVERGREEN_POST_10_9_SELECTORS is retired' \
   || { echo "FAIL: MAVERGREEN_POST_10_9_SELECTORS in the environment did not stop the configure:"; echo "$out"; exit 1; }
 
-# spec: scripts/objc-compat-build.sh header -- CMakeLists.txt installs the analyzer sources, the Drydock and toolchain pins
-#       and the reference set where that script and MavergreenCompatGuard.cmake look for them.
+# spec: scripts/objc-reference-dir.sh header -- CMakeLists.txt installs the Drydock pin beside the wrappers that fetch it, and
+#       stages the pinned Drydock's reference set, byte for byte, as reference/objc, where objc-reference-dir.sh looks first.
 b="$w/build"; p="$w/prefix"
 cmake -S "$root" -B "$b" >"$w/configure.log" 2>&1 || { echo "FAIL: shipyard did not configure:"; tail -20 "$w/configure.log"; exit 1; }
-cmake --install "$b" --prefix "$p" >"$w/install.log" 2>&1 || { echo "FAIL: shipyard did not install:"; tail -20 "$w/install.log"; exit 1; }
+# spec: scripts/fetch_drydock.sh header -- an unverified Drydock in the environment is never what the install stages.
+mkdir -p "$w/fake-drydock/bin" "$w/fake-drydock/share/drydock/objc/reference"
+printf '#!/bin/sh\n' >"$w/fake-drydock/bin/drydock-objc"; chmod +x "$w/fake-drydock/bin/drydock-objc"
+echo fake >"$w/fake-drydock/share/drydock/objc/reference/fake.tsv"
+MAVERGREEN_DRYDOCK_PREFIX="$w/fake-drydock" cmake --install "$b" --prefix "$p" >"$w/install.log" 2>&1 || { echo "FAIL: shipyard did not install:"; tail -20 "$w/install.log"; exit 1; }
 d="$p/share/cmake/MavergreenShipyard"
-for f in reference/objc/manifest.json reference/objc/floor-runtime.tsv tools/objc-compat/main.m tools/objc-compat/report.h \
-  tools/objc-source-inventory.c .mavergreen/ingredients/objc-reader-drydock/PIN .mavergreen/ingredients/objc-reader-drydock/SHA256 .mavergreen/ingredients/objc-reference-clang/VERSION \
-  scripts/objc-compat.sh scripts/objc-compat-build.sh scripts/fetch_pinned_source.sh scripts/fetch_product_pkg.sh; do
+for f in components/drydock/version components/drydock/linux-sha256 components/objc-receipt-clang/version \
+  components/objc-receipt-clang/linux-sha256 scripts/objc-compat.sh scripts/objc-build-evidence.sh scripts/objc-provider-link-args.sh \
+  scripts/objc-source-inventory.sh scripts/objc-reference-dir.sh scripts/fetch_drydock.sh scripts/fetch_product_pkg.sh; do
   cmp -s "$root/$f" "$d/$f" || { echo "FAIL: the install does not stage $f"; exit 1; }
 done
-(cd "$root" && ls tools/objc-compat reference/objc) >"$w/want"
-(cd "$d" && ls tools/objc-compat reference/objc) >"$w/got"
-cmp -s "$w/want" "$w/got" || { echo "FAIL: the staged analyzer sources or reference set differ:"; diff "$w/want" "$w/got"; exit 1; }
+refs="$(env -u MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED=/nonexistent sh "$root/scripts/fetch_drydock.sh" "$root/components/drydock")/share/drydock/objc/reference" \
+  || { echo "FAIL: the pinned Drydock could not be fetched to compare with"; exit 1; }
+diff -r "$refs" "$d/reference/objc" >"$w/refs.diff" 2>&1 \
+  || { echo "FAIL: the staged reference/objc is not the pinned Drydock's:"; cat "$w/refs.diff"; exit 1; }
+[ -f "$d/reference/objc/manifest.json" ] || { echo "FAIL: the staged reference/objc holds no manifest.json"; exit 1; }
+[ "$(sh "$d/scripts/objc-reference-dir.sh")" = "$(cd "$d/reference/objc" && pwd -P)" ] \
+  || { echo "FAIL: the installed objc-reference-dir.sh does not answer with the staged set"; exit 1; }
+for gone in tools/objc-compat components/objc-reader-drydock components/objc-reference-clang scripts/objc-compat-build.sh; do
+  [ ! -e "$d/$gone" ] || { echo "FAIL: the install still stages $gone"; exit 1; }
+done
 echo "PASS: compat-guard-cmake"
