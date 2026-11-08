@@ -52,6 +52,20 @@ scope_refusal() {
       ! only "$_s" '*?/' || echo "$_c names the install paths it covers: a scope of <install-path glob>, never * or a glob of nothing but wildcards" ;;
     packager)
       ! wild "$_s" || echo "packager names one path: a scope of <path>, never a wildcard" ;;
+    objc-api)
+      ! only "$_s" '*?/' || echo "objc-api must name the artifact it excuses: a scope of <artifact path>, never * or a glob of nothing but wildcards" ;;
+  esac
+  return 0
+}
+
+# spec: scripts/assert_binary_compatible.sh header -- an objc-api deviation excuses reviewed findings of one
+#       artifact scope, each through one evidence record: its reason is evidence=<file>#<record id>, then the
+#       review reason. Without its record, nothing names the finding.
+reason_refusal() {
+  case "$1" in
+    objc-api)
+      printf '%s\n' "$2" | grep -Eq '^evidence=[^ #]+#[A-Za-z0-9._-]+ +[^ ]' \
+        || echo "objc-api needs a reason of evidence=<file>#<record id>, one record, and then the review reason" ;;
   esac
   return 0
 }
@@ -78,6 +92,8 @@ one() {
   [ -n "$_revisit" ] || { refuse "$_id" "has no revisit; say what evidence would end the deviation"; _ok=0; }
   [ "$_ok" -eq 1 ] || return 0
   _why="$(scope_refusal "$1" "$_scope")"
+  [ -z "$_why" ] || { refuse "$_id" "$_why"; return 0; }
+  _why="$(reason_refusal "$1" "$_reason")"
   [ -z "$_why" ] || { refuse "$_id" "$_why"; return 0; }
   printf '%s %s %s\n' "$1" "$(printf '%s\n' "$_scope" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e "s/$tab/%09/g")" "$_reason"
 }

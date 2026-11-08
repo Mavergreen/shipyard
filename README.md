@@ -239,6 +239,103 @@ extra on 10.9. The compiler must read clang VFS overlays (clang22 does); the rec
 Recaulk ships, and `tests/sdk-metadata-consumer-test.sh` (run by hand on each box, see
 `tests/maintainer-tests`) is the evidence for the import orders it checks.
 
+## Build-input host tools
+
+Some build inputs come from tools that run on the build machine, never on 10.9: the pinned
+[mulle-xcode-to-cmake](https://github.com/mulle-nat/mulle-xcode-to-cmake) exporter
+(`components/mulle-xcode-to-cmake/version`, GPL-3.0, never shipped in a pkg). `MavergreenHostTools`
+builds them for the host in a configure of their own:
+
+```cmake
+include(MavergreenHostTools)
+mavergreen_build_host_tools(tools_bin
+  OUTPUT_ROOT "${MAVERGREEN_BUILD_ROOT}/host-tools"
+  COMPILER    /usr/local/mavergreen/bin/clang-22-cross)   # clang-22 on 10.9
+```
+
+On Apple Silicon the tools are arm64, against the pinned 11.3 SDK for macOS 11.0. When CMake itself
+runs under Rosetta, the tools' own configure and build are started with `/usr/bin/arch -arm64`, so
+neither they nor the tools run translated; if `sysctl` cannot tell but `uname -m` says arm64, it
+refuses rather than build x86_64 tools. Elsewhere the tools are x86_64, against the pinned 10.9 SDK
+for 10.9. Building them needs `/usr/bin/make`, which is a Command Line Tools stub on every macOS. The
+compiler runs with `--no-default-config` and an explicit target, so clang22's product defaults
+(Recaulk, its libc++, the 10.9 target) never reach a host link, and links with lld. An x86_64 host
+link also passes `-Wl,-U,__availability_version_check`, as clang22's own config does: compiler-rt's
+version-check helper names that libSystem function, which 10.9 lacks and never calls.
+
+The tools land in `OUTPUT_ROOT/<key>/bin`, keyed by host arch, compiler, SDK pin, exporter pin and
+this module's own files, beside a stamp of each file's SHA-256. The same inputs reuse the entry once
+it matches its stamp; an entry that does not (changed, unstamped, or left by an interrupted build) is
+set aside as `.rejected-*` and rebuilt, never run. The stamp guards against accidents, not against
+someone who can write `OUTPUT_ROOT`: keep it private to the build. One writer builds per key at a time, and an
+`OUTPUT_ROOT` inside shipyard or the exporter source is refused. The first build fetches the
+exporter's tarball (verified) and the host's pinned SDK.
+
+`MavergreenXcodeInputs` uses them to read an upstream Xcode project's source lists without Xcode:
+
+```cmake
+include(MavergreenXcodeInputs)
+mavergreen_export_xcode_sources(sources_cmake
+  PROJECT       "${src}/iTerm2.xcodeproj"
+  TARGETS       iTerm2 iTerm2Shared image_decoder SSKeychain
+  PREFIXES      ITERM2 ITERM2_SHARED IMAGE_DECODER SSKEYCHAIN
+  HOST_COMPILER /usr/local/mavergreen/bin/clang-22-cross
+  OUTPUT_DIR    "${CMAKE_BINARY_DIR}/xcode-inputs")
+include("${sources_cmake}")   # ITERM2_SHARED_SOURCES, ITERM2_MODELS, ...
+```
+
+`PREFIXES` are the variable prefixes the exporter gives each target, in `TARGETS`' order; with two or
+more targets, one it does not use is an error (a lone target's variables take its prefix). The
+exporter's `sexport -r` output is read as data, never `include()`d: every line must have the shape it
+writes, and every path must be plain (no `[ ] ; $ " \ ( )`, no `..`, nothing absolute) and lead to
+something inside the project's directory. Each target's sources, headers and resources are checked, entry
+for entry and duplicate for duplicate, against `mavergreen-xcode-inputs`, which reads the same build phases through
+Foundation's property-list reader and the project's group tree. Only then does the generated file
+appear, defining for each prefix:
+
+- `<P>_SOURCES`: the code files its sources phase compiles;
+- `<P>_MODELS`: the Core Data models that phase lists, which are not compiled;
+- `<P>_PRODUCT_RESOURCES`: other targets' built products its resources phase copies, by product name;
+- the exporter's `<P>_INCLUDE_DIRS`, `<P>_*_HEADERS` and `<P>_*RESOURCES`.
+
+Every path is relative to the project's directory, written as a bracket argument. Nothing in the
+project runs, and no link, ARC or bundle setting is translated: those belong to the product's own
+CMake. The same inputs reuse the export while it matches its stamp; a changed or unstamped export is
+refused and left as it is (remove it to export again).
+
+`MavergreenResourceInputs` stages a chosen subset of a pinned zip archive, such as compiled nibs from an
+upstream release, without unpacking or running the rest:
+
+```cmake
+include(MavergreenResourceInputs)
+mavergreen_extract_resource_members(resources_dir
+  ARCHIVE        "${zip}"                       # fetched beforehand, e.g. shipyard_fetch_verified
+  SHA256         90e6f2bd3eb2d245f4ab2c9f856c627c8a1536bac024fb3989db417bc3147565
+  MANIFEST       "${CMAKE_SOURCE_DIR}/resources/compiled.tsv"
+  MEMBER_PREFIX  "iTerm.app/Contents/Resources/"
+  VERSION_MEMBER "iTerm.app/Contents/Info.plist"
+  EXPECT_VERSION 3.0.15
+  HOST_COMPILER  /usr/local/mavergreen/bin/clang-22-cross
+  OUTPUT_DIR     "${CMAKE_BINARY_DIR}/resources")
+```
+
+The manifest's header is `member`, `destination`, `kind`, `bytes`, `sha256` (tab-separated); each line
+names a regular file under `MEMBER_PREFIX`, where it goes, `file`, and its exact size and SHA-256.
+`mavergreen-resource-extract` checks the archive's SHA-256 before reading any member, reads it with the
+system's libarchive, and stages each selected member only after its type, size and SHA-256 hold while
+it streams (written mode 0644, never as a link). `VERSION_MEMBER` must say `EXPECT_VERSION` as both
+`CFBundleVersion` and `CFBundleShortVersionString`; it is read, not staged. A member that is a Mach-O
+file (thin or fat) is refused, so upstream code cannot ride in as a resource, and `MEMBER_PREFIX` must
+name a directory. Names are compared in Unicode composed form (a zip made on macOS stores them
+decomposed). It refuses an unsafe path (absolute, `.`, `..`, empty segments, or `;`, `[`, `]`, which
+CMake would read as syntax), two members with one destination or one inside another, a name
+the archive holds twice, a missing member, a damaged, truncated or encrypted archive, and an output
+directory that exists or whose parent is a link. The output appears complete or not at all, and
+nothing outside it is written. On 10.9, libarchive 2.8.3 reads a zip's symbolic link as a regular file
+holding the link's text; such a member is still refused, because its bytes are not the manifest's.
+The same inputs reuse the staged members while each still has its manifest size, SHA-256 and mode and
+nothing else is there; anything else is refused and left as it is.
+
 ## Conventions for Claude Code
 
 The family's conventions ship as the `mavergreen` Claude Code plugin, from this repo's

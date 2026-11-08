@@ -147,4 +147,20 @@ deviation "$r" cxxabi runtime 'usr/local/mavergreen/libcxx22/lib/libc++abi.1.dyl
 out="$(sh "$S" "$r")"
 has 'arm64 usr/local/mavergreen/cmake/\* developers on Apple Silicon run it' "an install-path glob is an arm64 scope"
 has 'cxxabi usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib the family runtime' "an install path is a cxxabi scope"
+# spec: scripts/assert_binary_compatible.sh header -- an objc-api deviation names one artifact scope and points
+#       at one reviewed evidence record, evidence=<repo-relative file>#<record id>, then gives the review reason;
+#       an all-wildcard, evidence-less, record-less or reasonless one would excuse sends in silence.
+fresh
+deviation "$r" objc-api ws-launch 'bin/codex' 'evidence=compat/objc-exceptions.json#ws-launch guarded by respondsToSelector:'
+out="$(sh "$S" "$r")"
+has 'objc-api bin/codex evidence=compat/objc-exceptions.json#ws-launch guarded by respondsToSelector:' "an objc-api deviation"
+for scope in '*' '*/**' '?'; do
+  fresh; deviation "$r" objc-api x "$scope" 'evidence=compat/x.json#r every artifact'
+  refused 'objc-api' "the objc-api scope $scope"
+done
+for reason in 'reviewed by hand' 'evidence=compat/x.json no record' 'evidence=compat/x.json#r' \
+  'evidence=#r no file' 'evidence=compat/x.json#a#b two records'; do
+  fresh; deviation "$r" objc-api x 'bin/codex' "$reason"
+  refused 'objc-api' "the objc-api reason '$reason'"
+done
 echo "PASS: deviations"

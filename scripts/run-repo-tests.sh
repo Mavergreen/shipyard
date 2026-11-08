@@ -12,6 +12,9 @@
 #          and running no host-agnostic test at all fails.
 #          MAVERGREEN_TEST_JOBS=<n> runs up to n test files at once (default: the CPU count; 1 = one
 #          after another). Results still print in file order, each file's log only if it fails.
+#          A *.sh test whose own shell died on an expansion error (bash's "unbound variable",
+#          "parameter null or not set" or "bad substitution", from the file or a tests/lib helper it
+#          sources) FAILS whatever its exit status, and so does this runner if it dies that way.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Running a repo's
 #       tests" -- a newly added test file must run the day it lands, not wait for someone to remember
 #       a CI line (macports-legacy-support had 9 test files CI never ran; two had silently rotted).
@@ -111,7 +114,14 @@ stop_running() {
   done
   wait 2>/dev/null || :
 }
-trap 'rm -rf "$rdir"' EXIT
+# platform: 10.9's sh is bash 3.2, which exits 0 when `set -eu` kills a script on an unset variable
+#           and an EXIT trap then succeeds: the trap runs with $? 0 and that status stands. This runner
+#           dying so would report every file it never ran as nothing at all, and pass. It finishes
+#           only through the `rrt_done=1; exit` at its end (or an INT/TERM/HUP exit, which is non-zero).
+trap 'rrt_st=$?; rm -rf "$rdir"
+      if [ "$rrt_st" = 0 ] && [ "${rrt_done:-}" != 1 ]; then
+        echo "run-repo-tests: stopped before it finished (the shell error above) -- failing the run" >&2; exit 70
+      fi' EXIT
 trap 'stop_running; exit 130' INT TERM
 trap 'stop_running; exit 129' HUP
 
@@ -141,11 +151,29 @@ drain_oldest() {
          fi ;;
     esac
   fi
+  case "$dt:$rc" in
+    *.sh:0|*.sh:77)
+      died="$(own_death "$dt" "$log")"
+      if [ -n "$died" ]; then
+        echo "FAIL $dt (exit $rc, but its shell died: $died)"; sed 's/^/    | /' "$log"; status=1; return 0
+      fi ;;
+  esac
   case "$rc" in
     0)  echo "PASS $dt" ;;
     77) echo "SKIP $dt (unmet prerequisites)" ;;
     *)  echo "FAIL $dt (exit $rc)"; sed 's/^/    | /' "$log"; status=1 ;;
   esac
+}
+
+# spec: scripts/run-repo-tests.sh header -- the line in which bash says the test's own shell died on an
+#       expansion error: it names the file as the runner ran it (or a tests/lib helper the file
+#       sources), so a child that died, and whose status the test checked, is not the test's death.
+# platform: on 10.9 (bash 3.2 as sh) a test under `set -eu` with an EXIT trap exits 0 from that death,
+#           so its status alone cannot be believed: a crash halfway through read as a PASS.
+own_death() {
+  awk -v t="$1" '
+    (index($0, t ": line ") == 1 || $0 ~ /^([^:]*\/)?tests\/lib\/[^:\/]*: line /) &&
+      $0 ~ /: line [0-9]+: .*: (unbound variable|parameter null or not set|bad substitution)$/ { print; exit }' "$2"
 }
 
 # spec: scripts/run-repo-tests.sh header -- results print in file order, so this prints every leading
@@ -245,4 +273,5 @@ if [ "$strict" -eq 1 ]; then
   echo "run-repo-tests: --strict-host on $os: $agnostic host-agnostic suites run, $macskip macOS-only not run"
   [ "$agnostic" -gt 0 ] || { echo "run-repo-tests: --strict-host ran no host-agnostic suite -- a gate that examined nothing has not passed"; status=1; }
 fi
+rrt_done=1
 exit "$status"

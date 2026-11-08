@@ -1,0 +1,6 @@
+project(fake-mulle C)
+cmake_minimum_required(VERSION 3.4)
+if(DEFINED ENV{MHT_TEST_COUNTER})
+  file(APPEND "$ENV{MHT_TEST_COUNTER}" "configured\n")
+endif()
+add_executable(mulle-xcode-to-cmake main.c)

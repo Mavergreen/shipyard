@@ -18,6 +18,11 @@
 #                                                        prints the reason a deviation in <facts> (a file of
 #                                                        those lines) gives to excuse <check> for
 #                                                        <subject>; prints nothing when none does
+#          shipyard_deviation_reasons <facts> <check> <subject>
+#                                                        prints, one per line in declaration order, the
+#                                                        reason of EVERY scoped deviation in <facts> whose
+#                                                        glob matches <subject>, for a check whose subject
+#                                                        may carry several (objc-api: one per finding)
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Conformance deviations" and
 #       "SDK pinning" -- ONE matcher, because check-artifact-conformance.sh (package time) and
 #       assert_binary_compatible.sh (build time) must excuse exactly the same files: an unscoped
@@ -94,4 +99,20 @@ shipyard_deviation_scopes() {  # $1 = check; one scope per line, * for an unscop
   [ -n "${SHIPYARD_DEVIATION_RC+x}" ] || shipyard_deviations . >/dev/null 2>&1 || :
   printf '%s\n' "$SHIPYARD_DEVIATION_FACTS" \
     | sed -n -e "s/^deviation ${1}\$/*/p" -e "s/^deviation ${1} .*\$/*/p" -e "s/^deviation ${1}:\([^ ]*\).*\$/\1/p" | _shipyard_deviation_unescape
+}
+
+shipyard_deviation_reasons() {  # $1 = facts file, $2 = check, $3 = the subject it concerns
+  while IFS= read -r _mdr_line; do
+    [ -n "$_mdr_line" ] || continue
+    _mdr_rest="${_mdr_line#deviation ${2}:}"
+    _mdr_glob="${_mdr_rest%% *}"
+    case "$_mdr_glob" in *%*) _mdr_glob="$(printf '%s\n' "$_mdr_glob" | _shipyard_deviation_unescape)" ;; esac
+    _mdr_why="${_mdr_rest#* }"
+    [ "$_mdr_why" != "$_mdr_rest" ] || continue      # a glob with no reason is not a deviation
+    case "$3" in
+      $_mdr_glob) printf '%s\n' "$_mdr_why" ;;
+    esac
+  done <<EOF2
+$(grep "^deviation ${2}:" "$1" || true)
+EOF2
 }

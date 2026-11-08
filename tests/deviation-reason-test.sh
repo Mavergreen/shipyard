@@ -70,4 +70,18 @@ says '' "$w/facts" sdk-pin 'Library/MyXTool/bin/x'
 says '' "$w/facts" sdk-pin 'Library/My/Tool/bin/x'
 says 'the Swift runtime ships prebuilt' "$w/facts" sdk-pin build/lib/libswiftCore.dylib
 [ -z "$(printf '\n' | shipyard_deviation_facts)" ] || { echo "FAIL: no deviations must yield no facts"; exit 1; }
+
+# spec: scripts/deviation-reason.sh -- shipyard_deviation_reasons gives every matching scoped reason, in
+#       declaration order, through the same case matcher: an objc-api subject may carry one per finding.
+cat > "$w/objc" <<'EOF'
+deviation objc-api:bin/codex evidence=compat/x.json#one first
+deviation objc-api:bin/other evidence=compat/x.json#two not this artifact
+deviation objc-api:bin/no-reason
+deviation objc-api:bin/co* evidence=compat/x.json#three third
+deviation sdk-pin:bin/codex another check
+EOF
+got="$(shipyard_deviation_reasons "$w/objc" objc-api bin/codex)"
+want="$(printf 'evidence=compat/x.json#one first\nevidence=compat/x.json#three third')"
+[ "$got" = "$want" ] || { echo "FAIL: shipyard_deviation_reasons -- wanted '$want', got '$got'"; exit 1; }
+[ -z "$(shipyard_deviation_reasons "$w/objc" objc-api lib/x)" ] || { echo "FAIL: no match must give no reasons"; exit 1; }
 echo "PASS: deviation-reason"
