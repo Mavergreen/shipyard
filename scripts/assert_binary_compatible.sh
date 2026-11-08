@@ -20,7 +20,8 @@
 #          the strict Objective-C analyzer (scripts/objc-compat.sh) run on the binary as shipped: every
 #          send it finds unsupported or unresolved against the versioned reference set
 #          (reference/objc) fails compat-selectors, with no selector list anywhere, and one it cannot
-#          measure is cannot-measure. Each run measures afresh; no earlier report is an input. Opted
+#          measure is cannot-measure: exit 1 with a FAIL line containing "CANNOT MEASURE", the text
+#          callers tell it from a blocking finding by. Each run measures afresh; no earlier report is an input. Opted
 #          in, compat-selectors is excused only send by send: a declared
 #          .mavergreen/deviations/objc-api/<label>/ (scope <artifact glob>, reason "evidence=<file>#<record
 #          id> <review reason>") whose scope matches the file's path RELATIVE TO MAVERGREEN_OBJC_ROOT hands
