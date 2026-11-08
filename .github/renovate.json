@@ -4,7 +4,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["/^components/objc-reference-clang/version$/"],
+      "managerFilePatterns": ["/^components/objc-(reference|receipt)-clang/version$/"],
       "matchStrings": ["(?<currentValue>[^\\s]+)"],
       "depNameTemplate": "Mavergreen/clang-22",
       "datasourceTemplate": "github-releases",
@@ -86,9 +86,9 @@
   ],
   "packageRules": [
     {
-      "description": "Renovate moves components/clang22/version and components/objc-reference-clang/version but cannot write the Linux archive's digest beside either, so the Linux job fails on the bump until the linux-sha256 beside the moved version names the new release's archive.",
+      "description": "Renovate moves components/clang22/version and components/objc-receipt-clang/version but cannot write the Linux archive's digest beside either, so the Linux job fails on the bump until the linux-sha256 beside the moved version names the new release's archive.",
       "matchDepNames": ["Mavergreen/clang-22"],
-      "prBodyNotes": ["Before this can merge, replace the linux-sha256 beside each moved version (components/clang22, components/objc-reference-clang) with the `clang22-<version>-linux-x86_64.tar.gz` line of the new release's SHA256SUMS: `gh release download <version> -R Mavergreen/clang-22 -p SHA256SUMS -O - | grep linux-x86_64.tar.gz > components/<dir>/linux-sha256`. An objc-reference-clang bump must also pass tests/objc-source-inventory-host-test.sh on Linux and a Mac."]
+      "prBodyNotes": ["Before this can merge, replace the linux-sha256 beside each moved version (components/clang22, components/objc-receipt-clang) with the `clang22-<version>-linux-x86_64.tar.gz` line of the new release's SHA256SUMS: `gh release download <version> -R Mavergreen/clang-22 -p SHA256SUMS -O - | grep linux-x86_64.tar.gz > components/<dir>/linux-sha256`. An objc-receipt-clang bump must also pass tests/objc-source-inventory-host-test.sh on Linux and a Mac."]
     },
     {
       "description": "Renovate moves DIGEST in components/mulle-xcode-to-cmake/version but cannot write TARBALL_SHA256 beside it, so the host-tool build refuses the bump until that digest names GitHub's tarball of the new commit, checked against the commit's tree.",

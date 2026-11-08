@@ -5,7 +5,8 @@
 #          Writes the Objective-C source receipt (tools/objc-source-inventory.c header) for the
 #          prepared provider source FILE lists (`SHA256  LABEL` lines, as Recaulk's build records
 #          them), found under the --root directories, to NEW_FILE. PREFIX is the pinned clang
-#          (components/objc-reference-clang), fetched through fetch_clang22.sh when not given; the
+#          (components/objc-receipt-clang: the first clang22 whose Linux archive ships libclang), fetched
+#          through fetch_clang22.sh when not given; the
 #          tool is built here against its libclang (on a Mac with /usr/bin/clang and the pinned host
 #          SDK, on Linux with PREFIX's clang) and parses against the pinned floor SDK. Generation only: the
 #          analyzer reads the receipt and never loads libclang. Nothing supplied is executed.
@@ -43,7 +44,7 @@ case "$(uname -s)/$(uname -m)" in
   *) fail "unsupported host: $(uname -s) $(uname -m)" ;;
 esac
 if [ -z "$prefix" ]; then
-  prefix=$(sh "$HERE/fetch_clang22.sh" "$HERE/../components/objc-reference-clang") || fail 'cannot fetch the pinned reference clang'
+  prefix=$(sh "$HERE/fetch_clang22.sh" "$HERE/../components/objc-receipt-clang") || fail 'cannot fetch the pinned reference clang'
 fi
 [ -x "$prefix/bin/clang" ] || fail "missing compiler: $prefix/bin/clang"
 [ -r "$prefix/include/clang-c/Index.h" ] && [ -r "$prefix/lib/$lib" ] || fail 'missing libclang headers/library'

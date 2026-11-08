@@ -163,6 +163,7 @@ install(FILES tools/objc-sdk-inventory.c tools/README.objc-sdk-inventory.md tool
 install(DIRECTORY tools/objc-compat DESTINATION "${_dest}/tools")
 install(FILES components/objc-reader-drydock/version DESTINATION "${_dest}/components/objc-reader-drydock")
 install(FILES components/objc-reference-clang/version DESTINATION "${_dest}/components/objc-reference-clang")
+install(FILES components/objc-receipt-clang/version components/objc-receipt-clang/linux-sha256 DESTINATION "${_dest}/components/objc-receipt-clang")
 install(DIRECTORY reference/objc DESTINATION "${_dest}/reference")
 # Sparkle updater templates (configure_file'd per product by MavericksSparkle.cmake).
 install(DIRECTORY updater DESTINATION "${_dest}")
