@@ -76,7 +76,7 @@ unset MAVERICKS_POST_10_9_SELECTORS
 #       stages the pinned Drydock's reference set, byte for byte, as reference/objc, where objc-reference-dir.sh looks first.
 b="$w/build"; p="$w/prefix"
 cmake -S "$root" -B "$b" >"$w/configure.log" 2>&1 || { echo "FAIL: shipyard did not configure:"; tail -20 "$w/configure.log"; exit 1; }
-# spec: CMakeLists.txt -- an unverified Drydock in the environment is never what the install stages.
+# spec: scripts/fetch_drydock.sh header -- an unverified Drydock in the environment is never what the install stages.
 mkdir -p "$w/fake-drydock/bin" "$w/fake-drydock/share/drydock/objc/reference"
 printf '#!/bin/sh\n' >"$w/fake-drydock/bin/drydock-objc"; chmod +x "$w/fake-drydock/bin/drydock-objc"
 echo fake >"$w/fake-drydock/share/drydock/objc/reference/fake.tsv"
