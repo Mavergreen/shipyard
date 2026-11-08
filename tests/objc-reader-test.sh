@@ -337,7 +337,7 @@ ARCHIVE_SHA=$(sed -n 1p "$ROOT/.mavergreen/ingredients/objc-reader-drydock/SHA25
 printf '%s\n' "$ARCHIVE_SHA" | grep -Eq '^[0-9a-f]{64}$' || fail 'the Drydock ingredient has no SHA256'
 NOCL="$T/nocl"
 mkdir -p "$NOCL/bin"
-DENY='git clang clang++ cc c++ gcc g++ cpp ld as xcrun xcodebuild xcode-select make libtool lipo otool nm strip ar ranlib'
+DENY='clang clang++ cc c++ gcc g++ cpp ld as xcrun xcodebuild xcode-select make libtool lipo otool nm strip ar ranlib git'
 for d in /bin /usr/bin /usr/sbin; do
   for f in "$d"/*; do
     n=${f##*/}
@@ -402,7 +402,7 @@ rc=0; bare MAVERGREEN_BUILD_ROOT="$T/stale" MAVERGREEN_OBJC_CLANG_PREFIX="$PREFI
 [ "$rc" = 0 ] || fail "a stale tree in the old cache place broke the build: $(tail -3 "$T/err")"
 [ "$(id "$T/err")" = "$SRCKEY" ] || fail 'a stale tree in the old cache place changed the source identity'
 [ -z "$(ls -A "$T/stale/src" | grep -v "^drydock-$DIGEST\$")" ] || fail "a build left its private Drydock tree behind: $(ls "$T/stale/src")"
-echo "objc-reader: the analyzer builds with neither the Command Line Tools nor git ($how)"
+echo "objc-reader: the analyzer builds with neither the Command Line Tools nor git: $how"
 
 # spec: tools/objc-compat/macho-reader.c header -- The real defective artifact, when the caller supplies it (never fetched, modified or run).
 if [ -n "${MAVERGREEN_OBJC_CODEX_ARTIFACT:-}" ]; then
