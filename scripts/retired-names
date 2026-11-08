@@ -68,3 +68,13 @@ product-names	products/<short>/noun and line
 product-name.sh	mavergreen_name
 registry-lookup	mg_repo and ingredients/<dep>/REPO
 MAVERGREEN_PRODUCT_NAMES	MAVERGREEN_REPO_ROOT (its .mavergreen/products/)
+MavericksHostTools	MavergreenHostTools
+MavericksXcodeInputs	MavergreenXcodeInputs
+MavericksResourceInputs	MavergreenResourceInputs
+mavericks_build_host_tools	mavergreen_build_host_tools
+mavericks_export_xcode_sources	mavergreen_export_xcode_sources
+mavericks_extract_resource_members	mavergreen_extract_resource_members
+mavericks-xcode-inputs	mavergreen-xcode-inputs
+mavericks-resource-extract	mavergreen-resource-extract
+MAVERICKS_HOST_TOOLS_	MAVERGREEN_HOST_TOOLS_
+mavericks_host_tools	mavergreen_host_tools
