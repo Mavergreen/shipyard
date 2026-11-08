@@ -1,0 +1,1 @@
+objc-source-inventory.sh hands it to drydock-objc receipt, which loads its libclang; the first clang22 whose Linux archive ships libclang (libclang needs glibc 2.35)

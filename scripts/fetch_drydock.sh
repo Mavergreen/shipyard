@@ -1,12 +1,12 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: fetch_drydock.sh PIN_DIR
-#          Prints the prefix of the Drydock release PIN_DIR/version names (its tag, vX.Y.Z), for this host: a
-#          prefix holding bin/drydock-objc and share/drydock/objc/reference. PIN_DIR is shipyard's
-#          components/drydock. MAVERGREEN_DRYDOCK_PREFIX, when set, is that prefix instead: it is checked for
-#          bin/drydock-objc, and nothing is fetched. On x86_64 Linux: the release's
-#          drydock-X.Y.Z-linux-x86_64.tar.gz, verified against PIN_DIR/linux-sha256 (the archive's line of the
-#          release's SHA256SUMS). fetch_product_tar.sh cannot take it -- its asset is named for the tag and its
+#   usage: fetch_drydock.sh ROOT
+#          Prints the prefix of the Drydock release ROOT/.mavergreen/ingredients/drydock/VERSION names (its tag,
+#          vX.Y.Z), from the repo its REPO names, for this host: a prefix holding bin/drydock-objc and
+#          share/drydock/objc/reference. ROOT is shipyard, a checkout or an install. MAVERGREEN_DRYDOCK_PREFIX,
+#          when set, is that prefix instead: it is checked for bin/drydock-objc, and nothing is fetched. On x86_64 Linux: the release's
+#          drydock-X.Y.Z-linux-x86_64.tar.gz, verified against the ingredient's LINUX_SHA256 (the archive's
+#          digest in the release's SHA256SUMS). fetch_product_tar.sh cannot take it -- its asset is named for the tag and its
 #          root must be opt/mavergreen/SHORT, while Drydock's tag has a v and its archive's root is
 #          drydock-X.Y.Z/ -- so the archive is fetched with mavergreen_fetch.sh's shipyard_fetch_verified, the
 #          downloader fetch_product_tar.sh uses, and unpacked here. On a Mac: an installed
@@ -24,12 +24,17 @@ if [ -n "${MAVERGREEN_DRYDOCK_PREFIX:-}" ]; then
   has_objc "$MAVERGREEN_DRYDOCK_PREFIX" || die "MAVERGREEN_DRYDOCK_PREFIX $MAVERGREEN_DRYDOCK_PREFIX holds no bin/drydock-objc"
   (cd "$MAVERGREEN_DRYDOCK_PREFIX" && pwd -P); exit 0
 fi
-[ $# -eq 1 ] && [ -d "$1" ] || { echo "usage: fetch_drydock.sh PIN_DIR (a components/drydock directory)" >&2; exit 2; }
-P="$(cd "$1" && pwd)"
-[ -f "$P/version" ] || { echo "fetch_drydock: $P has no version file" >&2; exit 2; }
-V="$(tr -d ' \t\n' < "$P/version")"
-case "$V" in v[0-9]*) ;; *) echo "fetch_drydock: $P/version holds '$V', not a release tag (vX.Y.Z)" >&2; exit 2 ;; esac
-case "$V" in *[!a-zA-Z0-9._-]*) echo "fetch_drydock: $P/version holds '$V', not a release tag (vX.Y.Z)" >&2; exit 2 ;; esac
+[ $# -eq 1 ] && [ -d "$1" ] || { echo "usage: fetch_drydock.sh ROOT (a repo holding .mavergreen/ingredients/drydock)" >&2; exit 2; }
+. "$S/mavergreen-meta.sh"
+MAVERGREEN_REPO_ROOT="$(cd "$1" && pwd)"
+export MAVERGREEN_REPO_ROOT
+P="$MAVERGREEN_REPO_ROOT/.mavergreen/ingredients/drydock"
+V="$(mg_value ingredients/drydock/VERSION)" || { echo "fetch_drydock: $P has no VERSION" >&2; exit 2; }
+case "$V" in v[0-9]*) ;; *) echo "fetch_drydock: $P/VERSION holds '$V', not a release tag (vX.Y.Z)" >&2; exit 2 ;; esac
+case "$V" in *[!a-zA-Z0-9._-]*) echo "fetch_drydock: $P/VERSION holds '$V', not a release tag (vX.Y.Z)" >&2; exit 2 ;; esac
+SLUG="$(mg_value ingredients/drydock/REPO)" || { echo "fetch_drydock: $P has no REPO" >&2; exit 2; }
+case "$SLUG" in */*/*|*[!a-zA-Z0-9._/-]*|*..*|/*|*/) SLUG= ;; */*) ;; *) SLUG= ;; esac
+[ -n "$SLUG" ] || { echo "fetch_drydock: $P/REPO is not OWNER/REPO" >&2; exit 2; }
 N="${V#v}"
 host="${MAVERGREEN_DRYDOCK_HOST:-}"
 if [ -z "$host" ]; then
@@ -53,10 +58,9 @@ manifest_version() {
 case "$host" in
   linux)
     asset="drydock-$N-linux-x86_64.tar.gz"
-    [ -f "$P/linux-sha256" ] || die "$P has no linux-sha256 for $asset"
-    sha="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' "$P/linux-sha256")"
-    case "$sha" in ''|*[!0-9a-f]*) die "$P/linux-sha256 names no SHA-256 for $asset (copy its line from https://github.com/Mavergreen/drydock/releases/download/$V/SHA256SUMS)" ;; esac
-    [ "${#sha}" -eq 64 ] || die "$P/linux-sha256's digest for $asset is not a SHA-256"
+    sha="$(mg_value ingredients/drydock/LINUX_SHA256)" || die "$P has no LINUX_SHA256 for $asset (copy its digest from https://github.com/$SLUG/releases/download/$V/SHA256SUMS)"
+    case "$sha" in ''|*[!0-9a-f]*) die "$P/LINUX_SHA256 holds '$sha', not the SHA-256 of $asset (copy its digest from https://github.com/$SLUG/releases/download/$V/SHA256SUMS)" ;; esac
+    [ "${#sha}" -eq 64 ] || die "$P/LINUX_SHA256 holds '$sha', not the SHA-256 of $asset"
     d="$W/linux"
     kept() { has_objc "$d" && [ "$(cat "$d.stamp" 2>/dev/null || :)" = "$sha" ]; }
     if ! kept; then
@@ -75,7 +79,7 @@ case "$host" in
     fi
     if ! kept; then
       . "$S/mavergreen_fetch.sh"
-      BASE="${MAVERGREEN_RELEASES:-https://github.com}/Mavergreen/drydock/releases/download/$V"
+      BASE="${MAVERGREEN_RELEASES:-https://github.com}/$SLUG/releases/download/$V"
       shipyard_fetch_verified "$BASE/$asset" "$sha" "$W" "$asset" >&2 || die "could not fetch and verify $BASE/$asset"
       tmp="$(mktemp -d "$W/linux.tmp.XXXXXX")"
       tar -xzf "$W/$asset" -C "$tmp" "drydock-$N" || die "could not unpack drydock-$N from $asset"
@@ -90,7 +94,7 @@ case "$host" in
       printf '%s\n' "$inst"; exit 0
     fi
     d="$W/mac"
-    sh "$S/fetch_product_pkg.sh" --asset "drydock-$N.pkg" drydock "$V" "$d" >/dev/null || die "could not fetch and verify drydock-$N.pkg" ;;
+    sh "$S/fetch_product_pkg.sh" --repo "$SLUG" --asset "drydock-$N.pkg" drydock "$V" "$d" >/dev/null || die "could not fetch and verify drydock-$N.pkg" ;;
 esac
 has_objc "$d" || die "$d holds no bin/drydock-objc"
 printf '%s\n' "$d"

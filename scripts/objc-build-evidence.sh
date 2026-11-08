@@ -2,7 +2,7 @@
 # platform: host-agnostic -- the wrapper; the pinned Drydock's drydock-objc writes evidence on macOS only (on Linux it exits 2)
 #   usage: objc-build-evidence.sh --artifact FILE --prestrip FILE --source-root DIR [--link-map FILE
 #                                 --provider-prefix DIR] --references REF_DIR --output NEW_FILE
-#          Runs `drydock-objc evidence` from the pinned Drydock release (components/drydock, through
+#          Runs `drydock-objc evidence` from the pinned Drydock release (.mavergreen/ingredients/drydock, through
 #          scripts/fetch_drydock.sh) with these arguments, and exits with its status. It writes schema-1
 #          Objective-C build evidence for the final artifact FILE to NEW_FILE, which must not exist in any form:
 #          the identities of the final and prestrip images, the link map, the reference set and the prepared
@@ -30,5 +30,5 @@ case "${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" in
   mac|Darwin) ;;
   *) echo "objc-build-evidence: drydock-objc evidence runs on macOS only, not on ${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" >&2; exit 4 ;;
 esac
-D=$(sh "$HERE/fetch_drydock.sh" "$HERE/../components/drydock") || { echo "objc-build-evidence: the pinned Drydock could not be had" >&2; exit 4; }
+D=$(sh "$HERE/fetch_drydock.sh" "$HERE/..") || { echo "objc-build-evidence: the pinned Drydock could not be had" >&2; exit 4; }
 exec "$D/bin/drydock-objc" evidence "$@"

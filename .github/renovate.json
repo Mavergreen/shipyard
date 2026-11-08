@@ -1,35 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>Mavergreen/shipyard"],
-  "customManagers": [
-    {
-      "customType": "regex",
-      "managerFilePatterns": ["/^components/objc-receipt-clang/version$/"],
-      "matchStrings": ["(?<currentValue>[^\\s]+)"],
-      "depNameTemplate": "Mavergreen/clang-22",
-      "datasourceTemplate": "github-releases",
-      "extractVersionTemplate": "^v?(?<version>.+)$",
-      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-mavericks\\.(?<build>\\d+)$"
-    },
-    {
-      "customType": "regex",
-      "description": "The Drydock release whose drydock-objc is the compat guard's strict Objective-C analyzer and whose reference set the shipyard pkg stages as reference/objc (components/drydock/version, a release tag). scripts/fetch_drydock.sh fetches it: the pkg on a Mac, verified against the release's SHA256SUMS, and the Linux archive against components/drydock/linux-sha256, which this manager does not move. A bump must pass tests/objc-guard-test.sh on 10.9 and tests/objc-source-inventory-host-test.sh on a Mac and in the Linux job.",
-      "managerFilePatterns": ["/^components/drydock/version$/"],
-      "matchStrings": ["^(?<currentValue>\\S+)\\s*$"],
-      "depNameTemplate": "Mavergreen/drydock",
-      "datasourceTemplate": "github-releases"
-    }
-  ],
   "packageRules": [
     {
-      "description": "Renovate moves .mavergreen/ingredients/clang22/VERSION and components/objc-receipt-clang/version but cannot write the Linux archive's digest beside either, so the Linux job fails on the bump until .mavergreen/ingredients/clang22/LINUX_SHA256 and components/objc-receipt-clang/linux-sha256 name the new release's archive.",
+      "description": "Renovate moves .mavergreen/ingredients/clang22/VERSION and .mavergreen/ingredients/objc-receipt-clang/VERSION but cannot write the Linux archive's digest beside either, so the Linux job fails on the bump until the LINUX_SHA256 beside the moved VERSION holds the new release's archive digest.",
       "matchDepNames": ["Mavergreen/clang-22"],
-      "prBodyNotes": ["Before this can merge, write the digest of `clang22-<version>-linux-x86_64.tar.gz` from the new release's SHA256SUMS, alone, to .mavergreen/ingredients/clang22/LINUX_SHA256: `gh release download <version> -R Mavergreen/clang-22 -p SHA256SUMS -O - | awk '$2 ~ /linux-x86_64[.]tar[.]gz$/ { print $1 }' > .mavergreen/ingredients/clang22/LINUX_SHA256`. Also replace components/objc-receipt-clang/linux-sha256 with that archive's line of SHA256SUMS; an objc-receipt-clang bump must also pass tests/objc-source-inventory-host-test.sh on Linux and a Mac."]
+      "prBodyNotes": ["Before this can merge, write the digest of `clang22-<version>-linux-x86_64.tar.gz` from the new release's SHA256SUMS, alone, to the LINUX_SHA256 beside each moved VERSION (.mavergreen/ingredients/clang22, .mavergreen/ingredients/objc-receipt-clang): `gh release download <version> -R Mavergreen/clang-22 -p SHA256SUMS -O - | awk '$2 ~ /linux-x86_64[.]tar[.]gz$/ { print $1 }' > .mavergreen/ingredients/<name>/LINUX_SHA256`. An objc-receipt-clang bump must also pass tests/objc-source-inventory-host-test.sh on Linux and a Mac."]
     },
     {
-      "description": "Renovate moves components/drydock/version but cannot write the Linux archive's digest beside it, so the Linux job fails on the bump until components/drydock/linux-sha256 names the new release's archive.",
+      "description": "Renovate moves .mavergreen/ingredients/drydock/VERSION but cannot write the Linux archive's digest beside it, so the Linux job fails on the bump until .mavergreen/ingredients/drydock/LINUX_SHA256 holds the new release's archive digest.",
       "matchDepNames": ["Mavergreen/drydock"],
-      "prBodyNotes": ["Before this can merge, replace components/drydock/linux-sha256 with the `drydock-<version without v>-linux-x86_64.tar.gz` line of the new release's SHA256SUMS: `gh release download <tag> -R Mavergreen/drydock -p SHA256SUMS -O - | grep linux-x86_64.tar.gz > components/drydock/linux-sha256`. Also rewrite tests/fixtures/objc-api/provider-body.tool with the new release's receipt tool digest (the `tools/objc-source-inventory.c` line of Drydock's tests/objc/IMPORTED.sha256 at the new tag). The bump must pass tests/objc-guard-test.sh on 10.9 (its report's analyzer names the new release) and tests/objc-source-inventory-host-test.sh on a Mac and in the Linux job."]
+      "prBodyNotes": ["Before this can merge, write the digest of `drydock-<version without v>-linux-x86_64.tar.gz` from the new release's SHA256SUMS, alone, to .mavergreen/ingredients/drydock/LINUX_SHA256: `gh release download <tag> -R Mavergreen/drydock -p SHA256SUMS -O - | awk '$2 ~ /linux-x86_64[.]tar[.]gz$/ { print $1 }' > .mavergreen/ingredients/drydock/LINUX_SHA256`. Also rewrite tests/fixtures/objc-api/provider-body.tool with the new release's receipt tool digest (the `tools/objc-source-inventory.c` line of Drydock's tests/objc/IMPORTED.sha256 at the new tag). The bump must pass tests/objc-guard-test.sh on 10.9 (its report's analyzer names the new release) and tests/objc-source-inventory-host-test.sh on a Mac and in the Linux job."]
     },
     {
       "description": "Renovate moves the commit in .mavergreen/ingredients/mulle-xcode-to-cmake/PIN but cannot write SHA256 beside it, so the host-tool build refuses the bump until that digest names GitHub's tarball of the new commit, checked against the commit's tree.",

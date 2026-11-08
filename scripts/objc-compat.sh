@@ -2,7 +2,7 @@
 # platform: host-agnostic -- the wrapper; the pinned Drydock's drydock-objc analyzes on macOS only (on Linux it exits 2)
 #   usage: objc-compat.sh --artifact FILE --root SHIPPED_ROOT --references REF_DIR --report NEW_FILE
 #                         [--build-evidence FILE] [--provider-prefix DIR [--source-receipt FILE]] [--mode inventory|strict] [--exceptions FILE]
-#          Runs `drydock-objc analyze` from the pinned Drydock release (components/drydock, through
+#          Runs `drydock-objc analyze` from the pinned Drydock release (.mavergreen/ingredients/drydock, through
 #          scripts/fetch_drydock.sh) with these arguments, and exits with its status. The analyzer is Drydock's,
 #          and its README and drydock-objc's header say what it does: it classifies every Objective-C message send
 #          in FILE's x86_64 slice against the reference set REF_DIR (scripts/objc-reference-dir.sh names the
@@ -37,5 +37,5 @@ case "${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" in
   mac|Darwin) ;;
   *) echo "objc-compat: drydock-objc analyze runs on macOS only, not on ${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" >&2; exit 4 ;;
 esac
-D=$(sh "$HERE/fetch_drydock.sh" "$HERE/../components/drydock") || { echo "objc-compat: the pinned Drydock could not be had" >&2; exit 4; }
+D=$(sh "$HERE/fetch_drydock.sh" "$HERE/..") || { echo "objc-compat: the pinned Drydock could not be had" >&2; exit 4; }
 exec "$D/bin/drydock-objc" analyze "$@"

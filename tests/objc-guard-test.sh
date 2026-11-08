@@ -149,7 +149,7 @@ passes MAVERGREEN_OBJC_REPORT_DIR="$T/reports"
 ls "$T/reports"/* >/dev/null 2>&1 || fail 'kept report: MAVERGREEN_OBJC_REPORT_DIR holds no report'
 grep -F "\"sha256\": \"$(sha "$BIN")\"" "$T/reports"/* >/dev/null || fail 'kept report: it does not name the binary'
 # spec: scripts/objc-compat.sh header -- the analyzer is the pinned Drydock's drydock-objc, and its report says so.
-DRYDOCK_V=$(sed 's/^v//' "$ROOT/components/drydock/version")
+DRYDOCK_V=$(sed -n '1s/^v//p' "$ROOT/.mavergreen/ingredients/drydock/VERSION")
 grep -F "\"analyzer\": \"drydock-$DRYDOCK_V-objc-src-" "$T/reports"/* >/dev/null ||
   fail "kept report: its analyzer is not drydock-$DRYDOCK_V's ($(grep -o '"analyzer": "[^"]*"' "$T/reports"/* | head -1))"
 grep -o '"analyzer": "[^"]*"' "$T/reports"/* | head -1 | sed 's/^/objc-guard: /'

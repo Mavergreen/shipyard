@@ -82,19 +82,20 @@ printf '#!/bin/sh\n' >"$w/fake-drydock/bin/drydock-objc"; chmod +x "$w/fake-dryd
 echo fake >"$w/fake-drydock/share/drydock/objc/reference/fake.tsv"
 MAVERGREEN_DRYDOCK_PREFIX="$w/fake-drydock" cmake --install "$b" --prefix "$p" >"$w/install.log" 2>&1 || { echo "FAIL: shipyard did not install:"; tail -20 "$w/install.log"; exit 1; }
 d="$p/share/cmake/MavergreenShipyard"
-for f in components/drydock/version components/drydock/linux-sha256 components/objc-receipt-clang/version \
-  components/objc-receipt-clang/linux-sha256 scripts/objc-compat.sh scripts/objc-build-evidence.sh scripts/objc-provider-link-args.sh \
+for f in .mavergreen/ingredients/drydock/VERSION .mavergreen/ingredients/drydock/REPO .mavergreen/ingredients/drydock/LINUX_SHA256 \
+  .mavergreen/ingredients/objc-receipt-clang/VERSION .mavergreen/ingredients/objc-receipt-clang/LINUX_SHA256 scripts/objc-compat.sh scripts/objc-build-evidence.sh scripts/objc-provider-link-args.sh \
   scripts/objc-source-inventory.sh scripts/objc-reference-dir.sh scripts/fetch_drydock.sh scripts/fetch_product_pkg.sh; do
   cmp -s "$root/$f" "$d/$f" || { echo "FAIL: the install does not stage $f"; exit 1; }
 done
-refs="$(env -u MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED=/nonexistent sh "$root/scripts/fetch_drydock.sh" "$root/components/drydock")/share/drydock/objc/reference" \
+refs="$(env -u MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED=/nonexistent sh "$root/scripts/fetch_drydock.sh" "$root")/share/drydock/objc/reference" \
   || { echo "FAIL: the pinned Drydock could not be fetched to compare with"; exit 1; }
 diff -r "$refs" "$d/reference/objc" >"$w/refs.diff" 2>&1 \
   || { echo "FAIL: the staged reference/objc is not the pinned Drydock's:"; cat "$w/refs.diff"; exit 1; }
 [ -f "$d/reference/objc/manifest.json" ] || { echo "FAIL: the staged reference/objc holds no manifest.json"; exit 1; }
 [ "$(sh "$d/scripts/objc-reference-dir.sh")" = "$(cd "$d/reference/objc" && pwd -P)" ] \
   || { echo "FAIL: the installed objc-reference-dir.sh does not answer with the staged set"; exit 1; }
-for gone in tools/objc-compat components/objc-reader-drydock components/objc-reference-clang scripts/objc-compat-build.sh; do
+for gone in tools/objc-compat components .mavergreen/ingredients/objc-reader-drydock .mavergreen/ingredients/objc-reference-clang \
+  scripts/objc-compat-build.sh; do
   [ ! -e "$d/$gone" ] || { echo "FAIL: the install still stages $gone"; exit 1; }
 done
 echo "PASS: compat-guard-cmake"

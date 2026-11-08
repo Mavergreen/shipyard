@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic -- the wrapper; the pinned Drydock's drydock-objc prints link arguments on macOS only (on Linux it exits 2)
 #   usage: objc-provider-link-args.sh --prefix PREFIX --link-map FILE
-#          Runs `drydock-objc link-args` from the pinned Drydock release (components/drydock, through
+#          Runs `drydock-objc link-args` from the pinned Drydock release (.mavergreen/ingredients/drydock, through
 #          scripts/fetch_drydock.sh) with these arguments, and exits with its status. It prints the linker
 #          arguments that link the Objective-C provider(s) PREFIX declares
 #          (PREFIX/share/recaulk/objc-providers.json, e.g. Recaulk's openURLs backfill) into the binary being
@@ -23,5 +23,5 @@ case "${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" in
   mac|Darwin) ;;
   *) echo "objc-provider-link-args: drydock-objc link-args runs on macOS only, not on ${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" >&2; exit 4 ;;
 esac
-D=$(sh "$HERE/fetch_drydock.sh" "$HERE/../components/drydock") || { echo "objc-provider-link-args: the pinned Drydock could not be had" >&2; exit 4; }
+D=$(sh "$HERE/fetch_drydock.sh" "$HERE/..") || { echo "objc-provider-link-args: the pinned Drydock could not be had" >&2; exit 4; }
 exec "$D/bin/drydock-objc" link-args "$@"

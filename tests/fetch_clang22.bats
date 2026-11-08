@@ -74,3 +74,16 @@ teardown() { rm -rf "$WORK"; }
   run sh "$HELPER" "$WORK"
   [ "$status" -eq 2 ]
 }
+@test 'NAME names another clang22 ingredient, whose own pin and digest are used' {
+  O="$WORK/.mavergreen/ingredients/other-clang"; mkdir -p "$O"
+  cp "$PIN/REPO" "$PIN/product" "$PIN/VERSION" "$O/"
+  printf '%s\n' "$SHA" > "$O/LINUX_SHA256"
+  out="$(CLANG22_HOST=linux sh "$HELPER" "$WORK" other-clang)"
+  [ "$out" = "$WORK/clang22/clang22-22.1.8-mavergreen.99" ] || { echo "$out"; return 1; }
+  run env CLANG22_HOST=linux sh "$HELPER" "$WORK"
+  [ "$status" -eq 1 ] || { echo "$output"; return 1; }
+}
+@test 'a NAME that is not an ingredient name is a usage error' {
+  run sh "$HELPER" "$WORK" ../clang22
+  [ "$status" -eq 2 ]
+}

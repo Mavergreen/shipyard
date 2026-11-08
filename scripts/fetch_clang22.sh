@@ -1,9 +1,10 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: fetch_clang22.sh ROOT
-#          Prints the root of the clang22 release ROOT/.mavergreen/ingredients/clang22/VERSION names, for
-#          this host: a prefix holding bin/clang, bin/ld64.lld and bin/llvm-{lipo,otool,nm,strings}. ROOT is
-#          a product repo. It is `shipyard-provision --only clang22` for the host's product: on x86_64
+#   usage: fetch_clang22.sh ROOT [NAME]
+#          Prints the root of the clang22 release ROOT/.mavergreen/ingredients/NAME/VERSION names (NAME
+#          defaults to clang22), for this host: a prefix holding bin/clang, bin/ld64.lld and
+#          bin/llvm-{lipo,otool,nm,strings}. ROOT is a product repo. It is `shipyard-provision --only NAME`
+#          for the host's product: on x86_64
 #          Linux the linux-x86_64 archive, verified against the digest in the same directory's
 #          LINUX_SHA256 (the archive's digest in the release's SHA256SUMS); on a Mac the clang22-cross
 #          pkg (on Mac OS X 10.9, whose cross pkg does not run there, the native clang22 pkg), verified
@@ -15,12 +16,14 @@
 set -eu
 S="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "fetch_clang22: $*" >&2; exit 1; }
-[ $# -eq 1 ] && [ -d "$1" ] || { echo "usage: fetch_clang22.sh ROOT (a repo holding .mavergreen/ingredients/clang22)" >&2; exit 2; }
+{ [ $# -eq 1 ] || [ $# -eq 2 ]; } && [ -d "$1" ] || { echo "usage: fetch_clang22.sh ROOT [NAME] (a repo holding .mavergreen/ingredients/NAME, default clang22)" >&2; exit 2; }
+N="${2:-clang22}"
+case "$N" in ''|.|..|*[!a-zA-Z0-9._-]*) echo "fetch_clang22: '$N' is not an ingredient name" >&2; exit 2 ;; esac
 . "$S/mavergreen-meta.sh"
 MAVERGREEN_REPO_ROOT="$(cd "$1" && pwd)"
 export MAVERGREEN_REPO_ROOT
-P="$MAVERGREEN_REPO_ROOT/.mavergreen/ingredients/clang22"
-V="$(mg_value ingredients/clang22/VERSION)" || { echo "fetch_clang22: $P has no VERSION" >&2; exit 2; }
+P="$MAVERGREEN_REPO_ROOT/.mavergreen/ingredients/$N"
+V="$(mg_value "ingredients/$N/VERSION")" || { echo "fetch_clang22: $P has no VERSION" >&2; exit 2; }
 case "$V" in ''|.|..|*[!a-zA-Z0-9._-]*) echo "fetch_clang22: $P/VERSION holds '$V', not a release tag" >&2; exit 2 ;; esac
 host="${CLANG22_HOST:-}"
 if [ -z "$host" ]; then
@@ -43,18 +46,18 @@ has_tools() {
 }
 provision() {
   _os=$1; shift; _rc=0
-  _out="$(CI= SHIPYARD_PROVISION_OS=$_os sh "$S/shipyard-provision" --only clang22 --into "$cache" "$@")" || _rc=$?
+  _out="$(CI= SHIPYARD_PROVISION_OS=$_os sh "$S/shipyard-provision" --only "$N" --into "$cache" "$@")" || _rc=$?
   if [ "$_rc" -ne 0 ]; then
     [ "$_os" != Linux ] || [ "$_rc" -ne 1 ] || die "could not fetch and verify $asset against $P/LINUX_SHA256 (its digest is in $sums)"
     exit "$_rc"
   fi
-  d="${_out#clang22=}"
+  d="${_out#"$N"=}"
 }
 case "$host" in
   linux)
     asset="clang22-$V-linux-x86_64.tar.gz"
     sums="https://github.com/Mavergreen/clang-22/releases/download/$V/SHA256SUMS"
-    sha="$(mg_value ingredients/clang22/LINUX_SHA256)" || die "$P has no LINUX_SHA256 for $asset (copy its digest from $sums)"
+    sha="$(mg_value "ingredients/$N/LINUX_SHA256")" || die "$P has no LINUX_SHA256 for $asset (copy its digest from $sums)"
     case "$sha" in ''|*[!0-9a-f]*) die "$P/LINUX_SHA256 holds '$sha', not the SHA-256 of $asset (copy its digest from $sums)" ;; esac
     [ "${#sha}" -eq 64 ] || die "$P/LINUX_SHA256 holds '$sha', not the SHA-256 of $asset (copy its digest from $sums)"
     provision Linux ;;

@@ -160,12 +160,10 @@ install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
 install(DIRECTORY explain DESTINATION "${_dest}")
 install(DIRECTORY .mavergreen/ingredients DESTINATION "${_dest}/.mavergreen")
 # spec: scripts/objc-reference-dir.sh header -- the guard's strict Objective-C analyzer is the pinned Drydock's
-#       drydock-objc, which the objc-*.sh wrappers fetch on first use (scripts/fetch_drydock.sh components/drydock),
+#       drydock-objc, which the objc-*.sh wrappers fetch on first use (scripts/fetch_drydock.sh, .mavergreen/ingredients/drydock),
 #       and an install stages that release's reference set beside the scripts, as reference/objc, so an installed
 #       guard measures against it with no fetch. It is fetched here, at install time, and verified as every
 #       Drydock fetch is (fetch_drydock.sh header); nothing is compiled.
-install(FILES components/drydock/version components/drydock/linux-sha256 DESTINATION "${_dest}/components/drydock")
-install(FILES components/objc-receipt-clang/version components/objc-receipt-clang/linux-sha256 DESTINATION "${_dest}/components/objc-receipt-clang")
 set(_msc_objc_refs_code [[
   if(IS_ABSOLUTE "@_dest@")
     set(_msc_to "@_dest@")
@@ -177,10 +175,10 @@ set(_msc_objc_refs_code [[
   #       unverified, which would put whatever a build machine holds into every shipyard pkg.
   execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env --unset=MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED=/nonexistent
-      sh "@CMAKE_CURRENT_SOURCE_DIR@/scripts/fetch_drydock.sh" "@CMAKE_CURRENT_SOURCE_DIR@/components/drydock"
+      sh "@CMAKE_CURRENT_SOURCE_DIR@/scripts/fetch_drydock.sh" "@CMAKE_CURRENT_SOURCE_DIR@"
     OUTPUT_VARIABLE _msc_drydock RESULT_VARIABLE _msc_drydock_rc OUTPUT_STRIP_TRAILING_WHITESPACE)
   if(NOT _msc_drydock_rc EQUAL 0)
-    message(FATAL_ERROR "the pinned Drydock (components/drydock) could not be fetched, so its Objective-C reference set cannot be staged")
+    message(FATAL_ERROR "the pinned Drydock (.mavergreen/ingredients/drydock) could not be fetched, so its Objective-C reference set cannot be staged")
   endif()
   set(_msc_refs "${_msc_drydock}/share/drydock/objc/reference")
   if(NOT IS_DIRECTORY "${_msc_refs}")

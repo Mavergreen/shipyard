@@ -16,9 +16,9 @@ fail() { echo "FAIL: $*"; [ ! -f "$T/err" ] || sed 's/^/    | /' "$T/err"; fails
 unset MAVERGREEN_DRYDOCK_PREFIX
 # spec: scripts/objc-reference-dir.sh header -- stage DIR: the scripts it runs, copied to DIR/scripts as an install lays them out.
 stage() {
-  mkdir -p "$1/scripts" "$1/components/drydock"
+  mkdir -p "$1/scripts" "$1/.mavergreen/ingredients/drydock"
   for s in objc-reference-dir.sh fetch_drydock.sh; do cp "$ROOT/scripts/$s" "$1/scripts/" 2>/dev/null || :; done
-  printf 'v9.9.9\n' >"$1/components/drydock/version"
+  printf 'v9.9.9\n' >"$1/.mavergreen/ingredients/drydock/VERSION"
 }
 run() { rc=0; out=$(sh "$1/scripts/objc-reference-dir.sh" 2>"$T/err") || rc=$?; }
 

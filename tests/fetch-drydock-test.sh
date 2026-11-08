@@ -25,9 +25,10 @@ printf '#!/bin/sh\necho fixture drydock-objc\n' >"$T/a/drydock-9.9.9/bin/drydock
 echo '{}' >"$T/a/drydock-9.9.9/share/drydock/objc/reference/manifest.json"
 asset=drydock-9.9.9-linux-x86_64.tar.gz
 (cd "$T/a" && tar -czf "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" drydock-9.9.9)
-mkdir -p "$T/pin"
-printf 'v9.9.9\n' >"$T/pin/version"
-printf '%s  %s\n' "$(sha "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset")" "$asset" >"$T/pin/linux-sha256"
+P="$T/pin/.mavergreen/ingredients/drydock"; mkdir -p "$P"
+printf 'v9.9.9\n# renovate: datasource=github-releases depName=Mavergreen/drydock\n' >"$P/VERSION"
+echo Mavergreen/drydock >"$P/REPO"
+sha "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" >"$P/LINUX_SHA256"
 fetch() { rc=0; out=$(env "$@" sh "$ROOT/scripts/fetch_drydock.sh" "$T/pin" 2>"$T/err") || rc=$?; }
 
 fetch MAVERGREEN_DRYDOCK_HOST=linux
@@ -48,13 +49,13 @@ fetch MAVERGREEN_DRYDOCK_HOST=linux
 [ "$rc" = 1 ] && [ -z "$out" ] && pass 'an archive that does not match the pinned digest fails' ||
   fail "digest mismatch: exit $rc, printed '$out', want 1"
 
-printf 'v9.9.9 && rm\n' >"$T/pin/version"
+printf 'v9.9.9 && rm\n' >"$P/VERSION"
 fetch MAVERGREEN_DRYDOCK_HOST=linux
 [ "$rc" = 2 ] && pass 'a malformed version pin is a usage error' || fail "malformed pin: exit $rc, want 2"
-printf 'v9.9.9\n' >"$T/pin/version"
-: >"$T/pin/linux-sha256"
+printf 'v9.9.9\n' >"$P/VERSION"
+rm "$P/LINUX_SHA256"
 fetch MAVERGREEN_DRYDOCK_HOST=linux
-[ "$rc" = 1 ] && grep -q 'linux-sha256' "$T/err" && pass 'a Linux pin with no digest fails, naming linux-sha256' ||
+[ "$rc" = 1 ] && grep -q 'LINUX_SHA256' "$T/err" && pass 'a Linux pin with no digest fails, naming LINUX_SHA256' ||
   fail "no digest: exit $rc"
 
 mkdir -p "$T/inst/bin"

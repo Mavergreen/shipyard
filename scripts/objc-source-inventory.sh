@@ -4,9 +4,9 @@
 #                                   --unit LABEL [--unit LABEL ...] [--include LABELDIR ...] --output NEW_FILE
 #          Writes the Objective-C source receipt for the prepared provider source FILE lists (`SHA256  LABEL`
 #          lines, as Recaulk's build records them), found under the --root directories, to NEW_FILE, with
-#          `drydock-objc receipt` from the pinned Drydock release (components/drydock, through
+#          `drydock-objc receipt` from the pinned Drydock release (.mavergreen/ingredients/drydock, through
 #          scripts/fetch_drydock.sh: on Linux its Linux archive's drydock-objc). PREFIX is the pinned clang
-#          (components/objc-receipt-clang: the first clang22 whose Linux archive ships libclang), fetched
+#          (.mavergreen/ingredients/objc-receipt-clang: the first clang22 whose Linux archive ships libclang), fetched
 #          through fetch_clang22.sh when not given; drydock-objc loads its libclang and parses against the pinned
 #          floor SDK, which this fetches through fetch_sdk.sh. Generation only: the analyzer reads the receipt
 #          and never loads libclang. Nothing supplied is executed.
@@ -35,9 +35,9 @@ while [ "$remaining" -gt 0 ]; do
   esac
   remaining=$((remaining - 2))
 done
-D=$(sh "$HERE/fetch_drydock.sh" "$HERE/../components/drydock") || fail 'cannot fetch the pinned Drydock'
+D=$(sh "$HERE/fetch_drydock.sh" "$HERE/..") || fail 'cannot fetch the pinned Drydock'
 if [ -z "$prefix" ]; then
-  prefix=$(sh "$HERE/fetch_clang22.sh" "$HERE/../components/objc-receipt-clang") || fail 'cannot fetch the pinned receipt clang'
+  prefix=$(sh "$HERE/fetch_clang22.sh" "$HERE/.." objc-receipt-clang) || fail 'cannot fetch the pinned receipt clang'
 fi
 # spec: Drydock's cli/drydock-objc.c header -- the receipt parses against the floor SDK Recaulk's build uses.
 floor_sdk=$(sh "$HERE/fetch_sdk.sh" --arch x86_64) || fail 'cannot fetch the pinned floor SDK'
