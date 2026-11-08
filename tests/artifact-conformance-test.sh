@@ -1405,6 +1405,8 @@ alone "pkg-name: a System Replace component named like the product's" "pkg-name"
 $SRN"
 alone "installer-title: a System Replace pkg titled like the product's" "installer-title" "$(printf '%s\n' "$SR" | sed 's/%20System%20Replace$//')
 $SRN"
+alone "installer-title: a System Replace pkg with a hand-set title" "installer-title" "$(printf '%s\n' "$SR" | sed 's/^pkg-title \(.*\) Mavergreen%20Go%201.26%20System%20Replace$/pkg-title \1 Mavericks%20Go%201.26%20System%20Replace/')
+$SRN"
 FT='asset go126.xml 700
 appcast go126.xml 1.26.8-mavergreen.7 go.pkg 10 10.9.5'
 ok "feed-title: the derived channel and item titles" "$NMC
