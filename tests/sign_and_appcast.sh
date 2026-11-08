@@ -50,7 +50,7 @@ printf '%s\n' "$OUT" | grep -q '<li>thing one</li>' || fail "notes not rendered"
 rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product no-such-product \
   --feed-dir "$T/feeds2" --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
   --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
-[ "$rc" -eq 2 ] || fail "a --product the repo does not declare has no feed; expected exit 2, got $rc"
+[ "$rc" -eq 1 ] || fail "a --product the repo does not declare is a missing input, not a usage error; expected exit 1, got $rc"
 [ ! -e "$T/feeds2" ] || fail "a refused call writes no feed"
 rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds4" \
   --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \

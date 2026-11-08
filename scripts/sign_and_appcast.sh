@@ -55,7 +55,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$PRODUCT" ] && [ -n "$FEEDDIR" ] && [ -n "$VER" ] && [ -n "$URL" ] && [ -n "$NOTES" ] && [ -n "$PKG" ] \
   || { echo "sign_and_appcast: need --product --feed-dir --version --pkg-url --notes-file --pkg" >&2; exit 2; }
-mavergreen_name identifier "$PRODUCT" >/dev/null || exit 2
+mavergreen_name identifier "$PRODUCT" >/dev/null || exit 1
 [ -f "$PKG" ] || { echo "sign_and_appcast: no pkg: $PKG" >&2; exit 1; }
 printenv SPARKLE_PRIVATE_KEY | grep -q . \
   || { echo "sign_and_appcast: SPARKLE_PRIVATE_KEY not set" >&2; exit 1; }
