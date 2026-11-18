@@ -37,9 +37,12 @@ ID="$(mavergreen_name identifier "$P")" || exit $?
 emit() {
   { printf '#!/bin/sh\n'
     printf '[ -n "${3:-}" ] || { echo "%s: system-replace got no target volume" >&2; exit 1; }\n' "$P"
+    printf 'LC_ALL=C; export LC_ALL\n'
+    cat "$SELF/lib/root-chain.sh"
     printf 'ROOT="${3%%/}"\n'
-    printf '[ -x "$ROOT/usr/local/bin/mavergreen" ] || { echo "%s: install %s before its System Replace" >&2; exit 1; }\n' "$P" "$P"
-    printf 'exec "$ROOT/usr/local/bin/mavergreen" --root "$ROOT/" system-replace %s\n' "$P"
+    printf '[ -x "$ROOT/opt/mavergreen/bin/mavergreen" ] || { echo "%s: install %s before its System Replace" >&2; exit 1; }\n' "$P" "$P"
+    printf 'mavergreen_chain_ok "$3/opt/mavergreen/bin/mavergreen" "$3" || exit 1\n'
+    printf 'exec "$ROOT/opt/mavergreen/bin/mavergreen" --root "$ROOT/" system-replace %s\n' "$P"
   } > "$1"; chmod +x "$1"
 }
 if [ -n "$EMIT" ]; then emit "$EMIT"; exit 0; fi

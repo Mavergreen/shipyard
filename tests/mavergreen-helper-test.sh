@@ -7,7 +7,8 @@ PB=/usr/libexec/PlistBuddy
 [ -x "$PB" ] || { echo "no PlistBuddy -- skipping"; exit 77; }
 w="$(mktemp -d "${TMPDIR:-/tmp}/mavergreen-helper.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
-V="$w/vol"; T="$V/usr/local/mavergreen"
+MAVERGREEN_CHAIN_UID="$(id -u)"; export MAVERGREEN_CHAIN_UID
+V="$w/vol"; T="$V/opt/mavergreen"
 mg() { sh "$MG" --root "$V" "$@"; }
 mkproduct() {  # $1 product  $2 group  $3 line  $4.. files under the tree
   _p="$1"; _g="$2"; _l="$3"; shift 3
@@ -114,6 +115,27 @@ rm -f "$T/var/mavergreen.plist" "$T/var/bin/var-tool"; rmdir "$T/var/bin"
 
 mg link openssh
 mg check || fail "a consistent farm must pass check: $(mg check 2>&1)"
+mkdir -p "$T/mavergreen/bin" "$V/Applications"; echo helper > "$T/mavergreen/bin/mavergreen"; chmod 755 "$T/mavergreen/bin/mavergreen"
+ln -s ../mavergreen/bin/mavergreen "$T/bin/mavergreen"
+mg check 2>"$w/err" || fail "the base helper link bin/mavergreen is exempt from the no-manifest rule: $(cat "$w/err")"
+chmod g+w "$T/go127"
+mg check 2>"$w/err" && fail "a group-writable product tree must fail check"
+grep -q "/opt/mavergreen/go127: group-writable" "$w/err" || fail "check must name the group-writable tree: $(cat "$w/err")"
+chmod g-w "$T/go127"
+mkdir "$V/Applications/Mavergreen"; chmod 755 "$V/Applications/Mavergreen"
+mg check 2>"$w/err" || fail "a real Applications/Mavergreen passes check: $(cat "$w/err")"
+rmdir "$V/Applications/Mavergreen"; ln -s "$w" "$V/Applications/Mavergreen"
+mg check 2>"$w/err" && fail "a symlinked Applications/Mavergreen must fail check"
+grep -q "Applications/Mavergreen" "$w/err" || fail "check must name Applications/Mavergreen"
+rm "$V/Applications/Mavergreen"
+chmod g+w "$T"
+mg check 2>"$w/err" && fail "a group-writable opt/mavergreen must fail check"
+grep -q "/opt/mavergreen: group-writable" "$w/err" || fail "check must name opt/mavergreen"
+chmod g-w "$T"
+rm "$T/bin/mavergreen"; rm -rf "$T/mavergreen"
+rc=0; mkproduct mavergreen mavergreen "" bin/x; mg link mavergreen 2>/dev/null || rc=$?
+[ "$rc" -eq 2 ] || fail "valid() still refuses the name mavergreen: want exit 2, got $rc"
+rm -rf "$T/mavergreen"
 rm -rf "$T/go127/bin/gofmt"
 mg check 2>"$w/err" && fail "a dangling link must fail check"
 grep -q 'bin/gofmt' "$w/err" || fail "check must name the dangling link"
@@ -146,7 +168,7 @@ touch "$V/Library/LaunchAgents/dev.mavergreen.widget-updatecheck.plist"
 "$PB" -c "Add :outside array" \
       -c "Add :outside:0 string Applications/Widget.app" \
       -c "Add :outside:1 string Library" \
-      -c "Add :outside:2 string usr/local/mavergreen/sibling" \
+      -c "Add :outside:2 string opt/mavergreen/sibling" \
       -c "Add :outside:3 string Library/Extensions" \
       -c "Add :outside:4 string Library/LaunchAgents/dev.mavergreen.widget-updatecheck.plist" \
       "$T/widget/mavergreen.plist" >/dev/null
@@ -157,8 +179,8 @@ rc=0; PATH="$stub:$PATH" mg uninstall widget 2>"$w/err" || rc=$?
 [ -d "$V/Library" ] || fail "a bare top-level directory like Library must be refused, not rm -rf'd whole"
 grep -q '^mavergreen: refusing to remove Library -- ' "$w/err" || fail "uninstall must name a refused non-bundle directory on stderr"
 [ -d "$T/sibling" ] && [ -f "$T/sibling/marker" ] \
-  || fail "an outside path under usr/local/mavergreen must be refused -- it can name a sibling product's tree"
-grep -q "unsafe outside path 'usr/local/mavergreen/sibling'" "$w/err" \
+  || fail "an outside path under opt/mavergreen must be refused -- it can name a sibling product's tree"
+grep -q "unsafe outside path 'opt/mavergreen/sibling'" "$w/err" \
   || fail "uninstall must name a refused path under the mavergreen tree on stderr"
 [ -d "$V/Library/Extensions" ] && [ -f "$V/Library/Extensions/marker" ] \
   || fail "a plain directory like Library/Extensions must be refused, not rm -rf'd whole"
@@ -228,7 +250,7 @@ mg system-replace openssh 2>"$w/err" && fail "system-replace must refuse a volum
 grep -q 'sealed\|10.9' "$w/err" || fail "the refusal must say why"
 "$PB" -c "Set :ProductVersion 10.9.5" "$V/System/Library/CoreServices/SystemVersion.plist"
 mg system-replace openssh || fail "system-replace on 10.9 must succeed"
-[ "$(readlink "$V/usr/bin/ssh")" = /usr/local/mavergreen/openssh/bin/ssh ] || fail "the system path becomes a link into the product"
+[ "$(readlink "$V/usr/bin/ssh")" = /opt/mavergreen/openssh/bin/ssh ] || fail "the system path becomes a link into the product"
 [ "$(cat "$T/var/system-replace/openssh/usr/bin/ssh")" = apple-ssh ] || fail "the original is saved"
 [ -L "$V/usr/sbin/sshd" ] || fail "a replacement with no original still gets its link"
 mg system-replace openssh || fail "system-replace must be idempotent"
@@ -242,7 +264,7 @@ grep -q 'system-restore\|already saved' "$w/err" || fail "the refusal must say t
   || fail "a refused system-replace must not touch the saved original"
 [ -f "$T/var/system-replace/openssh/.replaced" ] || fail "a refused system-replace must not remove the .replaced marker"
 [ "$(cat "$V/usr/bin/ssh")" = apple-update ] || fail "a refused system-replace must leave the drifted path alone"
-rm "$V/usr/bin/ssh"; ln -s /usr/local/mavergreen/openssh/bin/ssh "$V/usr/bin/ssh"
+rm "$V/usr/bin/ssh"; ln -s /opt/mavergreen/openssh/bin/ssh "$V/usr/bin/ssh"
 mg system-restore openssh || fail "system-restore must succeed"
 [ "$(cat "$V/usr/bin/ssh")" = apple-ssh ] && [ ! -L "$V/usr/bin/ssh" ] || fail "restore puts the original back"
 [ ! -e "$V/usr/sbin/sshd" ] && [ ! -L "$V/usr/sbin/sshd" ] || fail "restore removes a link that had no original"
@@ -348,8 +370,8 @@ mkdir -p "$T/hookgood/libexec/mavergreen"
 mkdir -p "$T/var/hookgood"; touch "$T/var/hookgood/state"
 cat > "$T/hookgood/libexec/mavergreen/pre-uninstall" <<EOF
 #!/bin/sh
-[ -d "\$MAVERGREEN_ROOT/usr/local/mavergreen/\$MAVERGREEN_PRODUCT" ] || exit 9
-[ -f "\$MAVERGREEN_ROOT/usr/local/mavergreen/var/\$MAVERGREEN_PRODUCT/state" ] || exit 9
+[ -d "\$MAVERGREEN_ROOT/opt/mavergreen/\$MAVERGREEN_PRODUCT" ] || exit 9
+[ -f "\$MAVERGREEN_ROOT/opt/mavergreen/var/\$MAVERGREEN_PRODUCT/state" ] || exit 9
 printf '%s %s\n' "\$MAVERGREEN_ROOT" "\$MAVERGREEN_PRODUCT" >> "$w/hook.log"
 exit 0
 EOF
@@ -422,7 +444,7 @@ printf '#!/bin/sh\nexit 1\n' > "$T/hookbeforerestore/libexec/mavergreen/pre-unin
 chmod +x "$T/hookbeforerestore/libexec/mavergreen/pre-uninstall"
 rc=0; PATH="$stub:$PATH" mg uninstall hookbeforerestore 2>"$w/err" || rc=$?
 [ "$rc" -ne 0 ] || fail "a failing pre-uninstall hook must fail uninstall even for a product with replaced system files"
-[ "$(readlink "$V/usr/bin/hookbr")" = /usr/local/mavergreen/hookbeforerestore/bin/hookbr ] \
+[ "$(readlink "$V/usr/bin/hookbr")" = /opt/mavergreen/hookbeforerestore/bin/hookbr ] \
   || fail "a failing pre-uninstall hook must run before system-restore -- the replaced system path must still be our link"
 [ -f "$T/var/system-replace/hookbeforerestore/usr/bin/hookbr" ] \
   || fail "a failing pre-uninstall hook must run before system-restore -- the saved original must still be waiting, untouched"

@@ -21,6 +21,18 @@ grep -q 'ROOT="${3%/}"' "$w/post" || fail "the generated postinstall computes RO
 root_join="$(sh -c 'ROOT="${1%/}"; printf %s "$ROOT/"' _ /)"
 [ "$root_join" = "/" ] || fail "with \$3 = / the trimmed ROOT is empty, so --root \"\$ROOT/\" must still be / (got: $root_join)"
 
+fv="$w/fv"; mkdir -p "$fv/opt/mavergreen/mavergreen/bin" "$fv/opt/mavergreen/bin"; chmod 755 "$fv" "$fv/opt" "$fv/opt/mavergreen" "$fv/opt/mavergreen/mavergreen" "$fv/opt/mavergreen/mavergreen/bin" "$fv/opt/mavergreen/bin"
+printf '#!/bin/sh\necho "ran $*"\n' > "$fv/opt/mavergreen/mavergreen/bin/mavergreen"; chmod 755 "$fv/opt/mavergreen/mavergreen/bin/mavergreen"
+ln -s ../mavergreen/bin/mavergreen "$fv/opt/mavergreen/bin/mavergreen"
+MAVERGREEN_CHAIN_UID="$(id -u)"; export MAVERGREEN_CHAIN_UID
+out="$(sh "$w/post" x x "$fv" 2>&1)" || fail "the postinstall runs the helper at opt/mavergreen/bin/mavergreen: $out"
+case "$out" in "ran --root $fv/ system-replace openssh") : ;; *) fail "the postinstall execs the opt helper with --root: $out" ;; esac
+chmod g+w "$fv/opt/mavergreen/mavergreen/bin"
+out="$(sh "$w/post" x x "$fv" 2>&1)" && fail "a group-writable helper directory must stop the postinstall"
+case "$out" in *"group-writable"*"fix: "*) : ;; *) fail "the refusal is the chain message: $out" ;; esac
+chmod g-w "$fv/opt/mavergreen/mavergreen/bin"
+unset MAVERGREEN_CHAIN_UID
+
 rc=0
 sh "$S" --emit-postinstall "$w/post" --product 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "an option given without a value must be a usage error, exit 2, never a hang or a silent mis-parse (got $rc)"

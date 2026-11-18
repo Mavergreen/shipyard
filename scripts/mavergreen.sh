@@ -22,7 +22,7 @@ PB=/usr/libexec/PlistBuddy
 ROOT=/
 if [ "${1:-}" = --root ]; then ROOT="${2:?mavergreen: --root needs a volume}"; shift 2; fi
 R="${ROOT%/}"
-MG="$R/usr/local/mavergreen"
+MG="$R/opt/mavergreen"
 SEL="$MG/var/mavergreen/selections"
 
 die() { echo "mavergreen: $1" >&2; exit "${2:-1}"; }
@@ -151,10 +151,21 @@ do_list() {
 
 do_check() {
   _n=0
+  _v="${R:-/}"
+  for _p in "" $(installed); do
+    mavergreen_chain_ok "$_v/opt/mavergreen${_p:+/$_p}" "$_v" || _n=$((_n + 1))
+  done
+  if [ -L "$MG/bin/mavergreen" ] || [ -e "$MG/bin/mavergreen" ]; then
+    mavergreen_chain_ok "$_v/opt/mavergreen/bin/mavergreen" "$_v" || _n=$((_n + 1))
+  fi
+  if [ -L "$R/Applications/Mavergreen" ] || [ -e "$R/Applications/Mavergreen" ]; then
+    mavergreen_dir_ok "$R/Applications/Mavergreen" || _n=$((_n + 1))
+  fi
   for _d in $(farm_dirs); do
     for _l in "$MG/$_d"/*; do
       [ -L "$_l" ] || continue
       if [ ! -e "$_l" ]; then echo "mavergreen: dangling link ${_l#"$MG/"}" >&2; _n=$((_n + 1)); continue; fi
+      if [ "$_l" = "$MG/bin/mavergreen" ] && [ "$(readlink "$_l")" = ../mavergreen/bin/mavergreen ]; then continue; fi
       _o="$(owner "$_l")"
       [ -f "$(manifest "$_o")" ] || { echo "mavergreen: ${_l#"$MG/"} points into $_o, which has no manifest" >&2; _n=$((_n + 1)); }
     done
@@ -207,7 +218,7 @@ do_system_replace() {
     [ -e "$MG/$1/$_rel" ] || die "$1 declares $_abs -> $_rel, but $_rel is not in its tree"
     is_real_dir "$MG/$1/$_rel" \
       && die "$1 declares $_abs -> $_rel, but $_rel is a directory; system-replace swaps files and symlinks only"
-    _want="/usr/local/mavergreen/$1/$_rel"; _cur="$R$_abs"
+    _want="/opt/mavergreen/$1/$_rel"; _cur="$R$_abs"
     is_real_dir "$_cur" \
       && die "$1 declares $_abs -> $_rel, but $_abs is a directory; system-replace swaps files and symlinks only"
     if [ -L "$_cur" ] && [ "$(readlink "$_cur")" = "$_want" ]; then continue; fi
@@ -220,7 +231,7 @@ EOF
   mkdir -p "$_b"; : > "$_b/.replaced"
   while IFS="	" read -r _abs _rel; do
     [ -n "$_abs" ] || continue
-    _want="/usr/local/mavergreen/$1/$_rel"; _cur="$R$_abs"
+    _want="/opt/mavergreen/$1/$_rel"; _cur="$R$_abs"
     if [ -L "$_cur" ] && [ "$(readlink "$_cur")" = "$_want" ]; then continue; fi
     if [ -e "$_cur" ] || [ -L "$_cur" ]; then
       mkdir -p "$(dirname "$_b$_abs")"; mv "$_cur" "$_b$_abs"
@@ -234,7 +245,7 @@ do_system_restore() {
   need_product "$1"
   _b="$MG/var/system-replace/$1"
   _entries="$(replaces "$1")"
-  _want_prefix="/usr/local/mavergreen/$1/"
+  _want_prefix="/opt/mavergreen/$1/"
   _rfail=0
   _saved=""
   if [ -d "$_b" ]; then
@@ -274,7 +285,7 @@ EOF
 }
 replace_drift() {
   _msgs="$(replaces "$1" | while IFS="	" read -r _abs _rel; do
-    if [ -L "$R$_abs" ] && [ "$(readlink "$R$_abs")" = "/usr/local/mavergreen/$1/$_rel" ]; then :; else
+    if [ -L "$R$_abs" ] && [ "$(readlink "$R$_abs")" = "/opt/mavergreen/$1/$_rel" ]; then :; else
       echo "mavergreen: $_abs is no longer $1's replacement"; fi
   done)"
   if [ -z "$_msgs" ]; then echo 0; return 0; fi
@@ -293,7 +304,7 @@ unload() {
 outside_shape_ok() {
   case "$1" in ''|/*|*/|*//*) return 1 ;; esac
   case "/$1/" in *"/./"*|*"/../"*) return 1 ;; esac
-  case "$1" in usr/local/mavergreen|usr/local/mavergreen/*) return 1 ;; esac
+  case "$1" in opt/mavergreen|opt/mavergreen/*) return 1 ;; esac
   return 0
 }
 parent_in_root() {
