@@ -28,3 +28,7 @@ golden-gate tests/xcode-inputs-test.sh
 golden-gate tests/resource-inputs-test.sh
 10.9 tests/objc-guard-test.sh
 golden-gate tests/objc-guard-test.sh
+10.9 tests/root-chain-test.sh
+10.9 tests/root-chain-acl-test.sh
+golden-gate tests/root-chain-test.sh
+golden-gate tests/root-chain-acl-test.sh

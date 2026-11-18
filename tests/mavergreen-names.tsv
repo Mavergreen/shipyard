@@ -4,6 +4,7 @@ MAVERGREEN_ALLOW_GUARDED_WEAK	weak imports the compat guard accepts because the 
 MAVERGREEN_ALLOW_SELECTORS	selectors the compat guard accepts although they are newer than the SDK
 MAVERGREEN_ALLOW_VENDORED	opts a build into vendoring shipyard
 MAVERGREEN_BUILD_ROOT	where the shared presets and build scripts put out-of-tree builds
+MAVERGREEN_CHAIN_UID	the uid the root-only chain trusts, default 0; only tests set it
 MAVERGREEN_CLANG22_CACHE	directory where fetch_clang22.sh caches the clang22 archive
 MAVERGREEN_CODELOAD	the host fetch_pinned_source.sh downloads GitHub tarballs from
 MAVERGREEN_DECISIONS_DIR	the shipyard root MavergreenDecisions.cmake reads the placeholder-icon denylist from
