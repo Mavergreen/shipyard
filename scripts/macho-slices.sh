@@ -12,6 +12,8 @@
 #       of recorded versions, shared by the compat guard and artifact-facts.sh.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 . "$SELF/lib/macho-tools.sh"
 . "$SELF/lib/pkg-tree.sh"
 [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "usage: macho-slices.sh FILE" >&2; exit 2; }

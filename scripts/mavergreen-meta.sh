@@ -182,3 +182,16 @@ mg_port_or_own() {
 }
 
 mg_xml_text() { printf '%s\n' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+
+mavergreen_prefix() {
+  [ $# -gt 0 ] || { printf '%s\n' /opt/mavergreen; return 0; }
+  if ! type mavergreen_name_ok >/dev/null 2>&1; then
+    echo "mavergreen_prefix: mavergreen_name_ok is undefined (the name rules are not sourced), so \"$1\" cannot be checked" >&2
+    return 2
+  fi
+  mavergreen_name_ok "$1" || {
+    echo "mavergreen_prefix: \"$1\" is not a product short name (lowercase ASCII letters, digits and hyphens, not reserved)" >&2
+    return 2
+  }
+  printf '/opt/mavergreen/%s\n' "$1"
+}

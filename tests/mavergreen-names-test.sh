@@ -16,7 +16,8 @@ for n in $used; do
 done
 
 pre="CLANG22_CACHE INGREDIENT_ PKG_CACHE PREFIX PRODUCT PRODUCT_NAMES PROGRESS RELEASES ROOT TAR_CACHE VERSION"
-while IFS="$TAB" read -r tok rep; do
+while IFS="$TAB" read -r tok rep why; do
+  [ -z "$why" ] || continue
   r="${rep%% *}"
   case "$r" in MAVERGREEN_*) ;; *) continue ;; esac
   for p in $pre; do
@@ -24,14 +25,7 @@ while IFS="$TAB" read -r tok rep; do
   done
 done < scripts/retired-names
 
-reps="$(cut -f2 scripts/retired-names | sort | uniq -d)"
+reps="$(awk -F'\t' 'NF < 3 { print $2 }' scripts/retired-names | sort | uniq -d)"
 [ -z "$reps" ] || fail "two retired tokens map to one replacement: $reps"
 
-others="$(git ls-files | grep -v -E '^(scripts/mavergreen[.]sh|tests/mavergreen-names-test[.]sh)$' | tr '\n' '\0' | xargs -0 grep -l -F 'MAVERGREEN_ROOT=' 2>/dev/null || true)"
-[ -z "$others" ] || fail "MAVERGREEN_ROOT= is assigned outside scripts/mavergreen.sh: $others. MAVERGREEN_ROOT is only the helper's install root; the repo root is MAVERGREEN_REPO_ROOT."
-
-srcs="$(git ls-files | grep -v -E '^(tests/mavergreen-names-test[.]sh)$' | tr '\n' '\0' | xargs -0 grep -l -E '[.] .*mavergreen-meta[.]sh' 2>/dev/null || true)"
-for f in $srcs; do
-  ! grep -q 'MAVERGREEN_ROOT' "$f" || fail "$f sources mavergreen-meta.sh and mentions MAVERGREEN_ROOT. The repo root is MAVERGREEN_REPO_ROOT."
-done
 echo ok

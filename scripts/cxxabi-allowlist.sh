@@ -10,6 +10,8 @@
 #          missing, the archive cannot be fetched or read, or it defines no machinery.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 . "$SELF/lib/macho-tools.sh"
 mach_tool LIPO 2>/dev/null || :; mach_tool OTOOL 2>/dev/null || :
 mach_tool NM 2>/dev/null || NM=nm; export NM

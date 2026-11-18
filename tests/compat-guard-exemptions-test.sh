@@ -14,7 +14,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/guard-exempt-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 # spec: scripts/objc-reference-dir.sh header -- laid out as an install, with a staged reference set, so nothing is fetched.
 mkdir -p "$w/scripts/lib" "$w/bin" "$w/repo" "$w/build/bin" "$w/reference/objc"
-for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh mavergreen-meta.sh check-lib.sh check-ids.tsv lib/macho-tools.sh lib/pkg-tree.sh \
+for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh mavergreen-meta.sh check-lib.sh check-ids.tsv lib/macho-tools.sh lib/name-rules.sh lib/pkg-tree.sh \
   objc-reference-dir.sh fetch_drydock.sh objc-compat.sh; do
   cp "$here/../scripts/$s" "$w/scripts/$s"
 done

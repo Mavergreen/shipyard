@@ -59,6 +59,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 # deliberately skips the AppleClang gate, so find_package alone left mavergreen_resolve_version()
 # undefined and the configure failed. Defining a function is language-agnostic and costs nothing.
 include(MavergreenVersion)
+include(MavergreenPrefix)
 
 # Convenience: expose the presets file's installed path (CMakePresets.json can
 # $env-include it; it cannot see find_package results directly).

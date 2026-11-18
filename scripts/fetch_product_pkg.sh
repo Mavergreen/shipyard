@@ -11,7 +11,8 @@
 #          mavergreen_fetch.sh's shipyard_fetch_verified against the release's SHA256SUMS, which is fetched
 #          afresh on every call; an asset SHA256SUMS does not list fails. The component is picked by its
 #          PackageInfo identifier, never by position (a product archive lists dev.mavergreen.base first).
-#          DEST is REPLACED by its usr/local/mavergreen/SHORT tree, extracted beside DEST and swapped in,
+#          DEST is REPLACED by the payload's opt/mavergreen/SHORT tree (else usr/local/mavergreen/SHORT, which
+#          pkgs from before the /opt layout carry), extracted beside DEST and swapped in,
 #          unless DEST.stamp says DEST already holds this very pkg's tree: then DEST is kept, since a
 #          parallel build may be running a compiler out of it. Calls for one DEST take turns through the
 #          lock directory DEST.lock, waiting up to SHIPYARD_LOCK_WAIT seconds (default 900) for it.
@@ -102,8 +103,9 @@ comp="$(dirname "$matches")"
 mkdir "$tmp/payload"
 ( cd "$tmp/payload" && gzip -dc "$comp/Payload" | cpio -id --quiet 2>/dev/null ) || {
   echo "fetch_product_pkg: could not unpack the Payload of $ID" >&2; exit 1; }
-tree="$tmp/payload/usr/local/mavergreen/$SHORT"
-[ -d "$tree" ] || { echo "fetch_product_pkg: $ID installs no usr/local/mavergreen/$SHORT" >&2; exit 1; }
+tree="$tmp/payload/opt/mavergreen/$SHORT"
+[ -d "$tree" ] || tree="$tmp/payload/usr/local/mavergreen/$SHORT"
+[ -d "$tree" ] || { echo "fetch_product_pkg: $ID installs no opt/mavergreen/$SHORT or usr/local/mavergreen/$SHORT" >&2; exit 1; }
 if [ -e "$DEST" ] || [ -L "$DEST" ]; then old="$(mktemp -d "$DEST.old.XXXXXX")"; mv "$DEST" "$old/dest"; fi
 mv "$tree" "$DEST" || { echo "fetch_product_pkg: could not move the tree to $DEST" >&2; exit 1; }
 printf '%s\n' "$stamp" > "$DEST.stamp"

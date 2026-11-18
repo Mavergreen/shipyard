@@ -20,9 +20,9 @@ while IFS= read -r p; do
   while IFS= read -r tok; do
     chk_deviated retired-name "$p#$tok" >/dev/null && continue
     repl="$(awk -F'\t' -v t="$tok" '$1 == t { print $2; exit }' "$SELF/retired-names")"
-    chk_fail retired-name "$p uses $tok, a retired family name" \
-      '"Mavericks" names only the OS an artifact targets' \
-      "write $repl"
+    why="$(awk -F'\t' -v t="$tok" '$1 == t { print $3; exit }' "$SELF/retired-names")"
+    [ -n "$why" ] || why='"Mavericks" names only the OS an artifact targets'
+    chk_fail retired-name "$p uses $tok, a retired family name" "$why" "write $repl"
   done < "$tmp/hits"
 done < "$tmp/paths"
 exit "$chk_status"

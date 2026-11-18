@@ -56,7 +56,7 @@ done
 rc=0; SHIPYARD_CHECK_VERSION=1.0.0-mavergreen.1 sh "$sc" --dist "$fx/compat-archs/pass/dist" --only pkg-in-place gui-relaunch-safe > "$t/out" 2>&1 || rc=$?
 [ "$rc" = 0 ] && [ "$(tail -n 1 "$t/out")" = "shipyard-check: 0 checks, 0 failed, 2 not run" ] \
   || fail "M3: a dist with no .pkg reports the pkg checks not run, got $rc: $(tail -n 1 "$t/out")"
-if sh -c '. "$1"; mach_tool OTOOL && mach_tool LIPO' sh "$here/scripts/lib/macho-tools.sh" >/dev/null 2>&1; then
+if sh -c '. "$1/mavergreen-meta.sh"; . "$1/lib/name-rules.sh"; . "$1/lib/macho-tools.sh"; mach_tool OTOOL && mach_tool LIPO' sh "$here/scripts" >/dev/null 2>&1; then
   rc=0; (cd "$t" && SHIPYARD_CHECK_VERSION=1.0.0-mavergreen.1 SHIPYARD_CHECK_REPO="$t" sh "$sc" --dist "$fx/bundle-id/pass/dist" --only enclosure notes floor) > "$t/out" 2>&1 || rc=$?
   [ "$rc" = 0 ] && [ "$(tail -n 1 "$t/out")" = "shipyard-check: 1 checks, 0 failed, 2 not run" ] \
     || fail "M3: a dist with no appcast reports the appcast checks not run, got $rc: $(tail -n 1 "$t/out")"

@@ -9,6 +9,8 @@
 #          Exit 0; 1 if FILE is not Mach-O; 2 on a usage error; 4 if a reader is missing or failed.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 . "$SELF/lib/macho-tools.sh"
 mach_tool LIPO 2>/dev/null || :; mach_tool OTOOL 2>/dev/null || :
 mach_tool NM 2>/dev/null || NM=nm; export NM

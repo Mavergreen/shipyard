@@ -7,6 +7,8 @@
 setup() {
   GUARD="$BATS_TEST_DIRNAME/../scripts/assert_binary_compatible.sh"
   SELF="$BATS_TEST_DIRNAME/../scripts"
+  . "$SELF/mavergreen-meta.sh"
+  . "$SELF/lib/name-rules.sh"
   . "$SELF/lib/macho-tools.sh"
   if ! { mach_tool LIPO && mach_tool NM && mach_tool STRINGS && mach_tool OTOOL; } 2>/dev/null; then
     CL="$(sh "$SELF/fetch_clang22.sh" "$BATS_TEST_DIRNAME/..")" || skip "no LLVM readers and no clang22 (install llvm, or set LIPO, NM, STRINGS and OTOOL)"

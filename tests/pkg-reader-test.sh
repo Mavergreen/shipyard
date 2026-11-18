@@ -8,6 +8,8 @@
 #          Exits 77 without LLVM's Mach-O readers or a fetchable stevedore.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
+. "$here/scripts/mavergreen-meta.sh"
+. "$here/scripts/lib/name-rules.sh"
 . "$here/scripts/lib/macho-tools.sh"
 . "$here/tests/lib/fixture_tree.sh"
 fail() { echo "FAIL: $1"; exit 1; }

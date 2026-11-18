@@ -78,3 +78,8 @@ mavericks-xcode-inputs	mavergreen-xcode-inputs
 mavericks-resource-extract	mavergreen-resource-extract
 MAVERICKS_HOST_TOOLS_	MAVERGREEN_HOST_TOOLS_
 mavericks_host_tools	mavergreen_host_tools
+MAVERGREEN_PREFIX	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where products are installed is MAVERGREEN_ROOT, the one override, and mavergreen_prefix names the path under it
+SHIPYARD_LOCAL_PREFIX	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where products are installed is MAVERGREEN_ROOT, the one override, and mavergreen_prefix names the path under it
+SHIPYARD_MG_PREFIX	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where products are installed is MAVERGREEN_ROOT, the one override, and mavergreen_prefix names the path under it
+MAVERGREEN_DRYDOCK_INSTALLED	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where products are installed is MAVERGREEN_ROOT, the one override, and mavergreen_prefix names the path under it
+SHIPYARD_OPT_PREFIX	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where products are installed is MAVERGREEN_ROOT, the one override, and mavergreen_prefix names the path under it

@@ -13,6 +13,8 @@
 #       reads a repo in seconds and gates every PR.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 . "$SELF/lib/macho-tools.sh"
 mach_tool LIPO 2>/dev/null || :; mach_tool OTOOL 2>/dev/null || :
 mach_tool NM 2>/dev/null || NM=nm; export NM

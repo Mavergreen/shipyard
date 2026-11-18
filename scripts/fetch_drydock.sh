@@ -10,7 +10,7 @@
 #          root must be opt/mavergreen/SHORT, while Drydock's tag has a v and its archive's root is
 #          drydock-X.Y.Z/ -- so the archive is fetched with mavergreen_fetch.sh's shipyard_fetch_verified, the
 #          downloader fetch_product_tar.sh uses, and unpacked here. On a Mac: an installed
-#          /usr/local/mavergreen/drydock at that release (MAVERGREEN_DRYDOCK_INSTALLED replaces the path), else
+#          drydock at that release under MAVERGREEN_ROOT (the volume, default /): opt/mavergreen/drydock, else usr/local/mavergreen/drydock, else
 #          the release's drydock-X.Y.Z.pkg through fetch_product_pkg.sh and stevedore, verified against the
 #          release's SHA256SUMS. A fetch is unpacked once into $MAVERGREEN_DRYDOCK_CACHE (default
 #          ~/Library/Caches/mavergreen-drydock on a Mac, ~/.cache/mavergreen-drydock elsewhere)/TAG and kept.
@@ -26,6 +26,7 @@ if [ -n "${MAVERGREEN_DRYDOCK_PREFIX:-}" ]; then
 fi
 [ $# -eq 1 ] && [ -d "$1" ] || { echo "usage: fetch_drydock.sh ROOT (a repo holding .mavergreen/ingredients/drydock)" >&2; exit 2; }
 . "$S/mavergreen-meta.sh"
+. "$S/lib/name-rules.sh"
 MAVERGREEN_REPO_ROOT="$(cd "$1" && pwd)"
 export MAVERGREEN_REPO_ROOT
 P="$MAVERGREEN_REPO_ROOT/.mavergreen/ingredients/drydock"
@@ -89,10 +90,12 @@ case "$host" in
       printf '%s\n' "$sha" > "$d.stamp"
     fi ;;
   mac)
-    inst="${MAVERGREEN_DRYDOCK_INSTALLED:-/usr/local/mavergreen/drydock}"
-    if has_objc "$inst" && [ "$(manifest_version "$inst")" = "$N" ]; then
-      printf '%s\n' "$inst"; exit 0
-    fi
+    vol="${MAVERGREEN_ROOT:-}"; vol="${vol%/}"
+    for inst in "$vol$(mavergreen_prefix drydock)" "$vol/usr/local/mavergreen/drydock"; do
+      if has_objc "$inst" && [ "$(manifest_version "$inst")" = "$N" ]; then
+        printf '%s\n' "$inst"; exit 0
+      fi
+    done
     d="$W/mac"
     sh "$S/fetch_product_pkg.sh" --repo "$SLUG" --asset "drydock-$N.pkg" drydock "$V" "$d" >/dev/null || die "could not fetch and verify drydock-$N.pkg" ;;
 esac

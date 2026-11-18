@@ -451,6 +451,8 @@ printf '%s\n' "$out" | grep -qi 'no build records' \
   || { echo "FAIL should say when there was nothing to compare; got: $out"; exit 1; }
 
 AF="$here/../scripts/artifact-facts.sh"
+. "$here/../scripts/mavergreen-meta.sh"
+. "$here/../scripts/lib/name-rules.sh"
 . "$here/../scripts/lib/macho-tools.sh"
 
 # spec: both the appcast <description> and the Release body are built from dist/RELEASE_NOTES.md

@@ -10,7 +10,6 @@ MAVERGREEN_DECISIONS_DIR	the shipyard root MavergreenDecisions.cmake reads the p
 MAVERGREEN_DEVIATIONS_ROOT	the directory whose INGREDIENTS.md declares the compat guard's deviations
 MAVERGREEN_DRYDOCK_CACHE	directory where fetch_drydock.sh caches the fetched Drydock release
 MAVERGREEN_DRYDOCK_HOST	linux or mac, replacing the host fetch_drydock.sh and the objc-*.sh wrappers would otherwise detect (a test seam)
-MAVERGREEN_DRYDOCK_INSTALLED	the installed Drydock fetch_drydock.sh uses on a Mac when it is the pinned release
 MAVERGREEN_DRYDOCK_PREFIX	an already-unpacked Drydock fetch_drydock.sh answers with instead of fetching the pin
 MAVERGREEN_EXPECTED_MODE	the build mode a script asserts it is running in
 MAVERGREEN_HOST_TOOLS_SYSCTL	the sysctl mavergreen_build_host_tools asks whether the host is Apple Silicon (a test seam)
@@ -30,13 +29,12 @@ MAVERGREEN_PKG_CACHE	directory where fetched product pkgs are cached
 MAVERGREEN_PLACEHOLDER_DENYLIST	path of the placeholder-icon denylist
 MAVERGREEN_POST_10_9_SELECTORS	selectors the compat guard refuses as newer than 10.9
 MAVERGREEN_POST_10_9_SYMBOLS	symbols the compat guard refuses as newer than 10.9
-MAVERGREEN_PREFIX	directory the family's products install under
 MAVERGREEN_PRODUCT	the short name of the product a helper hook runs for
 MAVERGREEN_PROGRESS	1 makes the fetch scripts report progress on stderr
 MAVERGREEN_RELEASES	the releases URL release-needed.sh queries
 MAVERGREEN_REPO_ROOT	the root of the repo being built or checked
 MAVERGREEN_REQUIRE_DEFINED_SYMBOLS	symbols the compat guard requires a binary to define
-MAVERGREEN_ROOT	the helper's install root, the volume it manages
+MAVERGREEN_ROOT	the volume the family is installed on, default /; the one override of where installed products are looked for
 MAVERGREEN_SDK_CACHE	directory where fetch_sdk.sh caches the SDK
 MAVERGREEN_SDK_METADATA_DIR	the directory holding the materialized SDK metadata overlay
 MAVERGREEN_SDK_SETTINGS_JSON	path of the SDKSettings.json the SDK metadata step reads

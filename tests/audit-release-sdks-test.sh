@@ -11,6 +11,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/audit-release-sdks.sh"
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/audit-sdks-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
+. "$here/../scripts/mavergreen-meta.sh"
+. "$here/../scripts/lib/name-rules.sh"
 . "$here/../scripts/lib/macho-tools.sh"
 if ! { mach_tool OTOOL && mach_tool LIPO; } 2>/dev/null; then
   CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/..")" || { echo "SKIP: no LLVM readers and no clang22 (install llvm, or set OTOOL and LIPO)"; exit 77; }

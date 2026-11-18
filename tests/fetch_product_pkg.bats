@@ -16,11 +16,11 @@ setup() {
   export STEVEDORE
   export MAVERGREEN_RELEASES="file://$WORK/rel" MAVERGREEN_PKG_CACHE="$WORK/cache"
   REL="$WORK/rel/Mavergreen/widget-repo/releases/download/1.0"
-  mkdir -p "$REL" "$WORK/base/usr/local/mavergreen/.base" "$WORK/prod/usr/local/mavergreen/widget/lib" \
-    "$WORK/prod/usr/local/mavergreen/widget/include/widget"
-  echo x > "$WORK/base/usr/local/mavergreen/.base/x"
-  printf W > "$WORK/prod/usr/local/mavergreen/widget/lib/libwidget.a"
-  : > "$WORK/prod/usr/local/mavergreen/widget/include/widget/w.h"
+  mkdir -p "$REL" "$WORK/base/opt/mavergreen/.base" "$WORK/prod/opt/mavergreen/widget/lib" \
+    "$WORK/prod/opt/mavergreen/widget/include/widget"
+  echo x > "$WORK/base/opt/mavergreen/.base/x"
+  printf W > "$WORK/prod/opt/mavergreen/widget/lib/libwidget.a"
+  : > "$WORK/prod/opt/mavergreen/widget/include/widget/w.h"
   DEST="$WORK/out/widget"
 }
 teardown() { rm -rf "$WORK"; }
@@ -52,9 +52,19 @@ DIST
   [ ! -e "$DEST/.base" ]
 }
 
+@test "a pkg from before the /opt layout, its payload under usr/local/mavergreen, is still extracted" {
+  mkdir -p "$WORK/prod/usr/local/mavergreen"
+  mv "$WORK/prod/opt/mavergreen/widget" "$WORK/prod/usr/local/mavergreen/widget"
+  rm -rf "$WORK/prod/opt"
+  serve widget-1.0.pkg
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$DEST/lib/libwidget.a")" = W ]
+}
+
 @test "the base component first does not confuse the pick" {
-  mkdir -p "$WORK/base/usr/local/mavergreen/widget/lib"
-  printf BASE > "$WORK/base/usr/local/mavergreen/widget/lib/libwidget.a"
+  mkdir -p "$WORK/base/opt/mavergreen/widget/lib"
+  printf BASE > "$WORK/base/opt/mavergreen/widget/lib/libwidget.a"
   serve widget-1.0.pkg
   run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 0 ]
@@ -79,7 +89,7 @@ DIST
   [ ! -e "$DEST/stray" ]
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
   echo stray > "$DEST/stray"
-  printf 'X' >> "$WORK/prod/usr/local/mavergreen/widget/lib/libwidget.a"
+  printf 'X' >> "$WORK/prod/opt/mavergreen/widget/lib/libwidget.a"
   REL="$WORK/rel/Mavergreen/widget-repo/releases/download/2.0"; mkdir -p "$REL"
   serve widget-2.0.pkg
   run sh "$HELPER" --repo Mavergreen/widget-repo widget 2.0 "$DEST"

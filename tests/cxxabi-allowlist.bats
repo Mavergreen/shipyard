@@ -7,7 +7,7 @@ setup() {
   CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT")"
   AR="$CL/bin/llvm-ar"
   export NM="${NM:-$CL/bin/llvm-nm}" LIPO="${LIPO:-$CL/bin/llvm-lipo}" OTOOL="${OTOOL:-$CL/bin/llvm-otool}"
-  export MAVERGREEN_PREFIX="$WORK/no-prefix"
+  export MAVERGREEN_ROOT="$WORK/no-prefix"
   printf '\t.globl ___cxa_uncaught_exceptions\n___cxa_uncaught_exceptions:\n\tret\n\t.globl __ZTISt9exception\n\t.data\n__ZTISt9exception:\n\t.quad 0\n' > "$WORK/a.s"
   printf '\t.globl _foo\n_foo:\n\tret\n' > "$WORK/b.s"
   ( cd "$WORK" && asm a.s b.s && "$AR" rcs fixture.a a.o b.o ) > "$WORK/fixture.log" 2>&1 || { sed "s/^/    | /" "$WORK/fixture.log"; echo "the pinned clang22 could not build the Mach-O fixture"; return 1; }

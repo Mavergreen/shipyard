@@ -15,7 +15,8 @@ fails=0
 pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*"; [ ! -f "$T/err" ] || sed 's/^/    | /' "$T/err"; fails=$((fails + 1)); }
 sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -c1-64; }
-unset MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED
+unset MAVERGREEN_DRYDOCK_PREFIX
+MAVERGREEN_ROOT="$T/no-volume"; export MAVERGREEN_ROOT
 MAVERGREEN_DRYDOCK_CACHE="$T/cache"; MAVERGREEN_TAR_CACHE="$T/tars"; MAVERGREEN_RELEASES="file://$T/rel"
 export MAVERGREEN_DRYDOCK_CACHE MAVERGREEN_TAR_CACHE MAVERGREEN_RELEASES
 
@@ -58,12 +59,18 @@ fetch MAVERGREEN_DRYDOCK_HOST=linux
 [ "$rc" = 1 ] && grep -q 'LINUX_SHA256' "$T/err" && pass 'a Linux pin with no digest fails, naming LINUX_SHA256' ||
   fail "no digest: exit $rc"
 
-mkdir -p "$T/inst/bin"
+mkdir -p "$T/inst/bin" "$T/vol/opt/mavergreen/drydock/bin" "$T/old/usr/local/mavergreen/drydock/bin"
 cp "$T/a/drydock-9.9.9/bin/drydock-objc" "$T/inst/bin/"
+cp "$T/a/drydock-9.9.9/bin/drydock-objc" "$T/vol/opt/mavergreen/drydock/bin/"
+cp "$T/a/drydock-9.9.9/bin/drydock-objc" "$T/old/usr/local/mavergreen/drydock/bin/"
 printf '<plist><dict>\n  <key>version</key>\n  <string>9.9.9</string>\n</dict></plist>\n' >"$T/inst/mavergreen.plist"
-fetch MAVERGREEN_DRYDOCK_HOST=mac MAVERGREEN_DRYDOCK_INSTALLED="$T/inst"
-[ "$rc" = 0 ] && [ "$out" = "$T/inst" ] && pass 'a Mac uses an installed Drydock at the pinned version' ||
-  fail "installed: exit $rc, printed '$out', want $T/inst"
+cp "$T/inst/mavergreen.plist" "$T/vol/opt/mavergreen/drydock/"; cp "$T/inst/mavergreen.plist" "$T/old/usr/local/mavergreen/drydock/"
+fetch MAVERGREEN_DRYDOCK_HOST=mac MAVERGREEN_ROOT="$T/vol/"
+[ "$rc" = 0 ] && [ "$out" = "$T/vol/opt/mavergreen/drydock" ] && pass 'a Mac uses an installed Drydock at the pinned version, under MAVERGREEN_ROOT/opt/mavergreen' ||
+  fail "installed: exit $rc, printed '$out', want $T/vol/opt/mavergreen/drydock"
+fetch MAVERGREEN_DRYDOCK_HOST=mac MAVERGREEN_ROOT="$T/old"
+[ "$rc" = 0 ] && [ "$out" = "$T/old/usr/local/mavergreen/drydock" ] && pass 'a Drydock only under usr/local/mavergreen is still found' ||
+  fail "installed under usr/local: exit $rc, printed '$out', want $T/old/usr/local/mavergreen/drydock"
 
 fetch MAVERGREEN_DRYDOCK_PREFIX="$T/inst"
 [ "$rc" = 0 ] && [ "$out" = "$T/inst" ] && pass 'MAVERGREEN_DRYDOCK_PREFIX is used as given' || fail "prefix: exit $rc, printed '$out'"

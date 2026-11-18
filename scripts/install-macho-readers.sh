@@ -12,6 +12,8 @@
 # spec: scripts/lib/macho-tools.sh -- Apple's cctools otool and lipo are never a fallback.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 . "$SELF/lib/macho-tools.sh"
 
 missing=""

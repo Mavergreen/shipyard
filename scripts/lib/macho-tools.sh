@@ -6,8 +6,9 @@
 #                                            it says which variable to set and returns 1.
 #          SHIPYARD_MACHO_DIRS, when set, replaces the family directories searched after
 #          clang-22's own (a test seam: the tests set it empty to mean "nowhere"). The default is
-#          /opt/mavergreen/clang22/bin and clang22/bin and clang22-cross/bin under SHIPYARD_MG_PREFIX
-#          (default /usr/local/mavergreen); a SHIPYARD_MG_PREFIX that is set is searched either way.
+#          clang22/bin and clang22-cross/bin under ${MAVERGREEN_ROOT}/opt/mavergreen, then under
+#          ${MAVERGREEN_ROOT}/usr/local/mavergreen. MAVERGREEN_ROOT is the volume, default /; the caller
+#          sources mavergreen-meta.sh and lib/name-rules.sh first, for mavergreen_prefix.
 #          NM alone also tries, before all of those, the llvm-nm beside the llvm-otool or llvm-lipo the
 #          caller chose as OTOOL or LIPO, and after all of them a bare nm.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the Mach-O
@@ -36,8 +37,10 @@ mach_tool() {
     done
   fi
   _mt_clang="$(command -v clang-22 2>/dev/null || true)"
-  _mt_pfx="${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}"
-  for _mt_dir in "${_mt_clang%/*}" ${SHIPYARD_MACHO_DIRS-/opt/mavergreen/clang22/bin $_mt_pfx/clang22/bin $_mt_pfx/clang22-cross/bin} ${SHIPYARD_MG_PREFIX:+$_mt_pfx/clang22/bin $_mt_pfx/clang22-cross/bin}; do
+  type mavergreen_prefix >/dev/null 2>&1 || { echo "macho-tools: mavergreen_prefix is undefined (source mavergreen-meta.sh and lib/name-rules.sh first)" >&2; return 2; }
+  _mt_vol="${MAVERGREEN_ROOT:-}"; _mt_vol="${_mt_vol%/}"
+  _mt_opt="$_mt_vol$(mavergreen_prefix clang22)"; _mt_optx="$_mt_vol$(mavergreen_prefix clang22-cross)"
+  for _mt_dir in "${_mt_clang%/*}" ${SHIPYARD_MACHO_DIRS-$_mt_opt/bin $_mt_optx/bin $_mt_vol/usr/local/mavergreen/clang22/bin $_mt_vol/usr/local/mavergreen/clang22-cross/bin}; do
     [ -z "$_mt_found" ] || break
     [ -n "$_mt_dir" ] || continue
     if [ -x "$_mt_dir/llvm-$_mt" ]; then _mt_found="$_mt_dir/llvm-$_mt"; break; fi

@@ -31,6 +31,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 fx="${SHIPYARD_FIXTURES_DIR:-$here/fixtures/checks}"
 reg="$root/scripts/check-ids.tsv"
+. "$root/scripts/mavergreen-meta.sh"
+. "$root/scripts/lib/name-rules.sh"
 . "$root/scripts/lib/macho-tools.sh"
 . "$here/lib/fixture_tree.sh"
 

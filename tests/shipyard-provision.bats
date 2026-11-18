@@ -4,8 +4,9 @@
 setup() {
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/shipyard-provision-test.XXXXXX")" && pwd)"
   S="$WORK/scripts"
-  mkdir -p "$S/lib" "$WORK/bin" "$WORK/repo/.mavergreen/ingredients" "$WORK/prefix"
+  mkdir -p "$S/lib" "$WORK/bin" "$WORK/repo/.mavergreen/ingredients" "$WORK/root"
   for f in shipyard-provision mavergreen-meta.sh deviation-reason.sh deviations.sh; do cp "$BATS_TEST_DIRNAME/../scripts/$f" "$S/$f" 2>/dev/null || :; done
+  cp "$BATS_TEST_DIRNAME/../scripts/lib/name-rules.sh" "$S/lib/name-rules.sh"
   cat > "$S/fetch_product_pkg.sh" <<'STUB'
 #!/bin/sh
 echo "pkg $*" >> "$STUB_LOG"
@@ -25,7 +26,7 @@ STUB
   chmod +x "$WORK/bin/sudo"
   export STUB_LOG="$WORK/log"; : > "$STUB_LOG"
   export PATH="$WORK/bin:$PATH"
-  export MAVERGREEN_REPO_ROOT="$WORK/repo" MAVERGREEN_PREFIX="$WORK/prefix" MAVERGREEN_PKG_CACHE="$WORK/cache"
+  export MAVERGREEN_REPO_ROOT="$WORK/repo" MAVERGREEN_ROOT="$WORK/root" MAVERGREEN_PKG_CACHE="$WORK/cache"
   export SHIPYARD_PROVISION_OS=Darwin
   unset CI
   P="sh $S/shipyard-provision"
@@ -41,16 +42,24 @@ ing() {  # ing NAME REPO VERSION PRODUCT ROLE...
   printf '%s\n' "$4" > "$d/product"
   shift 4; printf '%s\n' "$@" > "$d/role"
 }
-installed() {  # installed PRODUCT VERSION
-  mkdir -p "$WORK/prefix/$1"
-  printf '<plist><dict>\n<key>version</key>\n<string>%s</string>\n</dict></plist>\n' "$2" > "$WORK/prefix/$1/mavergreen.plist"
+installed() {  # installed PRODUCT VERSION [PREFIX-UNDER-ROOT]
+  mkdir -p "$WORK/root/${3:-opt/mavergreen}/$1"
+  printf '<plist><dict>\n<key>version</key>\n<string>%s</string>\n</dict></plist>\n' "$2" > "$WORK/root/${3:-opt/mavergreen}/$1/mavergreen.plist"
 }
 
 @test "an installed copy at the pin is used, with no fetch" {
   installed cmake 4.4.5-mavergreen.2
   run $P --only cmake
   [ "$status" -eq 0 ]
-  [ "$output" = "cmake=$WORK/prefix/cmake" ]
+  [ "$output" = "cmake=$WORK/root/opt/mavergreen/cmake" ]
+  [ ! -s "$STUB_LOG" ]
+}
+
+@test "a copy only under usr/local/mavergreen is still found" {
+  installed cmake 4.4.5-mavergreen.2 usr/local/mavergreen
+  run $P --only cmake
+  [ "$status" -eq 0 ]
+  [ "$output" = "cmake=$WORK/root/usr/local/mavergreen/cmake" ]
   [ ! -s "$STUB_LOG" ]
 }
 
@@ -117,14 +126,14 @@ installed() {  # installed PRODUCT VERSION
   echo cmake > "$d/scope"; echo 'loads its modules from its real prefix' > "$d/reason"; echo 'when cmake finds its modules relative to itself' > "$d/revisit"
   run $P --only cmake --install
   [ "$status" -eq 0 ]
-  [ "$output" = "cmake=$WORK/prefix/cmake" ]
+  [ "$output" = "cmake=$WORK/root/opt/mavergreen/cmake" ]
   grep -qx "sudo installer -pkg $WORK/cache/cmake/4.4.5-mavergreen.2/cmake-4.4.5-mavergreen.2.pkg -target /" "$STUB_LOG"
 }
 
 @test "CI=true implies --install" {
   CI=true run $P --only cmake
   [ "$status" -eq 0 ]
-  [ "$output" = "cmake=$WORK/prefix/cmake" ]
+  [ "$output" = "cmake=$WORK/root/opt/mavergreen/cmake" ]
   grep -q '^sudo installer ' "$STUB_LOG"
 }
 

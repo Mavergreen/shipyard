@@ -3,6 +3,8 @@
 : "${SHIPYARD_CHECK_DIR:=$(cd "$(dirname "$0")" && pwd)}"
 : "${SHIPYARD_SCRIPTS:=$SHIPYARD_CHECK_DIR}"
 . "$SHIPYARD_CHECK_DIR/check-lib.sh"
+. "$SHIPYARD_CHECK_DIR/mavergreen-meta.sh"
+. "$SHIPYARD_CHECK_DIR/lib/name-rules.sh"
 
 _py_ok() {
   "$1" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1
@@ -20,9 +22,9 @@ chk_python3() {
     set -- "$SHIPYARD_PYTHON3"
     _py_tried="\$SHIPYARD_PYTHON3, which names the interpreter to use"
   else
-    set -- "${SHIPYARD_OPT_PREFIX:-/opt/mavergreen}/bin/python3" \
-      "${SHIPYARD_LOCAL_PREFIX:-/usr/local/mavergreen}/bin/python3-315" python3-315 python3
-    _py_tried="/opt/mavergreen/bin/python3, /usr/local/mavergreen/bin/python3-315, and python3-315 and python3 on PATH"
+    _py_vol="${MAVERGREEN_ROOT:-}"; _py_vol="${_py_vol%/}"
+    set -- "$_py_vol$(mavergreen_prefix)/bin/python3" "$_py_vol/usr/local/mavergreen/bin/python3-315" python3-315 python3
+    _py_tried="$1, $2, and python3-315 and python3 on PATH"
   fi
   for _py_c in "$@"; do
     _py_p="$(command -v "$_py_c" 2>/dev/null)" || continue

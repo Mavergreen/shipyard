@@ -87,7 +87,7 @@ for f in .mavergreen/ingredients/drydock/VERSION .mavergreen/ingredients/drydock
   scripts/objc-source-inventory.sh scripts/objc-reference-dir.sh scripts/fetch_drydock.sh scripts/fetch_product_pkg.sh; do
   cmp -s "$root/$f" "$d/$f" || { echo "FAIL: the install does not stage $f"; exit 1; }
 done
-refs="$(env -u MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_DRYDOCK_INSTALLED=/nonexistent sh "$root/scripts/fetch_drydock.sh" "$root")/share/drydock/objc/reference" \
+refs="$(env -u MAVERGREEN_DRYDOCK_PREFIX MAVERGREEN_ROOT=/nonexistent sh "$root/scripts/fetch_drydock.sh" "$root")/share/drydock/objc/reference" \
   || { echo "FAIL: the pinned Drydock could not be fetched to compare with"; exit 1; }
 diff -r "$refs" "$d/reference/objc" >"$w/refs.diff" 2>&1 \
   || { echo "FAIL: the staged reference/objc is not the pinned Drydock's:"; cat "$w/refs.diff"; exit 1; }

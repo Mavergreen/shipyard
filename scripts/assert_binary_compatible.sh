@@ -88,6 +88,8 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
 . "$SELF/sdk-pins.sh"
 . "$SELF/deviation-reason.sh"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 . "$SELF/lib/macho-tools.sh"
 . "$SELF/lib/pkg-tree.sh"
 

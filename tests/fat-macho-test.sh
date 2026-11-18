@@ -7,6 +7,8 @@
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
 . "$here/scripts/lib/pkg-tree.sh"
+. "$here/scripts/mavergreen-meta.sh"
+. "$here/scripts/lib/name-rules.sh"
 . "$here/scripts/lib/macho-tools.sh"
 t="$(mktemp -d "${TMPDIR:-/tmp}/fat-macho-test.XXXXXX")"; trap 'rm -rf "$t"' EXIT
 unset SHIPYARD_CHECK_RUNLOG SHIPYARD_CHECK_FAILLOG SHIPYARD_CHECK_NOTRUNLOG SHIPYARD_CHECK_SELECTED SHIPYARD_CHECK_DIST
