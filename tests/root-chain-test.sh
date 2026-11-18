@@ -152,4 +152,14 @@ chmod 777 "$w/gw"
 rd "$V/a" || { cat "$w/err"; fail "root_dir judges DIR alone, not its ancestors"; }
 mavergreen_dir_ok "$V/a" 2>"$w/err" || { cat "$w/err"; fail "dir_ok judges DIR alone, not its ancestors"; }
 if mavergreen_dir_ok "$V/absent" 2>"$w/err"; then fail "dir_ok refuses a missing dir"; fi
+
+oo() { mavergreen_owned_ok "$1" 2>"$w/err"; }
+oo "$V/absent" || { cat "$w/err"; fail "owned_ok passes a missing path, which the installer creates"; }
+oo "$V/loose" || { cat "$w/err"; fail "owned_ok judges only the owner, so a g+w dir of the trusted uid passes"; }
+if oo "$V/islink"; then fail "owned_ok refuses a symlink"; fi
+grep -qxF "$V/islink: symlink; root will not write or run here; fix: sudo mv '$V/islink' '$V/islink.old'" "$w/err" || { cat "$w/err"; fail "owned_ok names the symlink"; }
+MAVERGREEN_CHAIN_UID=12345
+if oo "$V/loose"; then fail "owned_ok refuses an owner other than the trusted uid"; fi
+grep -qxF "$V/loose: owner; root will not write or run here; fix: sudo chown root:wheel '$V/loose'" "$w/err" || { cat "$w/err"; fail "owned_ok names the owner"; }
+MAVERGREEN_CHAIN_UID="$me"
 echo "PASS: root-chain"

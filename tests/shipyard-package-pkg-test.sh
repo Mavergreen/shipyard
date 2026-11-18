@@ -35,13 +35,13 @@ code | grep -q -- '--exclude bin/shipyard-check' \
 code | grep -q 'ln -s' && { echo "FAIL: package-pkg.sh makes links of its own; the launchers and compatibility links come from shipyard's cmake --install"; exit 1; }
 code | grep -q -- '--cmake-tree' && { echo "FAIL: package-pkg.sh still takes --cmake-tree; CMake is the cmake product's now, never shipyard's payload"; exit 1; }
 # spec: 2026-10-09 C4 -- the preinstall refuses a box without the cmake product at shipyard's pin.
-code | grep -q -- '--requires "cmake>=\$' \
-  || { echo "FAIL: package-pkg.sh must pass stage_product.sh --requires \"cmake>=<the pin>\", quoted"; exit 1; }
-code | grep -q 'mg_value products/shipyard/requires/cmake/min' \
-  || { echo "FAIL: the required cmake version must come from .mavergreen/products/shipyard/requires/cmake/min, the lowest cmake shipyard works with"; exit 1; }
-code | grep -q 'PREFIX_DIR="/usr/local/mavergreen/shipyard"' \
-  || { echo "FAIL: shipyard installs into /usr/local/mavergreen/shipyard, the one directory its short name owns"; exit 1; }
-code | grep -q 'usr/local/bin' && { echo "FAIL: shipyard installs nothing into /usr/local/bin -- only the base component's helper lives there"; exit 1; }
+code | grep -q -- '--requires' \
+  && { echo "FAIL: package-pkg.sh passes no --requires; stage_product.sh reads .mavergreen/products/shipyard/requires/cmake/"; exit 1; }
+[ -s "$root/.mavergreen/products/shipyard/requires/cmake/min" ] && [ -s "$root/.mavergreen/ingredients/cmake/REPO" ] \
+  || { echo "FAIL: the cmake requirement's min and its releases' REPO are declared in .mavergreen/, where stage_product.sh reads them"; exit 1; }
+code | grep -q 'PREFIX_DIR="$(mavergreen_prefix shipyard)"' \
+  || { echo "FAIL: shipyard installs into mavergreen_prefix shipyard, the one directory its short name owns"; exit 1; }
+code | grep -q 'usr/local' && { echo "FAIL: shipyard installs nothing under /usr/local"; exit 1; }
 code | grep -q 'updater-identity.sh" app shipyard' \
   || { echo "FAIL: the updater app's name is derived by updater-identity.sh app shipyard, as stage_updater.sh derives where it goes"; exit 1; }
 code | grep -q 'registry' && { echo "FAIL: package-pkg.sh derives shipyard's identity; it reads no registry"; exit 1; }
@@ -71,7 +71,7 @@ fi
 
 # spec: 2026-09-11 decision 1 -- --shipyard-prefix BECOMES the product prefix verbatim, so a stray
 #       file in it (a tarball, a .DS_Store, a build dir) would otherwise install into
-#       /usr/local/mavergreen/shipyard.
+#       /opt/mavergreen/shipyard.
 mkfixture() {  # $1 = dir: a shipyard prefix and an app that pass every other check
   rm -rf "$1"
   mkdir -p "$1/sp/bin" "$1/sp/share/cmake/MavergreenShipyard" "$1/app/shipyard-updater.app"
@@ -80,7 +80,7 @@ mkfixture() {  # $1 = dir: a shipyard prefix and an app that pass every other ch
     ln -s "shipyard-$c" "$1/sp/bin/$c"
   done
   : > "$1/sp/share/cmake/MavergreenShipyard/MavergreenShipyardConfig.cmake"
-  presets "$1" /usr/local/mavergreen/shipyard
+  presets "$1" /opt/mavergreen/shipyard
   : > "$1/notadir"
 }
 presets() {  # $1 = fixture dir  $2 = the prefix its installed presets name

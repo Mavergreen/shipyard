@@ -218,6 +218,7 @@ do_system_replace() {
     [ -e "$MG/$1/$_rel" ] || die "$1 declares $_abs -> $_rel, but $_rel is not in its tree"
     is_real_dir "$MG/$1/$_rel" \
       && die "$1 declares $_abs -> $_rel, but $_rel is a directory; system-replace swaps files and symlinks only"
+    mavergreen_chain_ok "${R:-/}/opt/mavergreen/$1/$_rel" "${R:-/}" || die "refusing to link $_abs into $1's tree, whose chain fails"
     _want="/opt/mavergreen/$1/$_rel"; _cur="$R$_abs"
     is_real_dir "$_cur" \
       && die "$1 declares $_abs -> $_rel, but $_abs is a directory; system-replace swaps files and symlinks only"

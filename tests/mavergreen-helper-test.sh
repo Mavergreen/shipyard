@@ -281,6 +281,20 @@ grep -q 'bin/missing' "$w/err" || fail "the refusal must name the entry it refus
   || fail "a refused first-time system-replace must change nothing, even for an entry that comes before the refused one"
 [ ! -e "$T/var/system-replace/twoentry" ] || fail "a refused first-time system-replace must leave no .replaced"
 
+mkproduct gwtree gwtree "" bin/gw
+"$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/gw string bin/gw" "$T/gwtree/mavergreen.plist"
+echo apple-gw > "$V/usr/bin/gw"
+chmod g+w "$T/gwtree/bin"
+mg system-replace gwtree 2>"$w/err" && fail "system-replace must refuse to link a system path into a group-writable product tree"
+grep -q 'gwtree/bin: group-writable' "$w/err" || fail "the refusal names the directory and the rule: $(cat "$w/err")"
+[ ! -L "$V/usr/bin/gw" ] && [ "$(cat "$V/usr/bin/gw")" = apple-gw ] || fail "a refused chain swaps nothing"
+[ ! -e "$T/var/system-replace/gwtree" ] || fail "a refused chain leaves no .replaced"
+chmod g-w "$T/gwtree/bin"
+mg system-replace gwtree || fail "system-replace links into a product tree whose chain passes"
+[ "$(readlink "$V/usr/bin/gw")" = /opt/mavergreen/gwtree/bin/gw ] || fail "the swap happens once the chain passes"
+mg system-restore gwtree || fail "setup: restore gwtree"
+rm -rf "$T/gwtree" "$V/usr/bin/gw"
+
 mkproduct escapee escapee "" bin/f
 "$PB" -c "Add :replaces dict" -c "Add :replaces:/../escaped-by-mavergreen-test string bin/f" \
       "$T/escapee/mavergreen.plist"

@@ -1,13 +1,13 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: package-pkg.sh --shipyard-prefix DIR --app APP --version V --dist DIR
-#          Packages shipyard as ONE prefix -- /usr/local/mavergreen/shipyard holding shipyard itself
+#          Packages shipyard as ONE prefix -- /opt/mavergreen/shipyard holding shipyard itself
 #          (share/cmake/MavergreenShipyard), the launchers bin/shipyard-{cmake,ctest,cpack} into the
 #          cmake product, and bin/{cmake,ctest,cpack} linked to them -- plus one universal updater and
 #          the dev.mavergreen.base component. The mavergreen helper exports the shipyard-* names
-#          into /usr/local/mavergreen/bin, never the bare cmake/ctest/cpack; nothing is installed into
-#          /usr/local/bin. The install scripts come from stage_product.sh, and its preinstall refuses
-#          a box without the cmake product at or above .mavergreen/products/shipyard/requires/cmake/min. The updater is a stopgap
+#          into /opt/mavergreen/bin, never the bare cmake/ctest/cpack. The install scripts come from
+#          stage_product.sh, and its preinstall refuses a box without the cmake product at or above
+#          .mavergreen/products/shipyard/requires/cmake/min. The updater is a stopgap
 #          until Mavericks Lineup exists. The pkg is DIR/shipyard-V.pkg.
 # spec: 2026-10-09 C4 -- shipyard ships no CMake of its own: the launchers run the cmake product
 #       installed beside it, with shipyard on CMAKE_PREFIX_PATH.
@@ -22,6 +22,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 MAVERGREEN_REPO_ROOT="$SELF/.."; export MAVERGREEN_REPO_ROOT
 SPREFIX=""; APP=""; VER=""; DISTDIR=""
 while [ $# -gt 0 ]; do
@@ -36,7 +37,7 @@ while [ $# -gt 0 ]; do
 done
 
 ID="$(mavergreen_name identifier shipyard)" || exit $?
-PREFIX_DIR="/usr/local/mavergreen/shipyard"
+PREFIX_DIR="$(mavergreen_prefix shipyard)"
 APP_REL="$(sh "$SELF/updater-identity.sh" app shipyard)" || exit $?
 APP_NAME="${APP_REL##*/}"
 
@@ -48,8 +49,6 @@ APP_NAME="${APP_REL##*/}"
 [ "$(basename "$APP")" = "$APP_NAME" ] \
   || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
 [ -d "$APP" ] || { echo "package-pkg: no such app: $APP" >&2; exit 1; }
-cmake_min="$(mg_value products/shipyard/requires/cmake/min 2>/dev/null || true)"
-[ -n "$cmake_min" ] || { echo "package-pkg: no cmake minimum in $SELF/../.mavergreen/products/shipyard/requires/cmake/min" >&2; exit 1; }
 require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-separated
   _flag="$1"; _dir="$2"; _allowed="$3"
   for _e in "$_dir"/* "$_dir"/.*; do
@@ -116,7 +115,7 @@ strip_appledouble() { find "$STAGE" -name '._*' -delete 2>/dev/null || true; }
 strip_appledouble
 sh "$SELF/stage_product.sh" --stage "$STAGE" --product shipyard \
   --version "$VER" --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack \
-  --requires "cmake>=$cmake_min" --updater-app "$APP" --scripts-out "$SCR"
+  --updater-app "$APP" --scripts-out "$SCR"
 strip_appledouble
 
 # platform: pkgbuild makes a payload holding a .app relocatable and version-checked, so a locally

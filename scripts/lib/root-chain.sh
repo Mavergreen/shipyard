@@ -140,6 +140,18 @@ mavergreen_dir_ok() (
   mavergreen_chain_one "$1" ""
 )
 
+mavergreen_owned_ok() (
+  LC_ALL=C; export LC_ALL
+  q="$(mavergreen_chain_q "$1")"
+  if [ -L "$1" ]; then mavergreen_chain_say "$1" symlink "sudo mv $q $(mavergreen_chain_q "$1.old")"; return 1; fi
+  [ -e "$1" ] || return 0
+  r="$(mavergreen_chain_ls "$1" 2>/dev/null | mavergreen_chain_verdict)"
+  case "$r" in
+    owner) mavergreen_chain_say "$1" owner "sudo chown root:wheel $q"; return 1 ;;
+    unreadable) mavergreen_chain_say "$1" unreadable "sudo ls -lde $q"; return 1 ;;
+  esac
+)
+
 mavergreen_root_dir() (
   LC_ALL=C; export LC_ALL
   u="${MAVERGREEN_CHAIN_UID:-0}"

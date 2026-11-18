@@ -707,7 +707,7 @@ if [ -n "$builds_pkg" ] && ! deviated stage-product "$REL"; then
   done < "$tmp/l741"
   [ -n "$staged" ] || chk_fail stage-product "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh" \
                          "its install scripts and manifest are hand-rolled" \
-                         "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare .mavergreen/deviations/stage-product/<label>/ (scope *, a reason, a revisit)"
+                         "stage the product under opt/mavergreen/<name>/ (apps under Applications/Mavergreen/) and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare .mavergreen/deviations/stage-product/<label>/ (scope *, a reason, a revisit)"
 fi
 
 # spec: SKILL.md "Family conventions" check 25, and "Rosetta" above -- the family is retiring
