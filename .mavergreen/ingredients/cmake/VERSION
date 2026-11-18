@@ -1,2 +1,2 @@
-4.4.5-mavericks.2
+4.4.5-mavericks.9
 # renovate: datasource=github-releases depName=Mavergreen/cmake versioning=regex:^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)-mavericks\.(?<build>\d+)$
