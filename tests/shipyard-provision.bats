@@ -22,7 +22,13 @@ echo "tar $*" >> "$STUB_LOG"
 while [ $# -gt 4 ]; do shift 2; done
 mkdir -p "$4"; printf '%s\n' "$4"
 STUB
-  printf '#!/bin/sh\necho "sudo $*" >> "$STUB_LOG"\n' > "$WORK/bin/sudo"
+  cat > "$WORK/bin/sudo" <<'STUB'
+#!/bin/sh
+echo "sudo $*" >> "$STUB_LOG"
+[ -n "${STUB_INSTALL_UNDER:-}" ] || exit 0
+mkdir -p "$MAVERGREEN_ROOT/$STUB_INSTALL_UNDER/cmake"
+printf '<plist><dict>\n<key>version</key>\n<string>4.4.5-mavergreen.2</string>\n</dict></plist>\n' > "$MAVERGREEN_ROOT/$STUB_INSTALL_UNDER/cmake/mavergreen.plist"
+STUB
   chmod +x "$WORK/bin/sudo"
   export STUB_LOG="$WORK/log"; : > "$STUB_LOG"
   export PATH="$WORK/bin:$PATH"
@@ -124,17 +130,25 @@ installed() {  # installed PRODUCT VERSION [PREFIX-UNDER-ROOT]
 @test "a relocatable product with --install is installed from the pinned pkg" {
   d="$WORK/repo/.mavergreen/deviations/relocatable/cmake"; mkdir -p "$d"
   echo cmake > "$d/scope"; echo 'loads its modules from its real prefix' > "$d/reason"; echo 'when cmake finds its modules relative to itself' > "$d/revisit"
+  export STUB_INSTALL_UNDER=usr/local/mavergreen
   run $P --only cmake --install
   [ "$status" -eq 0 ]
-  [ "$output" = "cmake=$WORK/root/opt/mavergreen/cmake" ]
+  [ "$output" = "cmake=$WORK/root/usr/local/mavergreen/cmake" ]
   grep -qx "sudo installer -pkg $WORK/cache/cmake/4.4.5-mavergreen.2/cmake-4.4.5-mavergreen.2.pkg -target /" "$STUB_LOG"
 }
 
-@test "CI=true implies --install" {
+@test "CI=true implies --install, and a pkg that installs under opt/mavergreen is answered there" {
+  export STUB_INSTALL_UNDER=opt/mavergreen
   CI=true run $P --only cmake
   [ "$status" -eq 0 ]
   [ "$output" = "cmake=$WORK/root/opt/mavergreen/cmake" ]
   grep -q '^sudo installer ' "$STUB_LOG"
+}
+
+@test "--install dies when the installed pkg left neither layout holding the pinned version" {
+  run $P --only cmake --install
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cmake"*"pinned"* ]] || false
 }
 
 @test "no --install and no CI: nothing is installed" {

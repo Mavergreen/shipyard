@@ -150,7 +150,7 @@ for name in $(mg_list ingredients); do
         # platform: guarded macOS-only call -- the os test above; Linux installs nothing
         sudo installer -pkg "$MAVERGREEN_PKG_CACHE/${slug#*/}/$version/$asset" -target / >&2 \
           || die "could not install $asset"
-        path="$root_vol$(mavergreen_prefix "$product")" || die "$product is not a product short name" 2
+        path="$(installed_copy "$product" "$version")" || die "$product-$version was installed, but neither opt/mavergreen nor usr/local/mavergreen holds $product at the pinned version"
       fi
     fi
   fi
