@@ -5,9 +5,10 @@ An updater's identity is derived, never chosen: from the product's short name an
 from, the feed is https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml. The check holds that the
 updater's SUFeedURL is that feed; that the dist carries <short>.xml for every updater its pkgs install (a
 build that does not sign runs stand-in-feeds.sh, which stages an unsigned stand-in); that a manifest's
-appcast is that feed when the pkg ships an updater and empty when not; and that a feed describing a product's
+feed is that feed for every product, and empty only for a product that is built-on-install
+(.mavergreen/products/<short>/built-on-install exists); and that a feed describing a product's
 pkg is named <short>.xml. A pkg whose updater polls a feed nothing publishes leaves every installed copy
-without updates.
+without updates, and a manifest naming another feed sends the helper to the wrong place.
 
 ## Incident
 None recorded.

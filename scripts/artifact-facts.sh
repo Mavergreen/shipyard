@@ -12,6 +12,7 @@
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
 #       reads a repo in seconds and gates every PR.
 set -eu
+LC_ALL=C; export LC_ALL
 SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
 . "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/name-rules.sh"
@@ -58,6 +59,7 @@ for _pd in "$root"/.mavergreen/products/*/; do
     _dv="$_dv $_v"
   done
   printf 'derived %s%s\n' "$_p" "$_dv"
+  [ ! -f "$_pd/built-on-install" ] || printf 'built-on-install %s\n' "$_p"
   _app="$(mg_value "products/$_p/app" 2>/dev/null)" || _app=""
   printf 'app %s %s\n' "$_p" "${_app:-none}"
   for _s in pkg component installer-title channel-title item-title manifest-name identifier; do
@@ -191,18 +193,18 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     #       space cannot shift fields; outside entries are encoded like installs paths so the
     #       checker compares them directly.
     [ -z "$_loc" ] || continue
-    for _mf in "$_root"/usr/local/mavergreen/*/mavergreen.plist; do
+    for _mf in "$_root"/opt/mavergreen/*/mavergreen.plist; do
       [ -f "$_mf" ] || continue
       _dir="$(basename "$(dirname "$_mf")" | enc)"
       _mp="$("$STEVEDORE" plist get "$_mf" product 2>/dev/null)" || _mp=""
       _mi="$("$STEVEDORE" plist get "$_mf" identifier 2>/dev/null)" || _mi=""
       _ml="$("$STEVEDORE" plist get "$_mf" line 2>/dev/null)" || _ml=""
-      _ma="$("$STEVEDORE" plist get "$_mf" appcast 2>/dev/null)" || _ma=""
+      _ma="$("$STEVEDORE" plist get "$_mf" feed 2>/dev/null)" || _ma=""
       _mnm="$("$STEVEDORE" plist get "$_mf" name 2>/dev/null)" || _mnm=""
       _mp="$(printf '%s' "${_mp:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest %s %s %s %s\n' "$1" "$_mp" "$(printf '%s' "${_mi:-none}" | tr -s '[:space:]' '_')" "$_dir"
       printf 'manifest-line %s %s\n' "$1" "$(printf '%s' "${_ml:-none}" | tr -s '[:space:]' '_')"
-      printf 'manifest-appcast %s %s\n' "$1" "$(printf '%s' "${_ma:-none}" | tr -s '[:space:]' '_')"
+      printf 'manifest-feed %s %s\n' "$1" "$(printf '%s' "${_ma:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest-name %s %s\n' "$1" "$(field "$_mnm")"
       _k=0
       while _o="$("$STEVEDORE" plist get "$_mf" "outside:$_k" 2>/dev/null)"; do

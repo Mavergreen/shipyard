@@ -15,7 +15,7 @@
 <li>a fix</li>
 </ul>
 ]]></description>
-      <enclosure url="https://github.com/Mavergreen/golang-127/releases/download/1.27.0-mavergreen.1/go127-1.27.0-mavergreen.1.pkg" type="application/octet-stream" sparkle:edSignature="x" length="9630" />
+      <enclosure url="https://github.com/Mavergreen/golang-127/releases/download/1.27.0-mavergreen.1/go127-1.27.0-mavergreen.1.pkg" type="application/octet-stream" sparkle:edSignature="x" length="9499" />
     </item>
   </channel>
 </rss>

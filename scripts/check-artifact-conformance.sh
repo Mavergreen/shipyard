@@ -16,7 +16,7 @@
 #            bundle        <file> <path> <CFBundleIdentifier>     one per top-level bundle
 #            bundle-name   <file> <path> <CFBundleName|none> <CFBundleDisplayName|none>  one per top-level bundle (%20-encoded)
 #            launchd       <file> <path> <Label>                  one per launchd job
-#            manifest      <file> <product> <identifier> <dir>    one per usr/local/mavergreen/<dir>/mavergreen.plist
+#            manifest      <file> <product> <identifier> <dir>    one per opt/mavergreen/<dir>/mavergreen.plist
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
 #            product       <product>                              one per directory in the repo's .mavergreen/products/
@@ -25,7 +25,8 @@
 #            app           <product> <noun|upstream|none>         how the product's .app is named
 #            manifest-name <file> <name|none>                     that manifest's name (%20-encoded)
 #            manifest-line <file> <line|none>                     that manifest's line
-#            manifest-appcast <file> <url|none>                   that manifest's appcast
+#            manifest-feed <file> <url|none>                      that manifest's feed
+#            built-on-install <product>                           one per product whose .mavergreen/products/<product>/built-on-install exists
 #            sparkle       <file> <path> <SUFeedURL>              one per top-level bundle carrying a Sparkle feed
 #            repository    <owner/name>                           the repo the release is built in (mg_repo), when known
 #            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
@@ -123,7 +124,7 @@ rule_of() {
     manifest) echo "a pkg that installs a product carries exactly one valid manifest, and installs only what it lists" ;;
     base) echo "a pkg that installs a product has dev.mavergreen.base as its first component" ;;
     line) echo "a lined product's manifest, version and repo agree about the line" ;;
-    install-path) echo "a pkg installs only into its product's tree and the family's places" ;;
+    install-path) echo "a pkg installs only into its product's tree under opt/mavergreen and the places the OS dictates" ;;
     feed) echo "a product's updater, feed and manifest agree with the identity derived for it" ;;
     updater) echo "a product's updater is the one derived for it" ;;
     repository) echo "every product a release ships is one of this repo's .mavergreen/products/" ;;
@@ -150,11 +151,11 @@ fix_of() {
     app-name) echo "name an app = noun bundle <noun>.app with CFBundleName and CFBundleDisplayName the noun and CFBundleIdentifier dev.mavergreen.<short>; keep an app = upstream bundle's CFBundleName equal to its filename, with no other CFBundleDisplayName" ;;
     bundle-id) echo "give the bundle a CFBundleIdentifier beginning dev.mavergreen., or declare .mavergreen/deviations/bundle-id/<label>/ (scope <its identifier>, a reason, a revisit)" ;;
     launchd-label) echo "name the job dev.mavergreen.<name> and its plist <Label>.plist, or declare .mavergreen/deviations/launchd-label/<label>/ (scope <its Label>, a reason, a revisit)" ;;
-    manifest) echo "install usr/local/mavergreen/<product>/mavergreen.plist (render-manifest.sh writes it), listing every file outside the product's tree under outside" ;;
+    manifest) echo "install opt/mavergreen/<product>/mavergreen.plist (render-manifest.sh writes it), listing every file outside the product's tree under outside, for a product declared in .mavergreen/products/<product>/" ;;
     base) echo "build the product archive with set_install_floor.sh, which lists dev.mavergreen.base first" ;;
     line) echo "write .mavergreen/products/<short>/line (dotted, like 1.27), render the manifest from it with render-manifest.sh, and release from the repo whose suffix is that line without dots, or fix the version" ;;
-    install-path) echo "install under usr/local/mavergreen/<product> (list the exceptions in the manifest's outside), or declare .mavergreen/deviations/install-path/<label>/ (scope <glob>, a reason, a revisit)" ;;
-    feed) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>), name the feed <product>.xml, and point the manifest's appcast at it" ;;
+    install-path) echo "install under opt/mavergreen/<product>/ (an app under Applications/Mavergreen/; list the exceptions in the manifest's outside), or, where the OS dictates the place, declare .mavergreen/deviations/install-path/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    feed) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>), name the feed <product>.xml, and point the manifest's feed at it" ;;
     updater) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>) and ship its LaunchAgent" ;;
     repository) echo "declare the product in .mavergreen/products/<product>/, or release it from the repo that declares it" ;;
     enclosure) echo "publish the pkg the appcast names, or regenerate the appcast with gen_appcast.sh" ;;
@@ -298,9 +299,9 @@ grep '^component ' "$facts" > "$tmp/components" || true
 : > "$tmp/prod-of"
 for pk in $(sed -n 's/^pkg \([^ ][^ ]*\) .*/\1/p' "$facts" | sort -u); do
   n="$(awk -v p="$pk" '$2 == p' "$tmp/manifests" | wc -l | tr -d ' ')"
-  product_files="$(awk -v p="$pk" '$1 == "installs" && $2 == p && index($3, "usr/local/mavergreen/.base/") != 1 && index($3, "opt/mavergreen/.base/") != 1' "$facts" | wc -l | tr -d ' ')"
+  product_files="$(awk -v p="$pk" '$1 == "installs" && $2 == p && index($3, "opt/mavergreen/.base/") != 1' "$facts" | wc -l | tr -d ' ')"
   if [ "$product_files" -gt 0 ] && [ "$n" -ne 1 ]; then
-    fail manifest "$pk installs $product_files files but carries $n usr/local/mavergreen/<product>/mavergreen.plist manifests; it must carry exactly one, or nothing can find, update or uninstall what it installed" "$pk"
+    fail manifest "$pk installs $product_files files but carries $n opt/mavergreen/<product>/mavergreen.plist manifests; it must carry exactly one, or nothing can find, update or uninstall what it installed" "$pk"
     continue
   fi
   [ "$n" -eq 1 ] || continue
@@ -308,7 +309,9 @@ for pk in $(sed -n 's/^pkg \([^ ][^ ]*\) .*/\1/p' "$facts" | sort -u); do
 $(awk -v p="$pk" '$2 == p' "$tmp/manifests")
 EOF
   [ "$mprod" = "$mdir" ] \
-    || fail manifest "$pk's manifest names product '$mprod' but sits in usr/local/mavergreen/$(dec "$mdir")" "$pk"
+    || fail manifest "$pk's manifest names product '$mprod' but sits in opt/mavergreen/$(dec "$mdir")" "$pk"
+  awk -v m="$mprod" '$1 == "product" && $2 == m { f = 1 } END { exit !f }' "$facts" \
+    || fail manifest "$pk's manifest names product '$mprod', which this repo does not declare in .mavergreen/products/$mprod/" "$pk"
   [ "$mid" = "dev.mavergreen.$mprod" ] \
     || fail manifest "$pk's manifest names identifier $mid; product $mprod's is dev.mavergreen.$mprod" "$pk"
   awk -v p="$pk" -v i="$mid" '$2 == p && $3 == i { f = 1 } END { exit !f }' "$tmp/components" \
@@ -321,11 +324,11 @@ EOF
     NR == FNR {
       if ($1 != "manifest-outside" || $2 != p) next
       if ($3 == "" || $3 ~ /^\// || $3 ~ /\/$/ || index($3, "//") || index("/" $3 "/", "/./") || index("/" $3 "/", "/../") \
-          || $3 == "usr/local/mavergreen" || index($3, "usr/local/mavergreen/") == 1) print "badshape " $3
+          || $3 == "opt/mavergreen" || index($3, "opt/mavergreen/") == 1) print "badshape " $3
       else o[$3] = 1
       next
     }
-    $1 == "installs" && $2 == p && index($3, "usr/local/mavergreen/" pr "/") != 1 && index($3, "usr/local/mavergreen/.base/") != 1 && index($3, "opt/mavergreen/.base/") != 1 {
+    $1 == "installs" && $2 == p && index($3, "opt/mavergreen/" pr "/") != 1 && index($3, "opt/mavergreen/.base/") != 1 {
       hit = ""
       if ($3 in o) hit = $3
       else {
@@ -344,7 +347,7 @@ EOF
       unlisted) unlisted=$((unlisted + 1)); [ "$unlisted" -le 20 ] || continue
         fail manifest "$pk installs $(dec "$op") outside its tree, and its manifest's outside list does not name it -- uninstall would leave it behind" "$pk" ;;
       unused) fail manifest "$pk's manifest lists $(dec "$op") in outside, but the pkg installs nothing it would remove -- uninstall deletes an entry only as that exact file or link, or as a whole .app, .kext, .prefPane, .plugin, .bundle, .framework or .jdk directory" "$pk" ;;
-      badshape) fail manifest "$pk's manifest lists outside entry '$(dec "$op")' in a shape the helper refuses to uninstall -- empty, absolute, ending in /, an empty, . or .. segment, or under usr/local/mavergreen" "$pk" ;;
+      badshape) fail manifest "$pk's manifest lists outside entry '$(dec "$op")' in a shape the helper refuses to uninstall -- empty, absolute, ending in /, an empty, . or .. segment, or under opt/mavergreen" "$pk" ;;
     esac
   done < "$tmp/outside-$pk"
   [ "$unlisted" -le 20 ] \
@@ -352,11 +355,11 @@ EOF
   awk -v p="$pk" '$1 == "manifest-generated" && $2 == p { print $3 }' "$facts" > "$tmp/generated-$pk"
   while IFS= read -r gp; do
     case "$gp" in
-      ''|/*|*/|*//*|usr/local/mavergreen|usr/local/mavergreen/*) gbad=1 ;;
+      ''|/*|*/|*//*|opt/mavergreen|opt/mavergreen/*) gbad=1 ;;
       *) case "/$gp/" in *"/./"*|*"/../"*) gbad=1 ;; *) gbad=0 ;; esac ;;
     esac
     [ "$gbad" -eq 0 ] \
-      || fail manifest "$pk's manifest lists generated entry '$(dec "$gp")' in a shape the helper refuses to uninstall -- empty, absolute, ending in /, an empty, . or .. segment, or under usr/local/mavergreen" "$pk"
+      || fail manifest "$pk's manifest lists generated entry '$(dec "$gp")' in a shape the helper refuses to uninstall -- empty, absolute, ending in /, an empty, . or .. segment, or under opt/mavergreen" "$pk"
   done < "$tmp/generated-$pk"
 done
 
@@ -399,13 +402,15 @@ EOF
         || fail updater "$pk ships $P's updater but no LaunchAgent labelled $want_label -- nothing would run its daily check" "$pk"
       grep -q "^appcast $P\.xml " "$facts" \
         || fail feed "$pk ships $P's updater, but the dist carries no $P.xml -- /latest/download/$P.xml would 404 for every installed $P" "$pk"
-      want_ma="$want_feed"
-    else
-      want_ma=none
     fi
-    ma="$(awk -v p="$pk" '$1 == "manifest-appcast" && $2 == p { print $3; exit }' "$facts")"
-    [ -z "$ma" ] || [ "$ma" = "$want_ma" ] || { [ "$want_ma" = none ] && [ -s "$tmp/sparkle-$pk" ]; } \
-      || fail feed "$pk's manifest names the feed '$ma'; it should name '$want_ma' (a product with no updater names none)" "$pk"
+    ma="$(awk -v p="$pk" '$1 == "manifest-feed" && $2 == p { print $3; exit }' "$facts")"
+    if awk -v m="$P" '$1 == "built-on-install" && $2 == m { f = 1 } END { exit !f }' "$facts"; then
+      [ -z "$ma" ] || [ "$ma" = none ] \
+        || fail feed "$pk's manifest names the feed '$ma'; $P is built on install and names none" "$pk"
+    elif [ "$want_feed" != none ]; then
+      [ -z "$ma" ] || [ "$ma" = "$want_feed" ] \
+        || fail feed "$pk's manifest names the feed '$ma'; $P's feed is $want_feed" "$pk"
+    fi
     awk -v p="$pk" '$1 == "launchd" && $2 == p && index($4, "updatecheck") { print $4 }' "$facts" > "$tmp/uc-$pk"
     while read -r ul; do
       [ "$ul" = "$want_label" ] || fail updater "$pk installs the update-check job $ul; $P's is $want_label" "$pk"
@@ -525,9 +530,15 @@ done < "$facts"
 #       deviation scoped to the PATH (glob; `*` spans "/" and spaces), so excusing a kext's
 #       directory cannot quietly excuse a stray file elsewhere in the same pkg. Reported once per
 #       reason and capped, since one wrong directory can hold thousands of files.
+os_bundle() {  # $1 = path, $2 = the directory the OS loads from, $3 = the bundle suffix
+  case "$1" in "$2"?*) ;; *) return 1 ;; esac
+  _ob="${1#"$2"}"; _ob="${_ob%%/*}"
+  case "$_ob" in ?*"$3") return 0 ;; esac
+  return 1
+}
 installs_seen=0
 last_file=""; prod=""; has_base=no
-: > "$tmp/ip-dev"; : > "$tmp/ip-fail"
+: > "$tmp/ip-dev"; : > "$tmp/ip-fail"; : > "$tmp/ip-usrlocal"
 while read -r kind file path; do
   [ "$kind" = installs ] || continue
   installs_seen=$((installs_seen + 1))
@@ -537,12 +548,21 @@ while read -r kind file path; do
     has_base=no
     awk -v f="$file" '$2 == f && $3 == "dev.mavergreen.base" { g = 1 } END { exit !g }' "$tmp/components" && has_base=yes
   fi
-  if [ -n "$prod" ]; then case "$path" in "usr/local/mavergreen/$prod/"*) continue ;; esac; fi
+  if [ -n "$prod" ]; then case "$path" in "opt/mavergreen/$prod/"*) continue ;; esac; fi
   case "$path" in
-    usr/local/mavergreen/.base/*|opt/mavergreen/.base/*) [ "$has_base" = no ] || continue ;;
-    Applications/*|"Library/Application%20Support/Mavergreen/"*) continue ;;
-    Library/LaunchAgents/dev.mavergreen.*.plist|Library/LaunchDaemons/dev.mavergreen.*.plist) continue ;;
+    usr/local|usr/local/*) printf '%s\n' "$file: $(dec "$path")" >> "$tmp/ip-usrlocal"; continue ;;
+    opt/mavergreen/.base/*) [ "$has_base" = no ] || continue ;;
+    Applications/Mavergreen/*) continue ;;
+    Library/LaunchAgents/dev.mavergreen.*.plist|Library/LaunchDaemons/dev.mavergreen.*.plist)
+      case "${path#Library/*/}" in */*) ;; *) continue ;; esac ;;
   esac
+  os_bundle "$path" Library/Extensions/ .kext && continue
+  os_bundle "$path" System/Library/Extensions/ .kext && continue
+  os_bundle "$path" System/Library/Filesystems/ .fs && continue
+  os_bundle "$path" Library/PreferencePanes/ .prefPane && continue
+  os_bundle "$path" Library/Application%20Support/Apple/BezelServices/ .plugin && continue
+  os_bundle "$path" Library/Application%20Support/SIMBL/Plugins/ .bundle && continue
+  os_bundle "$path" Library/Application%20Support/Mavergreen/ -updater.app && continue
   p="$(dec "$path")"
   r="$(deviation_reason install-path "$p")"
   if [ -n "$r" ]; then printf '%s\n' "$r" >> "$tmp/ip-dev"
@@ -551,11 +571,23 @@ done < "$facts"
 sort "$tmp/ip-dev" | uniq -c | while read -r n r; do
   echo "conformance: install-path: DECLARED DEVIATION ($n files) -- $r"
 done
+ul="$(wc -l < "$tmp/ip-usrlocal" | tr -d ' ')"
+if [ "$ul" -gt 0 ]; then
+  head -20 "$tmp/ip-usrlocal" > "$tmp/ip-usrlocal20"
+  while IFS= read -r l; do
+    chk_fail install-path "$(rule_of install-path)" "$l -- nothing installs under usr/local/; the family left it (vision principle 6)" "install it under opt/mavergreen/<product>/, or, for an app, under Applications/Mavergreen/; no deviation excuses usr/local/"
+  done < "$tmp/ip-usrlocal20"
+  [ "$ul" -le 20 ] || echo "conformance: install-path: ... and $((ul - 20)) more under usr/local/" >&2
+fi
 nfail="$(wc -l < "$tmp/ip-fail" | tr -d ' ')"
 if [ "$nfail" -gt 0 ]; then
   head -20 "$tmp/ip-fail" > "$tmp/ip-fail20"
   while IFS= read -r l; do
-    chk_fail install-path "$(rule_of install-path)" "$l -- outside usr/local/mavergreen/<its product>, usr/local/mavergreen/.base (with the base component), Applications, Library/Application Support/Mavergreen and dev.mavergreen.* launchd jobs" "$(fix_of install-path)"
+    case "${l#*: }" in
+      Applications/*) _ipfix="install it under Applications/Mavergreen/" ;;
+      *) _ipfix="$(fix_of install-path)" ;;
+    esac
+    chk_fail install-path "$(rule_of install-path)" "$l -- outside opt/mavergreen/<its product>, opt/mavergreen/.base (with the base component), Applications/Mavergreen and the places the OS dictates (kexts, filesystems, preference panes, BezelServices and SIMBL plugins, dev.mavergreen.* launchd jobs)" "$_ipfix"
   done < "$tmp/ip-fail20"
   [ "$nfail" -le 20 ] || echo "conformance: install-path: ... and $((nfail - 20)) more" >&2
 fi

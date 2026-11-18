@@ -28,6 +28,17 @@ has() {  # facts must fail, and some failure must start with the check's id (oth
   printf '%s\n' "$out" | grep -q "^$2: " || { echo "FAIL $1: a failure should start with '$2: ', got: $out"; exit 1; }
 }
 
+clean() {  # facts must not trip check $2 (others may)
+  out="$(printf '%s\nend-of-facts\n' "$3" | sh "$S" 2>&1 >/dev/null)" || :
+  ! printf '%s\n' "$out" | grep -q "^$2: " || { echo "FAIL $1: $2 should not trip, got: $out"; exit 1; }
+}
+
+says() {  # facts must fail with a failure that starts with check $2's id and carries text $3 (others may trip too)
+  out="$(printf '%s\nend-of-facts\n' "$4" | sh "$S" 2>&1 >/dev/null)" && { echo "FAIL $1: expected failure"; exit 1; }
+  printf '%s\n' "$out" | grep -q "^$2: " || { echo "FAIL $1: a failure should start with '$2: ', got: $out"; exit 1; }
+  printf '%s\n' "$out" | grep -qF "$3" || { echo "FAIL $1: should mention '$3', got: $out"; exit 1; }
+}
+
 GOOD='expected 1.26.5-mavergreen.5
 upstream-kind port
 pkg golang-1.26.5-native-mavergreen.5.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
@@ -67,21 +78,21 @@ macho p.pkg usr/local/go/bin/go x86_64 EXECUTE 10.9 26.5 aa"
 # spec: SKILL.md "Family conventions" check 37 -- a pkg's arm64 slice is a declared deviation,
 #       an arm64 deviation whose scope is a glob, matched against the install path; a Sparkle updater's slices are
 #       exempt, and a repo grandfathered as modern-smoke is warned rather than failed.
-T='macho golang-1.26.5-native-mavergreen.5.pkg usr/local/mavergreen/go126/bin/go'
+T='macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go'
 U='sparkle golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
 macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa'
-no "an undeclared arm64 tool slice" "arm64|golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
+no "an undeclared arm64 tool slice" "arm64|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go" "$GOOD
 $T x86_64 EXECUTE 10.9 10.9 aa
 $T arm64 EXECUTE 11.0 11.3 aa"
 ok "a declared arm64 tool slice" "$GOOD
-deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
+deviation arm64:opt/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
 $T x86_64 EXECUTE 10.9 10.9 aa
 $T arm64 EXECUTE 11.0 11.3 aa"
-no "a declaration covers only the install paths its glob names" "arm64|golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go" "$GOOD
+no "a declaration covers only the install paths its glob names" "arm64|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go" "$GOOD
 deviation arm64:build/build.sh a source path names nothing the pkg installs
 $T arm64 EXECUTE 11.0 11.3 aa"
 no "a declaration of another check does not cover it" "arm64|with an arm64 slice" "$GOOD
-deviation sdk-pin:usr/local/mavergreen/go126/bin/* not an arm64 declaration
+deviation sdk-pin:opt/mavergreen/go126/bin/* not an arm64 declaration
 $T arm64 EXECUTE 11.0 11.3 aa"
 ok "an updater-only arm64 slice needs no declaration" "$GOOD
 $U"
@@ -117,7 +128,7 @@ cp -R "$here/../scripts" "$_gfs/scripts"
 printf 'modern-smoke golang-126 release.yml:modern-smoke\n' > "$_gfs/scripts/conventions-grandfathered"
 _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-126" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
   || { echo "FAIL: a grandfathered repo's undeclared arm64 slice warns, never fails: $_gfo"; exit 1; }
-printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: arm64: golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go' \
+printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: arm64: golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go' \
   || { echo "FAIL: a grandfathered repo's undeclared arm64 slice is reported as a ::warning:: naming it: $_gfo"; exit 1; }
 _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-127" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
   && { echo "FAIL: another repo's modern-smoke line excuses nothing here: $_gfo"; exit 1; }
@@ -126,12 +137,12 @@ _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golan
   && { echo "FAIL: another check's grandfathered line excuses nothing here: $_gfo"; exit 1; }
 rm -rf "$_gfs"
 
-X='macho golang-1.26.5-native-mavergreen.5.pkg usr/local/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
-C='golang-1.26.5-native-mavergreen.5.pkg usr/local/mavergreen/go126/bin/go'
-no "a program defining ___cxa_throw fails" "cxxabi|golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines C++ runtime machinery beyond Recaulk's back-fills: ___cxa_throw" "$GOOD
+X='macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
+C='golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go'
+no "a program defining ___cxa_throw fails" "cxxabi|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go (x86_64), which defines C++ runtime machinery beyond Recaulk's back-fills: ___cxa_throw" "$GOOD
 $X
 cxxabi-defines $C x86_64 ___cxa_throw visible"
-no "the failure says how to declare it" "cxxabi|declare .mavergreen/deviations/cxxabi/<label>/ (scope usr/local/mavergreen/go126/bin/go, a reason, a revisit)" "$GOOD
+no "the failure says how to declare it" "cxxabi|declare .mavergreen/deviations/cxxabi/<label>/ (scope opt/mavergreen/go126/bin/go, a reason, a revisit)" "$GOOD
 $X
 cxxabi-defines $C x86_64 ___cxa_throw visible"
 _cxf="$GOOD
@@ -150,35 +161,35 @@ cxxabi-defines $C x86_64 ___gxx_personality_v0 hidden"
 _cxf="$GOOD
 $X"
 for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22; do _cxf="$_cxf
-cxxabi-defines p.pkg usr/local/mavergreen/go126/bin/t$_i x86_64 ___cxa_throw visible"; done
+cxxabi-defines p.pkg opt/mavergreen/go126/bin/t$_i x86_64 ___cxa_throw visible"; done
 _cxo="$(printf '%s\nend-of-facts\n' "$_cxf" | sh "$S" 2>&1)" && { echo "FAIL: 22 violating files fail"; exit 1; }
 [ "$(printf '%s\n' "$_cxo" | grep -c 'which defines')" = 20 ] && printf '%s\n' "$_cxo" | grep -q 'cxxabi: and 2 more files' \
   || { echo "FAIL: cxxabi failures are capped at 20 files, then a count: $_cxo"; exit 1; }
 ok "a declared path passes" "$GOOD
-deviation cxxabi:usr/local/mavergreen/go126/bin/* Go's cgo runtime links its own libc++abi; exit: when it links libcxx22
+deviation cxxabi:opt/mavergreen/go126/bin/* Go's cgo runtime links its own libc++abi; exit: when it links libcxx22
 $X
 cxxabi-defines $C x86_64 ___cxa_throw visible"
 no "a cxxabi declaration covers only the paths its glob names" "cxxabi|golang" "$GOOD
-deviation cxxabi:usr/local/mavergreen/go126/lib/* another path; exit: never
+deviation cxxabi:opt/mavergreen/go126/lib/* another path; exit: never
 $X
 cxxabi-defines $C x86_64 ___cxa_throw visible"
 no "another check's declaration does not cover cxxabi" "cxxabi|golang" "$GOOD
-deviation sdk-pin:usr/local/mavergreen/go126/bin/* not a cxxabi declaration
+deviation sdk-pin:opt/mavergreen/go126/bin/* not a cxxabi declaration
 $X
 cxxabi-defines $C x86_64 ___cxa_throw visible"
 no "a definition in one slice of a fat binary fails" "cxxabi|go (arm64), which defines" "$GOOD
-deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain
+deviation arm64:opt/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain
 $X
 macho $C arm64 EXECUTE 11.0 11.3 aa
 cxxabi-defines $C arm64 ___cxa_throw visible"
-no "loading a second libc++abi fails" "cxxabi|golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which loads /opt/vendor/lib/libc++abi.1.dylib" "$GOOD
+no "loading a second libc++abi fails" "cxxabi|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go (x86_64), which loads /opt/vendor/lib/libc++abi.1.dylib" "$GOOD
 $X
 cxxabi-loads $C x86_64 /opt/vendor/lib/libc++abi.1.dylib"
 no "a load path with a space is decoded" "cxxabi|which loads @rpath/Vendor Runtime/libc++abi.dylib" "$GOOD
 $X
 cxxabi-loads $C x86_64 @rpath/Vendor%20Runtime/libc++abi.dylib"
 ok "a declared load passes" "$GOOD
-deviation cxxabi:usr/local/mavergreen/go126/* vendored; exit: when upstream links libcxx22
+deviation cxxabi:opt/mavergreen/go126/* vendored; exit: when upstream links libcxx22
 $X
 cxxabi-loads $C x86_64 @rpath/libc++abi.dylib"
 
@@ -188,22 +199,22 @@ gfrun() {  # $1 = the grandfathered file's one line, $2 = the repository; the fa
   printf '%s\n' "$1" > "$_gfs/scripts/conventions-grandfathered"
   { printf '%s\nrepository Mavergreen/%s\n%s\n' "$GOOD" "$2" "$X"; cat; printf 'end-of-facts\n'; } | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1
 }
-_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw hidden\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw hidden\n' "$C" | gfrun 'cxxabi golang-126 opt/mavergreen/go126/bin/go' golang-126)" \
   || { echo "FAIL: a grandfathered repo's violation warns and passes: $_gfo"; exit 1; }
-printf '%s\n' "$_gfo" | grep -q "^::warning::conformance: cxxabi: golang-1.26.5-native-mavergreen.5.pkg installs usr/local/mavergreen/go126/bin/go (x86_64), which defines .*(grandfathered: cxxabi golang-126 usr/local/mavergreen/go126/bin/go)$" \
+printf '%s\n' "$_gfo" | grep -q "^::warning::conformance: cxxabi: golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go (x86_64), which defines .*(grandfathered: cxxabi golang-126 opt/mavergreen/go126/bin/go)$" \
   || { echo "FAIL: a grandfathered cxxabi violation is a ::warning:: naming its line: $_gfo"; exit 1; }
-_gfo="$(printf 'cxxabi-loads %s x86_64 /opt/vendor/lib/libc++abi.1.dylib\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
+_gfo="$(printf 'cxxabi-loads %s x86_64 /opt/vendor/lib/libc++abi.1.dylib\n' "$C" | gfrun 'cxxabi golang-126 opt/mavergreen/go126/bin/go' golang-126)" \
   || { echo "FAIL: a grandfathered repo's second libc++abi load warns and passes: $_gfo"; exit 1; }
 printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: cxxabi: .*which loads /opt/vendor/lib/libc++abi.1.dylib' \
   || { echo "FAIL: a grandfathered load is a ::warning::: $_gfo"; exit 1; }
-_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'cxxabi golang-127 usr/local/mavergreen/go126/bin/go' golang-126)" \
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'cxxabi golang-127 opt/mavergreen/go126/bin/go' golang-126)" \
   && { echo "FAIL: another repo's cxxabi line excuses nothing here: $_gfo"; exit 1; }
-_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'cxxabi golang-126 usr/local/mavergreen/go126/bin/gofmt' golang-126)" \
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'cxxabi golang-126 opt/mavergreen/go126/bin/gofmt' golang-126)" \
   && { echo "FAIL: another path's cxxabi line excuses nothing here: $_gfo"; exit 1; }
-_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'modern-smoke golang-126 usr/local/mavergreen/go126/bin/go' golang-126)" \
+_gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'modern-smoke golang-126 opt/mavergreen/go126/bin/go' golang-126)" \
   && { echo "FAIL: another check's grandfathered line excuses nothing here: $_gfo"; exit 1; }
-_gfo="$(printf '%s\n%s\nrepository Mavergreen/golang-126\nmacho p.pkg usr/local/mavergreen/go126/bin/a%%20b x86_64 EXECUTE 10.9 10.9 aa\ncxxabi-defines p.pkg usr/local/mavergreen/go126/bin/a%%20b x86_64 ___cxa_throw visible\nend-of-facts\n' "$GOOD" "$X" \
-  | { printf 'cxxabi golang-126 usr/local/mavergreen/go126/bin/a%%20b\n' > "$_gfs/scripts/conventions-grandfathered"; sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1; })" \
+_gfo="$(printf '%s\n%s\nrepository Mavergreen/golang-126\nmacho p.pkg opt/mavergreen/go126/bin/a%%20b x86_64 EXECUTE 10.9 10.9 aa\ncxxabi-defines p.pkg opt/mavergreen/go126/bin/a%%20b x86_64 ___cxa_throw visible\nend-of-facts\n' "$GOOD" "$X" \
+  | { printf 'cxxabi golang-126 opt/mavergreen/go126/bin/a%%20b\n' > "$_gfs/scripts/conventions-grandfathered"; sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1; })" \
   || { echo "FAIL: a grandfathered path keeps its %20 encoding, one field per line: $_gfo"; exit 1; }
 rm -rf "$_gfs"
 
@@ -942,8 +953,8 @@ component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
 product x
 derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml
-installs p.pkg usr/local/mavergreen/.base/1.0.9/mavergreen
-installs p.pkg usr/local/mavergreen/x/mavergreen.plist'
+installs p.pkg opt/mavergreen/.base/1.0.9/mavergreen
+installs p.pkg opt/mavergreen/x/mavergreen.plist'
 
 alone() {  # facts must fail, and every failure reported must be check $2's -- no other check trips
   _err="$(printf '%s\nend-of-facts\n' "$3" | sh "$S" 2>&1 >/dev/null)" && { echo "FAIL $1: expected failure"; exit 1; }
@@ -954,25 +965,68 @@ alone() {  # facts must fail, and every failure reported must be check $2's -- n
 
 ok "identity: family bundle, job and paths pass" "$REL
 $LAYOUT
-manifest-outside p.pkg Applications/Mavericks%20X.app
-manifest-outside p.pkg Library/Application%20Support/Mavergreen/XUpdater.app
+manifest-outside p.pkg Applications/Mavergreen/Mavericks%20X.app
+manifest-outside p.pkg Library/Application%20Support/Mavergreen/y-updater.app
 manifest-outside p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
 manifest-outside p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
-installs p.pkg usr/local/mavergreen/x/bin/x
-installs p.pkg Applications/Mavericks%20X.app/Contents/MacOS/X
-installs p.pkg Library/Application%20Support/Mavergreen/XUpdater.app/Contents/Info.plist
+installs p.pkg opt/mavergreen/x/bin/x
+installs p.pkg Applications/Mavergreen/Mavericks%20X.app/Contents/MacOS/X
+installs p.pkg Library/Application%20Support/Mavergreen/y-updater.app/Contents/Info.plist
 installs p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
 installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
-bundle p.pkg Library/Application%20Support/Mavergreen/XUpdater.app dev.mavergreen.XUpdater
+bundle p.pkg Library/Application%20Support/Mavergreen/y-updater.app dev.mavergreen.XUpdater
 launchd p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck"
 
-has "install-path: loose files in /usr/local are no longer the family's" "install-path" "$REL
+says "install-path: nothing installs under usr/local/" install-path "nothing installs under usr/local/; the family left it (vision principle 6)" "$REL
 $LAYOUT
 installs p.pkg usr/local/bin/x"
 
+says "install-path: no deviation scope excuses usr/local/" install-path "nothing installs under usr/local/; the family left it (vision principle 6)" "$REL
+$LAYOUT
+deviation install-path:usr/local/* upstream's own layout
+installs p.pkg usr/local/bin/x"
+
+says "install-path: the old family tree under usr/local/mavergreen is refused too" install-path "nothing installs under usr/local/" "$REL
+$LAYOUT
+installs p.pkg usr/local/mavergreen/x/bin/x"
+
+says "install-path: a bare /Applications is not the family's" install-path "install it under Applications/Mavergreen/" "$REL
+$LAYOUT
+installs p.pkg Applications/Go.app/Contents/MacOS/Go"
+
+clean "install-path: the places the OS dictates pass" install-path "$REL
+$LAYOUT
+manifest-outside p.pkg Library/Extensions/X.kext
+manifest-outside p.pkg System/Library/Extensions/Y.kext
+manifest-outside p.pkg System/Library/Filesystems/Z.fs
+manifest-outside p.pkg Library/PreferencePanes/P.prefPane
+manifest-outside p.pkg Library/Application%20Support/Apple/BezelServices/B.plugin
+manifest-outside p.pkg Library/Application%20Support/SIMBL/Plugins/S.bundle
+manifest-outside p.pkg Library/Application%20Support/Mavergreen/x-updater.app
+manifest-outside p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
+manifest-outside p.pkg Library/LaunchAgents/dev.mavergreen.xa.plist
+manifest-outside p.pkg Applications/Mavergreen/Go.app
+installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
+installs p.pkg System/Library/Extensions/Y.kext/Contents/Info.plist
+installs p.pkg System/Library/Filesystems/Z.fs/Contents/Info.plist
+installs p.pkg Library/PreferencePanes/P.prefPane/Contents/Info.plist
+installs p.pkg Library/Application%20Support/Apple/BezelServices/B.plugin/Contents/Info.plist
+installs p.pkg Library/Application%20Support/SIMBL/Plugins/S.bundle/Contents/Info.plist
+installs p.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist
+installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
+installs p.pkg Library/LaunchAgents/dev.mavergreen.xa.plist
+installs p.pkg Applications/Mavergreen/Go.app/Contents/Info.plist"
+
+for _bad in Library/Extensions/stray Library/Extensions/a/b.kext/c Library/PreferencePanes/P.kext/x Library/LaunchDaemons/com.example.x.plist \
+            Library/Application%20Support/Mavergreen/stuff Library/Application%20Support/Other/x-updater.app/x Library/Java/JavaVirtualMachines/x.jdk/Contents/Home; do
+  has "install-path: $_bad is not an OS-dictated place" "install-path" "$REL
+$LAYOUT
+installs p.pkg $_bad"
+done
+
 has "install-path: another product's tree is not this pkg's" "install-path" "$REL
 $LAYOUT
-installs p.pkg usr/local/mavergreen/y/bin/y"
+installs p.pkg opt/mavergreen/y/bin/y"
 
 has "install-path: .base is only for a pkg that carries the base component" "install-path" 'expected 1.0.0-mavergreen.1
 upstream-kind port
@@ -980,49 +1034,73 @@ pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
 product x
-installs p.pkg usr/local/mavergreen/x/mavergreen.plist
-installs p.pkg usr/local/mavergreen/.base/1.0.9/mavergreen'
+installs p.pkg opt/mavergreen/x/mavergreen.plist
+installs p.pkg opt/mavergreen/.base/1.0.9/mavergreen'
+
+says "install-path: .base without the base component says so" install-path "opt/mavergreen/.base/1/x -- outside" 'expected 1.0.0-mavergreen.1
+upstream-kind port
+pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
+component p.pkg dev.mavergreen.x
+manifest p.pkg x dev.mavergreen.x x
+product x
+installs p.pkg opt/mavergreen/x/mavergreen.plist
+installs p.pkg opt/mavergreen/.base/1/x'
+
+ok "install-path: .base with the base component passes" "$REL
+component p.pkg dev.mavergreen.base
+component p.pkg dev.mavergreen.x
+manifest p.pkg x dev.mavergreen.x x
+product x
+installs p.pkg opt/mavergreen/x/mavergreen.plist
+installs p.pkg opt/mavergreen/.base/1/x"
+
+no "manifest: a manifest naming a product this repo does not declare" "manifest|nosuch" "$REL
+component p.pkg dev.mavergreen.base
+component p.pkg dev.mavergreen.nosuch
+manifest p.pkg nosuch dev.mavergreen.nosuch nosuch
+product x
+installs p.pkg opt/mavergreen/nosuch/mavergreen.plist"
 
 no "manifest: a pkg that installs a product must carry its manifest" "manifest" "$REL
 component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
-installs p.pkg usr/local/mavergreen/x/bin/x"
+installs p.pkg opt/mavergreen/x/bin/x"
 
 alone "manifest: a nested identifier is not the one derived from the product" "manifest" "$REL
 component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.golang.x
 manifest p.pkg x dev.mavergreen.golang.x x
 product x
-installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
+installs p.pkg opt/mavergreen/x/mavergreen.plist"
 no "manifest: the identifier is dev.mavergreen.<product>" "manifest|dev.mavergreen.x" "$REL
 component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.golang.x
 manifest p.pkg x dev.mavergreen.golang.x x
 product x
-installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
+installs p.pkg opt/mavergreen/x/mavergreen.plist"
 
 no "manifest: the manifest's product must match the tree it sits in" "manifest" "$REL
 component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg y dev.mavergreen.x x
 product y
-installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
+installs p.pkg opt/mavergreen/x/mavergreen.plist"
 
 no "manifest: something installed outside the tree must be listed in outside" "manifest|outside" "$REL
 component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
 product x
-installs p.pkg usr/local/mavergreen/x/mavergreen.plist
-installs p.pkg Applications/X.app/Contents/MacOS/X"
+installs p.pkg opt/mavergreen/x/mavergreen.plist
+installs p.pkg Applications/Mavergreen/X.app/Contents/MacOS/X"
 
 no "manifest: an outside entry must name something the pkg installs" "manifest|outside" "$REL
 component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
 product x
-manifest-outside p.pkg Applications/Gone.app
-installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
+manifest-outside p.pkg Applications/Mavergreen/Gone.app
+installs p.pkg opt/mavergreen/x/mavergreen.plist"
 
 no "manifest: a whole unlisted directory is reported capped, not once per file" "manifest|5 more files outside its tree" "$REL
 $LAYOUT
@@ -1031,7 +1109,7 @@ $(awk 'BEGIN { for (i = 0; i < 25; i++) print "installs p.pkg usr/local/bin/f" i
 alone "manifest: an outside directory that is not a bundle covers nothing beneath it -- uninstall refuses to remove it" "manifest" "$REL
 $LAYOUT
 manifest-outside p.pkg Applications
-installs p.pkg Applications/Stray.app/Contents/MacOS/Stray"
+installs p.pkg Applications/Mavergreen/Stray.app/Contents/MacOS/Stray"
 
 alone "manifest: a launchd directory listed as outside covers none of its jobs" "manifest" "$REL
 $LAYOUT
@@ -1040,25 +1118,25 @@ installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist"
 
 alone "manifest: a plain support directory listed as outside covers none of its files" "manifest" "$REL
 $LAYOUT
-manifest-outside p.pkg Library/Application%20Support/Mavergreen/x
-installs p.pkg Library/Application%20Support/Mavergreen/x/data"
+manifest-outside p.pkg Library/Application%20Support/Apple/BezelServices
+installs p.pkg Library/Application%20Support/Apple/BezelServices/B.plugin/data"
 
-for _bad in /Applications/X.app 'Applications/../X.app' 'Applications/./X.app' usr/local/mavergreen/x/bin/x usr/local/mavergreen ''; do
+for _bad in /Applications/Mavergreen/X.app 'Applications/../X.app' 'Applications/./X.app' opt/mavergreen/x/bin/x opt/mavergreen ''; do
   _facts="$REL
 $LAYOUT
-manifest-outside p.pkg Applications/X.app
+manifest-outside p.pkg Applications/Mavergreen/X.app
 manifest-outside p.pkg $_bad
-installs p.pkg Applications/X.app/Contents/MacOS/X"
+installs p.pkg Applications/Mavergreen/X.app/Contents/MacOS/X"
   no "manifest: outside entry '$_bad' has a shape the helper refuses to uninstall" "manifest|shape the helper refuses" "$_facts"
   alone "manifest: outside entry '$_bad' has a shape the helper refuses to uninstall" "manifest" "$_facts"
 done
 
 ok "manifest: a bundle entry covers the files beneath it, and a file entry covers itself" "$REL
 $LAYOUT
-manifest-outside p.pkg Applications/X.app
+manifest-outside p.pkg Applications/Mavergreen/X.app
 manifest-outside p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
-installs p.pkg Applications/X.app/Contents/MacOS/X
-installs p.pkg Applications/X.app/Contents/Info.plist
+installs p.pkg Applications/Mavergreen/X.app/Contents/MacOS/X
+installs p.pkg Applications/Mavergreen/X.app/Contents/Info.plist
 installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist"
 
 ok "manifest: a .jdk bundle entry covers the Info.plist and Home link beneath it" "$REL
@@ -1073,7 +1151,7 @@ component p.pkg dev.mavergreen.x
 component p.pkg dev.mavergreen.base
 manifest p.pkg x dev.mavergreen.x x
 product x
-installs p.pkg usr/local/mavergreen/x/mavergreen.plist"
+installs p.pkg opt/mavergreen/x/mavergreen.plist"
 
 no "base: a bare component pkg cannot carry the helper, so it cannot install a product" "base" 'expected 1.0.0-mavergreen.1
 upstream-kind port
@@ -1084,24 +1162,24 @@ asset appcast.xml 10
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
 product x
-installs p.pkg usr/local/mavergreen/x/mavergreen.plist'
+installs p.pkg opt/mavergreen/x/mavergreen.plist'
 
 no "identity: a bundle outside the family" "bundle-id" "$REL
 $LAYOUT
-bundle p.pkg Applications/X.app com.example.x"
+bundle p.pkg Applications/Mavergreen/X.app com.example.x"
 alone "identity: a bundle outside the family" "bundle-id" "$REL
 $LAYOUT
-bundle p.pkg Applications/X.app com.example.x"
+bundle p.pkg Applications/Mavergreen/X.app com.example.x"
 
 ok "identity: a bundle deviation scoped to its identifier excuses it" "$REL
 $LAYOUT
 deviation bundle-id:com.example.* upstream's own kext, loaded by upstream's identifier
-bundle p.pkg Applications/X.app com.example.x"
+bundle p.pkg Applications/Mavergreen/X.app com.example.x"
 
 alone "identity: a bundle deviation for a DIFFERENT identifier excuses nothing" "bundle-id" "$REL
 $LAYOUT
 deviation bundle-id:org.other.* some other bundle
-bundle p.pkg Applications/X.app com.example.x"
+bundle p.pkg Applications/Mavergreen/X.app com.example.x"
 
 alone "identity: a launchd job outside the family" "launchd-label" "$REL
 $LAYOUT
@@ -1126,59 +1204,59 @@ installs p.pkg Library/LaunchDaemons/com.example.xd.plist"
 
 alone "install-path: an arbitrary system location" "install-path" "$REL
 $LAYOUT
-manifest-outside p.pkg Library/Extensions/X.kext
-installs p.pkg Library/Extensions/X.kext/Contents/Info.plist"
+manifest-outside p.pkg Library/Frameworks/X.framework
+installs p.pkg Library/Frameworks/X.framework/Contents/Info.plist"
 
 ok "install-path: a deviation scoped to the path excuses it, and the glob spans spaces" "$REL
 $LAYOUT
-deviation install-path:Library/Extensions/* 10.9 loads kexts only from here
+deviation install-path:Library/Frameworks/* 10.9 loads frameworks only from here
 deviation install-path:Library/Some*Place/* where upstream expects it
-manifest-outside p.pkg Library/Extensions/X.kext
+manifest-outside p.pkg Library/Frameworks/X.framework
 manifest-outside p.pkg Library/Some%20Place/y
-installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
+installs p.pkg Library/Frameworks/X.framework/Contents/Info.plist
 installs p.pkg Library/Some%20Place/y"
 
-no "install-path: a path deviation excuses only the paths it names" "install-path|Library/PreferencePanes" "$REL
+no "install-path: a path deviation excuses only the paths it names" "install-path|Library/Java" "$REL
 $LAYOUT
-deviation install-path:Library/Extensions/* 10.9 loads kexts only from here
-manifest-outside p.pkg Library/Extensions/X.kext
-manifest-outside p.pkg Library/PreferencePanes/X.prefPane
-installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
-installs p.pkg Library/PreferencePanes/X.prefPane/Contents/Info.plist"
+deviation install-path:Library/Frameworks/* 10.9 loads frameworks only from here
+manifest-outside p.pkg Library/Frameworks/X.framework
+manifest-outside p.pkg Library/Java/JavaVirtualMachines/x.jdk
+installs p.pkg Library/Frameworks/X.framework/Contents/Info.plist
+installs p.pkg Library/Java/JavaVirtualMachines/x.jdk/Contents/Info.plist"
 alone "install-path: a path deviation excuses only the paths it names" "install-path" "$REL
 $LAYOUT
-deviation install-path:Library/Extensions/* 10.9 loads kexts only from here
-manifest-outside p.pkg Library/Extensions/X.kext
-manifest-outside p.pkg Library/PreferencePanes/X.prefPane
-installs p.pkg Library/Extensions/X.kext/Contents/Info.plist
-installs p.pkg Library/PreferencePanes/X.prefPane/Contents/Info.plist"
+deviation install-path:Library/Frameworks/* 10.9 loads frameworks only from here
+manifest-outside p.pkg Library/Frameworks/X.framework
+manifest-outside p.pkg Library/Java/JavaVirtualMachines/x.jdk
+installs p.pkg Library/Frameworks/X.framework/Contents/Info.plist
+installs p.pkg Library/Java/JavaVirtualMachines/x.jdk/Contents/Info.plist"
 
 alone "install-path: a path deviation with no reason excuses nothing" "install-path" "$REL
 $LAYOUT
 deviation install-path
-manifest-outside p.pkg Library/Extensions/X.kext
-installs p.pkg Library/Extensions/X.kext/Contents/Info.plist"
+manifest-outside p.pkg Library/Frameworks/X.framework
+installs p.pkg Library/Frameworks/X.framework/Contents/Info.plist"
 
 ok "manifest: a scoped, reasoned deviation excuses a pkg with no manifest, like any other check" "$REL
 deviation manifest:p.pkg upstream's own pkg, mirrored unmodified
-deviation install-path:usr/local/upstream/* upstream's own layout
-installs p.pkg usr/local/upstream/bin/u"
+deviation install-path:Library/Java/JavaVirtualMachines/* 10.9's java_home looks only here
+installs p.pkg Library/Java/JavaVirtualMachines/x.jdk/Contents/Home"
 
 ok "manifest: a generated entry need not be in the payload" "$REL
 $LAYOUT
-manifest-generated p.pkg Applications/Linux%20X.app"
+manifest-generated p.pkg Applications/Mavergreen/Linux%20X.app"
 
 alone "manifest: an absolute generated entry fails manifest" "manifest" "$REL
 $LAYOUT
-manifest-generated p.pkg /Applications/X.app"
+manifest-generated p.pkg /Applications/Mavergreen/X.app"
 
-alone "manifest: a generated entry under usr/local/mavergreen fails manifest" "manifest" "$REL
+alone "manifest: a generated entry under opt/mavergreen fails manifest" "manifest" "$REL
 $LAYOUT
-manifest-generated p.pkg usr/local/mavergreen/y/bin/y"
+manifest-generated p.pkg opt/mavergreen/y/bin/y"
 
 alone "manifest: a generated entry ending in / fails manifest" "manifest" "$REL
 $LAYOUT
-manifest-generated p.pkg Applications/X.app/"
+manifest-generated p.pkg Applications/Mavergreen/X.app/"
 
 alone "manifest: a generated entry with an empty segment fails manifest" "manifest" "$REL
 $LAYOUT
@@ -1186,7 +1264,7 @@ manifest-generated p.pkg Applications//X.app"
 
 alone "manifest: an outside entry ending in / fails manifest" "manifest" "$REL
 $LAYOUT
-manifest-outside p.pkg Applications/X.app/"
+manifest-outside p.pkg Applications/Mavergreen/X.app/"
 
 alone "manifest: an outside entry with an empty segment fails manifest" "manifest" "$REL
 $LAYOUT
@@ -1203,7 +1281,7 @@ installs p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
 bundle p.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.x.updater
 sparkle p.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml
 launchd p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck
-manifest-appcast p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
+manifest-feed p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
 FEED='asset x.xml 700
 appcast x.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5'
 
@@ -1214,19 +1292,30 @@ alone "feed: every updater the dist installs has its <short>.xml in the dist" "f
 $UPD"
 alone "feed: a manifest whose pkg ships an updater names the derived feed" "feed" "$REL
 $FEED
-$(printf '%s\n' "$UPD" | sed 's|^manifest-appcast p.pkg .*|manifest-appcast p.pkg none|')"
-ok "feed: a product with no updater has an empty appcast and needs no feed" "$REL
+$(printf '%s\n' "$UPD" | sed 's|^manifest-feed p.pkg .*|manifest-feed p.pkg none|')"
+ok "feed: a product with no updater names the derived feed too" "$REL
 $LAYOUT
-manifest-appcast p.pkg none"
-alone "feed: a product with no updater names no feed -- it would 404" "feed" "$REL
+manifest-feed p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
+alone "feed: a product that is not built-on-install must name its feed" "feed" "$REL
 $LAYOUT
-manifest-appcast p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
+manifest-feed p.pkg none"
+alone "feed: a product names a feed that was not derived" "feed" "$REL
+$LAYOUT
+manifest-feed p.pkg https://example.com/x.xml"
+ok "feed: a built-on-install product names no feed" "$REL
+$LAYOUT
+built-on-install x
+manifest-feed p.pkg none"
+alone "feed: a built-on-install product that names a feed would be polled for nothing" "feed" "$REL
+$LAYOUT
+built-on-install x
+manifest-feed p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
 alone "updater: a bundle id that was not derived" "updater" "$REL
 $FEED
 $(printf '%s\n' "$UPD" | sed 's/ dev\.mavergreen\.x\.updater$/ dev.mavergreen.XUpdater/')"
 alone "updater: an app that was not derived" "updater" "$REL
 $FEED
-$(printf '%s\n' "$UPD" | sed '/^derived /!s|Mavergreen/x-updater\.app|Mavergreen/XUpdater.app|')"
+$(printf '%s\n' "$UPD" | sed '/^derived /!s|Mavergreen/x-updater\.app|Mavergreen/y-updater.app|')"
 alone "updater: an update-check label that was not derived" "updater" "$REL
 $FEED
 $(printf '%s\n' "$UPD" | sed '/^derived /!s/dev\.mavergreen\.x-updatecheck/dev.mavergreen.x.updatecheck/g')"
@@ -1268,7 +1357,7 @@ component go126.pkg dev.mavergreen.go126
 manifest go126.pkg go126 dev.mavergreen.go126 go126
 product go126
 manifest-line go126.pkg 1.26
-installs go126.pkg usr/local/mavergreen/go126/mavergreen.plist
+installs go126.pkg opt/mavergreen/go126/mavergreen.plist
 pkg go126-cross.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go126-cross
 asset go126-cross.pkg 10
 component go126-cross.pkg dev.mavergreen.base
@@ -1276,7 +1365,7 @@ component go126-cross.pkg dev.mavergreen.go126-cross
 manifest go126-cross.pkg go126-cross dev.mavergreen.go126-cross go126-cross
 product go126-cross
 manifest-line go126-cross.pkg 1.26-cross
-installs go126-cross.pkg usr/local/mavergreen/go126-cross/mavergreen.plist
+installs go126-cross.pkg opt/mavergreen/go126-cross/mavergreen.plist
 asset go126.xml 700
 appcast go126.xml 1.26.8-mavergreen.7 go126-cross.pkg 10 10.9.5
 asset go126-cross.xml 700
@@ -1291,7 +1380,7 @@ component go.pkg dev.mavergreen.base
 component go.pkg dev.mavergreen.go126
 manifest go.pkg go126 dev.mavergreen.go126 go126
 product go126
-installs go.pkg usr/local/mavergreen/go126/mavergreen.plist'
+installs go.pkg opt/mavergreen/go126/mavergreen.plist'
 G126='repository Mavergreen/golang-126'
 ok "line: go126 is Go 1.26, built in golang-126" "$GO
 $G126
@@ -1329,16 +1418,16 @@ component c.pkg dev.mavergreen.clang22
 manifest c.pkg clang22 dev.mavergreen.clang22 clang22
 product clang22
 repository Mavergreen/clang-22
-installs c.pkg usr/local/mavergreen/clang22/mavergreen.plist
+installs c.pkg opt/mavergreen/clang22/mavergreen.plist
 manifest-line c.pkg 22'
 ok "line: a variant-only line carries no version, so the product is not lined" "$REL
 $LAYOUT
 manifest-line p.pkg cross"
 ok "repository: every product the release ships is one of this repo's, with no repository fact" "$GO
 manifest-line go.pkg 1.26"
-alone "repository: a product this repo does not declare" "repository" "$(printf '%s\n' "$GO" | grep -v '^product ')
+has "repository: a product this repo does not declare" "repository" "$(printf '%s\n' "$GO" | grep -v '^product ')
 manifest-line go.pkg 1.26"
-no "repository: says which product and where to declare it" "repository|.mavergreen/products/go126/" "$(printf '%s\n' "$GO" | sed 's/^product go126$/product go127/')
+says "repository: says which product and where to declare it" repository ".mavergreen/products/go126/" "$(printf '%s\n' "$GO" | sed 's/^product go126$/product go127/')
 manifest-line go.pkg 1.26"
 
 GONAMES='app go126 none
@@ -1452,21 +1541,21 @@ export STEVEDORE="$SD"
 {
   _pk="$(mktemp -d "${TMPDIR:-/tmp}/conformance-pkg.XXXXXX")"   # template: 10.9 BSD mktemp requires one
   _st="$_pk/stage"; _ap="$_st/Library/Application Support/Mavergreen/x-updater.app/Contents"
-  mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/usr/local/mavergreen/x/bin" "$_pk/dist" "$_pk/comp" "$_pk/archive"
+  mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/opt/mavergreen/x/bin" "$_pk/dist" "$_pk/comp" "$_pk/archive"
   _plist() { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>%s</key><string>%s</string></dict></plist>\n' "$1" "$2" > "$3"; }
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.x.updater</string><key>SUFeedURL</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string></dict></plist>\n' > "$_ap/Info.plist"
   _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
   _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
-  echo x > "$_st/usr/local/mavergreen/x/bin/x"; ln -s bin/x "$_st/usr/local/mavergreen/x/link"
+  echo x > "$_st/opt/mavergreen/x/bin/x"; ln -s bin/x "$_st/opt/mavergreen/x/link"
   _macho=""
   if [ "$(uname -s)" = Darwin ] && command -v cc >/dev/null 2>&1 && command -v lipo >/dev/null 2>&1; then
     _macho=1
     printf 'int main(void){return 0;}\n' > "$_pk/h.c"
     # platform: the runner's SDK would make this fixture fail the sdk-pin rule the archive assertion below now enforces; clang honours SDKROOT
-    SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/usr/local/mavergreen/x/bin/hello"
-    ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
+    SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/opt/mavergreen/x/bin/hello"
+    ( cd "$_st/opt/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
   fi
-  cat > "$_st/usr/local/mavergreen/x/mavergreen.plist" <<'PLIST'
+  cat > "$_st/opt/mavergreen/x/mavergreen.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
 <key>product</key><string>x</string>
@@ -1477,15 +1566,15 @@ export STEVEDORE="$SD"
 <string>Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist</string>
 </array>
 <key>generated</key><array><string>Applications/Linux X.app</string></array>
-<key>appcast</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string>
+<key>feed</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string>
 </dict></plist>
 PLIST
   mkdir -p "$_pk/.mavergreen/products/x" "$_pk/.mavergreen/products/w"
-  printf 'X\n' > "$_pk/.mavergreen/products/x/noun"; printf 'W\n' > "$_pk/.mavergreen/products/w/noun"
+  printf 'X\n' > "$_pk/.mavergreen/products/x/noun"; printf 'W\n' > "$_pk/.mavergreen/products/w/noun"; : > "$_pk/.mavergreen/products/w/built-on-install"
   mkdir -p "$_pk/.mavergreen/upstream"; printf '1.0.0\n# renovate: datasource=github-releases depName=example/x\n' > "$_pk/.mavergreen/upstream/VERSION"
   "$SD" component --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavergreen.1 --install-location / \
     --mtime 1700000000 --out "$_pk/dist/x-1.0.0-mavergreen.1.pkg"
-  "$SD" component --root "$_st/usr/local/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavergreen.1 \
+  "$SD" component --root "$_st/opt/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavergreen.1 \
     --install-location /usr/local/y --mtime 1700000000 --out "$_pk/dist/y-1.0.0-mavergreen.1.pkg"
   "$SD" component --root "$_st" --identifier dev.mavergreen.z --version 1.0.0-mavergreen.1 --install-location /opt/z \
     --mtime 1700000000 --out "$_pk/dist/z-1.0.0-mavergreen.1.pkg"
@@ -1529,12 +1618,14 @@ PLIST
     || { echo "FAIL: an undeclared product is the repository check's to report, not a reason to stop the stream: $_fn"; exit 1; }
   [ "$(printf '%s\n' "$_f" | grep -c '^product ')" -eq 2 ] && printf '%s\n' "$_f" | grep -qx 'product w' \
     || { echo "FAIL: one product record per directory in .mavergreen/products/: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -qx 'built-on-install x' \
+    && { echo "FAIL: only a product with .mavergreen/products/<short>/built-on-install has a built-on-install fact: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q '^registered ' \
     && { echo "FAIL: the stream carries no registered record; identity is derived: $_f"; exit 1; }
   rm -rf "$_pk"
   for want in \
     'installs x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist' \
-    'installs x-1.0.0-mavergreen.1.pkg usr/local/mavergreen/x/link' \
+    'installs x-1.0.0-mavergreen.1.pkg opt/mavergreen/x/link' \
     'installs y-1.0.0-mavergreen.1.pkg usr/local/y/bin/x' \
     'bundle x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.x.updater' \
     'launchd x-1.0.0-mavergreen.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck' \
@@ -1551,23 +1642,24 @@ PLIST
     'name x manifest-name X' \
     'name x identifier dev.mavergreen.x' \
     'product x' \
+    'built-on-install w' \
     'manifest-outside x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app' \
     'manifest-outside x-1.0.0-mavergreen.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist' \
     'manifest-generated x-1.0.0-mavergreen.1.pkg Applications/Linux%20X.app' \
     'sparkle x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
     'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
     'manifest-line x-1.0.0-mavergreen.1.pkg none' \
-    'manifest-appcast x-1.0.0-mavergreen.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml'
+    'manifest-feed x-1.0.0-mavergreen.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml'
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
   if [ -n "$_macho" ]; then
-  printf '%s\n' "$_f" | grep -qE '^macho x-1\.0\.0-mavergreen\.1\.pkg usr/local/mavergreen/x/bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
+  printf '%s\n' "$_f" | grep -qE '^macho x-1\.0\.0-mavergreen\.1\.pkg opt/mavergreen/x/bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
     || { echo "FAIL: a Mach-O in a pkg payload must yield a macho fact -- got: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -qE '^macho x-tools\.tar\.gz bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
     || { echo "FAIL: a Mach-O in a shipped tarball must yield a macho fact -- got: $_f"; exit 1; }
   fi
-  printf '%s\n' "$_f" | grep -q '^macho .* usr/local/mavergreen/x/bin/x ' \
+  printf '%s\n' "$_f" | grep -q '^macho .* opt/mavergreen/x/bin/x ' \
     && { echo "FAIL: a non-Mach-O file must not yield a macho fact: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q 'org.sparkle-project' \
     && { echo "FAIL: a framework nested inside the updater is not a top-level bundle; its identifier is not the product's: $_f"; exit 1; }
