@@ -26,7 +26,6 @@ macos-runner make release.yml:build-x86_64
 macos-runner make release.yml:installed-arm64
 macos-runner make release.yml:package
 macos-runner make release.yml:tests
-macos-runner nodejs-24 release.yml:build
 macos-runner openssh release.yml:build
 macos-runner packer-plugin-macosx ci.yml:go-macos
 macos-runner pi release.yml:build
