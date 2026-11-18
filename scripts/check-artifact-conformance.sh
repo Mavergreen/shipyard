@@ -298,7 +298,7 @@ grep '^component ' "$facts" > "$tmp/components" || true
 : > "$tmp/prod-of"
 for pk in $(sed -n 's/^pkg \([^ ][^ ]*\) .*/\1/p' "$facts" | sort -u); do
   n="$(awk -v p="$pk" '$2 == p' "$tmp/manifests" | wc -l | tr -d ' ')"
-  product_files="$(awk -v p="$pk" '$1 == "installs" && $2 == p && index($3, "usr/local/mavergreen/.base/") != 1' "$facts" | wc -l | tr -d ' ')"
+  product_files="$(awk -v p="$pk" '$1 == "installs" && $2 == p && index($3, "usr/local/mavergreen/.base/") != 1 && index($3, "opt/mavergreen/.base/") != 1' "$facts" | wc -l | tr -d ' ')"
   if [ "$product_files" -gt 0 ] && [ "$n" -ne 1 ]; then
     fail manifest "$pk installs $product_files files but carries $n usr/local/mavergreen/<product>/mavergreen.plist manifests; it must carry exactly one, or nothing can find, update or uninstall what it installed" "$pk"
     continue
@@ -325,7 +325,7 @@ EOF
       else o[$3] = 1
       next
     }
-    $1 == "installs" && $2 == p && index($3, "usr/local/mavergreen/" pr "/") != 1 && index($3, "usr/local/mavergreen/.base/") != 1 {
+    $1 == "installs" && $2 == p && index($3, "usr/local/mavergreen/" pr "/") != 1 && index($3, "usr/local/mavergreen/.base/") != 1 && index($3, "opt/mavergreen/.base/") != 1 {
       hit = ""
       if ($3 in o) hit = $3
       else {
@@ -539,7 +539,7 @@ while read -r kind file path; do
   fi
   if [ -n "$prod" ]; then case "$path" in "usr/local/mavergreen/$prod/"*) continue ;; esac; fi
   case "$path" in
-    usr/local/mavergreen/.base/*) [ "$has_base" = no ] || continue ;;
+    usr/local/mavergreen/.base/*|opt/mavergreen/.base/*) [ "$has_base" = no ] || continue ;;
     Applications/*|"Library/Application%20Support/Mavergreen/"*) continue ;;
     Library/LaunchAgents/dev.mavergreen.*.plist|Library/LaunchDaemons/dev.mavergreen.*.plist) continue ;;
   esac

@@ -12,7 +12,7 @@
 #          dev.mavergreen.S.system-replace and "Mavergreen <name> System Replace". COMP's own
 #          identifier must be the derived one. Every archive also carries dev.mavergreen.base (built
 #          via build-base-component.sh, --base-version picks its version) and lists it FIRST in the
-#          choices-outline, so its postinstall -- which installs or upgrades /usr/local/bin/mavergreen
+#          choices-outline, so its postinstall -- which installs or upgrades /opt/mavergreen/bin/mavergreen
 #          -- runs before the product's postinstall runs the helper.
 # spec: tests/shipyard-package-pkg-test.sh -- package-pkg.sh's own integration coverage exercises
 #       --host-arch end to end (both architectures must reach the Distribution).

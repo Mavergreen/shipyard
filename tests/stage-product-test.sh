@@ -62,8 +62,7 @@ sh "$w/scr/preinstall" /x.pkg "$V/" "$V/" || fail "preinstall must succeed"
 [ -f "$V/usr/local/mavergreen/var/openssh/state" ] || fail "preinstall must never touch var/"
 cp -R "$st/usr/local/mavergreen/openssh" "$V/usr/local/mavergreen/"
 mkdir -p "$V/usr/local/mavergreen/.base/9.9"
-sed 's/@MAVERGREEN_VERSION@/9.9/' "$here/../scripts/mavergreen.sh" > "$V/usr/local/mavergreen/.base/9.9/mavergreen"
-chmod +x "$V/usr/local/mavergreen/.base/9.9/mavergreen"
+sh "$here/../scripts/build-base-component.sh" --emit-helper "$V/usr/local/mavergreen/.base/9.9/mavergreen" --version 9.9
 sh "$w/scr/postinstall" /x.pkg "$V/" "$V/" || fail "postinstall must succeed with only a staged helper"
 [ -L "$V/usr/local/mavergreen/bin/ssh" ] || fail "postinstall links the product"
 grep -q post-hook-ran "$V/hook.log" || fail "the product's own postinstall hook runs"
@@ -272,8 +271,7 @@ poisonlog="$w/poison.log"
   printf 'exit 1\n'
 } > "$Vver/usr/local/mavergreen/.base/1.0.9/mavergreen"
 chmod +x "$Vver/usr/local/mavergreen/.base/1.0.9/mavergreen"
-sed 's/@MAVERGREEN_VERSION@/1.0.10/' "$here/../scripts/mavergreen.sh" > "$Vver/usr/local/mavergreen/.base/1.0.10/mavergreen"
-chmod +x "$Vver/usr/local/mavergreen/.base/1.0.10/mavergreen"
+sh "$here/../scripts/build-base-component.sh" --emit-helper "$Vver/usr/local/mavergreen/.base/1.0.10/mavergreen" --version 1.0.10
 sh "$w/scr/postinstall" /x.pkg "$Vver/" "$Vver/" \
   || fail "postinstall must succeed with only staged helpers present, picking the numerically newest one"
 [ ! -f "$poisonlog" ] \
@@ -285,7 +283,7 @@ stg="$w/stage-go"; mkdir -p "$stg/usr/local/mavergreen/go126/bin"; echo go > "$s
 sh "$S" --stage "$stg" --product go126 --version 2 --group go --scripts-out "$w/scr-go" \
   || fail "staging a group member must succeed"
 Vup="$w/volup"; MGup="$Vup/usr/local/mavergreen"; mkdir -p "$Vup/usr/local/bin" "$MGup/go127/bin"
-sed 's/@MAVERGREEN_VERSION@/9.9/' "$here/../scripts/mavergreen.sh" > "$Vup/usr/local/bin/mavergreen"; chmod +x "$Vup/usr/local/bin/mavergreen"
+sh "$here/../scripts/build-base-component.sh" --emit-helper "$Vup/usr/local/bin/mavergreen" --version 9.9
 cp -R "$stg/usr/local/mavergreen/go126" "$MGup/"
 echo go > "$MGup/go127/bin/go"
 xplist "$MGup/go127/mavergreen.plist" product go127 group go line 127 identifier dev.mavergreen.go127 version 1
@@ -333,8 +331,7 @@ else
 fi
 
 V2="$w/vol-hooks"; T2="$V2/usr/local/mavergreen"; mkdir -p "$V2/usr/local/bin" "$T2"
-sed 's/@MAVERGREEN_VERSION@/9.9/' "$here/../scripts/mavergreen.sh" > "$V2/usr/local/bin/mavergreen"
-chmod +x "$V2/usr/local/bin/mavergreen"
+sh "$here/../scripts/build-base-component.sh" --emit-helper "$V2/usr/local/bin/mavergreen" --version 9.9
 printf 'false\n' > "$w/hook-false"
 printf 'exit 0\n' > "$w/hook-exit"
 printf 'if [ -z "$ROOT" ]; then false; fi\n' > "$w/hook-guarded"

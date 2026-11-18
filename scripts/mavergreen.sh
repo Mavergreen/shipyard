@@ -15,6 +15,8 @@ set -eu
 # spec: tests/name-rules-test.sh -- a name is lowercase ASCII; a UTF-8 locale can collate [a-z] to
 #       admit uppercase in case patterns and awk ranges, so names are matched in the C locale.
 LC_ALL=C; export LC_ALL
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/lib/root-chain.sh"
 MAVERGREEN_VERSION="@MAVERGREEN_VERSION@"
 PB=/usr/libexec/PlistBuddy
 ROOT=/

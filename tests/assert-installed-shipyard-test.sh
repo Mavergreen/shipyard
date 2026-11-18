@@ -215,7 +215,7 @@ check "--no-slices runs no lipo" 0 "slices: not checked" \
 #           macOS-only), so off macOS it cannot pass its own check; tests/installed-shipyard-test.sh
 #           runs it on a real install.
 if [ -x /usr/libexec/PlistBuddy ]; then
-  cp "$root/scripts/mavergreen.sh" "$fx/usr/local/bin/mavergreen"; chmod +x "$fx/usr/local/bin/mavergreen"
+  sh "$root/scripts/build-base-component.sh" --emit-helper "$fx/usr/local/bin/mavergreen" --version 0.0.0
   check "an installed helper whose check fails fails the assertion (farm links into a product with no manifest)" 1 "mavergreen check failed" \
     assert --cmake-version "$ver"
   ms="$w/manifest-stage"; mkdir -p "$ms/usr/local/mavergreen/shipyard"

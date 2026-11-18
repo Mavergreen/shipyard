@@ -1578,7 +1578,7 @@ PLIST
   for want in \
     'pkg x-1.0.0-mavergreen.1.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x' \
     'pkg-title x-1.0.0-mavergreen.1.pkg Mavergreen%20X' \
-    'installs x-1.0.0-mavergreen.1.pkg usr/local/mavergreen/.base/1.0.9/mavergreen'
+    'installs x-1.0.0-mavergreen.1.pkg opt/mavergreen/.base/1.0.9/mavergreen'
   do
     printf '%s\n' "$_fa" | grep -qxF "$want" \
       || { echo "FAIL: a product archive's version and identity are the product's, not the base component's that precedes it: want $want -- got: $_fa"; exit 1; }

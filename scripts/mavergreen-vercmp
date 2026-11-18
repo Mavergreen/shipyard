@@ -1,0 +1,11 @@
+#!/bin/sh
+# platform: host-agnostic
+#   usage: mavergreen-vercmp A B
+#          Exits 0, 1 or 2 when A is older than, the same as or newer than B; 3 when either can't be ordered.
+# spec: tests/mavergreen-vercmp-test.sh
+set -eu
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/lib/vercmp.sh"
+[ $# -eq 2 ] || { echo "usage: mavergreen-vercmp A B" >&2; exit 3; }
+r="$(mavergreen_vercmp "$1" "$2")" || exit 3
+case "$r" in -1) exit 0 ;; 0) exit 1 ;; 1) exit 2 ;; *) exit 3 ;; esac
