@@ -21,6 +21,11 @@ v() { printf '%s\n' "$@" | mavergreen_chain_verdict; }
 for p in write append add_file delete writesecurity chown; do
   [ "$(v 'drwxr-xr-x+ 3 0  0  102 Nov 18 13:25 /opt' " 0: user:me allow $p")" = acl-write ] || fail "allow $p is acl-write"
 done
+for bad in 'garbage' ' 0: group:admin allow' ' 0: group:admin permit add_file' ' x: group:admin deny delete' '0 group:admin deny delete'; do
+  [ "$(v 'drwxr-xr-x+ 3 0  0  102 Nov 18 13:25 /opt' "$bad")" = unreadable ] || fail "an ACL line that doesn't parse ('$bad') is unreadable"
+done
+[ "$(v 'total 0')" = unreadable ] || fail "a first line that isn't ls -ldn's is unreadable"
+[ "$(printf '' | mavergreen_chain_verdict)" = unreadable ] || fail "no input is unreadable"
 [ "$(v 'drwxr-xr-x  3 0  0  102 Nov 18 13:25 /Volumes/Macintosh HD 2/opt')" = ok ] || fail "a name with spaces parses as ok"
 [ "$(v 'drwxrwxr-x  3 0  0  102 Nov 18 13:25 /Volumes/Macintosh HD 2/opt')" = group-writable ] || fail "a name with spaces parses as group-writable"
 [ "$(v 'drwxr-xr-x  3 501  0  102 Nov 18 13:25 /Volumes/Macintosh 0 0/opt')" = owner ] || fail "a name with spaces parses as owner"
@@ -41,7 +46,7 @@ V="$(cd -P "$w/gw/vol" && pwd -P)"
 ok "$V/a/b/c" "$V" "a clean three-level chain passes"
 ok "$V/a/b/c" "$V" "VOLROOT bounds the walk: the group-writable dir above it is ignored"
 chmod g+w "$V/a/b"
-no "$V/a/b/c" "$V" "g+w on the middle dir fails" "$V/a/b: group-writable; root will not write or run here; fix: sudo chmod go-w $V/a/b"
+no "$V/a/b/c" "$V" "g+w on the middle dir fails" "$V/a/b: group-writable; root will not write or run here; fix: sudo chmod go-w '$V/a/b'"
 chmod g-w "$V/a/b"; chmod o+w "$V/a"
 no "$V/a/b/c" "$V" "o+w on the top dir fails" "$V/a: other-writable"
 chmod o-w "$V/a"
@@ -68,9 +73,37 @@ no "$w/other" "$V" "a PATH outside VOLROOT fails" "outside $V"
 no "$V/a" "$w/nowhere" "a missing VOLROOT fails" "$w/nowhere"
 
 MAVERGREEN_CHAIN_UID=12345
-no "$V/a/b/c" "$V" "an owner other than the trusted uid fails" "$V/a/b/c: owner; root will not write or run here; fix: sudo chown root:wheel $V/a/b/c"
-no "$V" "$V" "a VOLROOT not owned by the trusted uid names enableOwnership" "$V: owner; root will not write or run here; fix: sudo diskutil enableOwnership $V"
+mavergreen_dir_ok "$V/a/b/c" 2>"$w/err" && fail "an owner other than the trusted uid fails"
+grep -qxF "$V/a/b/c: owner; root will not write or run here; fix: sudo chown root:wheel '$V/a/b/c'" "$w/err" || { cat "$w/err"; fail "the owner fix is chown root:wheel"; }
+no "$V/a/b/c" "$V" "the walk judges VOLROOT first" "$V: owner"
+no "$V" "$V" "a VOLROOT not owned by the trusted uid names enableOwnership" "$V: owner; root will not write or run here; fix: sudo diskutil enableOwnership '$V'"
+mavergreen_chain_ok "$V" // 2>"$w/err" && fail "a // VOLROOT is judged as /"
+grep -qxF "/: owner; root will not write or run here; fix: sudo diskutil enableOwnership '/'" "$w/err" || { cat "$w/err"; fail "a // VOLROOT is normalised to /"; }
 MAVERGREEN_CHAIN_UID="$me"
+
+mkdir -p "$V/Mac HD 2/opt"; chmod 755 "$V/Mac HD 2" "$V/Mac HD 2/opt"
+ok "$V/Mac HD 2/opt" "$V" "a clean chain through a spaced name passes"
+chmod g+w "$V/Mac HD 2/opt"
+no "$V/Mac HD 2/opt" "$V" "a g+w spaced dir fails" "group-writable"
+grep -qxF "$V/Mac HD 2/opt: group-writable; root will not write or run here; fix: sudo chmod go-w '$V/Mac HD 2/opt'" "$w/err" || { cat "$w/err"; fail "the fix line quotes a spaced path"; }
+chmod g-w "$V/Mac HD 2/opt"
+evil="$V/a'b;echo pwn"
+mkdir "$evil"; chmod 775 "$evil"
+no "$evil" "$V" "a g+w dir with a quote in its name fails" "group-writable"
+grep -qxF "$evil: group-writable; root will not write or run here; fix: sudo chmod go-w '$V/a'\\''b;echo pwn'" "$w/err" || { cat "$w/err"; fail "the fix line escapes a quote in the path"; }
+q="$(sed 's/.*fix: sudo chmod go-w //' "$w/err")"
+eval "set -- $q"
+[ $# = 1 ] && [ "$1" = "$evil" ] || fail "the quoted path reads back as one word, the path itself"
+rmdir "$evil"
+
+mkdir -p "$V/real/sub" "$V/farm"; chmod 755 "$V/real" "$V/real/sub"; chmod 775 "$V/farm"
+printf 'x\n' > "$V/real/helper"; chmod 755 "$V/real/helper"
+ln -s ../real/helper "$V/farm/helper"; ln -s ../real "$V/farm/r"
+no "$V/farm/helper" "$V" "a file link in a g+w dir fails, naming the link's dir" "$V/farm: group-writable"
+no "$V/farm/r/sub" "$V" "a dir link in a g+w dir fails, naming the link's dir" "$V/farm: group-writable"
+chmod 755 "$V/farm"
+ok "$V/farm/helper" "$V" "a file link in a clean dir passes"
+ok "$V/farm/r/sub" "$V" "a dir link in a clean dir passes"
 
 printf 'x\n' > "$V/a/b/f"; chmod 755 "$V/a/b/f"
 ok "$V/a/b/f" "$V" "a clean file passes"
@@ -89,6 +122,11 @@ ln -s loop1 "$V/loop2"; ln -s loop2 "$V/loop1"
 no "$V/loop1" "$V" "a symlink loop fails" "$V/loop1"
 ln -s "$w/other/x" "$V/out"
 no "$V/out" "$V" "a link leaving VOLROOT fails" "outside $V"
+ln -s "$w/tmplink/vol/a" "$V/back"
+no "$V/back/b" "$V" "a link whose target passes through a link outside VOLROOT fails" "outside $V"
+ln -s ../vol/a "$V/up"
+ok "$V/up/b" "$V" "a link up through an ancestor of VOLROOT and back passes"
+no "$V/../../other/../gw/vol/a" "$V" "a path that strays outside VOLROOT and back fails" "/other: outside $V"
 
 rd() { mavergreen_root_dir "$1" 2>"$w/err"; }
 rd "$V/made" || { cat "$w/err"; fail "root_dir creates a missing dir"; }
@@ -108,7 +146,7 @@ rd "$V/tight" || { cat "$w/err"; fail "root_dir accepts an existing 700 dir"; }
 [ "$(ls -ldn "$V/tight" | cut -c1-10)" = drwx------ ] || fail "root_dir leaves an existing dir's mode untouched"
 mkdir "$V/loose"; chmod 775 "$V/loose"
 if rd "$V/loose"; then fail "root_dir refuses an existing g+w dir"; fi
-grep -qF "$V/loose: group-writable; root will not write or run here; fix: sudo chmod go-w $V/loose" "$w/err" || { cat "$w/err"; fail "root_dir names the g+w dir"; }
+grep -qF "$V/loose: group-writable; root will not write or run here; fix: sudo chmod go-w '$V/loose'" "$w/err" || { cat "$w/err"; fail "root_dir names the g+w dir"; }
 [ "$(ls -ldn "$V/loose" | cut -c1-10)" = drwxrwxr-x ] || fail "root_dir leaves a refused dir's mode untouched"
 chmod 777 "$w/gw"
 rd "$V/a" || { cat "$w/err"; fail "root_dir judges DIR alone, not its ancestors"; }
