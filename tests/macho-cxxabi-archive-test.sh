@@ -36,3 +36,19 @@ out="$(sh "$MC" dup.a)" || fail "two members of one name: exit $?"
 want="$(printf 'x86_64 defines ___cxa_call_terminate visible\nx86_64 defines ___cxa_throw visible')"
 [ "$out" = "$want" ] || fail "two members of one name: got '$out'"
 echo "ok: members sharing a name are all read"
+
+"$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -flto -c throw.c -o bc.o
+"$AR" rcS bc.a bc.o lib.rmeta
+sh "$MC" bc.a > /dev/null 2>"$w/bc.err" && rc=0 || rc=$?
+[ "$rc" -eq 4 ] || fail "bitcode member: exit $rc, want 4"
+grep -q 'bc.o' "$w/bc.err" || fail "bitcode member: stderr does not name the member"
+echo "ok: bitcode member exits 4, named"
+
+: > empty.txt
+"$AR" rcS none.a lib.rmeta empty.txt
+sh "$MC" none.a > /dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 1 ] || fail "archive with no Mach-O member: exit $rc, want 1"
+"$AR" rcS empty.a
+sh "$MC" empty.a > /dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 1 ] || fail "empty archive: exit $rc, want 1"
+echo "ok: archive with no Mach-O member is not Mach-O"

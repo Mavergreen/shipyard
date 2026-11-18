@@ -5,7 +5,8 @@
 #          that matches scripts/cxxabi-machinery.txt, whether exported or not (a private external, or a
 #          non-external symbol of a linked image, is hidden), and "<arch> loads <path>" for each dylib it
 #          loads or re-exports whose basename starts libc++abi. A static archive is read member by member;
-#          a member that is not Mach-O (an rlib's lib.rmeta) is skipped. An old toolchain's
+#          a member that is not Mach-O (an rlib's lib.rmeta) is skipped, a bitcode member exits 4, and an
+#          archive with no Mach-O member is not Mach-O. An old toolchain's
 #          "<symbol>.eh" frame label counts as <symbol>.
 #          Exit 0; 1 if FILE is not Mach-O; 2 on a usage error; 4 if a reader is missing or failed,
 #          or a member with Mach-O magic could not be read.
@@ -36,6 +37,10 @@ thin_arch() {
     cefaedfe:07000000) echo i386 ;;
     *) return 1 ;;
   esac
+}
+is_bitcode() {
+  case "$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')" in 4243c0de|dec0170b) return 0 ;; esac
+  return 1
 }
 is_macho() {
   case "$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')" in
@@ -80,12 +85,14 @@ read_archive() {
     _n=$((_n + 1)); _d="$t/m$_n"; mkdir "$_d"
     if [ "$_c" -eq 1 ]; then ( cd "$_d" && "$AR" x "$_ar" "$_name" ); else ( cd "$_d" && "$AR" xN "$_c" "$_ar" "$_name" ); fi 2>"$t/err" || reader_died "$AR x $_name"
     for _m in "$_d"/* "$_d"/.[!.]*; do
-      if [ -f "$_m" ] && is_macho "$_m"; then read_member "$_m"; fi
+      [ -f "$_m" ] || continue
+      if is_bitcode "$_m"; then echo "macho-cxxabi: bitcode member $_name of $f cannot be measured" >&2; exit 4; fi
+      if is_macho "$_m"; then _seen=1; read_member "$_m"; fi
     done
   done < "$t/members.n"
 }
 if is_archive "$f"; then
-  read_archive "$f" > "$t/res"
+  _seen=0; read_archive "$f" > "$t/res"; [ "$_seen" -eq 1 ] || exit 1
   LC_ALL=C sort -u "$t/res"
   exit 0
 fi
@@ -95,5 +102,5 @@ archs="$(printf '%s\n' "$info" | sed -n 's/.*: //p' | xargs)"
 for a in $archs; do
   s="$f"
   case "$info" in Architectures*) "${LIPO:-lipo}" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>"$t/err" || reader_died "${LIPO:-lipo} -thin $a"; s="$t/$a" ;; esac
-  if is_archive "$s"; then read_archive "$s" > "$t/res"; LC_ALL=C sort -u "$t/res"; else read_slice "$s" "$a"; fi
+  if is_archive "$s"; then _seen=0; read_archive "$s" > "$t/res"; [ "$_seen" -eq 1 ] || exit 1; LC_ALL=C sort -u "$t/res"; else read_slice "$s" "$a"; fi
 done
