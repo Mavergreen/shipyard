@@ -137,6 +137,12 @@ chmod 755 "$V/opt/mavergreen"
 rc=0; sh "$w/x-1.0.10/Scripts/postinstall" /fake.pkg >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 1 ] || fail "with no target volume the postinstall exits 1 rather than assume /: got $rc"
 
+V="$w/etcdir"; mkdir -p "$V/etc/paths.d/mavergreen"
+rc=0; install_base 1.0.9 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "a paths.d entry it cannot write makes the postinstall exit 1: got $rc"
+[ ! -e "$V/opt/mavergreen/.base/installed-version" ] || fail "a failed paths.d write records no installed-version, so the next base retries"
+[ -z "$(ls "$V/etc/paths.d/mavergreen")" ] || fail "nothing is moved into a paths.d entry that is a directory"
+
 sh "$S" --out "$w/bad.pkg" --version 'v1.0' 2>/dev/null && fail "a non-numeric version must be refused -- the compare is numeric"
 SHIPYARD_VERSION=7.7.7 sh "$S" --emit-postinstall "$w/post-env" \
   || fail "with no installed config, SHIPYARD_VERSION names the base's version (install@v1 exports it on Linux, where the action's checkout has no .git)"
