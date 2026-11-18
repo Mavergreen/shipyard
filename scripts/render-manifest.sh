@@ -1,16 +1,18 @@
 #!/bin/sh
 # platform: host-agnostic -- stevedore lints and reads back the manifest it writes
-#   usage: render-manifest.sh --stage ROOT --product P --version V [--group G]
-#            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]... [--has-updater]
-#          Writes ROOT/usr/local/mavergreen/P/mavergreen.plist. Run it LAST: `outside` is read from
+#   usage: render-manifest.sh --stage ROOT --product P --version V
+#            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
+#          Writes ROOT/opt/mavergreen/P/mavergreen.plist. Run it LAST: `outside` is read from
 #          whatever is staged at that moment.
-#          Its identifier is derived from .mavergreen/products/P/. With --has-updater the manifest's
-#          appcast is the product's feed (scripts/updater-identity.sh feed P); else empty.
+#          Everything else is read from .mavergreen/products/P/: group, line, requires/, restart-to-update.
+#          Its feed is scripts/updater-identity.sh feed P, empty only when P is built-on-install.
 # spec: tests/render-manifest-test.sh
 set -eu
+LC_ALL=C; export LC_ALL
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
-ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; HASUPD=""; EXCL=""; REPL=""; GEN=""
+. "$SELF/lib/name-rules.sh"
+ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; EXCL=""; REPL=""; GEN=""
 nl='
 '
 dotty() { case "/$1/" in *"/./"*|*"/../"*) return 0 ;; esac; return 1; }
@@ -22,10 +24,10 @@ while [ $# -gt 0 ]; do
     --product) P="$2"; shift 2 ;;
     --name) echo "render-manifest: --name is derived from the product; write .mavergreen/products/<P>/noun" >&2; exit 2 ;;
     --version) VER="$2"; shift 2 ;;
-    --group) G="$2"; shift 2 ;;
+    --group) echo "render-manifest: --group is read from the product; write .mavergreen/products/<P>/group" >&2; exit 2 ;;
     --line) echo "render-manifest: --line is derived from the product; write .mavergreen/products/<P>/line" >&2; exit 2 ;;
     --appcast) echo "render-manifest: --appcast is derived from --product; stop passing it" >&2; exit 2 ;;
-    --has-updater) HASUPD=1; shift ;;
+    --has-updater) echo "render-manifest: --has-updater is gone: every product has a feed unless .mavergreen/products/<P>/built-on-install exists" >&2; exit 2 ;;
     --exclude) EXCL="$EXCL$2$nl"; shift 2 ;;
     --replaces)
       case "$2" in
@@ -42,7 +44,9 @@ while [ $# -gt 0 ]; do
         ''|/*) echo "render-manifest: --generated wants a /-relative path, got '$2'" >&2; exit 2 ;;
         *"$nl"*) echo "render-manifest: --generated may not contain a newline: $2" >&2; exit 2 ;;
         */|*//*) echo "render-manifest: --generated may not end in / or have an empty segment: $2" >&2; exit 2 ;;
-        usr/local/mavergreen|usr/local/mavergreen/*) echo "render-manifest: --generated may not name anything under usr/local/mavergreen: $2" >&2; exit 2 ;;
+        opt/mavergreen|opt/mavergreen/*) echo "render-manifest: --generated may not name anything under opt/mavergreen: $2" >&2; exit 2 ;;
+        Applications/Mavergreen/*) : ;;
+        *.app|*.app/*) echo "render-manifest: --generated names an app outside Applications/Mavergreen/: $2" >&2; exit 2 ;;
       esac
       if dotty "$2"; then echo "render-manifest: --generated has a . or .. component: $2" >&2; exit 2; fi
       GEN="$GEN$2$nl"; shift 2 ;;
@@ -53,12 +57,18 @@ done
 ID="$(mavergreen_name identifier "$P")" || exit $?
 NAME="$(mavergreen_name manifest-name "$P")" || exit $?
 L="$(mg_value "products/$P/line" 2>/dev/null)" || L=
-if [ -n "$HASUPD" ]; then
+G="$(mg_value "products/$P/group" 2>/dev/null)" || G=
+G="${G:-$P}"
+if mg_has "products/$P/built-on-install"; then
+  AC=
+else
   AC="$(sh "$SELF/updater-identity.sh" feed "$P")" || exit $?
 fi
-case "${G:-$P}" in *[!a-z0-9-]*|-*) echo "render-manifest: bad group ${G:-$P}" >&2; exit 2 ;; esac
+if mg_has "products/$P/restart-to-update"; then RESTART=true; else RESTART=false; fi
+case "$G" in *[!a-z0-9-]*|-*) echo "render-manifest: bad group $G" >&2; exit 2 ;; esac
 case "$L" in *[!0-9a-z.-]*) echo "render-manifest: bad line $L" >&2; exit 2 ;; esac
-T="$ST/usr/local/mavergreen/$P"; M="$T/mavergreen.plist"
+PFX="$(mavergreen_prefix "$P")" || exit $?
+T="$ST$PFX"; M="$T/mavergreen.plist"
 mkdir -p "$T"; rm -f "$M"
 {
   cat <<'PLIST_HEADER'
@@ -70,10 +80,23 @@ PLIST_HEADER
   xstring identifier "$ID"
   xstring name "$NAME"
   xstring product "$P"
-  xstring group "${G:-$P}"
+  xstring group "$G"
   xstring line "$L"
   xstring version "$VER"
-  xstring appcast "$AC"
+  xstring feed "$AC"
+  printf '  <key>requires</key>\n  <dict>\n'
+  mg_list "products/$P/requires" | while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    k="$(mg_value "products/$P/requires/$d/kind")" || k=
+    printf '    <key>%s</key>\n    <dict>\n' "$(xesc "$d")"
+    printf '      <key>kind</key>\n      <string>%s</string>\n' "$(xesc "$k")"
+    if m="$(mg_value "products/$P/requires/$d/min")"; then
+      printf '      <key>min</key>\n      <string>%s</string>\n' "$(xesc "$m")"
+    fi
+    printf '    </dict>\n'
+  done
+  printf '  </dict>\n'
+  printf '  <key>restart-to-update</key>\n  <%s/>\n' "$RESTART"
   printf '  <key>exports-exclude</key>\n  <array>\n'
   printf '%s' "$EXCL" | while IFS= read -r e; do [ -n "$e" ] || continue; printf '    <string>%s</string>\n' "$(xesc "$e")"; done
   printf '  </array>\n'
@@ -87,7 +110,7 @@ PLIST_HEADER
   printf '%s' "$GEN" | while IFS= read -r g; do [ -n "$g" ] || continue; printf '    <string>%s</string>\n' "$(xesc "$g")"; done
   printf '  </array>\n'
   printf '  <key>outside</key>\n  <array>\n'
-  ( cd "$ST" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | grep -v "^usr/local/mavergreen/$P/" \
+  ( cd "$ST" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | grep -v "^${PFX#/}/" \
     | awk '{ n = split($0, c, "/"); out = $0
              for (k = 1; k <= n; k++) if (c[k] ~ /\.(app|kext|prefPane|plugin|bundle|framework|jdk)$/) { out = c[1]; for (j = 2; j <= k; j++) out = out "/" c[j]; break }
              print out }' | sort -u \
@@ -103,7 +126,13 @@ verify() {
 verify identifier "$ID"
 verify name "$NAME"
 verify product "$P"
-verify group "${G:-$P}"
+verify group "$G"
 verify line "$L"
 verify version "$VER"
-verify appcast "$AC"
+verify feed "$AC"
+verify restart-to-update "$RESTART"
+mg_list "products/$P/requires" | while IFS= read -r d; do
+  [ -n "$d" ] || continue
+  verify "requires:$d:kind" "$(mg_value "products/$P/requires/$d/kind")"
+  if m="$(mg_value "products/$P/requires/$d/min")"; then verify "requires:$d:min" "$m"; fi
+done

@@ -96,7 +96,6 @@ if [ -n "$APP" ]; then
     || { echo "stage_product: $APP was not built for $P: it is '${_got_id:-none}' polling '${_got_feed:-none}', and $P's is $_want_id polling $_want_feed -- build it with mavericks_add_updater_app(PRODUCT $P)" >&2; exit 1; }
   snippet="$SCR/.agent-load"
   sh "$SELF/stage_updater.sh" --stage "$ST" --app "$APP" --product "$P" --snippet-out "$snippet"
-  set -- "$@" --has-updater
 fi
 sh "$SELF/render-manifest.sh" "$@"
 {
