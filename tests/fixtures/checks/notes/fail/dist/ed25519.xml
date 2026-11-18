@@ -15,7 +15,7 @@
 <li>a different fix</li>
 </ul>
 ]]></description>
-      <enclosure url="https://github.com/Mavergreen/ed25519/releases/download/1.0.0-mavergreen.1/ed25519-1.0.0-mavergreen.1.pkg" type="application/octet-stream" sparkle:edSignature="x" length="8971" />
+      <enclosure url="https://github.com/Mavergreen/ed25519/releases/download/1.0.0-mavergreen.1/ed25519-1.0.0-mavergreen.1.pkg" type="application/octet-stream" sparkle:edSignature="x" length="8962" />
     </item>
   </channel>
 </rss>

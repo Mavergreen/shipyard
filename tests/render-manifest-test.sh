@@ -13,6 +13,8 @@ mkdir -p "$st/opt/mavergreen/openssh/bin" "$st/Applications/Mavericks X.app/Cont
          "$st/Library/LaunchAgents" "$st/Library/Application Support/Mavergreen/OpenSSHUpdater.app/Contents" \
          "$st/Library/Java/JavaVirtualMachines/x.jdk/Contents"
 touch "$st/Library/Java/JavaVirtualMachines/x.jdk/Contents/Info.plist"
+mkdir -p "$st/System/Library/Filesystems/z.fs/Contents"
+touch "$st/System/Library/Filesystems/z.fs/Contents/Info.plist"
 ln -s /opt/mavergreen/openssh "$st/Library/Java/JavaVirtualMachines/x.jdk/Contents/Home"
 touch "$st/opt/mavergreen/openssh/bin/ssh" "$st/Applications/Mavericks X.app/Contents/MacOS/X" \
       "$st/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" \
@@ -47,8 +49,8 @@ grep -qF GITHUB_REPOSITORY "$w/err" || fail "the refusal names GITHUB_REPOSITORY
 sh "$S" --stage "$st" --product openssh --version 1 --appcast https://example/appcast.xml 2>/dev/null \
   && fail "--appcast must be refused: the feed is derived, never chosen"
 outside="$(i=0; while v="$("$SD" plist get "$M" "outside:$i" 2>/dev/null)"; do echo "$v"; i=$((i+1)); done)"
-[ "$outside" = "$(printf '%s\n' 'Applications/Mavericks X.app' 'Library/Application Support/Mavergreen/OpenSSHUpdater.app' 'Library/Java/JavaVirtualMachines/x.jdk' 'Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist')" ] \
-  || fail "outside lists what is installed outside the tree, bundles (a .jdk among them) collapsed, spaces intact: $outside"
+[ "$outside" = "$(printf '%s\n' 'Applications/Mavericks X.app' 'Library/Application Support/Mavergreen/OpenSSHUpdater.app' 'Library/Java/JavaVirtualMachines/x.jdk' 'Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist' 'System/Library/Filesystems/z.fs')" ] \
+  || fail "outside lists what is installed outside the tree, bundles (a .jdk and a .fs among them) collapsed, spaces intact: $outside"
 nasty_name='O'\''Brien "quoted" \back & <angle>'
 printf '%s\n' "$nasty_name" > "$w/repo/.mavergreen/products/openssh/noun"
 sh "$S" --stage "$st" --product openssh --version 1

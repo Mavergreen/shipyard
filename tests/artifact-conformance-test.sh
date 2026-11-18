@@ -33,6 +33,11 @@ clean() {  # facts must not trip check $2 (others may)
   ! printf '%s\n' "$out" | grep -q "^$2: " || { echo "FAIL $1: $2 should not trip, got: $out"; exit 1; }
 }
 
+clean2() {  # facts must trip neither install-path nor manifest
+  out="$(printf '%s\nend-of-facts\n' "$2" | sh "$S" 2>&1 >/dev/null)" || :
+  ! printf '%s\n' "$out" | grep -qE '^(install-path|manifest): ' || { echo "FAIL $1: install-path and manifest should both pass, got: $out"; exit 1; }
+}
+
 says() {  # facts must fail with a failure that starts with check $2's id and carries text $3 (others may trip too)
   out="$(printf '%s\nend-of-facts\n' "$4" | sh "$S" 2>&1 >/dev/null)" && { echo "FAIL $1: expected failure"; exit 1; }
   printf '%s\n' "$out" | grep -q "^$2: " || { echo "FAIL $1: a failure should start with '$2: ', got: $out"; exit 1; }
@@ -994,7 +999,7 @@ says "install-path: a bare /Applications is not the family's" install-path "inst
 $LAYOUT
 installs p.pkg Applications/Go.app/Contents/MacOS/Go"
 
-clean "install-path: the places the OS dictates pass" install-path "$REL
+clean2 "install-path: the places the OS dictates pass" "$REL
 $LAYOUT
 manifest-outside p.pkg Library/Extensions/X.kext
 manifest-outside p.pkg System/Library/Extensions/Y.kext
@@ -1017,7 +1022,7 @@ installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
 installs p.pkg Library/LaunchAgents/dev.mavergreen.xa.plist
 installs p.pkg Applications/Mavergreen/Go.app/Contents/Info.plist"
 
-for _bad in Library/Extensions/stray Library/Extensions/a/b.kext/c Library/PreferencePanes/P.kext/x Library/LaunchDaemons/com.example.x.plist \
+for _bad in Applications/Mavergreen/readme.txt Library/Extensions/stray Library/Extensions/a/b.kext/c Library/PreferencePanes/P.kext/x Library/LaunchDaemons/com.example.x.plist \
             Library/Application%20Support/Mavergreen/stuff Library/Application%20Support/Other/x-updater.app/x Library/Java/JavaVirtualMachines/x.jdk/Contents/Home; do
   has "install-path: $_bad is not an OS-dictated place" "install-path" "$REL
 $LAYOUT
@@ -1037,7 +1042,7 @@ product x
 installs p.pkg opt/mavergreen/x/mavergreen.plist
 installs p.pkg opt/mavergreen/.base/1.0.9/mavergreen'
 
-says "install-path: .base without the base component says so" install-path "opt/mavergreen/.base/1/x -- outside" 'expected 1.0.0-mavergreen.1
+says "install-path: .base without the base component says so" install-path "opt/mavergreen/.base (with the base component)" 'expected 1.0.0-mavergreen.1
 upstream-kind port
 pkg p.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
 component p.pkg dev.mavergreen.x
@@ -1053,13 +1058,6 @@ manifest p.pkg x dev.mavergreen.x x
 product x
 installs p.pkg opt/mavergreen/x/mavergreen.plist
 installs p.pkg opt/mavergreen/.base/1/x"
-
-no "manifest: a manifest naming a product this repo does not declare" "manifest|nosuch" "$REL
-component p.pkg dev.mavergreen.base
-component p.pkg dev.mavergreen.nosuch
-manifest p.pkg nosuch dev.mavergreen.nosuch nosuch
-product x
-installs p.pkg opt/mavergreen/nosuch/mavergreen.plist"
 
 no "manifest: a pkg that installs a product must carry its manifest" "manifest" "$REL
 component p.pkg dev.mavergreen.base
@@ -1138,6 +1136,12 @@ manifest-outside p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
 installs p.pkg Applications/Mavergreen/X.app/Contents/MacOS/X
 installs p.pkg Applications/Mavergreen/X.app/Contents/Info.plist
 installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist"
+
+ok "manifest: a .fs bundle entry covers the files beneath it" "$REL
+$LAYOUT
+manifest-outside p.pkg System/Library/Filesystems/Z.fs
+installs p.pkg System/Library/Filesystems/Z.fs/Contents/Info.plist
+installs p.pkg System/Library/Filesystems/Z.fs/Contents/Resources/mount"
 
 ok "manifest: a .jdk bundle entry covers the Info.plist and Home link beneath it" "$REL
 $LAYOUT
@@ -1425,9 +1429,9 @@ $LAYOUT
 manifest-line p.pkg cross"
 ok "repository: every product the release ships is one of this repo's, with no repository fact" "$GO
 manifest-line go.pkg 1.26"
-has "repository: a product this repo does not declare" "repository" "$(printf '%s\n' "$GO" | grep -v '^product ')
+alone "repository: a product this repo does not declare" "repository" "$(printf '%s\n' "$GO" | grep -v '^product ')
 manifest-line go.pkg 1.26"
-says "repository: says which product and where to declare it" repository ".mavergreen/products/go126/" "$(printf '%s\n' "$GO" | sed 's/^product go126$/product go127/')
+no "repository: says which product and where to declare it" "repository|.mavergreen/products/go126/" "$(printf '%s\n' "$GO" | sed 's/^product go126$/product go127/')
 manifest-line go.pkg 1.26"
 
 GONAMES='app go126 none

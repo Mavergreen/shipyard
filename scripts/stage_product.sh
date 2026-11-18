@@ -107,7 +107,7 @@ if [ -n "$APP" ]; then
 fi
 sh "$SELF/render-manifest.sh" "$@"
 ANC="$( (cd "$ST" && find "Library/Application Support" ! -path "Library/Application Support" 2>/dev/null) \
-  | awk -F/ '{ n = NF; for (k = 3; k <= NF; k++) if ($k ~ /\.(app|kext|prefPane|plugin|bundle|framework|jdk)$/) { n = k; break }
+  | awk -F/ '{ n = NF; for (k = 3; k <= NF; k++) if ($k ~ /\.(app|kext|prefPane|plugin|bundle|framework|jdk|fs)$/) { n = k; break }
                p = $1 "/" $2; for (k = 3; k <= n; k++) { p = p "/" $k; print p } }' | sort -u)"
 {
   printf '#!/bin/sh\n'
@@ -176,7 +176,7 @@ while [ -n "$_rr" ] && _o="$(/usr/libexec/PlistBuddy -c "Print :outside:$_i" "$_
   _i=$((_i + 1))
   case "$_o" in ''|/*|*/|*//*|opt/mavergreen|opt/mavergreen/*) continue ;; esac
   case "/$_o/" in *"/./"*|*"/../"*) continue ;; esac
-  case "${_o##*/}" in *.app|*.kext|*.prefPane|*.plugin|*.bundle|*.framework|*.jdk) ;; *) continue ;; esac
+  case "${_o##*/}" in *.app|*.kext|*.prefPane|*.plugin|*.bundle|*.framework|*.jdk|*.fs) ;; *) continue ;; esac
   _b="$ROOT/$_o"
   if [ -L "$_b" ] || [ ! -d "$_b" ]; then continue; fi
   _pd="$(cd -P "$(dirname "$_b")" 2>/dev/null && pwd -P)" || continue

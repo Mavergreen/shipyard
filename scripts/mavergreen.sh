@@ -328,7 +328,7 @@ remove_outside() {
   fi
   if [ -d "$_full" ]; then
     case "$(basename "$_full")" in
-      *.app|*.kext|*.prefPane|*.plugin|*.bundle|*.framework|*.jdk)
+      *.app|*.kext|*.prefPane|*.plugin|*.bundle|*.framework|*.jdk|*.fs)
         unload "$1"
         rm -rf "$_full" || { echo "mavergreen: could not remove $1" >&2; return 1; }
         return 0 ;;

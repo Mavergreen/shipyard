@@ -151,7 +151,7 @@ fix_of() {
     app-name) echo "name an app = noun bundle <noun>.app with CFBundleName and CFBundleDisplayName the noun and CFBundleIdentifier dev.mavergreen.<short>; keep an app = upstream bundle's CFBundleName equal to its filename, with no other CFBundleDisplayName" ;;
     bundle-id) echo "give the bundle a CFBundleIdentifier beginning dev.mavergreen., or declare .mavergreen/deviations/bundle-id/<label>/ (scope <its identifier>, a reason, a revisit)" ;;
     launchd-label) echo "name the job dev.mavergreen.<name> and its plist <Label>.plist, or declare .mavergreen/deviations/launchd-label/<label>/ (scope <its Label>, a reason, a revisit)" ;;
-    manifest) echo "install opt/mavergreen/<product>/mavergreen.plist (render-manifest.sh writes it), listing every file outside the product's tree under outside, for a product declared in .mavergreen/products/<product>/" ;;
+    manifest) echo "install opt/mavergreen/<product>/mavergreen.plist (render-manifest.sh writes it), listing every file outside the product's tree under outside" ;;
     base) echo "build the product archive with set_install_floor.sh, which lists dev.mavergreen.base first" ;;
     line) echo "write .mavergreen/products/<short>/line (dotted, like 1.27), render the manifest from it with render-manifest.sh, and release from the repo whose suffix is that line without dots, or fix the version" ;;
     install-path) echo "install under opt/mavergreen/<product>/ (an app under Applications/Mavergreen/; list the exceptions in the manifest's outside), or, where the OS dictates the place, declare .mavergreen/deviations/install-path/<label>/ (scope <glob>, a reason, a revisit)" ;;
@@ -310,8 +310,6 @@ $(awk -v p="$pk" '$2 == p' "$tmp/manifests")
 EOF
   [ "$mprod" = "$mdir" ] \
     || fail manifest "$pk's manifest names product '$mprod' but sits in opt/mavergreen/$(dec "$mdir")" "$pk"
-  awk -v m="$mprod" '$1 == "product" && $2 == m { f = 1 } END { exit !f }' "$facts" \
-    || fail manifest "$pk's manifest names product '$mprod', which this repo does not declare in .mavergreen/products/$mprod/" "$pk"
   [ "$mid" = "dev.mavergreen.$mprod" ] \
     || fail manifest "$pk's manifest names identifier $mid; product $mprod's is dev.mavergreen.$mprod" "$pk"
   awk -v p="$pk" -v i="$mid" '$2 == p && $3 == i { f = 1 } END { exit !f }' "$tmp/components" \
@@ -334,7 +332,7 @@ EOF
       else {
         n = split($3, c, "/"); s = c[1]
         for (i = 1; i < n && hit == ""; i++) {
-          if ((s in o) && c[i] ~ /\.(app|kext|prefPane|plugin|bundle|framework|jdk)$/) hit = s
+          if ((s in o) && c[i] ~ /\.(app|kext|prefPane|plugin|bundle|framework|jdk|fs)$/) hit = s
           s = s "/" c[i + 1]
         }
       }
@@ -346,7 +344,7 @@ EOF
     case "$why" in
       unlisted) unlisted=$((unlisted + 1)); [ "$unlisted" -le 20 ] || continue
         fail manifest "$pk installs $(dec "$op") outside its tree, and its manifest's outside list does not name it -- uninstall would leave it behind" "$pk" ;;
-      unused) fail manifest "$pk's manifest lists $(dec "$op") in outside, but the pkg installs nothing it would remove -- uninstall deletes an entry only as that exact file or link, or as a whole .app, .kext, .prefPane, .plugin, .bundle, .framework or .jdk directory" "$pk" ;;
+      unused) fail manifest "$pk's manifest lists $(dec "$op") in outside, but the pkg installs nothing it would remove -- uninstall deletes an entry only as that exact file or link, or as a whole .app, .kext, .prefPane, .plugin, .bundle, .framework, .jdk or .fs directory" "$pk" ;;
       badshape) fail manifest "$pk's manifest lists outside entry '$(dec "$op")' in a shape the helper refuses to uninstall -- empty, absolute, ending in /, an empty, . or .. segment, or under opt/mavergreen" "$pk" ;;
     esac
   done < "$tmp/outside-$pk"
@@ -552,7 +550,7 @@ while read -r kind file path; do
   case "$path" in
     usr/local|usr/local/*) printf '%s\n' "$file: $(dec "$path")" >> "$tmp/ip-usrlocal"; continue ;;
     opt/mavergreen/.base/*) [ "$has_base" = no ] || continue ;;
-    Applications/Mavergreen/*) continue ;;
+    Applications/Mavergreen/*) os_bundle "$path" Applications/Mavergreen/ .app && continue ;;
     Library/LaunchAgents/dev.mavergreen.*.plist|Library/LaunchDaemons/dev.mavergreen.*.plist)
       case "${path#Library/*/}" in */*) ;; *) continue ;; esac ;;
   esac

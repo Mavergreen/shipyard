@@ -5,13 +5,13 @@ Anything that wants to know what is installed (the helper, conformance, uninstal
 /opt/mavergreen/*/mavergreen.plist, so a pkg without a manifest is invisible to all of them, and a file
 installed outside the product's tree that the manifest's outside list does not name is left behind by
 uninstall. The check requires: exactly one manifest per pkg that installs anything besides the base's staged
-helper; its product equal to its directory and naming a product this repo declares in .mavergreen/products/;
+helper; its product equal to its directory;
 its identifier dev.mavergreen.<product> and one
 of the pkg's components; its outside list naming every file installed outside the tree, exactly as
 uninstall would remove it (the entry, or a bundle directory and what is inside it), with no entry left
 unused and none in a shape the helper refuses; and every generated entry in a shape the helper accepts.
-stage_product.sh writes the manifest; never write it by hand. The repository check reports the same
-undeclared product for the release as a whole.
+stage_product.sh writes the manifest; never write it by hand. Whether the product is one this repo
+declares in .mavergreen/products/ is the repository check's to say.
 
 ## Incident
 None recorded.
