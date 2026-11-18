@@ -46,10 +46,17 @@ cat > "$work/bin/nm" <<'SH'
 #!/bin/sh
 case "$2" in
   */throws) printf '0000000100000f50 (__TEXT,__text) external ___cxa_throw\n' ;;
-  */librecaulk.a) printf '0000000000000000 (__TEXT,__text) external ___cxa_uncaught_exceptions\n' ;;
+  */recaulk.o) printf '0000000000000000 (__TEXT,__text) external ___cxa_uncaught_exceptions\n' ;;
 esac
 SH
-chmod +x "$work/bin/lipo" "$work/bin/otool" "$work/bin/nm"
+cat > "$work/bin/ar" <<'SH'
+#!/bin/sh
+case "$1" in
+  t) echo recaulk.o ;;
+  x) printf '\317\372\355\376' > "$3" ;;
+esac
+SH
+chmod +x "$work/bin/lipo" "$work/bin/otool" "$work/bin/nm" "$work/bin/ar"
 LIPO="$work/bin/lipo"; OTOOL="$work/bin/otool"; NM="$work/bin/nm"; export LIPO OTOOL NM
 STEVEDORE="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed -- the generator reads each repo's released pkgs with it"; exit 1; }
 export STEVEDORE
