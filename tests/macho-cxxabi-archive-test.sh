@@ -1,0 +1,38 @@
+#!/bin/sh
+# platform: host-agnostic
+set -eu
+here="$(cd "$(dirname "$0")" && pwd)"
+MC="$here/../scripts/macho-cxxabi.sh"
+CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/../components/clang22" 2>/dev/null)" || { echo "SKIP: no clang22 to fetch"; exit 77; }
+w="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/mc-archive.XXXXXX")" && pwd)"; trap 'rm -rf "$w"' EXIT
+fail() { echo "FAIL: $*"; exit 1; }
+export LIPO="$CL/bin/llvm-lipo" OTOOL="$CL/bin/llvm-otool" NM="$CL/bin/llvm-nm"
+AR="$CL/bin/llvm-ar"
+cd "$w"
+
+printf 'void __cxa_throw(void) {}\n' > throw.c
+"$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -c throw.c -o throw.o
+printf 'rustc 1.99.1 metadata, not an object\n' > lib.rmeta
+
+"$AR" rcs t.rlib throw.o lib.rmeta
+out="$(sh "$MC" t.rlib)" && rc=0 || rc=$?
+[ "$rc" -eq 0 ] || fail "archive with an rmeta member: exit $rc, want 0"
+[ "$out" = "x86_64 defines ___cxa_throw visible" ] || fail "archive with an rmeta member: got '$out'"
+echo "ok: archive with an rmeta member is read"
+
+size="$(wc -c < throw.o | tr -d ' ')"
+dd if=throw.o bs=1 count=$((size / 2)) of=corrupt.o 2>/dev/null
+"$AR" rcS bad.a corrupt.o lib.rmeta
+sh "$MC" bad.a > /dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 4 ] || fail "corrupt Mach-O member: exit $rc, want 4"
+echo "ok: corrupt Mach-O member still fails"
+
+printf 'void __cxa_call_terminate(void) {}\n' > term.c
+mkdir dup1 dup2
+cp throw.o dup1/m.o
+"$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -c term.c -o dup2/m.o
+"$AR" rcS dup.a dup1/m.o dup2/m.o
+out="$(sh "$MC" dup.a)" || fail "two members of one name: exit $?"
+want="$(printf 'x86_64 defines ___cxa_call_terminate visible\nx86_64 defines ___cxa_throw visible')"
+[ "$out" = "$want" ] || fail "two members of one name: got '$out'"
+echo "ok: members sharing a name are all read"

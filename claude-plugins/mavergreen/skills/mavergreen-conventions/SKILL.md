@@ -2063,7 +2063,7 @@ could never match and would excuse nothing in silence, and refuses an `unlinked`
 
 **One C++ runtime per process (`cxxabi`).** Two copies of libc++abi in one process each keep their own
 exception and type-info state, so a throw that crosses from one to the other is not caught, or
-terminates. `artifact-facts.sh` reads every shipped Mach-O, archives member by member, with
+terminates. `artifact-facts.sh` reads every shipped Mach-O, archives member by member (a member that is not Mach-O, such as an rlib's `lib.rmeta`, is skipped), with
 `macho-cxxabi.sh`, and emits two facts: `cxxabi-defines <artifact> <path> <arch> <symbol>
 <visible|hidden>` for each C++ runtime symbol (`scripts/cxxabi-machinery.txt`) a slice defines beyond the
 allow-list, and `cxxabi-loads <artifact> <path> <arch> <load path>` for each libc++abi it loads other
