@@ -9,7 +9,7 @@ whose line does, makes a consumer choose between two products by asset name.
 2026-10-14: five native/-cross pairs made consumers choose by asset name, fd and rg by uname -m (architectures survey §3)
 
 ## Limits
-It reads .mavergreen/products/ only.
+It reads .mavergreen/products/ only. It matches any short name ending in cross, so crisscross would be refused; no such product exists.
 
 ## Deviating
 No deviation is read.

@@ -225,8 +225,9 @@ script does not.
 ## The compiler: clang22 on every host
 
 **Products build with clang22 on every host, and nothing a build needs comes from the Command Line
-Tools.** `fetch_clang22.sh` gives the host's clang22: the pinned Linux archive on Linux, `clang22`
-on a Mac. Its `clang.cfg` is part of the compiler: it places
+Tools.** `fetch_clang22.sh` gives the host's clang22: the pinned Linux archive on Linux; on a Mac, until P11,
+the pinned pre-flag-day clang22, installed under the old prefix as its cross product, and on 10.9 its native
+pkg (P11's re-pin to a merged universal clang22 retires the split). Its `clang.cfg` is part of the compiler: it places
 `librecaulk.a` at the tail of the inputs, before the driver's `-lSystem`, so a Recaulk fix to a 10.9
 function (posix_spawn; pselect in 20261107.1) reaches every product at its next build, with no
 per-product plumbing. clang22's `llvm-*` tools stand in for Xcode's: no `xcrun`, no Command Line Tools
@@ -1549,7 +1550,7 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
 ## Sparkle updater
 
 - **An update of a large pkg can sit forever after it has installed** (Sparkle 1.27.3, measured
-  2026-10-18 updating clang22 on Golden Gate). The privileged helper runs
+  2026-10-18 updating the pinned pre-flag-day clang22 on Golden Gate). The privileged helper runs
   `installer -verboseR`, whose output goes to an 8 KB socket nothing reads, so a long install's
   output fills it and installer blocks on its last write. Check the receipt
   (`pkgutil --pkg-info <identifier>`); if it shows the new version, quit the updater's Autoupdate
@@ -1589,10 +1590,10 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   `.mavergreen/ingredients/clang22/LINUX_SHA256`. `CL="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" .)"`
   prints the toolchain root for this host, fetched, verified and cached:
   - Linux: the pinned `linux-x86_64` archive.
-  - A Mac: the `clang22` pkg, through stevedore.
-  - Mac OS X 10.9: the same pkg; 10.9 has no
-    AArch64 backend, so x86_64 only.
-  - Either Mac: an installed `clang22` at the pinned release.
+  - A Mac: until P11, the pinned pre-flag-day clang22, installed under the old prefix as its cross product, through stevedore.
+  - Mac OS X 10.9: until P11, that release's native pkg, since the cross pkg does not run there and 10.9 has no
+    AArch64 backend, so x86_64 only. P11's re-pin to a merged universal clang22 retires the split.
+  - Either Mac: the installed one at the pinned release.
   An updater-only configure sets `MAVERICKS_REQUIRE_APPLECLANG OFF` before `include(Mavergreen)`. The
   AppleClang gate is per configure, not per target, and it stays for every other caller. Configure once
   per arch through `MavergreenToolchain.cmake` with:
