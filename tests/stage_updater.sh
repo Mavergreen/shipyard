@@ -40,7 +40,7 @@ grep -q "$LABEL.plist" "$PI" || fail "postinstall label wrong"
 sh -n "$PI" || fail "rendered postinstall is not valid sh"
 no_token "$PI"
 
-[ ! -d "$STAGE/usr/local/bin" ] || fail "staged something into /usr/local/bin -- the daily agent is the only check, with no manual-trigger shim"
+[ ! -d "$STAGE/opt/mavergreen/bin" ] || fail "staged something into /opt/mavergreen/bin -- the daily agent is the only check, with no manual-trigger shim"
 
 STAGE2="$T/stage2"; SNIP="$T/snips/agent-load.sh"
 sh "$ROOT/scripts/stage_updater.sh" --stage "$STAGE2" --app "$APP" --product openssh --snippet-out "$SNIP"

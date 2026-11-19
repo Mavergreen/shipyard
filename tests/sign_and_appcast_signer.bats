@@ -37,7 +37,7 @@ serve_tarball() {
 }
 
 serve_pkg() {
-  signer_tree "$WORK/pkgroot/usr/local/mavergreen/ed25519" pkg
+  signer_tree "$WORK/pkgroot/opt/mavergreen/ed25519" pkg
   sh "$ROOT/scripts/build_component_pkg.sh" --root "$WORK/pkgroot" --identifier dev.mavergreen.ed25519 \
     --version 1.0 --install-location / --out "$REL/ed25519-$PIN.pkg" > /dev/null 2>&1
 }
@@ -95,8 +95,8 @@ sign() {  # sign HOST
 }
 
 @test "a pkg with no signer never falls back to the working directory" {
-  mkdir -p "$WORK/pkgroot/usr/local/mavergreen/ed25519/share"
-  : > "$WORK/pkgroot/usr/local/mavergreen/ed25519/share/x"
+  mkdir -p "$WORK/pkgroot/opt/mavergreen/ed25519/share"
+  : > "$WORK/pkgroot/opt/mavergreen/ed25519/share/x"
   sh "$ROOT/scripts/build_component_pkg.sh" --root "$WORK/pkgroot" --identifier dev.mavergreen.ed25519 \
     --version 1.0 --install-location / --out "$REL/ed25519-$PIN.pkg" > /dev/null 2>&1
   sums "ed25519-$PIN.pkg"

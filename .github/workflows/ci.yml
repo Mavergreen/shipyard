@@ -80,10 +80,11 @@ jobs:
           # spec: scripts/package-pkg.sh -- the install bakes its prefix into mavergreen-presets.json, so
           #       it installs INTO the pkg's prefix, staged under DESTDIR; package-pkg.sh refuses presets
           #       naming any other toolchain file.
+          . scripts/mavergreen-meta.sh && . scripts/lib/name-rules.sh
           DESTDIR="$RUNNER_TEMP/payload-stage" cmake --install "$RUNNER_TEMP/payload-build" \
-            --prefix /usr/local/mavergreen/shipyard
+            --prefix "$(mavergreen_prefix shipyard)"
           sh scripts/package-pkg.sh \
-            --shipyard-prefix "$RUNNER_TEMP/payload-stage/usr/local/mavergreen/shipyard" \
+            --shipyard-prefix "$RUNNER_TEMP/payload-stage$(mavergreen_prefix shipyard)" \
             --app "$RUNNER_TEMP/shipyard-updater.app" \
             --version "$v" \
             --dist "$RUNNER_TEMP/dist"

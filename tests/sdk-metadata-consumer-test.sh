@@ -13,13 +13,14 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 fx="$here/fixtures/sdk-metadata-consumer"
 recipes="$here/fixtures/sdk-metadata/recipes-v1.json"
-SC="${CMAKE:-$(command -v shipyard-cmake || echo /usr/local/mavergreen/bin/shipyard-cmake)}"
+. "$root/scripts/mavergreen-meta.sh"
+SC="${CMAKE:-$(command -v shipyard-cmake || echo "$(mavergreen_prefix)/bin/shipyard-cmake")}"
 CC="${SDK_METADATA_CC:-}"
 if [ -z "$CC" ]; then
-  for c in /usr/local/mavergreen/bin/clang-22 /usr/local/mavergreen/bin/clang-22-cross; do
+  for c in "$(mavergreen_prefix)/bin/clang-22" "$(mavergreen_prefix)/bin/clang-22-cross" "$(command -v clang-22 || :)" "$(command -v clang-22-cross || :)"; do
     [ -x "$c" ] && { CC="$c"; break; }
   done
-  CC="${CC:-/usr/local/mavergreen/bin/clang-22 or clang-22-cross}"
+  CC="${CC:-$(mavergreen_prefix)/bin/clang-22 or clang-22-cross}"
 fi
 unmet() {
   if [ "${SHIPYARD_ON_TARGET:-}" = 1 ]; then echo "FAIL: $*"; exit 1; fi

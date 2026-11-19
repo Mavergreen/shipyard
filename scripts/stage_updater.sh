@@ -10,7 +10,7 @@
 #            --product      P, a short name this repo declares
 #            --scripts-out  dir to write a complete `postinstall` into (pass as --scripts to pkgbuild)
 #            --snippet-out  file to write JUST the agent-load fragment into, for a postinstall to source
-#          Both outputs are optional. There is deliberately NO manual-trigger shim in /usr/local/bin:
+#          Both outputs are optional. There is deliberately NO manual-trigger shim in /opt/mavergreen/bin:
 #          the agent checks daily on its own, and a command nobody documented is a command nobody runs.
 # spec: tests/stage_updater.sh
 set -eu

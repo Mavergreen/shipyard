@@ -47,7 +47,7 @@ stub() {  # $1 = stub name, $2 = install name
 stub sys /usr/lib/libc++abi.dylib
 stub rpath1 @rpath/libc++abi.1.dylib
 stub loader1 @loader_path/libc++abi.1.dylib
-stub tree1 /usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib
+stub tree1 /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib
 stub rpath0 @rpath/libc++abi.dylib
 stub vendor1 /opt/vendor/lib/libc++abi.1.dylib
 stub rpath2 @rpath/libc++abi.2.dylib

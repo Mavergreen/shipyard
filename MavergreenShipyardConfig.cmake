@@ -29,11 +29,11 @@ if(CMAKE_HOST_APPLE)
      OR NOT EXISTS "${_shipyard_cmake_pair}/shipyard/bin/shipyard-cmake"
      OR CMAKE_VERSION VERSION_LESS _shipyard_cmake_min)
     message(FATAL_ERROR
-      "shipyard must be configured with shipyard-cmake (/usr/local/mavergreen/bin/shipyard-cmake), "
+      "shipyard must be configured with shipyard-cmake (/opt/mavergreen/bin/shipyard-cmake), "
       "which runs the Mavergreen cmake product installed beside shipyard, CMake ${_shipyard_cmake_min} or later. "
       "In GitHub Actions, Mavergreen/shipyard/.github/actions/install@v1 provides both. This configure is "
       "running ${CMAKE_COMMAND}, CMake ${CMAKE_VERSION}. IDEs with a configurable CMake executable: point that setting at "
-      "/usr/local/mavergreen/bin/shipyard-cmake.")
+      "/opt/mavergreen/bin/shipyard-cmake.")
   endif()
 endif()
 

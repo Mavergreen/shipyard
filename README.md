@@ -19,17 +19,21 @@ sudo installer -pkg cmake-pkg/cmake-*.pkg -target /
 sudo installer -pkg shipyard-pkg/shipyard-*.pkg -target /
 ```
 
-Shipyard's modules, scripts and launchers land in `/usr/local/mavergreen/shipyard`.
-CMake lives separately in `/usr/local/mavergreen/cmake`. Nothing goes in `/usr/local/bin` but the
-family's `mavergreen` helper.
-The helper links three commands into `/usr/local/mavergreen/bin`, which the pkg puts on every login
-shell's `PATH` through `/etc/paths.d/mavergreen` (open a new terminal to pick it up):
+Shipyard's modules, scripts and launchers land in `/opt/mavergreen/shipyard`.
+CMake lives separately in `/opt/mavergreen/cmake`. Nothing goes in `/usr/local`.
+The family's `mavergreen` helper links three commands into `/opt/mavergreen/bin`, which the pkg puts on
+every login shell's `PATH` through `/etc/paths.d/mavergreen` (open a new terminal to pick it up):
 
 ```
-/usr/local/mavergreen/bin/shipyard-cmake
-/usr/local/mavergreen/bin/shipyard-ctest
-/usr/local/mavergreen/bin/shipyard-cpack
+/opt/mavergreen/bin/shipyard-cmake
+/opt/mavergreen/bin/shipyard-ctest
+/opt/mavergreen/bin/shipyard-cpack
 ```
+
+`/opt` and `/opt/mavergreen` must be owned by root and writable by no one else, because root runs the
+installer's scripts from there. The installer creates them if they are absent, and refuses to go on if
+they exist with any other owner, mode or ACL, naming the directory and the command that fixes it.
+`mavergreen check` reports the same, and any broken link in the farm.
 
 **Configure your projects with `shipyard-cmake`.** It launches the sibling CMake product after
 appending shipyard's prefix to `CMAKE_PREFIX_PATH`, so your own search paths still take precedence.
@@ -50,8 +54,8 @@ pkg works on Intel, on Apple Silicon and on 10.9.
 
 GUI tools that want a CMake executable (CLion, VS Code's CMake Tools, Xcode wrappers), launchd jobs and
 anything else that never runs a login shell do not see `paths.d`: point them at
-`/usr/local/mavergreen/bin/shipyard-cmake`. The shared presets live at
-`/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/mavergreen-presets.json`.
+`/opt/mavergreen/bin/shipyard-cmake`. The shared presets live at
+`/opt/mavergreen/shipyard/share/cmake/MavergreenShipyard/mavergreen-presets.json`.
 
 **The CMake product has no HTTPS downloader.** `file(DOWNLOAD https://…)` and HTTPS
 `FetchContent` fail with "Unsupported protocol". See [CMake's README](https://github.com/Mavergreen/cmake#readme)
@@ -60,14 +64,6 @@ for the limit and the offline FetchContent pattern. Fetch pinned sources with sh
 
 If you have a machine that ran an older shipyard, `rm -rf ~/.cmake/packages/MavergreenShipyard` once.
 Nothing reads it any more.
-
-A machine that had shipyard installed before it moved under `/usr/local/mavergreen` still has the old
-layout, which no installer removes and whose `/usr/local/bin/shipyard-cmake` comes first on `PATH`.
-Remove it by hand, once:
-
-```sh
-sudo rm -rf /usr/local/mavergreen-shipyard /usr/local/bin/shipyard-cmake /usr/local/bin/shipyard-ctest /usr/local/bin/shipyard-cpack
-```
 
 CMake.app (`cmake-gui`) uses its own bundled CMake and cannot be pointed at the launcher.
 It can open a build directory first configured with `shipyard-cmake`.
@@ -140,7 +136,7 @@ In your `CMakePresets.json`:
 ```json
 {
   "version": 6,
-  "include": ["/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/mavergreen-presets.json"],
+  "include": ["/opt/mavergreen/shipyard/share/cmake/MavergreenShipyard/mavergreen-presets.json"],
   "configurePresets": [
     { "name": "native", "inherits": "mavergreen-native" },
     { "name": "cross",  "inherits": "mavergreen-cross"  }
@@ -190,7 +186,7 @@ its bundle id and its feed are derived from it and the repo.
 
 Some Objective-C source needs a declaration the 10.9 SDK lacks, such as `NSArray`'s lightweight
 generic parameter. Recaulk ships recipes for those edits as data
-(`/usr/local/mavergreen/recaulk/share/sdk-metadata/recipes.json`, schema 1); `MavergreenSDKMetadata`
+(`/opt/mavergreen/recaulk/share/sdk-metadata/recipes.json`, schema 1); `MavergreenSDKMetadata`
 applies them without touching the SDK:
 
 ```cmake
@@ -250,7 +246,7 @@ builds them for the host in a configure of their own:
 include(MavergreenHostTools)
 mavergreen_build_host_tools(tools_bin
   OUTPUT_ROOT "${MAVERGREEN_BUILD_ROOT}/host-tools"
-  COMPILER    /usr/local/mavergreen/bin/clang-22-cross)   # clang-22 on 10.9
+  COMPILER    /opt/mavergreen/bin/clang-22-cross)   # clang-22 on 10.9
 ```
 
 On Apple Silicon the tools are arm64, against the pinned 11.3 SDK for macOS 11.0. When CMake itself
@@ -279,7 +275,7 @@ mavergreen_export_xcode_sources(sources_cmake
   PROJECT       "${src}/iTerm2.xcodeproj"
   TARGETS       iTerm2 iTerm2Shared image_decoder SSKeychain
   PREFIXES      ITERM2 ITERM2_SHARED IMAGE_DECODER SSKEYCHAIN
-  HOST_COMPILER /usr/local/mavergreen/bin/clang-22-cross
+  HOST_COMPILER /opt/mavergreen/bin/clang-22-cross
   OUTPUT_DIR    "${CMAKE_BINARY_DIR}/xcode-inputs")
 include("${sources_cmake}")   # ITERM2_SHARED_SOURCES, ITERM2_MODELS, ...
 ```
@@ -315,7 +311,7 @@ mavergreen_extract_resource_members(resources_dir
   MEMBER_PREFIX  "iTerm.app/Contents/Resources/"
   VERSION_MEMBER "iTerm.app/Contents/Info.plist"
   EXPECT_VERSION 3.0.15
-  HOST_COMPILER  /usr/local/mavergreen/bin/clang-22-cross
+  HOST_COMPILER  /opt/mavergreen/bin/clang-22-cross
   OUTPUT_DIR     "${CMAKE_BINARY_DIR}/resources")
 ```
 

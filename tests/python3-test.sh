@@ -3,7 +3,7 @@
 #   usage: python3-test.sh
 #          chk_python3 finds a python3 >= 3.9, and fails the python3 check, naming the install
 #          command for the host OS, when it finds none. It finds python-315's python3-315 off PATH,
-#          as a 10.9 non-login shell has no /usr/local/mavergreen/bin there. MAVERGREEN_ROOT is the volume to look under.
+#          as a 10.9 non-login shell has no /opt/mavergreen/bin there. MAVERGREEN_ROOT is the volume to look under.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
 t="$(mktemp -d "${TMPDIR:-/tmp}/python3-test.XXXXXX")"

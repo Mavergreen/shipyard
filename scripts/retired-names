@@ -83,3 +83,5 @@ SHIPYARD_LOCAL_PREFIX	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where p
 SHIPYARD_MG_PREFIX	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where products are installed is MAVERGREEN_ROOT, the one override, and mavergreen_prefix names the path under it
 MAVERGREEN_DRYDOCK_INSTALLED	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where products are installed is MAVERGREEN_ROOT, the one override, and mavergreen_prefix names the path under it
 SHIPYARD_OPT_PREFIX	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where products are installed is MAVERGREEN_ROOT, the one override, and mavergreen_prefix names the path under it
+/usr/local/mavergreen	/opt/mavergreen (mavergreen_prefix)	every product installs under /opt/mavergreen, a root-only chain, and mavergreen_prefix names the path
+/usr/local/bin/mavergreen	/opt/mavergreen/bin/mavergreen	the helper lives in the product root, never in admin-writable /usr/local/bin

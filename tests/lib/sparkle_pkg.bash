@@ -8,7 +8,7 @@
 mkpkg() {
   local out="$1" root; shift
   root="$(mktemp -d "$BATS_TEST_TMPDIR/root.XXXXXX")"
-  mkdir -p "$root/usr/local/share/doc/test"; echo not-an-updater > "$root/usr/local/share/doc/test/README"
+  mkdir -p "$root/opt/mavergreen/test/share/doc"; echo not-an-updater > "$root/opt/mavergreen/test/share/doc/README"
   while [ "$#" -ge 3 ]; do
     local c="$root/Library/Application Support/Mavergreen/$3.app/Contents"
     mkdir -p "$c"

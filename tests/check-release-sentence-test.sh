@@ -192,7 +192,7 @@ for bad in '1) Stop.' '1. Stop.'; do
 done
 
 ok "path is not base64" <<'X'
-Go now installs in /usr/local/mavergreen/go127 by default.
+Go now installs in /opt/mavergreen/go127 by default.
 X
 ok "setting is not base64" <<'X'
 Set GODEBUG=x509usefallbackroots=0 to use them.

@@ -20,9 +20,9 @@ pkg_release() {  # pkg_release: serve a Recaulk release holding the fixture arch
   REL="$WORK/rel/Mavergreen/recaulk/releases/download/$PIN"
   STEVEDORE="${STEVEDORE:-$(sh "$ROOT/scripts/fetch_stevedore.sh")}"
   export STEVEDORE SOURCE_DATE_EPOCH=1700000000
-  mkdir -p "$REL" "$WORK/base/usr/local/mavergreen/.base" "$WORK/prod/usr/local/mavergreen/recaulk/lib"
-  echo x > "$WORK/base/usr/local/mavergreen/.base/x"
-  cp "$WORK/fixture.a" "$WORK/prod/usr/local/mavergreen/recaulk/lib/librecaulk.a"
+  mkdir -p "$REL" "$WORK/base/opt/mavergreen/.base" "$WORK/prod/opt/mavergreen/recaulk/lib"
+  echo x > "$WORK/base/opt/mavergreen/.base/x"
+  cp "$WORK/fixture.a" "$WORK/prod/opt/mavergreen/recaulk/lib/librecaulk.a"
   sh "$ROOT/scripts/build_component_pkg.sh" --root "$WORK/base" --identifier dev.mavergreen.base --version 1.0 --install-location / --out "$WORK/base.pkg" > /dev/null 2>&1
   sh "$ROOT/scripts/build_component_pkg.sh" --root "$WORK/prod" --identifier dev.mavergreen.recaulk --version 1.0 --install-location / --out "$WORK/prod.pkg" > /dev/null 2>&1
   cat > "$WORK/dist.xml" <<DIST

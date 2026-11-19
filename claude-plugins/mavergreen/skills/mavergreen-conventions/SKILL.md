@@ -43,7 +43,7 @@ reverse-engineering tool. The reason names that use. A library gets an arm64 sli
 arm64 consumer, never speculatively. Parity is about *developers'* tools, not about shipping Mavericks
 products for Apple Silicon. A product spec that plans a universal build without such a reason is
 following a retired direction (universal-by-default never landed); correct the spec.
-The glob is matched against the install path in the pkg (`usr/local/mavergreen/cmake/bin/*`), never a
+The glob is matched against the install path in the pkg (`opt/mavergreen/cmake/bin/*`), never a
 build script's path; a bare `- arm64: <reason>`, or a glob of nothing but wildcards, is refused.
 Conformance fails a pkg whose Mach-O carries an arm64 slice that no declaration covers; the Sparkle
 updater's slices are exempt (only the product's updater bundle, whose identity is derived). A repo that declares one has a `modern-smoke` job in
@@ -69,9 +69,10 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 
 - Install via its **action**: `uses: Mavergreen/shipyard/.github/actions/install@v1`. On a macOS
   runner it verifies and installs the pinned cmake product first, then shipyard's released `.pkg`.
-  It adds `/usr/local/mavergreen/bin` to `$GITHUB_PATH` (a
+  It runs `"$(mavergreen_prefix)/bin/mavergreen" check`, so a broken chain or farm fails the job before
+  any build. It adds `$(mavergreen_prefix)/bin` to `$GITHUB_PATH` (a
   job's steps are not login shells, so `paths.d` never reaches them) and exports `SHIPYARD_SCRIPTS`
-  (`/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/scripts`). On any other runner
+  (`$(mavergreen_prefix shipyard)/share/cmake/MavergreenShipyard/scripts`). On any other runner
   it installs nothing and adds nothing to `PATH`: `SHIPYARD_SCRIPTS` is the action checkout's own
   `scripts/`, and `MavergreenShipyard_DIR` points `find_package` at that checkout. Consume the CMake
   side with `find_package` — **no `CMAKE_PREFIX_PATH`, no vendored copy, no hand-run `--install`.**
@@ -87,12 +88,12 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   Download shipyard from the latest release
   (`gh release download -R Mavergreen/shipyard --pattern '*.pkg'`) and install it. It is a family
   product like any other (see "Install layout and identity"): one whole prefix at
-  `/usr/local/mavergreen/shipyard` — modules, scripts and launchers — whose
+  `/opt/mavergreen/shipyard` — modules, scripts and launchers — whose
   `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` the `mavergreen` helper links into
-  `/usr/local/mavergreen/bin` (never the bare `cmake`/`ctest`/`cpack`: its manifest excludes them).
+  `/opt/mavergreen/bin` (never the bare `cmake`/`ctest`/`cpack`: its manifest excludes them).
   `/etc/paths.d/mavergreen` puts that directory on every *login* shell's `PATH`, so open a new
   terminal after the first install. The pkg also installs a Sparkle updater that keeps it current,
-  and cmake has its own updater. CMake lives at `/usr/local/mavergreen/cmake`.
+  and cmake has its own updater. CMake lives at `/opt/mavergreen/cmake`.
 
   **Configure, test and package with `shipyard-cmake` / `shipyard-ctest` / `shipyard-cpack`** — in
   workflows and in `build/*.sh` alike. These POSIX sh launchers exec the sibling cmake product's tools.
@@ -113,7 +114,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   hits this same wall.
 
   Point **GUI/IDE tooling** (CLion, VS Code's CMake Tools, an Xcode wrapper) and launchd jobs at
-  `/usr/local/mavergreen/bin/shipyard-cmake`, by absolute path, as their CMake executable. They never
+  `/opt/mavergreen/bin/shipyard-cmake`, by absolute path, as their CMake executable. They never
   run a login shell, so `paths.d` does not reach them and a bare `shipyard-cmake` is not found; and an
   IDE's bundled cmake is one of the ones the config refuses, a failure that surfaces as an
   unexplained configure error inside the IDE.
@@ -145,7 +146,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 - **After `install@v1`, use `$SHIPYARD_SCRIPTS`** — the action exports the installed scripts dir.
   **Everywhere else, run `shipyard-scripts`**: `SHIPYARD_SCRIPTS="${SHIPYARD_SCRIPTS:-$(shipyard-scripts)}"`.
   It honours `SHIPYARD_SCRIPTS` when CI has set it, and otherwise
-  asks `shipyard-cmake` (from `PATH`, else `/usr/local/mavergreen/bin/shipyard-cmake`, so a shell
+  asks `shipyard-cmake` (from `PATH`, else `/opt/mavergreen/bin/shipyard-cmake`, so a shell
   that predates the install still works) where `find_package(MavergreenShipyard)` lands — so a
   `CMAKE_PREFIX_PATH` dev override moves the scripts together with the modules. A committed copy of the retired script finder fails the gate
   (`legacy-top-level`): eleven hand-kept copies had already drifted into three variants. Change
@@ -731,7 +732,7 @@ from it and the repo, so two lines never share one. Every feed is
 that line's, so no line needs a fixed per-line feed release. Renaming a line repo is a flag-day step
 and is asked for, never done in passing.
 
-**The lines of one upstream share a group.** Each line repo stages with the same `--group` (`go`)
+**The lines of one upstream share a group.** Each line repo writes the same `.mavergreen/products/<short>/group` (`go`)
 and its own `.mavergreen/products/<short>/line` (`1.26`, `1.27`; `render-manifest.sh --line` is refused). Every member always exports `<cmd>-<line>` (`go-126`,
 `gofmt-127`); the bare names (`go`, `gofmt`) belong to the one member the group has **selected**.
 The first member installed is selected; installing another never takes the selection, and neither
@@ -1105,7 +1106,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   all (no `release.yml`, no `.pkg`, no updater) to point at the generator; its own plan needs
   correcting before any release-notes work applies to it.
 - **`--line` takes the prefix the TAGS carry, not the repo's own product id or any other per-repo
-  identifier.** golang's product id is `126` (tree `/usr/local/mavergreen/go126`), but its release
+  identifier.** golang's product id is `126` (tree `/opt/mavergreen/go126`), but its release
   tags are `1.26.7-mavergreen.N`, so `--line` must be `1.26` (derived in `release.yml` as
   `printf '%s' "$VER" | cut -d. -f1,2`) — the identifier used elsewhere (`126`) matches nothing against
   `previous-release-tag.sh`'s glob (it compares to real tags like `1.26.*-mavergreen.*`). **An unmatched
@@ -1572,8 +1573,8 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   `sign_and_appcast.sh --product <short> --feed-dir dist` writes the feed as `dist/<short>.xml`, and
   `publish-release.yml` attaches it with the other assets, publishing only after every upload, so
   `/latest/` always has it. There is no `appcast.xml`: every release carries `<short>.xml` for every
-  updater its pkgs install, and `release-assets.sh` refuses the retired name. A product with no updater
-  has no feed, and its manifest's `appcast` is empty. Conformance's `updater` and `feed` checks hold
+  updater its pkgs install, and `release-assets.sh` refuses the retired name. A manifest's `feed` is its
+  product's derived feed, and empty only for a product built on install. Conformance's `updater` and `feed` checks hold
   what ships to all of it.
 - **The updater builds with clang22 on every host, Linux and Mac alike, through the same function.**
   Pin clang22 in `.mavergreen/ingredients/clang22/VERSION` (line 2 a Renovate `github-releases` annotation on
@@ -1882,8 +1883,9 @@ openssh's `on-mavericks` is the model: download the dist artifact, install the p
 
 **Known traps on stock 10.9:** there is no `python3`; `git` is a CLT stub, so no `git ls-files`; and
 a test that needs arguments only ctest passes must exit 77 without them, not 1, since
-`run-repo-tests.sh` runs every `tests/*.sh` bare. The `mavergreen` helper is
-`/usr/local/bin/mavergreen`, not under `/usr/local/mavergreen/bin` (longboat's first VM run, 2026-10-19).
+`run-repo-tests.sh` runs every `tests/*.sh` bare. A non-login shell's `PATH` lacks the farm, so call the
+`mavergreen` helper as `/opt/mavergreen/bin/mavergreen` (longboat's first VM run, 2026-10-19, looked for
+it in the wrong place).
 `otool`, `lipo`, `nm` and `strings` are CLT stubs there too: export clang22's `llvm-otool`, `llvm-lipo`,
 `llvm-nm` and `llvm-strings` as OTOOL, LIPO, NM and STRINGS, which the compat guard and shipyard's
 Mach-O scripts read (clang-22's first VM run, 2026-10-19).
@@ -2036,33 +2038,56 @@ quiet without going red is not a check.
 
 ## Install layout and identity
 
-**Every product owns exactly one directory, `/usr/local/mavergreen/<product>/`.** What installed a
+**Every product owns exactly one directory, `/opt/mavergreen/<product>/`.** What installed a
 file is readable from its path; an upgrade replaces the directory wholesale, so a file the newer
 payload stopped carrying is gone rather than left behind (Installer itself never removes one); and
 uninstall is complete. Commands and manpages are still found without the user doing anything.
+**`mavergreen_prefix [<short>]`** (in `scripts/mavergreen-meta.sh`) prints `/opt/mavergreen` or
+`/opt/mavergreen/<short>`, and every packager, checker, workflow and the install action asks it rather
+than spelling the path; `MavergreenPrefix.cmake`'s `mavergreen_prefix(<out-var> [<short>])` is its
+CMake twin. A reader of an installed product looks under `${MAVERGREEN_ROOT%/}$(mavergreen_prefix <short>)`:
+`MAVERGREEN_ROOT` is the volume, `/` by default, and the one override of where things are installed.
 
-```
-/usr/local/bin/mavergreen                  the helper; the only family file in /usr/local/bin
-/etc/paths.d/mavergreen                    /usr/local/mavergreen/bin and /usr/local/mavergreen/sbin
-/etc/manpaths.d/mavergreen                 /usr/local/mavergreen/share/man
+| Path | Owner, mode | Written by |
+|---|---|---|
+| `/opt`, `/opt/mavergreen` | `root:wheel 755`, created if absent | the base preinstall |
+| `/opt/mavergreen/{bin,sbin,share/man/man*}/` | link farm | the helper only |
+| `/opt/mavergreen/bin/mavergreen` | link → `../mavergreen/bin/mavergreen` | the base postinstall |
+| `/opt/mavergreen/mavergreen/{bin/mavergreen,libexec/mavergreen-vercmp}` | `root:wheel 755` | the base postinstall |
+| `/opt/mavergreen/<short>/` | the product's tree; `mavergreen.plist` at its root | its pkg |
+| `/opt/mavergreen/var/<short>/`, `var/mavergreen/selections/<group>` | state that survives an upgrade; which member owns a group's bare names | the product; the helper |
+| `/opt/mavergreen/var/system-replace/<short>/` | system files saved by system-replace, and its marker | the helper |
+| `/opt/mavergreen/.base/<V>/`, `.base/installed-version` | the staged base; the helper version last installed | the base component |
+| `/etc/paths.d/mavergreen` | `/opt/mavergreen/bin` and `/opt/mavergreen/sbin`, one per line | the base postinstall |
+| `/etc/manpaths.d/mavergreen` | `/opt/mavergreen/share/man` | the base postinstall |
+| `/Applications/Mavergreen/` | `root:wheel 755`, created no-follow | a product preinstall |
 
-/usr/local/mavergreen/
-  bin/  sbin/  share/man/man*/             link farm; written only by the helper
-  <product>/                               owned by one pkg; its preinstall removes it on every upgrade
-    mavergreen.plist                       the manifest
-    bin/ sbin/ lib/ libexec/ share/ etc/   the product's own layout
-  var/<product>/                           state that survives an upgrade; uninstall removes it
-  var/mavergreen/selections/<group>        which member owns the group's bare names
-  var/system-replace/<product>/            system files saved by system-replace, and its marker
-  .base/<version>/                         the staged helper, removed by the base postinstall
-  .base/installed-version                  the helper version last installed
-```
+**Root runs only from a root-only chain.** An admin can write `/usr/local`, `/Users`, `/tmp`, a home
+directory and `/Applications`, so a non-root process could replace anything root runs from there.
+Before root writes into or runs from `/opt/mavergreen`, the base preinstall, every generated product
+pre- and postinstall and the helper's `check` walk the chain: every directory from the path up to the
+target volume's root, physically (`cd -P`), and no further. Each must have uid 0, a mode with no group
+or other write, and no ACL entry that `allow`s `write`, `append`, `add_file`, `add_subdirectory`,
+`delete_child`, `delete`, `writesecurity` or `chown` (`deny` entries pass). A directory that fails is
+refused by name, with the rule and its fix: `sudo chown root:wheel`, `sudo chmod go-w`, or `sudo chmod -a`
+naming the ACL entry. A volume root not owned by root names `sudo diskutil enableOwnership <volume>`.
+`scripts/lib/root-chain.sh` is the one copy of the check: it holds definitions only, and every install script and the stamped helper carry it inline, because nothing installed is trusted to
+verify the place it was installed into.
 
-**Discovery is one family link farm on the path, never links in `/usr/local/bin`.** `path_helper`
+**Apps go in `/Applications/Mavergreen/`, which root creates for itself.** `/Applications` is
+admin-writable, so a bare `/Applications/<App>.app` is not the family's. The base preinstall, in every
+archive, refuses an existing `Applications/Mavergreen` that is a symlink, is not a directory, or fails
+the chain rules, and never creates one. A product's generated preinstall creates it (`mkdir -m 755`,
+then `chown root:wheel`) only when its stage or its `--generated` list has entries there, so a CLI-only
+product leaves none behind. A file whose place the OS dictates stays where the OS looks; for one below
+`Library/Application Support` (a BezelServices or SIMBL plugin), the generated preinstall refuses an
+ancestor below that directory that is a symlink or not root-owned.
+
+**Discovery is one family link farm on the path, never links in a shared `bin`.** `path_helper`
 reads `paths.d` for every login shell, identically on 10.9 and modern macOS, and a farm of our own
-can never collide with Tigerbrew, MacPorts-in-`/usr/local` or hand-built software. The cost:
+can never collide with Tigerbrew, MacPorts or hand-built software. The cost:
 already-open shells, launchd jobs, GUI apps (IDEs) and CI steps never run a login shell and do not
-see it, so they use the absolute path, `/usr/local/mavergreen/bin/<cmd>` — on a macOS runner, `install@v1`
+see it, so they use the absolute path, `/opt/mavergreen/bin/<cmd>`; on a macOS runner, `install@v1`
 adds that directory to `$GITHUB_PATH` for the job. Reconsider if a real user workflow cannot be made to work
 through `paths.d` plus absolute paths.
 
@@ -2098,7 +2123,7 @@ what breaks them, so a hand-made manifest cannot reach a reserved name. Many sho
 (`golang-126` ships `go126` and `go126-cross`). A product's own repo comes from `mg_repo`, and a
 dependency's from `ingredients/<dep>/REPO`.
 **A tree path can be a contract.** `ca-certs`' tree path
-`/usr/local/mavergreen/ca-certs/etc/openssl/certs/ca-certificates.crt` is a contract, which nothing
+`/opt/mavergreen/ca-certs/etc/openssl/certs/ca-certificates.crt` is a contract, which nothing
 in code enforces: ca-certs installs its bundle exactly there, root-owned, and leaves out any root the
 running Mac's admin trust settings deny for TLS. golang-127's keychain-union patch (`0008`) already
 lists that file among the roots it trusts; golang-126's patch lists only its own bundle and the system
@@ -2112,7 +2137,7 @@ its verdict, and the bundle serves those that can't.
 ### The manifest (`<product>/mavergreen.plist`)
 
 Written by `stage_product.sh`, never by hand. Anything that wants to know what is installed — the
-helper, conformance — globs `/usr/local/mavergreen/*/mavergreen.plist`, so a product that is gone
+helper, conformance — globs `/opt/mavergreen/*/mavergreen.plist`, so a product that is gone
 has nothing left to prune.
 
 | Key | From | Notes |
@@ -2120,10 +2145,12 @@ has nothing left to prune.
 | `identifier` | `dev.mavergreen.<short>`, derived | the pkg receipt; not a flag, so it cannot disagree with the product |
 | `name` | `.mavergreen/products/<short>/noun`, then the line | display (`name` in "Product naming"); `--name` is refused |
 | `product` | `--product` | the short name (identity, so still a flag); must equal the tree's directory name |
-| `group` | `--group` | defaults to `product` |
+| `group` | `.mavergreen/products/<short>/group` | defaults to `product`; `--group` is refused |
 | `line` | line 1 of `.mavergreen/products/<short>/line`, as upstream spells it (`1.27`) | empty for a product with one line; `--line` is refused |
 | `version` | `--version` | |
-| `appcast` | derived | the product's feed (`updater-identity.sh feed <product>`) when it stages an updater, else empty; `--appcast` is refused |
+| `feed` | derived | the product's feed (`updater-identity.sh feed <product>`), empty only for a product with `.mavergreen/products/<short>/built-on-install`; `--appcast` is refused |
+| `requires` | `.mavergreen/products/<short>/requires/<dep>/` | each dependency's `kind`, and its `min` when it has one |
+| `restart-to-update` | `.mavergreen/products/<short>/restart-to-update` exists | a boolean |
 | `exports-exclude` | `--exclude`, repeatable | tree-relative paths kept out of the farm |
 | `replaces` | `--replaces /abs/path=tree/path`, repeatable | system-replace, below |
 | `outside` | **the stage itself** | every file or link staged outside the tree, collapsed to its enclosing `.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework` or `.jdk` |
@@ -2171,7 +2198,7 @@ pass Installer's target volume rather than assuming `/`; with any other root it 
 | `unlink <product>` | removes every farm link into it; never changes a selection |
 | `select <group> [<product>]` | prints the selection, or moves it: the group's bare links swap to that member |
 | `list` | one line per installed product: short name, group, line (`-` for none), version, `selected` |
-| `check` | dangling farm links, links into a directory with no manifest, a manifest whose `product` is not its directory, missing links, system-replace drift — each on stderr, non-zero on any. scripts/assert-installed-shipyard.sh runs it |
+| `check` | a root-only chain that fails, for `/opt/mavergreen`, each installed product's tree, the helper, and `Applications/Mavergreen` when present; dangling farm links, links into a directory with no manifest, a manifest whose `product` is not its directory, missing links, system-replace drift — each on stderr, non-zero on any. scripts/assert-installed-shipyard.sh runs it |
 | `uninstall <product>` | below |
 | `system-replace <product>` / `system-restore <product>` | below |
 | `version` | the helper's version |
@@ -2188,7 +2215,7 @@ survives, so a retry can finish the restore. Then it unlinks; removes each `outs
 `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`, `.jdk`), unloading a launchd job first when the
 root is `/`; never a
 plain directory, and never an entry that is empty, absolute, ends in `/`, has an empty, `.` or `..` segment or lies under
-`usr/local/mavergreen/`; removes the tree and `var/<product>`; never removes an entry, the tree
+`opt/mavergreen/`; removes the tree and `var/<product>`; never removes an entry, the tree
 or `var/<product>` when its parent directory resolves (through symlinks) outside the target volume; re-selects (above); and forgets the
 receipt. Past the restore it is **best-effort-then-fail**: every step runs, each failure is reported,
 and it exits non-zero at the end — neither a silent success nor a half-uninstall that stopped at
@@ -2225,7 +2252,7 @@ component `<short>.pkg`, its identifier `dev.mavergreen.<short>` and its Install
 all derived; `--title`, `--out` and `--identifier` are refused, and the component's own identifier must be
 the derived one. First, for its postinstall: Installer lays down every payload before running any
 postinstall, then runs the postinstalls in Distribution order, so a base listed first has installed
-or upgraded `/usr/local/bin/mavergreen` before the product's postinstall runs it (a product's
+or upgraded `/opt/mavergreen/bin/mavergreen` before the product's postinstall runs it (a product's
 *preinstall* runs before the base's payload lands, so it uses the helper only if one is already
 installed). The product postinstall also falls back to the newest helper staged under `.base/`.
 
@@ -2238,47 +2265,54 @@ product archives.
 
 ### `stage_product.sh`: the one way to get install scripts
 
-Stage the product's files under `<stage>/usr/local/mavergreen/<product>/` (and anything the OS
-dictates elsewhere), then call `sh "$SHIPYARD_SCRIPTS/stage_product.sh"`. It refuses a stage with
+Stage the product's files under `<stage>/opt/mavergreen/<product>/`, its apps under
+`<stage>/Applications/Mavergreen/` (an app anywhere else in `Applications/` is refused), and anything
+the OS dictates elsewhere; then call `sh "$SHIPYARD_SCRIPTS/stage_product.sh"`. It refuses a stage with
 nothing in it; a product whose every file lives where the OS dictates still gets a tree, holding just
-its manifest. It writes the manifest and both
-scripts:
+its manifest. Group and requirements are read from `.mavergreen/products/<product>/` (`group`,
+`requires/<dep>/`), so `--group` and `--requires` are refused, naming those files. It writes the
+manifest and both scripts, each carrying `lib/root-chain.sh` inline:
 
-- **preinstall**: first, for every `--requires <short>` (repeatable), refuses to proceed — before
-  `mavergreen unlink`, before anything else — if `usr/local/mavergreen/<short>/mavergreen.plist` is
-  missing on the target volume, naming this product's display name, `<short>`, and its releases URL
-  (`https://github.com/<repo>/releases`, the repo from `mg_repo`) on stderr, and exits 1 having changed nothing. `--requires <short>>=<version>`
-  also refuses when that manifest's `version` is older than `<version>`, or is missing or
-  unorderable (`1.0-rc1`), naming the minimum and the installed version; every unmet requirement
-  is reported before it exits. Then `mavergreen unlink
+- **preinstall**: first checks the root-only chain of `opt/mavergreen` on the target volume, creates
+  or checks `Applications/Mavergreen` when the product puts anything there, and refuses an ancestor of
+  an OS-dictated path below `Library/Application Support` that is a symlink or not root-owned. Then,
+  for every `requires/<dep>/` whose `kind` is not `external`, it refuses to proceed — before
+  `mavergreen unlink`, before anything else — if `opt/mavergreen/<dep>/mavergreen.plist` is
+  missing on the target volume, naming this product's display name, `<dep>`, and its releases URL
+  (`https://github.com/<repo>/releases`, the repo from `.mavergreen/ingredients/<dep>/REPO`) on stderr,
+  and exits 1 having changed nothing. A `requires/<dep>/min` also refuses when that manifest's `version`
+  is older than the minimum, or is missing or unorderable (`1.0-rc1`), naming the minimum and the
+  installed version; every unmet requirement is reported before it exits. An `external` requirement is
+  checked by nothing at install time. Then, after checking the helper's own chain, `mavergreen unlink
   <product>` if a helper exists; then the product's
   `--preinstall-hook`, which still sees the outgoing version's tree and bundles; then removes each
-  bundle directory (`.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`, `.jdk`) that the
+  bundle directory (`.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`, `.jdk`, `.fs`) that the
   installed manifest lists in `outside`, so a file the new version drops (from Sparkle, say) cannot
   linger inside a bundle and break its code-signature seal; then removes
-  `/usr/local/mavergreen/<product>` (never `var/`). Listed files are left for the payload to
+  `/opt/mavergreen/<product>` (never `var/`). Listed files are left for the payload to
   overwrite, and an entry the helper's uninstall would refuse (absolute, `.`/`..`, in the tree, a
   symlink, or under a parent that resolves off the volume) is left alone. With no readable manifest,
   no bundle is removed. A bundle or tree it cannot remove is reported, never failing the install:
   files the new version dropped may linger.
-- **postinstall**: `mavergreen link <product>`, failing the install if it fails; then the updater's
-  agent load (`--updater-app`, whose place and label are derived, above); then the `--postinstall-hook`.
+- **postinstall**: checks the chain of the helper it is about to run (the installed one, else the
+  newest staged under `.base/`), then `mavergreen link <product>`, failing the install if either fails;
+  then the updater's agent load (`--updater-app`, whose place and label are derived, above); then the
+  `--postinstall-hook`.
 
-`--requires` replaces a hand-written "is product X installed?" or "is it new enough?" check in a
+`requires/` replaces a hand-written "is product X installed?" or "is it new enough?" check in a
 preinstall hook: 1password once checked for Porthole and Container Tools, signal-desktop only for
-Porthole, and Porthole for nothing, and the three drifted. Each `--requires <short>` must name a
-different product, a short name the reserved list does not forbid; a self-naming
-`--requires` fails staging (exit 2). A minimum (`--requires container-tools>=20261019.1`) is
-compared by `scripts/lib/vercmp.sh`, the family's one comparator, which the preinstall carries
-inline; a minimum it cannot order (empty, `1.0-rc1`, `abc`) fails staging (exit 2). It does no
-old-layout detection, and is stage_product-only: it never reaches `render-manifest.sh` or the
-manifest.
+Porthole, and Porthole for nothing, and the three drifted. Each `requires/<dep>/` must name a
+different product, a short name the reserved list does not forbid, with
+`.mavergreen/ingredients/<dep>/REPO` declared; a self-naming requirement fails staging (exit 2). A
+minimum (`requires/container-tools/min` holding `20261019.1`) is compared by `scripts/lib/vercmp.sh`,
+the family's one comparator, which the preinstall carries inline; a minimum it cannot order (empty,
+`1.0-rc1`, `abc`) fails staging (exit 2). It does no old-layout detection.
 
 Require what you use, at the version that has it. The 10.9 SDK is installed once, by
 `sudo longboat sdk install 10.9`, as the product `sdk109`, and each toolchain's `SDKs` links to
 `../sdk109/SDKs` instead of shipping a copy. So clang-22's toolchains require `sdk109`. A product
-that reads the installed SDK's `SDKSettings.json` requires `sdk109>=20261024.3`, the first Longboat
-to write it; an `sdk109` from an older Longboat gets `sudo longboat sdk install 10.9` again. A `--requires`
+that reads the installed SDK's `SDKSettings.json` requires `sdk109` with a `min` of `20261024.3`, the first Longboat
+to write it; an `sdk109` from an older Longboat gets `sudo longboat sdk install 10.9` again. A requirement
 binds every repo whose CI installs that pkg, too: a 10.9 test that installs a toolchain first
 installs Longboat's pinned release and runs that command, as clang-22's and swift's
 `on-mavericks` jobs do. Pin it as clang-22 does: a `.mavergreen/ingredients/longboat/` labelled CI only
@@ -2308,18 +2342,20 @@ left of `||`, so `set -e` inside it is silently ignored, not enforced.
 
 **Everything a pkg installs says it is ours, and lands where the family puts things.** Read from the
 payload itself (`artifact-facts.sh` expands each pkg; a filename or a recipe is a claim, the payload
-is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
+is the fact), these checks, each excusable only by a scoped, reasoned deviation:
 
 | Check | Default rule | Deviation scoped to |
 |---|---|---|
 | `identifier` | the pkg's identifier is `dev.mavergreen.*`, and a product's is `dev.mavergreen.<short>` | the pkg filename |
 | `bundle-id` | every TOP-LEVEL bundle (`.app`, `.prefPane`, `.kext`, `.bundle`, `.framework`, `.jdk`, …; not one nested inside another, so Sparkle.framework inside an updater is not asked) has a `CFBundleIdentifier` under `dev.mavergreen.*` | the identifier |
 | `launchd-label` | every `Library/Launch{Agents,Daemons}/*.plist` has a `Label` under `dev.mavergreen.*`, and is named `<Label>.plist` | the Label |
-| `install-path` | every installed file or link is under `usr/local/mavergreen/<the product its manifest names>/`, `Applications/` or `Library/Application Support/Mavergreen/`, or is a `dev.mavergreen.*` launchd plist — or is under `usr/local/mavergreen/.base/` in an archive that carries `dev.mavergreen.base` | the installed path (glob; `*` spans `/` and spaces) |
+| `install-path` | every installed file or link is under `opt/mavergreen/<the product its manifest names>/` or `Applications/Mavergreen/`, is a `dev.mavergreen.*` launchd plist, or is in a place the OS dictates (`Library/Extensions/*.kext/`, `System/Library/Extensions/*.kext/`, `System/Library/Filesystems/*.fs/`, `Library/PreferencePanes/*.prefPane/`, `Library/Application Support/Apple/BezelServices/*.plugin/`, `Library/Application Support/SIMBL/Plugins/*.bundle/`, and `Library/Application Support/Mavergreen/*-updater.app/` until the updaters retire) — or is under `opt/mavergreen/.base/` in an archive that carries `dev.mavergreen.base`. Nothing installs under `usr/local/`, and no deviation excuses it | the installed path (glob; `*` spans `/` and spaces) |
+| `root-runs` | a `Library/LaunchDaemons` plist's `Program` (else `ProgramArguments` item 0) starts with `/opt/mavergreen/`, `/bin/`, `/sbin/`, `/usr/bin/`, `/usr/sbin/`, `/usr/libexec/` or `/System/`; each component's preinstall and postinstall starts `#!/bin/sh` or `#!/bin/bash` and names no admin-writable root (`/usr/local`, `/Users`, `/tmp`, `/private/tmp`, a home directory, or `/Applications` other than `/Applications/Mavergreen`) | the pkg filename |
+| `os-overwrite` | a regular product's pkg installs no path that 10.9.5 ships (`scripts/os-inventory-10.9.5.gz`); a system edition's pkg is not read | the installed path |
 | `manifest` | a pkg that installs anything besides the base's staged helper carries exactly one manifest; its `product` is its directory; its `identifier` is `dev.mavergreen.<short>`, and one of the pkg's components; its `outside` names everything installed outside the tree, exactly as uninstall would remove it (the entry itself, or a bundle directory and what is inside it), with no entry left unused and none in a shape the helper refuses; every `generated` entry has a shape the helper accepts, and need not be in the payload | the pkg filename |
 | `base` | a pkg carrying a manifest lists `dev.mavergreen.base` as its first component | the pkg filename |
 | `updater` | a Sparkle updater (a top-level bundle with `SUFeedURL`) is `Library/Application Support/Mavergreen/<short>-updater.app` with bundle id `<pkg identifier>.updater`; a pkg with an updater installs the LaunchAgent `<pkg identifier>-updatecheck`; every launchd Label containing `updatecheck` is that one | the pkg filename |
-| `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
+| `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `feed` is the product's derived feed, and empty for a product built on install; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
 | `line` | a product of a line repo (one whose repo ends in `-<number>`) declares a line; a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | every product a release ships is one of this repo's `.mavergreen/products/` | the pkg filename |
 | `pkg-name` | the pkg is `<short>-<version without a leading v>.pkg` and its component `<short>.pkg` (System Replace: `<short>-system-replace-<version>.pkg`, `<short>-system-replace.pkg`) | the pkg filename |
@@ -2334,18 +2370,19 @@ component installed at `/`, since a product tree always is.
 **Why a default, and why deviations stay legal.** An identifier or path that isn't ours collides with
 someone else's: tailscale once installed its daemon as `com.tailscale.tailscaled`, the Label upstream's
 own `tailscaled install-system-daemon` writes, so the two installs could silently overwrite each other.
-But some products genuinely must go elsewhere, only where the OS dictates, and those say so: a kext
+But some products genuinely must go elsewhere, only where the OS dictates: a kext
 loads only from `/Library/Extensions`, a prefpane only from `/Library/PreferencePanes`, a
-BezelServices plugin only from where BezelServices looks. (swift-runtime once kept `/usr/lib/swift` on
+BezelServices plugin only from where BezelServices looks. Those places are on the default list; any
+other the OS dictates says so with a deviation that names the OS rule. (swift-runtime once kept `/usr/lib/swift` on
 this ground; since 6.4.0-mavericks.2 programs find it through an rpath into its tree,
-`/usr/local/mavergreen/swift-runtime/lib/swift`, so it needs no exception.) Each such file is still in `outside`,
+`/opt/mavergreen/swift-runtime/lib/swift`, so it needs no exception.) Each such file is still in `outside`,
 because rendering lists it, so uninstall removes it; and even a product whose every file lives where
 the OS dictates still stages a tree, since its manifest is how uninstall finds them. Sparkle updaters
 stay in `Library/Application Support/Mavergreen/` until Mavericks Lineup retires them.
 
 ```markdown
-.mavergreen/deviations/install-path/kexts/scope   Library/Extensions/*
-.mavergreen/deviations/install-path/kexts/reason  10.9 loads third-party kexts only from here
+.mavergreen/deviations/install-path/jdk/scope     Library/Java/JavaVirtualMachines/*
+.mavergreen/deviations/install-path/jdk/reason    10.9's java_home looks only here
 .mavergreen/deviations/bundle-id/upstream/scope   as.acidanthera.*
 .mavergreen/deviations/bundle-id/upstream/reason  upstream's kext, shipped unmodified under upstream's identity
 ```
@@ -2353,9 +2390,12 @@ stay in `Library/Application Support/Mavergreen/` until Mavericks Lineup retires
 **No upgrade migrations while the family has no users.** The 2026-09-22 flag day moved every
 identifier from `dev.modernmavericks.*` to `dev.mavergreen.*` without shipping code to retire the old
 names from existing installs, because there were none to protect: a maintainer's own box is cleaned by
-hand. The move into `/usr/local/mavergreen` was the same: pkg identifiers did not change, so
+hand. The move into `/opt/mavergreen` is the same: pkg identifiers did not change, so
 installing a moved product over its old version leaves the old files where they were, and the
-maintainer removes them by hand, once. A pkg's pre/postinstall handles upgrades from its own current
+maintainer removes them by hand, once. Nothing produces, stages, links or checks the old prefix; the
+one exception is that readers of a release pinned before the move (`fetch_product_pkg.sh`,
+`fetch_drydock.sh`, `shipyard-provision`, `lib/macho-tools.sh`, `lib/py.sh`) also look where that
+release installs, until every family ingredient is re-pinned to a release built for `/opt/mavergreen`. A pkg's pre/postinstall handles upgrades from its own current
 identity and layout only. The day the family has real users, a rename or a move needs a retirement
 plan, written with its exit condition (see "A "transitional" decision without an exit task is a
 permanent one", below).
@@ -3008,7 +3048,7 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
     people will copy); do not add a `tags:` trigger — tags are retired as an input, and dispatch
     covers every case they served (`gh workflow run … --ref <any ref>`).
 14. If it ships a `.pkg`: write `.mavergreen/products/<short>/noun` (and `line` for a lined product); stage
-    everything under `usr/local/mavergreen/<short name>/`; get the install scripts and manifest from
+    everything under `opt/mavergreen/<short name>/` (apps under `Applications/Mavergreen/`); get the install scripts and manifest from
     `stage_product.sh` (product-specific steps as hooks); wrap with `set_install_floor.sh`, which
     adds `dev.mavergreen.base`. See "Install layout and identity".
 15. Configure through the shipyard presets or `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavergreenToolchain.cmake`,

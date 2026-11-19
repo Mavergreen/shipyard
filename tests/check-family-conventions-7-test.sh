@@ -200,7 +200,7 @@ grandfather
 #       deviation; a repo grandfathered as modern-smoke skips the check.
 ms() {  # $1 = label, $2 = decl|nodecl, $3 = runs-on (empty: no job), $4 = needed|unneeded
   d="$work/ms-$1"; mkrepo7 "$d"
-  [ "$2" != decl ] || deviation "$d" arm64 w-bin 'usr/local/mavergreen/w/bin/*' 'developers on Apple Silicon run w to build Mavericks artifacts'
+  [ "$2" != decl ] || deviation "$d" arm64 w-bin 'opt/mavergreen/w/bin/*' 'developers on Apple Silicon run w to build Mavericks artifacts'
   deviation "$d" macos-runner modern-smoke 'release.yml:modern-smoke' 'the arm64 slice runs only on Apple Silicon, exit when a Linux host can run it'
   if [ -n "$3" ]; then
     printf '  modern-smoke:\n    runs-on: %s\n    steps:\n      - run: true\n' "$3" >> "$d/.github/workflows/release.yml"
@@ -256,7 +256,7 @@ while read -r c r k extra; do
   [ -n "$k" ] && [ -z "$extra" ] || { echo "FAIL: conventions-grandfathered line is not '<check> <repo> <job|path>': $c $r $k $extra"; exit 1; }
   case "$c" in macos-runner|packager|artifact-checks-wired|modern-smoke|cxxabi) ;; *) echo "FAIL: conventions-grandfathered names an unknown check: $c"; exit 1 ;; esac
   case "$c:$k" in
-    macos-runner:*.yml:*|macos-runner:*.yaml:*|packager:*|artifact-checks-wired:*|modern-smoke:release.yml:modern-smoke|cxxabi:usr/local/mavergreen/*|cxxabi:Applications/*|cxxabi:Library/*) ;;
+    macos-runner:*.yml:*|macos-runner:*.yaml:*|packager:*|artifact-checks-wired:*|modern-smoke:release.yml:modern-smoke|cxxabi:opt/mavergreen/*|cxxabi:Applications/*|cxxabi:Library/*) ;;
     *) echo "FAIL: conventions-grandfathered key is not <workflow file>:<job> (macos-runner), release.yml:modern-smoke (modern-smoke), an installed path (cxxabi) or a path: $c $r $k"; exit 1 ;;
   esac
 done < "$GF"

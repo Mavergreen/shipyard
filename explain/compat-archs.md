@@ -18,7 +18,7 @@ A file that is not a readable Mach-O fails here.
 
 ## Deviating
 A deviations/compat-archs/<label>/ with a scope (<glob>), a reason and a revisit excuses this id for the binaries whose path the glob matches: under shipyard-check --dist, the
-path inside the pkg or tarball (usr/local/mavergreen/<product>/...). That is how one binary in a dist keeps
+path inside the pkg or tarball (opt/mavergreen/<product>/...). That is how one binary in a dist keeps
 the allowance its CMake target passes in a knob, since --dist applies one environment to every binary. At build time, state
 the set with MAVERGREEN_ALLOW_ARCHS; a universal updater beside an x86_64 product is the usual case for a
 scoped deviation. The deviations/arm64/ form is P5's, and no check reads it for this id yet.

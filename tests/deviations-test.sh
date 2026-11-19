@@ -142,11 +142,11 @@ for check in arm64 cxxabi; do
   done
 done
 fresh
-deviation "$r" arm64 cmake 'usr/local/mavergreen/cmake/*' 'developers on Apple Silicon run it'
-deviation "$r" cxxabi runtime 'usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib' 'the family runtime'
+deviation "$r" arm64 cmake 'opt/mavergreen/cmake/*' 'developers on Apple Silicon run it'
+deviation "$r" cxxabi runtime 'opt/mavergreen/libcxx22/lib/libc++abi.1.dylib' 'the family runtime'
 out="$(sh "$S" "$r")"
-has 'arm64 usr/local/mavergreen/cmake/\* developers on Apple Silicon run it' "an install-path glob is an arm64 scope"
-has 'cxxabi usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib the family runtime' "an install path is a cxxabi scope"
+has 'arm64 opt/mavergreen/cmake/\* developers on Apple Silicon run it' "an install-path glob is an arm64 scope"
+has 'cxxabi opt/mavergreen/libcxx22/lib/libc++abi.1.dylib the family runtime' "an install path is a cxxabi scope"
 # spec: scripts/assert_binary_compatible.sh header -- an objc-api deviation names one artifact scope and points
 #       at one reviewed evidence record, evidence=<repo-relative file>#<record id>, then gives the review reason;
 #       an all-wildcard, evidence-less, record-less or reasonless one would excuse sends in silence.

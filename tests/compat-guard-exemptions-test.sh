@@ -162,13 +162,13 @@ printf '#!/bin/sh\ncase "$1" in -m) LC_ALL=C sed -n "s/^NM //p" "$2" ;; *) LC_AL
 printf '#!/bin/sh\nLC_ALL=C sed -n "s/^STR //p" "$2"\n' > "$w/bin/strings"
 printf '#!/bin/sh\ncp "$3" "$5"\n' > "$w/bin/lipo"; chmod +x "$w/bin/nm" "$w/bin/strings" "$w/bin/lipo"
 LIPO="$w/bin/lipo"; export LIPO
-r="$w/tree/usr/local/mavergreen/demo"; mkdir -p "$r/bin" "$w/dist"
+r="$w/tree/opt/mavergreen/demo"; mkdir -p "$r/bin" "$w/dist"
 macho() { printf '\317\372\355\376\n'; printf '%s\n' "$@"; }
 macho 'x86_64 EXECUTE 10.9 10.9' 'STR labelColor' 'DEF _shim' > "$r/bin/demo"
 macho 'x86_64 EXECUTE 10.9 10.9' 'arm64 EXECUTE 11.0 11.3' 'DEF _shim' > "$r/bin/updater"
 macho 'x86_64 EXECUTE 10.9 10.9' 'NM                  (undefined) weak external _os_log_create (from libSystem)' 'DEF _shim' > "$r/bin/weak"
 macho 'x86_64 EXECUTE 10.9 10.9' > "$r/bin/noshim"
-(cd "$w/tree" && tar czf "$w/dist/demo-1.0.0-mavergreen.1.tar.gz" usr)
+(cd "$w/tree" && tar czf "$w/dist/demo-1.0.0-mavergreen.1.tar.gz" opt)
 dist() { rc=0; out="$(cd "$w" && SHIPYARD_CHECK_DIST="$w/dist" MAVERGREEN_DEVIATIONS_ROOT="$w/repo" MAVERGREEN_REQUIRE_DEFINED_SYMBOLS=_shim sh "$G" 2>&1)" || rc=$?; }
 label="--dist with no deviation: each binary's own allowance is missing"
 deviations_are
@@ -178,16 +178,16 @@ for id in compat-selectors compat-archs compat-imports compat-required-defined; 
 done
 label="--dist honours a path-scoped deviation for each compat id"
 deviations_are \
-  compat-selectors demo usr/local/mavergreen/demo/bin/demo 'it sends labelColor only after respondsToSelector:. Revisit when 10.9 leaves.' \
-  compat-archs updater usr/local/mavergreen/demo/bin/updater 'the updater is universal. Revisit when P5 reads arm64.' \
-  compat-imports weak usr/local/mavergreen/demo/bin/weak 'weak, NULL-checked. Revisit when the shim lands.' \
-  compat-required-defined noshim usr/local/mavergreen/demo/bin/noshim 'a helper with no shim. Revisit when it links one.'
+  compat-selectors demo opt/mavergreen/demo/bin/demo 'it sends labelColor only after respondsToSelector:. Revisit when 10.9 leaves.' \
+  compat-archs updater opt/mavergreen/demo/bin/updater 'the updater is universal. Revisit when P5 reads arm64.' \
+  compat-imports weak opt/mavergreen/demo/bin/weak 'weak, NULL-checked. Revisit when the shim lands.' \
+  compat-required-defined noshim opt/mavergreen/demo/bin/noshim 'a helper with no shim. Revisit when it links one.'
 dist; [ "$rc" -eq 0 ] || { echo "FAIL ($label): should pass, exit $rc:"; echo "$out"; exit 1; }
 for id in compat-selectors compat-archs compat-imports compat-required-defined; do
   says "is excused from $id:"
 done
 label="--dist: a deviation scoped to one binary excuses no other"
-deviations_are compat-archs demo usr/local/mavergreen/demo/bin/demo 'wrong file. Revisit never.'
+deviations_are compat-archs demo opt/mavergreen/demo/bin/demo 'wrong file. Revisit never.'
 dist; [ "$rc" -ne 0 ] || { echo "FAIL ($label): should fail"; echo "$out"; exit 1; }
-says "usr/local/mavergreen/demo/bin/updater arches"
+says "opt/mavergreen/demo/bin/updater arches"
 echo "PASS: compat-guard-exemptions"

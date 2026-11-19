@@ -12,7 +12,7 @@ noun x X; noun go127 Go; printf '1.27\n' > "$P/go127/line"; noun amp 'A&B <x>'; 
 mkdir -p "$P/empty"; : > "$P/empty/noun"
 MAVERGREEN_REPO_ROOT="$w/repo"; export MAVERGREEN_REPO_ROOT
 SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || fail "fetch_stevedore.sh failed -- the pkg block is the only gate for this seam, so it cannot be skipped"
-mkdir -p "$w/root/usr/local/mavergreen/x" "$w/c"; echo x > "$w/root/usr/local/mavergreen/x/f"
+mkdir -p "$w/root/opt/mavergreen/x" "$w/c"; echo x > "$w/root/opt/mavergreen/x/f"
 comp() { "$SD" component --root "$w/root" --identifier "$2" --version 1.0 --install-location / --mtime "$SOURCE_DATE_EPOCH" --out "$w/c/$1" >/dev/null; }
 comp x.pkg dev.mavergreen.x; comp go127-built.pkg dev.mavergreen.go127; comp amp.pkg dev.mavergreen.amp
 comp shipyard.pkg dev.mavergreen.shipyard; comp other.pkg dev.mavergreen.other; comp empty.pkg dev.mavergreen.empty

@@ -11,6 +11,7 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 . "$here/lib/cmake_fixture.sh"
+. "$root/scripts/mavergreen-meta.sh"
 real="$(command -v cmake 2>/dev/null)" || { echo "SKIP: no cmake"; exit 77; }
 command -v make >/dev/null 2>&1 || { echo "FAIL: the regeneration case needs make"; exit 1; }
 # platform: on a Linux runner, install@v1 exports MavergreenShipyard_DIR (and a caller may carry a
@@ -54,6 +55,7 @@ refused() {  # $1 = what  $2 = the minimum the refusal must name; the rest is th
   if [ "$darwin" -eq 1 ]; then
     if _out="$("$@" 2>&1)"; then echo "FAIL: $_what must be refused on a macOS host"; exit 1; fi
     printf '%s' "$_out" | grep -q 'shipyard-cmake' || { echo "FAIL: refusing $_what must name shipyard-cmake; got:"; echo "$_out"; exit 1; }
+    printf '%s' "$_out" | tr -s ' \n' '  ' | grep -qF "($(mavergreen_prefix)/bin/shipyard-cmake)" || { echo "FAIL: refusing $_what must name $(mavergreen_prefix)/bin/shipyard-cmake; got:"; echo "$_out"; exit 1; }
     printf '%s' "$_out" | grep -qF "CMake $_min or later" || { echo "FAIL: refusing $_what must name the minimum, $_min; got:"; echo "$_out"; exit 1; }
   else
     _out="$("$@" 2>&1)" || { echo "FAIL: off macOS $_what must configure -- there is no Linux cmake product to demand; got:"; echo "$_out"; exit 1; }

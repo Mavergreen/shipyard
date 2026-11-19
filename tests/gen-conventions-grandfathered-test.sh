@@ -64,8 +64,8 @@ chmod +x "$work/bin/gh"
 # spec: scripts/cxxabi-allowlist.sh -- the allow-list is read from the pinned Recaulk's librecaulk.a, served
 #       here from a file:// release tree so the generator's cxxabi facts need no network.
 rv="$(sed -n 1p "$here/../.mavergreen/ingredients/recaulk/VERSION")"
-rr="$work/rel/Mavergreen/recaulk/releases/download/$rv"; mkdir -p "$rr" "$work/rc/usr/local/mavergreen/recaulk/lib"
-printf '!<arch>\n' > "$work/rc/usr/local/mavergreen/recaulk/lib/librecaulk.a"
+rr="$work/rel/Mavergreen/recaulk/releases/download/$rv"; mkdir -p "$rr" "$work/rc/opt/mavergreen/recaulk/lib"
+printf '!<arch>\n' > "$work/rc/opt/mavergreen/recaulk/lib/librecaulk.a"
 "$STEVEDORE" component --root "$work/rc" --identifier dev.mavergreen.recaulk --version "$rv" --install-location / \
   --mtime 1700000000 --out "$work/rc.pkg" >/dev/null || { echo "FAIL: stevedore could not build the Recaulk fixture component"; exit 1; }
 printf '<?xml version="1.0" encoding="utf-8"?>\n<installer-gui-script minSpecVersion="1">\n  <pkg-ref id="dev.mavergreen.recaulk" version="%s">rc.pkg</pkg-ref>\n  <choices-outline><line choice="r"/></choices-outline>\n  <choice id="r"><pkg-ref id="dev.mavergreen.recaulk"/></choice>\n</installer-gui-script>\n' "$rv" > "$work/rc.xml"
@@ -78,8 +78,8 @@ FAKE_REPOS="$work/repos"; FAKE_SRC="$work/src"; export FAKE_REPOS FAKE_SRC
 
 mksrc() {  # $1 = name, $2 = yes: has a release workflow that calls the gate and runs on macos, $3 = decl: declares an arm64 slice
   d="$work/src/$1"; mkdir -p "$d"
-  [ "${3:-}" != decl ] || deviation "$d" arm64 bin "usr/local/mavergreen/$1/bin/*" 'developers on Apple Silicon run it'
-  [ "${3:-}" != cxxdecl ] || deviation "$d" cxxabi bin "usr/local/mavergreen/$1/bin/*" 'upstream vendors its runtime; exit: when it links libcxx22'
+  [ "${3:-}" != decl ] || deviation "$d" arm64 bin "opt/mavergreen/$1/bin/*" 'developers on Apple Silicon run it'
+  [ "${3:-}" != cxxdecl ] || deviation "$d" cxxabi bin "opt/mavergreen/$1/bin/*" 'upstream vendors its runtime; exit: when it links libcxx22'
   if [ "$2" = yes ]; then
     mkdir -p "$d/.github/workflows"
     printf '# calls family-conventions.yml\nname: release\non: push\njobs:\n  build:\n    runs-on: macos-14\n    steps:\n      - run: true\n' > "$d/.github/workflows/release.yml"
@@ -95,7 +95,7 @@ mksrc() {  # $1 = name, $2 = yes: has a release workflow that calls the gate and
 mkrel() {  # $1 = name, $2 = tool|throws|updater|none: where the pkg's arm64 Mach-O is (throws: one that defines ___cxa_throw)
   r="$work/src/$1.release"; st="$work/stage-$1"; mkdir -p "$r" "$st"; printf 'v1\n' > "$r/.tag"
   case "$2" in
-    tool|throws) mkdir -p "$st/usr/local/mavergreen/$1/bin"; m="$st/usr/local/mavergreen/$1/bin/$2" ;;
+    tool|throws) mkdir -p "$st/opt/mavergreen/$1/bin"; m="$st/opt/mavergreen/$1/bin/$2" ;;
     updater)
       a="$st/Library/Application Support/Mavergreen/$1-updater.app/Contents"; mkdir -p "$a/MacOS"
       printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.%s.updater</string><key>SUFeedURL</key><string>https://github.com/Mavergreen/%s/releases/latest/download/%s.xml</string></dict></plist>\n' "$1" "$1" "$1" > "$a/Info.plist"
@@ -117,7 +117,7 @@ mksrc hotel yes cxxdecl; mkrel hotel throws
 printf '.github\nalpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\ngolf\nhotel\n' > "$work/repos"
 
 out="$(sh "$G" "$work/clones" 2>"$work/err")" || { echo "FAIL: generator failed: $(cat "$work/err")"; exit 1; }
-want='cxxabi golf usr/local/mavergreen/golf/bin/throws
+want='cxxabi golf opt/mavergreen/golf/bin/throws
 macos-runner alpha release.yml:build
 macos-runner charlie release.yml:build
 macos-runner delta release.yml:build

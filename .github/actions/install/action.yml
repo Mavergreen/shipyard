@@ -69,7 +69,8 @@ runs:
         d="$RUNNER_TEMP/cmake-pkg"; mkdir -p "$d"
         pkg="$(sh "$root/scripts/fetch-release-pkg.sh" cmake "$v" "cmake-$v.pkg" "$d")"
         sudo installer -pkg "$pkg" -target /
-        /usr/local/mavergreen/cmake/bin/cmake --version | head -1
+        . "$root/scripts/mavergreen-meta.sh" && . "$root/scripts/lib/name-rules.sh"
+        "$(mavergreen_prefix cmake)/bin/cmake" --version | head -1
 
     # spec: scripts/install-macho-readers.sh -- the compat guard every shipyard-cmake build runs reads
     #       Mach-O with LLVM's readers and never Apple's; a macOS runner has only Apple's, so they are
@@ -101,9 +102,11 @@ runs:
         d="$RUNNER_TEMP/shipyard-pkg"; mkdir -p "$d"
         pkg="$(sh "$root/scripts/fetch-release-pkg.sh" shipyard "v$ver" "shipyard-$ver.pkg" "$d")"
         sudo installer -pkg "$pkg" -target /
-        echo /usr/local/mavergreen/bin >> "$GITHUB_PATH"
-        /usr/local/mavergreen/bin/shipyard-cmake --version | head -1
-        scripts=/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/scripts
+        . "$root/scripts/mavergreen-meta.sh" && . "$root/scripts/lib/name-rules.sh"
+        "$(mavergreen_prefix)/bin/mavergreen" check
+        echo "$(mavergreen_prefix)/bin" >> "$GITHUB_PATH"
+        "$(mavergreen_prefix)/bin/shipyard-cmake" --version | head -1
+        scripts="$(mavergreen_prefix shipyard)/share/cmake/MavergreenShipyard/scripts"
         [ -d "$scripts" ] || { echo "::error::the shipyard pkg installed no scripts dir at $scripts"; exit 1; }
         echo "SHIPYARD_SCRIPTS=$scripts" >> "$GITHUB_ENV"
         echo "shipyard $ver installed; SHIPYARD_SCRIPTS=$scripts"

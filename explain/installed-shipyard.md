@@ -5,8 +5,7 @@ Asserts that the cmake product beside shipyard is the CMake in .mavergreen/ingre
 that the farm's shipyard-cmake, shipyard-ctest, shipyard-cpack and shipyard-check are executable on the
 default PATH, and shipyard-check runs from there; that a probe under a stripped environment finds shipyard
 through shipyard-cmake; that the installed updater is
-universal; that nothing is left in /usr/local/bin from the old layout; that an installed mavergreen helper
-passes its own check; and that any other cmake is refused, by name. --root defaults to "/" (a real install);
+universal; that an installed /opt/mavergreen/bin/mavergreen helper passes its own check; and that any other cmake is refused, by name. --root defaults to "/" (a real install);
 a fixture root makes it unit-testable. It is shipyard's own check, run by hand on a real install
 (tests/installed-shipyard-test.sh, listed in tests/maintainer-tests).
 

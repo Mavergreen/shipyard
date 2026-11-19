@@ -4,7 +4,7 @@
 #          scripts/shipyard-scripts prints shipyard's scripts directory: $SHIPYARD_SCRIPTS when set,
 #          else wherever shipyard-cmake's find_package(MavergreenShipyard) lands (so a
 #          CMAKE_PREFIX_PATH dev override moves the scripts with the modules), else through the
-#          absolute /usr/local/mavergreen/bin/shipyard-cmake. The stub cases need no cmake and
+#          absolute /opt/mavergreen/bin/shipyard-cmake. The stub cases need no cmake and
 #          run in the 10.9 guest; the real-cmake cases are skipped without one.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
@@ -15,7 +15,7 @@ T="$root/scripts/shipyard-scripts"
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/shipyard-scripts-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 w="$(cd -P "$w" && pwd)"
-installed_cm=/usr/local/mavergreen/bin/shipyard-cmake
+installed_cm="$(. "$root/scripts/mavergreen-meta.sh" && mavergreen_prefix)/bin/shipyard-cmake"
 
 mkdir -p "$w/s"
 got="$(env -i PATH=/usr/bin:/bin SHIPYARD_SCRIPTS="$w/s" sh "$T")" \

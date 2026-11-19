@@ -7,9 +7,9 @@
 #          shipyard-provision are executable on the default PATH, and shipyard-check runs from there;
 #          a probe under a stripped environment
 #          finds shipyard through shipyard-cmake; shipyard's own pins are installed beside its scripts;
-#          the installed updater is universal; nothing is left in /usr/local/bin from the old layout;
-#          an installed mavergreen helper passes its own check; and any other cmake is refused, by
-#          name. --root defaults to "/" (a real install); a fixture root makes this unit-testable.
+#          the installed updater is universal; an installed mavergreen helper passes its own check;
+#          and any other cmake is refused, by name. --root defaults to "/" (a real install); a fixture
+#          root makes this unit-testable.
 #          Exit 0 clean, 1 on a failed assertion, 2 on a usage error. --no-slices skips reading the
 #          two universal binaries' slices, for a host that has no lipo that reads Mach-O.
 # spec: R-P1-17 -- tests/installed-shipyard-test.sh (a real install) and
@@ -32,10 +32,13 @@ done
 [ -d "$ROOT" ] || { echo "assert-installed-shipyard: no such root: $ROOT" >&2; exit 2; }
 
 R="${ROOT%/}"
-FARM="$R/usr/local/mavergreen/bin"
+SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
+MG="$R$(mavergreen_prefix)"
+FARM="$MG/bin"
 CM="$FARM/shipyard-cmake"
-PREFIX="$R/usr/local/mavergreen/shipyard"
-PRODUCT="$R/usr/local/mavergreen/cmake/bin/cmake"
+PREFIX="$MG/shipyard"
+PRODUCT="$MG/cmake/bin/cmake"
 CFGDIR="$PREFIX/share/cmake/MavergreenShipyard"
 EXE="$R/Library/Application Support/Mavergreen/shipyard-updater.app/Contents/MacOS/shipyard-updater"
 
@@ -76,13 +79,8 @@ if [ -x "$FARM/shipyard-check" ]; then
   "$FARM/shipyard-check" --explain tests-run-in-ci >/dev/null 2>"$W/check.log" \
     || fail "shipyard-check does not run from the link farm: $(cat "$W/check.log")"
 fi
-# platform: -L as well as -e -- a leftover link whose old prefix was removed by hand dangles, and -e
-#           alone reads a dangling link as absent.
-if [ -e "$R/usr/local/bin/shipyard-cmake" ] || [ -L "$R/usr/local/bin/shipyard-cmake" ]; then
-  fail "$R/usr/local/bin/shipyard-cmake is left over from the old layout -- it shadows the farm's shipyard-cmake on the default PATH; remove it by hand"
-fi
-if [ -f "$R/usr/local/bin/mavergreen" ]; then
-  sh "$R/usr/local/bin/mavergreen" --root "$ROOT" check || fail "mavergreen check failed"
+if [ -f "$FARM/mavergreen" ]; then
+  sh "$FARM/mavergreen" --root "$ROOT" check || fail "mavergreen check failed"
 fi
 # spec: 2026-10-09 C4 -- shipyard-cmake is a launcher script, so the slices are the cmake product's.
 if [ "$SLICES" -eq 1 ] && [ -x "$PRODUCT" ]; then
@@ -133,11 +131,11 @@ other="$(command -v cmake 2>/dev/null || true)"
 #           host has no refusal to check, so the probe runs on Darwin alone.
 [ "$(uname -s)" = Darwin ] || other=""
 # spec: 2026-10-09 C5 -- the config accepts the cmake product, so a cmake on PATH that resolves under
-#       /usr/local/mavergreen/ (the product, or shipyard's compatibility link to its launcher) is ours.
+#       /opt/mavergreen/ (the product, or shipyard's compatibility link to its launcher) is ours.
 # platform: 10.9 has no realpath and no readlink -f, so links are followed one at a time.
 _o="$other"
 while [ -n "$_o" ]; do
-  case "$_o" in "$R"/usr/local/mavergreen/*) other=""; break ;; esac
+  case "$_o" in "$MG"/*) other=""; break ;; esac
   [ -L "$_o" ] || break
   _l="$(readlink "$_o")"
   case "$_l" in /*) _o="$_l" ;; *) _o="${_o%/*}/$_l" ;; esac

@@ -29,9 +29,9 @@ d="$w/devs"
 
 # spec: SKILL.md "SDK pinning" -- one glob written with a leading */ matches the payload path and
 #       the build path alike.
-says 'the Swift runtime ships prebuilt' "$d" sdk-pin usr/local/mavergreen/swift/lib/libswiftCore.dylib
+says 'the Swift runtime ships prebuilt' "$d" sdk-pin opt/mavergreen/swift/lib/libswiftCore.dylib
 says 'the Swift runtime ships prebuilt' "$d" sdk-pin /Users/runner/work/swift/build/lib/libswiftCore.dylib
-says '' "$d" sdk-pin usr/local/mavergreen/swift/lib/libswiftRemoteMirror.dylib
+says '' "$d" sdk-pin opt/mavergreen/swift/lib/libswiftRemoteMirror.dylib
 # spec: SKILL.md "Conformance deviations" -- a glob with no reason is not a declaration
 says '' "$d" sdk-pin build/bin/no-reason
 says 'first match wins' "$d" sdk-pin build/bin/second

@@ -16,7 +16,7 @@ S="$root/scripts/assert-installed-shipyard.sh"
 CL="$(sh "$root/scripts/fetch_clang22.sh" "$root")"
 
 # platform: a 10.9 box without the Command Line Tools has no cmake on PATH, only the cmake product it installed.
-real="$(command -v cmake 2>/dev/null)" || real=/usr/local/mavergreen/cmake/bin/cmake
+real="$(command -v cmake 2>/dev/null)" || real="$(. "$root/scripts/mavergreen-meta.sh" && . "$root/scripts/lib/name-rules.sh" && mavergreen_prefix cmake)/bin/cmake"
 [ -x "$real" ] || { echo "SKIP: no cmake to build a fixture prefix from"; exit 77; }
 # platform: macOS sets TMPDIR with a trailing slash. The fixture root is passed as --root and
 #           greped for verbatim in cmake's own STATUS output, and cmake normalizes "//" away when it
@@ -50,11 +50,11 @@ check() {  # $1 = what  $2 = expected exit (0 or 1)  $3 = substring the output m
 }
 
 fx="$w/root"
-prefix="$fx/usr/local/mavergreen/shipyard"
-farm="$fx/usr/local/mavergreen/bin"
+prefix="$fx/opt/mavergreen/shipyard"
+farm="$fx/opt/mavergreen/bin"
 mkdir -p "$farm"
 # spec: tests/lib/cmake_fixture.sh -- the fixture is a pair <root>/{shipyard,cmake}, as installed.
-copy_cmake_product "$real" "$fx/usr/local/mavergreen/cmake"
+copy_cmake_product "$real" "$fx/opt/mavergreen/cmake"
 for c in cmake ctest cpack; do
   ln -s "../shipyard/bin/shipyard-$c" "$farm/shipyard-$c"
 done
@@ -85,7 +85,7 @@ lipo_says() {  # $1 = the -info line for the cmake product  $2 = the -info line 
 #!/bin/sh
 case "\$2" in
   *shipyard-updater) printf '%s\n' "$2" ;;
-  */usr/local/mavergreen/cmake/bin/cmake) printf '%s\n' "$1" ;;
+  */opt/mavergreen/cmake/bin/cmake) printf '%s\n' "$1" ;;
   *) echo "fatal error: lipo: can't figure out the architecture type of: \$2" >&2; exit 1 ;;
 esac
 EOF
@@ -107,7 +107,7 @@ check "a correctly installed shipyard passes" 0 "finds shipyard in" \
 check "a cmake product that is not the pinned CMake fails" 1 "is not CMake" \
   assert --cmake-version 0.0.0-not-this-one
 
-product="$fx/usr/local/mavergreen/cmake"
+product="$fx/opt/mavergreen/cmake"
 mv "$farm/shipyard-cmake" "$w/link-aside"
 printf '#!/bin/sh\necho "cmake version 9.9.9"\n' > "$farm/shipyard-cmake"; chmod +x "$farm/shipyard-cmake"
 check "the version is the cmake product's own, not whatever shipyard-cmake prints" 1 "is not CMake 9.9.9" \
@@ -162,19 +162,9 @@ check "a prefix whose shipyard is missing fails the stripped-environment probe" 
 mv "$w/shipyard-aside" "$prefix/share/cmake/MavergreenShipyard"
 
 mv "$farm/shipyard-cmake" "$w/link-aside"
-check "a missing /usr/local/mavergreen/bin/shipyard-cmake fails" 1 "no executable shipyard-cmake" \
+check "a missing /opt/mavergreen/bin/shipyard-cmake fails" 1 "no executable shipyard-cmake" \
   assert --cmake-version "$ver"
 mv "$w/link-aside" "$farm/shipyard-cmake"
-
-mkdir -p "$fx/usr/local/bin"
-ln -s ../mavergreen/shipyard/bin/cmake "$fx/usr/local/bin/shipyard-cmake"
-check "a /usr/local/bin/shipyard-cmake beside the new layout fails" 1 "left over from the old layout" \
-  assert --cmake-version "$ver"
-rm "$fx/usr/local/bin/shipyard-cmake"
-ln -s ../mavergreen-shipyard/bin/cmake "$fx/usr/local/bin/shipyard-cmake"
-check "a DANGLING /usr/local/bin/shipyard-cmake (its old prefix removed by hand) still fails" 1 "left over from the old layout" \
-  assert --cmake-version "$ver"
-rm "$fx/usr/local/bin/shipyard-cmake"
 
 if [ "$(uname -s)" = Darwin ]; then
   printf '#!/bin/sh\nexit 0\n' > "$stub/cmake"
@@ -194,7 +184,7 @@ check "off Darwin a foreign cmake that is not refused is not probed" 0 "no refus
   env HOME="$run_home" PATH="$fakeuname:$stub:$PATH" sh "$S" --root "$fx" --cmake-version "$ver"
 rm -f "$stub/cmake"
 # spec: 2026-10-09 C5 -- the cmake product is the one cmake the config accepts, so a cmake on PATH
-#       that resolves under the root's /usr/local/mavergreen/ is not foreign, whatever it is called.
+#       that resolves under the root's /opt/mavergreen/ is not foreign, whatever it is called.
 ln -s "$product/bin/cmake" "$stub/cmake"
 check "the cmake product reached as a bare cmake on PATH is not probed as foreign" 0 "finds shipyard in" \
   assert --cmake-version "$ver"
@@ -215,21 +205,24 @@ check "--no-slices runs no lipo" 0 "slices: not checked" \
 #           macOS-only), so off macOS it cannot pass its own check; tests/installed-shipyard-test.sh
 #           runs it on a real install.
 if [ -x /usr/libexec/PlistBuddy ]; then
-  sh "$root/scripts/build-base-component.sh" --emit-helper "$fx/usr/local/bin/mavergreen" --version 0.0.0
+  MAVERGREEN_CHAIN_UID="$(id -u)"; export MAVERGREEN_CHAIN_UID
+  mkdir -p "$fx/opt/mavergreen/mavergreen/bin"
+  sh "$root/scripts/build-base-component.sh" --emit-helper "$fx/opt/mavergreen/mavergreen/bin/mavergreen" --version 0.0.0
+  ln -s ../mavergreen/bin/mavergreen "$farm/mavergreen"
   check "an installed helper whose check fails fails the assertion (farm links into a product with no manifest)" 1 "mavergreen check failed" \
     assert --cmake-version "$ver"
-  ms="$w/manifest-stage"; mkdir -p "$ms/usr/local/mavergreen/shipyard"
+  ms="$w/manifest-stage"; mkdir -p "$ms/opt/mavergreen/shipyard"
   for p in shipyard cmake; do mkdir -p "$w/mrepo/.mavergreen/products/$p"; echo "$p" > "$w/mrepo/.mavergreen/products/$p/noun"; done
-  MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product shipyard --version 0.0.0 \
+  GITHUB_REPOSITORY=Mavergreen/shipyard MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product shipyard --version 0.0.0 \
     --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
-  cp "$ms/usr/local/mavergreen/shipyard/mavergreen.plist" "$prefix/mavergreen.plist"
-  mkdir -p "$fx/usr/local/mavergreen/var/mavergreen/selections"
-  echo shipyard > "$fx/usr/local/mavergreen/var/mavergreen/selections/shipyard"
-  mkdir -p "$ms/usr/local/mavergreen/cmake"
-  MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product cmake --version 4.4.4-mavergreen.1 \
+  cp "$ms/opt/mavergreen/shipyard/mavergreen.plist" "$prefix/mavergreen.plist"
+  mkdir -p "$fx/opt/mavergreen/var/mavergreen/selections"
+  echo shipyard > "$fx/opt/mavergreen/var/mavergreen/selections/shipyard"
+  mkdir -p "$ms/opt/mavergreen/cmake"
+  GITHUB_REPOSITORY=Mavergreen/cmake MAVERGREEN_REPO_ROOT="$w/mrepo" sh "$root/scripts/render-manifest.sh" --stage "$ms" --product cmake --version 4.4.4-mavergreen.1 \
     --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack
-  cp "$ms/usr/local/mavergreen/cmake/mavergreen.plist" "$product/mavergreen.plist"
-  echo cmake > "$fx/usr/local/mavergreen/var/mavergreen/selections/cmake"
+  cp "$ms/opt/mavergreen/cmake/mavergreen.plist" "$product/mavergreen.plist"
+  echo cmake > "$fx/opt/mavergreen/var/mavergreen/selections/cmake"
   check "with the helper and the cmake product installed and shipyard linked, a correct install passes mavergreen check too" 0 "finds shipyard in" \
     assert --cmake-version "$ver"
 else

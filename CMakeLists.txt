@@ -35,6 +35,8 @@ if(SHIPYARD_BUILD_UPDATER)
   # Every slice embeds Sparkle's FAT framework, so the two single-arch builds carry an identical
   # framework and lipo-merge-tree.sh only has to merge the updater's own executable.
   include("${CMAKE_CURRENT_SOURCE_DIR}/MavericksSparkle.cmake")
+  include("${CMAKE_CURRENT_SOURCE_DIR}/MavergreenPrefix.cmake")
+  mavergreen_prefix(_shipyard_installed shipyard)
 
   # ONE universal app (spec 2026-09-11): built once per arch -- x86_64/10.9 and arm64/11.0, since a
   # deployment floor is per-configure and arm64 has no 10.9 -- and merged by lipo-merge-tree.sh in the
@@ -45,7 +47,7 @@ if(SHIPYARD_BUILD_UPDATER)
     VERSION "${PROJECT_VERSION}"
     LOG_PREFIX "MavShipyardUpdater"
     CONFIRM_TITLE "Shipyard updated"
-    CONFIRM_BODY "Shipyard in /usr/local/mavergreen/shipyard was updated."
+    CONFIRM_BODY "Shipyard in ${_shipyard_installed} was updated."
     RELAUNCH_MARKER "/tmp/.shipyard-updater-relaunched"
     ALLOW_GENERIC
     # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification. shipyard has no UI.

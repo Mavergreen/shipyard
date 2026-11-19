@@ -7,7 +7,8 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/.." && pwd)"
 fx="$here/fixtures/sdk-metadata"
-SC="${CMAKE:-$(command -v shipyard-cmake || command -v cmake || echo /usr/local/mavergreen/bin/shipyard-cmake)}"
+. "$root/scripts/mavergreen-meta.sh"
+SC="${CMAKE:-$(command -v shipyard-cmake || command -v cmake || echo "$(mavergreen_prefix)/bin/shipyard-cmake")}"
 [ -x "$SC" ] || command -v "$SC" >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/sdk metadata test.XXXXXX")"

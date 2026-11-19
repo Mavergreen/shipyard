@@ -5,5 +5,6 @@
 #          the cmake product this checkout pins. Exits 77 when no shipyard is installed.
 set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
-[ -d /usr/local/mavergreen/shipyard ] || { echo "SKIP: no shipyard installed at /usr/local/mavergreen/shipyard"; exit 77; }
+sy="$(. "$root/scripts/mavergreen-meta.sh" && . "$root/scripts/lib/name-rules.sh" && mavergreen_prefix shipyard)"
+[ -d "$sy" ] || { echo "SKIP: no shipyard installed at $sy"; exit 77; }
 exec sh "$root/scripts/assert-installed-shipyard.sh" --cmake-version "$(. "$root/scripts/mavergreen-meta.sh" && MAVERGREEN_REPO_ROOT="$root" mg_value ingredients/cmake/VERSION | sed 's/-mavergreen\..*//')" --root /

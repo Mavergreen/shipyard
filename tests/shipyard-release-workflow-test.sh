@@ -156,8 +156,14 @@ if any(re.search(r"(^|[\s;|&(=])shipyard-c(make|test|pack)\b", c) for st in buil
     bad.append("the build job runs shipyard-cmake/ctest/cpack, which install@v1's Linux path does not provide")
 need(r'^cmake -S \. -B "\$RUNNER_TEMP/payload-build"$',
      "the build job must configure the payload with the runner's cmake (cmake -S . -B \"$RUNNER_TEMP/payload-build\")")
-need(r'^DESTDIR="\$RUNNER_TEMP/payload-stage" cmake --install "\$RUNNER_TEMP/payload-build" --prefix /usr/local/mavergreen/shipyard$',
-     "the build job must install the payload with the runner's cmake (DESTDIR=... cmake --install ... --prefix /usr/local/mavergreen/shipyard)")
+need(r'^DESTDIR="\$RUNNER_TEMP/payload-stage" cmake --install "\$RUNNER_TEMP/payload-build" --prefix "\$\(mavergreen_prefix shipyard\)"$',
+     "the build job must install the payload with the runner's cmake (DESTDIR=... cmake --install ... --prefix \"$(mavergreen_prefix shipyard)\")")
+need(r'^sh scripts/package-pkg\.sh --shipyard-prefix "\$RUNNER_TEMP/payload-stage\$\(mavergreen_prefix shipyard\)" ',
+     "the build job must package the staged $(mavergreen_prefix shipyard), the prefix it installed into")
+need(r'^\. scripts/mavergreen-meta\.sh && \. scripts/lib/name-rules\.sh$',
+     "the build job never defines mavergreen_prefix (. scripts/mavergreen-meta.sh && . scripts/lib/name-rules.sh)")
+if find(r"usr/local/mavergreen"):
+    bad.append("release.yml still names usr/local/mavergreen; every path goes through mavergreen_prefix")
 
 if find(r"^sudo (-n )?installer "):
     bad.append("release.yml installs a pkg on a runner; shipyard's release builds and publishes it, and runs no install")
@@ -282,12 +288,23 @@ if not exports(rel_mac, "SHIPYARD_SCRIPTS"):
 # Consumer-facing: every product's CI calls shipyard-cmake by bare name and reads $SHIPYARD_SCRIPTS.
 # The pkg exports its commands through the link farm, which only paths.d puts on PATH -- and a
 # runner's steps never read paths.d.
-if not any(re.search(r'^echo /usr/local/mavergreen/bin >> "\$GITHUB_PATH"$', c) for c in rel_mac):
-    bad.append("the macOS release path never puts /usr/local/mavergreen/bin on the job's PATH "
-               "(echo /usr/local/mavergreen/bin >> \"$GITHUB_PATH\"), so no later step finds shipyard-cmake")
-if not any(re.search(r'^scripts=/usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/scripts$', c) for c in rel_mac):
+if not any(re.search(r'^echo "\$\(mavergreen_prefix\)/bin" >> "\$GITHUB_PATH"$', c) for c in rel_mac):
+    bad.append("the macOS release path never puts $(mavergreen_prefix)/bin on the job's PATH "
+               "(echo \"$(mavergreen_prefix)/bin\" >> \"$GITHUB_PATH\"), so no later step finds shipyard-cmake")
+if not any(re.search(r'^scripts="\$\(mavergreen_prefix shipyard\)/share/cmake/MavergreenShipyard/scripts"$', c) for c in rel_mac):
     bad.append("the macOS release path must export SHIPYARD_SCRIPTS from the installed product "
-               "tree, /usr/local/mavergreen/shipyard/share/cmake/MavergreenShipyard/scripts")
+               "tree, $(mavergreen_prefix shipyard)/share/cmake/MavergreenShipyard/scripts")
+mac_sy = [i for i, c in enumerate(rel_mac) if re.search(r'fetch-release-pkg\.sh" shipyard ', c)]
+mac_ck = [i for i, c in enumerate(rel_mac) if re.search(r'^"\$\(mavergreen_prefix\)/bin/mavergreen" check$', c)]
+if not mac_sy or not mac_ck or mac_ck[0] < mac_sy[0]:
+    bad.append("the macOS release path never runs \"$(mavergreen_prefix)/bin/mavergreen\" check after installing "
+               "shipyard, so a broken chain or farm reaches the consumer's build unannounced")
+if not any(re.search(r'^"\$\(mavergreen_prefix cmake\)/bin/cmake" --version', c) for c in rel_mac):
+    bad.append("the macOS release path never runs the cmake product it installed, at $(mavergreen_prefix cmake)/bin/cmake")
+if not any(re.search(r'(^|&& )\. "\$root/scripts/mavergreen-meta\.sh" && \. "\$root/scripts/lib/name-rules\.sh"$', c) for c in rel_mac):
+    bad.append("the macOS release path never defines mavergreen_prefix from the action's own checkout")
+if any("usr/local/mavergreen" in c for c in rel_mac + rel_oth):
+    bad.append("install@v1 still names usr/local/mavergreen; every path goes through mavergreen_prefix")
 
 # R-P1-18: a non-macOS runner gets shipyard's shell half, pinned to the ref, and nothing installed.
 # repackage-on-ingredient-bump.yml runs on ubuntu-latest and wants exactly that.
@@ -362,4 +379,12 @@ esac
 case "$merge" in
   *--allow-differ*) echo "FAIL: tests/lib/build-updater.sh merges with --allow-differ; nothing in updater/Info.plist.in is arch-dependent, so a difference there is a defect to fix, not one to declare"; exit 1 ;;
 esac
+ci="$here/../.github/workflows/ci.yml"
+grep -q -e '--prefix "$(mavergreen_prefix shipyard)"' "$ci" \
+  || { echo "FAIL: ci.yml's package rehearsal never installs the payload into \"\$(mavergreen_prefix shipyard)\""; exit 1; }
+grep -q -e '--shipyard-prefix "$RUNNER_TEMP/payload-stage$(mavergreen_prefix shipyard)"' "$ci" \
+  || { echo "FAIL: ci.yml's package rehearsal never packages the staged \$(mavergreen_prefix shipyard)"; exit 1; }
+if grep -n 'usr/local/mavergreen' "$ci"; then
+  echo "FAIL: ci.yml still names usr/local/mavergreen; every path goes through mavergreen_prefix"; exit 1
+fi
 echo "PASS: shipyard-release-workflow"
