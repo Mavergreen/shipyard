@@ -34,3 +34,5 @@ golden-gate tests/objc-guard-test.sh
 10.9 tests/root-chain-acl-test.sh
 golden-gate tests/root-chain-test.sh
 golden-gate tests/root-chain-acl-test.sh
+10.9 tests/gen-os-inventory-test.sh
+golden-gate tests/gen-os-inventory-test.sh

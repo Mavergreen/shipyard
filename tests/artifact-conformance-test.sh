@@ -1575,6 +1575,52 @@ has "root-runs: a deviation scoped to another pkg does not" root-runs "$RR
 deviation root-runs:q.pkg the daemon is upstream's own, and its installer puts it there
 script-mentions p.pkg dev.mavergreen.x postinstall /usr/local/"
 
+# spec: explain/os-overwrite.md -- a regular product only adds files to Mac OS X 10.9.5.
+OW="$REL
+name x identifier dev.mavergreen.x
+installs p.pkg opt/mavergreen/x/bin/x"
+HDA='System/Library/Extensions/AppleHDA.kext/Contents/Info.plist'
+says "os-overwrite: a file 10.9.5 ships is named" os-overwrite "p.pkg overwrites $HDA, which Mac OS X 10.9.5 ships; a regular product may only add files" "$OW
+installs p.pkg $HDA"
+says "os-overwrite: its fix names the tree and the system edition" os-overwrite "fix: install it under /opt/mavergreen/<short>/, or make this a system edition" "$OW
+installs p.pkg $HDA"
+says "os-overwrite: a shipped path with a space is matched" os-overwrite "p.pkg overwrites Library/Application Support/Apple/Automator/Workflows/Process Images.workflow/Contents/document.wflow," "$OW
+installs p.pkg Library/Application%20Support/Apple/Automator/Workflows/Process%20Images.workflow/Contents/document.wflow"
+has "os-overwrite: a shipped path with a percent sign is matched" os-overwrite "$OW
+installs p.pkg System/Library/Frameworks/Ruby.framework/Versions/1.8/usr/share/ri/1.8/system/ACL/allow_addr%253f-i.yaml"
+has "os-overwrite: usr/bin/ssh is the OS's" os-overwrite "$OW
+installs p.pkg usr/bin/ssh"
+clean "os-overwrite: a kext 10.9.5 lacks is added" os-overwrite "$OW
+installs p.pkg Library/Extensions/VoodooInputMavericks.kext/Contents/Info.plist"
+clean "os-overwrite: a directory 10.9.5 ships may gain a file" os-overwrite "$OW
+installs p.pkg usr/bin/mavergreen-not-shipped"
+clean "os-overwrite: a deviation scoped to the path excuses it" os-overwrite "$OW
+deviation os-overwrite:System/Library/Extensions/AppleHDA.kext/* the driver patches AppleHDA for codecs 10.9.5 lacks
+installs p.pkg $HDA"
+has "os-overwrite: a deviation scoped to another path does not" os-overwrite "$OW
+deviation os-overwrite:System/Library/Extensions/AppleHDA.kext/* the driver patches AppleHDA for codecs 10.9.5 lacks
+installs p.pkg usr/bin/ssh"
+clean "os-overwrite: a System Replace pkg is a system edition's" os-overwrite "$(printf '%s\n' "$OW" | sed 's/ dev\.mavergreen\.x$/ dev.mavergreen.x.system-replace/')
+installs p.pkg usr/bin/ssh"
+clean "os-overwrite: a product whose edition is system may replace" os-overwrite "$OW
+edition x system
+installs p.pkg usr/bin/ssh"
+has "os-overwrite: another product's system edition excuses nothing" os-overwrite "$OW
+edition y system
+name y identifier dev.mavergreen.y
+installs p.pkg usr/bin/ssh"
+_ow="$(mktemp -d "${TMPDIR:-/tmp}/conformance-os-overwrite.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+cp -R "$here/../scripts" "$_ow/scripts"
+rm -f "$_ow/scripts/os-inventory-10.9.5.gz"
+_owout="$(printf '%s\ninstalls p.pkg Library/Extensions/VoodooInputMavericks.kext/Contents/Info.plist\nend-of-facts\n' "$OW" | sh "$_ow/scripts/check-artifact-conformance.sh" 2>&1 >/dev/null)" \
+  && { echo "FAIL os-overwrite: a missing inventory must fail, not pass"; exit 1; }
+printf '%s\n' "$_owout" | grep -q '^os-overwrite: ' || { echo "FAIL os-overwrite: a missing inventory is os-overwrite's failure, got: $_owout"; exit 1; }
+: | gzip > "$_ow/scripts/os-inventory-10.9.5.gz"
+_owout="$(printf '%s\ninstalls p.pkg Library/Extensions/VoodooInputMavericks.kext/Contents/Info.plist\nend-of-facts\n' "$OW" | sh "$_ow/scripts/check-artifact-conformance.sh" 2>&1 >/dev/null)" \
+  && { echo "FAIL os-overwrite: an empty inventory must fail, not pass"; exit 1; }
+printf '%s\n' "$_owout" | grep -q '^os-overwrite: ' || { echo "FAIL os-overwrite: an empty inventory is os-overwrite's failure, got: $_owout"; exit 1; }
+rm -rf "$_ow"
+
 
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
@@ -1613,7 +1659,7 @@ export STEVEDORE="$SD"
 </dict></plist>
 PLIST
   mkdir -p "$_pk/.mavergreen/products/x" "$_pk/.mavergreen/products/w"
-  printf 'X\n' > "$_pk/.mavergreen/products/x/noun"; printf 'W\n' > "$_pk/.mavergreen/products/w/noun"; : > "$_pk/.mavergreen/products/w/built-on-install"
+  printf 'X\n' > "$_pk/.mavergreen/products/x/noun"; printf 'W\n' > "$_pk/.mavergreen/products/w/noun"; : > "$_pk/.mavergreen/products/w/built-on-install"; printf 'system\n' > "$_pk/.mavergreen/products/w/edition"
   mkdir -p "$_pk/.mavergreen/upstream"; printf '1.0.0\n# renovate: datasource=github-releases depName=example/x\n' > "$_pk/.mavergreen/upstream/VERSION"
   "$SD" component --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavergreen.1 --install-location / \
     --mtime 1700000000 --out "$_pk/dist/x-1.0.0-mavergreen.1.pkg"
@@ -1663,6 +1709,8 @@ PLIST
     || { echo "FAIL: one product record per directory in .mavergreen/products/: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -qx 'built-on-install x' \
     && { echo "FAIL: only a product with .mavergreen/products/<short>/built-on-install has a built-on-install fact: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -q '^edition x' \
+    && { echo "FAIL: only a product with .mavergreen/products/<short>/edition has an edition fact: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q '^registered ' \
     && { echo "FAIL: the stream carries no registered record; identity is derived: $_f"; exit 1; }
   rm -rf "$_pk"
@@ -1686,6 +1734,7 @@ PLIST
     'name x identifier dev.mavergreen.x' \
     'product x' \
     'built-on-install w' \
+    'edition w system' \
     'manifest-outside x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app' \
     'manifest-outside x-1.0.0-mavergreen.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist' \
     'manifest-generated x-1.0.0-mavergreen.1.pkg Applications/Linux%20X.app' \

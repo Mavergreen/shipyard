@@ -60,6 +60,8 @@ for _pd in "$root"/.mavergreen/products/*/; do
   done
   printf 'derived %s%s\n' "$_p" "$_dv"
   [ ! -f "$_pd/built-on-install" ] || printf 'built-on-install %s\n' "$_p"
+  _ed="$(mg_value "products/$_p/edition" 2>/dev/null)" || _ed=""
+  [ -z "$_ed" ] || printf 'edition %s %s\n' "$_p" "$(printf '%s' "$_ed" | af_enc)"
   _app="$(mg_value "products/$_p/app" 2>/dev/null)" || _app=""
   printf 'app %s %s\n' "$_p" "${_app:-none}"
   for _s in pkg component installer-title channel-title item-title manifest-name identifier; do

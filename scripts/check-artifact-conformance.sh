@@ -30,6 +30,7 @@
 #            manifest-line <file> <line|none>                     that manifest's line
 #            manifest-feed <file> <url|none>                      that manifest's feed
 #            built-on-install <product>                           one per product whose .mavergreen/products/<product>/built-on-install exists
+#            edition       <product> <edition>                    one per product whose .mavergreen/products/<product>/edition exists (%20-encoded)
 #            sparkle       <file> <path> <SUFeedURL>              one per top-level bundle carrying a Sparkle feed
 #            repository    <owner/name>                           the repo the release is built in (mg_repo), when known
 #            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
@@ -106,7 +107,7 @@ kind_ran() {  # $1 = the fact kind the ids read, $2 = what it is called, then th
 chk_ran version-scheme
 if has pkg || has appcast; then chk_ran version; else chk_notrun version "no .pkg or appcast in this release"; fi
 kind_ran pkg .pkg floor identifier bundle-id launchd-label manifest base line install-path feed updater repository arm64 \
-  pkg-name installer-title manifest-name app-name root-runs
+  pkg-name installer-title manifest-name app-name root-runs os-overwrite
 kind_ran appcast appcast enclosure length enclosure-url notes feed-title
 kind_ran build-info "build record" variant-build-info
 kind_ran macho Mach-O sdk-pin cxxabi
@@ -140,6 +141,7 @@ rule_of() {
     arm64) echo "a pkg ships an arm64 slice only where .mavergreen/deviations/arm64/ declares its install path" ;;
     cxxabi) echo "one process gets one C++ runtime: no shipped Mach-O defines libc++abi's machinery or loads another libc++abi" ;;
     root-runs) echo "root runs a launch daemon or an install script only from a root-only chain" ;;
+    os-overwrite) echo "a regular product only adds files to Mac OS X 10.9.5, and never replaces one the OS ships" ;;
   esac
 }
 fix_of() {
@@ -171,6 +173,7 @@ fix_of() {
     arm64) echo "build that path x86_64 only, or declare .mavergreen/deviations/arm64/<label>/ (scope <install-path glob>, a reason saying who runs it on Apple Silicon and why, a revisit), with a modern-smoke job in release.yml that runs it" ;;
     cxxabi) echo "link the family's runtime (libcxx22), or declare .mavergreen/deviations/cxxabi/<label>/ (scope <glob>, a reason, a revisit)" ;;
     root-runs) echo "never name an admin-writable path in an install script; root runs only from a root-only chain" ;;
+    os-overwrite) echo "install it under /opt/mavergreen/<short>/, or make this a system edition" ;;
   esac
 }
 
@@ -617,6 +620,50 @@ while read -r kind file a b c; do
       fail root-runs "$file's $a $b names $c, which an admin can write" "$file" ;;
   esac
 done < "$facts"
+
+# spec: explain/os-overwrite.md -- a regular product only adds files to Mac OS X 10.9.5.
+if has pkg; then
+  awk '$1 == "edition" && $3 == "system" { s[$2] = 1 }
+       $1 == "name" && $3 == "identifier" { id[$2] = $4 }
+       END { for (p in s) if (p in id) print id[p] }' "$facts" > "$tmp/ow-system"
+  awk 'FILENAME == ARGV[1] { sys[$1] = 1; next }
+       $1 == "pkg" && !($5 in sys) && $5 !~ /\.system-replace$/ { reg[$2] = 1 }
+       $1 == "installs" && ($2 in reg) { print $2, $3 }' "$tmp/ow-system" "$facts" > "$tmp/ow-installs"
+  : > "$tmp/ow-dev"; : > "$tmp/ow-fail"; : > "$tmp/ow-hits"
+  ow_rc=0
+  if [ ! -s "$tmp/ow-installs" ]; then
+    gzip -dc "$SELF/os-inventory-10.9.5.gz" 2>/dev/null | head -1 | grep -q . || ow_rc=3
+  else
+    { gzip -dc "$SELF/os-inventory-10.9.5.gz" 2>/dev/null || echo /gzip-failed; } | awk '
+      NR == FNR { want[$2] = want[$2] " " $1; next }
+      $0 == "/gzip-failed" { bad = 1; next }
+      { n++; p = $0; gsub(/%/, "%25", p); gsub(/ /, "%20", p)
+        if (p in want) { k = split(want[p], f, " "); for (i = 1; i <= k; i++) print f[i], p } }
+      END { if (bad || n == 0) exit 3 }' "$tmp/ow-installs" - > "$tmp/ow-hits" || ow_rc=$?
+  fi
+  if [ "$ow_rc" -ne 0 ]; then
+    chk_fail os-overwrite "$(rule_of os-overwrite)" \
+      "scripts/os-inventory-10.9.5.gz is missing, empty or unreadable, so nothing says which files 10.9.5 ships" \
+      "restore scripts/os-inventory-10.9.5.gz from shipyard, or regenerate it on a 10.9.5 Mac with gen-os-inventory.sh | gzip -9n"
+  else
+    LC_ALL=C sort "$tmp/ow-hits" | while read -r file path; do
+      p="$(dec "$path")"
+      r="$(deviation_reason os-overwrite "$p")"
+      if [ -n "$r" ]; then printf '%s\n' "$r" >> "$tmp/ow-dev"
+      else printf '%s %s\n' "$file" "$path" >> "$tmp/ow-fail"; fi
+    done
+    sort "$tmp/ow-dev" | uniq -c | while read -r n r; do
+      echo "conformance: os-overwrite: DECLARED DEVIATION ($n files) -- $r"
+    done
+    head -20 "$tmp/ow-fail" > "$tmp/ow-fail20"
+    while read -r file path; do
+      chk_fail os-overwrite "$(rule_of os-overwrite)" \
+        "$file overwrites $(dec "$path"), which Mac OS X 10.9.5 ships; a regular product may only add files" "$(fix_of os-overwrite)"
+    done < "$tmp/ow-fail20"
+    ow_nfail="$(wc -l < "$tmp/ow-fail" | tr -d ' ')"
+    [ "$ow_nfail" -le 20 ] || echo "conformance: os-overwrite: ... and $((ow_nfail - 20)) more" >&2
+  fi
+fi
 
 # spec: SKILL.md "Artifact conformance" axis table -- ITSELF: the appcast describes this release, and
 #       its enclosure names a published asset at its real length.
