@@ -161,12 +161,13 @@ _opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\" hostArchitectures=\"x
   [ -n "$WELCOME" ] && echo "    <welcome file=\"$(basename "$WELCOME")\" mime-type=\"text/html\"/>"
   [ -n "$LICENSE" ] && echo "    <license file=\"$(basename "$LICENSE")\"/>"
   [ -n "$CONCLUSION" ] && echo "    <conclusion file=\"$(basename "$CONCLUSION")\" mime-type=\"text/html\"/>"
-  printf '%s\n' "$ARCH_LINES" | awk '
+  printf '%s\n' "$ARCH_LINES" | awk -v opts="<options $_opts/>" '
+    NR == 2 { print opts }
     /^<script><!\[CDATA\[$/ { print "<script>"; s = 1; next }
     /^\]\]><\/script>$/ { print "</script>"; s = 0; next }
     s { gsub(/&/, "\\&amp;"); gsub(/</, "\\&lt;"); gsub(/>/, "\\&gt;") }
-    { print }' | sed 's/^/    /'
-  echo "    <options $_opts/>"
+    { print }
+    END { if (NR < 2) print opts }' | sed 's/^/    /'
   echo '    <choices-outline>'
   echo '        <line choice="default">'
   echo '            <line choice="dev.mavergreen.base"/>'
@@ -197,6 +198,7 @@ got="$(sed 's/^[[:space:]]*//' "$X/x/Distribution" | awk '
   s { gsub(/&lt;/, "<"); gsub(/&gt;/, ">"); gsub(/&amp;/, "\\&") }
   s { print }')"
 opts="$(grep -c "<options [^>]*hostArchitectures=\"x86_64,arm64\"" "$X/x/Distribution" || true)"
+order="$(sed 's/^[[:space:]]*//' "$X/x/Distribution" | awk '/^<(allowed-os-versions|options|installation-check|script)[ >\/]/ { t = $1; sub(/^</, "", t); sub(/[>\/].*/, "", t); printf "%s ", t }')"
 first="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$X/x/Distribution" | grep -v '^default$' | head -1)"
 concl="$(grep -c '<conclusion file=' "$X/x/Distribution" || true)"
 rm -rf "$X"
@@ -205,6 +207,12 @@ want="$(printf '%s\n' "$ARCH_LINES" | sed -e 's/^<allowed-os-versions>//' -e 's|
   || { echo "productbuild_floor: the OS range or installation-check in $OUT is not the class's (got: $got; want: $want)" >&2; exit 1; }
 [ "$opts" -ge 1 ] \
   || { echo "productbuild_floor: hostArchitectures=\"x86_64,arm64\" is missing from $OUT" >&2; exit 1; }
+case "$ARCH_LINES" in
+  *installation-check*) want_order="allowed-os-versions options installation-check script ";;
+  *) want_order="allowed-os-versions options ";;
+esac
+[ "$order" = "$want_order" ] \
+  || { echo "productbuild_floor: $OUT orders its elements as \"$order\", not \"$want_order\"" >&2; exit 1; }
 [ "$first" = dev.mavergreen.base ] \
   || { echo "productbuild_floor: dev.mavergreen.base is not first in $OUT" >&2; exit 1; }
 [ -z "$CONCLUSION" ] || [ "$concl" -ge 1 ] \

@@ -49,7 +49,15 @@ has() { grep -qF -- "$2" "$D" || fail "$1: the Distribution has '$2': $(cat "$D"
 hasnt() { grep -qF -- "$2" "$D" && fail "$1: the Distribution has no '$2'" || :; }
 installs_check() { has "$1" '<installation-check script="mavergreen_arch()"/>'; }
 no_check() { hasnt "$1" 'installation-check'; hasnt "$1" '<script>'; }
-has_options() { has "$1" 'hostArchitectures="x86_64,arm64"'; }
+has_options() {
+  has "$1" 'hostArchitectures="x86_64,arm64"'
+  _o="$(sed 's/^[[:space:]]*//' "$D" | awk '/^<(allowed-os-versions|options|installation-check|script)[ >\/]/ { t = $1; sub(/^</, "", t); sub(/[>\/].*/, "", t); printf "%s ", t }')"
+  case "$_o" in
+    "allowed-os-versions options installation-check script "|"allowed-os-versions options ") ;;
+    *) fail "$1: the Distribution orders allowed-os-versions, options, then the installation-check and script: got '$_o'";;
+  esac
+  case "$(cat "$D")" in *installation-check*) [ "$_o" = "allowed-os-versions options installation-check script " ] || fail "$1: a rule has its installation-check and script";; esac
+}
 newer() { mkdir -p "$w/repo/.mavergreen/deviations/newer-macos/t"
   printf 'w\n' > "$w/repo/.mavergreen/deviations/newer-macos/t/scope"
   printf 'w serves newer macOS\n' > "$w/repo/.mavergreen/deviations/newer-macos/t/reason"
@@ -77,6 +85,8 @@ if need_readers x86_64; then
   build x86_64 opt/mavergreen/w/bin/clean=clean; built x86_64
   has x86_64 'min="10.9.5" before="10.11"'; installs_check x86_64; has x86_64 'Built for Intel Macs'
   has x86_64 'running Mac OS X 10.9 or 10.10'; has_options x86_64
+  build archive opt/mavergreen/w/lib/libm.a=libm.a; built archive
+  has archive 'Built for Intel Macs'; installs_check archive; has_options archive
   newer
   build intel-newer opt/mavergreen/w/bin/clean=clean; built intel-newer
   has intel-newer 'min="10.9.5"/>'; hasnt intel-newer before; installs_check intel-newer
