@@ -13,6 +13,12 @@ pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*"; [ ! -f "$T/err" ] || sed 's/^/    | /' "$T/err"; fails=$((fails + 1)); }
 S="$ROOT/scripts/fetch_host_libcxx.sh"
 pin=22.1.8; digest=922f1817a0df7b1489272d18134ee0087a8b068828f87ac63b9861b1a9965888
+CLANG22_PINS="${FETCH_HOST_LIBCXX_TEST_CLANG22_PINS:-$ROOT/components/clang22}"
+real_llvm=$(tr -d ' \t\n' <"$CLANG22_PINS/version"); real_llvm=${real_llvm%%-*}
+if [ "$real_llvm" != "$pin" ]; then
+  echo "FAIL: components/clang22/version is LLVM $real_llvm; this test's llvm-project pin ($pin $digest) must be bumped alongside clang22"
+  exit 1
+fi
 
 mkdir -p "$T/pin"
 printf '22.1.9-mavericks.1\n' >"$T/pin/version"
@@ -32,13 +38,14 @@ if [ "$rc" = 0 ] && [ "$out" = "$T/cache/22.1.8-mavericks.1" ]; then
 else fail "cache: exit $rc, printed '$out'"; fi
 
 if [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ]; then
-  cp "$ROOT/components/clang22/version" "$ROOT/components/clang22/linux-sha256" "$T/pin/"
+  cp "$CLANG22_PINS/version" "$CLANG22_PINS/linux-sha256" "$T/pin/"
   printf '%s %s\n' "$pin" "$digest" >"$T/pin/llvm-project"
   CL=$(sh "$ROOT/scripts/fetch_clang22.sh" "$T/pin" 2>"$T/err") || { fail 'fetch clang22'; CL=; }
   if [ -n "$CL" ]; then
     rc=0; out=$(MAVERGREEN_HOST_LIBCXX_CACHE="$T/full" sh "$S" "$T/pin" "$CL" 2>"$T/err") || rc=$?
     if [ "$rc" = 0 ] && [ -f "$out/lib/libc++.a" ] && [ -f "$out/lib/libc++abi.a" ] && [ -f "$out/include/c++/v1/__config_site" ]; then
-      pass "the full build prints a prefix holding libc++.a and libc++abi.a: $out"
+      pass "the full build prints a prefix holding libc++.a and libc++abi.a"
+      echo "ok: built prefix $out holds lib/libc++.a and lib/libc++abi.a"
     else fail "full build: exit $rc, printed '$out'"; fi
   fi
 else echo "NOTE: the full build runs on x86_64 Linux only"; fi

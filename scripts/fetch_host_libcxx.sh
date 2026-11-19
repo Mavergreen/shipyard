@@ -21,7 +21,8 @@ cv="$(tr -d ' \t\n' < "$PIN/version")"
 case "$cv" in "$v"-*) ;; *) die "clang22 $cv is not LLVM $v; update $PIN/llvm-project" ;; esac
 base="${MAVERGREEN_HOST_LIBCXX_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-host-libcxx}"
 dest="$base/$cv"
-if [ -f "$dest/lib/libc++.a" ] && [ -f "$dest/include/c++/v1/__config_site" ]; then echo "$dest"; exit 0; fi
+complete() { [ -f "$1/lib/libc++.a" ] && [ -f "$1/lib/libc++abi.a" ] && [ -f "$1/include/c++/v1/__config_site" ]; }
+if complete "$dest"; then echo "$dest"; exit 0; fi
 asset="llvm-project-$v.src.tar.xz"
 shipyard_fetch_verified "https://github.com/llvm/llvm-project/releases/download/llvmorg-$v/$asset" "$sha" "$base/dl" "$asset" >&2
 work="$(mktemp -d "${TMPDIR:-/tmp}/host-libcxx.XXXXXX")"; trap 'rm -rf "$work"' EXIT
@@ -43,6 +44,6 @@ rm -rf "$dest.tmp"
   -DLIBCXX_INCLUDE_BENCHMARKS=OFF >&2
 "$cm" --build "$work/b" --target install-cxx install-cxxabi -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" >&2
 rm -rf "$dest"; mv "$dest.tmp" "$dest"
-[ -f "$dest/lib/libc++.a" ] && [ -f "$dest/lib/libc++abi.a" ] && [ -f "$dest/include/c++/v1/__config_site" ] \
+complete "$dest" \
   || die "the build installed no lib/libc++.a, lib/libc++abi.a or include/c++/v1/__config_site under $dest"
 echo "$dest"
