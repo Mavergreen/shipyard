@@ -59,7 +59,7 @@ $M x86_64 EXECUTE 10.9 10.9 aa"
 no "an x86_64 slice linked against the runner's SDK" "sdk-pin" "$GOOD
 $M x86_64 EXECUTE 10.9 26.5 aa"
 ok "a pinned arm64 slice" "$GOOD
-deviation arm64:usr/local/go/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
+deviation arch-host:usr/local/go/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
 $M arm64 EXECUTE 11.0 11.3 aa"
 no "an arm64 slice on the runner's SDK" "sdk-pin" "$GOOD
 $M arm64 EXECUTE 11.0 26.5 aa"
@@ -88,52 +88,61 @@ no "and only those" "sdk-pin" "$GOOD
 deviation sdk-pin:usr/local/go/src/* Go's own race-detector and testdata objects, shipped verbatim in src/
 macho p.pkg usr/local/go/bin/go x86_64 EXECUTE 10.9 26.5 aa"
 
-# spec: SKILL.md "Family conventions" check 37 -- a pkg's arm64 slice is a declared deviation,
-#       an arm64 deviation whose scope is a glob, matched against the install path; a Sparkle updater's slices are
-#       exempt, and a repo grandfathered as modern-smoke is warned rather than failed.
+# spec: explain/arch-host.md -- a host binary's arm64 slice is declared by an arch-host deviation whose
+#       scope is a glob of its install path; target files and Library/Application Support/Mavergreen/ are
+#       not host binaries, and a repo grandfathered as modern-smoke is warned rather than failed.
 T='macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go'
 U='sparkle golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
 macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa'
-no "an undeclared arm64 tool slice" "arm64|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go" "$GOOD
+no "an undeclared arm64 tool slice" "arch-host|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go" "$GOOD
 $T x86_64 EXECUTE 10.9 10.9 aa
 $T arm64 EXECUTE 11.0 11.3 aa"
 ok "a declared arm64 tool slice" "$GOOD
-deviation arm64:opt/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
+deviation arch-host:opt/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain to build Mavericks artifacts
 $T x86_64 EXECUTE 10.9 10.9 aa
 $T arm64 EXECUTE 11.0 11.3 aa"
-no "a declaration covers only the install paths its glob names" "arm64|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go" "$GOOD
-deviation arm64:build/build.sh a source path names nothing the pkg installs
+no "a declaration covers only the install paths its glob names" "arch-host|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go" "$GOOD
+deviation arch-host:build/build.sh a source path names nothing the pkg installs
 $T arm64 EXECUTE 11.0 11.3 aa"
-no "a declaration of another check does not cover it" "arm64|with an arm64 slice" "$GOOD
+no "a declaration of another check does not cover it" "arch-host|with an arm64 slice" "$GOOD
 deviation sdk-pin:opt/mavergreen/go126/bin/* not an arm64 declaration
 $T arm64 EXECUTE 11.0 11.3 aa"
-ok "an updater-only arm64 slice needs no declaration" "$GOOD
-$U"
-ok "artifact-facts reports a payload's Mach-O before its bundles" "$GOOD
-$(printf '%s\n' "$U" | sed -n 2p)
-$(printf '%s\n' "$U" | sed -n 1p)"
-no "the updater exemption is the updater's bundle, not a path beside it" "arm64|with an arm64 slice" "$GOOD
-$U
+ok "an arm64 slice under Library/Application Support/Mavergreen/ needs no declaration" "$GOOD
+$(printf '%s\n' "$U" | sed -n 2p)"
+ok "the exemption is the path, not the bundle: a tool beside the updater is exempt too" "$GOOD
 macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app-helper/tool arm64 EXECUTE 11.0 11.3 aa"
-no "another pkg's updater exempts nothing here" "arm64|with an arm64 slice" "$GOOD
-pkg other-1.26.5-mavergreen.5.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
-sparkle other-1.26.5-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
-macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa"
+W='macho golang-1.26.5-native-mavergreen.5.pkg Applications/Mavergreen/W.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle'
+no "an app's Sparkle framework is a host binary like any other" "arch-host|Applications/Mavergreen/W.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle with an arm64 slice" "$GOOD
+sparkle golang-1.26.5-native-mavergreen.5.pkg Applications/Mavergreen/W.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
+$W x86_64 DYLIB 10.9 10.9 aa
+$W arm64 DYLIB 11.0 11.3 aa"
+ok "a deviation declares it" "$GOOD
+deviation arch-host:Applications/Mavergreen/W.app/* W runs natively on Apple Silicon
+$W x86_64 DYLIB 10.9 10.9 aa
+$W arm64 DYLIB 11.0 11.3 aa"
 R='manifest golang-1.26.5-native-mavergreen.5.pkg go126 dev.mavergreen.go126 go126
 product go126
 derived go126 dev.mavergreen.go126.updater dev.mavergreen.go126-updatecheck Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml'
 _ro="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "$R" "$U" | sh "$S" 2>&1)" || :
-printf '%s\n' "$_ro" | grep -q 'with an arm64 slice' && { echo "FAIL: the derived updater is exempt: $_ro"; exit 1; }
-printf '%s\n' "$_ro" | grep -q 'arm64: 0 declared, 0 undeclared' && { echo "FAIL: the arm64 summary prints only when there is something to count: $_ro"; exit 1; }
-has "a product with a derived updater exempts only that bundle" arm64 "$GOOD
+printf '%s\n' "$_ro" | grep -q 'with an arm64 slice' && { echo "FAIL: the updater is exempt: $_ro"; exit 1; }
+printf '%s\n' "$_ro" | grep -q 'arch-host: 0 declared, 0 undeclared' && { echo "FAIL: the arch-host summary prints only when there is something to count: $_ro"; exit 1; }
+TS="$GOOD
 $R
-sparkle golang-1.26.5-native-mavergreen.5.pkg Applications/Vendor.app https://vendor.example/appcast.xml
-macho golang-1.26.5-native-mavergreen.5.pkg Applications/Vendor.app/Contents/MacOS/Vendor arm64 EXECUTE 11.0 11.3 aa"
+target go126 lib/My%20Target/*
+macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/lib/My%20Target/a130 arm64 EXECUTE 13.0 11.3 aa
+installs golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/lib/My%20Target/a130"
+clean "a target file with a space in its path is not a host binary" arch-host "$TS"
+clean "and its glob matches it" arch-target "$TS"
+says "a target glob covers only its product's tree" arch-host "opt/mavergreen/go126/bin/a130 with an arm64 slice" "$GOOD
+$R
+target go126 lib/*
+macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/a130 arm64 EXECUTE 13.0 11.3 aa
+installs golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/lib/x"
 ok "an x86_64-only pkg needs no declaration" "$GOOD
 $T x86_64 EXECUTE 10.9 10.9 aa"
 ok "a shipped tarball is not a pkg" "$GOOD
 macho tools.tar.gz bin/go arm64 EXECUTE 11.0 11.3 aa"
-has "arm64e is an arm64 slice" arm64 "$GOOD
+has "arm64e is an arm64 slice" arch-host "$GOOD
 $T arm64e EXECUTE 11.0 11.3 aa"
 
 _gfs="$(mktemp -d "${TMPDIR:-/tmp}/conformance-gf.XXXXXX")"   # template: 10.9 BSD mktemp requires one
@@ -141,7 +150,7 @@ cp -R "$here/../scripts" "$_gfs/scripts"
 printf 'modern-smoke golang-126 release.yml:modern-smoke\n' > "$_gfs/scripts/conventions-grandfathered"
 _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-126" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
   || { echo "FAIL: a grandfathered repo's undeclared arm64 slice warns, never fails: $_gfo"; exit 1; }
-printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: arm64: golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go' \
+printf '%s\n' "$_gfo" | grep -q '^::warning::conformance: arch-host: golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go' \
   || { echo "FAIL: a grandfathered repo's undeclared arm64 slice is reported as a ::warning:: naming it: $_gfo"; exit 1; }
 _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golang-127" "$T arm64 EXECUTE 11.0 11.3 aa" | sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1)" \
   && { echo "FAIL: another repo's modern-smoke line excuses nothing here: $_gfo"; exit 1; }
@@ -191,7 +200,7 @@ deviation sdk-pin:opt/mavergreen/go126/bin/* not a cxxabi declaration
 $X
 cxxabi-defines $C x86_64 ___cxa_throw visible"
 no "a definition in one slice of a fat binary fails" "cxxabi|go (arm64), which defines" "$GOOD
-deviation arm64:opt/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain
+deviation arch-host:opt/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain
 $X
 macho $C arm64 EXECUTE 11.0 11.3 aa
 cxxabi-defines $C arm64 ___cxa_throw visible"
@@ -395,6 +404,48 @@ pkg-arch e.pkg x86_64,arm64 none arm64-below:11.0"
 says "no deviation excuses arch-floors" arch-floors "install floor of 10.9;" "$(printf '%s\n' "$ARCH" | sed 's/^pkg e.pkg \(.*\) 10.9.5 /pkg e.pkg \1 10.9 /')
 deviation arch-floors the fixture says so
 pkg-arch e.pkg x86_64,arm64 10.11 none"
+
+# spec: explain/arch-target.md -- every target glob matches an installed file of its product, and no
+#       host binary of the pkg loads a target file, through an absolute path, @loader_path,
+#       @executable_path or @rpath, resolved lexically.
+TGT="$ARCH
+target e lib/*
+installs e.pkg opt/mavergreen/e/lib/libt.dylib
+macho e.pkg opt/mavergreen/e/lib/libt.dylib x86_64 DYLIB 10.9 10.9 aa
+macho e.pkg opt/mavergreen/e/bin/loader x86_64 EXECUTE 10.9 10.9 aa"
+L='macho-load e.pkg opt/mavergreen/e/bin/loader x86_64'
+clean "a host binary loading only the OS" arch-target "$TGT
+$L dylib /usr/lib/libSystem.B.dylib"
+clean "a target file may load a target file" arch-target "$TGT
+macho-load e.pkg opt/mavergreen/e/lib/libt.dylib x86_64 dylib @loader_path/libt.dylib"
+clean "a load that resolves to no installed file" arch-target "$TGT
+$L dylib @rpath/libother.dylib
+$L rpath @loader_path/../lib"
+clean "a product with no target file has nothing to judge" arch-target "$ARCH
+$L dylib /opt/mavergreen/e/lib/libt.dylib"
+says "a target glob that matches nothing" arch-target "the target glob share/none/* matches no file e installs" "$TGT
+target e share/none/*"
+says "a host binary loads a target file through @rpath" arch-target "opt/mavergreen/e/bin/loader loads opt/mavergreen/e/lib/libt.dylib (@rpath/libt.dylib), a target file" "$TGT
+$L dylib @rpath/libt.dylib
+$L rpath @loader_path/../lib"
+says "through @loader_path, normalized" arch-target "loads opt/mavergreen/e/lib/libt.dylib" "$TGT
+$L dylib @loader_path/../../e/./lib/libt.dylib"
+says "through @executable_path, from the loader's own directory" arch-target "loads opt/mavergreen/e/lib/libt.dylib" "$TGT
+$L dylib @executable_path/../lib/libt.dylib"
+says "through an absolute path" arch-target "loads opt/mavergreen/e/lib/libt.dylib" "$TGT
+$L dylib /opt/mavergreen/e/lib/libt.dylib"
+says "through an absolute rpath" arch-target "loads opt/mavergreen/e/lib/libt.dylib" "$TGT
+$L dylib @rpath/libt.dylib
+$L rpath /opt/mavergreen/e/lib"
+says "a target path with a space" arch-target "loads opt/mavergreen/e/lib/My Target/libt.dylib (@rpath/libt.dylib)" "$ARCH
+target e lib/My%20Target/*
+installs e.pkg opt/mavergreen/e/lib/My%20Target/libt.dylib
+macho e.pkg opt/mavergreen/e/bin/loader x86_64 EXECUTE 10.9 10.9 aa
+$L dylib @rpath/libt.dylib
+$L rpath @loader_path/../lib/My%20Target"
+says "no deviation excuses arch-target" arch-target "share/none/*" "$TGT
+deviation arch-target the fixture says so
+target e share/none/*"
 
 # spec: scripts/check-artifact-conformance.sh's scoped deviations -- swift-toolchain
 #       republishes swift.org's .pkg verbatim so the correspondence with download.swift.org

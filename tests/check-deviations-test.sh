@@ -62,6 +62,12 @@ for k in msc-template sparkle-updater release-assets python3; do
 done
 case_ r-floor floor x '*' because
 fails r-floor deviation-known-check 'floors are derived (arch-floors); no deviation excuses them'
+case_ r-arm64 arm64 x 'opt/mavergreen/w/bin/*' because
+fails r-arm64 deviation-known-check 'now `arch-host`; move the directory to .mavergreen/deviations/arch-host/'
+case_ arch-host arch-host x 'opt/mavergreen/w/bin/*' because
+run "$w/arch-host" || fail "an arch-host deviation scoped to an install-path glob is clean: $(cat "$w/out")"
+case_ arch-host-all arch-host x '*' because
+fails arch-host-all deviation-complete 'arch-host names the install paths it covers'
 
 case_ noreason rosetta x 'build/*.sh' ''
 fails noreason deviation-complete 'no reason'

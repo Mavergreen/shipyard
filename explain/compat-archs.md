@@ -12,7 +12,7 @@ an extra one both fail.
 None recorded.
 
 ## Limits
-It compares the arch set; it does not check that the arm64 slice has a declared reason in deviations/arm64/.
+It compares the arch set; it does not check that the arm64 slice has a declared reason in deviations/arch-host/.
 The spec lists "an arm64 slice needs an arm64 deviation" as a rule found unchecked, planned for the flag day.
 A file that is not a readable Mach-O fails here.
 
@@ -21,6 +21,6 @@ A deviations/compat-archs/<label>/ with a scope (<glob>), a reason and a revisit
 path inside the pkg or tarball (opt/mavergreen/<product>/...). That is how one binary in a dist keeps
 the allowance its CMake target passes in a knob, since --dist applies one environment to every binary. At build time, state
 the set with MAVERGREEN_ALLOW_ARCHS; a universal updater beside an x86_64 product is the usual case for a
-scoped deviation. The deviations/arm64/ form is P5's, and no check reads it for this id yet.
+scoped deviation. The deviations/arch-host/ form is the arch-host id's, and this id does not read it.
 
 Formerly the compat guard's arch set rule

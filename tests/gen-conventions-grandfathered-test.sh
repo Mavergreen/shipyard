@@ -78,7 +78,7 @@ FAKE_REPOS="$work/repos"; FAKE_SRC="$work/src"; export FAKE_REPOS FAKE_SRC
 
 mksrc() {  # $1 = name, $2 = yes: has a release workflow that calls the gate and runs on macos, $3 = decl: declares an arm64 slice
   d="$work/src/$1"; mkdir -p "$d"
-  [ "${3:-}" != decl ] || deviation "$d" arm64 bin "opt/mavergreen/$1/bin/*" 'developers on Apple Silicon run it'
+  [ "${3:-}" != decl ] || deviation "$d" arch-host bin "opt/mavergreen/$1/bin/*" 'developers on Apple Silicon run it'
   [ "${3:-}" != cxxdecl ] || deviation "$d" cxxabi bin "opt/mavergreen/$1/bin/*" 'upstream vendors its runtime; exit: when it links libcxx22'
   if [ "$2" = yes ]; then
     mkdir -p "$d/.github/workflows"

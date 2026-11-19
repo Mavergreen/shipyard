@@ -876,8 +876,8 @@ fi
 
 # spec: SKILL.md "Family conventions" check 37 -- an arm64 slice is a declared deviation, and what
 #       declares one runs it: release.yml has a modern-smoke job on a macos-* runner that publish
-#       needs exactly when .mavergreen/deviations/arm64/ declares a deviation. Conformance holds
-#       the pkg to the declaration (the arm64 id).
+#       needs exactly when .mavergreen/deviations/arch-host/ declares a deviation. Conformance holds
+#       the pkg to the declaration (the arch-host id).
 if rel_ran modern-smoke && ! grandfathered modern-smoke release.yml:modern-smoke && [ "$PY_OK" -eq 1 ]; then
   rc=0
   chk_py /dev/stdin "$REL" > "$tmp/c37" <<'PY' || rc=$?
@@ -907,16 +907,16 @@ for p in pubs or ["publish"]:
         print("unneeded %s" % p)
 PY
   [ "$rc" -eq 0 ] || py_crashed modern-smoke
-  _decl37="$(shipyard_deviation_scopes arm64 | head -1)"
+  _decl37="$(shipyard_deviation_scopes arch-host | head -1)"
   _job37=no; grep -qx job "$tmp/c37" && _job37=yes
   if [ -n "$_decl37" ] && [ "$_job37" = no ]; then
-    chk_fail modern-smoke ".mavergreen/deviations/arm64/ declares an arm64 slice, but release.yml has no modern-smoke job" \
+    chk_fail modern-smoke ".mavergreen/deviations/arch-host/ declares an arm64 slice, but release.yml has no modern-smoke job" \
       "nothing runs the arm64 slice before it ships" \
       "add a job named modern-smoke to $REL, on a macos-* runner, that installs the run's own pkg and runs its arm64 slice, and add it to publish's needs:"
   elif [ -z "$_decl37" ] && [ "$_job37" = yes ]; then
-    chk_fail modern-smoke "release.yml has a modern-smoke job, but .mavergreen/deviations/arm64/ declares no arm64 slice" \
+    chk_fail modern-smoke "release.yml has a modern-smoke job, but .mavergreen/deviations/arch-host/ declares no arm64 slice" \
       "an arm64 slice ships only with a reason" \
-      "declare .mavergreen/deviations/arm64/<label>/ (scope <install-path glob>, a reason saying who runs it on Apple Silicon and why, a revisit), or remove the job and ship x86_64 only"
+      "declare .mavergreen/deviations/arch-host/<label>/ (scope <install-path glob>, a reason saying who runs it on Apple Silicon and why, a revisit), or remove the job and ship x86_64 only"
   elif [ "$_job37" = yes ]; then
     grep -qx offmac "$tmp/c37" \
       && chk_fail modern-smoke "the modern-smoke job does not run on a macos-* runner" \

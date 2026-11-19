@@ -196,11 +196,11 @@ done
 grandfather
 
 # spec: SKILL.md "Family conventions" check 37 -- release.yml has a job named modern-smoke, on a
-#       macos-* runner, that publish needs, exactly when .mavergreen/deviations/arm64/ holds a
+#       macos-* runner, that publish needs, exactly when .mavergreen/deviations/arch-host/ holds a
 #       deviation; a repo grandfathered as modern-smoke skips the check.
 ms() {  # $1 = label, $2 = decl|nodecl, $3 = runs-on (empty: no job), $4 = needed|unneeded
   d="$work/ms-$1"; mkrepo7 "$d"
-  [ "$2" != decl ] || deviation "$d" arm64 w-bin 'opt/mavergreen/w/bin/*' 'developers on Apple Silicon run w to build Mavericks artifacts'
+  [ "$2" != decl ] || deviation "$d" arch-host w-bin 'opt/mavergreen/w/bin/*' 'developers on Apple Silicon run w to build Mavericks artifacts'
   deviation "$d" macos-runner modern-smoke 'release.yml:modern-smoke' 'the arm64 slice runs only on Apple Silicon, exit when a Linux host can run it'
   if [ -n "$3" ]; then
     printf '  modern-smoke:\n    runs-on: %s\n    steps:\n      - run: true\n' "$3" >> "$d/.github/workflows/release.yml"
@@ -219,13 +219,13 @@ passes "check 37: a declaration and a modern-smoke job publish needs" "$work/ms-
 ms list decl '[self-hosted, macos-15]' needed
 passes "check 37: a runs-on list naming macos-*" "$work/ms-list"
 ms nojob decl '' ''
-fails "check 37: a declaration with no modern-smoke job" "$work/ms-nojob" 'modern-smoke: .mavergreen/deviations/arm64/ declares an arm64 slice, but release.yml has no modern-smoke job'
+fails "check 37: a declaration with no modern-smoke job" "$work/ms-nojob" 'modern-smoke: .mavergreen/deviations/arch-host/ declares an arm64 slice, but release.yml has no modern-smoke job'
 ms linux decl ubuntu-latest needed
 fails "check 37: a modern-smoke job off macOS" "$work/ms-linux" 'modern-smoke: the modern-smoke job does not run on a macos-\* runner'
 ms unneeded decl macos-26 unneeded
 fails "check 37: a modern-smoke job publish does not need" "$work/ms-unneeded" 'modern-smoke: publish does not need the modern-smoke job'
 ms nodecl nodecl macos-26 needed
-fails "check 37: a modern-smoke job with no declaration" "$work/ms-nodecl" 'modern-smoke: release.yml has a modern-smoke job, but .mavergreen/deviations/arm64/ declares no arm64 slice'
+fails "check 37: a modern-smoke job with no declaration" "$work/ms-nodecl" 'modern-smoke: release.yml has a modern-smoke job, but .mavergreen/deviations/arch-host/ declares no arm64 slice'
 out="$(gate "$work/ms-nojob")" || :
 printf '%s\n' "$out" | grep -q 'declares no arm64 slice' && { echo "FAIL: check 37: each direction has its own message: $out"; exit 1; }
 out="$(gate "$work/ms-nodecl")" || :

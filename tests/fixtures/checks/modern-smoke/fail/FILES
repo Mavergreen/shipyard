@@ -3,6 +3,6 @@
 .gitignore
 .mavergreen/hooks/upstream-release-notes-url
 tests/a-test.sh
-.mavergreen/deviations/arm64/w-bin/reason
-.mavergreen/deviations/arm64/w-bin/revisit
-.mavergreen/deviations/arm64/w-bin/scope
+.mavergreen/deviations/arch-host/w-bin/reason
+.mavergreen/deviations/arch-host/w-bin/revisit
+.mavergreen/deviations/arch-host/w-bin/scope

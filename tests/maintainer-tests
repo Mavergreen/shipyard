@@ -41,3 +41,4 @@ golden-gate tests/install-layout-e2e.sh
 10.9 tests/arch-rules-test.sh
 10.9 tests/set-install-floor-arch-test.sh
 golden-gate tests/set-install-floor-arch-test.sh
+10.9 tests/macho-loads-test.sh

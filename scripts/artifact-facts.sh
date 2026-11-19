@@ -5,7 +5,8 @@
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
-#          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each.
+#          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each; in a
+#          payload holding a product with a target file, the `macho-load` facts of each too.
 # platform: runs at PACKAGE TIME, on any host that has the artifacts: stevedore reads the pkgs and
 #           plists, and LLVM's readers (lib/macho-tools.sh) the Mach-O, on 10.9, modern macOS and Linux.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
@@ -158,6 +159,16 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
       printf 'macho %s %s %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_ft" "$_mn" "$_sd" "$_sha"
     done
     cxxabi_facts "$1" "$2/$_mf" "$_p" || { rm -f "$_ml" "$_mferr"; return 1; }
+    [ "${_mf_loads:-0}" = 1 ] || continue
+    _rc=0; _ld="$(sh "$SELF/macho-loads.sh" "$2/$_mf" 2>"$_mferr")" || _rc=$?
+    if [ "$_rc" -ne 0 ]; then
+      _mf_why="cannot read the loads of a Mach-O in $1: $_mf (macho-loads.sh exit $_rc) $(tr '\n' ' ' < "$_mferr")"
+      echo "artifact-facts: cannot read the loads of $1:$_mf (macho-loads.sh exit $_rc)" >&2; rm -f "$_ml" "$_mferr"; return 1
+    fi
+    printf '%s\n' "$_ld" | while read -r _a _k _v; do
+      [ -n "$_v" ] || continue
+      printf 'macho-load %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_k" "$(printf '%s' "$_v" | enc)"
+    done
   done < "$_ml"
   rm -f "$_ml" "$_mferr"
 }
@@ -169,6 +180,12 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     # platform: a payload's paths are relative to its component's install-location, not to "/".
     af_unpack_payload "$_pl" || return 1
     _loc="$AF_LOC"; _root="$AF_ROOT"
+    _mf_loads=0
+    for _mf in "$_root"/opt/mavergreen/*/mavergreen.plist; do
+      [ -z "$_loc" ] && [ -f "$_mf" ] || continue
+      _mp="$("$STEVEDORE" plist get "$_mf" product 2>/dev/null)" || _mp=""
+      [ -z "$_mp" ] || [ ! -f "$root/.mavergreen/products/$_mp/target" ] || _mf_loads=1
+    done
     macho_facts "$1" "$_root" "$(printf '%s' "$_loc" | enc)" || { _pf_why="$_mf_why"; return 1; }
     _pmodes="$(af_payload_modes "$_pl")" || { _pf_why="cannot list the modes of $1's payload ${_pl#"$2"/}"; return 1; }
     printf '%s\n' "$_pmodes" | awk -v pkg="$1" -v loc="$(printf '%s' "$_loc" | enc)" '{
@@ -333,7 +350,7 @@ for f in "$dist"/*; do
     *.tar.gz|*.tgz|*.tar.xz|*.tar.bz2)
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
       tar -xf "$f" -C "$x" 2>/dev/null || { af_rm "$x"; abort "cannot extract $b"; }
-      macho_facts "$b" "$x" "" || { af_rm "$x"; abort "${_mf_why:-cannot read a Mach-O in $b}"; }
+      _mf_loads=0; macho_facts "$b" "$x" "" || { af_rm "$x"; abort "${_mf_why:-cannot read a Mach-O in $b}"; }
       af_rm "$x"
       ;;
     RELEASE_NOTES.md)

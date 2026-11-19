@@ -57,7 +57,7 @@ rc=0; SHIPYARD_CHECK_VERSION=1.0.0-mavergreen.1 sh "$sc" --dist "$fx/compat-arch
 [ "$rc" = 0 ] && [ "$(tail -n 1 "$t/out")" = "shipyard-check: 0 checks, 0 failed, 2 not run" ] \
   || fail "M3: a dist with no .pkg reports the pkg checks not run, got $rc: $(tail -n 1 "$t/out")"
 if sh -c '. "$1/mavergreen-meta.sh"; . "$1/lib/name-rules.sh"; . "$1/lib/macho-tools.sh"; mach_tool OTOOL && mach_tool LIPO' sh "$here/scripts" >/dev/null 2>&1; then
-  rc=0; (cd "$t" && SHIPYARD_CHECK_VERSION=1.0.0-mavergreen.1 SHIPYARD_CHECK_REPO="$t" sh "$sc" --dist "$fx/bundle-id/pass/dist" --only enclosure notes floor) > "$t/out" 2>&1 || rc=$?
+  rc=0; (cd "$t" && SHIPYARD_CHECK_VERSION=1.0.0-mavergreen.1 SHIPYARD_CHECK_REPO="$t" sh "$sc" --dist "$fx/bundle-id/pass/dist" --only enclosure notes identifier) > "$t/out" 2>&1 || rc=$?
   [ "$rc" = 0 ] && [ "$(tail -n 1 "$t/out")" = "shipyard-check: 1 checks, 0 failed, 2 not run" ] \
     || fail "M3: a dist with no appcast reports the appcast checks not run, got $rc: $(tail -n 1 "$t/out")"
 fi
@@ -80,6 +80,10 @@ for pair in upstream-version:upstream-complete upstream-version-bare:value-file-
   [ "$rc" = 2 ] && grep -q "'$id' is retired" "$t/out" || fail "R7: --only $id refuses a retired id, got $rc: $(cat "$t/out")"
   [ "$(sh "$sc" --explain "$id")" = "Retired by P2: replaced by ${pair#*:}." ] || fail "R7: --explain $id names what replaced it"
 done
+[ "$(sh "$sc" --explain arm64)" = "Retired by P5: now arch-host." ] || fail "P5: --explain arm64 names arch-host"
+rc=0; sh "$sc" --only arm64 > "$t/out" 2>&1 || rc=$?
+[ "$rc" = 2 ] && grep -q "'arm64' is retired" "$t/out" || fail "P5: --only arm64 refuses a retired id, got $rc: $(cat "$t/out")"
+[ "$(sh "$sc" --explain arch-host)" = "$(cat "$here/explain/arch-host.md")" ] || fail "P5: --explain arch-host prints its page"
 
 [ "$bad" -eq 0 ] || exit 1
 echo "PASS shipyard-check-accounting"

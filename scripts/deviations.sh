@@ -48,7 +48,7 @@ scope_refusal() {
       if wild "$_s" || [ "$_f" = "$_s" ] || [ -z "$_f" ] || [ -z "$_j" ]; then
         echo "macos-runner names one job: a scope of <workflow file>:<job>, never a wildcard"
       fi ;;
-    arm64|cxxabi)
+    arch-host|cxxabi)
       ! only "$_s" '*?/' || echo "$_c names the install paths it covers: a scope of <install-path glob>, never * or a glob of nothing but wildcards" ;;
     packager)
       ! wild "$_s" || echo "packager names one path: a scope of <path>, never a wildcard" ;;

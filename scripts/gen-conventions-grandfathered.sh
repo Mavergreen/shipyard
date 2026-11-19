@@ -84,7 +84,7 @@ while read -r repo; do
     shipyard_deviated cxxabi "$(printf '%s' "$p" | sed -e 's/%20/ /g' -e 's/%25/%/g')" > /dev/null \
       || echo "cxxabi $repo $p"
   done
-  if sh "$tmp/scripts/check-artifact-conformance.sh" < "$tmp/facts" 2>&1 >/dev/null | grep -q '^arm64: .* with an arm64 slice'; then
+  if sh "$tmp/scripts/check-artifact-conformance.sh" < "$tmp/facts" 2>&1 >/dev/null | grep -q '^arch-host: .* with an arm64 slice'; then
     echo "modern-smoke $repo release.yml:modern-smoke"
   fi
 done < "$tmp/repos" > "$tmp/found"

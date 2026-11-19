@@ -133,19 +133,19 @@ deviation "$r" macos-runner build 'ci.yml:build' 'needs macOS; exit when Linux'
 out="$(sh "$S" "$r")"
 has 'packager build/package.sh oracle; exit when stevedore is it' "a named packager path is a scope"
 has 'macos-runner ci.yml:build needs macOS; exit when Linux' "macos-runner scopes <file>:<job>"
-# spec: SKILL.md "Family conventions" check 37 -- arm64 and cxxabi name the install paths they
+# spec: SKILL.md "Family conventions" check 37 -- arch-host and cxxabi name the install paths they
 #       cover; * or a glob of nothing but wildcards would declare the whole pkg, so it is refused.
-for check in arm64 cxxabi; do
+for check in arch-host cxxabi; do
   for scope in '*' '*/*' '**' '?'; do
     fresh; deviation "$r" "$check" x "$scope" 'every path'
     refused "$check" "the $check scope $scope"
   done
 done
 fresh
-deviation "$r" arm64 cmake 'opt/mavergreen/cmake/*' 'developers on Apple Silicon run it'
+deviation "$r" arch-host cmake 'opt/mavergreen/cmake/*' 'developers on Apple Silicon run it'
 deviation "$r" cxxabi runtime 'opt/mavergreen/libcxx22/lib/libc++abi.1.dylib' 'the family runtime'
 out="$(sh "$S" "$r")"
-has 'arm64 opt/mavergreen/cmake/\* developers on Apple Silicon run it' "an install-path glob is an arm64 scope"
+has 'arch-host opt/mavergreen/cmake/\* developers on Apple Silicon run it' "an install-path glob is an arch-host scope"
 has 'cxxabi opt/mavergreen/libcxx22/lib/libc++abi.1.dylib the family runtime' "an install path is a cxxabi scope"
 # spec: scripts/assert_binary_compatible.sh header -- an objc-api deviation names one artifact scope and points
 #       at one reviewed evidence record, evidence=<repo-relative file>#<record id>, then gives the review reason;

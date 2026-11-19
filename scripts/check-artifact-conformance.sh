@@ -43,6 +43,7 @@
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
 #            cxxabi-defines <artifact> <path> <arch> <symbol> <visible|hidden>  one per C++ runtime symbol a slice defines beyond Recaulk's back-fills
 #            cxxabi-loads  <artifact> <path> <arch> <load-path>   one per libc++abi a slice loads other than /usr/lib's or libcxx22's (%20-encoded)
+#            macho-load    <artifact> <path> <arch> <dylib|rpath> <value>  one per dylib load or rpath of a slice, for a product with a target file (%20-encoded)
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
 #            appcast-notes <appcast-file> [<sha256>]               digest of the appcast's <description> CDATA
 #            deviation     <check> <reason...>                    a declared, reasoned departure
@@ -112,7 +113,7 @@ kind_ran() {  # $1 = the fact kind the ids read, $2 = what it is called, then th
 }
 chk_ran version-scheme
 if has pkg || has appcast; then chk_ran version; else chk_notrun version "no .pkg or appcast in this release"; fi
-kind_ran pkg .pkg identifier bundle-id launchd-label manifest base line install-path feed updater repository arm64 \
+kind_ran pkg .pkg identifier bundle-id launchd-label manifest base line install-path feed updater repository arch-host arch-target \
   pkg-name installer-title manifest-name app-name root-runs os-overwrite
 kind_ran pkg-arch .pkg arch-distribution arch-floors
 kind_ran appcast appcast enclosure length enclosure-url notes feed-title
@@ -146,7 +147,8 @@ rule_of() {
     notes) echo "an appcast's description is the release body" ;;
     variant-build-info) echo "variants of one release agree about what they were built from" ;;
     sdk-pin) echo "every shipped Mach-O slice records its arch's pinned minos and SDK" ;;
-    arm64) echo "a pkg ships an arm64 slice only where .mavergreen/deviations/arm64/ declares its install path" ;;
+    arch-host) echo "a host binary ships an arm64 slice only where a deviation declares its install path" ;;
+    arch-target) echo "every target glob matches a file its product installs, and no host binary of the pkg loads a target file" ;;
     cxxabi) echo "one process gets one C++ runtime: no shipped Mach-O defines libc++abi's machinery or loads another libc++abi" ;;
     root-runs) echo "root runs a launch daemon or an install script only from a root-only chain" ;;
     os-overwrite) echo "a regular product only adds files to Mac OS X 10.9.5, and never replaces one the OS ships" ;;
@@ -179,7 +181,8 @@ fix_of() {
     notes) echo "generate the appcast from the same RELEASE_NOTES.md the Release body is built from" ;;
     variant-build-info) echo "build every variant from the same pins, or declare .mavergreen/deviations/variant-build-info/<label>/ (scope *, a reason, a revisit)" ;;
     sdk-pin) echo "link against the pinned SDK (scripts/fetch_sdk.sh), or declare .mavergreen/deviations/sdk-pin/<label>/ (scope <glob>, a reason, a revisit)" ;;
-    arm64) echo "build that path x86_64 only, or declare .mavergreen/deviations/arm64/<label>/ (scope <install-path glob>, a reason saying who runs it on Apple Silicon and why, a revisit), with a modern-smoke job in release.yml that runs it" ;;
+    arch-host) echo "build that path x86_64 only, or declare .mavergreen/deviations/arch-host/<label>/ (scope <install-path glob>, a reason saying who runs it as arm64 on Apple Silicon and why, a revisit), with a modern-smoke job in release.yml that runs it" ;;
+    arch-target) echo "correct .mavergreen/products/<short>/target, so it names only files built for the target, or link the host binary against a host copy; no deviation excuses this check" ;;
     cxxabi) echo "link the family's runtime (libcxx22), or declare .mavergreen/deviations/cxxabi/<label>/ (scope <glob>, a reason, a revisit)" ;;
     root-runs) echo "never name an admin-writable path in an install script; root runs only from a root-only chain" ;;
     os-overwrite) echo "install it under /opt/mavergreen/<short>/, or make this a system edition" ;;
@@ -856,48 +859,118 @@ while read -r kind file path arch ft mn sd sha; do
     || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")"
 done < "$facts"
 
-# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Family conventions" check 37 --
-#       a pkg ships x86_64 unless .mavergreen/deviations/arm64/ declares a scope for the install
-#       path; a Sparkle updater's slices are exempt, and where the product's updater is derived,
-#       only that bundle's. A repo grandfathered as modern-smoke is warned.
+# spec: explain/arch-host.md -- a host binary ships x86_64 unless an arch-host deviation's scope matches
+#       its install path; a target file and an arch_is_exempt path are not host binaries. A repo
+#       grandfathered as modern-smoke is warned.
+targets_of() {  # $1 = product; its target globs, decoded, one per line
+  awk -v p="$1" '$1 == "target" && $2 == p { print $3 }' "$facts" | sed -e 's/%20/ /g' -e 's/%25/%/g'
+}
+prod_of() { awk -v f="$1" '$1 == "manifest" && $2 == f { print $3; exit }' "$facts"; }
 arm_gf=no
 [ -n "$repository" ] && [ -f "$SELF/conventions-grandfathered" ] \
   && grep -qxF "modern-smoke ${repository#*/} release.yml:modern-smoke" "$SELF/conventions-grandfathered" && arm_gf=yes
 awk '$1 == "pkg" { pkg[$2] = 1 }
-     $1 == "manifest" { prod[$2] = $3 }
-     $1 == "derived" { app[$2] = $5 }
-     $1 == "sparkle" { spk[$2 "\t" $3] = 1 }
-     $1 == "macho" && $4 ~ /^arm64e?$/ { arm[$2 "\t" $3] = 1 }
-     END {
-       for (k in spk) {
-         split(k, u, "\t"); p = prod[u[1]]
-         if (p != "" && (p in app) && app[p] != u[2]) continue
-         upd[u[1] "\t" u[2] "/"] = 1
-       }
-       for (a in arm) {
-         split(a, m, "\t"); if (!(m[1] in pkg)) continue
-         exempt = 0
-         for (k in upd) { split(k, u, "\t"); if (u[1] == m[1] && index(m[2], u[2]) == 1) exempt = 1 }
-         if (!exempt) print m[1], m[2]
-       } }' "$facts" | sort -u > "$tmp/arm64"
-arm_declared=0; arm_undeclared=0
+     $1 == "macho" && $4 ~ /^arm64e?$/ && !(($2 " " $3) in seen) { seen[$2 " " $3] = 1; arm[++n] = $2 " " $3 }
+     END { for (i = 1; i <= n; i++) { split(arm[i], m, " "); if (m[1] in pkg) print arm[i] } }' "$facts" > "$tmp/arm64"
+arm_declared=0; arm_undeclared=0; ah_file=; ah_tree=
 while read -r file path; do
-  if [ -n "$(deviation_reason arm64 "$(dec "$path")")" ]; then arm_declared=$((arm_declared + 1)); continue; fi
+  p="$(dec "$path")"
+  ! arch_is_exempt "$p" || continue
+  if [ "$file" != "$ah_file" ]; then
+    ah_file="$file"; ah_tree=; : > "$tmp/ah-targets"
+    ah_prod="$(prod_of "$file")"
+    if [ -n "$ah_prod" ]; then ah_tree="opt/mavergreen/$ah_prod/"; targets_of "$ah_prod" > "$tmp/ah-targets"; fi
+  fi
+  if [ -n "$ah_tree" ] && [ -s "$tmp/ah-targets" ]; then
+    case "$p" in "$ah_tree"*) ! arch_is_target "${p#"$ah_tree"}" "$tmp/ah-targets" || continue ;; esac
+  fi
+  if [ -n "$(deviation_reason arch-host "$p")" ]; then arm_declared=$((arm_declared + 1)); continue; fi
   arm_undeclared=$((arm_undeclared + 1))
   [ "$arm_undeclared" -le 20 ] || continue
-  msg="$file installs $(dec "$path") with an arm64 slice, and no .mavergreen/deviations/arm64/ scope matches that install path"
+  msg="$file installs $p with an arm64 slice, and no .mavergreen/deviations/arch-host/ scope matches that install path"
   if [ "$arm_gf" = yes ]; then
-    echo "::warning::conformance: arm64: $msg (grandfathered: modern-smoke ${repository#*/})"
+    echo "::warning::conformance: arch-host: $msg (grandfathered: modern-smoke ${repository#*/})"
   else
-    chk_fail arm64 "$(rule_of arm64)" "$msg" "$(fix_of arm64)"
+    chk_fail arch-host "$(rule_of arch-host)" "$msg" "$(fix_of arch-host)"
   fi
 done < "$tmp/arm64"
 if [ "$arm_undeclared" -gt 20 ]; then
-  if [ "$arm_gf" = yes ]; then echo "::warning::conformance: arm64: and $((arm_undeclared - 20)) more undeclared arm64 files"
-  else echo "conformance: arm64: and $((arm_undeclared - 20)) more undeclared arm64 files" >&2; fi
+  if [ "$arm_gf" = yes ]; then echo "::warning::conformance: arch-host: and $((arm_undeclared - 20)) more undeclared arm64 host files"
+  else echo "conformance: arch-host: and $((arm_undeclared - 20)) more undeclared arm64 host files" >&2; fi
 fi
 [ "$arm_declared" -eq 0 ] && [ "$arm_undeclared" -eq 0 ] \
-  || echo "conformance: arm64: $arm_declared declared, $arm_undeclared undeclared non-updater arm64 files in pkgs"
+  || echo "conformance: arch-host: $arm_declared declared, $arm_undeclared undeclared arm64 host files in pkgs"
+
+# spec: explain/arch-target.md -- every target glob matches an installed file of its product, and no
+#       host binary of the same pkg loads a target file; loads are resolved lexically from the loader's
+#       directory, @rpath through each of its rpaths.
+tab="$(printf '\t')"
+for at_prod in $(awk '$1 == "target" { print $2 }' "$facts" | LC_ALL=C sort -u); do
+  at_pkgs="$(awk -v p="$at_prod" '$1 == "manifest" && $3 == p { print $2 }' "$facts" | LC_ALL=C sort -u)"
+  [ -n "$at_pkgs" ] || continue
+  at_tree="opt/mavergreen/$at_prod/"
+  targets_of "$at_prod" > "$tmp/at-globs"
+  for at_pkg in $at_pkgs; do
+    awk -v f="$at_pkg" -v t="$at_tree" '$1 == "installs" && $2 == f && index($3, t) == 1 { print substr($3, length(t) + 1) }' "$facts"
+  done | sed -e 's/%20/ /g' -e 's/%25/%/g' > "$tmp/at-installs"
+  : > "$tmp/at-targets"
+  while IFS= read -r at_rel; do
+    ! arch_is_target "$at_rel" "$tmp/at-globs" || printf '%s%s\n' "$at_tree" "$at_rel" >> "$tmp/at-targets"
+  done < "$tmp/at-installs"
+  while IFS= read -r at_g; do
+    [ -n "$at_g" ] || continue
+    printf '%s\n' "$at_g" > "$tmp/at-one"
+    at_hit=0
+    while IFS= read -r at_rel; do
+      if arch_is_target "$at_rel" "$tmp/at-one"; then at_hit=1; break; fi
+    done < "$tmp/at-installs"
+    [ "$at_hit" -eq 1 ] \
+      || arch_fail arch-target "the target glob $at_g matches no file $at_prod installs, so .mavergreen/products/$at_prod/target declares a file the pkg does not ship"
+  done < "$tmp/at-globs"
+  [ -s "$tmp/at-targets" ] || continue
+  for at_pkg in $at_pkgs; do
+    awk -v f="$at_pkg" '
+      function dec(s) { gsub(/%20/, " ", s); gsub(/%25/, "%", s); return s }
+      function norm(s,   n, c, i, k, o, r) {
+        n = split(s, c, "/"); k = 0
+        for (i = 1; i <= n; i++) {
+          if (c[i] == "" || c[i] == ".") continue
+          if (c[i] == "..") { if (k > 0) k--; continue }
+          o[++k] = c[i]
+        }
+        r = ""; for (i = 1; i <= k; i++) r = r (i > 1 ? "/" : "") o[i]
+        return r
+      }
+      function res(v, d) {
+        if (v == "@loader_path" || v == "@executable_path") return norm(d)
+        if (index(v, "@loader_path/") == 1) return norm(d "/" substr(v, 14))
+        if (index(v, "@executable_path/") == 1) return norm(d "/" substr(v, 18))
+        if (index(v, "/") == 1) return norm(v)
+        return ""
+      }
+      $1 == "macho-load" && $2 == f {
+        k = $3 SUBSEP $4
+        if ($5 == "rpath") { rp[k] = rp[k] dec($6) "\n"; next }
+        if ($5 == "dylib") { ld[++n] = k; lv[n] = dec($6); lp[n] = dec($3) }
+      }
+      END {
+        for (i = 1; i <= n; i++) {
+          d = lp[i]; sub(/\/[^\/]*$/, "", d); v = lv[i]
+          if (index(v, "@rpath/") == 1) {
+            m = split(rp[ld[i]], r, "\n")
+            for (j = 1; j <= m; j++) { b = res(r[j], d); if (b != "") print lp[i] "\t" norm(b "/" substr(v, 8)) "\t" v }
+          } else {
+            b = res(v, d); if (b != "") print lp[i] "\t" b "\t" v
+          }
+        } }' "$facts" | LC_ALL=C sort -u > "$tmp/at-loads"
+    while IFS="$tab" read -r at_ld at_to at_raw; do
+      grep -qxF -- "$at_to" "$tmp/at-targets" || continue
+      ! grep -qxF -- "$at_ld" "$tmp/at-targets" || continue
+      ! arch_is_exempt "$at_ld" || continue
+      arch_fail arch-target "$at_pkg: $at_ld loads $at_to ($at_raw), a target file"
+    done < "$tmp/at-loads"
+  done
+done
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact conformance" -- one C++
 #       runtime per process; a cxxabi deviation whose scope is a glob excuses a path, and a path grandfathered as cxxabi

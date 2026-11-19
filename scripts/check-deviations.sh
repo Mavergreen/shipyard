@@ -36,6 +36,7 @@ retired_fix() {
     ingredient-pins) echo "now \`watch-matches\`, which reads no deviation; delete the directory" ;;
     upstream-version-bare) echo "now \`value-file-line\`; move the directory to .mavergreen/deviations/value-file-line/" ;;
     floor) echo "floors are derived (arch-floors); no deviation excuses them; delete the directory" ;;
+    arm64) echo "now \`arch-host\`; move the directory to .mavergreen/deviations/arch-host/" ;;
     sparkle-updater|release-assets|python3|registered) echo "no check reads this; delete the directory" ;;
     *) return 1 ;;
   esac

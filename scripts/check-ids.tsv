@@ -111,7 +111,7 @@ on-target	checkout	scripts/check-family-conventions.sh	gate 29	P1
 packager	checkout	scripts/check-family-conventions.sh	gate 35	P1
 macos-runner	checkout	scripts/check-family-conventions.sh	gate 36	P1
 modern-smoke	checkout	scripts/check-family-conventions.sh	gate 37	P1
-arm64	dist	scripts/check-artifact-conformance.sh	conformance arm64	P1
+arm64	retired	scripts/check-artifact-conformance.sh	conformance arm64	P5
 cxxabi	dist	scripts/check-artifact-conformance.sh	conformance cxxabi	P1
 repo-public	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh visibility	P1
 repo-requires-on-target	repo-state	scripts/audit-repo-settings.sh	audit-repo-settings.sh on-target	P1
@@ -137,3 +137,5 @@ root-runs	dist	scripts/check-artifact-conformance.sh	new	P4
 os-overwrite	dist	scripts/check-artifact-conformance.sh	new	P4
 arch-distribution	dist	scripts/check-artifact-conformance.sh	new (P5: architectures A2)	P5
 arch-floors	dist	scripts/check-artifact-conformance.sh	new (P5: architectures A3; was floor)	P5
+arch-host	dist	scripts/check-artifact-conformance.sh	conformance arm64	P5
+arch-target	dist	scripts/check-artifact-conformance.sh	new (P5: architectures A1)	P5

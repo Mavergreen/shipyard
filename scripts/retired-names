@@ -86,3 +86,6 @@ SHIPYARD_OPT_PREFIX	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where pro
 /usr/local/mavergreen	/opt/mavergreen (mavergreen_prefix)	every product installs under /opt/mavergreen, a root-only chain, and mavergreen_prefix names the path
 /usr/local/bin/mavergreen	/opt/mavergreen/bin/mavergreen	the helper lives in the product root, never in admin-writable /usr/local/bin
 mavergreen-opt	/etc/paths.d/mavergreen and /etc/manpaths.d/mavergreen	while pinned pre-flag-day releases still carry the old base, which owns /etc/paths.d/mavergreen, the /opt base writes its own path entries; L1 gives the spec's name back
+deviations/arm64	deviations/arch-host	P5 renamed the arm64 check arch-host, and it judges host binaries only
+--only arm64	--only arch-host	P5 renamed the arm64 check arch-host, and it judges host binaries only
+--explain arm64	--explain arch-host	P5 renamed the arm64 check arch-host, and it judges host binaries only
