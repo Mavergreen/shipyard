@@ -29,11 +29,11 @@ if [ "$rc" = 1 ] && grep -q '22\.1\.9' "$T/err" && grep -q '22\.1\.8' "$T/err"; 
 else fail "mismatch: exit $rc"; fi
 
 printf '22.1.8-mavericks.1\n' >"$T/pin/version"
-mkdir -p "$T/cache/22.1.8-mavericks.1/lib" "$T/cache/22.1.8-mavericks.1/include/c++/v1"
-: >"$T/cache/22.1.8-mavericks.1/lib/libc++.a"; : >"$T/cache/22.1.8-mavericks.1/lib/libc++abi.a"; : >"$T/cache/22.1.8-mavericks.1/include/c++/v1/__config_site"
+mkdir -p "$T/cache/22.1.8-mavericks.1-pic/lib" "$T/cache/22.1.8-mavericks.1-pic/include/c++/v1"
+: >"$T/cache/22.1.8-mavericks.1-pic/lib/libc++.a"; : >"$T/cache/22.1.8-mavericks.1-pic/lib/libc++abi.a"; : >"$T/cache/22.1.8-mavericks.1-pic/include/c++/v1/__config_site"
 rc=0; out=$(MAVERGREEN_HOST_LIBCXX_CACHE="$T/cache" SHIPYARD_FETCH_TRIES=1 MAVERGREEN_RELEASES="file://$T/none" \
   sh "$S" "$T/pin" "$T/clang" 2>"$T/err") || rc=$?
-if [ "$rc" = 0 ] && [ "$out" = "$T/cache/22.1.8-mavericks.1" ]; then
+if [ "$rc" = 0 ] && [ "$out" = "$T/cache/22.1.8-mavericks.1-pic" ]; then
   pass 'a cached prefix is printed without a fetch'
 else fail "cache: exit $rc, printed '$out'"; fi
 
@@ -46,6 +46,13 @@ if [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ]; then
     if [ "$rc" = 0 ] && [ -f "$out/lib/libc++.a" ] && [ -f "$out/lib/libc++abi.a" ] && [ -f "$out/include/c++/v1/__config_site" ]; then
       pass "the full build prints a prefix holding libc++.a and libc++abi.a"
       echo "ok: built prefix $out holds lib/libc++.a and lib/libc++abi.a"
+      printf '%s\n' 'void f() { try { throw 1; } catch (int) {} }' >"$T/pic.cpp"
+      if "$CL/bin/clang++" --no-default-config -rtlib=libgcc --unwindlib=libgcc -fPIC -nostdinc++ -isystem "$out/include/c++/v1" \
+        -shared -fuse-ld=lld --ld-path="$CL/bin/ld.lld" -nostdlib++ "$T/pic.cpp" "$out/lib/libc++.a" "$out/lib/libc++abi.a" \
+        -o "$T/pic.so" 2>"$T/err"; then
+        pass "a shared object links the built libc++.a and libc++abi.a"
+        echo "ok: $T/pic.so links lib/libc++.a and lib/libc++abi.a with -shared"
+      else fail "a shared object cannot link the built libc++.a and libc++abi.a"; fi
     else fail "full build: exit $rc, printed '$out'"; fi
   fi
 else echo "NOTE: the full build runs on x86_64 Linux only"; fi
