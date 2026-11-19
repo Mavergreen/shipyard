@@ -7,7 +7,8 @@ mavericks_fetch.sh	mavergreen_fetch.sh
 mavericks_mode.sh	mavergreen_mode.sh
 MAVERICKS_TEST_JOBS	MAVERGREEN_TEST_JOBS
 MAVERICKS_TAGS	MAVERGREEN_TAGS
-MAVERICKS_MIN_OS	MAVERGREEN_MIN_OS
+MAVERICKS_MIN_OS	.mavergreen/products/<short>/floor (mavergreen_floor)	the install floor is a per-product file, not an environment variable
+MAVERGREEN_MIN_OS	.mavergreen/products/<short>/floor (mavergreen_floor)	the install floor is a per-product file, not an environment variable
 MAVERICKS_SDK_URL	MAVERGREEN_SDK_URL
 MAVERICKS_SDK_SHA256	MAVERGREEN_SDK_SHA256
 MAVERICKS_SDK_CACHE	MAVERGREEN_SDK_CACHE

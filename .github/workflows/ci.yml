@@ -115,13 +115,14 @@ jobs:
           SHIPYARD_CHECK_VERSION="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"
           export SHIPYARD_CHECK_VERSION
           d="$RUNNER_TEMP/dist"
-          sh scripts/release-notes.sh --tag "v$SHIPYARD_CHECK_VERSION" --version "$SHIPYARD_CHECK_VERSION" \
-            --short shipyard --min-os 10.9.5 --out "$d/RELEASE_NOTES.md"
           pkg="$d/shipyard-$SHIPYARD_CHECK_VERSION.pkg"
+          sh scripts/release-notes.sh --tag "v$SHIPYARD_CHECK_VERSION" --version "$SHIPYARD_CHECK_VERSION" \
+            --short shipyard --pkg "$pkg" --out "$d/RELEASE_NOTES.md"
+          . scripts/mavergreen-meta.sh && . scripts/lib/name-rules.sh
           len="$(wc -c < "$pkg" | tr -d ' ')"
           sh scripts/gen_appcast.sh shipyard "$SHIPYARD_CHECK_VERSION" \
             "https://github.com/Mavergreen/shipyard/releases/download/v$SHIPYARD_CHECK_VERSION/shipyard-$SHIPYARD_CHECK_VERSION.pkg" \
-            10.9.5 "$d/RELEASE_NOTES.md" "sparkle:edSignature=\"rehearsal\" length=\"$len\"" > "$d/shipyard.xml"
+            "$(mavergreen_floor shipyard)" "$d/RELEASE_NOTES.md" "sparkle:edSignature=\"rehearsal\" length=\"$len\"" > "$d/shipyard.xml"
           sh scripts/shipyard-check --dist "$d"
 
       # spec: scripts/package-pkg.sh -- its two inputs, as tars that keep modes and links, so the pkg

@@ -63,6 +63,17 @@ rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/
   --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "--feed-dir is required; expected exit 2, got $rc"
 
+printf '%s\n' 10.9.4 > "$T/repo/.mavergreen/products/openssh/floor"
+SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds5" --version 1.2.3 \
+  --pkg-url https://example.invalid/x.pkg --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null
+grep -q '<sparkle:minimumSystemVersion>10.9.4</sparkle:minimumSystemVersion>' "$T/feeds5/openssh.xml" || fail "the minimum is the product's floor"
+rm -f "$T/repo/.mavergreen/products/openssh/floor"
+rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds6" --min-os 10.9.5 \
+  --version 1.2.3 --pkg-url https://example.invalid/x.pkg --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2> "$T/err6" || rc=$?
+[ "$rc" -eq 2 ] || fail "--min-os is refused; expected exit 2, got $rc"
+grep -q ".mavergreen/products/<short>/floor" "$T/err6" || fail "the refusal names the floor file: $(cat "$T/err6")"
+[ ! -e "$T/feeds6" ] || fail "a refused call writes no feed"
+
 # spec: SKILL.md "Family conventions" check 28 -- with no --signer, the signer is the pinned ed25519 release,
 #       verified: a release whose SHA256SUMS does not list that release's pkg is refused, by version.
 pin="$(sed -n 1p "$ROOT/.mavergreen/ingredients/ed25519/VERSION")"

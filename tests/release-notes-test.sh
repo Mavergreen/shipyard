@@ -36,6 +36,7 @@ YML
   ( cd "$1" && git add -A && git commit -qm base )
 }
 decl() { mkdir -p "$1/.mavergreen/products/$2"; [ -s "$1/.mavergreen/products/$2/noun" ] || printf "%s\n" "$2" > "$1/.mavergreen/products/$2/noun"; }
+AD="$here/fixtures/checks/arch-distribution"
 L2='# renovate: datasource=github-releases depName=libressl/portable extractVersion=^v(?<version>.+)$'
 bump() {
   printf '%s\n%s\n' "$2" "$L2" > "$1/.mavergreen/ingredients/libressl/VERSION"
@@ -46,7 +47,7 @@ gen() {  # $1 = repo, $2 = tag/version, rest = extra args
   ( cd "$r" && MAVERGREEN_REPO_ROOT="$r" \
       GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=Mavergreen/mavericks-openssh \
       sh "$S" --tag "$v" --version "$v" \
-      --short openssh --min-os 10.9.5 --out "$r/OUT.md" "$@" )
+      --short openssh --pkg "$AD/pass-neutral-newer-macos/dist/example-1.0.0-mavergreen.1.pkg" --out "$r/OUT.md" "$@" )
 }
 
 # spec: scripts/release-notes.sh -- a new upstream must name the upstream, link its notes, and
@@ -65,7 +66,7 @@ MAVERGREEN_REPO_ROOT="$r" sh "$here/../scripts/check-release-notes.sh" "$r/OUT.m
 r="$work/restart"; mkrepo "$r"
 ( cd "$r" && git tag 1.2.3-mavericks.4 )
 ( cd "$r" && MAVERGREEN_REPO_ROOT="$r" GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=Mavergreen/foo \
-    sh "$S" --tag 1.2.3-mavergreen.1 --version 1.2.3-mavergreen.1 --short foo --min-os 10.9.5 --out "$r/OUT.md" ) >/dev/null \
+    sh "$S" --tag 1.2.3-mavergreen.1 --version 1.2.3-mavergreen.1 --short foo --pkg "$AD/pass-neutral-newer-macos/dist/example-1.0.0-mavergreen.1.pkg" --out "$r/OUT.md" ) >/dev/null \
   || { echo "FAIL restart: the first -mavergreen release beside a -mavericks tag must generate"; exit 1; }
 grep -qx -- '- First release of Foo 1.2.3.' "$r/OUT.md" \
   || { echo "FAIL restart: the first -mavergreen.1 is a first release, never a repackage of 1.2.3-mavericks.4"; cat "$r/OUT.md"; exit 1; }
@@ -249,7 +250,7 @@ r="$work/dir-changes-self"; mkrepo "$r"
 ( cd "$r" && git tag 20260802.4 && git tag 20260802.5 )
 mkdir -p "$r/.mavergreen/release-notes/20260802.6/changes"; printf 'Pure-Go programs now run on Mavericks.\n' > "$r/.mavergreen/release-notes/20260802.6/changes/go"
 ( cd "$r" && git add -A && git commit -qm notes )
-gen "$r" 20260802.6 --short porthole --min-os 10.9 >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self: ships"; cat "$r/ERR"; exit 1; }
+gen "$r" 20260802.6 --short porthole >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==3{exit}' "$r/OUT.md")" = "$(printf -- '- Pure-Go programs now run on Mavericks.\n- New release of Porthole 20260802.6 (was 20260802.5).\n  [Changes since 20260802.5](https://github.com/Mavergreen/mavericks-openssh/compare/20260802.5...20260802.6)')" ] \
   || { echo "FAIL dir-changes-self: a same-date release with changes is a new release"; cat "$r/OUT.md"; exit 1; }
 
@@ -279,7 +280,7 @@ gen "$r" "$T" >/dev/null 2>"$r/ERR" || { echo "FAIL dir-req-landing: ships"; cat
 grep -q '### Before you update' "$r/OUT.md" && { echo "FAIL dir-req-landing: a release from before .mavergreen/ lists no requirement"; cat "$r/OUT.md"; exit 1; }
 
 dset notice; notice "$r" openssh 'Never publish an image that contains macOS.'
-dgen new --min-os ''
+dgen new --pkg ''
 [ "$rc" -eq 0 ] || { echo "FAIL dir-notice: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^---$/{f=1; next} f' "$r/OUT.md")" = "$(printf 'Never publish an image that contains macOS.\n\n[All changes since 9.9p2-mavergreen.1](https://github.com/Mavergreen/mavericks-openssh/compare/9.9p2-mavergreen.1...9.9p2-mavergreen.2)')" ] \
   || { echo "FAIL dir-notice: the notice opens the footer"; cat "$r/OUT.md"; exit 1; }
@@ -348,7 +349,7 @@ r="$work/dir-changes-self-ing"; mkrepo "$r"
 ( cd "$r" && git tag 20260802.5 ); bump "$r" 3.9.2
 mkdir -p "$r/.mavergreen/release-notes/20260802.6/changes"; printf 'Pure-Go programs now run on Mavericks.\n' > "$r/.mavergreen/release-notes/20260802.6/changes/go"
 ( cd "$r" && git add -A && git commit -qm "bump libressl" )
-gen "$r" 20260802.6 --short porthole --min-os 10.9 >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self-ing: ships"; cat "$r/ERR"; exit 1; }
+gen "$r" 20260802.6 --short porthole >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self-ing: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- Pure-Go programs now run on Mavericks.\n- Rebuilt because build ingredients moved (below).')" ] \
   || { echo "FAIL dir-changes-self-ing: changes are a change to the product itself"; cat "$r/OUT.md"; exit 1; }
 
@@ -446,7 +447,7 @@ dgen new
   || { echo "FAIL dir-rebuild-only: only the rebuild bullet"; cat "$r/OUT.md"; exit 1; }
 r="$work/dir-notice-first"; mkrepo "$r"; notice "$r" openssh 'Never publish an image that contains macOS.'
 ( cd "$r" && git add -A && git commit -qm notice && git tag 9.9p2-mavergreen.1 )
-gen "$r" 9.9p2-mavergreen.1 --min-os '' >/dev/null 2>"$r/ERR" || { echo "FAIL dir-notice-first: ships"; cat "$r/ERR"; exit 1; }
+gen "$r" 9.9p2-mavergreen.1 --pkg '' >/dev/null 2>"$r/ERR" || { echo "FAIL dir-notice-first: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^---$/{f=1; next} f' "$r/OUT.md")" = 'Never publish an image that contains macOS.' ] \
   || { echo "FAIL dir-notice-first: the footer is the notice alone"; cat "$r/OUT.md"; exit 1; }
 dset changes-ing; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/keys"
@@ -491,13 +492,13 @@ grep -q '^## .* (' "$r/OUT.md" && { echo "FAIL self: port-shaped title"; exit 1;
 
 # spec: Porthole/shipyard/magic-trackpad2 have no -mavergreen axis, so SELF_UPSTREAM is decided
 #       from VER alone; that must not also mean "never gets a baseline" -- self-upstream also gets
-#       the same compare-link footer everyone else gets. gen() hard-codes --product/--min-os but
+#       the same compare-link footer everyone else gets. gen() hard-codes --short/--pkg but
 #       appends "$@" after them, and release-notes.sh's argument loop lets a later flag win, so
 #       this overrides both to exercise the porthole (YYYYMMDD.N) tag shape through the shared
 #       fixture.
 r="$work/selfglob"; mkrepo "$r"
 ( cd "$r" && git tag 20260802.4 && git tag 20260802.5 )
-gen "$r" 20260802.6 --short porthole --min-os 10.9 >/dev/null
+gen "$r" 20260802.6 --short porthole >/dev/null
 grep -q '^## Porthole 20260802.6$' "$r/OUT.md" \
   || { echo "FAIL selfglob: title"; cat "$r/OUT.md"; exit 1; }
 grep -q '^- Repackage of Porthole 20260802; packaging changes only\.$' "$r/OUT.md" \
@@ -510,7 +511,7 @@ grep -q '^\[All changes since 20260802\.5\](.*compare/20260802\.5\.\.\.20260802\
 #       case left the whole suite green until this was added.
 r="$work/selfvglob"; mkrepo "$r"
 ( cd "$r" && git tag v0.5.1 && git tag v0.5.2 )
-gen "$r" v0.5.3 --short magictrackpad2 --min-os 10.9 >/dev/null
+gen "$r" v0.5.3 --short magictrackpad2 >/dev/null
 grep -q '^## MagicTrackpad2 0.5.3$' "$r/OUT.md" \
   || { echo "FAIL selfvglob: title"; cat "$r/OUT.md"; exit 1; }
 grep -q '^- New release of MagicTrackpad2 v0.5.3 (was v0.5.2)\.$' "$r/OUT.md" \
@@ -849,7 +850,7 @@ r="$work/args"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavergreen.1 )
 if ( cd "$r" && MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag 9.9p2-mavergreen.1 --version 9.9p2-mavergreen.1 \
        --out "$r/OUT.md" ) >/dev/null 2>&1; then echo "FAIL args: several products and no --short must fail"; exit 1; fi
 
-# spec: scripts/release-notes.sh -- a release with no --min-os floor and no compare link (e.g.,
+# spec: scripts/release-notes.sh -- a release with no --pkg floor and no compare link (e.g.,
 #       swift-toolchain in a fixture with no remote). The old code printed the footer rule
 #       unconditionally and then
 #       conditionally appended the floor/link, so a body with neither ended in a dangling <hr>
@@ -885,16 +886,16 @@ grep -q -- '^---$' "$r/OUT.md" || { echo "FAIL G3: footer rule missing when a fo
 #       short.
 r="$work/linefatal"; mkrepo "$r"
 ( cd "$r" && git tag 1.26.7-mavergreen.1 )
-if gen "$r" 1.26.7-mavergreen.2 --short go --line 126 --min-os 10.9.5 >/dev/null 2>&1; then
+if gen "$r" 1.26.7-mavergreen.2 --short go --line 126 >/dev/null 2>&1; then
   echo "FAIL linefatal: --line matching no tag must be fatal for a repackage"; exit 1
 fi
-out="$(gen "$r" 1.26.7-mavergreen.2 --short go --line 126 --min-os 10.9.5 2>&1 || true)"
+out="$(gen "$r" 1.26.7-mavergreen.2 --short go --line 126 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'matches no' \
   || { echo "FAIL linefatal: error must name the unmatched line glob: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q '1\.26' \
   || { echo "FAIL linefatal: error must show the shape the tags actually carry: $out"; exit 1; }
 
-gen "$r" 1.26.7-mavergreen.2 --short go --line 1.26 --min-os 10.9.5 >/dev/null
+gen "$r" 1.26.7-mavergreen.2 --short go --line 1.26 >/dev/null
 grep -q 'compare/1\.26\.7-mavergreen\.1\.\.\.1\.26\.7-mavergreen\.2' "$r/OUT.md" \
   || { echo "FAIL linefatal: a correct --line still yields a compare link"; cat "$r/OUT.md"; exit 1; }
 
@@ -902,7 +903,7 @@ grep -q 'compare/1\.26\.7-mavergreen\.1\.\.\.1\.26\.7-mavergreen\.2' "$r/OUT.md"
 #       baseline, so an unmatched --line must NOT be fatal for it -- that IS what a first release
 #       of a new line looks like.
 r="$work/linefatal-first"; mkrepo "$r"
-gen "$r" 1.27.0-mavergreen.1 --short go --line 1.27 --min-os 10.9.5 >/dev/null
+gen "$r" 1.27.0-mavergreen.1 --short go --line 1.27 >/dev/null
 grep -q '^## Go 1.27.0$' "$r/OUT.md" \
   || { echo "FAIL linefatal-first: first release of a line still generates"; cat "$r/OUT.md"; exit 1; }
 
@@ -1147,9 +1148,28 @@ gen "$r" v1.0.300 --short shipyard >/dev/null || { echo "FAIL names: shipyard ge
 [ "$(sed -n 1,2p "$r/OUT.md")" = "$(printf '## Shipyard 1.0.300\nRelease v1.0.300 \302\267 Requires Mac OS X 10.9.5 or later')" ] \
   || { echo "FAIL names: shipyard heading and Release line"; cat "$r/OUT.md"; exit 1; }
 ( cd "$r" && MAVERGREEN_REPO_ROOT="$r" sh "$S" --tag v1.0.300 --version v1.0.300 --short shipyard --out "$r/OUT.md" ) >/dev/null \
-  || { echo "FAIL names: no --min-os generates"; exit 1; }
-[ "$(sed -n 2p "$r/OUT.md")" = 'Release v1.0.300' ] || { echo "FAIL names: no --min-os gives Release <tag> alone"; cat "$r/OUT.md"; exit 1; }
+  || { echo "FAIL names: no --pkg generates"; exit 1; }
+[ "$(sed -n 2p "$r/OUT.md")" = 'Release v1.0.300' ] || { echo "FAIL names: no --pkg gives Release <tag> alone"; cat "$r/OUT.md"; exit 1; }
 grep -q 'Requires Mac OS X' "$r/OUT.md" && { echo "FAIL names: no floor given, none shown"; exit 1; }
+
+# spec: scripts/release-notes.sh -- line 2's Requires range is read from the pkg's Distribution: one of
+#       Q6's four forms, never a flag; --min-os is refused.
+for c in "universal:pass-universal:Mac OS X 10.9.5 or later; on Apple Silicon, macOS 13.0 or later" \
+         "x86_64:pass-x86_64:Mac OS X 10.9.5 through 10.10" \
+         "newer:pass-newer-macos:an Intel Mac with Mac OS X 10.9.5 or later" \
+         "neutral-newer:pass-neutral-newer-macos:Mac OS X 10.9.5 or later" \
+         "neutral:pass-neutral:Mac OS X 10.9.5 through 10.10"; do
+  nm="${c%%:*}"; rest="${c#*:}"; fx="${rest%%:*}"; want="${rest#*:}"
+  gen "$r" v1.0.300 --short shipyard --pkg "$AD/$fx/dist/example-1.0.0-mavergreen.1.pkg" >/dev/null \
+    || { echo "FAIL names: --pkg $fx generates"; exit 1; }
+  [ "$(sed -n 2p "$r/OUT.md")" = "$(printf 'Release v1.0.300 \302\267 Requires %s' "$want")" ] \
+    || { echo "FAIL names: --pkg $fx ($nm) gives its Requires range"; cat "$r/OUT.md"; exit 1; }
+done
+rc=0; out="$(gen "$r" v1.0.300 --short shipyard --min-os 10.9.5 2>&1)" || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL names: --min-os exits 2, got $rc"; exit 1; }
+printf '%s\n' "$out" | grep -qF 'the floor line is read from the pkg; pass --pkg' || { echo "FAIL names: --min-os names its fix: $out"; exit 1; }
+rc=0; gen "$r" v1.0.300 --short shipyard --pkg "$AD/pass-universal/dist/no-such.pkg" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 1 ] || { echo "FAIL names: a --pkg that is no file is fatal, got $rc"; exit 1; }
 grep -q 'for Mavericks' "$r/OUT.md" && { echo "FAIL names: for Mavericks"; exit 1; }
 
 rc=0; out="$(gen "$r" 1.27.2-mavergreen.1 --short go127 --product Go 2>&1)" || rc=$?

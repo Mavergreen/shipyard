@@ -114,7 +114,7 @@ jobs:
           set -eu
           v='${{ steps.ver.outputs.version }}'
           sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "v$v" --version "$v" \
-            --short shipyard --min-os 10.9.5 --out dist/RELEASE_NOTES.md
+            --short shipyard --pkg "dist/shipyard-$v.pkg" --out dist/RELEASE_NOTES.md
           [ -s dist/RELEASE_NOTES.md ] || { echo "::error::release notes came back empty"; exit 1; }
 
       - name: Sign + appcast

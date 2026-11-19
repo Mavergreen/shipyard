@@ -50,10 +50,20 @@ first="$(sed -n '1p' "$f")"
 second="$(sed -n '2p' "$f")"
 case "$second" in
   "Release $tag") ;;
-  "Release $tag · Requires Mac OS X "*" or later")
-    floor="${second#"Release $tag · Requires Mac OS X "}"; floor="${floor% or later}"
-    case "$floor" in ''|*[!0-9.]*) fail "the second line of $f has no install floor: $second" ;; esac ;;
-  *) fail "the second line of $f is not 'Release $tag' (optionally with ' · Requires Mac OS X <x> or later'): $second" ;;
+  "Release $tag · Requires "*)
+    range="${second#"Release $tag · Requires "}"
+    ok=no
+    case "$range" in
+      "Mac OS X "*" through 10.10") x="${range#Mac OS X }"; x="${x% through 10.10}"; case "$x" in ''|*[!0-9.]*) ;; *) ok=yes ;; esac ;;
+      "an Intel Mac with Mac OS X "*" or later") x="${range#an Intel Mac with Mac OS X }"; x="${x% or later}"; case "$x" in ''|*[!0-9.]*) ;; *) ok=yes ;; esac ;;
+      "Mac OS X "*" or later; on Apple Silicon, macOS "*" or later")
+        x="${range#Mac OS X }"; x="${x%%" or later; on Apple Silicon, macOS "*}"
+        y="${range#*"on Apple Silicon, macOS "}"; y="${y% or later}"
+        case "$x" in ''|*[!0-9.]*) ;; *) case "$y" in ''|*[!0-9.]*) ;; *) ok=yes ;; esac ;; esac ;;
+      "Mac OS X "*" or later") x="${range#Mac OS X }"; x="${x% or later}"; case "$x" in ''|*[!0-9.]*) ;; *) ok=yes ;; esac ;;
+    esac
+    [ "$ok" = yes ] || fail "the second line of $f has no install floor in one of the four forms: $second" ;;
+  *) fail "the second line of $f is not 'Release $tag' (optionally with ' · Requires <range>'): $second" ;;
 esac
 
 grep -q '^### What changed[[:space:]]*$' "$f" \

@@ -219,6 +219,31 @@ Release 9.9p2-mavergreen.6 · Requires Mac OS X ten or later
 ### What changed
 - Repackage.
 EOF
+
+for rng in "Mac OS X 10.9.5 through 10.10" "an Intel Mac with Mac OS X 10.9.5 or later" \
+           "Mac OS X 10.9.5 or later; on Apple Silicon, macOS 13.0 or later" "Mac OS X 10.9.4 or later"; do
+  ok 9.9p2-mavergreen.6 "the Requires form: $rng" <<EOT
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6 · Requires $rng
+
+### What changed
+- Repackage.
+EOT
+done
+no 9.9p2-mavergreen.6 "an unknown range" "install floor" <<'EOF'
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6 · Requires Mac OS X 10.9.5 or so
+
+### What changed
+- Repackage.
+EOF
+no 9.9p2-mavergreen.6 "a universal range whose Apple Silicon floor is not a version" "install floor" <<'EOF'
+## OpenSSH 9.9p2
+Release 9.9p2-mavergreen.6 · Requires Mac OS X 10.9.5 or later; on Apple Silicon, macOS soon or later
+
+### What changed
+- Repackage.
+EOF
 cat > "$work/n.md" <<'EOF'
 ## OpenSSH 9.9p2
 Release 9.9p2-mavergreen.6

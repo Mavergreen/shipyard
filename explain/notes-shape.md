@@ -5,7 +5,9 @@ The shape is small on purpose, since it has to pass for every product from a Go 
 asserts only what a reader is entitled to, that the release says which version it is and what changed. Line 1
 must equal the derived heading, "## <noun> <version>", from .mavergreen/products/<short>/noun (a leading v and any
 -mavergreen.N suffix are dropped from the version); line 2 must be "Release <tag>", optionally followed by
-" · Requires Mac OS X <x> or later" (U+00B7, one space each side). A hand-chosen noun, a parenthesised version or
+" · Requires " and one of four ranges, read from the pkg (U+00B7, one space each side): "Mac OS X <x> through 10.10",
+"an Intel Mac with Mac OS X <x> or later", "Mac OS X <x> or later" or "Mac OS X <x> or later; on Apple
+Silicon, macOS <y> or later". Any other range, "Mac OS X 10.9.5 or so" among them, fails. A hand-chosen noun, a parenthesised version or
 "for Mavericks" fails. The
 generator self-checks what it wrote with this, and publish-release.yml checks it again at release time,
 structurally: the call carries no fallback (no ||, &&, ;, pipe) and no set +e precedes it, so "|| true" or

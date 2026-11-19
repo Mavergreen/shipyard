@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: sign_and_appcast.sh --product P --feed-dir DIR --version V --pkg-url URL \
-#            --notes-file FILE --pkg PKG [--signer BIN] [--verifier BIN] [--min-os 10.9.5] \
+#            --notes-file FILE --pkg PKG [--signer BIN] [--verifier BIN] \
 #            [--pubkey B64] [--allow-key-change]
 #          (SPARKLE_PRIVATE_KEY must be in the environment)
 #          Signs a .pkg with the native EdDSA signer and writes its Sparkle feed to DIR/P.xml, in one
@@ -17,7 +17,7 @@
 #            --pkg       the .pkg to sign
 #            --pkg-url   the URL the enclosure will point at (the release-asset download URL)
 #            --pubkey, --allow-key-change   passed to assert_update_trusted.sh
-#            others      passed through to gen_appcast.sh
+#            others      passed through to gen_appcast.shn#          sparkle:minimumSystemVersion is `mavergreen_floor P` (.mavergreen/products/P/floor); --min-os is refused.
 #          After signing, assert_update_trusted.sh proves the clients ALREADY INSTALLED will accept
 #          the signature -- against the key in the live release's updater, not the repo's .pub -- and
 #          no appcast is emitted if they would not.
@@ -33,9 +33,10 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 
 PRODUCT=""; FEEDDIR=""
-SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; VER=""; URL=""; NOTES=""; PKG=""; MINOS="${MAVERGREEN_MIN_OS:-10.9.5}"
+SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; VER=""; URL=""; NOTES=""; PKG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --product) PRODUCT="$2"; shift 2;;
@@ -49,13 +50,14 @@ while [ $# -gt 0 ]; do
     --pkg-url) URL="$2"; shift 2;;
     --notes-file) NOTES="$2"; shift 2;;
     --pkg) PKG="$2"; shift 2;;
-    --min-os) MINOS="$2"; shift 2;;
+    --min-os) echo "sign_and_appcast: --min-os is refused; the minimum is the product's floor (fix: write .mavergreen/products/<short>/floor)" >&2; exit 2;;
     *) echo "sign_and_appcast: unknown arg: $1" >&2; exit 2;;
   esac
 done
 [ -n "$PRODUCT" ] && [ -n "$FEEDDIR" ] && [ -n "$VER" ] && [ -n "$URL" ] && [ -n "$NOTES" ] && [ -n "$PKG" ] \
   || { echo "sign_and_appcast: need --product --feed-dir --version --pkg-url --notes-file --pkg" >&2; exit 2; }
 mavergreen_name identifier "$PRODUCT" >/dev/null || exit 1
+MINOS="$(mavergreen_floor "$PRODUCT")" || exit 1
 [ -f "$PKG" ] || { echo "sign_and_appcast: no pkg: $PKG" >&2; exit 1; }
 printenv SPARKLE_PRIVATE_KEY | grep -q . \
   || { echo "sign_and_appcast: SPARKLE_PRIVATE_KEY not set" >&2; exit 1; }

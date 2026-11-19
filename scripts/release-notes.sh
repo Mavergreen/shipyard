@@ -1,12 +1,13 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: release-notes.sh --tag T --version V --out FILE [--short S] [--line L] [--min-os M]
+#   usage: release-notes.sh --tag T --version V --out FILE [--short S] [--line L] [--pkg PKG]
 #     --tag/--version   the release tag and full version (equal for most repos; golang's differ)
 #     --short           this product's short name; defaults to the repo's only product. The noun is
 #                       derived from .mavergreen/products/<short>/noun, never passed.
 #     --line            upstream-line prefix for a repo shipping parallel lines (golang: "1.26";
 #                       "1.26.*" also accepted -- both are normalized to a glob before use)
-#     --min-os          adds the install floor to line 2; omit for a product that is not a 10.9 .pkg
+#     --pkg             the built .pkg; line 2 then carries "Requires <range>", read from its Distribution
+#                       (hostArchitectures, os-version, installation-check); omit for a product with no .pkg
 #     Generates ONE product's release notes: the Sparkle appcast <description> and the GitHub
 #     Release body, which are the same bytes by construction. Sections, in order: title, committed
 #     prose (verbatim, never rewritten), Before you update (only with requires/ or rebuild), What
@@ -22,8 +23,11 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # MAVERGREEN_REPO_ROOT
 . "$SELF/deviation-reason.sh"
+. "$SELF/lib/vercmp.sh"
+. "$SELF/lib/arch-rules.sh"
+. "$SELF/lib/pkg-tree.sh"
 
-TAG=""; VER=""; OUT=""; LINE=""; MINOS=""; SHORT=""; SHORT_SET=no
+TAG=""; VER=""; OUT=""; LINE=""; PKG=""; SHORT=""; SHORT_SET=no
 while [ $# -gt 0 ]; do
   case "$1" in
     --tag) TAG="$2"; shift 2;;
@@ -31,7 +35,8 @@ while [ $# -gt 0 ]; do
     --product) echo "release-notes: --product is refused (fix: the noun is derived: write .mavergreen/products/<short>/noun and pass --short)" >&2; exit 2;;
     --out) OUT="$2"; shift 2;;
     --line) LINE="$2"; shift 2;;
-    --min-os) MINOS="$2"; shift 2;;
+    --min-os) echo "release-notes: --min-os is refused (fix: the floor line is read from the pkg; pass --pkg)" >&2; exit 2;;
+    --pkg) PKG="$2"; shift 2;;
     --short) SHORT="$2"; SHORT_SET=yes; shift 2;;
     *) echo "release-notes: unknown argument: $1" >&2; exit 2;;
   esac
@@ -131,7 +136,27 @@ footer_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-footer.XXXXXX")"
 watched_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-watched.XXXXXX")"
 trap 'rm -f "$tmp" "$footer_tmp" "$watched_tmp"' EXIT
 
-printf '%s\nRelease %s%s\n' "$HEADING" "$TAG" "${MINOS:+ · Requires Mac OS X $MINOS or later}" > "$tmp"
+REQUIRES=""
+if [ -n "$PKG" ]; then
+  [ -f "$PKG" ] || die "--pkg $PKG is not a file"
+  _rn_x="$(mktemp -d "${TMPDIR:-/tmp}/release-notes-pkg.XXXXXX")"
+  trap 'rm -rf "$tmp" "$footer_tmp" "$watched_tmp"; af_rm "$_rn_x"' EXIT
+  af_pkg_tree "$PKG" "$_rn_x" || die "cannot read $PKG: ${AF_WHY:-stevedore cannot expand it}"
+  [ -f "$AF_TREE/Distribution" ] || die "$PKG has no Distribution, so its install floor cannot be read"
+  _rn_min="$(sed -n 's/.*<os-version[^>]*min="\([^"]*\)".*/\1/p' "$AF_TREE/Distribution" | head -n 1)"
+  [ -n "$_rn_min" ] || die "$PKG's Distribution has no os-version min"
+  set -- $(arch_read_distribution "$AF_TREE/Distribution")
+  _rn_newer=yes; [ "$2" = none ] || _rn_newer=no
+  case "$3" in
+    none) _rn_class=neutral; _rn_a=none;;
+    intel) _rn_class=x86_64; _rn_newer=no; _rn_a=none;;
+    intel-newer) _rn_class=x86_64; _rn_newer=yes; _rn_a=none;;
+    arm64-below:*) _rn_class=universal; _rn_newer=yes; _rn_a="${3#arm64-below:}";;
+    *) die "$PKG's Distribution has an installation-check that is none of the family's rules";;
+  esac
+  REQUIRES=" · Requires $(arch_requires_line "$_rn_class" "$_rn_newer" "$_rn_min" "$_rn_a")"
+fi
+printf '%s\nRelease %s%s\n' "$HEADING" "$TAG" "$REQUIRES" > "$tmp"
 
 # spec: SKILL.md "Release notes" -- a tag that names a commit other than HEAD is already minted; its
 #       committed prose publishes as is.
@@ -421,7 +446,7 @@ fi
 
 # spec: tests/release-notes-test.sh "nofooter"/"withfooter" -- the footer's '---' rule is buffered
 #       separately and emitted only when at least one footer line follows it; swift-toolchain has
-#       neither a --min-os floor nor (in a fixture with no remote) a compare link.
+#       neither a --pkg floor nor (in a fixture with no remote) a compare link.
 [ -z "$NOTICE" ] || printf '%s\n' "$NOTICE" >> "$footer_tmp"
 
 if [ -n "$PREV" ]; then
