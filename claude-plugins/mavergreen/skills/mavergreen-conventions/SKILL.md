@@ -233,6 +233,13 @@ per-product plumbing. clang22's `llvm-*` tools stand in for Xcode's: no `xcrun`,
 `ld64`, `libtool`, `ar`, `otool`, `lipo` or `nm`, on any host. This is the step toward a family-owned
 distribution that replaces the Command Line Tools.
 
+**Linux's C++ library is built, not shipped.** clang22's Linux archive carries a libc++ for Darwin
+targets only, so a cross build's Linux-host tools (Rust's `LINUX_HOST_CXX`) take
+`fetch_host_libcxx.sh PIN_DIR CLANG22_PREFIX`: static `libc++.a` and `libc++abi.a` built by that clang22
+from the llvm-project release it is built from (`components/clang22/llvm-project`: `<LLVM version>
+<sha256 of llvm-project-<version>.src.tar.xz>`; it refuses a clang22 of another LLVM version), cached. It
+exits when clang22's Linux archive ships a libc++ for Linux targets.
+
 **Apple's clang is a declared deviation, never a default.** `/usr/bin/clang`, AppleClang, or a configure
 that keeps `RequireAppleClang`, is allowed only where clang22 cannot do the job. Its comment names that
 reason and the shared fix that would retire it, and an `apple-clang` deviation scoped to that file declares

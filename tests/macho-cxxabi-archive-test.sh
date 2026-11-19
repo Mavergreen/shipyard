@@ -67,3 +67,10 @@ out="$(sh "$MC" fat.a)" || fail "fat archive: exit $?"
 want="$(printf 'x86_64 defines ___cxa_throw visible\ni386 defines ___cxa_throw visible')"
 [ "$(printf '%s\n' "$out" | LC_ALL=C sort)" = "$(printf '%s\n' "$want" | LC_ALL=C sort)" ] || fail "fat archive: got '$out'"
 echo "ok: every slice of a fat archive is read"
+
+mkdir xnm
+printf '#!/bin/sh\ncase "$1" in --version) exec "%s" --version ;; esac\nfor a; do [ "$a" = --no-llvm-bc ] && exec "%s" "$@"; done\necho "nm: error: Not an int attribute" >&2; exit 1\n' "$NM" "$NM" > xnm/nm
+chmod +x xnm/nm
+out="$(NM="$w/xnm/nm" sh "$MC" x86.a)" || fail "llvm-nm named nm: exit $?"
+[ "$out" = "x86_64 defines ___cxa_throw visible" ] || fail "llvm-nm named nm: got '$out'"
+echo "ok: an llvm-nm by any name skips embedded bitcode"
