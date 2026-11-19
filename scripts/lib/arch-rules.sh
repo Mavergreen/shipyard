@@ -13,8 +13,6 @@
 #          arch_distribution CLASS NEWER FLOOR ARM64FLOOR   prints the allowed-os-versions element and,
 #                                         with a rule, the installation-check and script, unindented
 #          arch_requires_line CLASS NEWER FLOOR ARM64FLOOR  prints the release notes' <range>
-# spec: .superpowers/plans/2026-11-19-flag-day-p5-architectures.md "Global Constraints" -- the class,
-#       the floors and the Distribution, exactly.
 
 arch_is_target() {
   [ -f "$2" ] || return 1
