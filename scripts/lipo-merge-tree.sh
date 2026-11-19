@@ -36,11 +36,21 @@ $2"; shift 2;;
 done
 [ -d "$A" ] && [ -d "$B" ] && [ -n "$OUT" ] || { echo "lipo-merge-tree: need --a DIR --b DIR --out DIR" >&2; exit 2; }
 [ ! -e "$OUT" ] || { echo "lipo-merge-tree: $OUT already exists" >&2; exit 2; }
-mach_tool LIPO || exit 4
 work="$(mktemp -d "${TMPDIR:-/tmp}/lipo-merge-tree.XXXXXX")"
 trap 'rm -rf "$work" "$OUT"' EXIT
 
-is_macho() { "$LIPO" -info "$1" >/dev/null 2>&1; }
+# platform: a payload with no Mach-O magic needs no reader, so LIPO is resolved at the first file that
+#           has one; a LIPO the caller set is always asked.
+has_magic() {
+  case "$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' ')" in
+    feedface|feedfacf|cefaedfe|cffaedfe|cafebabe|bebafeca) return 0;;
+  esac
+  return 1
+}
+is_macho() {
+  if [ -z "${LIPO:-}" ]; then has_magic "$1" || return 1; mach_tool LIPO || exit 4; fi
+  "$LIPO" -info "$1" >/dev/null 2>&1
+}
 allowed() { printf '%s\n' "$ALLOW" | grep -Fqx -- "$1"; }
 # platform: lipo -info includes the PATH ("Non-fat file: path/to/bin/tool is architecture: x86_64",
 #           "Architectures in the fat file: path/to/bin/tool are: i386 x86_64"), so match exact
@@ -59,13 +69,30 @@ union_fail() {
 tree_list "$A" > "$work/lmt-a"
 tree_list "$B" > "$work/lmt-b"
 comm -12 "$work/lmt-a" "$work/lmt-b" > "$work/lmt-both"
-comm -23 "$work/lmt-a" "$work/lmt-b" | while IFS= read -r rel; do [ -d "$B/$rel" ] && [ ! -L "$B/$rel" ] || echo "$rel"; done > "$work/lmt-only-a"
-comm -13 "$work/lmt-a" "$work/lmt-b" | while IFS= read -r rel; do [ -d "$A/$rel" ] && [ ! -L "$A/$rel" ] || echo "$rel"; done > "$work/lmt-only-b"
+comm -23 "$work/lmt-a" "$work/lmt-b" > "$work/lmt-oa"
+comm -13 "$work/lmt-a" "$work/lmt-b" > "$work/lmt-ob"
+: > "$work/lmt-only-a"; : > "$work/lmt-only-b"; : > "$work/lmt-mismatch"
+is_dir() { [ -d "$1" ] && [ ! -L "$1" ]; }
+split_side() {
+  while IFS= read -r rel; do
+    if [ -e "$3/$rel" ] || [ -L "$3/$rel" ]; then
+      is_dir "$2/$rel" && is_dir "$3/$rel" || echo "$rel" >> "$work/lmt-mismatch"
+    else
+      echo "$rel" >> "$work/lmt-only-$4"
+    fi
+  done < "$1"
+}
+split_side "$work/lmt-oa" "$A" "$B" a
+split_side "$work/lmt-ob" "$B" "$A" b
 cat "$work/lmt-only-a" "$work/lmt-only-b" > "$work/lmt-one"
 
 : > "$work/lmt-globs"
 [ -z "$SHORT" ] || mg_lines "products/$SHORT/union" > "$work/lmt-globs" 2>/dev/null || true
 bad=0
+while IFS= read -r rel; do
+  union_fail "$rel is a different kind of entry in the two trees" "$rel cannot be merged"
+  bad=1
+done < "$work/lmt-mismatch"
 while IFS= read -r rel; do
   matches_any "$rel" "$work/lmt-globs" && continue
   union_fail "$rel is in only one of the trees and no union glob declares it" "$rel is built on one arch only"
@@ -125,7 +152,7 @@ if [ -n "$ARCHS" ]; then
         exit 1
       fi
     done
-  done < "$work/lmt-a"
+  done < "$work/lmt-both"
 fi
 
 trap 'rm -rf "$work"' EXIT
