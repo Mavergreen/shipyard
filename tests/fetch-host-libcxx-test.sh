@@ -30,7 +30,7 @@ else fail "mismatch: exit $rc"; fi
 
 printf '22.1.8-mavericks.1\n' >"$T/pin/version"
 mkdir -p "$T/cache/22.1.8-mavericks.1/lib" "$T/cache/22.1.8-mavericks.1/include/c++/v1"
-: >"$T/cache/22.1.8-mavericks.1/lib/libc++.a"; : >"$T/cache/22.1.8-mavericks.1/include/c++/v1/__config_site"
+: >"$T/cache/22.1.8-mavericks.1/lib/libc++.a"; : >"$T/cache/22.1.8-mavericks.1/lib/libc++abi.a"; : >"$T/cache/22.1.8-mavericks.1/include/c++/v1/__config_site"
 rc=0; out=$(MAVERGREEN_HOST_LIBCXX_CACHE="$T/cache" SHIPYARD_FETCH_TRIES=1 MAVERGREEN_RELEASES="file://$T/none" \
   sh "$S" "$T/pin" "$T/clang" 2>"$T/err") || rc=$?
 if [ "$rc" = 0 ] && [ "$out" = "$T/cache/22.1.8-mavericks.1" ]; then
