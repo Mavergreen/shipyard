@@ -39,3 +39,5 @@ golden-gate tests/gen-os-inventory-test.sh
 10.9 tests/install-layout-e2e.sh
 golden-gate tests/install-layout-e2e.sh
 10.9 tests/arch-rules-test.sh
+10.9 tests/set-install-floor-arch-test.sh
+golden-gate tests/set-install-floor-arch-test.sh

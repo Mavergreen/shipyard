@@ -53,6 +53,6 @@ EPOCH="$(sh "$SELF/source-date-epoch.sh")"
 STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
 "$STEVEDORE" component --nopayload --scripts "$W/scripts" --identifier "$ID.system-replace" --version "$VER" \
   --install-location / --mtime "$EPOCH" --out "$W/c/system-replace.pkg" >&2
-set -- --short "$P" --system-replace --version "$VER" --component "$W/c/system-replace.pkg" --dist "$DISTDIR" --require-scripts --host-arch x86_64,arm64
+set -- --short "$P" --system-replace --version "$VER" --component "$W/c/system-replace.pkg" --dist "$DISTDIR" --require-scripts
 [ -z "$BASEVER" ] || set -- "$@" --base-version "$BASEVER"
 sh "$SELF/set_install_floor.sh" "$@"

@@ -10,7 +10,16 @@ S="$root/scripts/package-pkg.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/pkg-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 code() { grep -v '^[[:space:]]*#' "$S"; }   # the script minus its comments
 
-[ "$(code | grep -c -- '--host-arch x86_64,arm64')" = 1 ] || { echo "FAIL: the Distribution must declare BOTH architectures and exactly those -- without arm64, Installer on Apple Silicon offers Rosetta for a pkg with scripts and runs them translated; only one arch would stop the pkg installing on the other box -- package-pkg.sh must pass --host-arch x86_64,arm64 exactly once"; exit 1; }
+code | grep -q -- '--host-arch\|--min-os' && { echo "FAIL: package-pkg.sh passes no --host-arch or --min-os; set_install_floor.sh derives the arches and the floor from the payload"; exit 1; }
+mkdir -p "$w/np/opt/mavergreen/shipyard" "$w/npc"; printf '#!/bin/sh\nexit 0\n' > "$w/np/opt/mavergreen/shipyard/tool"
+SD="$(sh "$root/scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed"; exit 1; }
+"$SD" component --root "$w/np" --identifier dev.mavergreen.shipyard --version 1.0 --install-location / --mtime 1700000000 --out "$w/npc/shipyard.pkg" >/dev/null
+npout="$(SOURCE_DATE_EPOCH=1700000000 MAVERGREEN_REPO_ROOT="$root" sh "$root/scripts/set_install_floor.sh" --short shipyard --version 1.0.0 --component "$w/npc/shipyard.pkg" --dist "$w/npd" --base-version 1.0.0 2>/dev/null)" \
+  || { echo "FAIL: a neutral shipyard payload must build"; exit 1; }
+"$SD" expand "$npout" "$w/npx" >/dev/null
+grep -q '<os-version min="10.9.5"/>' "$w/npx/Distribution" \
+  || { echo "FAIL: shipyard is neutral and serves modern developers (newer-macos/modern-developers), so its OS range has no before"; exit 1; }
+grep -q 'installation-check' "$w/npx/Distribution" && { echo "FAIL: a neutral shipyard pkg has no installation-check"; exit 1; }
 for gone in register-with-cmake sysctl agent-load-cross uname CrossUpdater modernmavericks mavergreen-shipyard emit-preinstall --title; do
   code | grep -q -- "$gone" && { echo "FAIL: package-pkg.sh still mentions $gone"; exit 1; }
 done

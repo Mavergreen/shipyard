@@ -97,6 +97,12 @@ fixture_repo() {
   mkdir -p "$W/repo/.mavergreen/products/$1"
   printf '%s\n' "$2" > "$W/repo/.mavergreen/products/$1/noun"
   : > "$W/repo/.mavergreen/products/$1/built-on-install"
+  printf '*\n' > "$W/repo/.mavergreen/products/$1/target"
+  _dv="$W/repo/.mavergreen/deviations/newer-macos/e2e"
+  mkdir -p "$_dv"
+  printf '*\n' > "$_dv/scope"
+  printf 'this e2e proves the /opt layout on every host, not arches\n' > "$_dv/reason"
+  printf 'the layout e2e builds products of real classes\n' > "$_dv/revisit"
 }
 fixture_pkg() {
   _short="$1"; _ver="$2"; _st="$3"; shift 3
@@ -106,8 +112,7 @@ fixture_pkg() {
   MAVERGREEN_REPO_ROOT="$W/repo" sh "$S/build_component_pkg.sh" --root "$_st" --identifier "dev.mavergreen.$_short" \
     --version "$_ver" --install-location / --scripts "$W/scr-$_short" --out "$W/comp/$_short.pkg" >> "$BL" 2>&1 || return 1
   MAVERGREEN_REPO_ROOT="$W/repo" sh "$S/set_install_floor.sh" --short "$_short" --version "$_ver" \
-    --component "$W/comp/$_short.pkg" --dist "$W/dist" --base-version 0.0.1 --require-scripts \
-    --host-arch x86_64,arm64 2>> "$BL"
+    --component "$W/comp/$_short.pkg" --dist "$W/dist" --base-version 0.0.1 --require-scripts 2>> "$BL"
 }
 mkdir -p "$W/comp" "$W/dist"
 

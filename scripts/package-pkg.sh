@@ -15,9 +15,6 @@
 #       off-target parity" -- shipyard's own .pkg is the worked example: one artifact serves both
 #       boxes because developing under Mavericks and developing under modern macOS are equally
 #       first-class, and two pkgs would make someone choose, silently wrong when they choose badly.
-#       --host-arch x86_64,arm64 is BOTH arches -- without arm64, Installer on Apple Silicon offers
-#       Rosetta for a pkg with scripts and runs them translated, the very prompt this pkg exists to
-#       avoid.
 # spec: tests/shipyard-package-pkg-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
@@ -128,7 +125,6 @@ OUT="$(sh "$SELF/set_install_floor.sh" --short shipyard \
   --version "$VER" \
   --component "$comp" \
   --dist "$DISTDIR" \
-  --host-arch x86_64,arm64 \
   --base-version "$VER" \
   --require-scripts)"
 

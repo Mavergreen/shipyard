@@ -2,11 +2,13 @@
 # platform: host-agnostic
 #   usage: set_install_floor.sh --short S --version V --component COMP.pkg --dist DIR [--system-replace]
 #            [--resources DIR] [--welcome FILE] [--license FILE] [--conclusion FILE]
-#            [--require-scripts] [--host-arch x86_64] [--min-os 10.9.5] [--base-version V]
+#            [--require-scripts] [--base-version V]
 #          FILE for --welcome, --license and --conclusion names a file inside --resources.
-#          Wraps a flat component pkg into a distributable product archive that enforces a hard OS
-#          install floor (default MAVERGREEN_MIN_OS) via a Distribution, and prints the archive's
-#          path. The filename, component name, identifier and Installer title are derived from
+#          Wraps a flat component pkg into a distributable product archive and prints its path. The
+#          Distribution carries the product's floor (.mavergreen/products/S/floor, default 10.9.5),
+#          hostArchitectures="x86_64,arm64", and the class's OS range and installation-check, all
+#          derived from the component's Mach-O files by lib/arch-rules.sh; exit 1 for an arm64 slice
+#          without a newer-macos deviation. The filename, component name, identifier and Installer title are derived from
 #          .mavergreen/products/S/: DIR/S-V.pkg, S.pkg, dev.mavergreen.S and "Mavergreen <name>";
 #          with --system-replace, DIR/S-system-replace-V.pkg, S-system-replace.pkg,
 #          dev.mavergreen.S.system-replace and "Mavergreen <name> System Replace". COMP's own
@@ -14,8 +16,6 @@
 #          via build-base-component.sh, --base-version picks its version) and lists it FIRST in the
 #          choices-outline, so its postinstall -- which installs or upgrades /opt/mavergreen/bin/mavergreen
 #          -- runs before the product's postinstall runs the helper.
-# spec: tests/shipyard-package-pkg-test.sh -- package-pkg.sh's own integration coverage exercises
-#       --host-arch end to end (both architectures must reach the Distribution).
 # spec: tests/set-install-floor-base-test.sh -- the base component must be first in the
 #       choices-outline: Installer runs the components' postinstalls in Distribution order, after
 #       every payload has landed, so only a base listed first has installed or upgraded the helper
@@ -23,10 +23,15 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
+. "$SELF/lib/vercmp.sh"
+. "$SELF/lib/arch-rules.sh"
+. "$SELF/lib/pkg-tree.sh"
+. "$SELF/deviation-reason.sh"
+LC_ALL=C; export LC_ALL
 
-MIN_OS="${MAVERGREEN_MIN_OS:-10.9.5}"
 SHORT=""; VER=""; COMPONENT=""; DISTDIR=""; RES=""; WELCOME=""; LICENSE=""; CONCLUSION=""
-REQSCRIPTS="false"; HOSTARCH=""; BASEVER=""; SYSREP=""
+REQSCRIPTS="false"; BASEVER=""; SYSREP=""
 
 refuse() { echo "productbuild_floor: $1 is refused; $2" >&2; exit 2; }
 while [ $# -gt 0 ]; do
@@ -34,7 +39,9 @@ while [ $# -gt 0 ]; do
     --title) refuse --title "write .mavergreen/products/<short>/noun" ;;
     --out) refuse --out "the filename is derived, <short>-<version>.pkg; pass --dist" ;;
     --identifier) refuse --identifier "the identifier is dev.mavergreen.<short>" ;;
-    --short|--version|--component|--dist|--resources|--welcome|--license|--conclusion|--host-arch|--min-os|--base-version)
+    --host-arch) refuse --host-arch "every pkg declares hostArchitectures=\"x86_64,arm64\"" ;;
+    --min-os) refuse --min-os "the floor is .mavergreen/products/<short>/floor" ;;
+    --short|--version|--component|--dist|--resources|--welcome|--license|--conclusion|--base-version)
       [ $# -ge 2 ] || { echo "productbuild_floor: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
@@ -48,8 +55,6 @@ while [ $# -gt 0 ]; do
     --license) LICENSE="$2"; shift 2;;
     --conclusion) CONCLUSION="$2"; shift 2;;
     --require-scripts) REQSCRIPTS="true"; shift;;
-    --host-arch) HOSTARCH="$2"; shift 2;;
-    --min-os) MIN_OS="$2"; shift 2;;
     --base-version) BASEVER="$2"; shift 2;;
     *) echo "productbuild_floor: unknown arg: $1" >&2; exit 2;;
   esac
@@ -102,6 +107,44 @@ mkdir -p "$BASEDIR/comp"
 cp "$COMPONENT" "$BASEDIR/comp/$COMP_BASE"
 COMPONENT="$BASEDIR/comp/$COMP_BASE"
 
+FLOOR="$(mavergreen_floor "$SHORT")" || exit $?
+shipyard_deviations "$(dirname "$(mg_dir)")" >/dev/null || exit 1
+if shipyard_deviated newer-macos "$SHORT" >/dev/null; then NEWER=yes; else NEWER=no; fi
+TREE="$(mavergreen_prefix "$SHORT" | sed 's|^/||')/"
+TARGETS="$(mg_dir)/products/$SHORT/target"
+SLICES="$BASEDIR/slices"
+: > "$SLICES"
+if [ -f "$BASEDIR/comp-x/Payload" ]; then
+  af_unpack_payload "$BASEDIR/comp-x/Payload" || { echo "productbuild_floor: cannot unpack the payload of $COMPONENT" >&2; exit 1; }
+  ( cd "$AF_ROOT" && find . -type f | sed 's|^\./||' | sort ) > "$BASEDIR/files"
+  while IFS= read -r _rel; do
+    [ -n "$_rel" ] || continue
+    _full="$AF_LOC$_rel"
+    [ -n "$(af_macho_kind "$AF_ROOT/$_rel")" ] || continue
+    ! arch_is_exempt "$_full" || continue
+    case "$_full" in "$TREE"*) ! arch_is_target "${_full#"$TREE"}" "$TARGETS" || continue;; esac
+    _rc=0; sh "$SELF/macho-slices.sh" "$AF_ROOT/$_rel" > "$BASEDIR/one" 2> "$BASEDIR/one.err" || _rc=$?
+    case "$_rc" in
+      0) ;;
+      1) continue;;
+      *) echo "productbuild_floor: cannot read the Mach-O file $_full" >&2; cat "$BASEDIR/one.err" >&2; exit 1;;
+    esac
+    _enc="$(printf '%s\n' "$_full" | af_enc)"
+    awk -v p="$_enc" '{ print p, $1, $3 }' "$BASEDIR/one" >> "$SLICES"
+  done < "$BASEDIR/files"
+fi
+arch_derive < "$SLICES" > "$BASEDIR/derived" 2> "$BASEDIR/derive.err" \
+  || { echo "productbuild_floor: $(cat "$BASEDIR/derive.err")" >&2; exit 1; }
+CLASS="$(sed -n 's/^class //p' "$BASEDIR/derived")"
+ARM64FLOOR="$(sed -n 's/^arm64-floor //p' "$BASEDIR/derived")"
+arch_rule "$CLASS" "$NEWER" "$FLOOR" "$ARM64FLOOR" >/dev/null 2>&1 || {
+  _arm="$(awk '$2 ~ /^arm64/ { print $1; exit }' "$SLICES" | sed 's/%20/ /g; s/%25/%/g')"
+  echo "productbuild_floor: $SHORT ships an arm64 slice ($_arm), which serves only macOS 11 or later; declare .mavergreen/deviations/newer-macos/<label>/ with scope $SHORT" >&2
+  exit 1
+}
+ARCH_LINES="$(arch_distribution "$CLASS" "$NEWER" "$FLOOR" "$ARM64FLOOR")" || exit 1
+RANGE="$(arch_requires_line "$CLASS" "$NEWER" "$FLOOR" "$ARM64FLOOR")"
+
 BASE="$BASEDIR/mavergreen-base.pkg"
 if [ -n "$BASEVER" ]; then
   sh "$SELF/build-base-component.sh" --version "$BASEVER" --out "$BASE" >&2
@@ -109,8 +152,7 @@ else
   sh "$SELF/build-base-component.sh" --out "$BASE" >&2
 fi
 
-_opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\""
-[ -n "$HOSTARCH" ] && _opts="$_opts hostArchitectures=\"$HOSTARCH\""
+_opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\" hostArchitectures=\"x86_64,arm64\""
 
 {
   echo '<?xml version="1.0" encoding="utf-8"?>'
@@ -119,7 +161,11 @@ _opts="customize=\"never\" require-scripts=\"$REQSCRIPTS\""
   [ -n "$WELCOME" ] && echo "    <welcome file=\"$(basename "$WELCOME")\" mime-type=\"text/html\"/>"
   [ -n "$LICENSE" ] && echo "    <license file=\"$(basename "$LICENSE")\"/>"
   [ -n "$CONCLUSION" ] && echo "    <conclusion file=\"$(basename "$CONCLUSION")\" mime-type=\"text/html\"/>"
-  echo "    <allowed-os-versions><os-version min=\"$MIN_OS\"/></allowed-os-versions>"
+  printf '%s\n' "$ARCH_LINES" | awk '
+    /^<script><!\[CDATA\[$/ { print "<script>"; s = 1; next }
+    /^\]\]><\/script>$/ { print "</script>"; s = 0; next }
+    s { gsub(/&/, "\\&amp;"); gsub(/</, "\\&lt;"); gsub(/>/, "\\&gt;") }
+    { print }' | sed 's/^/    /'
   echo "    <options $_opts/>"
   echo '    <choices-outline>'
   echo '        <line choice="default">'
@@ -143,15 +189,25 @@ OUT="$DISTDIR/$PKGNAME"
 
 X=$(mktemp -d "${TMPDIR:-/tmp}/pkgfloor.XXXXXX")
 "$STEVEDORE" expand "$OUT" "$X/x" >&2
-got=$(grep -o 'os-version min="[0-9.]*"' "$X/x/Distribution" || true)
+got="$(sed 's/^[[:space:]]*//' "$X/x/Distribution" | awk '
+  /^<os-version / { print; next }
+  /^<installation-check / { print; next }
+  /^<script>$/ { print "<script><![CDATA["; s = 1; next }
+  /^<\/script>$/ { print "]]></script>"; s = 0; next }
+  s { gsub(/&lt;/, "<"); gsub(/&gt;/, ">"); gsub(/&amp;/, "\\&") }
+  s { print }')"
+opts="$(grep -c "<options [^>]*hostArchitectures=\"x86_64,arm64\"" "$X/x/Distribution" || true)"
 first="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$X/x/Distribution" | grep -v '^default$' | head -1)"
 concl="$(grep -c '<conclusion file=' "$X/x/Distribution" || true)"
 rm -rf "$X"
-[ "$got" = "os-version min=\"$MIN_OS\"" ] \
-  || { echo "productbuild_floor: FLOOR MISSING/WRONG in $OUT (got: ${got:-none}, want $MIN_OS)" >&2; exit 1; }
+want="$(printf '%s\n' "$ARCH_LINES" | sed -e 's/^<allowed-os-versions>//' -e 's|</allowed-os-versions>$||')"
+[ "$got" = "$want" ] \
+  || { echo "productbuild_floor: the OS range or installation-check in $OUT is not the class's (got: $got; want: $want)" >&2; exit 1; }
+[ "$opts" -ge 1 ] \
+  || { echo "productbuild_floor: hostArchitectures=\"x86_64,arm64\" is missing from $OUT" >&2; exit 1; }
 [ "$first" = dev.mavergreen.base ] \
   || { echo "productbuild_floor: dev.mavergreen.base is not first in $OUT" >&2; exit 1; }
 [ -z "$CONCLUSION" ] || [ "$concl" -ge 1 ] \
   || { echo "productbuild_floor: the conclusion pane did not make it into $OUT" >&2; exit 1; }
-echo "productbuild_floor: $OUT built, install floor $MIN_OS enforced" >&2
+echo "productbuild_floor: $OUT built: $CLASS, $RANGE" >&2
 printf '%s\n' "$OUT"
