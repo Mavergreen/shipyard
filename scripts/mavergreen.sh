@@ -367,6 +367,8 @@ run_pre_uninstall_hook() {
     die "refusing to run $1's pre-uninstall hook ($_puh) -- it is a symlink, and a hook is never a link into the payload"
   fi
   [ -e "$_puh" ] || return 0
+  mavergreen_chain_ok "${R:-/}/opt/mavergreen/$1/libexec/mavergreen/pre-uninstall" "${R:-/}" \
+    || die "refusing to run $1's pre-uninstall hook ($_puh) -- its chain fails; uninstall stopped, nothing removed"
   [ -x "$_puh" ] \
     || die "$1's pre-uninstall hook ($_puh) exists but is not executable; uninstall stopped, nothing removed"
   _puh_rc=0

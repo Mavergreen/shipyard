@@ -451,6 +451,21 @@ grep -qF "$T/hooklink/libexec/mavergreen/pre-uninstall" "$w/err" \
 [ ! -e "$w/outside-hook/ran" ] || fail "a refused symlinked pre-uninstall hook's target must never run"
 [ -d "$T/hooklink" ] || fail "a refused symlinked pre-uninstall hook must remove nothing"
 
+mkproduct hookgw hookgw "" bin/hookgw
+mkdir -p "$T/hookgw/libexec/mavergreen"
+printf '#!/bin/sh\ntouch "%s/hookgw-ran"\nexit 0\n' "$w" > "$T/hookgw/libexec/mavergreen/pre-uninstall"
+chmod +x "$T/hookgw/libexec/mavergreen/pre-uninstall"
+chmod g+w "$T/hookgw/libexec"
+rc=0; PATH="$stub:$PATH" mg uninstall hookgw 2>"$w/err" || rc=$?
+[ "$rc" -ne 0 ] || fail "a pre-uninstall hook under a group-writable libexec must be refused"
+grep -qF "/opt/mavergreen/hookgw/libexec: group-writable" "$w/err" \
+  || fail "the refusal must name the writable directory: $(cat "$w/err")"
+grep -qF "refusing to run hookgw's pre-uninstall hook" "$w/err" \
+  || fail "the refusal must name the hook it will not run: $(cat "$w/err")"
+[ ! -e "$w/hookgw-ran" ] || fail "root must never run a hook from a directory a non-root user can write"
+[ -d "$T/hookgw" ] || fail "a refused pre-uninstall hook's chain must remove nothing"
+chmod g-w "$T/hookgw/libexec"
+
 mkproduct hookbeforerestore hookbeforerestore "" bin/hookbr
 "$PB" -c "Add :replaces dict" -c "Add :replaces:/usr/bin/hookbr string bin/hookbr" "$T/hookbeforerestore/mavergreen.plist"
 echo apple-hookbr > "$V/usr/bin/hookbr"
