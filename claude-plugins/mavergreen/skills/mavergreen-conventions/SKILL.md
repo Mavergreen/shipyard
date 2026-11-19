@@ -2303,7 +2303,7 @@ manifest and both scripts, each carrying `lib/root-chain.sh` inline:
 preinstall hook: 1password once checked for Porthole and Container Tools, signal-desktop only for
 Porthole, and Porthole for nothing, and the three drifted. Each `requires/<dep>/` must name a
 different product, a short name the reserved list does not forbid, with
-`.mavergreen/ingredients/<dep>/REPO` declared; a self-naming requirement fails staging (exit 2). A
+`.mavergreen/ingredients/<dep>/REPO` declared unless its `kind` is `external`; a self-naming requirement fails staging (exit 2). A
 minimum (`requires/container-tools/min` holding `20261019.1`) is compared by `scripts/lib/vercmp.sh`,
 the family's one comparator, which the preinstall carries inline; a minimum it cannot order (empty,
 `1.0-rc1`, `abc`) fails staging (exit 2). It does no old-layout detection.
@@ -2394,9 +2394,10 @@ hand. The move into `/opt/mavergreen` is the same: pkg identifiers did not chang
 installing a moved product over its old version leaves the old files where they were, and the
 maintainer removes them by hand, once. Nothing produces, stages, links or checks the old prefix; the
 one exception is that readers of a release pinned before the move (`fetch_product_pkg.sh`,
-`fetch_drydock.sh`, `shipyard-provision`, `lib/macho-tools.sh`, `lib/py.sh`) also look where that
-release installs, until every family ingredient is re-pinned to a release built for `/opt/mavergreen`. A pkg's pre/postinstall handles upgrades from its own current
-identity and layout only. The day the family has real users, a rename or a move needs a retirement
+`fetch_drydock.sh`, `fetch_stevedore.sh`, `shipyard-provision`, `lib/macho-tools.sh`, `lib/py.sh`)
+also look where that release installs, until every family ingredient is re-pinned to a release built
+for `/opt/mavergreen`. A pkg's pre/postinstall handles upgrades from its own current identity and
+layout only. The day the family has real users, a rename or a move needs a retirement
 plan, written with its exit condition (see "A "transitional" decision without an exit task is a
 permanent one", below).
 

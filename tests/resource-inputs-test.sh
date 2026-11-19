@@ -24,7 +24,7 @@ unmet() {
 }
 CC="${MAVERGREEN_HOST_TOOLS_CC:-}"
 if [ -z "$CC" ]; then
-  for c in "$(mavergreen_prefix)/bin/clang-22" "$(mavergreen_prefix)/bin/clang-22-cross" "$(command -v clang-22 || :)" "$(command -v clang-22-cross || :)"; do
+  for c in "$(mavergreen_prefix)/bin/clang-22" "$(mavergreen_prefix)/bin/clang-22-cross" /usr/local/mavergreen/bin/clang-22 /usr/local/mavergreen/bin/clang-22-cross; do
     [ -x "$c" ] && { CC="$c"; break; }
   done
 fi
