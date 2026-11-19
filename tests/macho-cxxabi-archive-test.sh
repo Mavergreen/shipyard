@@ -37,6 +37,12 @@ want="$(printf 'x86_64 defines ___cxa_call_terminate visible\nx86_64 defines ___
 [ "$out" = "$want" ] || fail "two members of one name: got '$out'"
 echo "ok: members sharing a name are all read"
 
+printf '#!/bin/sh\ncase "$1" in *N*) echo "ar: illegal option -- N" >&2; exit 1 ;; esac\nexec "%s" "$@"\n' "$AR" > ar-no-n
+chmod +x ar-no-n
+out="$(AR="$w/ar-no-n" sh "$MC" dup.a)" || fail "two members of one name, ar without N: exit $?"
+[ "$out" = "$want" ] || fail "two members of one name, ar without N: got '$out'"
+echo "ok: members sharing a name are read by an ar without N"
+
 "$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -flto -c throw.c -o bc.o
 "$AR" rcS bc.a bc.o lib.rmeta
 sh "$MC" bc.a > /dev/null 2>"$w/bc.err" && rc=0 || rc=$?
