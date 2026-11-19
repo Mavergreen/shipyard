@@ -1561,7 +1561,7 @@ for _int in /usr/bin/env /bin/zsh none /bin/sh2; do
   has "root-runs: the interpreter $_int fails" root-runs "$RR
 script p.pkg dev.mavergreen.x preinstall $_int"
 done
-for _tok in /usr/local/ /Users/ /tmp/ /private/tmp/ '$HOME' '${HOME' /Applications/; do
+for _tok in /usr/local/ /Users/ /tmp/ /private/tmp/ '$HOME' '${HOME' /Applications/ '~'; do
   says "root-runs: a script naming $_tok fails" root-runs "dev.mavergreen.x postinstall names $_tok" "$RR
 script-mentions p.pkg dev.mavergreen.x postinstall $_tok"
 done
@@ -1776,6 +1776,23 @@ PLIST
   _case tokens "$(printf '#!/bin/sh\nls /usr/local/bin /Users/x /private/tmp/x\necho $HOME ${HOME}\n')"
   _case envbash "$(printf '#!/usr/bin/env bash\ntrue\n')"
   _case noshebang "$(printf 'true\n')"
+  _case baretmp "$(printf '#!/bin/sh\ncd /tmp; ./x\n')"
+  _case bareusrlocal "$(printf '#!/bin/sh\nP=/usr/local; $P/bin/x\n')"
+  _case bareapps "$(printf '#!/bin/sh\ncd /Applications && rm -rf Foo.app\n')"
+  _case bareusers "$(printf '#!/bin/sh\nls /Users|wc -l\n')"
+  _case bareprivtmp "$(printf '#!/bin/sh\n( cd /private/tmp)\n')"
+  _case baredefault "$(printf '#!/bin/sh\nT="${TMPDIR:-/tmp}"\n')"
+  _case eoftmp "$(printf '#!/bin/sh\ncd /tmp')"
+  _case appsdotdot "$(printf '#!/bin/sh\nrm -rf "$3/Applications/Mavergreen/../Other.app"\n')"
+  _case appsdotdotdeep "$(printf '#!/bin/sh\nrm -rf /Applications/Mavergreen/X.app/../../Other.app\n')"
+  _case caseusers "$(printf '#!/bin/sh\nls /users/bob\n')"
+  _case caseusrlocal "$(printf '#!/bin/sh\nls /usr/LOCAL/x\n')"
+  _case caseapps "$(printf '#!/bin/sh\nls /applications/Foo.app\n')"
+  _case casetmp "$(printf '#!/bin/sh\nls /TMP/x\n')"
+  _case tildeslash "$(printf '#!/bin/sh\ncp x ~/Library/x\n')"
+  _case tildebare "$(printf '#!/bin/sh\ncd ~ && ls\n')"
+  _case tildeeof "$(printf '#!/bin/sh\ncd ~')"
+  _case clean "$(printf '#!/bin/sh\nls /tmpfile /usr/localx /Usersx /opt/mavergreen/x /applications/mavergreen/X.app\nls /Applications/Mavergreen/a..b "$3/Applications/Mavergreen";x=a~b\necho $home ${home}\nawk '"'"'$1 ~ /x/ || $2 !~ /y/'"'"'\n')"
   _fr="$(sh "$AF" "$_rr/dist" 1.0.0 "$_rr")"
   rm -rf "$_rr"
   for want in \
@@ -1794,11 +1811,28 @@ PLIST
     'script-mentions tokens.pkg dev.mavergreen.tokens preinstall $HOME' \
     'script-mentions tokens.pkg dev.mavergreen.tokens preinstall ${HOME' \
     'script envbash.pkg dev.mavergreen.envbash preinstall /usr/bin/env' \
-    'script noshebang.pkg dev.mavergreen.noshebang preinstall none'
+    'script noshebang.pkg dev.mavergreen.noshebang preinstall none' \
+    'script-mentions baretmp.pkg dev.mavergreen.baretmp preinstall /tmp/' \
+    'script-mentions bareusrlocal.pkg dev.mavergreen.bareusrlocal preinstall /usr/local/' \
+    'script-mentions bareapps.pkg dev.mavergreen.bareapps preinstall /Applications/' \
+    'script-mentions bareusers.pkg dev.mavergreen.bareusers preinstall /Users/' \
+    'script-mentions bareprivtmp.pkg dev.mavergreen.bareprivtmp preinstall /private/tmp/' \
+    'script-mentions baredefault.pkg dev.mavergreen.baredefault preinstall /tmp/' \
+    'script-mentions eoftmp.pkg dev.mavergreen.eoftmp preinstall /tmp/' \
+    'script-mentions appsdotdot.pkg dev.mavergreen.appsdotdot preinstall /Applications/' \
+    'script-mentions appsdotdotdeep.pkg dev.mavergreen.appsdotdotdeep preinstall /Applications/' \
+    'script-mentions caseusers.pkg dev.mavergreen.caseusers preinstall /Users/' \
+    'script-mentions caseusrlocal.pkg dev.mavergreen.caseusrlocal preinstall /usr/local/' \
+    'script-mentions caseapps.pkg dev.mavergreen.caseapps preinstall /Applications/' \
+    'script-mentions casetmp.pkg dev.mavergreen.casetmp preinstall /tmp/' \
+    'script-mentions tildeslash.pkg dev.mavergreen.tildeslash preinstall ~' \
+    'script-mentions tildebare.pkg dev.mavergreen.tildebare preinstall ~' \
+    'script-mentions tildeeof.pkg dev.mavergreen.tildeeof preinstall ~' \
+    'script clean.pkg dev.mavergreen.clean preinstall /bin/sh'
   do
     printf '%s\n' "$_fr" | grep -qxF "$want" || { echo "FAIL: root-runs facts should include: $want -- got: $_fr"; exit 1; }
   done
-  printf '%s\n' "$_fr" | grep -q '^script-mentions \(x\|apps\)\.pkg ' \
+  printf '%s\n' "$_fr" | grep -q '^script-mentions \(x\|apps\|clean\)\.pkg ' \
     && { echo "FAIL: stage_product.sh's scripts and Applications/Mavergreen, with or without a slash, name no admin-writable path: $_fr"; exit 1; }
   [ "$(printf '%s\n' "$_fr" | grep -c '^script-mentions appsother\.pkg ')" -eq 1 ] \
     || { echo "FAIL: a token is reported once per script: $_fr"; exit 1; }

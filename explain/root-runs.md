@@ -7,9 +7,12 @@ root-owned directories that no group or other can write. An admin can write /usr
 from there. Every pkg is read three ways. A Library/LaunchDaemons plist's Program, or else its
 ProgramArguments item 0, starts with /opt/mavergreen/, /bin/, /sbin/, /usr/bin/, /usr/sbin/,
 /usr/libexec/ or /System/. Each component's preinstall and postinstall starts with #!/bin/sh or
-#!/bin/bash. Neither script names /usr/local/, /Users/, /tmp/, /private/tmp/, $HOME, ${HOME, or
-/Applications/ not followed by Mavergreen as a whole path component. Applications/Mavergreen is the
-directory root creates for itself (principle 6(b)).
+#!/bin/bash. Neither script names /usr/local, /Users, /tmp, /private/tmp or /Applications, in any
+case (HFS+ and APFS ignore it), each ending at a /, a quote, a space, a tab, a newline, ;, ), &, |, }
+or the end of the script. /Applications passes only as /Applications/Mavergreen, a whole path component
+with no .. after it: Applications/Mavergreen is the directory root creates for itself (principle 6(b)).
+Nor does either script name $HOME, ${HOME, ~/, or a ~ that is a word ending its command, all of which
+are a home directory.
 
 ## Incident
 2026-10-13: flavours-darkmode's payload directory was world-writable, a live root hole closed by hand
@@ -17,8 +20,10 @@ directory root creates for itself (principle 6(b)).
 
 ## Limits
 It reads the scripts as text, not as a shell parse. A path built at run time, such as one joined from
-parts or read from a file, is not seen. A mention that is not a call, such as a comment or a message
-naming /usr/local/, still fails. Only preinstall and postinstall are read, not other files in Scripts
+parts or read from a file, is not seen; nor is a root followed by another character, such as /tmp*, nor
+~user, nor a ~ followed by another word, which reads like awk's match operator. A mention that is not a
+call, such as a comment or a message naming /usr/local, still fails, and so does /var/tmp or
+/System/Applications, which contain a root. Only preinstall and postinstall are read, not other files in Scripts
 that they run. A daemon is read only from a payload installed at /.
 
 It does not read the owner or mode a payload gives its directories. stevedore forces uid and gid 0 but
