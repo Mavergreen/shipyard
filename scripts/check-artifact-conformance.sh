@@ -19,6 +19,7 @@
 #            launchd-program <file> <path> <program|none>         one per Library/LaunchDaemons plist: Program, else ProgramArguments:0 (%20-encoded)
 #            script        <file> <component-id> <preinstall|postinstall> <interpreter|none>  one per install script: its #! line's first word (%20-encoded)
 #            script-mentions <file> <component-id> <phase> <token>  one per admin-writable root that script's text names
+#            payload-mode  <file> <path> <uid> <gid> <mode>       one per payload entry, its mode as ls spells it (%20-encoded; . is the volume root)
 #            manifest      <file> <product> <identifier> <dir>    one per opt/mavergreen/<dir>/mavergreen.plist
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
@@ -620,6 +621,24 @@ while read -r kind file a b c; do
       fail root-runs "$file's $a $b names $c, which an admin can write" "$file" ;;
   esac
 done < "$facts"
+awk '$1 == "payload-mode" {
+       p = $3; t = substr($6, 1, 1)
+       if (p != "." && p != "opt" && p != "opt/mavergreen" && p !~ /^opt\/mavergreen\// \
+           && p != "Applications" && p != "Applications/Mavergreen" && p !~ /^Applications\/Mavergreen\//) next
+       if ($4 != 0 || $5 != 0 || (t != "l" && (substr($6, 6, 1) == "w" || substr($6, 9, 1) == "w"))) print $2, $3, $4, $5, $6
+     }' "$facts" > "$tmp/rr-modes"
+cut -d' ' -f1 "$tmp/rr-modes" | sort -u > "$tmp/rr-files"
+while IFS= read -r file; do
+  awk -v f="$file" '$1 == f' "$tmp/rr-modes" > "$tmp/rr-modes1"
+  n="$(wc -l < "$tmp/rr-modes1" | tr -d ' ')"
+  rr_dev="$(deviation_reason root-runs "$file")"
+  if [ -n "$rr_dev" ]; then head -1 "$tmp/rr-modes1" > "$tmp/rr-modes20"; else head -20 "$tmp/rr-modes1" > "$tmp/rr-modes20"; fi
+  while read -r _f path uid gid mode; do
+    fail root-runs "$file installs $(dec "$path") as $mode $uid:$gid; root runs from a product's tree, so every entry on the way to and under opt/mavergreen/ and Applications/Mavergreen/ is 0:0 and grants no group or other write" "$file" \
+      "build the component with build_component_pkg.sh, which strips group and other write, or chmod -R go-w the staged tree and rebuild"
+  done < "$tmp/rr-modes20"
+  [ -n "$rr_dev" ] || [ "$n" -le 20 ] || echo "conformance: root-runs: ... and $((n - 20)) more in $file" >&2
+done < "$tmp/rr-files"
 
 # spec: explain/os-overwrite.md -- a regular product only adds files to Mac OS X 10.9.5.
 if has pkg; then

@@ -1575,6 +1575,33 @@ has "root-runs: a deviation scoped to another pkg does not" root-runs "$RR
 deviation root-runs:q.pkg the daemon is upstream's own, and its installer puts it there
 script-mentions p.pkg dev.mavergreen.x postinstall /usr/local/"
 
+PM='payload-mode p.pkg'
+for _pm in ". 0 0 drwx------" "opt 0 0 drwxr-xr-x" "opt/mavergreen/x/sbin 0 0 drwxr-xr-x" "opt/mavergreen/x/sbin/xd 0 0 -rwxr-xr-x" \
+  "opt/mavergreen/x/bin/l 0 0 lrwxrwxrwx" "Applications/Mavergreen/X.app 0 0 drwxr-xr-x" \
+  "Library/Application%20Support/Mavergreen 0 80 drwxrwxr-x" "Library 0 0 drwxrwxr-x" "usr/local/y 501 20 drwxrwxrwx"; do
+  clean "root-runs: a payload entry $_pm passes" root-runs "$RR
+$PM $_pm"
+done
+says "root-runs: a group-writable directory under a product's tree names it and its mode" root-runs "p.pkg installs opt/mavergreen/x/sbin as drwxrwxr-x 0:0" "$RR
+$PM opt/mavergreen/x/sbin 0 0 drwxrwxr-x"
+says "root-runs: a payload mode's fix strips group and other write" root-runs "fix: build the component with build_component_pkg.sh, which strips group and other write, or chmod -R go-w the staged tree and rebuild" "$RR
+$PM opt/mavergreen/x/sbin 0 0 drwxrwxr-x"
+for _pm in ". 0 0 drwxrwxrwx" "opt 0 0 drwxrwxr-x" "opt/mavergreen 0 0 drwxr-xrwx" "opt/mavergreen/x/sbin/xd 0 0 -rwxrwxr-x" \
+  "opt/mavergreen/x/libexec 501 0 drwxr-xr-x" "opt/mavergreen/x/libexec 0 20 drwxr-xr-x" "opt/mavergreen/x/bin/l 501 0 lrwxrwxrwx" \
+  "Applications 0 80 drwxr-xr-x" "Applications/Mavergreen 0 0 drwxrwxr-x" "Applications/Mavergreen/X.app/Contents/MacOS/x 0 0 -rwxrwxrwx" \
+  "opt/mavergreen/x/Mac%20HD 0 0 drwxrwxrwt"; do
+  has "root-runs: a payload entry $_pm fails" root-runs "$RR
+$PM $_pm"
+done
+_pmn="$RR"; _pmi=0; while [ "$_pmi" -lt 25 ]; do _pmn="$_pmn
+$PM opt/mavergreen/x/d$_pmi 0 0 drwxrwxrwx"; _pmi=$((_pmi + 1)); done
+_pmo="$(printf '%s\nend-of-facts\n' "$_pmn" | sh "$S" 2>&1 >/dev/null)" || :
+[ "$(printf '%s\n' "$_pmo" | grep -c '^root-runs: .* installs opt/mavergreen/x/d')" -eq 20 ] && printf '%s\n' "$_pmo" | grep -q 'and 5 more' \
+  || { echo "FAIL root-runs: a loose payload names its first 20 entries and counts the rest: $_pmo"; exit 1; }
+clean "root-runs: a deviation scoped to the pkg excuses a payload mode" root-runs "$RR
+deviation root-runs:p.pkg upstream's installer needs it
+$PM opt/mavergreen/x/sbin 0 0 drwxrwxr-x"
+
 # spec: explain/os-overwrite.md -- a regular product only adds files to Mac OS X 10.9.5.
 OW="$REL
 name x identifier dev.mavergreen.x
@@ -1906,6 +1933,36 @@ PLIST
     && { echo "FAIL: stage_product.sh's scripts and Applications/Mavergreen, with or without a slash, name no admin-writable path: $_fr"; exit 1; }
   [ "$(printf '%s\n' "$_fr" | grep -c '^script-mentions appsother\.pkg ')" -eq 1 ] \
     || { echo "FAIL: a token is reported once per script: $_fr"; exit 1; }
+}
+
+{
+  _pm="$(mktemp -d "${TMPDIR:-/tmp}/conformance-payload-mode.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+  mkdir -p "$_pm/st/opt/mavergreen/x/sbin" "$_pm/st/opt/mavergreen/x/Mac HD" "$_pm/loose" "$_pm/tight"
+  echo x > "$_pm/st/opt/mavergreen/x/sbin/xd"; ln -s sbin/xd "$_pm/st/opt/mavergreen/x/xd-link"
+  chmod 755 "$_pm/st" "$_pm/st/opt" "$_pm/st/opt/mavergreen" "$_pm/st/opt/mavergreen/x" "$_pm/st/opt/mavergreen/x/Mac HD"
+  chmod 777 "$_pm/st/opt/mavergreen/x/sbin"; chmod 755 "$_pm/st/opt/mavergreen/x/sbin/xd"
+  "$SD" component --root "$_pm/st" --identifier dev.mavergreen.x --version 1.0.0-mavergreen.1 --install-location / \
+    --mtime 1700000000 --out "$_pm/loose/x.pkg" >/dev/null
+  chmod 755 "$_pm/st/opt/mavergreen/x/sbin"
+  "$SD" component --root "$_pm/st" --identifier dev.mavergreen.x --version 1.0.0-mavergreen.1 --install-location / \
+    --mtime 1700000000 --out "$_pm/tight/x.pkg" >/dev/null
+  _fl="$(sh "$AF" "$_pm/loose" 1.0.0-mavergreen.1 "$_pm")"
+  _ft="$(sh "$AF" "$_pm/tight" 1.0.0-mavergreen.1 "$_pm")"
+  rm -rf "$_pm"
+  for want in 'payload-mode x.pkg . 0 0 drwxr-xr-x' 'payload-mode x.pkg opt/mavergreen/x/sbin 0 0 drwxrwxrwx' \
+    'payload-mode x.pkg opt/mavergreen/x/sbin/xd 0 0 -rwxr-xr-x' 'payload-mode x.pkg opt/mavergreen/x/Mac%20HD 0 0 drwxr-xr-x'; do
+    printf '%s\n' "$_fl" | grep -qxF "$want" || { echo "FAIL: a payload's modes are facts: want $want -- got: $_fl"; exit 1; }
+  done
+  printf '%s\n' "$_fl" | grep -q '^payload-mode x.pkg opt/mavergreen/x/xd-link 0 0 l[-rwx]*$' \
+    || { echo "FAIL: a link's mode is a fact, named without its target: $_fl"; exit 1; }
+  printf '%s\n' "$_ft" | grep -qxF 'payload-mode x.pkg opt/mavergreen/x/sbin 0 0 drwxr-xr-x' \
+    || { echo "FAIL: a payload's modes are read from the payload, as staged: $_ft"; exit 1; }
+  _cl="$(printf '%s\n' "$_fl" | sh "$S" 2>&1 >/dev/null)" || :
+  printf '%s\n' "$_cl" | grep -q '^root-runs: .* x.pkg installs opt/mavergreen/x/sbin as drwxrwxrwx 0:0' \
+    || { echo "FAIL: a pkg stevedore built from a world-writable staged sbin fails root-runs: $_cl"; exit 1; }
+  _ct="$(printf '%s\n' "$_ft" | sh "$S" 2>&1 >/dev/null)" || :
+  printf '%s\n' "$_ct" | grep -q '^root-runs: ' \
+    && { echo "FAIL: the same pkg built from a tree with no group or other write passes root-runs: $_ct"; exit 1; }
 }
 
 _xe="$(mktemp -d "${TMPDIR:-/tmp}/conformance-titles.XXXXXX")"   # template: 10.9 BSD mktemp requires one

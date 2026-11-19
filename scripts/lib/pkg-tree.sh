@@ -8,6 +8,9 @@
 #                                          when stevedore cannot be fetched; 1 when it cannot expand the pkg.
 #          af_unpack_payload <Payload>     extracts it to <its directory>.root (once), and sets AF_ROOT to
 #                                          that tree and AF_LOC to its install-location ("" or "a/b/")
+#          af_payload_modes <Payload>      prints "<path> <uid> <gid> <mode>" for every entry, its path
+#                                          relative to the payload (. for its root, %20-encoded) and its
+#                                          mode as ls spells it; returns 1 on a line that does not parse
 #          af_unpack_scripts <Scripts> <dir>  extracts a component's Scripts archive into the existing <dir>
 #          af_extract <tarball> <dir>      extracts a release tarball into the existing <dir>
 #          af_interpreter <script>         prints the first word of its #! line, or none
@@ -58,6 +61,30 @@ af_cpio() {
   _ac_rc=0; ( cd "$2" && cpio -id < "$_ac_tmp" >/dev/null 2>&1 ) || _ac_rc=$?
   rm -f "$_ac_tmp"
   return "$_ac_rc"
+}
+
+# platform: BSD and GNU cpio -tvn both list an entry as ls -ln does: mode, links, uid, gid, size, a
+#           three-word date, then the name, and a link's name as "name -> target".
+af_payload_modes() {
+  _apm_tmp="$1.list"
+  gzip -dc "$1" > "$_apm_tmp.cpio" 2>/dev/null && cpio -itvn < "$_apm_tmp.cpio" > "$_apm_tmp" 2>/dev/null \
+    || { rm -f "$_apm_tmp" "$_apm_tmp.cpio"; return 1; }
+  rm -f "$_apm_tmp.cpio"
+  _apm_rc=0
+  LC_ALL=C awk '
+    {
+      if ($1 !~ /^[-dl][-r][-w][-xsS][-r][-w][-xsS][-r][-w][-xtT]$/ || $3 !~ /^[0-9]+$/ || $4 !~ /^[0-9]+$/ \
+          || !match($0, /^[^ ]+ +[^ ]+ +[^ ]+ +[^ ]+ +[^ ]+ +[^ ]+ +[^ ]+ +[^ ]+ /)) { bad = 1; exit 1 }
+      n = substr($0, RLENGTH + 1)
+      if (substr($1, 1, 1) == "l") { i = index(n, " -> "); if (i == 0) { bad = 1; exit 1 }; n = substr(n, 1, i - 1) }
+      if (n == ".") n = ""; sub(/^\.\//, "", n); sub(/\/$/, "", n)
+      if (n == "") n = "."
+      gsub(/%/, "%25", n); gsub(/ /, "%20", n)
+      print n, $3, $4, $1; seen = 1
+    }
+    END { if (bad || !seen) exit 1 }' "$_apm_tmp" || _apm_rc=1
+  rm -f "$_apm_tmp"
+  return "$_apm_rc"
 }
 
 af_interpreter() {

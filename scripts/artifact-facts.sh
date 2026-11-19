@@ -160,6 +160,10 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     af_unpack_payload "$_pl" || return 1
     _loc="$AF_LOC"; _root="$AF_ROOT"
     macho_facts "$1" "$_root" "$(printf '%s' "$_loc" | enc)" || { _pf_why="$_mf_why"; return 1; }
+    _pmodes="$(af_payload_modes "$_pl")" || { _pf_why="cannot list the modes of $1's payload ${_pl#"$2"/}"; return 1; }
+    printf '%s\n' "$_pmodes" | awk -v pkg="$1" -v loc="$(printf '%s' "$_loc" | enc)" '{
+      p = $1; if (loc != "") p = (p == "." ? substr(loc, 1, length(loc) - 1) : loc p)
+      print "payload-mode", pkg, p, $2, $3, $4 }'
     ( cd "$_root" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | enc \
       | awk -v pkg="$1" -v loc="$(printf '%s' "$_loc" | enc)" '{ print "installs " pkg " " loc $0 }'
     ( cd "$_root" && find . -type d \( -name '*.app' -o -name '*.prefPane' -o -name '*.kext' -o -name '*.bundle' \
