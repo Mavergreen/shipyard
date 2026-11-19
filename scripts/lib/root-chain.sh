@@ -10,6 +10,7 @@ mavergreen_chain_judge() (
       else if ($3 != uid) r = "owner"
       else if (substr($1, 6, 1) == "w") r = "group-writable"
       else if (substr($1, 9, 1) == "w") r = "other-writable"
+      acl = substr($1, 11, 1) == "+"
       next
     }
     !/^ *[0-9]+: .* (allow|deny) [^ ]+$/ { bad = 1; next }
@@ -21,7 +22,7 @@ mavergreen_chain_judge() (
         }
     }
     END {
-      if (NR == 0 || bad) r = "unreadable"
+      if (NR == 0 || bad || (acl && NR == 1)) r = "unreadable"
       print (r == "" ? "ok" : r)
       if (r == "acl-write") print i
     }'
@@ -51,7 +52,7 @@ mavergreen_chain_above() (
   return 1
 )
 
-# platform: only Darwin's ls has -e, which lists the ACL entries under the line.
+# platform: only Darwin's ls has -e, which lists the ACL entries under the line; elsewhere a + has none, so it is unreadable.
 mavergreen_chain_ls() (
   LC_ALL=C; export LC_ALL
   case "$(uname -s)" in Darwin) ls -ldne -- "$1" ;; *) ls -ldn -- "$1" ;; esac
@@ -65,7 +66,7 @@ mavergreen_chain_one() (
   case "$r" in
     ok) return 0 ;;
     owner)
-      if [ "$1" = "$2" ]; then f="sudo diskutil enableOwnership $q"; else f="sudo chown root:wheel $q"; fi ;;
+      if [ "$1" = "$2" ]; then f="sudo diskutil enableOwnership $q && sudo chown root:wheel $q"; else f="sudo chown root:wheel $q"; fi ;;
     group-writable|other-writable) f="sudo chmod go-w $q" ;;
     acl-write)
       i="$(printf '%s\n' "$v" | sed -n 2p)"
@@ -85,6 +86,9 @@ mavergreen_chain_ok() (
     || { mavergreen_chain_say "$2" missing "name the target volume's root"; return 1; }
   case "$vol" in //*) vol="/${vol#"${vol%%[!/]*}"}" ;; esac
   out="install under $(mavergreen_chain_q "$vol")"
+  top="$2"; while [ "${top%/}" != "$top" ]; do top="${top%/}"; done
+  case "$1" in "$top"/*|"${top:-/}") ;; *)
+    mavergreen_chain_say "$1" "not spelled under $2" "pass PATH as $(mavergreen_chain_q "$2")/..."; return 1 ;; esac
   case "$1" in /*) rest="$1" ;; *) rest="$(pwd -P)/$1" ;; esac
   cur=/; seen=0; fresh=1; n=0
   while :; do

@@ -2070,7 +2070,9 @@ target volume's root, physically (`cd -P`), and no further. Each must have uid 0
 or other write, and no ACL entry that `allow`s `write`, `append`, `add_file`, `add_subdirectory`,
 `delete_child`, `delete`, `writesecurity` or `chown` (`deny` entries pass). A directory that fails is
 refused by name, with the rule and its fix: `sudo chown root:wheel`, `sudo chmod go-w`, or `sudo chmod -a`
-naming the ACL entry. A volume root not owned by root names `sudo diskutil enableOwnership <volume>`.
+naming the ACL entry. A volume root not owned by root names `sudo diskutil enableOwnership <volume> &&
+sudo chown root:wheel <volume>`. A path not spelled under the volume root it names, and off Darwin a
+directory whose mode carries an ACL `+`, fail closed.
 `scripts/lib/root-chain.sh` is the one copy of the check: it holds definitions only, and every install script and the stamped helper carry it inline, because nothing installed is trusted to
 verify the place it was installed into.
 

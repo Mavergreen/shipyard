@@ -24,6 +24,8 @@ done
 for bad in 'garbage' ' 0: group:admin allow' ' 0: group:admin permit add_file' ' x: group:admin deny delete' '0 group:admin deny delete'; do
   [ "$(v 'drwxr-xr-x+ 3 0  0  102 Nov 18 13:25 /opt' "$bad")" = unreadable ] || fail "an ACL line that doesn't parse ('$bad') is unreadable"
 done
+[ "$(v 'drwxr-xr-x+ 3 0  0  102 Nov 18 13:25 /opt')" = unreadable ] || fail "an ACL mark with no entries listed (ls off Darwin) is unreadable"
+[ "$(v 'drwxr-xr-x. 3 0  0  102 Nov 18 13:25 /opt')" = ok ] || fail "GNU ls's SELinux-context dot is not an ACL"
 [ "$(v 'total 0')" = unreadable ] || fail "a first line that isn't ls -ldn's is unreadable"
 [ "$(printf '' | mavergreen_chain_verdict)" = unreadable ] || fail "no input is unreadable"
 [ "$(v 'drwxr-xr-x  3 0  0  102 Nov 18 13:25 /Volumes/Macintosh HD 2/opt')" = ok ] || fail "a name with spaces parses as ok"
@@ -50,7 +52,7 @@ no "$V/a/b/c" "$V" "g+w on the middle dir fails" "$V/a/b: group-writable; root w
 chmod g-w "$V/a/b"; chmod o+w "$V/a"
 no "$V/a/b/c" "$V" "o+w on the top dir fails" "$V/a: other-writable"
 chmod o-w "$V/a"
-no "$V/a/b/c" "$w/gw" "a group-writable VOLROOT fails" "${V%/vol}: group-writable"
+no "$w/gw/vol/a/b/c" "$w/gw" "a group-writable VOLROOT fails" "${V%/vol}: group-writable"
 ok "$V/a/b/c/missing" "$V" "a missing leaf is judged by its parent"
 chmod g+w "$V/a/b/c"
 no "$V/a/b/c/missing" "$V" "a missing leaf's g+w parent fails" "$V/a/b/c: group-writable"
@@ -67,18 +69,21 @@ chmod g-w "$V/t"
 ok "$w//gw//vol/a/b/c" "$w//gw//vol/" "doubled slashes resolve to the same chain"
 ln -s gw "$w/tmplink"
 ok "$w/tmplink/vol/a/b/c" "$w/tmplink/vol" "a symlinked TMPDIR resolves on both sides"
-ok "$V/a/b/c" "$w/tmplink/vol" "a physical PATH under a symlinked VOLROOT passes"
+no "$V/a/b/c" "$w/tmplink/vol" "a PATH not spelled under VOLROOT fails, even if it resolves there" "$V/a/b/c: not spelled under $w/tmplink/vol"
+ok "$w/tmplink/vol/a/b/c" "$w/tmplink/vol/" "a VOLROOT's trailing slash still prefixes PATH"
+no "$V/a/b/cx" "$V/a/b/c" "a sibling sharing VOLROOT's spelling as a prefix fails" "not spelled under $V/a/b/c"
+no "a/b/c" "$V" "a relative PATH fails" "a/b/c: not spelled under $V"
 mkdir -p "$w/other"; chmod 755 "$w/other"
-no "$w/other" "$V" "a PATH outside VOLROOT fails" "outside $V"
+no "$w/other" "$V" "a PATH outside VOLROOT fails" "$w/other: not spelled under $V"
 no "$V/a" "$w/nowhere" "a missing VOLROOT fails" "$w/nowhere"
 
 MAVERGREEN_CHAIN_UID=12345
 mavergreen_dir_ok "$V/a/b/c" 2>"$w/err" && fail "an owner other than the trusted uid fails"
 grep -qxF "$V/a/b/c: owner; root will not write or run here; fix: sudo chown root:wheel '$V/a/b/c'" "$w/err" || { cat "$w/err"; fail "the owner fix is chown root:wheel"; }
 no "$V/a/b/c" "$V" "the walk judges VOLROOT first" "$V: owner"
-no "$V" "$V" "a VOLROOT not owned by the trusted uid names enableOwnership" "$V: owner; root will not write or run here; fix: sudo diskutil enableOwnership '$V'"
+no "$V" "$V" "a VOLROOT not owned by the trusted uid names enableOwnership, then chown" "$V: owner; root will not write or run here; fix: sudo diskutil enableOwnership '$V' && sudo chown root:wheel '$V'"
 mavergreen_chain_ok "$V" // 2>"$w/err" && fail "a // VOLROOT is judged as /"
-grep -qxF "/: owner; root will not write or run here; fix: sudo diskutil enableOwnership '/'" "$w/err" || { cat "$w/err"; fail "a // VOLROOT is normalised to /"; }
+grep -qxF "/: owner; root will not write or run here; fix: sudo diskutil enableOwnership '/' && sudo chown root:wheel '/'" "$w/err" || { cat "$w/err"; fail "a // VOLROOT is normalised to /"; }
 MAVERGREEN_CHAIN_UID="$me"
 
 mkdir -p "$V/Mac HD 2/opt"; chmod 755 "$V/Mac HD 2" "$V/Mac HD 2/opt"
