@@ -24,6 +24,9 @@
 #           isolation. Pair with assert_pkg_installs_in_place.sh, which gates the BUILT .pkg so a
 #           regression (a product that bypasses this, or a packager change) fails CI instead
 #           of shipping.
+# platform: stevedore copies each entry's mode from --root, so this script first removes group and
+#           other write permission from every entry under --root (silently; symlinks are not
+#           followed); no pkg it builds ships an entry that non-root users can write.
 set -eu
 
 ROOT=""; IDENT=""; VER=""; LOC=""; OUT=""; SCRIPTS=""
@@ -41,6 +44,7 @@ done
 [ -n "$ROOT" ] && [ -n "$IDENT" ] && [ -n "$VER" ] && [ -n "$LOC" ] && [ -n "$OUT" ] \
   || { echo "build_component_pkg: need --root --identifier --version --install-location --out" >&2; exit 2; }
 [ -d "$ROOT" ] || { echo "build_component_pkg: no payload root: $ROOT" >&2; exit 1; }
+chmod -R go-w "$ROOT"
 
 SELF="$(cd "$(dirname "$0")" && pwd)"
 EPOCH="$(sh "$SELF/source-date-epoch.sh")"

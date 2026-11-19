@@ -116,3 +116,17 @@ build() {
   echo "$output" | grep -q 'BundleIsRelocatable is ON'
   echo "$output" | grep -q 'BundleIsVersionChecked is ON'
 }
+
+@test "build_component_pkg: no group- or other-writable entry reaches the payload" {
+  d="$WORK/root/opt/mavergreen/demo"
+  mkdir -p "$d/open" "$d/shared"
+  printf 'x\n' > "$d/loose"
+  chmod 0777 "$d/open"; chmod 0775 "$d/shared"; chmod 0666 "$d/loose"
+  run build "$WORK/modes.pkg"
+  [ "$status" -eq 0 ]
+  "$STEVEDORE" expand "$WORK/modes.pkg" "$WORK/modes-x"
+  gzip -dc "$WORK/modes-x/Payload" | cpio -it -v 2>/dev/null > "$WORK/modes.lst"
+  [ "$(grep '/open$' "$WORK/modes.lst" | cut -c1-10)" = "drwxr-xr-x" ]
+  [ "$(grep '/shared$' "$WORK/modes.lst" | cut -c1-10)" = "drwxr-xr-x" ]
+  [ "$(grep '/loose$' "$WORK/modes.lst" | cut -c1-10)" = "-rw-r--r--" ]
+}
