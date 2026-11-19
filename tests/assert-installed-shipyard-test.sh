@@ -106,6 +106,8 @@ check "a correctly installed shipyard passes" 0 "finds shipyard in" \
 
 check "a cmake product that is not the pinned CMake fails" 1 "is not CMake" \
   assert --cmake-version 0.0.0-not-this-one
+check "a pin that is only a prefix of the cmake product's version fails" 1 "is not CMake ${ver%?}" \
+  assert --cmake-version "${ver%?}"
 
 product="$fx/opt/mavergreen/cmake"
 mv "$farm/shipyard-cmake" "$w/link-aside"

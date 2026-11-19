@@ -58,7 +58,7 @@ printf '%s\n' \
 if [ -x "$PRODUCT" ]; then
   if ! "$PRODUCT" --version > "$W/version.txt" 2>&1; then
     fail "the cmake product ($PRODUCT) does not run: $(cat "$W/version.txt")"
-  elif ! grep -q "cmake version $WANT" "$W/version.txt"; then
+  elif ! sed -n 1p "$W/version.txt" | grep -qxF "cmake version $WANT"; then
     fail "the cmake product is not CMake $WANT: $(head -1 "$W/version.txt")"
   fi
 else
