@@ -20,9 +20,30 @@ S="$root/scripts"
 PKG="$(cd "$(dirname "$MAVERGREEN_E2E_PKG")" && pwd -P)/$(basename "$MAVERGREEN_E2E_PKG")"
 W="$(mktemp -d "${TMPDIR:-/tmp}/install-layout-e2e.XXXXXX")"
 DEVS=""
+host_state() {
+  for _p in $(pkgutil --pkgs 2>/dev/null | grep '^dev\.mavergreen\.' | sort); do
+    printf 'receipt %s %s\n' "$_p" "$(pkgutil --pkg-info "$_p" 2>/dev/null | grep -E '^(version|install-time):' | tr '\n' ' ')"
+  done
+  for _f in /opt/mavergreen /etc/paths.d/mavergreen /Applications/Mavergreen /Library/LaunchAgents/dev.mavergreen.*; do
+    if [ -e "$_f" ] || [ -L "$_f" ]; then ls -ldT "$_f"; else echo "absent $_f"; fi
+  done
+}
+HOST_BEFORE="$(host_state)"; HOST_REPORTED=""
+host_changed() {
+  _now="$(host_state)"
+  [ "$_now" != "$HOST_BEFORE" ] || return 1
+  [ -n "$HOST_REPORTED" ] && return 0
+  HOST_REPORTED=1
+  echo "FAIL THE RUNNING SYSTEM CHANGED: its Mavergreen receipts or paths differ from before the run"
+  echo "  before:"; printf '%s\n' "$HOST_BEFORE" | sed 's/^/    /'
+  echo "  after:"; printf '%s\n' "$_now" | sed 's/^/    /'
+}
 cleanup() {
+  _rc=$?
   for d in $DEVS; do hdiutil detach -quiet "$d" 2>/dev/null || hdiutil detach -quiet -force "$d" 2>/dev/null || true; done
+  if host_changed; then _rc=1; fi
   rm -rf "$W"
+  exit "$_rc"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -54,7 +75,23 @@ V1="${V0%.*}.$((${V0##*.} + 1))"
 MIN="$(sed -n 1p "$root/.mavergreen/products/shipyard/requires/cmake/min")"
 CMAKE_WANT="$(printf '%s\n' "$MIN" | sed 's/-mavericks\..*//; s/-mavergreen\..*//')"
 CMAKE_REPO="$(sed -n 1p "$root/.mavergreen/ingredients/cmake/REPO")"
+checkout_head() {
+  _gd="$root/.git"
+  if [ -f "$_gd" ]; then _gd="$(sed -n 's/^gitdir: //p' "$_gd")"; case "$_gd" in /*) ;; *) _gd="$root/$_gd" ;; esac; fi
+  _cd="$_gd"
+  if [ -f "$_gd/commondir" ]; then _cd="$(sed -n 1p "$_gd/commondir")"; case "$_cd" in /*) ;; *) _cd="$_gd/$_cd" ;; esac; fi
+  _h="$(sed -n 1p "$_gd/HEAD" 2>/dev/null)" || _h=""
+  case "$_h" in
+    'ref: '*)
+      _r="${_h#ref: }"
+      sed -n 1p "$_gd/$_r" 2>/dev/null || sed -n 1p "$_cd/$_r" 2>/dev/null \
+        || sed -n "s|^\([0-9a-f]*\) $_r\$|\1|p" "$_cd/packed-refs" 2>/dev/null || echo unknown ;;
+    '') echo "unknown (no .git)" ;;
+    *) printf '%s\n' "$_h" ;;
+  esac
+}
 echo "install-layout-e2e: $PKG (shipyard $V0, upgrade to $V1), $FS images, cmake seed $MIN on macOS $(sw_vers -productVersion) $(uname -m)"
+echo "install-layout-e2e: the upgrade, seed and toy pkgs, and their dev.mavergreen.base, are built from this checkout ($root, HEAD $(checkout_head))"
 
 fixture_repo() {
   mkdir -p "$W/repo/.mavergreen/products/$1"
@@ -69,7 +106,8 @@ fixture_pkg() {
   MAVERGREEN_REPO_ROOT="$W/repo" sh "$S/build_component_pkg.sh" --root "$_st" --identifier "dev.mavergreen.$_short" \
     --version "$_ver" --install-location / --scripts "$W/scr-$_short" --out "$W/comp/$_short.pkg" >> "$BL" 2>&1 || return 1
   MAVERGREEN_REPO_ROOT="$W/repo" sh "$S/set_install_floor.sh" --short "$_short" --version "$_ver" \
-    --component "$W/comp/$_short.pkg" --dist "$W/dist" --base-version 0.0.1 --require-scripts 2>> "$BL"
+    --component "$W/comp/$_short.pkg" --dist "$W/dist" --base-version 0.0.1 --require-scripts \
+    --host-arch x86_64,arm64 2>> "$BL"
 }
 mkdir -p "$W/comp" "$W/dist"
 
@@ -109,6 +147,8 @@ sh "$S/package-pkg.sh" --shipyard-prefix "$W/up/root/opt/mavergreen/shipyard" \
   --version "$V1" --dist "$W/up/dist" >> "$BL" 2>&1 \
   || die "could not repackage $PKG's payload as shipyard $V1"
 [ -f "$UPGRADE" ] || die "package-pkg.sh made no $UPGRADE"
+sh "$S/assert_pkg_installs_in_place.sh" "$PKG" "$UPGRADE" "$SEED" "$TOY" >> "$BL" 2>&1 \
+  || die "a pkg would not install in place"
 
 n=0; VOL=""
 fresh_volume() {
@@ -117,10 +157,27 @@ fresh_volume() {
   hdiutil create -quiet -size 600m -fs "$FS" -volname "$_name" "$W/$_name.dmg" || return 1
   _out="$(hdiutil attach -nobrowse -owners on "$W/$_name.dmg")" || return 1
   _dev="$(printf '%s\n' "$_out" | sed -n '1s/[[:space:]].*//p')"
-  DEVS="$_dev $DEVS"
   VOL="$(printf '%s\n' "$_out" | sed -n 's|.*[[:space:]]\(/Volumes/[^[:space:]]*\)[[:space:]]*$|\1|p' | sed -n '$p')"
+  case "$_dev" in
+    /dev/disk[0-9]*) DEVS="$_dev $DEVS" ;;
+    *) echo "attach named no /dev/diskN: $_out"; hdiutil detach -quiet "/Volumes/$_name" 2>/dev/null || :; return 1 ;;
+  esac
   [ "$VOL" = "/Volumes/$_name" ] || { echo "attach did not mount /Volumes/$_name: $_out"; return 1; }
-  diskutil info "$VOL" | grep -q 'Owners:.*Enabled' || diskutil enableOwnership "$VOL" >/dev/null || return 1
+  _info="$(diskutil info "$VOL")" || return 1
+  _d="${_dev#/dev/}"
+  _whole="$(printf '%s\n' "$_info" | sed -n 's/^ *Part of Whole: *//p')"
+  _store="$(printf '%s\n' "$_info" | sed -n 's/^ *APFS Physical Store: *//p')"
+  case "$_whole" in "$_d") ;; *)
+    case "$_store" in "${_d}s"[0-9]*) ;; *) echo "$VOL is on $_whole (store '$_store'), not the image's $_dev"; return 1 ;; esac ;;
+  esac
+  if ! printf '%s\n' "$_info" | grep -q 'Owners:.*Enabled'; then
+    diskutil enableOwnership "$VOL" >/dev/null || return 1
+    diskutil info "$VOL" | grep -q 'Owners:.*Enabled' || { echo "ownership is still off on $VOL"; return 1; }
+  fi
+  mkdir "$VOL/.e2e-owner-probe" && chown 1:1 "$VOL/.e2e-owner-probe" || return 1
+  [ "$(stat -f %u:%g "$VOL/.e2e-owner-probe")" = 1:1 ] \
+    || { echo "$VOL does not honor ownership: a chown 1:1 reads back $(stat -f %u:%g "$VOL/.e2e-owner-probe")"; return 1; }
+  rmdir "$VOL/.e2e-owner-probe"
   chown root:wheel "$VOL" && chmod 755 "$VOL" || return 1
   [ "$(stat -f '%u:%g %Lp' "$VOL")" = "0:0 755" ] || { echo "$VOL is $(stat -f '%u:%g %Lp' "$VOL"), not 0:0 755: ownership is not honored"; return 1; }
   mkdir -p "$VOL/System/Library/CoreServices"
@@ -147,7 +204,12 @@ seed_and_install() {
 }
 
 scenario_fresh() {
-  [ ! -e "$VOL/opt" ] || bad "a fresh volume already has opt" || return 1
+  [ ! -e "$VOL/opt" ] && [ ! -L "$VOL/opt" ] || bad "a fresh volume already has opt" || return 1
+  ! install_to "$PKG" || bad "shipyard $V0 installed with no cmake on the volume" || return 1
+  grep -qF "needs cmake installed first" "$_log" || bad "the install log does not name the missing cmake" || return 1
+  [ ! -e "$VOL/opt/mavergreen/shipyard" ] || bad "opt/mavergreen/shipyard was installed without cmake" || return 1
+  mode_is "$VOL/opt" "root:wheel 755" || return 1
+  mode_is "$VOL/opt/mavergreen" "root:wheel 755" || return 1
   seed_and_install || return 1
   mode_is "$VOL/opt" "root:wheel 755" || return 1
   mode_is "$VOL/opt/mavergreen" "root:wheel 755" || return 1
@@ -217,8 +279,6 @@ scenario_uninstall() {
     || bad "the helper went with shipyard" || return 1
 }
 
-host_receipts() { ls /var/db/receipts /Library/Receipts 2>/dev/null | grep '^dev\.mavergreen\.' | sort || :; }
-before="$(host_receipts)"
 fails=0
 for sc in fresh group_writable_opt symlinked_applications upgrade uninstall; do
   _log=""
@@ -229,6 +289,6 @@ for sc in fresh group_writable_opt symlinked_applications upgrade uninstall; do
     echo "FAIL $sc (no scratch volume)"; fails=$((fails + 1))
   fi
 done
-[ "$(host_receipts)" = "$before" ] || { echo "FAIL the running system's receipts changed: $(host_receipts)"; fails=$((fails + 1)); }
+if host_changed; then fails=$((fails + 1)); fi
 echo "install-layout-e2e: $fails failed"
 [ "$fails" -eq 0 ]
