@@ -21,16 +21,7 @@ PKG="$(cd "$(dirname "$MAVERGREEN_E2E_PKG")" && pwd -P)/$(basename "$MAVERGREEN_
 W="$(mktemp -d "${TMPDIR:-/tmp}/install-layout-e2e.XXXXXX")"
 . "$root/tests/lib/e2e-volume.sh"
 HOST_BEFORE="$(host_state)"; HOST_REPORTED=""
-cleanup() {
-  _rc=$?
-  e2e_detach_all
-  if host_changed; then _rc=1; fi
-  rm -rf "$W"
-  exit "$_rc"
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+e2e_trap
 
 : "${SOURCE_DATE_EPOCH:=$(date +%s)}"; export SOURCE_DATE_EPOCH
 : "${MAVERGREEN_PKG_CACHE:=$W/pkg-cache}"; export MAVERGREEN_PKG_CACHE
@@ -134,21 +125,6 @@ sh "$S/assert_pkg_installs_in_place.sh" "$PKG" "$UPGRADE" "$SEED" "$TOY" >> "$BL
   || die "a pkg would not install in place"
 
 n=0; VOL=""
-fresh_volume() {
-  n=$((n + 1))
-  VOL="$(e2e_volume "$n")"
-}
-drop_volume() {
-  e2e_volume_detach "$VOL"
-}
-install_to() {
-  _log="$W/install-$n-$(basename "$1").log"
-  _off="$(wc -c < /var/log/install.log 2>/dev/null | tr -d ' ')" || _off=0
-  _rc=0; installer -verbose -dumplog -pkg "$1" -target "$VOL" > "$_log" 2>&1 || _rc=$?
-  tail -c +"$((${_off:-0} + 1))" /var/log/install.log >> "$_log" 2>/dev/null || :
-  return "$_rc"
-}
-bad() { echo "    FAIL: $*"; [ -z "${_log:-}" ] || { echo "    last installer log ($_log), tail:"; tail -n 40 "$_log" | sed 's/^/    | /'; }; return 1; }
 mode_is() { [ "$(stat -f '%Su:%Sg %Lp' "$1")" = "$2" ] || bad "$1 is $(stat -f '%Su:%Sg %Lp' "$1"), not $2"; }
 mg() { sh "$VOL/opt/mavergreen/bin/mavergreen" --root "$VOL" "$@"; }
 seed_and_install() {

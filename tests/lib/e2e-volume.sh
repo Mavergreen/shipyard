@@ -6,6 +6,12 @@
 #                                 on stderr and returns 1. Run it in $( ), so NAME must differ per call
 #          e2e_volume_detach V    detaches the image whose mount point V e2e_volume printed, and removes it
 #          e2e_detach_all         detaches every image e2e_volume made that is still attached
+#          e2e_trap               on exit, detaches every image, fails the run if host_changed, and removes W
+#          fresh_volume           makes the next numbered volume into VOL (n counts them); returns 1 on failure
+#          drop_volume            detaches VOL
+#          install_to PKG         installer -pkg PKG -target VOL into $_log (installer output plus the
+#                                 install.log lines it wrote); returns installer's status
+#          bad MSG...             prints FAIL MSG and the tail of $_log, and returns 1
 #          host_state             prints the running system's Mavergreen receipts and paths
 #          host_changed           1 when host_state differs from $HOST_BEFORE; otherwise prints what changed,
 #                                 once, and returns 0. The caller sets HOST_BEFORE="$(host_state)" and HOST_REPORTED=""
@@ -79,3 +85,30 @@ e2e_detach_all() {
   done < "$W/e2e-volumes"
   : > "$W/e2e-volumes"
 }
+e2e_cleanup() {
+  _rc=$?
+  e2e_detach_all
+  if host_changed; then _rc=1; fi
+  rm -rf "$W"
+  exit "$_rc"
+}
+e2e_trap() {
+  trap e2e_cleanup EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+}
+fresh_volume() {
+  n=$(( ${n:-0} + 1 ))
+  VOL="$(e2e_volume "$n")"
+}
+drop_volume() {
+  e2e_volume_detach "$VOL"
+}
+install_to() {
+  _log="$W/install-$n-$(basename "$1").log"
+  _off="$(wc -c < /var/log/install.log 2>/dev/null | tr -d ' ')" || _off=0
+  _rc=0; installer -verbose -dumplog -pkg "$1" -target "$VOL" > "$_log" 2>&1 || _rc=$?
+  tail -c +"$((${_off:-0} + 1))" /var/log/install.log >> "$_log" 2>/dev/null || :
+  return "$_rc"
+}
+bad() { echo "    FAIL: $*"; [ -z "${_log:-}" ] || { echo "    last installer log ($_log), tail:"; tail -n 40 "$_log" | sed 's/^/    | /'; }; return 1; }

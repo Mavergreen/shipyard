@@ -29,16 +29,7 @@ FX="$root/tests/fixtures/macho"
 W="$(mktemp -d "${TMPDIR:-/tmp}/arch-distribution-e2e.XXXXXX")"
 . "$root/tests/lib/e2e-volume.sh"
 HOST_BEFORE="$(host_state)"; HOST_REPORTED=""
-cleanup() {
-  _rc=$?
-  e2e_detach_all
-  if host_changed; then _rc=1; fi
-  rm -rf "$W"
-  exit "$_rc"
-}
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
+e2e_trap
 
 : "${SOURCE_DATE_EPOCH:=$(date +%s)}"; export SOURCE_DATE_EPOCH
 [ -n "${STEVEDORE:-}" ] || { : "${STEVEDORE_CACHE:=$W/stevedore-cache}"; export STEVEDORE_CACHE; }
@@ -65,12 +56,12 @@ done
 mkdir -p "$W/comp" "$W/dist"
 archive() {
   _short="$1"; _payload="$2"
-  rm -rf "$W/st-$_short"; mkdir -p "$W/st-$_short/opt/mavergreen/$_short/bin"
+  rm -rf "$W/st-$_short" && mkdir -p "$W/st-$_short/opt/mavergreen/$_short/bin" || return 1
   case "$_payload" in
-    sh) printf '#!/bin/sh\nexit 0\n' > "$W/st-$_short/opt/mavergreen/$_short/bin/tool" ;;
-    *) cp "$FX/$_payload" "$W/st-$_short/opt/mavergreen/$_short/bin/tool" ;;
+    sh) printf '#!/bin/sh\nexit 0\n' > "$W/st-$_short/opt/mavergreen/$_short/bin/tool" || return 1 ;;
+    *) cp "$FX/$_payload" "$W/st-$_short/opt/mavergreen/$_short/bin/tool" || return 1 ;;
   esac
-  chmod 755 "$W/st-$_short/opt/mavergreen/$_short/bin/tool"
+  chmod 755 "$W/st-$_short/opt/mavergreen/$_short/bin/tool" || return 1
   rm -rf "$W/scr-$_short"
   MAVERGREEN_REPO_ROOT="$REPO" sh "$S/stage_product.sh" --stage "$W/st-$_short" --product "$_short" --version 1 \
     --scripts-out "$W/scr-$_short" >> "$BL" 2>&1 || return 1
@@ -88,46 +79,44 @@ PKG_neutral="$(archive neutral sh)" || die "could not build neutral"
 PKG_neutralnew="$(archive neutralnew sh)" || die "could not build neutralnew"
 
 n=0; VOL=""
-fresh_volume() {
-  n=$((n + 1))
-  VOL="$(e2e_volume "$n")"
-}
-drop_volume() {
-  e2e_volume_detach "$VOL"
-}
-install_to() {
-  _log="$W/install-$n-$(basename "$1").log"
-  _off="$(wc -c < /var/log/install.log 2>/dev/null | tr -d ' ')" || _off=0
-  _rc=0; installer -verbose -dumplog -pkg "$1" -target "$VOL" > "$_log" 2>&1 || _rc=$?
-  tail -c +"$((${_off:-0} + 1))" /var/log/install.log >> "$_log" 2>/dev/null || :
-  return "$_rc"
-}
-bad() { echo "    FAIL: $*"; [ -z "${_log:-}" ] || { echo "    last installer log ($_log), tail:"; tail -n 40 "$_log" | sed 's/^/    | /'; }; return 1; }
 
 installs() {
   install_to "$1" || bad "$2 did not install" || return 1
   [ -d "$VOL/opt/mavergreen/$2" ] || bad "$VOL/opt/mavergreen/$2 is not there" || return 1
   [ -f "$VOL/opt/mavergreen/$2/mavergreen.plist" ] || bad "$2 has no mavergreen.plist" || return 1
 }
+SCRIPTS_FAIL='error occurred while running scripts|preinstall'
+INTEL_MSG='built for Intel Macs'
+OS_MSG='incompatible with this version|requires (Mac OS X|macOS|OS X) [0-9]|newer version of (Mac OS X|macOS|OS X)'
+refusal_lines() { grep -iE "$INTEL_MSG|$OS_MSG|needs macOS|refus|cannot|failed|not (supported|compatible)" "$_log" | sed -n 1,12p | sed 's/^/    | /'; }
 refused() {
   ! install_to "$1" || bad "$2 installed, and the class refuses it here" || return 1
   [ ! -e "$VOL/opt/mavergreen/$2" ] && [ ! -L "$VOL/opt/mavergreen/$2" ] || bad "$2 left a tree behind" || return 1
-  [ -z "${3:-}" ] || grep -qF "$3" "$_log" || bad "the installer output does not say '$3'" || return 1
-}
-which_refusal() {
-  if grep -qF 'built for Intel Macs.' "$_log"; then echo "    x86 refused with the installation-check's message: built for Intel Macs."
-  elif grep -qF 'built for Intel Macs running' "$_log"; then echo "    x86 refused with the installation-check's message: built for Intel Macs running Mac OS X 10.9 or 10.10."
-  else echo "    x86 refused with another message: $(grep -iE 'cannot|requires|not supported|operating system|version' "$_log" | sed -n 1p)"; fi
+  if grep -qiE "$SCRIPTS_FAIL" "$_log"; then
+    bad "$2 was refused by a failing install script, not by its Distribution; the refusal lines:" "$(refusal_lines)" || return 1
+  fi
+  if [ -n "${3:-}" ]; then
+    grep -qF "$3" "$_log" && { echo "    $2 refused with the installation-check's message: $3"; return 0; }
+    bad "$2's refusal does not say '$3'; the refusal lines:" "$(refusal_lines)" || return 1
+  fi
+  if grep -qF "$INTEL_MSG" "$_log" && [ "${4:-}" = either ]; then
+    echo "    $2 refused with the installation-check's message: $(grep -F "$INTEL_MSG" "$_log" | sed -n 1p)"; return 0
+  fi
+  if grep -qiE "$OS_MSG" "$_log"; then
+    echo "    $2 refused by allowed-os-versions: $(grep -iE "$OS_MSG" "$_log" | sed -n 1p)"; return 0
+  fi
+  bad "$2 was refused with no recognised refusal; the refusal lines:" "$(refusal_lines)" || return 1
 }
 
 run_case() {
-  _short="$1"; _want="$2"; _msg="$3"
+  _short="$1"; _want="$2"; _msg="$3"; _mode=""
+  [ "$_short" != x86 ] || _mode=either
   eval "_pkg=\$PKG_$_short"
   _log=""
   if fresh_volume; then
     if ( case "$_want" in
            install) installs "$_pkg" "$_short" ;;
-           *) refused "$_pkg" "$_short" "$_msg" && { [ "$_short" != x86 ] || which_refusal; } ;;
+           *) refused "$_pkg" "$_short" "$_msg" "$_mode" ;;
          esac ); then echo "PASS $_short ($_want)"; else echo "FAIL $_short (expected $_want)"; fails=$((fails + 1)); fi
     drop_volume
   else
