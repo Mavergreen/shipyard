@@ -1619,7 +1619,18 @@ printf '%s\n' "$_owout" | grep -q '^os-overwrite: ' || { echo "FAIL os-overwrite
 _owout="$(printf '%s\ninstalls p.pkg Library/Extensions/VoodooInputMavericks.kext/Contents/Info.plist\nend-of-facts\n' "$OW" | sh "$_ow/scripts/check-artifact-conformance.sh" 2>&1 >/dev/null)" \
   && { echo "FAIL os-overwrite: an empty inventory must fail, not pass"; exit 1; }
 printf '%s\n' "$_owout" | grep -q '^os-overwrite: ' || { echo "FAIL os-overwrite: an empty inventory is os-overwrite's failure, got: $_owout"; exit 1; }
+head -c 100000 "$here/../scripts/os-inventory-10.9.5.gz" > "$_ow/scripts/os-inventory-10.9.5.gz"
+_owout="$(printf '%s\ninstalls p.pkg Library/Extensions/VoodooInputMavericks.kext/Contents/Info.plist\nend-of-facts\n' "$OW" | sh "$_ow/scripts/check-artifact-conformance.sh" 2>&1 >/dev/null)" \
+  && { echo "FAIL os-overwrite: a truncated inventory must fail, not pass"; exit 1; }
+printf '%s\n' "$_owout" | grep -q '^os-overwrite: ' || { echo "FAIL os-overwrite: a truncated inventory is os-overwrite's failure, got: $_owout"; exit 1; }
 rm -rf "$_ow"
+clean "os-overwrite: a deviation scoped * with a reason excuses every path, as install-path's does" os-overwrite "$OW
+deviation os-overwrite:* this product patches the OS by design
+installs p.pkg usr/bin/ssh
+installs p.pkg $HDA"
+has "os-overwrite: a deviation scoped * with no reason excuses nothing" os-overwrite "$OW
+deviation os-overwrite:*
+installs p.pkg usr/bin/ssh"
 
 
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above

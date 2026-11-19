@@ -630,16 +630,15 @@ if has pkg; then
        $1 == "pkg" && !($5 in sys) && $5 !~ /\.system-replace$/ { reg[$2] = 1 }
        $1 == "installs" && ($2 in reg) { print $2, $3 }' "$tmp/ow-system" "$facts" > "$tmp/ow-installs"
   : > "$tmp/ow-dev"; : > "$tmp/ow-fail"; : > "$tmp/ow-hits"
+  ow_inv="$SELF/os-inventory-10.9.5.gz"
   ow_rc=0
-  if [ ! -s "$tmp/ow-installs" ]; then
-    gzip -dc "$SELF/os-inventory-10.9.5.gz" 2>/dev/null | head -1 | grep -q . || ow_rc=3
-  else
-    { gzip -dc "$SELF/os-inventory-10.9.5.gz" 2>/dev/null || echo /gzip-failed; } | awk '
-      NR == FNR { want[$2] = want[$2] " " $1; next }
-      $0 == "/gzip-failed" { bad = 1; next }
-      { n++; p = $0; gsub(/%/, "%25", p); gsub(/ /, "%20", p)
-        if (p in want) { k = split(want[p], f, " "); for (i = 1; i <= k; i++) print f[i], p } }
-      END { if (bad || n == 0) exit 3 }' "$tmp/ow-installs" - > "$tmp/ow-hits" || ow_rc=$?
+  gzip -t "$ow_inv" 2>/dev/null && gzip -dc "$ow_inv" 2>/dev/null | head -1 | grep -q . || ow_rc=3
+  if [ "$ow_rc" -eq 0 ] && [ -s "$tmp/ow-installs" ]; then
+    awk '{ p = $2; gsub(/%20/, " ", p); gsub(/%25/, "%", p); print p }' "$tmp/ow-installs" | LC_ALL=C sort -u > "$tmp/ow-want"
+    gzip -dc "$ow_inv" | LC_ALL=C comm -12 - "$tmp/ow-want" > "$tmp/ow-shipped" || ow_rc=3
+    awk 'FILENAME == ARGV[1] { s[$0] = 1; next }
+         { p = $2; gsub(/%20/, " ", p); gsub(/%25/, "%", p); if (p in s) print $1, $2 }' \
+      "$tmp/ow-shipped" "$tmp/ow-installs" > "$tmp/ow-hits"
   fi
   if [ "$ow_rc" -ne 0 ]; then
     chk_fail os-overwrite "$(rule_of os-overwrite)" \

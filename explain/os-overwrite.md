@@ -35,6 +35,7 @@ private/etc/aliases.
 ## Deviating
 Write .mavergreen/deviations/os-overwrite/<label>/ with a scope (<installed path glob>), a reason and a
 revisit. A good reason says why the product must replace that OS file rather than add its own, and why
-it cannot be a system edition.
+it cannot be a system edition. As with install-path, a scope of * excuses every path a pkg installs, and
+a deviation with no reason excuses nothing.
 
 New in the flag day (P4, the install-layout plan's Q6)
