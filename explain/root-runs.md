@@ -8,11 +8,12 @@ from there. Every pkg is read three ways. A Library/LaunchDaemons plist's Progra
 ProgramArguments item 0, starts with /opt/mavergreen/, /bin/, /sbin/, /usr/bin/, /usr/sbin/,
 /usr/libexec/ or /System/. Each component's preinstall and postinstall starts with #!/bin/sh or
 #!/bin/bash. Neither script names /usr/local, /Users, /tmp, /private/tmp or /Applications, in any
-case (HFS+ and APFS ignore it), each ending at a /, a quote, a space, a tab, a newline, ;, ), &, |, }
-or the end of the script. /Applications passes only as /Applications/Mavergreen, a whole path component
+case (HFS+ and APFS ignore it), each ending at a /, a quote, a space, a tab, a newline, ;, ), &, |, },
+<, >, a backtick or the end of the script. /Applications passes only as /Applications/Mavergreen, a whole path component
 with no .. after it: Applications/Mavergreen is the directory root creates for itself (principle 6(b)).
-Nor does either script name $HOME, ${HOME, ~/, or a ~ that is a word ending its command, all of which
-are a home directory.
+Nor does either script name $HOME, ${HOME, ~/, or a ~ that starts a word or follows = or : (an
+assignment's value, which the shell expands too) and ends its command, all of which are a home
+directory.
 
 ## Incident
 2026-10-13: flavours-darkmode's payload directory was world-writable, a live root hole closed by hand
@@ -21,7 +22,8 @@ are a home directory.
 ## Limits
 It reads the scripts as text, not as a shell parse. A path built at run time, such as one joined from
 parts or read from a file, is not seen; nor is a root followed by another character, such as /tmp*, nor
-~user, nor a ~ followed by another word, which reads like awk's match operator. A mention that is not a
+~user, nor a ~ followed by another word, which reads like awk's match operator. awk's ~/re/, with no
+space, still fails, because it reads like ~/. A mention that is not a
 call, such as a comment or a message naming /usr/local, still fails, and so does /var/tmp or
 /System/Applications, which contain a root. Only preinstall and postinstall are read, not other files in Scripts
 that they run. A daemon is read only from a payload installed at /.

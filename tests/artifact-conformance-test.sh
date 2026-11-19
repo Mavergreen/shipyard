@@ -1792,7 +1792,12 @@ PLIST
   _case tildeslash "$(printf '#!/bin/sh\ncp x ~/Library/x\n')"
   _case tildebare "$(printf '#!/bin/sh\ncd ~ && ls\n')"
   _case tildeeof "$(printf '#!/bin/sh\ncd ~')"
-  _case clean "$(printf '#!/bin/sh\nls /tmpfile /usr/localx /Usersx /opt/mavergreen/x /applications/mavergreen/X.app\nls /Applications/Mavergreen/a..b "$3/Applications/Mavergreen";x=a~b\necho $home ${home}\nawk '"'"'$1 ~ /x/ || $2 !~ /y/'"'"'\n')"
+  _case tildeassign "$(printf '#!/bin/sh\nH=~; cp x $H/y\n')"
+  _case tildepath "$(printf '#!/bin/sh\nPATH=$PATH:~\n')"
+  _case backticktmp "$(printf '#!/bin/sh\nx=`ls /tmp`\n')"
+  _case redirtmp "$(printf '#!/bin/sh\nls /tmp>f\n')"
+  _case tilderedir "$(printf '#!/bin/sh\ncd ~>f\n')"
+  _case clean "$(printf '#!/bin/sh\nls /tmpfile /usr/localx /Usersx /opt/mavergreen/x /applications/mavergreen/X.app\nls /Applications/Mavergreen/a..b "$3/Applications/Mavergreen";x=a~b\necho $home ${home}\nawk '"'"'$1 ~ /x/ || $2 !~ /y/'"'"'\n[[ $x =~ re ]]\n')"
   _fr="$(sh "$AF" "$_rr/dist" 1.0.0 "$_rr")"
   rm -rf "$_rr"
   for want in \
@@ -1828,6 +1833,11 @@ PLIST
     'script-mentions tildeslash.pkg dev.mavergreen.tildeslash preinstall ~' \
     'script-mentions tildebare.pkg dev.mavergreen.tildebare preinstall ~' \
     'script-mentions tildeeof.pkg dev.mavergreen.tildeeof preinstall ~' \
+    'script-mentions tildeassign.pkg dev.mavergreen.tildeassign preinstall ~' \
+    'script-mentions tildepath.pkg dev.mavergreen.tildepath preinstall ~' \
+    'script-mentions backticktmp.pkg dev.mavergreen.backticktmp preinstall /tmp/' \
+    'script-mentions redirtmp.pkg dev.mavergreen.redirtmp preinstall /tmp/' \
+    'script-mentions tilderedir.pkg dev.mavergreen.tilderedir preinstall ~' \
     'script clean.pkg dev.mavergreen.clean preinstall /bin/sh'
   do
     printf '%s\n' "$_fr" | grep -qxF "$want" || { echo "FAIL: root-runs facts should include: $want -- got: $_fr"; exit 1; }

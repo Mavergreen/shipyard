@@ -13,10 +13,10 @@
 #          af_interpreter <script>         prints the first word of its #! line, or none
 #          af_mentions <script>            prints, once each, the admin-writable roots its text names, in
 #                                          any case, each ending at a boundary (/ " ' space tab newline ; ) & | }
-#                                          or the end): /usr/local/, /Users/, /tmp/, /private/tmp/, and
+#                                          < > ` or the end): /usr/local/, /Users/, /tmp/, /private/tmp/, and
 #                                          /Applications/ unless Mavergreen follows as a whole component with
-#                                          no .. after it; also $HOME, ${HOME, ~/, and ~ alone as a word
-#                                          that ends its command (awk's ` ~ /re/` is not one)
+#                                          no .. after it; also $HOME, ${HOME, ~/, and ~ alone as a word or
+#                                          after = or : that ends its command (awk's ` ~ /re/` is not one)
 #          af_macho_kind <file>            prints strict (a Mach-O magic, or a fat one af_fat_macho
 #                                          accepts), loose (an ar archive, Mach-O only if the readers say
 #                                          so) or nothing (a Java class file shares the fat magic)
@@ -73,7 +73,7 @@ af_mentions() {
     }
     { t = t $0 "\n" }
     END {
-      B = "/\"\047 \t\n;)&|}"
+      B = "/\"\047 \t\n;)&|}<>`"
       l = tolower(t)
       n = split("/usr/local /users /tmp /private/tmp", r, " "); split("/usr/local/ /Users/ /tmp/ /private/tmp/", o, " ")
       for (i = 1; i <= n; i++) if (root(l, r[i])) print o[i]
@@ -95,7 +95,7 @@ af_mentions() {
         if (p > 1) pc = substr(s, p - 1, 1)
         s = substr(s, p + 1); c = substr(s, 1, 1); c0 = c
         w = 0
-        if (pc == "" || pc == " " || pc == "\t" || pc == "\n") {
+        if (pc == "" || pc == " " || pc == "\t" || pc == "\n" || pc == "=" || pc == ":") {
           if (c == " " || c == "\t") { match(s, /^[ \t]*/); c = substr(s, RLENGTH + 1, 1); w = c == "" || index(";&|)<>\n", c) > 0 }
           else w = bnd(c)
         }
