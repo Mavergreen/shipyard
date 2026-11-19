@@ -22,6 +22,8 @@ mach_tool NM 2>/dev/null || NM=nm; export NM
 . "$SELF/deviation-reason.sh"
 . "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/pkg-tree.sh"
+. "$SELF/lib/vercmp.sh"
+. "$SELF/lib/arch-rules.sh"
 dist="${1:?artifact-facts: dist directory required}"
 version="${2:?artifact-facts: version required}"
 root="$(cd "${3:-.}" && pwd)"
@@ -62,6 +64,11 @@ for _pd in "$root"/.mavergreen/products/*/; do
   _rc=0; _v="$(mavergreen_floor "$_p" 2>&1)" || _rc=$?
   [ "$_rc" -eq 0 ] || abort "cannot read $_p's floor: $(printf '%s' "$_v" | tr '\n' ' ')"
   printf 'floor %s %s\n' "$_p" "$_v"
+  if [ -f "$_pd/target" ]; then
+    while read -r _tg || [ -n "$_tg" ]; do
+      [ -z "$_tg" ] || printf 'target %s %s\n' "$_p" "$(printf '%s' "$_tg" | af_enc)"
+    done < "$_pd/target"
+  fi
   [ ! -f "$_pd/built-on-install" ] || printf 'built-on-install %s\n' "$_p"
   _ed="$(mg_value "products/$_p/edition" 2>/dev/null)" || _ed=""
   [ -z "$_ed" ] || printf 'edition %s %s\n' "$_p" "$(printf '%s' "$_ed" | af_enc)"
@@ -285,14 +292,14 @@ for f in "$dist"/*; do
           comps="$(sed -n 's/.*<line choice="\([^"]*\)".*/\1/p' "$AF_TREE/Distribution" | grep -v '^default$' || true)"
           title="$(sed -n 's|.*<title>\(.*\)</title>.*|\1|p' "$AF_TREE/Distribution" | head -1 | xml_dec)"
           printf 'pkg-title %s %s\n' "$b" "$(field "$title")"
+          printf 'pkg-arch %s %s\n' "$b" "$(arch_read_distribution "$AF_TREE/Distribution")"
           awk 'match($0, /<pkg-ref [^>]*>[^<]+<\/pkg-ref>/) {
                  s = substr($0, RSTART, RLENGTH); i = s; sub(/.*[ \t]id="/, "", i); sub(/".*/, "", i)
                  t = s; sub(/^[^>]*>/, "", t); sub(/<\/pkg-ref>$/, "", t); sub(/^#/, "", t); print i "\t" t }' \
             "$AF_TREE/Distribution" > "$x/names"
         else
           # platform: a component package: PackageInfo carries version and identity, and there is NO
-          #           floor to read -- that is structural, not a defect (the checker requires an
-          #           appcast to declare the minimum instead). Restricted to <pkg-info> and anchored
+          #           floor or arch to read (arch-distribution fails it). Restricted to <pkg-info> and anchored
           #           on a SPACE before the attribute name, or two real artifacts mis-parse: line 1's
           #           <?xml version="1.0"?> would match first without the element restriction, and
           #           generator-version="InstallCmds-864.1 (25E246)" (embedded space) would shift
@@ -302,6 +309,7 @@ for f in "$dist"/*; do
           floor=""
           comps="$ident"
           : > "$x/names"
+          printf 'pkg-arch %s none none none\n' "$b"
         fi
         # spec: tests/artifact-conformance-test.sh -- the fact stream is whitespace-delimited, so a
         #       value containing a space would silently shift the fields after it; collapsed to

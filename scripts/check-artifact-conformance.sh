@@ -11,6 +11,7 @@
 #            upstream-kind <port|own>                             whether the repo ports an upstream or is its own
 #            pkg           <file> <version> <floor> <identifier>  one per shipped .pkg
 #            pkg-title     <file> <title|none>                    a product archive's Distribution title (%20-encoded)
+#            pkg-arch      <file> <hostArchitectures|none> <before|none> <rule>  one per .pkg, read by arch_read_distribution (none none none: no Distribution)
 #            component     <file> <identifier> <name|none>        one per component, in Distribution order; its pkg-ref name
 #            installs      <file> <path>                          one per installed file or link (%20-encoded)
 #            bundle        <file> <path> <CFBundleIdentifier>     one per top-level bundle
@@ -25,6 +26,7 @@
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
 #            product       <product>                              one per directory in the repo's .mavergreen/products/
 #            floor         <product> <version>                    the product's floor (.mavergreen/products/<product>/floor, else 10.9.5)
+#            target        <product> <glob>                       one per line of .mavergreen/products/<product>/target (%20-encoded)
 #            derived       <product> <bundle-id> <label> <app> <feed|none>  the updater identity derived for it
 #            name          <product> <surface> <value>            mavergreen_name's value, at the expected version (%20-encoded)
 #            app           <product> <noun|upstream|none>         how the product's .app is named
@@ -56,6 +58,8 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/check-lib.sh"
 . "$SELF/sdk-pins.sh"
 . "$SELF/deviation-reason.sh"
+. "$SELF/lib/vercmp.sh"
+. "$SELF/lib/arch-rules.sh"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/conformance.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT  # template: 10.9 BSD mktemp requires one
 facts="$tmp/facts"
@@ -108,8 +112,9 @@ kind_ran() {  # $1 = the fact kind the ids read, $2 = what it is called, then th
 }
 chk_ran version-scheme
 if has pkg || has appcast; then chk_ran version; else chk_notrun version "no .pkg or appcast in this release"; fi
-kind_ran pkg .pkg floor identifier bundle-id launchd-label manifest base line install-path feed updater repository arm64 \
+kind_ran pkg .pkg identifier bundle-id launchd-label manifest base line install-path feed updater repository arm64 \
   pkg-name installer-title manifest-name app-name root-runs os-overwrite
+kind_ran pkg-arch .pkg arch-distribution arch-floors
 kind_ran appcast appcast enclosure length enclosure-url notes feed-title
 kind_ran build-info "build record" variant-build-info
 kind_ran macho Mach-O sdk-pin cxxabi
@@ -118,7 +123,8 @@ rule_of() {
   case "$1" in
     version-scheme) echo "a port's release version is <upstream>-mavergreen.N, and an own-upstream repo's is YYYYMMDD.N" ;;
     version) echo "every artifact names the version the release claims" ;;
-    floor) echo "a product archive declares an install floor of 10.9.5, and a component package an appcast that declares its minimum" ;;
+    arch-distribution) echo "a pkg's Distribution declares hostArchitectures x86_64,arm64 and the OS range and installation-check its class gets from its host slices" ;;
+    arch-floors) echo "a pkg's x86_64 floor is its product's, and its arm64 floor the highest minimum OS its arm64 host slices record" ;;
     identifier) echo "a pkg identifier is inside dev.mavergreen.*, and a product's is its derived one" ;;
     bundle-id) echo "an installed bundle's identifier is inside dev.mavergreen.*" ;;
     pkg-name) echo "a product's pkg and its component are named as derived from the product" ;;
@@ -150,7 +156,8 @@ fix_of() {
   case "$1" in
     version-scheme) echo "version a port <upstream>-mavergreen.N (1.2.3-mavergreen.1) and an own-upstream repo YYYYMMDD.N (20261006.1), or declare .mavergreen/deviations/version-scheme/<label>/ (scope *, a reason, a revisit)" ;;
     version) echo "rebuild the artifact with the release version, or remove the stale one from dist/" ;;
-    floor) echo "wrap the component with set_install_floor.sh (10.9.5), or have the appcast declare sparkle:minimumSystemVersion; or declare .mavergreen/deviations/floor/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    arch-distribution) echo "build every pkg with set_install_floor.sh, which writes the class's Distribution from the payload; a product that serves newer macOS declares .mavergreen/deviations/newer-macos/<label>/ (scope <short>, a reason, a revisit); no deviation excuses this check" ;;
+    arch-floors) echo "build the pkg with set_install_floor.sh, which writes .mavergreen/products/<short>/floor (default 10.9.5) and the arm64 floor its slices record; no deviation excuses a floor" ;;
     identifier) echo "build the pkg with set_install_floor.sh --short <short>, whose identifier is dev.mavergreen.<short>, or declare .mavergreen/deviations/identifier/<label>/ (scope <glob>, a reason, a revisit)" ;;
     pkg-name) echo "build the pkg with set_install_floor.sh --short <short> --dist DIR (or package-system-replace.sh), which derive both names, and do not rename it" ;;
     installer-title) echo "build the pkg with set_install_floor.sh --short <short>, which titles it Mavergreen <name> from .mavergreen/products/<short>/" ;;
@@ -245,27 +252,82 @@ case "$upstream_kind" in
 esac
 
 # spec: SKILL.md "Artifact conformance" axis table -- ITSELF/NEIGHBOURS: every .pkg agrees with the
-#       tag, floor and identifier scheme.
+#       tag and identifier scheme.
 while read -r kind file ver floor ident; do
   [ "$kind" = pkg ] || continue
   [ "$ver" = "$expected" ] \
     || fail version "$file says version $ver, the release is $expected" "$file"
-  # platform: a product archive (Distribution) declares an install floor; a component package
-  #           (PackageInfo) cannot -- floors are a productbuild concept -- so its minimum lives in the
-  #           appcast instead. golang's cross product targets 10.9 but runs on 11.0+, so demanding
-  #           10.9.5 of it would be wrong.
-  if [ "$floor" = none ]; then
-    grep -q "^appcast .* $file [0-9][0-9]* [0-9]" "$facts" \
-      || fail floor "$file declares no install floor, and no appcast declares a minimum system version for it" "$file"
-  else
-    [ "$floor" = 10.9.5 ] \
-      || fail floor "$file declares an install floor of $floor, not 10.9.5" "$file"
-  fi
   case "$ident" in
     dev.mavergreen.*) : ;;
     *) fail identifier "$file has identifier '$ident', outside dev.mavergreen.*" "$file" ;;
   esac
 done < "$facts"
+
+# spec: explain/arch-distribution.md and explain/arch-floors.md -- each pkg's class, OS range and
+#       floors are derived from its host slices, its product's floor and the newer-macos deviation,
+#       through lib/arch-rules.sh as set_install_floor.sh derives them; no deviation excuses either.
+arch_fail() { chk_fail "$1" "$(rule_of "$1")" "$2" "$(fix_of "$1")"; }
+grep '^pkg-arch ' "$facts" > "$tmp/pkg-arch" || true
+while read -r _ pa_file pa_host pa_before pa_rule; do
+  if ! awk -v f="$pa_file" '$1 == "pkg-title" && $2 == f { hit = 1 } END { exit !hit }' "$facts"; then
+    arch_fail arch-distribution "$pa_file is a component package with no Distribution, and every pkg a release ships is a product archive from set_install_floor.sh"
+    continue
+  fi
+  pa_prod="$(awk -v f="$pa_file" '$1 == "manifest" && $2 == f { print $3; exit }' "$facts")"
+  pa_floor=10.9.5; pa_newer=no; pa_tree=
+  : > "$tmp/pa-targets"
+  if [ -n "$pa_prod" ]; then
+    pa_tree="opt/mavergreen/$pa_prod/"
+    pa_floor="$(awk -v p="$pa_prod" '$1 == "floor" && $2 == p { print $3; exit }' "$facts")"
+    : "${pa_floor:=10.9.5}"
+    awk -v p="$pa_prod" '$1 == "target" && $2 == p { print $3 }' "$facts" | sed -e 's/%20/ /g' -e 's/%25/%/g' > "$tmp/pa-targets"
+    [ -z "$(deviation_reason newer-macos "$pa_prod")" ] || pa_newer=yes
+  fi
+  pa_pkgfloor="$(awk -v f="$pa_file" '$1 == "pkg" && $2 == f { print $4; exit }' "$facts")"
+  [ "$pa_pkgfloor" = "$pa_floor" ] \
+    || arch_fail arch-floors "$pa_file declares an install floor of $pa_pkgfloor; $(if [ -n "$pa_prod" ]; then echo "$pa_prod's floor"; else echo "$pa_file names no product, whose floor"; fi) is $pa_floor"
+  [ "$pa_host" = x86_64,arm64 ] || {
+    if [ "$pa_host" = none ]; then arch_fail arch-distribution "$pa_file declares no hostArchitectures; every pkg declares \"x86_64,arm64\""
+    else arch_fail arch-distribution "$pa_file declares hostArchitectures \"$pa_host\", not \"x86_64,arm64\""; fi
+  }
+  awk -v f="$pa_file" '$1 == "macho" && $2 == f {
+      d = $3; gsub(/%20/, " ", d); gsub(/%25/, "%", d); print $3, $4, $6, d }' "$facts" > "$tmp/pa-all"
+  : > "$tmp/pa-slices"
+  while read -r pa_p pa_a pa_m pa_d; do
+    ! arch_is_exempt "$pa_d" || continue
+    if [ -n "$pa_tree" ] && [ -s "$tmp/pa-targets" ]; then
+      case "$pa_d" in "$pa_tree"*) ! arch_is_target "${pa_d#"$pa_tree"}" "$tmp/pa-targets" || continue ;; esac
+    fi
+    printf '%s %s %s\n' "$pa_p" "$pa_a" "$pa_m" >> "$tmp/pa-slices"
+  done < "$tmp/pa-all"
+  if ! arch_derive < "$tmp/pa-slices" > "$tmp/pa-derived" 2> "$tmp/pa-err"; then
+    arch_fail arch-distribution "$pa_file: $(sed -e 's/%20/ /g' -e 's/%25/%/g' "$tmp/pa-err" | head -n 1)"
+    continue
+  fi
+  pa_class="$(sed -n 's/^class //p' "$tmp/pa-derived")"
+  pa_arm="$(sed -n 's/^arm64-floor //p' "$tmp/pa-derived")"
+  case "$pa_rule" in
+    arm64-below:*)
+      [ "$pa_arm" = none ] || [ "${pa_rule#arm64-below:}" = "$pa_arm" ] \
+        || arch_fail arch-floors "$pa_file refuses Apple Silicon below macOS ${pa_rule#arm64-below:}; its arm64 host slices record $pa_arm" ;;
+  esac
+  pa_want="$(arch_rule "$pa_class" "$pa_newer" "$pa_floor" "$pa_arm")" || {
+    arch_fail arch-distribution "$pa_file ships an arm64 host slice, so it is universal, and $(if [ -n "$pa_prod" ]; then echo "$pa_prod declares"; else echo "a pkg that names no product can declare"; fi) no newer-macos deviation; a universal pkg has no 10.11 ceiling, so it must serve newer macOS"
+    continue
+  }
+  pa_want="${pa_want%% *}"
+  case "$pa_class:$pa_newer" in
+    universal:*|*:yes) pa_wbefore=none ;;
+    *) pa_wbefore=10.11 ;;
+  esac
+  pa_how="its class is $pa_class$(if [ "$pa_newer" = yes ]; then echo ", with newer-macos"; fi)"
+  [ "$pa_before" = "$pa_wbefore" ] || {
+    if [ "$pa_wbefore" = none ]; then arch_fail arch-distribution "$pa_file allows os-versions before=\"$pa_before\"; $pa_how, which wants no before"
+    else arch_fail arch-distribution "$pa_file allows os-versions with $(if [ "$pa_before" = none ]; then echo "no before"; else echo "before=\"$pa_before\""; fi); $pa_how, which wants before=\"$pa_wbefore\""; fi
+  }
+  [ "${pa_rule%%:*}" = "$pa_want" ] \
+    || arch_fail arch-distribution "$pa_file $(if [ "$pa_rule" = none ]; then echo "has no installation-check"; else echo "has a $pa_rule installation-check"; fi); $pa_how, which wants $pa_want"
+done < "$tmp/pkg-arch"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
 #       identity" -- SIBLINGS: what a pkg installs carries the family's identity. A deviation for these

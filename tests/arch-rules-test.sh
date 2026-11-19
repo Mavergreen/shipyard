@@ -92,4 +92,54 @@ arch_is_target lib/z "$g" || fail "last line with no newline"
 
 arch_is_exempt "Library/Application Support/Mavergreen/w-updater.app/Contents/MacOS/w" || fail "updater is exempt"
 arch_is_exempt "Applications/Mavergreen/W.app/Contents/MacOS/w" && fail "the app is not exempt"
+
+as_built() {
+  { echo '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
+    echo '<installer-gui-script minSpecVersion="1">'
+    echo '    <title>Mavergreen W</title>'
+    arch_distribution "$@" | awk '
+      NR == 1 { sub(/^<allowed-os-versions>/, ""); sub(/<\/allowed-os-versions>$/, "")
+                print "<allowed-os-versions>"; print "    " $0; print "</allowed-os-versions>"
+                print "<options customize=\"never\" require-scripts=\"false\" hostArchitectures=\"x86_64,arm64\"/>"; next }
+      /^<script><!\[CDATA\[$/ { print "<script>"; s = 1; next }
+      /^\]\]><\/script>$/ { print "</script>"; s = 0; next }
+      s { gsub(/&/, "\\&amp;"); gsub(/</, "\\&lt;"); gsub(/>/, "\\&gt;") }
+      { print }' | sed 's/^/    /'
+    echo '    <choices-outline>'
+    echo '        <line choice="default"/>'
+    echo '    </choices-outline>'
+    echo '</installer-gui-script>'; } > "$w/Distribution"
+}
+read_back() { arch_read_distribution "$w/Distribution"; }
+edit() { sed "$1" "$w/Distribution" > "$w/D2"; mv "$w/D2" "$w/Distribution"; }
+as_built neutral no 10.9.5 none
+eq "read: neutral" "$(read_back)" "x86_64,arm64 10.11 none"
+as_built neutral yes 10.9.5 none
+eq "read: neutral newer" "$(read_back)" "x86_64,arm64 none none"
+as_built x86_64 no 10.9.5 none
+grep -q '^    <installation-check' "$w/Distribution" || fail "as_built indents the installation-check"
+eq "read: intel" "$(read_back)" "x86_64,arm64 10.11 intel"
+as_built x86_64 yes 10.9.5 none
+eq "read: intel-newer" "$(read_back)" "x86_64,arm64 none intel-newer"
+as_built universal yes 10.9.5 13.0
+grep -qF "ProductVersion, '13.0') &lt; 0" "$w/Distribution" || fail "as_built escapes the script: $(cat "$w/Distribution")"
+eq "read: arm64-below" "$(read_back)" "x86_64,arm64 none arm64-below:13.0"
+as_built universal yes 10.9.5 12.10
+eq "read: arm64-below 12.10" "$(read_back)" "x86_64,arm64 none arm64-below:12.10"
+{ echo '<installer-gui-script>'; echo '<options hostArchitectures="x86_64,arm64"/>'; arch_distribution universal yes 10.9.5 13.0; echo '</installer-gui-script>'; } > "$w/Distribution"
+eq "read: a CDATA script" "$(read_back)" "x86_64,arm64 none arm64-below:13.0"
+as_built x86_64 no 10.9.5 none
+edit 's/running Mac OS X 10.9 or 10.10/only/'
+eq "read: an edited message" "$(read_back)" "x86_64,arm64 10.11 nonstandard"
+as_built universal yes 10.9.5 13.0
+edit "s/'13.0') &lt; 0/'12.0') \&lt; 0/"
+eq "read: a condition that disagrees with its message" "$(read_back)" "x86_64,arm64 none nonstandard"
+as_built x86_64 no 10.9.5 none
+edit '/installation-check/d'
+eq "read: no installation-check" "$(read_back)" "x86_64,arm64 10.11 none"
+as_built x86_64 no 10.9.5 none
+edit 's/hostArchitectures="x86_64,arm64"/hostArchitectures="x86_64"/'
+eq "read: x86_64 only" "$(read_back)" "x86_64 10.11 intel"
+printf '<installer-gui-script>\n</installer-gui-script>\n' > "$w/Distribution"
+eq "read: nothing declared" "$(read_back)" "none none none"
 echo "PASS: arch-rules"

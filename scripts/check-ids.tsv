@@ -34,7 +34,7 @@ deviation-complete	checkout	scripts/check-deviations.sh	deviations.sh refusal	P1
 artifact-facts	dist	scripts/check-artifact-conformance.sh	conformance abort	P1
 version-scheme	dist	scripts/check-artifact-conformance.sh	conformance scheme	P1
 version	dist	scripts/check-artifact-conformance.sh	conformance version	P1
-floor	dist	scripts/check-artifact-conformance.sh	conformance floor	P1
+floor	retired	scripts/check-artifact-conformance.sh	conformance floor	P5
 identifier	dist	scripts/check-artifact-conformance.sh	conformance identifier	P1
 bundle-id	dist	scripts/check-artifact-conformance.sh	conformance bundle-id	P1
 launchd-label	dist	scripts/check-artifact-conformance.sh	conformance launchd-label	P1
@@ -81,7 +81,7 @@ publish-order	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 renovate-extends-preset	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 no-hardcoded-version	checkout	scripts/check-family-conventions.sh	new (K6)	P1
 installed-shipyard	only	scripts/assert-installed-shipyard.sh	assert-installed-shipyard.sh	P1
-linux	key	scripts/check-artifact-conformance.sh	deviation key (longboat)	P5
+linux	key	scripts/check-artifact-conformance.sh	deviation key (longboat)	later
 no-tags-trigger	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 no-pull-request-target	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 checkout-drops-credentials	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
@@ -126,7 +126,7 @@ prose-restates-value	checkout	scripts/check-metadata.sh	new (P2: the metadata sp
 readme-links-metadata	checkout	scripts/check-metadata.sh	new (P2: the README points at the metadata)	P2
 relocatable	key	scripts/shipyard-provision	deviation key (shipyard-provision: a product that cannot run from a cache)	P2
 newer-macos	key	scripts/check-artifact-conformance.sh	deviation key (architectures: a product that serves newer macOS)	P5
-flat-incapable	key	scripts/check-artifact-conformance.sh	deviation key (architectures: a product that cannot ship a flat pkg)	P5
+flat-incapable	key	scripts/check-artifact-conformance.sh	deviation key (architectures: a product that cannot ship a flat pkg)	later
 build-from-mavericks	key	scripts/check-artifact-conformance.sh	deviation key (reproducible releases: a product that builds on fewer hosts)	P6
 publish-unchanged	key	scripts/check-artifact-conformance.sh	deviation key (reproducible releases: a repo that always publishes)	P6
 reproducible	key	scripts/check-artifact-conformance.sh	deviation key (reproducible releases: a path or repo exempt from the reproduce check)	P6
@@ -135,3 +135,5 @@ release-sentence	publish	scripts/check-release-sentence.sh	new (check-release-se
 retired-name	checkout	scripts/check-retired-names.sh	new	P3
 root-runs	dist	scripts/check-artifact-conformance.sh	new	P4
 os-overwrite	dist	scripts/check-artifact-conformance.sh	new	P4
+arch-distribution	dist	scripts/check-artifact-conformance.sh	new (P5: architectures A2)	P5
+arch-floors	dist	scripts/check-artifact-conformance.sh	new (P5: architectures A3; was floor)	P5

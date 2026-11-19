@@ -41,7 +41,7 @@ while IFS="$(printf '\t')" read -r id mode script old fate; do
     [ "$fate" != P1 ] || fail "$id is retired, so its fate names the phase that retired it, never P1"
     continue
   fi
-  case "$fate" in P1|P2|P3|P4) ;; *) continue ;; esac
+  case "$fate" in P1|P2|P3|P4|P5) ;; *) continue ;; esac
   if [ "$mode" = key ]; then
     [ ! -d "$fx/$id" ] || fail "$id is a deviation key, which no check runs, so it has no fixtures"
     continue
@@ -79,7 +79,12 @@ section_text() {
 }
 while IFS="$(printf '\t')" read -r id mode script old fate; do
   f="$here/explain/$id.md"
-  if [ "$mode" = retired ] || { [ "$fate" != P1 ] && [ "$fate" != P2 ] && [ "$fate" != P3 ] && [ "$fate" != P4 ]; }; then
+  if [ "$fate" = later ]; then
+    [ "$(grep -c '' "$f")" -eq 1 ] || fail "$id (fate later) is a one-line page"
+    grep -Eq '^Not read yet: [^ ]' "$f" || fail "$id (fate later) says 'Not read yet:' and what the key will mean"
+    continue
+  fi
+  if [ "$mode" = retired ] || { [ "$fate" != P1 ] && [ "$fate" != P2 ] && [ "$fate" != P3 ] && [ "$fate" != P4 ] && [ "$fate" != P5 ]; }; then
     [ "$(grep -c '' "$f")" -eq 1 ] || fail "$id (fate $fate) is a one-line stub"
     grep -q "^Retired by $fate" "$f" || fail "$id (fate $fate) says 'Retired by $fate' and nothing else"
     continue

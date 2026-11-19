@@ -35,6 +35,7 @@ retired_fix() {
     ingredients-md|ingredient-tracked) echo "now \`ingredient-complete\`, which reads no deviation; delete the directory" ;;
     ingredient-pins) echo "now \`watch-matches\`, which reads no deviation; delete the directory" ;;
     upstream-version-bare) echo "now \`value-file-line\`; move the directory to .mavergreen/deviations/value-file-line/" ;;
+    floor) echo "floors are derived (arch-floors); no deviation excuses them; delete the directory" ;;
     sparkle-updater|release-assets|python3|registered) echo "no check reads this; delete the directory" ;;
     *) return 1 ;;
   esac

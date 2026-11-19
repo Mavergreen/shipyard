@@ -60,6 +60,8 @@ for k in msc-template sparkle-updater release-assets python3; do
   case_ "r-$k" "$k" x '*' because
   fails "r-$k" deviation-known-check 'delete the directory'
 done
+case_ r-floor floor x '*' because
+fails r-floor deviation-known-check 'floors are derived (arch-floors); no deviation excuses them'
 
 case_ noreason rosetta x 'build/*.sh' ''
 fails noreason deviation-complete 'no reason'

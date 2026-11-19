@@ -13,6 +13,9 @@
 #          arch_distribution CLASS NEWER FLOOR ARM64FLOOR   prints the allowed-os-versions element and,
 #                                         with a rule, the installation-check and script, unindented
 #          arch_requires_line CLASS NEWER FLOOR ARM64FLOOR  prints the release notes' <range>
+#          arch_read_distribution FILE    prints "<hostArchitectures|none> <before|none> <rule>" for a
+#                                         Distribution, its rule none (no installation-check), intel,
+#                                         intel-newer, arm64-below:V or nonstandard (none of arch_distribution's)
 
 arch_is_target() {
   [ -f "$2" ] || return 1
@@ -109,4 +112,28 @@ arch_requires_line() {
     neutral:yes) echo "Mac OS X $3 or later";;
     *) echo "Mac OS X $3 through 10.10";;
   esac
+}
+
+arch_read_distribution() {
+  arch_rd_host="$(sed -n 's/.*<options[^>]*[[:space:]]hostArchitectures="\([^"]*\)".*/\1/p' "$1" | head -n 1 | sed 's/[[:space:]][[:space:]]*/_/g')"
+  arch_rd_before="$(sed -n 's/.*<os-version[^>]*[[:space:]]before="\([^"]*\)".*/\1/p' "$1" | head -n 1 | sed 's/[[:space:]][[:space:]]*/_/g')"
+  arch_rd_run="$(sed 's/^[[:space:]]*//' "$1" | LC_ALL=C awk '
+    /^<installation-check / { on = 1 }
+    !on { next }
+    /^<script>$/ { print "<script><![CDATA["; s = 1; next }
+    /^<\/script>$/ { print "]]></script>"; exit }
+    /^\]\]><\/script>$/ { print; exit }
+    s { gsub(/&lt;/, "<"); gsub(/&gt;/, ">"); gsub(/&amp;/, "\\&") }
+    { print }')"
+  arch_rd_rule=none
+  if [ -n "$arch_rd_run" ]; then
+    arch_rd_rule=nonstandard
+    arch_rd_v="$(printf '%s\n' "$arch_rd_run" | sed -n "s/.*system\.compareVersions(system\.version\.ProductVersion, '\([0-9][0-9.]*\)') < 0.*/\1/p" | head -n 1)"
+    if [ "$arch_rd_run" = "$(arch_distribution x86_64 no 10.9.5 none | sed 1d)" ]; then arch_rd_rule=intel
+    elif [ "$arch_rd_run" = "$(arch_distribution x86_64 yes 10.9.5 none | sed 1d)" ]; then arch_rd_rule=intel-newer
+    elif [ -n "$arch_rd_v" ] && [ "$arch_rd_run" = "$(arch_distribution universal yes 10.9.5 "$arch_rd_v" | sed 1d)" ]; then
+      arch_rd_rule="arm64-below:$arch_rd_v"
+    fi
+  fi
+  printf '%s %s %s\n' "${arch_rd_host:-none}" "${arch_rd_before:-none}" "$arch_rd_rule"
 }

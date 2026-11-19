@@ -257,11 +257,6 @@ appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 999
 asset p.pkg 10
 asset appcast.xml 700'
 
-no "a .pkg without the 10.9.5 floor" "floor" 'expected 1.0.0-mavergreen.1
-upstream-kind port
-pkg p.pkg 1.0.0-mavergreen.1 10.13 dev.mavergreen.x
-asset p.pkg 10'
-
 no "an identifier outside the family scheme" "identifier" 'expected 1.0.0-mavergreen.1
 upstream-kind port
 pkg p.pkg 1.0.0-mavergreen.1 10.9.5 com.example.thing
@@ -300,66 +295,106 @@ upstream-kind port
 pkg ed25519-20221003-mavergreen.2.pkg 20221003-mavergreen.2 10.9.5 dev.mavergreen.ed25519
 asset ed25519-20221003-mavergreen.2.pkg 10'
 
-# platform: a component .pkg (PackageInfo, no Distribution) has no os-version floor by
-#           construction -- floors are a productbuild concept. Its effective minimum lives in
-#           the appcast that ships it. golang's cross product is exactly this: it TARGETS 10.9
-#           but RUNS on 11.0+, so demanding 10.9.5 of it would be wrong.
-ok "a component pkg whose appcast declares the minimum" 'expected 1.26.5-mavergreen.5
+# spec: explain/arch-distribution.md and explain/arch-floors.md -- each pkg's Distribution states the
+#       class its host slices make, and the floors they and the product derive.
+ARCH='expected 1.0.0-mavergreen.1
 upstream-kind port
-pkg golang-cross.pkg 1.26.5-mavergreen.5 none dev.mavergreen.golang.go126-cross
-appcast appcast-cross.xml 1.26.5-mavergreen.5 golang-cross.pkg 10 11.0
-asset golang-cross.pkg 10
-asset appcast-cross.xml 700'
-
-no "a pkg with no floor and no appcast to declare one" "floor" 'expected 1.0.0-mavergreen.1
-upstream-kind port
-pkg orphan.pkg 1.0.0-mavergreen.1 none dev.mavergreen.x
-asset orphan.pkg 10'
-
-ok "a product archive that does declare 10.9.5" 'expected 1.0.0-mavergreen.1
-upstream-kind port
-pkg native.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.x
-asset native.pkg 10'
-
-no "an undeclared floor deviation still fails" "floor" 'expected 1.0.0-mavergreen.1
-upstream-kind port
-pkg p.pkg 1.0.0-mavergreen.1 11.0 dev.mavergreen.x
-asset p.pkg 10'
-
-ok "a declared floor deviation passes" 'expected 1.0.0-mavergreen.1
-upstream-kind port
-deviation floor the cross toolchain runs on modern macOS and targets 10.9; it is not itself a 10.9 install
-pkg p.pkg 1.0.0-mavergreen.1 11.0 dev.mavergreen.x
-asset p.pkg 10'
-
-no "a deviation with no reason is not a deviation" "floor|reason" 'expected 1.0.0-mavergreen.1
-upstream-kind port
-deviation floor
-pkg p.pkg 1.0.0-mavergreen.1 11.0 dev.mavergreen.x
-asset p.pkg 10'
-
-no "a floor deviation is scoped to its own check and does not excuse a bad identifier" "identifier" 'expected 1.0.0-mavergreen.1
-upstream-kind port
-deviation floor targets 10.9 rather than running on it
-pkg p.pkg 1.0.0-mavergreen.1 11.0 com.example.thing
-asset p.pkg 10'
-
-CROSS='expected 1.26.8-mavergreen.7
-upstream-kind port
-deviation floor:golang-*-cross-*.pkg the cross toolchain runs on macOS 11 and later and only targets 10.9
-pkg golang-1.26.8-cross-mavergreen.7.pkg 1.26.8-mavergreen.7 11.0 dev.mavergreen.golang.go126-cross
-asset golang-1.26.8-cross-mavergreen.7.pkg 10'
-ok "a floor deviation scoped to the cross archive excuses its 11.0 floor" "$CROSS
-pkg golang-1.26.8-native-mavergreen.7.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.golang.go126
-asset golang-1.26.8-native-mavergreen.7.pkg 10"
-_xerr="$(printf '%s\nend-of-facts\n' "$CROSS
-pkg golang-1.26.8-native-mavergreen.7.pkg 1.26.8-mavergreen.7 11.0 dev.mavergreen.golang.go126
-asset golang-1.26.8-native-mavergreen.7.pkg 10" | sh "$S" 2>&1 >/dev/null)" \
-  && { echo "FAIL: the cross archive's floor deviation must not excuse the native archive's 11.0 floor"; exit 1; }
-printf '%s\n' "$_xerr" | grep -q 'golang-1.26.8-native-mavergreen.7.pkg declares an install floor of 11.0' \
-  || { echo "FAIL: the native archive must be the one named: $_xerr"; exit 1; }
-printf '%s\n' "$_xerr" | grep -q 'cross-mavergreen.7.pkg declares' \
-  && { echo "FAIL: the cross archive is excused and must not be reported: $_xerr"; exit 1; }
+product e
+floor e 10.9.5
+pkg e.pkg 1.0.0-mavergreen.1 10.9.5 dev.mavergreen.e
+pkg-title e.pkg Mavergreen%20E
+component e.pkg dev.mavergreen.base
+component e.pkg dev.mavergreen.e
+manifest e.pkg e dev.mavergreen.e e
+installs e.pkg opt/mavergreen/e/mavergreen.plist
+asset e.pkg 10'
+X86='macho e.pkg opt/mavergreen/e/bin/t x86_64 EXECUTE 10.9 10.9 aa'
+FAT="$X86
+macho e.pkg opt/mavergreen/e/bin/t arm64 EXECUTE 13.0 11.3 aa"
+NEWER='deviation newer-macos:e developers on modern Macs run e'
+arch_clean() { clean "$1: arch-distribution" arch-distribution "$2"; clean "$1: arch-floors" arch-floors "$2"; }
+arch_clean "neutral" "$ARCH
+pkg-arch e.pkg x86_64,arm64 10.11 none"
+arch_clean "x86_64" "$ARCH
+$X86
+pkg-arch e.pkg x86_64,arm64 10.11 intel"
+arch_clean "x86_64 with newer-macos" "$ARCH
+$NEWER
+$X86
+pkg-arch e.pkg x86_64,arm64 none intel-newer"
+arch_clean "neutral with newer-macos" "$ARCH
+$NEWER
+pkg-arch e.pkg x86_64,arm64 none none"
+arch_clean "universal" "$ARCH
+$NEWER
+$FAT
+pkg-arch e.pkg x86_64,arm64 none arm64-below:13.0"
+arch_clean "a pkg-only stream has nothing to judge" "$ARCH"
+arch_clean "a target file is not a host binary" "$ARCH
+target e lib/x/*
+$X86
+macho e.pkg opt/mavergreen/e/lib/x/a130 arm64 EXECUTE 13.0 11.3 aa
+pkg-arch e.pkg x86_64,arm64 10.11 intel"
+arch_clean "a target glob reads decoded paths" "$ARCH
+target e lib/My%20*
+$X86
+macho e.pkg opt/mavergreen/e/lib/My%20Lib.dylib arm64 DYLIB 13.0 11.3 aa
+pkg-arch e.pkg x86_64,arm64 10.11 intel"
+arch_clean "the updater is not a host binary" "$ARCH
+$X86
+macho e.pkg Library/Application%20Support/Mavergreen/e-updater.app/Contents/MacOS/u arm64 EXECUTE 11.0 11.3 aa
+pkg-arch e.pkg x86_64,arm64 10.11 intel"
+arch_clean "a product's own floor" "$(printf '%s\n' "$ARCH" | sed 's/^floor e 10.9.5$/floor e 10.13/; s/^pkg e.pkg \(.*\) 10.9.5 /pkg e.pkg \1 10.13 /')
+pkg-arch e.pkg x86_64,arm64 10.11 none"
+says "before: newer-macos drops the 10.11 ceiling" arch-distribution 'before="10.11"' "$ARCH
+$NEWER
+pkg-arch e.pkg x86_64,arm64 10.11 none"
+says "before: the default keeps it" arch-distribution 'no before' "$ARCH
+pkg-arch e.pkg x86_64,arm64 none none"
+says "an x86_64 pkg with no installation-check" arch-distribution "wants intel" "$ARCH
+$X86
+pkg-arch e.pkg x86_64,arm64 10.11 none"
+says "hostArchitectures x86_64 only" arch-distribution 'hostArchitectures "x86_64"' "$ARCH
+$X86
+pkg-arch e.pkg x86_64 10.11 intel"
+says "no hostArchitectures" arch-distribution 'declares no hostArchitectures' "$ARCH
+pkg-arch e.pkg none 10.11 none"
+says "an edited script" arch-distribution "nonstandard" "$ARCH
+$X86
+pkg-arch e.pkg x86_64,arm64 10.11 nonstandard"
+says "a neutral pkg with an installation-check" arch-distribution "wants none" "$ARCH
+pkg-arch e.pkg x86_64,arm64 10.11 intel"
+says "a component-only pkg" arch-distribution "every pkg a release ships is a product archive from set_install_floor.sh" "$(printf '%s\n' "$ARCH" | sed '/^pkg-title /d; s/^pkg e.pkg \(.*\) 10.9.5 /pkg e.pkg \1 none /')
+pkg-arch e.pkg none none none"
+clean "a component-only pkg is arch-distribution's alone" arch-floors "$(printf '%s\n' "$ARCH" | sed '/^pkg-title /d; s/^pkg e.pkg \(.*\) 10.9.5 /pkg e.pkg \1 none /')
+pkg-arch e.pkg none none none"
+says "universal without newer-macos (R4)" arch-distribution "newer-macos" "$ARCH
+$FAT
+pkg-arch e.pkg x86_64,arm64 none arm64-below:13.0"
+says "an arm64-only host file" arch-distribution "opt/mavergreen/e/bin/My Tool is arm64 only" "$ARCH
+$X86
+macho e.pkg opt/mavergreen/e/bin/My%20Tool arm64 EXECUTE 13.0 11.3 aa
+pkg-arch e.pkg x86_64,arm64 10.11 intel"
+says "an arm64 slice with no minos" arch-distribution "records no minimum OS" "$ARCH
+$NEWER
+$X86
+macho e.pkg opt/mavergreen/e/bin/t arm64 EXECUTE - - aa
+pkg-arch e.pkg x86_64,arm64 none arm64-below:11.0"
+says "no deviation excuses arch-distribution" arch-distribution "nonstandard" "$ARCH
+deviation arch-distribution the fixture says so
+$X86
+pkg-arch e.pkg x86_64,arm64 10.11 nonstandard"
+says "the x86_64 floor is the product's" arch-floors "install floor of 10.9; e's floor is 10.9.5" "$(printf '%s\n' "$ARCH" | sed 's/^pkg e.pkg \(.*\) 10.9.5 /pkg e.pkg \1 10.9 /')
+pkg-arch e.pkg x86_64,arm64 10.11 none"
+says "no manifest: the floor is 10.9.5" arch-floors "install floor of 10.13; e.pkg names no product, whose floor is 10.9.5" "$(printf '%s\n' "$ARCH" | sed '/^manifest /d; s/^pkg e.pkg \(.*\) 10.9.5 /pkg e.pkg \1 10.13 /')
+pkg-arch e.pkg x86_64,arm64 10.11 none"
+says "the arm64 floor is derived" arch-floors "macOS 11.0; its arm64 host slices record 13.0" "$ARCH
+$NEWER
+$FAT
+pkg-arch e.pkg x86_64,arm64 none arm64-below:11.0"
+says "no deviation excuses arch-floors" arch-floors "install floor of 10.9;" "$(printf '%s\n' "$ARCH" | sed 's/^pkg e.pkg \(.*\) 10.9.5 /pkg e.pkg \1 10.9 /')
+deviation arch-floors the fixture says so
+pkg-arch e.pkg x86_64,arm64 10.11 none"
 
 # spec: scripts/check-artifact-conformance.sh's scoped deviations -- swift-toolchain
 #       republishes swift.org's .pkg verbatim so the correspondence with download.swift.org
@@ -368,7 +403,6 @@ printf '%s\n' "$_xerr" | grep -q 'cross-mavergreen.7.pkg declares' \
 MIRROR='expected 6.3.3-mavergreen.2
 upstream-kind port
 deviation version:upstream-swift-*.pkg mirrored verbatim from swift.org; the version is upstream own
-deviation floor:upstream-swift-*.pkg same mirror
 deviation identifier:upstream-swift-*.pkg same mirror
 pkg upstream-swift-6.3.3-RELEASE-osx.pkg 6.3.3.20260625101 10.11 org.swift.633202606251a
 asset upstream-swift-6.3.3-RELEASE-osx.pkg 10'
