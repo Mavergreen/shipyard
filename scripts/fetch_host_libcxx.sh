@@ -16,8 +16,9 @@ die() { echo "fetch_host_libcxx: $*" >&2; exit 1; }
 [ $# -eq 2 ] && [ -d "$1" ] || { echo "usage: fetch_host_libcxx.sh PIN_DIR CLANG22_PREFIX" >&2; exit 2; }
 PIN="$(cd "$1" && pwd)"; CL="$2"
 [ -f "$PIN/LLVM_PROJECT" ] && [ -f "$PIN/VERSION" ] || { echo "fetch_host_libcxx: $PIN needs LLVM_PROJECT and VERSION files" >&2; exit 2; }
-v="$(awk '{ print $1 }' "$PIN/LLVM_PROJECT")"; sha="$(awk '{ print $2 }' "$PIN/LLVM_PROJECT")"
-cv="$(tr -d ' \t\n' < "$PIN/VERSION")"
+line1() { IFS= read -r _l1 < "$1" || [ -n "$_l1" ] || :; printf '%s\n' "${_l1%"$(printf '\r')"}"; }
+v="$(line1 "$PIN/LLVM_PROJECT" | awk '{ print $1 }')"; sha="$(line1 "$PIN/LLVM_PROJECT" | awk '{ print $2 }')"
+cv="$(line1 "$PIN/VERSION" | tr -d ' \t')"
 case "$cv" in "$v"-*) ;; *) die "clang22 $cv is not LLVM $v; update $PIN/LLVM_PROJECT" ;; esac
 base="${MAVERGREEN_HOST_LIBCXX_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-host-libcxx}"
 dest="$base/$cv"
