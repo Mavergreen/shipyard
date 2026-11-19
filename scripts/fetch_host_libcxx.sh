@@ -3,22 +3,22 @@
 #   usage: fetch_host_libcxx.sh PIN_DIR CLANG22_PREFIX
 #          Prints a prefix holding libc++ and libc++abi (static: include/c++/v1, lib/libc++.a and
 #          lib/libc++abi.a) for this x86_64 Linux host, built by that clang22 from the llvm-project release
-#          clang22 is built from, and cached. PIN_DIR is a product's components/clang22: its llvm-project
-#          holds "LLVM_VERSION SHA256" (the SHA-256 of llvm-project-LLVM_VERSION.src.tar.xz), and its version
+#          clang22 is built from, and cached. PIN_DIR is a product's .mavergreen/ingredients/clang22: its LLVM_PROJECT
+#          holds "LLVM_VERSION SHA256" (the SHA-256 of llvm-project-LLVM_VERSION.src.tar.xz), and its VERSION
 #          must be a clang22 release of that LLVM version, else exit 1. A cross build's host toolset uses the
 #          prefix, so host tools on Linux use clang22 and its own libc++ as on every Mac host; clang22's Linux
 #          archive ships a libc++ for Darwin targets only. The cache is $MAVERGREEN_HOST_LIBCXX_CACHE
 #          (default ~/.cache/mavergreen-host-libcxx)/CLANG22_VERSION.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/mavericks_fetch.sh"
+. "$SELF/mavergreen_fetch.sh"
 die() { echo "fetch_host_libcxx: $*" >&2; exit 1; }
 [ $# -eq 2 ] && [ -d "$1" ] || { echo "usage: fetch_host_libcxx.sh PIN_DIR CLANG22_PREFIX" >&2; exit 2; }
 PIN="$(cd "$1" && pwd)"; CL="$2"
-[ -f "$PIN/llvm-project" ] && [ -f "$PIN/version" ] || { echo "fetch_host_libcxx: $PIN needs llvm-project and version files" >&2; exit 2; }
-v="$(awk '{ print $1 }' "$PIN/llvm-project")"; sha="$(awk '{ print $2 }' "$PIN/llvm-project")"
-cv="$(tr -d ' \t\n' < "$PIN/version")"
-case "$cv" in "$v"-*) ;; *) die "clang22 $cv is not LLVM $v; update $PIN/llvm-project" ;; esac
+[ -f "$PIN/LLVM_PROJECT" ] && [ -f "$PIN/VERSION" ] || { echo "fetch_host_libcxx: $PIN needs LLVM_PROJECT and VERSION files" >&2; exit 2; }
+v="$(awk '{ print $1 }' "$PIN/LLVM_PROJECT")"; sha="$(awk '{ print $2 }' "$PIN/LLVM_PROJECT")"
+cv="$(tr -d ' \t\n' < "$PIN/VERSION")"
+case "$cv" in "$v"-*) ;; *) die "clang22 $cv is not LLVM $v; update $PIN/LLVM_PROJECT" ;; esac
 base="${MAVERGREEN_HOST_LIBCXX_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-host-libcxx}"
 dest="$base/$cv"
 complete() { [ -f "$1/lib/libc++.a" ] && [ -f "$1/lib/libc++abi.a" ] && [ -f "$1/include/c++/v1/__config_site" ]; }

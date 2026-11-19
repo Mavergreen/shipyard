@@ -236,7 +236,7 @@ distribution that replaces the Command Line Tools.
 **Linux's C++ library is built, not shipped.** clang22's Linux archive carries a libc++ for Darwin
 targets only, so a cross build's Linux-host tools (Rust's `LINUX_HOST_CXX`) take
 `fetch_host_libcxx.sh PIN_DIR CLANG22_PREFIX`: static `libc++.a` and `libc++abi.a` built by that clang22
-from the llvm-project release it is built from (`components/clang22/llvm-project`: `<LLVM version>
+from the llvm-project release it is built from (`.mavergreen/ingredients/clang22/LLVM_PROJECT`: `<LLVM version>
 <sha256 of llvm-project-<version>.src.tar.xz>`; it refuses a clang22 of another LLVM version), cached. It
 exits when clang22's Linux archive ships a libc++ for Linux targets.
 
