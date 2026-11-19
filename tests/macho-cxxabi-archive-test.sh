@@ -52,3 +52,12 @@ sh "$MC" none.a > /dev/null 2>&1 && rc=0 || rc=$?
 sh "$MC" empty.a > /dev/null 2>&1 && rc=0 || rc=$?
 [ "$rc" -eq 1 ] || fail "empty archive: exit $rc, want 1"
 echo "ok: archive with no Mach-O member is not Mach-O"
+
+"$CL/bin/clang" --no-default-config -target i386-apple-macos10.9 -c throw.c -o throw-i386.o
+"$AR" rcS x86.a throw.o
+"$AR" rcS i386.a throw-i386.o
+"$LIPO" -create x86.a i386.a -output fat.a
+out="$(sh "$MC" fat.a)" || fail "fat archive: exit $?"
+want="$(printf 'x86_64 defines ___cxa_throw visible\ni386 defines ___cxa_throw visible')"
+[ "$(printf '%s\n' "$out" | LC_ALL=C sort)" = "$(printf '%s\n' "$want" | LC_ALL=C sort)" ] || fail "fat archive: got '$out'"
+echo "ok: every slice of a fat archive is read"
