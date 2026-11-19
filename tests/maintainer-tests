@@ -38,3 +38,4 @@ golden-gate tests/root-chain-acl-test.sh
 golden-gate tests/gen-os-inventory-test.sh
 10.9 tests/install-layout-e2e.sh
 golden-gate tests/install-layout-e2e.sh
+10.9 tests/arch-rules-test.sh

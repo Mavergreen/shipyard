@@ -32,6 +32,19 @@ def arm64(path, minos, sdk):
     lc = struct.pack('<IIIIIIII', 0x32, 32, 1, ver(*minos), ver(*sdk), 1, 3, 0x03e80000)
     hdr = struct.pack('<IiiIIIII', 0xfeedfacf, 0x0100000c, 0, 2, 1, len(lc), 0x200085, 0)
     open(path, 'wb').write(hdr + lc + b'\0' * 4064)
+def arm64_unversioned(path):
+    hdr = struct.pack('<IiiIIIII', 0xfeedfacf, 0x0100000c, 0, 2, 0, 0, 0x200085, 0)
+    open(path, 'wb').write(hdr + b'\0' * 4096)
+def padded(s, head):
+    b = s.encode() + b'\0'
+    return b + b'\0' * (-(head + len(b)) % 8)
+def x86_64_loader(path):
+    dylib = padded('@rpath/libt.dylib', 24)
+    rpath = padded('@loader_path/../lib', 12)
+    lc = (struct.pack('<IIIIII', 0xc, 24 + len(dylib), 24, 2, 0x10000, 0x10000) + dylib +
+          struct.pack('<III', 0x8000001c, 12 + len(rpath), 12) + rpath)
+    hdr = struct.pack('<IiiIIIII', 0xfeedfacf, 0x01000007, 3, 2, 2, len(lc), 0x200085, 0)
+    open(path, 'wb').write(hdr + lc + b'\0' * 4064)
 def restamp_x86(src, dst, sdk):
     b = bytearray(open(src, 'rb').read())
     off = 32
@@ -43,10 +56,16 @@ def restamp_x86(src, dst, sdk):
     open(dst, 'wb').write(b)
 arm64(d + '/a113', (11, 0), (11, 3))
 arm64(d + '/a265', (11, 0), (26, 5))
+arm64(d + '/a130', (13, 0), (11, 3))
+arm64(d + '/a280', (28, 0), (11, 3))
+arm64_unversioned(d + '/a00')
+x86_64_loader(d + '/loader')
 restamp_x86(d + '/clean', d + '/r265', (26, 5))
 restamp_x86(d + '/leak', d + '/leak265', (26, 5))
 PY
 llvm-lipo -create "$here/clean" "$here/a113" -output "$here/fatok"
 llvm-lipo -create "$here/clean" "$here/a265" -output "$here/fatbad"
 llvm-lipo -create "$here/leak" "$here/a113" -output "$here/fatleak"
+llvm-lipo -create "$here/clean" "$here/a130" -output "$here/fat130"
+llvm-lipo -create "$here/clean" "$here/a280" -output "$here/fat280"
 rm -f "$here/leak265"
