@@ -84,9 +84,8 @@ read_archive() {
   case "$1" in /*) _ar="$1" ;; *) _ar="$PWD/$1" ;; esac
   "$AR" t "$_ar" > "$t/members" 2>"$t/err" || reader_died "$AR t"
   awk '{ c[$0]++; print c[$0] "\t" $0 }' "$t/members" > "$t/members.n"
-  _n=0
   while IFS='	' read -r _c _name; do
-    _n=$((_n + 1)); _d="$t/m$_n"; mkdir "$_d"
+    _d="$(mktemp -d "$t/m.XXXXXX")"
     if [ "$_c" -eq 1 ]; then ( cd "$_d" && "$AR" x "$_ar" "$_name" ); else ( cd "$_d" && "$AR" xN "$_c" "$_ar" "$_name" ); fi 2>"$t/err" || reader_died "$AR x $_name"
     for _m in "$_d"/* "$_d"/.[!.]*; do
       [ -f "$_m" ] || continue
