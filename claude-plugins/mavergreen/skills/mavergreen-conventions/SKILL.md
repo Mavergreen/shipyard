@@ -45,9 +45,47 @@ products for Apple Silicon. A product spec that plans a universal build without 
 following a retired direction (universal-by-default never landed); correct the spec.
 The glob is matched against the install path in the pkg (`opt/mavergreen/cmake/bin/*`), never a
 build script's path; a bare `- arm64: <reason>`, or a glob of nothing but wildcards, is refused.
-Conformance fails a pkg whose Mach-O carries an arm64 slice that no declaration covers; the Sparkle
-updater's slices are exempt (only the product's updater bundle, whose identity is derived). A repo that declares one has a `modern-smoke` job in
+Conformance's `arch-host` check fails a pkg whose host Mach-O carries an arm64 slice that no declaration
+covers. A repo that declares one has a `modern-smoke` job in
 `release.yml`, on a `macos-*` runner, that runs the arm64 slice and that publish needs (check 37).
+
+**A pkg has a class, derived from its host slices and never chosen.** `set_install_floor.sh` reads the
+Mach-O slices the payload installs (`scripts/lib/arch-rules.sh`) and writes the Distribution; every pkg is
+a product archive, and every Distribution declares `hostArchitectures="x86_64,arm64"` so Installer runs
+the check natively instead of prompting for Rosetta.
+
+| Class | Host slices | Allowed OS | `installation-check` refuses |
+|---|---|---|---|
+| neutral | none | the product's floor up to, not including, 10.11 | nothing |
+| x86_64 | x86_64 only | the product's floor up to, not including, 10.11 | Apple Silicon |
+| universal | any arm64, beside x86_64 | the product's floor, no ceiling | Apple Silicon below the arm64 floor |
+
+A neutral or x86_64 pkg refuses 10.11 and later unless the product declares a `newer-macos` deviation
+(`.mavergreen/deviations/newer-macos/<label>/`, scope the product's short name, or `*` for every product
+in the repo), which drops the ceiling and, for an x86_64 pkg, still refuses Apple Silicon. A universal pkg
+has no ceiling, so it must have one. A host file with arm64 and no x86_64 is refused. The
+Distribution's order is `allowed-os-versions`, then `options`, then `installation-check` and its
+`script`, whose text is one of three fixed messages, so conformance compares it word for word.
+
+**Floors are derived.** The x86_64 floor is the product's: `.mavergreen/products/<short>/floor`, else
+10.9.5 (`mavergreen_floor <short>` in `mavergreen-meta.sh`; a pkg that names no product is held to 10.9.5).
+The arm64 floor is the highest minimum OS any arm64 host slice records, compared as versions (12.10 is above
+12.9). `arch-floors` checks both against the Distribution; no deviation excuses either.
+
+**Host files and target files.** A product's `.mavergreen/products/<short>/target` lists globs, relative to
+its tree under `opt/mavergreen/<short>/`, for the files it ships *for the target* rather than to run on the
+host: an SDK's stubs, a cross toolchain's target runtime. A target file never decides a class or a floor and
+`arch-host` does not judge its slices. `arch-target` fails a glob that matches no file the product installs,
+and a host binary of the pkg that loads a target file. The one other path outside the rule is
+`arch_is_exempt`: a payload path under `Library/Application Support/Mavergreen/`, where the updater lives.
+
+**One product, one name; a merge declares its one-sided files.** The x86_64 and arm64 builds of a product
+are two slices of one product, so a native/`-cross` pair is one universal product under the native short
+name, and `no-cross-products` (in `check-metadata.sh`) refuses a short name ending in `cross`.
+`lipo-merge-tree.sh --short <short>` merges two builds and refuses a file, symlink or empty directory in
+only one tree (`arch-union`) unless `.mavergreen/products/<short>/union` declares it, one glob per line over
+the relative path; the entry is copied from its own side, and a glob that matches no one-sided entry is
+refused too.
 
 **A repo has no secrets to set. Never list one as a setup or release step.** `SPARKLE_PRIVATE_KEY`,
 `MAVERICKS_VM_KEY` and `PINS_BOT_PRIVATE_KEY` are ORGANIZATION secrets, and every public Mavergreen
@@ -186,7 +224,7 @@ updaters, signing, or compat checks:**
 | `mavergreen_assert_binary_compatible` · `MavergreenCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set; with `OBJC_STRICT`, every Objective-C send) | a bespoke compat check |
 | `mavericks_add_updater_app` · `MavericksSparkle` · `stage_updater.sh` | builds/stages the Sparkle updater (self-fetches the framework) | wiring Sparkle by hand |
 | `apply_patches.sh SRC PATCHDIR` | applies `PATCHDIR/*.patch` to an unpacked source once, in name order with no fuzz; records their SHA-256s in `SRC/.mavergreen-patches`, no-ops on the same set, refuses a tree patched with another | a hand-rolled `patch` loop |
-| `build_component_pkg.sh` · `set_install_floor.sh` | builds a component `.pkg`; stamps the 10.9.5 install floor on a product `.pkg` (see "Seam hosts", below) | `pkgbuild`, `productbuild`, editing the pkg Distribution |
+| `build_component_pkg.sh` · `set_install_floor.sh` | builds a component `.pkg`; writes a product `.pkg`'s Distribution, its floors and its architecture rule derived from the payload (see "Seam hosts", below) | `pkgbuild`, `productbuild`, editing the pkg Distribution |
 | `sign_and_appcast.sh` · `gen_appcast.sh` | EdDSA-signs + renders the appcast (fetches `ed25519-sign` via `gh`) | rolling your own signing |
 | `mavergreen_fetch_sdk` · `MavergreenFetch` · `mavergreen_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
 | `shipyard_curl URL OUT\|-` · `mavergreen_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
@@ -619,8 +657,8 @@ Names are derived, never typed. `mavergreen_name <surface> <short> [<version>]` 
 | `identifier` | `dev.mavergreen.<short>` |
 | `link-suffix` | `line` with every `.` removed (`1.27` becomes `127`); empty without a line |
 
-The OS is named once, on the notes line: `Release <tag> · Requires Mac OS X <floor> or later` (U+00B7 with a
-space on each side; the floor part only when a floor is given). An app the product ships follows its
+The OS is named once, on the notes line: `Release <tag> · Requires <range>` (U+00B7 with a
+space on each side; the range part only when the pkg is given, read from its Distribution). An app the product ships follows its
 `products/<short>/app` file: `noun` means the bundle's filename, `CFBundleName` and
 `CFBundleDisplayName` equal the noun and `CFBundleIdentifier` is `dev.mavergreen.<short>`; `upstream` means
 upstream's own names, kept by declaration. Keep the "unofficial community build, not affiliated with
@@ -1096,12 +1134,14 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   `<description>` and the GitHub Release body, so the two cannot disagree:
   ```sh
   sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "$TAG" --version "$FULL" \
-     --short openssh --min-os 10.9.5 --out dist/RELEASE_NOTES.md
+     --short openssh --pkg dist/openssh-9.9p2-mavergreen.1.pkg --out dist/RELEASE_NOTES.md
   ```
   The noun is never passed; the heading comes from `.mavergreen/products/<short>/noun` (see "Product
   naming"): `## OpenSSH 9.9p2`, and `## Porthole 20260802.6` for a self-upstream product. Line 2 is
-  `Release <tag>`, with ` · Requires Mac OS X <floor> or later` when `--min-os` is given; omit it for a
-  product that is not a 10.9 `.pkg`. `--short` names the product and defaults to the repo's only product;
+  `Release <tag>`, with ` · Requires <range>` when `--pkg` names the built pkg: the range is read from the
+  pkg's Distribution (`Mac OS X <floor> or later`, `Mac OS X <floor> through 10.10`, `an Intel Mac with
+  Mac OS X <floor> or later`, or, for a universal pkg, `Mac OS X <floor> or later; on Apple Silicon,
+  macOS <arm64 floor> or later`); omit `--pkg` for a product with no `.pkg`. `--min-os` exits 2. `--short` names the product and defaults to the repo's only product;
   a repo with several products must pass it. `--product` is refused.
   `--line` scopes the baseline for a repo shipping parallel lines (golang's `1.26`); it is normalized
   internally, so both `1.26` and `1.26.*` work.
@@ -1127,69 +1167,19 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   name and the version prefix coincide there by chance, not by rule. This bit the migration plan itself
   before it was corrected against the real tags; verify a line's actual tag shape, never assume it
   matches its directory name.
-- **`--min-os` must describe what the shipped `.pkg` actually declares, verified against the artifact
-  — not assumed from a survey.** A survey got this wrong twice before each repo's real build was
-  checked. As migrated:
-
-  | `--min-os` passed | Repos |
-  |---|---|
-    | `10.9.5` | 1password, signal-desktop, porthole (bare `10.9` until the 2026-09-22 flag day, which found it was drift), openssh, container-tools, clang, golang, macports-legacy-support, ed25519, tailscale, swift, magic-trackpad2, ca-certs, shipyard |
-
-  **Dual-variant repos (clang, golang): the notes' floor line describes the NATIVE `.pkg`, while each
-  appcast enforces its own artifact's real minimum — this split is deliberate, do not "fix" it.** Both
-  repos pass `--min-os 10.9.5` to `release-notes.sh` because that describes the native build, the
-  flagship most users install; their cross variant's own `sign_and_appcast.sh` call separately passes
-  `--min-os 11.0` for its own appcast feed, independent of what the notes say. A golang/clang cross
-  build TARGETS 10.9 but RUNS on 11.0+ (see Artifact conformance, "structure matters more than it
-  looks") — the notes describe one variant, the appcast enforces each variant's own truth, and they
-  are allowed to disagree on purpose.
-- **Every footer line gets a blank line BEFORE it, never after the line it follows.** `gen_appcast.sh`'s
-  `md_to_html` joins consecutive non-blank lines into one `<p>` — correct Markdown — so a compare link
-  written directly under the floor line renders in the Sparkle dialog as one run-on sentence whose
-  second half is a link (`Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5`).
-  That shipped in every release from the generator's landing until it was fixed. The rule binds
-  anything appended **after** the generator hands the file off, in another repo's script — the
-  `Mavergreen-State:` marker above is the live case — and the separator is emitted only when
-  something already precedes it, since a footer that opens with a blank line renders an empty leading
-  `<p>`.
-- **Release notes are files, not prose.** What a release says beyond the generated sections is a few
-  small files, each one checkable fact or one checkable sentence; an agent may write them, a check that
-  passes is the approval, and nothing in a release waits on a human. Today's layout:
-
-  ```
-  .mavergreen/release-notes/<TAG>/
-    changes/<slug>      one per user-visible change; <slug> is [a-z0-9-]+ and orders them by ls
-                        line 1: one sentence; no other lines
-    rebuild             OPTIONAL: present means users must rebuild something; line 1 says what
-  .mavergreen/products/<short>/
-    requires/<dep>/min  a requirement: listed when its min differs from the previous release's
-    notice              OPTIONAL, standing: line 1 opens every release's footer
-  ```
-
-  A repo that tags products separately (swift) nests `<TAG>/` under `.mavergreen/release-notes/<short>/`
-  and passes `--short <short>` to `release-notes.sh`; given it, and when that directory exists, only
-  the nested tree is read. The product whose `requires/` and `notice` are read is `--short`'s, else the
-  repo's only product. A requirement is listed
-  under "Before you update" when its `min` differs from the previous release's, so a new or raised one
-  is announced once; a previous release from before `.mavergreen/` lists none. An unknown entry in
-  `.mavergreen/release-notes/<TAG>/` fails the release, naming it, as does any file beside it but a
-  `.md`; nothing else from the directory reaches the body. A directory beside it named for any other
-  tag fails a new release too, naming the tag it expected: only `<TAG>`, an existing tag's directory,
-  or a product's nest may sit there (a minted tag's regeneration leaves notes staged for a
-  later release alone).
-
-  **Every sentence is checked by `check-release-sentence.sh`** (`changes/*`, `rebuild`, `notice`; its
-  header lists every rule, one per line, and its test holds the cases, so they are not restated here),
-  and a listed `requires/<dep>/min` must be a version. A file that fails is
-  refused, never trimmed. Check each file before committing it:
-
+- **The notes' floor line is read from the shipped `.pkg`, never passed.** `release-notes.sh --pkg <pkg>`
+  reads the pkg's Distribution (`hostArchitectures`, `os-version`, `installation-check`) and fails when
+  the pkg has none or an `installation-check` that is none of the family's rules. The appcast agrees by
+  construction: `sign_and_appcast.sh` takes `sparkle:minimumSystemVersion` from `mavergreen_floor <product>`
+  (`.mavergreen/products/<short>/floor`, else 10.9.5), the same file `set_install_floor.sh` writes into
+  the pkg, and exits 2 on `--min-os`.
   ```sh
   sh "$SHIPYARD_SCRIPTS/check-release-sentence.sh" .mavergreen/release-notes/<TAG>/changes/<slug>
   ```
 
   (shipyard's own notes add `--allow shipyard`). To see the whole body, render it from the repo root
   with tags fetched, as the release would: `sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag <TAG>
-  --version <VERSION> --short <short> --out "$TMPDIR/notes.md"` (plus the `--line` and `--min-os`
+  --version <VERSION> --short <short> --out "$TMPDIR/notes.md"` (plus the `--line` and `--pkg`
   the repo's `release.yml` passes).
 
   **Naming `<TAG>` before the release exists**, by version scheme:
@@ -1723,8 +1713,14 @@ the vendor's newest package.
 
 | Slice | Records | SDK comes from |
 |---|---|---|
-| x86_64 | minos 10.9, sdk 10.9 | `fetch_sdk.sh` (MacOSX10.9.sdk) |
+| x86_64, floor 10.9 | minos 10.9, sdk 10.9 | `fetch_sdk.sh` (MacOSX10.9.sdk) |
 | arm64 | minos 11.0, sdk 11.3 | `fetch_sdk.sh --arch arm64` (MacOSX11.3.sdk) |
+
+The pins are keyed by (arch, floor): `shipyard_sdk_pin <arch> [<floor>]` and `fetch_sdk.sh --floor`
+select the x86_64 pin by the product's floor (`mavergreen_floor`, default 10.9.5), and arm64 ignores the
+floor. Only the 10.9 pin exists today, so a floor with no pin exits 2 and conformance's `sdk-pin` check
+fails "no pinned SDK for x86_64 at floor <floor>". The compat guard judges at `MAVERGREEN_FLOOR`, else
+the one floor the repo's products share.
 
 This covers cross toolchains installed on modern Macs too (clang-cross, golang-cross, the cmake product's
 arm64 slice). The pins and the rule live in exactly one place, `scripts/sdk-pins.sh`.
@@ -1947,7 +1943,7 @@ disagree is incoherent however it was built.
 |---|---|
 | Itself | `.pkg` / appcast / tag versions match; the enclosure names a published asset at its real length, and points into THIS release |
 | Neighbours | every `.pkg` of one release agrees on the version; **variants agree about their ingredients** |
-| Siblings | version scheme `<upstream>-mavergreen.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a product archive declares the 10.9.5 floor; every shipped Mach-O slice records its arch's pinned SDK (see "SDK pinning"); no shipped Mach-O carries or loads a second C++ runtime (below) |
+| Siblings | version scheme `<upstream>-mavergreen.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a pkg's Distribution declares its product's floor and the architecture rule its host slices derive; every shipped Mach-O slice records its arch's pinned SDK (see "SDK pinning"); no shipped Mach-O carries or loads a second C++ runtime (below) |
 
 **This constrains outputs, not methods.** Products here build in genuinely different ways — a Go
 toolchain, a boot2docker iso, libswiftCore, an openssh — and making those look alike would buy
@@ -1955,9 +1951,9 @@ uniformity by inventing a bespoke "kind" per product. If a check can only pass b
 product is built rather than *what it emits*, it is the wrong check.
 
 **Structure matters more than it looks.** A product archive (`Distribution`) declares an install
-floor; a component package (`PackageInfo`) cannot — a floor belongs to a product archive — so its
-minimum lives in the appcast instead. golang's cross product is exactly that: it TARGETS 10.9 but RUNS
-on 11.0+, so demanding 10.9.5 of it would be wrong.
+floor; a component package (`PackageInfo`) cannot, so every pkg a release ships is a product archive,
+and `arch-distribution` fails one with no Distribution. Its floor is its product's
+(`.mavergreen/products/<short>/floor`, else 10.9.5), not a per-variant guess.
 
 **Record what a variant was built FROM.** `sh "$SHIPYARD_SCRIPTS/build-info.sh" dist/build-info-<variant>.txt
 key=value …` at package time, and ship it as a release asset. Conformance compares any key appearing in
@@ -2628,7 +2624,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@`, or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) whose steps do (comments do not count; an uncalled job in another workflow file and a remote reusable workflow do not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or an `on-target` deviation with scope `*` is declared. An `on-target` deviation scoped to `<part>` declares a coverage gap and exempts nothing; a glob for `<part>` is refused | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
 | **35.** No tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt` outside `tests/` and `test/` calls the system `pkgbuild` or `productbuild` on a non-comment line, unless the path is grandfathered or a `packager` deviation is scoped to it | The pkg is built by stevedore, which runs on any host; a direct call keeps the build on a scarce macOS runner. This steers repos off the system packager one path at a time, and `@v1` moving reddens none of them while their lines stand |
 | **36.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` runner (as a string, a list, or `${{ matrix.X }}` read through the job's matrix) is grandfathered or declares a `macos-runner` deviation scoped to `<workflow file>:<job>` (`ci.yml:build`; shipyard has none, since it runs no macOS job) | macOS runners are scarce, and a job lands on one by default. The deviation names the reason it needs macOS and what would let it leave; the key is `<workflow file>:<job>`, so a new `build` job in another workflow is caught. Needs PyYAML, which check 8 already requires |
-| **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when an `arch-host` deviation is declared; a declaration with no such job and a job with no declaration fail with different messages. At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arch-host:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). An `arch-host` deviation scoped to a glob of only `*`, `?` and `/` is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
+| **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when an `arch-host` deviation is declared; a declaration with no such job and a job with no declaration fail with different messages. At package time, `check-artifact-conformance.sh`'s `arch-host` check fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arch-host:<glob>` matches, except a target file (one a `.mavergreen/products/<short>/target` glob names) and a path under `Library/Application Support/Mavergreen/`, the one exemption packaging uses. An `arch-host` deviation scoped to a glob of only `*`, `?` and `/` is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
 | **`pr-trigger`.** `release.yml` runs on a pull request to `main` (or on every push), or a `ci.yml` does, unless `renovate.json` sets `ignoreTests: true` | Renovate's automerge waits on a CI check; without one on the bump PR it stalls forever. fd and rg each asserted this themselves |
 | **`publish-order`.** In `release.yml` the first mentions of `release-notes.sh`, `release-state-record.sh`, `sign_and_appcast.sh` and `publish-release.yml` come in that order | The appcast and the Release must carry the same notes. A step a repo lacks takes no part |
 | **`renovate-extends-preset`, `renovate-json-valid`.** `.github/renovate.json` parses and its `extends` names `github>Mavergreen/shipyard` | The preset carries the automerge and `ignoreTests` defaults; Renovate ignores a config it cannot parse. Five repos asserted one or both |
@@ -3107,7 +3103,7 @@ it here.** A silently dropped increment is how the family drifted in the first p
 - [x] Per-repo migration onto the generator (13 product repos plus shipyard itself, swift-runtime
       first) — done 2026-09-12. Every `release.yml` in the family now calls `release-notes.sh`
       directly; the legacy `release-notes-file.sh` wrapper is deleted. See Release notes,
-      above, for the `--line`/`--min-os` decisions this migration recorded and the
+      above, for the `--line` decisions this migration recorded and the
       three generator defects it found and fixed
 - [x] **The three enforcement layers** — gate (`check-family-conventions.sh` check 14: does a repo's
       PR actually wire `release-notes.sh`), publisher (`check-release-notes.sh` inside
