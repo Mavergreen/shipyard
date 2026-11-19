@@ -81,7 +81,7 @@ and a host binary of the pkg that loads a target file. The one other path outsid
 
 **One product, one name; a merge declares its one-sided files.** The x86_64 and arm64 builds of a product
 are two slices of one product, so a native/`-cross` pair is one universal product under the native short
-name, and `no-cross-products` (in `check-metadata.sh`) refuses a short name ending in `cross`.
+name, and `no-cross-products` (in `check-metadata.sh`) refuses a short name or a product `line` ending in `cross`.
 `lipo-merge-tree.sh --short <short>` merges two builds and refuses a file, symlink or empty directory in
 only one tree (`arch-union`) unless `.mavergreen/products/<short>/union` declares it, one glob per line over
 the relative path; the entry is copied from its own side, and a glob that matches no one-sided entry is
@@ -1173,6 +1173,46 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   construction: `sign_and_appcast.sh` takes `sparkle:minimumSystemVersion` from `mavergreen_floor <product>`
   (`.mavergreen/products/<short>/floor`, else 10.9.5), the same file `set_install_floor.sh` writes into
   the pkg, and exits 2 on `--min-os`.
+- **Every footer line gets a blank line BEFORE it, never after the line it follows.** `gen_appcast.sh`'s
+  `md_to_html` joins consecutive non-blank lines into one `<p>` — correct Markdown — so a compare link
+  written directly under the floor line renders in the Sparkle dialog as one run-on sentence whose
+  second half is a link (`Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5`).
+  That shipped in every release from the generator's landing until it was fixed. The rule binds
+  anything appended **after** the generator hands the file off, in another repo's script — the
+  `Mavergreen-State:` marker above is the live case — and the separator is emitted only when
+  something already precedes it, since a footer that opens with a blank line renders an empty leading
+  `<p>`.
+- **Release notes are files, not prose.** What a release says beyond the generated sections is a few
+  small files, each one checkable fact or one checkable sentence; an agent may write them, a check that
+  passes is the approval, and nothing in a release waits on a human. Today's layout:
+
+  ```
+  .mavergreen/release-notes/<TAG>/
+    changes/<slug>      one per user-visible change; <slug> is [a-z0-9-]+ and orders them by ls
+                        line 1: one sentence; no other lines
+    rebuild             OPTIONAL: present means users must rebuild something; line 1 says what
+  .mavergreen/products/<short>/
+    requires/<dep>/min  a requirement: listed when its min differs from the previous release's
+    notice              OPTIONAL, standing: line 1 opens every release's footer
+  ```
+
+  A repo that tags products separately (swift) nests `<TAG>/` under `.mavergreen/release-notes/<short>/`
+  and passes `--short <short>` to `release-notes.sh`; given it, and when that directory exists, only
+  the nested tree is read. The product whose `requires/` and `notice` are read is `--short`'s, else the
+  repo's only product. A requirement is listed
+  under "Before you update" when its `min` differs from the previous release's, so a new or raised one
+  is announced once; a previous release from before `.mavergreen/` lists none. An unknown entry in
+  `.mavergreen/release-notes/<TAG>/` fails the release, naming it, as does any file beside it but a
+  `.md`; nothing else from the directory reaches the body. A directory beside it named for any other
+  tag fails a new release too, naming the tag it expected: only `<TAG>`, an existing tag's directory,
+  or a product's nest may sit there (a minted tag's regeneration leaves notes staged for a
+  later release alone).
+
+  **Every sentence is checked by `check-release-sentence.sh`** (`changes/*`, `rebuild`, `notice`; its
+  header lists every rule, one per line, and its test holds the cases, so they are not restated here),
+  and a listed `requires/<dep>/min` must be a version. A file that fails is
+  refused, never trimmed. Check each file before committing it:
+
   ```sh
   sh "$SHIPYARD_SCRIPTS/check-release-sentence.sh" .mavergreen/release-notes/<TAG>/changes/<slug>
   ```
