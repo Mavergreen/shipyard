@@ -79,10 +79,13 @@ if _ma="$(thin_arch "$1")"; then read_slice "$1" "$_ma"; return; fi
 read_archive() {
   case "$1" in /*) _ar="$1" ;; *) _ar="$PWD/$1" ;; esac
   "$AR" t "$_ar" > "$t/members" 2>"$t/err" || reader_died "$AR t"
-  awk '{ c[$0]++; print c[$0] "\t" $0 }' "$t/members" > "$t/members.n"
-  while IFS='	' read -r _c _name; do
+  awk 'NR == FNR { n[$0]++; next } { c[$0]++; print c[$0] "\t" n[$0] "\t" $0 }' "$t/members" "$t/members" > "$t/members.n"
+  _src="$_ar"
+  if awk -F'\t' '$2 > 1 { d = 1 } END { exit !d }' "$t/members.n"; then _src="$t/dups.a"; cp "$_ar" "$_src"; fi
+  while IFS='	' read -r _c _n _name; do
     _d="$(mktemp -d "$t/m.XXXXXX")"
-    if [ "$_c" -eq 1 ]; then ( cd "$_d" && "$AR" x "$_ar" "$_name" ); else ( cd "$_d" && "$AR" xN "$_c" "$_ar" "$_name" ); fi 2>"$t/err" || reader_died "$AR x $_name"
+    ( cd "$_d" && "$AR" x "$_src" "$_name" ) 2>"$t/err" || reader_died "$AR x $_name"
+    if [ "$_c" -lt "$_n" ]; then "$AR" d "$_src" "$_name" 2>"$t/err" || reader_died "$AR d $_name"; fi
     for _m in "$_d"/* "$_d"/.[!.]*; do
       [ -f "$_m" ] || continue
       if is_bitcode "$_m"; then echo "macho-cxxabi: bitcode member $_name of $f cannot be measured" >&2; exit 4; fi
