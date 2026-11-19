@@ -1,0 +1,35 @@
+name: spike-q4-opt
+on:
+  push:
+    branches: [spike/q4-opt]
+permissions: { contents: read }
+jobs:
+  q4:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with: { repository: Mavergreen/shipyard, ref: flag-day, path: sy, persist-credentials: false }
+      - name: Does installer create /opt on a modern Mac that has none?
+        shell: bash
+        run: |
+          set +e -x
+          sw_vers; uname -m
+          cat /usr/share/firmlinks; cat /etc/synthetic.conf
+          ls -ld / /opt /System/Volumes/Data/opt
+          sudo mv /System/Volumes/Data/opt /System/Volumes/Data/opt.aside
+          ls -ld /opt /System/Volumes/Data/opt
+          [ -e /opt ] && echo "Q4: /opt STILL PRESENT after moving Data/opt aside" || echo "Q4: /opt absent"
+          r="$(mktemp -d)"; mkdir -p "$r/opt/mavergreen/toy/bin"
+          printf '#!/bin/sh\necho toy ran\n' > "$r/opt/mavergreen/toy/bin/toy"; chmod 755 "$r/opt/mavergreen/toy/bin/toy"
+          pkgbuild --root "$r" --identifier dev.mavergreen.q4toy --version 1 --install-location / "$RUNNER_TEMP/toy.pkg"
+          sudo installer -verbose -pkg "$RUNNER_TEMP/toy.pkg" -target /; echo "Q4: installer rc=$?"
+          ls -ld /opt /opt/mavergreen /opt/mavergreen/toy /opt/mavergreen/toy/bin /System/Volumes/Data/opt
+          stat -f '%N %Su:%Sg %Sp' /opt /opt/mavergreen /opt/mavergreen/toy/bin/toy /System/Volumes/Data/opt
+          /opt/mavergreen/toy/bin/toy; echo "Q4: toy rc=$?"
+          df /opt /System/Volumes/Data/opt
+          diskutil info "$(df /opt | awk 'NR==2{print $1}')" | grep -E 'Volume Name|APFS Volume Role|Read-Only'
+          pkgutil --files dev.mavergreen.q4toy
+          . sy/scripts/lib/root-chain.sh
+          mavergreen_chain_ok /opt/mavergreen/toy/bin / && echo "Q4: chain ok" || echo "Q4: chain refused rc=$?"
+          grep -E 'q4toy|/opt' /var/log/install.log | tail -20
