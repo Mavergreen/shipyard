@@ -8,7 +8,8 @@
 #          must be a clang22 release of that LLVM version, else exit 1. A cross build's host toolset uses the
 #          prefix, so host tools on Linux use clang22 and its own libc++ as on every Mac host; clang22's Linux
 #          archive ships a libc++ for Darwin targets only. The cache is $MAVERGREEN_HOST_LIBCXX_CACHE
-#          (default ~/.cache/mavergreen-host-libcxx)/CLANG22_VERSION.
+#          (default ~/.cache/mavergreen-host-libcxx)/CLANG22_VERSION-pic; the libraries are built
+#          position-independent, so shared objects can link them.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen_fetch.sh"
@@ -21,7 +22,7 @@ v="$(line1 "$PIN/LLVM_PROJECT" | awk '{ print $1 }')"; sha="$(line1 "$PIN/LLVM_P
 cv="$(line1 "$PIN/VERSION" | tr -d ' \t')"
 case "$cv" in "$v"-*) ;; *) die "clang22 $cv is not LLVM $v; update $PIN/LLVM_PROJECT" ;; esac
 base="${MAVERGREEN_HOST_LIBCXX_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/mavergreen-host-libcxx}"
-dest="$base/$cv"
+dest="$base/$cv-pic"
 complete() { [ -f "$1/lib/libc++.a" ] && [ -f "$1/lib/libc++abi.a" ] && [ -f "$1/include/c++/v1/__config_site" ]; }
 if complete "$dest"; then echo "$dest"; exit 0; fi
 asset="llvm-project-$v.src.tar.xz"
@@ -32,7 +33,7 @@ s="$work/llvm-project-$v.src"
 cm="$(command -v cmake)" || die "no cmake on PATH"
 flags="--no-default-config -rtlib=libgcc --unwindlib=libgcc -stdlib=libstdc++"
 rm -rf "$dest.tmp"
-"$cm" -S "$s/runtimes" -B "$work/b" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$dest.tmp" \
+"$cm" -S "$s/runtimes" -B "$work/b" -DCMAKE_BUILD_TYPE=Release -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$dest.tmp" \
   -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=OFF -DLLVM_INCLUDE_TESTS=OFF \
   -DCMAKE_C_COMPILER="$CL/bin/clang" -DCMAKE_CXX_COMPILER="$CL/bin/clang++" \
   -DCMAKE_C_COMPILER_TARGET=x86_64-unknown-linux-gnu -DCMAKE_CXX_COMPILER_TARGET=x86_64-unknown-linux-gnu \
