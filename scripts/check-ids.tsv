@@ -133,3 +133,4 @@ reproducible	key	scripts/check-artifact-conformance.sh	deviation key (reproducib
 apple-clang	key	scripts/check-deviations.sh	deviation key (a product that builds with Apple's clang where clang22 cannot)	P1
 release-sentence	publish	scripts/check-release-sentence.sh	new (check-release-sentence.sh, from main)	P1
 retired-name	checkout	scripts/check-retired-names.sh	new	P3
+root-runs	dist	scripts/check-artifact-conformance.sh	new	P4

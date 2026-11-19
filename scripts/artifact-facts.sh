@@ -186,6 +186,10 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
         [ -f "$_lp" ] || continue
         _lab="$("$STEVEDORE" plist get "$_lp" Label 2>/dev/null || echo none)"
         printf 'launchd %s %s/%s %s\n' "$1" "$_ld" "$(basename "$_lp" | enc)" "${_lab:-none}"
+        [ "$_ld" = Library/LaunchDaemons ] || continue
+        _pg="$("$STEVEDORE" plist get "$_lp" Program 2>/dev/null)" || _pg=""
+        [ -n "$_pg" ] || _pg="$("$STEVEDORE" plist get "$_lp" ProgramArguments:0 2>/dev/null)" || _pg=""
+        printf 'launchd-program %s %s/%s %s\n' "$1" "$_ld" "$(basename "$_lp" | enc)" "$(field "$_pg")"
       done
     done
     # spec: tests/artifact-conformance-test.sh -- a product tree always installs at "/", so only
@@ -217,6 +221,26 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     done
   done
   return 0
+}
+
+script_facts() {  # $1 = pkg basename, $2 = its expanded tree, $3 = scratch. Non-zero when a Scripts archive cannot be read.
+  for _sc in $(find "$2" -name "*.root" -prune -o -name Scripts -print | sed 's/ /%20/g'); do
+    _sc="$(printf '%s' "$_sc" | sed 's/%20/ /g')"
+    _sd="$_sc"
+    if [ ! -d "$_sc" ]; then
+      _sd="$3/scripts.d/${_sc#"$2"/}"; mkdir -p "$_sd"
+      af_unpack_scripts "$_sc" "$_sd" || return 1
+    fi
+    _cid="$(sed -n '/<pkg-info/ s/.*[[:space:]]identifier="\([^"]*\)".*/\1/p' "${_sc%Scripts}PackageInfo" 2>/dev/null | head -1)"
+    _cid="$(printf '%s' "${_cid:-none}" | tr -s '[:space:]' '_')"
+    for _ph in preinstall postinstall; do
+      [ -f "$_sd/$_ph" ] || continue
+      printf 'script %s %s %s %s\n' "$1" "$_cid" "$_ph" "$(af_interpreter "$_sd/$_ph" | enc)"
+      af_mentions "$_sd/$_ph" | while IFS= read -r _tk; do
+        printf 'script-mentions %s %s %s %s\n' "$1" "$_cid" "$_ph" "$_tk"
+      done
+    done
+  done
 }
 
 # spec: scripts/deviations.sh -- ONE reader of .mavergreen/deviations/, because the conventions
@@ -283,6 +307,7 @@ for f in "$dist"/*; do
           printf 'component %s %s %s\n' "$b" "$(printf '%s' "$c" | tr -s '[:space:]' '_')" "$(field "$cn")"
         done
         payload_facts "$b" "$AF_TREE" || { af_rm "$x"; abort "${_pf_why:-cannot read the payload of $b}"; }
+        script_facts "$b" "$AF_TREE" "$x" || { af_rm "$x"; abort "cannot read the install scripts of $b"; }
       else
         printf 'pkg %s unreadable none none\n' "$b"
       fi

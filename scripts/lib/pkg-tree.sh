@@ -10,6 +10,11 @@
 #                                          that tree and AF_LOC to its install-location ("" or "a/b/")
 #          af_unpack_scripts <Scripts> <dir>  extracts a component's Scripts archive into the existing <dir>
 #          af_extract <tarball> <dir>      extracts a release tarball into the existing <dir>
+#          af_interpreter <script>         prints the first word of its #! line, or none
+#          af_mentions <script>            prints, once each, the admin-writable roots its text names:
+#                                          /usr/local/, /Users/, /tmp/, /private/tmp/, $HOME, ${HOME, and
+#                                          /Applications/ when not followed by Mavergreen ending at /, ", ',
+#                                          whitespace or the end of a line
 #          af_macho_kind <file>            prints strict (a Mach-O magic, or a fat one af_fat_macho
 #                                          accepts), loose (an ar archive, Mach-O only if the readers say
 #                                          so) or nothing (a Java class file shares the fat magic)
@@ -51,6 +56,26 @@ af_cpio() {
   _ac_rc=0; ( cd "$2" && cpio -id < "$_ac_tmp" >/dev/null 2>&1 ) || _ac_rc=$?
   rm -f "$_ac_tmp"
   return "$_ac_rc"
+}
+
+af_interpreter() {
+  _ai="$(sed -n '1s/^#![[:space:]]*//p' "$1" | awk '{ print $1 }')"
+  printf '%s\n' "${_ai:-none}"
+}
+
+af_mentions() {
+  awk '{ t = t $0 "\n" }
+    END {
+      n = split("/usr/local/ /Users/ /tmp/ /private/tmp/ $HOME ${HOME", k, " ")
+      for (i = 1; i <= n; i++) if (index(t, k[i])) print k[i]
+      s = t
+      while ((p = index(s, "/Applications/")) > 0) {
+        s = substr(s, p + 14); c = substr(s, 11, 1)
+        if (substr(s, 1, 10) != "Mavergreen" || !(c == "/" || c == "\"" || c == "\047" || c == " " || c == "\t" || c == "\n" || c == "")) {
+          print "/Applications/"; break
+        }
+      }
+    }' "$1"
 }
 
 af_extract() {

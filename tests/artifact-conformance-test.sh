@@ -1536,6 +1536,45 @@ alone "bundle-id: an upstream product's other bundles are still asked" "bundle-i
 bundle go.pkg Library/PreferencePanes/Foo.prefPane org.example.foo.pane"
 alone "bundle-id: a product with no app = upstream keeps every bundle in dev.mavergreen.*" "bundle-id" "$(printf '%s\n' "$UPA" | sed 's/^app go126 upstream$/app go126 none/')"
 
+# spec: explain/root-runs.md -- root runs only from a root-only chain.
+RR="$REL
+script p.pkg dev.mavergreen.base preinstall /bin/sh
+script p.pkg dev.mavergreen.x postinstall /bin/bash"
+DAEMON='launchd-program p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist'
+for _prog in /opt/mavergreen/x/sbin/xd /bin/sh /sbin/launchd /usr/bin/true /usr/sbin/sshd /usr/libexec/x /System/Library/x; do
+  clean "root-runs: a daemon running $_prog passes" root-runs "$RR
+$DAEMON $_prog"
+done
+says "root-runs: a daemon under usr/local names its program" root-runs "dev.mavergreen.xd.plist runs /usr/local/sbin/xd" "$RR
+$DAEMON /usr/local/sbin/xd"
+says "root-runs: a daemon's fix points the plist at the product's tree" root-runs "fix: install the program under /opt/mavergreen/<short>/ and point the plist there" "$RR
+$DAEMON /usr/local/sbin/xd"
+for _prog in /Users/x/xd /tmp/xd /Applications/Mavergreen/X.app/Contents/MacOS/xd /opt/other/xd /optional/xd xd none /opt/mavergreen/../../usr/local/xd; do
+  has "root-runs: a daemon running $_prog fails" root-runs "$RR
+$DAEMON $_prog"
+done
+says "root-runs: an interpreter outside /bin is named" root-runs "postinstall runs under /usr/local/bin/bash" "$RR
+script p.pkg dev.mavergreen.x postinstall /usr/local/bin/bash"
+says "root-runs: an interpreter's fix names the two allowed" root-runs "#!/bin/sh or #!/bin/bash" "$RR
+script p.pkg dev.mavergreen.x postinstall /usr/local/bin/bash"
+for _int in /usr/bin/env /bin/zsh none /bin/sh2; do
+  has "root-runs: the interpreter $_int fails" root-runs "$RR
+script p.pkg dev.mavergreen.x preinstall $_int"
+done
+for _tok in /usr/local/ /Users/ /tmp/ /private/tmp/ '$HOME' '${HOME' /Applications/; do
+  says "root-runs: a script naming $_tok fails" root-runs "dev.mavergreen.x postinstall names $_tok" "$RR
+script-mentions p.pkg dev.mavergreen.x postinstall $_tok"
+done
+says "root-runs: a script's fix says root runs only from a root-only chain" root-runs "fix: never name an admin-writable path in an install script; root runs only from a root-only chain" "$RR
+script-mentions p.pkg dev.mavergreen.x postinstall /usr/local/"
+clean "root-runs: a deviation scoped to the pkg excuses it" root-runs "$RR
+deviation root-runs:p.pkg the daemon is upstream's own, and its installer puts it there
+$DAEMON /usr/local/sbin/xd
+script-mentions p.pkg dev.mavergreen.x postinstall /usr/local/"
+has "root-runs: a deviation scoped to another pkg does not" root-runs "$RR
+deviation root-runs:q.pkg the daemon is upstream's own, and its installer puts it there
+script-mentions p.pkg dev.mavergreen.x postinstall /usr/local/"
+
 
 # spec: scripts/artifact-facts.sh "payload_facts" -- read from a REAL pkg, because the facts above
 #       are only as good as the extraction: install-location, a nested framework that is not a
@@ -1681,6 +1720,12 @@ PLIST
   done
   [ "$(printf '%s\n' "$_fa" | sed -n 's/^component x-1.0.0-mavergreen.1.pkg //p' | tr '\n' ' ')" = 'dev.mavergreen.base mavergreen-base.pkg dev.mavergreen.x x.pkg ' ] \
     || { echo "FAIL: an archive's components are reported in Distribution order, base first: $_fa"; exit 1; }
+  for want in 'script x-1.0.0-mavergreen.1.pkg dev.mavergreen.base preinstall /bin/sh' \
+    'script x-1.0.0-mavergreen.1.pkg dev.mavergreen.base postinstall /bin/sh'; do
+    printf '%s\n' "$_fa" | grep -qxF "$want" || { echo "FAIL: the base component's install scripts are facts: want $want -- got: $_fa"; exit 1; }
+  done
+  printf '%s\n' "$_fa" | grep -q '^script-mentions ' \
+    && { echo "FAIL: the base component's scripts, \"\$R/Applications/Mavergreen\" included, name no admin-writable path: $_fa"; exit 1; }
   _ca="$(printf '%s\n' "$_fa" | sh "$S" 2>&1)" \
     || { echo "FAIL: an archive set_install_floor.sh built from a laid-out stage must pass conformance: $_ca"; exit 1; }
   _cr="$(printf '%s\n' "$_fr" | sh "$S" 2>&1)" \
@@ -1697,6 +1742,66 @@ PLIST
     && printf "%s\n" "$_fu" | grep -qxF end-of-facts && ! printf "%s\n" "$_fu" | grep -q "^abort" \
     && printf "%s\n" "$_fu" | grep -q "^pkg good.pkg 1 none dev.mavergreen.ok$" \
     || { echo "FAIL: unreadable pkg is a fact, not an abort: $_fu"; exit 1; }
+}
+
+{
+  _rr="$(mktemp -d "${TMPDIR:-/tmp}/conformance-root-runs.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+  _st="$_rr/st"
+  mkdir -p "$_rr/.mavergreen/products/x" "$_st/opt/mavergreen/x/sbin" "$_st/Applications/Mavergreen/X.app/Contents" \
+    "$_st/Library/LaunchDaemons" "$_rr/dist" "$_rr/s"
+  echo X > "$_rr/.mavergreen/products/x/noun"
+  echo x > "$_st/opt/mavergreen/x/sbin/xd"
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.x</string></dict></plist>\n' \
+    > "$_st/Applications/Mavergreen/X.app/Contents/Info.plist"
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>Label</key><string>dev.mavergreen.xd</string><key>ProgramArguments</key><array><string>/opt/mavergreen/x/sbin/xd</string><string>-f</string></array></dict></plist>\n' \
+    > "$_st/Library/LaunchDaemons/dev.mavergreen.xd.plist"
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>Label</key><string>dev.mavergreen.yd</string><key>Program</key><string>/usr/local/sbin/yd</string><key>ProgramArguments</key><array><string>/opt/mavergreen/x/sbin/xd</string></array></dict></plist>\n' \
+    > "$_st/Library/LaunchDaemons/dev.mavergreen.yd.plist"
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>Label</key><string>dev.mavergreen.zd</string></dict></plist>\n' \
+    > "$_st/Library/LaunchDaemons/dev.mavergreen.zd.plist"
+  printf 'touch "$ROOT/Applications/Mavergreen/X.app/Contents/Info.plist"\n' > "$_rr/hook"
+  MAVERGREEN_REPO_ROOT="$_rr" GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stage_product.sh" --stage "$_st" --product x --version 1.0.0-mavergreen.1 \
+    --scripts-out "$_rr/scr" --postinstall-hook "$_rr/hook" >/dev/null 2>&1 \
+    || { echo "FAIL: stage_product.sh could not stage the product whose scripts this reads"; exit 1; }
+  "$SD" component --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavergreen.1 --install-location / \
+    --mtime 1700000000 --scripts "$_rr/scr" --out "$_rr/dist/x.pkg" >/dev/null
+  _case() {  # $1 = name, $2 = its preinstall's text
+    mkdir "$_rr/s/$1"; printf '%s' "$2" > "$_rr/s/$1/preinstall"
+    "$SD" component --nopayload --identifier "dev.mavergreen.$1" --version 1 --install-location / \
+      --mtime 1700000000 --scripts "$_rr/s/$1" --out "$_rr/dist/$1.pkg" >/dev/null
+  }
+  _case apps "$(printf '#!/bin/sh\nmkdir "$3/Applications/Mavergreen"\n[ -d '"'"'/Applications/Mavergreen'"'"' ]\nls /Applications/Mavergreen x\nls /Applications/Mavergreen/X.app\nls /Applications/Mavergreen\n')"
+  _case appsprefix "$(printf '#!/bin/sh\nls "$3/Applications/MavergreenX"\n')"
+  _case appsother "$(printf '#!/bin/sh\nls /Applications/Mavergreen/ok "$3/Applications/Other.app"\n')"
+  _case tokens "$(printf '#!/bin/sh\nls /usr/local/bin /Users/x /private/tmp/x\necho $HOME ${HOME}\n')"
+  _case envbash "$(printf '#!/usr/bin/env bash\ntrue\n')"
+  _case noshebang "$(printf 'true\n')"
+  _fr="$(sh "$AF" "$_rr/dist" 1.0.0 "$_rr")"
+  rm -rf "$_rr"
+  for want in \
+    'script x.pkg dev.mavergreen.x preinstall /bin/sh' \
+    'script x.pkg dev.mavergreen.x postinstall /bin/sh' \
+    'launchd-program x.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist /opt/mavergreen/x/sbin/xd' \
+    'launchd-program x.pkg Library/LaunchDaemons/dev.mavergreen.yd.plist /usr/local/sbin/yd' \
+    'launchd-program x.pkg Library/LaunchDaemons/dev.mavergreen.zd.plist none' \
+    'script apps.pkg dev.mavergreen.apps preinstall /bin/sh' \
+    'script-mentions appsprefix.pkg dev.mavergreen.appsprefix preinstall /Applications/' \
+    'script-mentions appsother.pkg dev.mavergreen.appsother preinstall /Applications/' \
+    'script-mentions tokens.pkg dev.mavergreen.tokens preinstall /usr/local/' \
+    'script-mentions tokens.pkg dev.mavergreen.tokens preinstall /Users/' \
+    'script-mentions tokens.pkg dev.mavergreen.tokens preinstall /tmp/' \
+    'script-mentions tokens.pkg dev.mavergreen.tokens preinstall /private/tmp/' \
+    'script-mentions tokens.pkg dev.mavergreen.tokens preinstall $HOME' \
+    'script-mentions tokens.pkg dev.mavergreen.tokens preinstall ${HOME' \
+    'script envbash.pkg dev.mavergreen.envbash preinstall /usr/bin/env' \
+    'script noshebang.pkg dev.mavergreen.noshebang preinstall none'
+  do
+    printf '%s\n' "$_fr" | grep -qxF "$want" || { echo "FAIL: root-runs facts should include: $want -- got: $_fr"; exit 1; }
+  done
+  printf '%s\n' "$_fr" | grep -q '^script-mentions \(x\|apps\)\.pkg ' \
+    && { echo "FAIL: stage_product.sh's scripts and Applications/Mavergreen, with or without a slash, name no admin-writable path: $_fr"; exit 1; }
+  [ "$(printf '%s\n' "$_fr" | grep -c '^script-mentions appsother\.pkg ')" -eq 1 ] \
+    || { echo "FAIL: a token is reported once per script: $_fr"; exit 1; }
 }
 
 _xe="$(mktemp -d "${TMPDIR:-/tmp}/conformance-titles.XXXXXX")"   # template: 10.9 BSD mktemp requires one

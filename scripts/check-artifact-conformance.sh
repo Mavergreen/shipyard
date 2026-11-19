@@ -16,6 +16,9 @@
 #            bundle        <file> <path> <CFBundleIdentifier>     one per top-level bundle
 #            bundle-name   <file> <path> <CFBundleName|none> <CFBundleDisplayName|none>  one per top-level bundle (%20-encoded)
 #            launchd       <file> <path> <Label>                  one per launchd job
+#            launchd-program <file> <path> <program|none>         one per Library/LaunchDaemons plist: Program, else ProgramArguments:0 (%20-encoded)
+#            script        <file> <component-id> <preinstall|postinstall> <interpreter|none>  one per install script: its #! line's first word (%20-encoded)
+#            script-mentions <file> <component-id> <phase> <token>  one per admin-writable root that script's text names
 #            manifest      <file> <product> <identifier> <dir>    one per opt/mavergreen/<dir>/mavergreen.plist
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
@@ -103,7 +106,7 @@ kind_ran() {  # $1 = the fact kind the ids read, $2 = what it is called, then th
 chk_ran version-scheme
 if has pkg || has appcast; then chk_ran version; else chk_notrun version "no .pkg or appcast in this release"; fi
 kind_ran pkg .pkg floor identifier bundle-id launchd-label manifest base line install-path feed updater repository arm64 \
-  pkg-name installer-title manifest-name app-name
+  pkg-name installer-title manifest-name app-name root-runs
 kind_ran appcast appcast enclosure length enclosure-url notes feed-title
 kind_ran build-info "build record" variant-build-info
 kind_ran macho Mach-O sdk-pin cxxabi
@@ -136,6 +139,7 @@ rule_of() {
     sdk-pin) echo "every shipped Mach-O slice records its arch's pinned minos and SDK" ;;
     arm64) echo "a pkg ships an arm64 slice only where .mavergreen/deviations/arm64/ declares its install path" ;;
     cxxabi) echo "one process gets one C++ runtime: no shipped Mach-O defines libc++abi's machinery or loads another libc++abi" ;;
+    root-runs) echo "root runs a launch daemon or an install script only from a root-only chain" ;;
   esac
 }
 fix_of() {
@@ -166,14 +170,15 @@ fix_of() {
     sdk-pin) echo "link against the pinned SDK (scripts/fetch_sdk.sh), or declare .mavergreen/deviations/sdk-pin/<label>/ (scope <glob>, a reason, a revisit)" ;;
     arm64) echo "build that path x86_64 only, or declare .mavergreen/deviations/arm64/<label>/ (scope <install-path glob>, a reason saying who runs it on Apple Silicon and why, a revisit), with a modern-smoke job in release.yml that runs it" ;;
     cxxabi) echo "link the family's runtime (libcxx22), or declare .mavergreen/deviations/cxxabi/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    root-runs) echo "never name an admin-writable path in an install script; root runs only from a root-only chain" ;;
   esac
 }
 
-fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (optional)
+fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (optional), $4 = the fix, when not fix_of's
   # spec: SKILL.md "Artifact conformance" -- a deviation excuses only its OWN check, only for the
   #       artifacts it names, and only with a reason (swift-toolchain's swift.org .pkg is the scoping
   #       example there).
-  _c="$1"; _msg="$2"; _file="${3:-}"
+  _c="$1"; _msg="$2"; _file="${3:-}"; _fix="${4:-}"
   case "$_c" in
     scheme) _id=version-scheme ;;
     ingredients) _id=variant-build-info ;;
@@ -200,7 +205,7 @@ fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (option
       "state why in .mavergreen/deviations/${_c}/<label>/ (scope, reason, revisit), or fix the artifact"
     return 0
   fi
-  chk_fail "$_id" "$(rule_of "$_id")" "$_msg" "$(fix_of "$_id")"
+  chk_fail "$_id" "$(rule_of "$_id")" "$_msg" "${_fix:-$(fix_of "$_id")}"
 }
 
 expected="$(sed -n 's/^expected \(..*\)$/\1/p' "$facts" | head -1)"
@@ -590,6 +595,28 @@ if [ "$nfail" -gt 0 ]; then
   [ "$nfail" -le 20 ] || echo "conformance: install-path: ... and $((nfail - 20)) more" >&2
 fi
 echo "conformance: install-path: checked $installs_seen installed files"
+
+while read -r kind file a b c; do
+  case "$kind" in
+    launchd-program)
+      prog="$(dec "$b")"
+      case "$prog" in
+        *"/../"*|*/..) ok=no ;;
+        /opt/mavergreen/?*|/bin/?*|/sbin/?*|/usr/bin/?*|/usr/sbin/?*|/usr/libexec/?*|/System/?*) ok=yes ;;
+        *) ok=no ;;
+      esac
+      [ "$ok" = yes ] || fail root-runs "$file's launch daemon $(dec "$a") runs $prog, outside /opt/mavergreen/ and the system's own /bin/, /sbin/, /usr/bin/, /usr/sbin/, /usr/libexec/ and /System/" "$file" \
+        "install the program under /opt/mavergreen/<short>/ and point the plist there" ;;
+    script)
+      case "$(dec "$c")" in
+        /bin/sh|/bin/bash) ;;
+        *) fail root-runs "$file's $a $b runs under $(dec "$c"), not /bin/sh or /bin/bash" "$file" \
+             "start the script with #!/bin/sh or #!/bin/bash; root runs only from a root-only chain" ;;
+      esac ;;
+    script-mentions)
+      fail root-runs "$file's $a $b names $c, which an admin can write" "$file" ;;
+  esac
+done < "$facts"
 
 # spec: SKILL.md "Artifact conformance" axis table -- ITSELF: the appcast describes this release, and
 #       its enclosure names a published asset at its real length.
