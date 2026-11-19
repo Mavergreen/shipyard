@@ -89,3 +89,8 @@ mavergreen-opt	/etc/paths.d/mavergreen and /etc/manpaths.d/mavergreen	while pinn
 deviations/arm64	deviations/arch-host	P5 renamed the arm64 check arch-host, and it judges host binaries only
 --only arm64	--only arch-host	P5 renamed the arm64 check arch-host, and it judges host binaries only
 --explain arm64	--explain arch-host	P5 renamed the arm64 check arch-host, and it judges host binaries only
+clang22-cross	clang22	the native and cross products are one universal product under the native short name
+go126-cross	go126	the native and cross products are one universal product under the native short name
+go127-cross	go127	the native and cross products are one universal product under the native short name
+rust-cross	rust	the native and cross products are one universal product under the native short name
+swift-toolchain-cross	swift-toolchain	the native and cross products are one universal product under the native short name

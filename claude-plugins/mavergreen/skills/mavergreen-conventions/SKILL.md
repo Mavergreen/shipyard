@@ -225,8 +225,8 @@ script does not.
 ## The compiler: clang22 on every host
 
 **Products build with clang22 on every host, and nothing a build needs comes from the Command Line
-Tools.** `fetch_clang22.sh` gives the host's clang22: the pinned Linux archive on Linux, `clang22-cross`
-on a modern Mac, the native `clang22` on 10.9. Its `clang.cfg` is part of the compiler: it places
+Tools.** `fetch_clang22.sh` gives the host's clang22: the pinned Linux archive on Linux, `clang22`
+on a Mac. Its `clang.cfg` is part of the compiler: it places
 `librecaulk.a` at the tail of the inputs, before the driver's `-lSystem`, so a Recaulk fix to a 10.9
 function (posix_spawn; pselect in 20261107.1) reaches every product at its next build, with no
 per-product plumbing. clang22's `llvm-*` tools stand in for Xcode's: no `xcrun`, no Command Line Tools
@@ -727,9 +727,9 @@ fails the build if one reappears.
 
 **The shape.** A product whose line carries a version part is **lined**, and each line is a repo
 named `<product>-<line version>`: `Mavergreen/golang-126`, `Mavergreen/clang-22`,
-`Mavergreen/nodejs-24`. A variant-only line (rust-cross's `cross`) does not make a product lined, so
-it stays in the product's repo (`Mavergreen/rust`). One line's native and cross products share its
-repo (`golang-126` ships `go126` and `go126-cross`). The line repo serves its line from the root:
+`Mavergreen/nodejs-24`. A line with no version part does not make a product lined, so
+it stays in the product's repo (`Mavergreen/rust`). One line's products share its
+repo (`golang-126` ships `go126`). The line repo serves its line from the root:
 `.mavergreen/upstream/VERSION` and `patches/` live there, the line is *derived* from it, never a
 separate input, and Renovate caps the repo at the next line (`matchDepNames: ["go-126"]`,
 `allowedVersions: "<1.27"`). A lined product's pkg identifier is `dev.mavergreen.<short
@@ -766,7 +766,7 @@ a new line repo is warranted.
 
 **Starting a new line.**
 1. Fork the previous line's repo as `<product>-<line>` (`golang-127`).
-2. Write `.mavergreen/products/go127/noun` and `line` (`Go`, `1.27`), and the `-cross` product's. There is
+2. Write `.mavergreen/products/go127/noun` and `line` (`Go`, `1.27`). There is
    nothing to register; uniqueness of the short name across the family is the catalog's check.
 3. Set the Renovate cap to the next line.
 4. Set the bootstrap cap, where the product has one.
@@ -1549,7 +1549,7 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
 ## Sparkle updater
 
 - **An update of a large pkg can sit forever after it has installed** (Sparkle 1.27.3, measured
-  2026-10-18 updating clang22-cross on Golden Gate). The privileged helper runs
+  2026-10-18 updating clang22 on Golden Gate). The privileged helper runs
   `installer -verboseR`, whose output goes to an 8 KB socket nothing reads, so a long install's
   output fills it and installer blocks on its last write. Check the receipt
   (`pkgutil --pkg-info <identifier>`); if it shows the new version, quit the updater's Autoupdate
@@ -1589,10 +1589,10 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   `.mavergreen/ingredients/clang22/LINUX_SHA256`. `CL="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" .)"`
   prints the toolchain root for this host, fetched, verified and cached:
   - Linux: the pinned `linux-x86_64` archive.
-  - A Mac: the `clang22-cross` pkg, through stevedore.
-  - Mac OS X 10.9: the native `clang22` pkg, since the cross pkg does not run there and 10.9 has no
+  - A Mac: the `clang22` pkg, through stevedore.
+  - Mac OS X 10.9: the same pkg; 10.9 has no
     AArch64 backend, so x86_64 only.
-  - Either Mac: an installed `clang22-cross` (`clang22` on 10.9) at the pinned release.
+  - Either Mac: an installed `clang22` at the pinned release.
   An updater-only configure sets `MAVERICKS_REQUIRE_APPLECLANG OFF` before `include(Mavergreen)`. The
   AppleClang gate is per configure, not per target, and it stays for every other caller. Configure once
   per arch through `MavergreenToolchain.cmake` with:
@@ -2136,7 +2136,7 @@ repos. A short name is `[a-z0-9-]`, not starting with `-` (it becomes a path in 
 is not one the layout reserves (`var`, `bin`, `sbin`, `share`, `mavergreen`, `system-replace`, `base`);
 `lib/name-rules.sh` holds the rules, and `mavergreen_name`, `render-manifest.sh` and the helper refuse
 what breaks them, so a hand-made manifest cannot reach a reserved name. Many short names may share a repo
-(`golang-126` ships `go126` and `go126-cross`). A product's own repo comes from `mg_repo`, and a
+(`golang-126` ships `go126`). A product's own repo comes from `mg_repo`, and a
 dependency's from `ingredients/<dep>/REPO`.
 **A tree path can be a contract.** `ca-certs`' tree path
 `/opt/mavergreen/ca-certs/etc/openssl/certs/ca-certificates.crt` is a contract, which nothing
@@ -2148,7 +2148,7 @@ keychain deny vetoes a root found anywhere, not a search order. The family's rul
 is that every consumer reaches the keychain's verdict: a consumer that can read the keychain takes
 its verdict, and the bundle serves those that can't.
 **Adding a product means writing `.mavergreen/products/<short>/noun`** (and `line` for a lined product);
-`render-manifest.sh` refuses a product the repo does not declare. A variant packaged separately is a product of its own (`go126-cross`).
+`render-manifest.sh` refuses a product the repo does not declare.
 
 ### The manifest (`<product>/mavergreen.plist`)
 
@@ -2372,7 +2372,7 @@ is the fact), these checks, each excusable only by a scoped, reasoned deviation:
 | `base` | a pkg carrying a manifest lists `dev.mavergreen.base` as its first component | the pkg filename |
 | `updater` | a Sparkle updater (a top-level bundle with `SUFeedURL`) is `Library/Application Support/Mavergreen/<short>-updater.app` with bundle id `<pkg identifier>.updater`; a pkg with an updater installs the LaunchAgent `<pkg identifier>-updatecheck`; every launchd Label containing `updatecheck` is that one | the pkg filename |
 | `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `feed` is the product's derived feed, and empty for a product built on install; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
-| `line` | a product of a line repo (one whose repo ends in `-<number>`) declares a line; a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
+| `line` | a product of a line repo (one whose repo ends in `-<number>`) declares a line; a lined product's line is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | every product a release ships is one of this repo's `.mavergreen/products/` | the pkg filename |
 | `pkg-name` | the pkg is `<short>-<version without a leading v>.pkg` and its component `<short>.pkg` (System Replace: `<short>-system-replace-<version>.pkg`, `<short>-system-replace.pkg`) | the pkg filename |
 | `installer-title` | the Installer title is `Mavergreen <name>` (System Replace: `Mavergreen <name> System Replace`) | the pkg filename |

@@ -263,11 +263,12 @@ if [ -f "$REL" ] && [ -z "$_prods" ]; then
 fi
 
 if [ -z "$_prods" ]; then
-  for _id in product-complete requires-pinned requires-min; do
+  for _id in product-complete requires-pinned requires-min no-cross-products; do
     chk_notrun "$_id" "there is no product under .mavergreen/products/"
   done
 else
   chk_ran product-complete
+  chk_ran no-cross-products
   chk_ran requires-pinned
   chk_ran requires-min
 fi
@@ -279,6 +280,18 @@ for _s in $_prods; do
       "each product is a directory of one value per file" \
       "make $_at a directory holding at least its noun"
     continue
+  fi
+  case "$_s" in
+    *cross) chk_fail no-cross-products "$_s is a -cross product; a native/cross pair is one universal product under the native short name" \
+      "a consumer would choose between a native and a cross asset by name, and the universal product has one name for every architecture" \
+      "merge $_at into the native product and delete it" ;;
+  esac
+  if mg_has "$_d/line"; then
+    case "$(mg_value "$_d/line" 2>/dev/null)" in
+      *cross) chk_fail no-cross-products "$_s is a -cross product; a native/cross pair is one universal product under the native short name" \
+        "a consumer would choose between a native and a cross asset by name, and the universal product has one name for every architecture" \
+        "write the line as digits and dots, like 1.27 or 22" ;;
+    esac
   fi
   _rc=0; mavergreen_name_ok "$_s" || _rc=$?
   case "$_rc" in

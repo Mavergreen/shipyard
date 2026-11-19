@@ -6,7 +6,7 @@
 #                                            it says which variable to set and returns 1.
 #          SHIPYARD_MACHO_DIRS, when set, replaces the family directories searched after
 #          clang-22's own (a test seam: the tests set it empty to mean "nowhere"). The default is
-#          clang22/bin and clang22-cross/bin under ${MAVERGREEN_ROOT}/opt/mavergreen, then under
+#          clang22/bin under ${MAVERGREEN_ROOT}/opt/mavergreen, then clang22/bin and clang22-cross/bin under
 #          ${MAVERGREEN_ROOT}/usr/local/mavergreen. MAVERGREEN_ROOT is the volume, default /; the caller
 #          sources mavergreen-meta.sh and lib/name-rules.sh first, for mavergreen_prefix.
 #          NM alone also tries, before all of those, the llvm-nm beside the llvm-otool or llvm-lipo the
@@ -39,8 +39,8 @@ mach_tool() {
   _mt_clang="$(command -v clang-22 2>/dev/null || true)"
   type mavergreen_prefix >/dev/null 2>&1 || { echo "macho-tools: mavergreen_prefix is undefined (source mavergreen-meta.sh and lib/name-rules.sh first)" >&2; return 2; }
   _mt_vol="${MAVERGREEN_ROOT:-}"; _mt_vol="${_mt_vol%/}"
-  _mt_opt="$_mt_vol$(mavergreen_prefix clang22)"; _mt_optx="$_mt_vol$(mavergreen_prefix clang22-cross)"
-  for _mt_dir in "${_mt_clang%/*}" ${SHIPYARD_MACHO_DIRS-$_mt_opt/bin $_mt_optx/bin $_mt_vol/usr/local/mavergreen/clang22/bin $_mt_vol/usr/local/mavergreen/clang22-cross/bin}; do
+  _mt_opt="$_mt_vol$(mavergreen_prefix clang22)"
+  for _mt_dir in "${_mt_clang%/*}" ${SHIPYARD_MACHO_DIRS-$_mt_opt/bin $_mt_vol/usr/local/mavergreen/clang22/bin $_mt_vol/usr/local/mavergreen/clang22-cross/bin}; do
     [ -z "$_mt_found" ] || break
     [ -n "$_mt_dir" ] || continue
     if [ -x "$_mt_dir/llvm-$_mt" ]; then _mt_found="$_mt_dir/llvm-$_mt"; break; fi

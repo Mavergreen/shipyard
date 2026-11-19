@@ -140,3 +140,4 @@ arch-floors	dist	scripts/check-artifact-conformance.sh	new (P5: architectures A3
 arch-host	dist	scripts/check-artifact-conformance.sh	conformance arm64	P5
 arch-target	dist	scripts/check-artifact-conformance.sh	new (P5: architectures A1)	P5
 arch-union	build	scripts/lipo-merge-tree.sh	new (P5: architectures A5)	P5
+no-cross-products	checkout	scripts/check-metadata.sh	new (P5: architectures A5)	P5

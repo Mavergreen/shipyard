@@ -490,7 +490,7 @@ EOF
     done < "$tmp/uc-$pk"
   fi
   ml="$(awk -v p="$pk" '$1 == "manifest-line" && $2 == p { print $3; exit }' "$facts")"
-  case "$ml" in ''|none|cross) lv="" ;; *-cross) lv="${ml%-cross}" ;; *) lv="$ml" ;; esac
+  case "$ml" in ''|none) lv="" ;; *) lv="$ml" ;; esac
   if [ -n "$(nm "$P" item-title)" ]; then
     pl="$(line_of "$P")"
     [ "$lv" = "$pl" ] \

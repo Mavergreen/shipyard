@@ -41,8 +41,8 @@ for v in OTOOL LIPO STRINGS; do
 done
 
 # spec: scripts/lib/macho-tools.sh -- NM resolves as the retired separate nm reader did: an explicit NM, else the
-#       llvm-nm beside the llvm-otool or llvm-lipo the caller chose, else an installed clang22's or
-#       clang22-cross's (under MAVERGREEN_ROOT, in opt/mavergreen, else usr/local/mavergreen), else a bare nm.
+#       llvm-nm beside the llvm-otool or llvm-lipo the caller chose, else an installed clang22's
+#       (under MAVERGREEN_ROOT, in opt/mavergreen, else usr/local/mavergreen), else a bare nm.
 nm_resolve() {  # $1 = env assignments, run with OTOOL LIPO NM unset and nothing on PATH but stubs
   env -u OTOOL -u LIPO -u NM -u STRINGS PATH="$w/apple" SHIPYARD_MACHO_DIRS="" "$@" /bin/sh -c "$PRE; mach_tool NM && printf '%s\n' \"\$NM\""
 }
@@ -57,9 +57,6 @@ got="$(nm_resolve LIPO="$w/llvm/bin/llvm-lipo" MAVERGREEN_ROOT="$w/empty")"
 mk "$w/mg/opt/mavergreen/clang22/bin" llvm-nm
 got="$(env -u OTOOL -u LIPO -u NM PATH="$w/apple" MAVERGREEN_ROOT="$w/mg" /bin/sh -c "$PRE; mach_tool NM && printf '%s\n' \"\$NM\"")"
 [ "$got" = "$w/mg/opt/mavergreen/clang22/bin/llvm-nm" ] || { echo "FAIL NM unset, no llvm readers chosen: an installed clang22's llvm-nm: got $got"; exit 1; }
-mk "$w/mgx/opt/mavergreen/clang22-cross/bin" llvm-nm
-got="$(env -u OTOOL -u LIPO -u NM PATH="$w/apple" MAVERGREEN_ROOT="$w/mgx" /bin/sh -c "$PRE; mach_tool NM && printf '%s\n' \"\$NM\"")"
-[ "$got" = "$w/mgx/opt/mavergreen/clang22-cross/bin/llvm-nm" ] || { echo "FAIL NM unset: an installed clang22-cross's llvm-nm: got $got"; exit 1; }
 got="$(nm_resolve MAVERGREEN_ROOT="$w/empty")"
 [ "$got" = "$w/apple/nm" ] || { echo "FAIL last resort for NM: a bare nm on PATH: got $got"; exit 1; }
 mk "$w/legacy/usr/local/mavergreen/clang22/bin" llvm-nm

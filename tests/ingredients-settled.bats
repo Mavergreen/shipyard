@@ -391,7 +391,7 @@ clang_caught_up() {
 }
 
 @test "a sibling product's pin counts as a pin of X" {
-  ypin rust 1.92.0-mavergreen.1 clang22-cross clang-22 22.1.0-mavergreen.3
+  ypin rust 1.92.0-mavergreen.1 foo-bar clang-22 22.1.0-mavergreen.3
   bump clang22 22.1.0-mavergreen.4
   head_commit
   settled $((RECAULK_PUB + 3600))

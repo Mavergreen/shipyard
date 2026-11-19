@@ -520,7 +520,7 @@ build-info build-info-native.txt arch x86_64
 build-info build-info-native.txt prefix /usr/local/go126
 build-info build-info-cross.txt variant cross
 build-info build-info-cross.txt arch arm64
-build-info build-info-cross.txt prefix /usr/local/go126-cross
+build-info build-info-cross.txt prefix /usr/local/go126-arm64
 pkg n.pkg 1.26.5-mavergreen.5 10.9.5 dev.mavergreen.golang.go126
 asset n.pkg 10'
 
@@ -1455,18 +1455,18 @@ manifest go126.pkg go126 dev.mavergreen.go126 go126
 product go126
 manifest-line go126.pkg 1.26
 installs go126.pkg opt/mavergreen/go126/mavergreen.plist
-pkg go126-cross.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go126-cross
-asset go126-cross.pkg 10
-component go126-cross.pkg dev.mavergreen.base
-component go126-cross.pkg dev.mavergreen.go126-cross
-manifest go126-cross.pkg go126-cross dev.mavergreen.go126-cross go126-cross
-product go126-cross
-manifest-line go126-cross.pkg 1.26-cross
-installs go126-cross.pkg opt/mavergreen/go126-cross/mavergreen.plist
+pkg go127.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go127
+asset go127.pkg 10
+component go127.pkg dev.mavergreen.base
+component go127.pkg dev.mavergreen.go127
+manifest go127.pkg go127 dev.mavergreen.go127 go127
+product go127
+manifest-line go127.pkg 1.26
+installs go127.pkg opt/mavergreen/go127/mavergreen.plist
 asset go126.xml 700
-appcast go126.xml 1.26.8-mavergreen.7 go126-cross.pkg 10 10.9.5
-asset go126-cross.xml 700
-appcast go126-cross.xml 1.26.8-mavergreen.7 go126.pkg 10 10.9.5'
+appcast go126.xml 1.26.8-mavergreen.7 go127.pkg 10 10.9.5
+asset go127.xml 700
+appcast go127.xml 1.26.8-mavergreen.7 go126.pkg 10 10.9.5'
 alone "feed: two updaters' feeds swap enclosures -- each is named for the pkg it actually describes" "feed" "$SWAP"
 
 GO='expected 1.26.8-mavergreen.7
@@ -1482,7 +1482,7 @@ G126='repository Mavergreen/golang-126'
 ok "line: go126 is Go 1.26, built in golang-126" "$GO
 $G126
 manifest-line go.pkg 1.26"
-ok "line: the cross variant's line is the version plus -cross" "$GO
+alone "line: a -cross line is judged like any other, and the version does not carry it" "line" "$GO
 $G126
 manifest-line go.pkg 1.26-cross"
 alone "line: a line the version does not carry" "line" "$GO
@@ -1517,9 +1517,6 @@ product clang22
 repository Mavergreen/clang-22
 installs c.pkg opt/mavergreen/clang22/mavergreen.plist
 manifest-line c.pkg 22'
-ok "line: a variant-only line carries no version, so the product is not lined" "$REL
-$LAYOUT
-manifest-line p.pkg cross"
 ok "repository: every product the release ships is one of this repo's, with no repository fact" "$GO
 manifest-line go.pkg 1.26"
 alone "repository: a product this repo does not declare" "repository" "$(printf '%s\n' "$GO" | grep -v '^product ')

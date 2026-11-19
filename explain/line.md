@@ -2,7 +2,7 @@ line: a lined product's manifest, version and repo agree about the line.
 
 ## Why
 A lined product's line lives in .mavergreen/products/<short>/line, dotted as upstream spells it (1.27, 22),
-and the manifest's line is a copy of it, minus any -cross until variants are settled. The version is the
+and the manifest's line is a copy of it. The version is the
 line or starts with the line and a dot: 1.26.8 is line 1.26, 22.1.1 is line 22. A line repo's numeric
 suffix is the line with its dots removed (golang-126, clang-22), and a product of a line repo must declare
 its line. Without this agreement two lines could share a bare-name selection or an updater, and a line
