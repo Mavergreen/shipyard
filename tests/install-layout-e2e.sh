@@ -19,28 +19,11 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 S="$root/scripts"
 PKG="$(cd "$(dirname "$MAVERGREEN_E2E_PKG")" && pwd -P)/$(basename "$MAVERGREEN_E2E_PKG")"
 W="$(mktemp -d "${TMPDIR:-/tmp}/install-layout-e2e.XXXXXX")"
-DEVS=""
-host_state() {
-  for _p in $(pkgutil --pkgs 2>/dev/null | grep '^dev\.mavergreen\.' | sort); do
-    printf 'receipt %s %s\n' "$_p" "$(pkgutil --pkg-info "$_p" 2>/dev/null | grep -E '^(version|install-time):' | tr '\n' ' ')"
-  done
-  for _f in /opt/mavergreen /usr/local/mavergreen /usr/local/bin/mavergreen /etc/paths.d/mavergreen /etc/paths.d/mavergreen-opt /etc/manpaths.d/mavergreen /etc/manpaths.d/mavergreen-opt /Applications/Mavergreen /Library/LaunchAgents/dev.mavergreen.*; do
-    if [ -e "$_f" ] || [ -L "$_f" ]; then ls -ldT "$_f"; else echo "absent $_f"; fi
-  done
-}
+. "$root/tests/lib/e2e-volume.sh"
 HOST_BEFORE="$(host_state)"; HOST_REPORTED=""
-host_changed() {
-  _now="$(host_state)"
-  [ "$_now" != "$HOST_BEFORE" ] || return 1
-  [ -n "$HOST_REPORTED" ] && return 0
-  HOST_REPORTED=1
-  echo "FAIL THE RUNNING SYSTEM CHANGED: its Mavergreen receipts or paths differ from before the run"
-  echo "  before:"; printf '%s\n' "$HOST_BEFORE" | sed 's/^/    /'
-  echo "  after:"; printf '%s\n' "$_now" | sed 's/^/    /'
-}
 cleanup() {
   _rc=$?
-  for d in $DEVS; do hdiutil detach -quiet "$d" 2>/dev/null || hdiutil detach -quiet -force "$d" 2>/dev/null || true; done
+  e2e_detach_all
   if host_changed; then _rc=1; fi
   rm -rf "$W"
   exit "$_rc"
@@ -53,11 +36,6 @@ trap 'exit 143' TERM
 : "${MAVERGREEN_PKG_CACHE:=$W/pkg-cache}"; export MAVERGREEN_PKG_CACHE
 [ -n "${STEVEDORE:-}" ] || { : "${STEVEDORE_CACHE:=$W/stevedore-cache}"; export STEVEDORE_CACHE; }
 STEVEDORE="$(sh "$S/fetch_stevedore.sh")"; export STEVEDORE
-
-case "$(sw_vers -productVersion)" in
-  10.[0-9]|10.[0-9].*|10.1[0-2]|10.1[0-2].*) FS=HFS+ ;;
-  *) FS=APFS ;;
-esac
 
 BL="$W/build.log"; : > "$BL"
 die() { echo "install-layout-e2e: $*" >&2; tail -n 40 "$BL" | sed 's/^/    | /' >&2; exit 1; }
@@ -90,7 +68,7 @@ checkout_head() {
     *) printf '%s\n' "$_h" ;;
   esac
 }
-echo "install-layout-e2e: $PKG (shipyard $V0, upgrade to $V1), $FS images, cmake seed $MIN on macOS $(sw_vers -productVersion) $(uname -m)"
+echo "install-layout-e2e: $PKG (shipyard $V0, upgrade to $V1), cmake seed $MIN on macOS $(sw_vers -productVersion) $(uname -m)"
 echo "install-layout-e2e: the upgrade, seed and toy pkgs, and their dev.mavergreen.base, are built from this checkout ($root, HEAD $(checkout_head))"
 
 fixture_repo() {
@@ -158,40 +136,10 @@ sh "$S/assert_pkg_installs_in_place.sh" "$PKG" "$UPGRADE" "$SEED" "$TOY" >> "$BL
 n=0; VOL=""
 fresh_volume() {
   n=$((n + 1))
-  _name="MGE2E$$-$n"
-  hdiutil create -quiet -size 600m -fs "$FS" -volname "$_name" "$W/$_name.dmg" || return 1
-  _out="$(hdiutil attach -nobrowse -owners on "$W/$_name.dmg")" || return 1
-  _dev="$(printf '%s\n' "$_out" | sed -n '1s/[[:space:]].*//p')"
-  VOL="$(printf '%s\n' "$_out" | sed -n 's|.*[[:space:]]\(/Volumes/[^[:space:]]*\)[[:space:]]*$|\1|p' | sed -n '$p')"
-  case "$_dev" in
-    /dev/disk[0-9]*) DEVS="$_dev $DEVS" ;;
-    *) echo "attach named no /dev/diskN: $_out"; return 1 ;;
-  esac
-  [ "$VOL" = "/Volumes/$_name" ] || { echo "attach did not mount /Volumes/$_name: $_out"; return 1; }
-  _info="$(diskutil info "$VOL")" || return 1
-  _d="${_dev#/dev/}"
-  _whole="$(printf '%s\n' "$_info" | sed -n 's/^ *Part of Whole: *//p')"
-  _store="$(printf '%s\n' "$_info" | sed -n 's/^ *APFS Physical Store: *//p')"
-  case "$_whole" in "$_d") ;; *)
-    case "$_store" in "${_d}s"[0-9]*) ;; *) echo "$VOL is on $_whole (store '$_store'), not the image's $_dev"; return 1 ;; esac ;;
-  esac
-  if ! printf '%s\n' "$_info" | grep -q 'Owners:.*Enabled'; then
-    diskutil enableOwnership "$VOL" >/dev/null || return 1
-    diskutil info "$VOL" | grep -q 'Owners:.*Enabled' || { echo "ownership is still off on $VOL"; return 1; }
-  fi
-  mkdir "$VOL/.e2e-owner-probe" && chown 1:1 "$VOL/.e2e-owner-probe" || return 1
-  [ "$(stat -f %u:%g "$VOL/.e2e-owner-probe")" = 1:1 ] \
-    || { echo "$VOL does not honor ownership: a chown 1:1 reads back $(stat -f %u:%g "$VOL/.e2e-owner-probe")"; return 1; }
-  rmdir "$VOL/.e2e-owner-probe"
-  chown root:wheel "$VOL" && chmod 755 "$VOL" || return 1
-  [ "$(stat -f '%u:%g %Lp' "$VOL")" = "0:0 755" ] || { echo "$VOL is $(stat -f '%u:%g %Lp' "$VOL"), not 0:0 755: ownership is not honored"; return 1; }
-  mkdir -p "$VOL/System/Library/CoreServices"
-  cp /System/Library/CoreServices/SystemVersion.plist "$VOL/System/Library/CoreServices/"
+  VOL="$(e2e_volume "$n")"
 }
 drop_volume() {
-  hdiutil detach -quiet "$_dev" 2>/dev/null || hdiutil detach -quiet -force "$_dev"
-  DEVS="$(printf '%s\n' "$DEVS" | sed "s|$_dev ||")"
-  rm -f "$W/$_name.dmg"
+  e2e_volume_detach "$VOL"
 }
 install_to() {
   _log="$W/install-$n-$(basename "$1").log"
