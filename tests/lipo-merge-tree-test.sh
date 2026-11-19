@@ -150,12 +150,16 @@ mkdir -p "$w/nr"
 printf '#!/bin/sh\nexit 1\n' > "$w/nr/xcrun"
 printf '#!/bin/sh\ntouch "%s"\nexit 0\n' "$w/ran" > "$w/nr/lipo"
 chmod +x "$w/nr/xcrun" "$w/nr/lipo"
-env -u LIPO SHIPYARD_MACHO_DIRS= PATH="$w/nr:/usr/bin:/bin" sh "$S" --a "$w/uk" --b "$w/ul" --out "$w/uo8" >/dev/null 2>"$uerr" \
+for t in sh env mktemp find sed sort comm cat cp rm od tr cmp grep dirname mkdir ln readlink touch cut head wc ls awk; do
+  tp="$(command -v "$t")" || { echo "FAIL: the test needs $t"; exit 1; }
+  ln -s "$tp" "$w/nr/$t"
+done
+env -u LIPO SHIPYARD_MACHO_DIRS= PATH="$w/nr" sh "$S" --a "$w/uk" --b "$w/ul" --out "$w/uo8" >/dev/null 2>"$uerr" \
   || { echo "FAIL: trees with no Mach-O must merge with no reader: $(cat "$uerr")"; exit 1; }
 mkdir -p "$w/ux/bin" "$w/uy/bin"
 printf '\317\372\355\376one' > "$w/ux/bin/m"; printf '\317\372\355\376two' > "$w/uy/bin/m"
 set +e
-env -u LIPO SHIPYARD_MACHO_DIRS= PATH="$w/nr:/usr/bin:/bin" sh "$S" --a "$w/ux" --b "$w/uy" --out "$w/uo10" >/dev/null 2>"$uerr"
+env -u LIPO SHIPYARD_MACHO_DIRS= PATH="$w/nr" sh "$S" --a "$w/ux" --b "$w/uy" --out "$w/uo10" >/dev/null 2>"$uerr"
 rc=$?
 set -e
 [ "$rc" -eq 4 ] && grep -q 'LIPO' "$uerr" || { echo "FAIL: Mach-O with no reader must exit 4 naming LIPO (rc=$rc): $(cat "$uerr")"; exit 1; }
