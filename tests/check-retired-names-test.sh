@@ -20,7 +20,7 @@ grep -q '^retired-name: scripts/x.sh uses deviations/arm64, a retired family nam
   || fail "the failure names the file and the retired form: $(cat "$w/out")"
 grep -q '^  fix: write deviations/arch-host$' "$w/out" || fail "the fix names deviations/arch-host: $(cat "$w/out")"
 
-tok="MAVERGREEN_MIN""_OS"
+tok=MAVERGREEN_MIN_OS
 run minos "MIN=\$$tok" && fail "$tok is retired: $(cat "$w/out")"
 grep -q "^retired-name: scripts/x.sh uses $tok, a retired family name" "$w/out" || fail "the failure names $tok: $(cat "$w/out")"
 grep -q '^  fix: write .mavergreen/products/<short>/floor (mavergreen_floor)$' "$w/out" || fail "the fix names the floor file: $(cat "$w/out")"

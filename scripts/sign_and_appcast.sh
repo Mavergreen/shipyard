@@ -17,7 +17,8 @@
 #            --pkg       the .pkg to sign
 #            --pkg-url   the URL the enclosure will point at (the release-asset download URL)
 #            --pubkey, --allow-key-change   passed to assert_update_trusted.sh
-#            others      passed through to gen_appcast.shn#          sparkle:minimumSystemVersion is `mavergreen_floor P` (.mavergreen/products/P/floor); --min-os is refused.
+#            others      passed through to gen_appcast.sh
+#          sparkle:minimumSystemVersion is `mavergreen_floor P` (.mavergreen/products/P/floor); --min-os is refused.
 #          After signing, assert_update_trusted.sh proves the clients ALREADY INSTALLED will accept
 #          the signature -- against the key in the live release's updater, not the repo's .pub -- and
 #          no appcast is emitted if they would not.
