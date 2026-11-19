@@ -60,7 +60,7 @@ if [ "$OS" = Linux ]; then
   tar -xzf "$file" -C "$tmp" "$member" || { echo "fetch_stevedore: could not unpack $member from $asset" >&2; exit 1; }
   src="$tmp/$member"
 else
-  member=usr/local/mavergreen/stevedore/bin/stevedore
+  member=opt/mavergreen/stevedore/bin/stevedore
   asset="stevedore-$V.pkg"
   file="$(sh "$SELF/fetch-release-pkg.sh" stevedore "$V" "$asset" "$tmp/dl")" || exit 1
   # platform: guarded macOS-only call -- this branch runs only when OS is Darwin
@@ -71,6 +71,7 @@ else
     ( cd "$tmp/payload" && gzip -dc "$payload" | cpio -id --quiet 2>/dev/null ) || :
   done
   src="$tmp/payload/$member"
+  [ -f "$src" ] || src="$tmp/payload/usr/local/mavergreen/stevedore/bin/stevedore"
 fi
 [ -f "$src" ] || { echo "fetch_stevedore: $asset installs no $member" >&2; exit 1; }
 cp "$src" "$tmp/stevedore" && chmod +x "$tmp/stevedore"

@@ -28,3 +28,14 @@ fake_stevedore() {
   [ "$output" = "$WORK/cache/$PIN/stevedore" ]
   [ "$("$output" --version)" = "stevedore $PIN" ]
 }
+
+@test "Darwin finds stevedore in a release pkg that installs under /opt/mavergreen" {
+  mkdir -p "$WORK/root/opt/mavergreen/stevedore/bin"
+  fake_stevedore "$WORK/root/opt/mavergreen/stevedore/bin/stevedore" "$PIN"
+  pkgbuild --quiet --root "$WORK/root" --identifier dev.mavergreen.stevedore --version 1 "$REL/stevedore-$PIN.pkg"
+  ( cd "$REL" && shasum -a 256 "stevedore-$PIN.pkg" > SHA256SUMS )
+  export STEVEDORE_HOST=Darwin
+  output="$(sh "$FETCH" 2>/dev/null)"
+  [ "$output" = "$WORK/cache/$PIN/stevedore" ]
+  [ "$("$output" --version)" = "stevedore $PIN" ]
+}
