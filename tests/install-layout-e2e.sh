@@ -24,7 +24,7 @@ host_state() {
   for _p in $(pkgutil --pkgs 2>/dev/null | grep '^dev\.mavergreen\.' | sort); do
     printf 'receipt %s %s\n' "$_p" "$(pkgutil --pkg-info "$_p" 2>/dev/null | grep -E '^(version|install-time):' | tr '\n' ' ')"
   done
-  for _f in /opt/mavergreen /etc/paths.d/mavergreen /Applications/Mavergreen /Library/LaunchAgents/dev.mavergreen.*; do
+  for _f in /opt/mavergreen /usr/local/mavergreen /usr/local/bin/mavergreen /etc/paths.d/mavergreen /Applications/Mavergreen /Library/LaunchAgents/dev.mavergreen.*; do
     if [ -e "$_f" ] || [ -L "$_f" ]; then ls -ldT "$_f"; else echo "absent $_f"; fi
   done
 }
@@ -160,7 +160,7 @@ fresh_volume() {
   VOL="$(printf '%s\n' "$_out" | sed -n 's|.*[[:space:]]\(/Volumes/[^[:space:]]*\)[[:space:]]*$|\1|p' | sed -n '$p')"
   case "$_dev" in
     /dev/disk[0-9]*) DEVS="$_dev $DEVS" ;;
-    *) echo "attach named no /dev/diskN: $_out"; hdiutil detach -quiet "/Volumes/$_name" 2>/dev/null || :; return 1 ;;
+    *) echo "attach named no /dev/diskN: $_out"; return 1 ;;
   esac
   [ "$VOL" = "/Volumes/$_name" ] || { echo "attach did not mount /Volumes/$_name: $_out"; return 1; }
   _info="$(diskutil info "$VOL")" || return 1
@@ -206,6 +206,7 @@ seed_and_install() {
 scenario_fresh() {
   [ ! -e "$VOL/opt" ] && [ ! -L "$VOL/opt" ] || bad "a fresh volume already has opt" || return 1
   ! install_to "$PKG" || bad "shipyard $V0 installed with no cmake on the volume" || return 1
+  ! grep -qF "/opt/mavergreen: missing" "$_log" || bad "shipyard's preinstall ran before base's" || return 1
   grep -qF "needs cmake installed first" "$_log" || bad "the install log does not name the missing cmake" || return 1
   [ ! -e "$VOL/opt/mavergreen/shipyard" ] || bad "opt/mavergreen/shipyard was installed without cmake" || return 1
   mode_is "$VOL/opt" "root:wheel 755" || return 1

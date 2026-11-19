@@ -1,0 +1,1 @@
+the e2e host guard watches where pinned pre-flag-day releases still install, to prove the run never writes there
