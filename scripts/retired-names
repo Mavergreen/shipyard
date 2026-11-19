@@ -85,3 +85,4 @@ MAVERGREEN_DRYDOCK_INSTALLED	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	
 SHIPYARD_OPT_PREFIX	MAVERGREEN_ROOT (the volume) and mavergreen_prefix	where products are installed is MAVERGREEN_ROOT, the one override, and mavergreen_prefix names the path under it
 /usr/local/mavergreen	/opt/mavergreen (mavergreen_prefix)	every product installs under /opt/mavergreen, a root-only chain, and mavergreen_prefix names the path
 /usr/local/bin/mavergreen	/opt/mavergreen/bin/mavergreen	the helper lives in the product root, never in admin-writable /usr/local/bin
+mavergreen-opt	/etc/paths.d/mavergreen and /etc/manpaths.d/mavergreen	while pinned pre-flag-day releases still carry the old base, which owns /etc/paths.d/mavergreen, the /opt base writes its own path entries; L1 gives the spec's name back

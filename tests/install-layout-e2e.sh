@@ -24,7 +24,7 @@ host_state() {
   for _p in $(pkgutil --pkgs 2>/dev/null | grep '^dev\.mavergreen\.' | sort); do
     printf 'receipt %s %s\n' "$_p" "$(pkgutil --pkg-info "$_p" 2>/dev/null | grep -E '^(version|install-time):' | tr '\n' ' ')"
   done
-  for _f in /opt/mavergreen /usr/local/mavergreen /usr/local/bin/mavergreen /etc/paths.d/mavergreen /Applications/Mavergreen /Library/LaunchAgents/dev.mavergreen.*; do
+  for _f in /opt/mavergreen /usr/local/mavergreen /usr/local/bin/mavergreen /etc/paths.d/mavergreen /etc/paths.d/mavergreen-opt /etc/manpaths.d/mavergreen /etc/manpaths.d/mavergreen-opt /Applications/Mavergreen /Library/LaunchAgents/dev.mavergreen.*; do
     if [ -e "$_f" ] || [ -L "$_f" ]; then ls -ldT "$_f"; else echo "absent $_f"; fi
   done
 }
@@ -219,8 +219,12 @@ scenario_fresh() {
   [ -f "$VOL/opt/mavergreen/mavergreen/bin/mavergreen" ] && [ ! -L "$VOL/opt/mavergreen/mavergreen/bin/mavergreen" ] \
     || bad "opt/mavergreen/bin/mavergreen does not resolve to a file in opt/mavergreen/mavergreen/" || return 1
   [ "$(mg version)" = "$V0" ] || bad "the helper is version '$(mg version)', not the pkg's $V0" || return 1
-  grep -qx /opt/mavergreen/bin "$VOL/etc/paths.d/mavergreen" \
-    || bad "etc/paths.d/mavergreen does not name /opt/mavergreen/bin: $(cat "$VOL/etc/paths.d/mavergreen" 2>&1)" || return 1
+  grep -qx /opt/mavergreen/bin "$VOL/etc/paths.d/mavergreen-opt" \
+    || bad "etc/paths.d/mavergreen-opt does not name /opt/mavergreen/bin: $(cat "$VOL/etc/paths.d/mavergreen-opt" 2>&1)" || return 1
+  grep -qx /opt/mavergreen/share/man "$VOL/etc/manpaths.d/mavergreen-opt" \
+    || bad "etc/manpaths.d/mavergreen-opt does not name /opt/mavergreen/share/man: $(cat "$VOL/etc/manpaths.d/mavergreen-opt" 2>&1)" || return 1
+  [ ! -e "$VOL/etc/paths.d/mavergreen" ] && [ ! -e "$VOL/etc/manpaths.d/mavergreen" ] \
+    || bad "the /opt base wrote the old layout's paths.d or manpaths.d entry" || return 1
   mg list | grep -qx "shipyard shipyard - $V0 selected" || bad "list has no shipyard line: $(mg list 2>&1)" || return 1
   _c="$(mg check 2>&1)" && [ -z "$_c" ] || bad "check is not silent with exit 0: $_c" || return 1
   sh "$S/assert-installed-shipyard.sh" --cmake-version "$CMAKE_WANT" --root "$VOL" || bad "assert-installed-shipyard.sh failed" || return 1

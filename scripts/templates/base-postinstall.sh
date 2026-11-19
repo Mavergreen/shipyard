@@ -16,6 +16,9 @@ put() {
   rm -f "$2.new" && cp "$1" "$2.new" && chmod "$3" "$2.new" && own "$2.new" && mv -f "$2.new" "$2"
 }
 mavergreen_chain_ok "$3/opt/mavergreen" "$3" || exit 1
+[ -f "$S/paths" ] && [ -f "$S/manpaths" ] || { echo "mavergreen-base: no staged path entries at $S" >&2; exit 1; }
+mkdir -p "$R/etc/paths.d" "$R/etc/manpaths.d" && put "$S/paths" "$R/etc/paths.d/mavergreen-opt" 644 \
+  && put "$S/manpaths" "$R/etc/manpaths.d/mavergreen-opt" 644 || exit 1
 cur="$(cat "$B/installed-version" 2>/dev/null || true)"
 case "$cur" in ''|*[!0-9.]*|.*|*.|*..*) cur="" ;; esac
 if [ ! -x "$H/bin/mavergreen" ] || [ ! -x "$H/libexec/mavergreen-vercmp" ] || [ -z "$cur" ] \
@@ -28,8 +31,6 @@ if [ ! -x "$H/bin/mavergreen" ] || [ ! -x "$H/libexec/mavergreen-vercmp" ] || [ 
     && own "$M/bin/mavergreen.new" && mv -f "$M/bin/mavergreen.new" "$M/bin/mavergreen" || exit 1
   mavergreen_chain_ok "$3/opt/mavergreen/bin/mavergreen" "$3" \
     && mavergreen_chain_ok "$3/opt/mavergreen/mavergreen/libexec/mavergreen-vercmp" "$3" || exit 1
-  mkdir -p "$R/etc/paths.d" "$R/etc/manpaths.d" && put "$S/paths" "$R/etc/paths.d/mavergreen" 644 \
-    && put "$S/manpaths" "$R/etc/manpaths.d/mavergreen" 644 || exit 1
   printf '%s\n' "$V" > "$B/installed-version" || exit 1
 fi
 rm -rf "$S"

@@ -7,7 +7,8 @@
 #                                  | --emit-helper FILE | --emit-vercmp FILE  [--version V]
 #          Builds dev.mavergreen.base: the mavergreen helper, mavergreen-vercmp and the paths.d/manpaths.d
 #          entries, staged under /opt/mavergreen/.base/<V>/. Its preinstall creates /opt and /opt/mavergreen
-#          and checks their root chain; its postinstall installs them only over a missing or older helper.
+#          and checks their root chain; its postinstall writes the path entries on every install and the
+#          helper only over a missing or older one.
 #          Every product archive carries it first (set_install_floor.sh). Each --emit-* writes one
 #          stamped script: its version filled in and each `. "$SELF/lib/X.sh"` line replaced by that file.
 # spec: tests/base-component-test.sh

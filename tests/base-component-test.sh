@@ -92,6 +92,10 @@ install_base() {  # $1 version: what Installer does -- the preinstall, the paylo
   sh "$w/x-$1/Scripts/postinstall" /fake.pkg "$V/" "$V/"
 }
 H="$V/opt/mavergreen/mavergreen"
+mkdir -p "$V/etc/paths.d" "$V/etc/manpaths.d"
+printf '/old-layout/bin\n/old-layout/sbin\n' > "$V/etc/paths.d/mavergreen"
+printf '/old-layout/share/man\n' > "$V/etc/manpaths.d/mavergreen"
+cp "$V/etc/paths.d/mavergreen" "$w/old-paths"; cp "$V/etc/manpaths.d/mavergreen" "$w/old-manpaths"
 install_base 1.0.9 || fail "the 1.0.9 postinstall passes"
 [ "$(sh "$V/opt/mavergreen/bin/mavergreen" version)" = 1.0.9 ] || fail "a first install puts the helper on the farm's bin"
 [ "$(readlink "$V/opt/mavergreen/bin/mavergreen")" = ../mavergreen/bin/mavergreen ] || fail "bin/mavergreen links to ../mavergreen/bin/mavergreen: $(readlink "$V/opt/mavergreen/bin/mavergreen")"
@@ -105,8 +109,11 @@ done
 rc=0; sh "$H/libexec/mavergreen-vercmp" 1.0.9 1.0.10 || rc=$?
 [ "$rc" -eq 0 ] || fail "the installed mavergreen-vercmp runs alone: got $rc"
 printf '/opt/mavergreen/bin\n/opt/mavergreen/sbin\n' > "$w/paths"
-cmp -s "$V/etc/paths.d/mavergreen" "$w/paths" || fail "paths.d names both farm bin dirs, one per line: $(cat "$V/etc/paths.d/mavergreen")"
-[ "$(cat "$V/etc/manpaths.d/mavergreen")" = /opt/mavergreen/share/man ] || fail "manpaths.d names the farm's man dir"
+cmp -s "$V/etc/paths.d/mavergreen-opt" "$w/paths" || fail "paths.d/mavergreen-opt names both farm bin dirs, one per line: $(cat "$V/etc/paths.d/mavergreen-opt")"
+[ "$(cat "$V/etc/manpaths.d/mavergreen-opt")" = /opt/mavergreen/share/man ] || fail "manpaths.d/mavergreen-opt names the farm's man dir"
+[ "$(mode "$V/etc/paths.d/mavergreen-opt")" = -rw-r--r-- ] || fail "paths.d/mavergreen-opt is 644: $(mode "$V/etc/paths.d/mavergreen-opt")"
+cmp -s "$V/etc/paths.d/mavergreen" "$w/old-paths" && cmp -s "$V/etc/manpaths.d/mavergreen" "$w/old-manpaths" \
+  || fail "the old layout's paths.d/mavergreen and manpaths.d/mavergreen belong to its own base, untouched"
 [ "$(cat "$V/opt/mavergreen/.base/installed-version")" = 1.0.9 ] || fail "installed-version records 1.0.9"
 [ ! -e "$V/opt/mavergreen/.base/1.0.9" ] || fail "the staged copy is cleared"
 [ ! -e "$V/usr" ] || fail "nothing installs under usr/"
@@ -114,6 +121,13 @@ install_base 1.0.10 || fail "the 1.0.10 postinstall passes"
 [ "$(sh "$V/opt/mavergreen/bin/mavergreen" version)" = 1.0.10 ] || fail "1.0.10 is newer than 1.0.9 -- the comparison is numeric, not lexical"
 install_base 1.0.9 || fail "an older postinstall still passes"
 [ "$(sh "$V/opt/mavergreen/bin/mavergreen" version)" = 1.0.10 ] || fail "an older product installer must never downgrade the helper"
+printf '/old-layout/bin\n' > "$V/etc/paths.d/mavergreen-opt"; : > "$V/etc/manpaths.d/mavergreen-opt"
+install_base 1.0.9 || fail "an older postinstall passes over damaged path entries"
+cmp -s "$V/etc/paths.d/mavergreen-opt" "$w/paths" && [ "$(cat "$V/etc/manpaths.d/mavergreen-opt")" = /opt/mavergreen/share/man ] \
+  || fail "every base install rewrites its path entries, even one whose helper loses: $(cat "$V/etc/paths.d/mavergreen-opt")"
+[ "$(sh "$V/opt/mavergreen/bin/mavergreen" version)" = 1.0.10 ] || fail "rewriting the path entries never downgrades the helper"
+[ ! -e "$V/etc/paths.d/mavergreen-opt.new" ] || fail "the rewrite leaves no .new behind"
+cmp -s "$V/etc/paths.d/mavergreen" "$w/old-paths" || fail "a losing base leaves the old layout's paths.d/mavergreen untouched"
 [ ! -e "$V/opt/mavergreen/.base/1.0.9" ] || fail "a skipped older base still clears its staged copy"
 printf 'garbage\n' > "$V/opt/mavergreen/.base/installed-version"
 out="$(install_base 1.0.9 2>&1)" || fail "an older base installs over a malformed installed-version: $out"
@@ -137,11 +151,16 @@ chmod 755 "$V/opt/mavergreen"
 rc=0; sh "$w/x-1.0.10/Scripts/postinstall" /fake.pkg >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 1 ] || fail "with no target volume the postinstall exits 1 rather than assume /: got $rc"
 
-V="$w/etcdir"; mkdir -p "$V/etc/paths.d/mavergreen"
+V="$w/etcdir"; mkdir -p "$V/etc/paths.d/mavergreen-opt"
 rc=0; install_base 1.0.9 2>"$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "a paths.d entry it cannot write makes the postinstall exit 1: got $rc"
 [ ! -e "$V/opt/mavergreen/.base/installed-version" ] || fail "a failed paths.d write records no installed-version, so the next base retries"
-[ -z "$(ls "$V/etc/paths.d/mavergreen")" ] || fail "nothing is moved into a paths.d entry that is a directory"
+[ -z "$(ls "$V/etc/paths.d/mavergreen-opt")" ] || fail "nothing is moved into a paths.d entry that is a directory"
+rmdir "$V/etc/paths.d/mavergreen-opt"
+install_base 1.0.10 >/dev/null 2>&1 || fail "1.0.10 installs once paths.d is writable"
+mkdir "$V/etc/manpaths.d/mavergreen-opt.d"; rm "$V/etc/manpaths.d/mavergreen-opt"; mv "$V/etc/manpaths.d/mavergreen-opt.d" "$V/etc/manpaths.d/mavergreen-opt"
+rc=0; install_base 1.0.9 2>"$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "a base whose helper loses still fails on a path entry it cannot write: got $rc"
 
 sh "$S" --out "$w/bad.pkg" --version 'v1.0' 2>/dev/null && fail "a non-numeric version must be refused -- the compare is numeric"
 SHIPYARD_VERSION=7.7.7 sh "$S" --emit-postinstall "$w/post-env" \

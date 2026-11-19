@@ -22,7 +22,7 @@ sudo installer -pkg shipyard-pkg/shipyard-*.pkg -target /
 Shipyard's modules, scripts and launchers land in `/opt/mavergreen/shipyard`.
 CMake lives separately in `/opt/mavergreen/cmake`. Nothing goes in `/usr/local`.
 The family's `mavergreen` helper links three commands into `/opt/mavergreen/bin`, which the pkg puts on
-every login shell's `PATH` through `/etc/paths.d/mavergreen` (open a new terminal to pick it up):
+every login shell's `PATH` through `/etc/paths.d/mavergreen-opt` (open a new terminal to pick it up):
 
 ```
 /opt/mavergreen/bin/shipyard-cmake

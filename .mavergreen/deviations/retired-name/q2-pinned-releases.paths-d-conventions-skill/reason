@@ -1,0 +1,1 @@
+pinned pre-flag-day releases' base owns /etc/paths.d/mavergreen and rewrites it with the old prefix, so the /opt base keeps its own path entries

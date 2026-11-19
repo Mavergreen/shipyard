@@ -91,7 +91,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   `/opt/mavergreen/shipyard` — modules, scripts and launchers — whose
   `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` the `mavergreen` helper links into
   `/opt/mavergreen/bin` (never the bare `cmake`/`ctest`/`cpack`: its manifest excludes them).
-  `/etc/paths.d/mavergreen` puts that directory on every *login* shell's `PATH`, so open a new
+  `/etc/paths.d/mavergreen-opt` puts that directory on every *login* shell's `PATH`, so open a new
   terminal after the first install. The pkg also installs a Sparkle updater that keeps it current,
   and cmake has its own updater. CMake lives at `/opt/mavergreen/cmake`.
 
@@ -2058,9 +2058,16 @@ CMake twin. A reader of an installed product looks under `${MAVERGREEN_ROOT%/}$(
 | `/opt/mavergreen/var/<short>/`, `var/mavergreen/selections/<group>` | state that survives an upgrade; which member owns a group's bare names | the product; the helper |
 | `/opt/mavergreen/var/system-replace/<short>/` | system files saved by system-replace, and its marker | the helper |
 | `/opt/mavergreen/.base/<V>/`, `.base/installed-version` | the staged base; the helper version last installed | the base component |
-| `/etc/paths.d/mavergreen` | `/opt/mavergreen/bin` and `/opt/mavergreen/sbin`, one per line | the base postinstall |
-| `/etc/manpaths.d/mavergreen` | `/opt/mavergreen/share/man` | the base postinstall |
+| `/etc/paths.d/mavergreen-opt` | `/opt/mavergreen/bin` and `/opt/mavergreen/sbin`, one per line | the base postinstall |
+| `/etc/manpaths.d/mavergreen-opt` | `/opt/mavergreen/share/man` | the base postinstall |
 | `/Applications/Mavergreen/` | `root:wheel 755`, created no-follow | a product preinstall |
+
+**The `-opt` path entries are temporary.** Pinned pre-flag-day releases still carry the old base,
+which owns `/etc/paths.d/mavergreen` and `/etc/manpaths.d/mavergreen` and rewrites them with
+its old prefix whenever its version wins. So the `/opt` base writes its own `mavergreen-opt`
+files on every install, whether or not its helper wins, and never writes or removes the old ones.
+Reconsider when L1 re-pins every family ingredient to a `-mavergreen.N` release: the base then takes
+`/etc/paths.d/mavergreen` and deletes both old files.
 
 **Root runs only from a root-only chain.** An admin can write `/usr/local`, `/Users`, `/tmp`, a home
 directory and `/Applications`, so a non-root process could replace anything root runs from there.
@@ -2259,7 +2266,7 @@ or upgraded `/opt/mavergreen/bin/mavergreen` before the product's postinstall ru
 installed). The product postinstall also falls back to the newest helper staged under `.base/`.
 
 **The base never downgrades.** Its payload is only staged, under `.base/<version>/`; its postinstall
-installs the helper and the `paths.d`/`manpaths.d` entries only over a missing helper, a missing or malformed
+installs the helper only over a missing helper, a missing or malformed
 `installed-version`, or an older one, compared numerically (`1.0.10` is newer than `1.0.9`), and
 removes the staged copy either way. An old product installer run on a box with a newer helper keeps
 the newer helper. Reconsider if Installer turns out to refuse or mis-order a shared component across
