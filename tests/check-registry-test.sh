@@ -33,7 +33,8 @@ for s in "$here"/scripts/check-*.sh "$here"/scripts/assert*.sh; do
   cut -f3 "$reg" | grep -qx "$rel" || fail "$rel is the script of at least one id"
 done
 infeasible="update-trusted|tests/assert_update_trusted.bats|it verifies a signed pkg against the updater's embedded key, so its failing case is a built, signed pkg that a fixture tree cannot hold
-installed-shipyard|tests/assert-installed-shipyard-test.sh|it inspects an installed prefix, which its test assembles in a scratch root"
+installed-shipyard|tests/assert-installed-shipyard-test.sh|it inspects an installed prefix, which its test assembles in a scratch root
+arch-union|tests/lipo-merge-tree-test.sh|it judges two build trees at merge time, which a dist fixture cannot hold"
 fx="$here/tests/fixtures/checks"
 while IFS="$(printf '\t')" read -r id mode script old fate; do
   if [ "$mode" = retired ]; then

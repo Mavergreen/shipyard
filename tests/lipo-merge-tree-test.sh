@@ -90,4 +90,76 @@ if sh "$S" --a "$w/i" --b "$w/j" --out "$w/o7" >/dev/null 2>&1; then
   echo "FAIL: a file missing from one tree must be refused"; exit 1
 fi
 
+repo="$w/repo"; mkdir -p "$repo/.mavergreen/products/w"
+union() { printf '%s\n' "$@" > "$repo/.mavergreen/products/w/union"; }
+um() {
+  mkdir -p "$1/bin" "$1/lib"
+  echo same > "$1/bin/tool"
+}
+uerr="$w/uerr"
+
+um "$w/ua"; um "$w/ub"
+echo llvm > "$w/ub/lib/libLLVMAArch64Foo.a"; chmod 640 "$w/ub/lib/libLLVMAArch64Foo.a"
+union 'lib/libLLVMAArch64*'
+MAVERGREEN_REPO_ROOT="$repo" sh "$S" --a "$w/ua" --b "$w/ub" --out "$w/uo1" --short w >/dev/null 2>&1 \
+  || { echo "FAIL: a B-only file matching a union glob must merge"; exit 1; }
+cmp -s "$w/ub/lib/libLLVMAArch64Foo.a" "$w/uo1/lib/libLLVMAArch64Foo.a" || { echo "FAIL: the union file is not byte-identical"; exit 1; }
+[ "$(ls -l "$w/uo1/lib/libLLVMAArch64Foo.a" | cut -c1-10)" = "$(ls -l "$w/ub/lib/libLLVMAArch64Foo.a" | cut -c1-10)" ] \
+  || { echo "FAIL: the union file lost its mode"; exit 1; }
+
+um "$w/uc"; um "$w/ud"; mkdir -p "$w/ud/share"; echo x > "$w/ud/share/extra.txt"
+union 'lib/libLLVMAArch64*'
+if MAVERGREEN_REPO_ROOT="$repo" sh "$S" --a "$w/uc" --b "$w/ud" --out "$w/uo2" --short w >/dev/null 2>"$uerr"; then
+  echo "FAIL: an undeclared one-sided file must be refused"; exit 1
+fi
+grep -q '^arch-union:' "$uerr" && grep -q 'share/extra.txt' "$uerr" || { echo "FAIL: arch-union must name share/extra.txt: $(cat "$uerr")"; exit 1; }
+[ ! -e "$w/uo2" ] || { echo "FAIL: a refused union merge must not leave OUT"; exit 1; }
+
+um "$w/ue"; um "$w/uf"
+union 'include/arm_*'
+if MAVERGREEN_REPO_ROOT="$repo" sh "$S" --a "$w/ue" --b "$w/uf" --out "$w/uo3" --short w >/dev/null 2>"$uerr"; then
+  echo "FAIL: a union glob that matches nothing must be refused"; exit 1
+fi
+grep -q 'include/arm_\*' "$uerr" || { echo "FAIL: arch-union must name the glob: $(cat "$uerr")"; exit 1; }
+[ ! -e "$w/uo3" ] || { echo "FAIL: a refused union merge must not leave OUT"; exit 1; }
+
+um "$w/ug"; um "$w/uh"; ln -s libLLVMAArch64Foo.a "$w/uh/lib/libLLVMAArch64Link.a"
+union 'lib/libLLVMAArch64*'
+MAVERGREEN_REPO_ROOT="$repo" sh "$S" --a "$w/ug" --b "$w/uh" --out "$w/uo4" --short w >/dev/null 2>&1 \
+  || { echo "FAIL: a B-only symlink matching a union glob must merge"; exit 1; }
+[ -L "$w/uo4/lib/libLLVMAArch64Link.a" ] || { echo "FAIL: the union symlink must stay a link"; exit 1; }
+
+um "$w/ui"; um "$w/uj"; mkdir "$w/uj/lib/emptydir"
+union 'lib/other*'
+if MAVERGREEN_REPO_ROOT="$repo" sh "$S" --a "$w/ui" --b "$w/uj" --out "$w/uo5" --short w >/dev/null 2>"$uerr"; then
+  echo "FAIL: an undeclared one-sided empty directory must be refused"; exit 1
+fi
+grep -q 'lib/emptydir' "$uerr" || { echo "FAIL: arch-union must name lib/emptydir: $(cat "$uerr")"; exit 1; }
+
+um "$w/uk"; um "$w/ul"; mkdir "$w/uk/lib/emptydir" "$w/ul/lib/emptydir"
+sh "$S" --a "$w/uk" --b "$w/ul" --out "$w/uo6" >/dev/null 2>&1 || { echo "FAIL: an empty directory on both sides must merge"; exit 1; }
+[ -d "$w/uo6/lib/emptydir" ] || { echo "FAIL: the shared empty directory is missing from OUT"; exit 1; }
+
+um "$w/um1"; um "$w/um2"; echo x > "$w/um1/lib/only-a"
+if sh "$S" --a "$w/um1" --b "$w/um2" --out "$w/uo7" >/dev/null 2>"$uerr"; then
+  echo "FAIL: an A-only file with no --short must be refused"; exit 1
+fi
+grep -q 'lib/only-a' "$uerr" || { echo "FAIL: the refusal must name lib/only-a: $(cat "$uerr")"; exit 1; }
+
+mkdir -p "$w/nr"
+printf '#!/bin/sh\nexit 1\n' > "$w/nr/xcrun"
+printf '#!/bin/sh\ntouch "%s"\nexit 0\n' "$w/ran" > "$w/nr/lipo"
+chmod +x "$w/nr/xcrun" "$w/nr/lipo"
+set +e
+env -u LIPO SHIPYARD_MACHO_DIRS= PATH="$w/nr:/usr/bin:/bin" sh "$S" --a "$w/uk" --b "$w/ul" --out "$w/uo8" >/dev/null 2>"$uerr"
+rc=$?
+set -e
+[ "$rc" -eq 4 ] && grep -q 'LIPO' "$uerr" || { echo "FAIL: no reader must exit 4 naming LIPO (rc=$rc): $(cat "$uerr")"; exit 1; }
+[ ! -e "$w/ran" ] || { echo "FAIL: a bare lipo on PATH was run"; exit 1; }
+
+printf '#!/bin/sh\necho "Non-fat file: $2 is architecture: x86_64 "\n' > "$w/spacelipo"; chmod +x "$w/spacelipo"
+um "$w/un"; um "$w/uo"
+LIPO="$w/spacelipo" sh "$S" --a "$w/un" --b "$w/uo" --out "$w/uo9" --require-archs x86_64 >/dev/null 2>&1 \
+  || { echo "FAIL: has_arch must match x86_64 in -info output that ends in a space"; exit 1; }
+
 echo "PASS: lipo-merge-tree"
