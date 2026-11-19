@@ -40,6 +40,10 @@
 #                                               CMAKE_SOURCE_DIR).
 #            MAVERGREEN_ALLOW_ARCHS             the exact arch set each binary must contain (default
 #                                               "x86_64"; a universal updater passes "x86_64 arm64").
+#            MAVERGREEN_FLOOR                   the floor every binary's SDK pin is judged at (default: the one
+#                                               floor every product in the deviations root's repo shares; if
+#                                               they differ and this is unset, exit 2). Under --dist, a pkg
+#                                               named for a product is judged at that product's floor.
 #            MAVERGREEN_POST_10_9_SYMBOLS       extra post-10.9 symbols (grep -E alternation) that
 #                                               must not appear as undefined imports.
 #            MAVERGREEN_POST_10_9_SELECTORS     extra post-10.9 ObjC selectors (grep -E alternation)
@@ -181,6 +185,42 @@ if [ -n "$REQUIRE_DEFINED" ]; then chk_ran compat-required-defined; elif [ -n "$
 POST_10_9_SEL='labelColor|secondaryLabelColor|tertiaryLabelColor|quaternaryLabelColor|controlAccentColor'
 [ -n "${MAVERGREEN_POST_10_9_SELECTORS:-}" ] && POST_10_9_SEL="$POST_10_9_SEL|$MAVERGREEN_POST_10_9_SELECTORS"
 ALLOW_SEL="${MAVERGREEN_ALLOW_SELECTORS:-}"
+floor_shared() {
+  [ -z "${MAVERGREEN_FLOOR:-}" ] || { printf '%s\n' "$MAVERGREEN_FLOOR"; return 0; }
+  _fs_all=
+  for _fs_d in "$_fs_root"/.mavergreen/products/*/; do
+    [ -d "$_fs_d" ] || continue
+    _fs_f="$(MAVERGREEN_REPO_ROOT="$_fs_root" mavergreen_floor "$(basename "$_fs_d")")" || return 2
+    _fs_all="$_fs_all $_fs_f"
+  done
+  _fs_u="$(printf '%s\n' $_fs_all | sort -u)"
+  case "$_fs_u" in
+    '') printf '%s\n' 10.9.5 ;;
+    *'
+'*) return 3 ;;
+    *) printf '%s\n' "$_fs_u" ;;
+  esac
+}
+floor_resolve() {
+  _fr_rc=0; GUARD_FLOOR="$(floor_shared)" || _fr_rc=$?
+  case "$_fr_rc" in
+    0) ;;
+    3) misuse "the products in $_fs_root declare different floors, so set MAVERGREEN_FLOOR to the one to judge at" ;;
+    *) misuse "a product's floor in $_fs_root cannot be read (said why above)" ;;
+  esac
+}
+floor_of_pkg() {
+  PKG_FLOOR=
+  [ -z "${MAVERGREEN_FLOOR:-}" ] || return 0
+  _fp_best=
+  for _fp_d in "$_fs_root"/.mavergreen/products/*/; do
+    [ -d "$_fp_d" ] || continue
+    _fp_p="$(basename "$_fp_d")"
+    case "$1" in "$_fp_p".pkg|"$_fp_p"-[0-9]*.pkg) [ "${#_fp_p}" -gt "${#_fp_best}" ] && _fp_best="$_fp_p" ;; esac
+  done
+  [ -z "$_fp_best" ] || PKG_FLOOR="$(MAVERGREEN_REPO_ROOT="$_fs_root" mavergreen_floor "$_fp_best")" \
+    || misuse "$_fp_best's floor cannot be read (said why above)"
+}
 ALLOW_ARCHS="$(printf '%s\n' ${MAVERGREEN_ALLOW_ARCHS:-x86_64} | sort -u | xargs)"
 OBJC_REFS="${MAVERGREEN_OBJC_REFERENCES:-}"
 
@@ -193,6 +233,8 @@ devs_root="${MAVERGREEN_DEVIATIONS_ROOT:-${SHIPYARD_CHECK_REPO:-.}}"
 # platform: not a pipeline -- deviations.sh exits 1 on a malformed entry, and a pipeline would report
 #           shipyard_deviation_facts' status instead, turning "this declaration is malformed" into "there
 #           are no deviations".
+_fs_root="$(cd "$devs_root" && pwd)"
+GUARD_FLOOR=
 shipyard_deviations "$devs_root" > "$work/devs" 2> "$work/devs.err" \
   || cannot_measure deviation-complete "$devs_root/.mavergreen/deviations/ holds a malformed deviation: $(cat "$work/devs.err")"
 
@@ -283,8 +325,13 @@ objc_exceptions() {  # $1 binary
   done < "$work/objc-api"
 }
 
-check_one() {  # $1 = the file, $2 = the path to report and match deviations against, $3 = strict|loose
+check_one() {  # $1 = the file, $2 = the path to report and match deviations against, $3 = strict|loose, $4 = its floor (empty: the shared one)
   b="$2"
+  fl="${4:-}"
+  if [ -z "$fl" ]; then
+    [ -n "$GUARD_FLOOR" ] || floor_resolve
+    fl="$GUARD_FLOOR"
+  fi
   checked=$((checked+1))
   if shipyard_sdk_exempt_sha256 "$(shasum -a 256 "$1" | awk '{print $1}')"; then
     echo "compat guard: $b is a pinned third-party binary (exempt by content)"; return 0
@@ -299,7 +346,7 @@ check_one() {  # $1 = the file, $2 = the path to report and match deviations aga
     || guard_fail compat-archs "$b" "$b arches '$archs' != '$ALLOW_ARCHS'"
   sdk_bad=""
   while read -r _a _ft _mn _sd; do
-    why="$(shipyard_sdk_rule "$_a" "$_ft" "$_mn" "$_sd")" || sdk_bad="${sdk_bad}$b: $why
+    why="$(shipyard_sdk_rule "$_a" "$_ft" "$_mn" "$_sd" "$fl")" || sdk_bad="${sdk_bad}$b: $why
 "
   done <<EOF
 $slices
@@ -375,6 +422,7 @@ EOF
 }
 
 if [ "$#" -gt 0 ]; then
+  floor_resolve
   for b in "$@"; do
     [ -f "$b" ] || { chk_fail compat-archs "$(rule_of compat-archs)" "$b does not exist, so it cannot be measured" "$(fix_of compat-archs)"; continue; }
     check_one "$b" "$b" strict
@@ -388,6 +436,7 @@ elif [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
     n=$((n + 1)); x="$work/x$n"; mkdir -p "$x"
     case "${f##*/}" in
       *.pkg)
+        floor_of_pkg "${f##*/}"
         rc=0; af_pkg_tree "$f" "$x" || rc=$?
         [ "$rc" -eq 0 ] || cannot_measure compat-archs "${f##*/} cannot be read$([ "$rc" -ne 3 ] || echo " ($AF_WHY)")"
         for pl in $(find "$AF_TREE" -name "*.root" -prune -o -name Payload -type f -print | sed 's/ /%20/g'); do
@@ -395,20 +444,20 @@ elif [ -n "${SHIPYARD_CHECK_DIST:-}" ]; then
           af_unpack_payload "$pl" || cannot_measure compat-archs "a payload of ${f##*/} cannot be read"
           ( cd "$AF_ROOT" && find . -type f ) | sed 's|^\./||' | while IFS= read -r rel; do
             k="$(af_macho_kind "$AF_ROOT/$rel")"
-            [ -z "$k" ] || printf '%s\t%s\t%s\n' "$AF_ROOT/$rel" "$AF_LOC$rel" "$k" >> "$work/list"
+            [ -z "$k" ] || printf '%s\t%s\t%s\t%s\n' "$AF_ROOT/$rel" "$AF_LOC$rel" "$k" "$PKG_FLOOR" >> "$work/list"
           done
         done ;;
       *.tar.gz|*.tgz|*.tar.xz|*.tar.bz2)
         af_extract "$f" "$x" || cannot_measure compat-archs "${f##*/} cannot be read as a tarball"
         ( cd "$x" && find . -type f ) | sed 's|^\./||' | while IFS= read -r rel; do
           k="$(af_macho_kind "$x/$rel")"
-          [ -z "$k" ] || printf '%s\t%s\t%s\n' "$x/$rel" "$rel" "$k" >> "$work/list"
+          [ -z "$k" ] || printf '%s\t%s\t%s\t\n' "$x/$rel" "$rel" "$k" >> "$work/list"
         done ;;
     esac
   done
   tab="$(printf '\t')"
-  while IFS="$tab" read -r file subject kind; do
-    check_one "$file" "$subject" "$kind"
+  while IFS="$tab" read -r file subject kind pfloor; do
+    check_one "$file" "$subject" "$kind" "$pfloor"
   done < "$work/list"
   if [ "$checked" -eq 0 ]; then
     for _id in compat-imports compat-selectors compat-archs compat-required-defined; do

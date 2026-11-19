@@ -13,6 +13,7 @@ MAVERGREEN_DRYDOCK_CACHE	directory where fetch_drydock.sh caches the fetched Dry
 MAVERGREEN_DRYDOCK_HOST	linux or mac, replacing the host fetch_drydock.sh and the objc-*.sh wrappers would otherwise detect (a test seam)
 MAVERGREEN_DRYDOCK_PREFIX	an already-unpacked Drydock fetch_drydock.sh answers with instead of fetching the pin
 MAVERGREEN_EXPECTED_MODE	the build mode a script asserts it is running in
+MAVERGREEN_FLOOR	the floor the compat guard judges SDK pins at, default the one floor every product in the repo shares
 MAVERGREEN_HOST_TOOLS_SYSCTL	the sysctl mavergreen_build_host_tools asks whether the host is Apple Silicon (a test seam)
 MAVERGREEN_HOST_TOOLS_UNAME	the uname mavergreen_build_host_tools asks for an Intel host's machine (a test seam)
 MAVERGREEN_INGREDIENT_	prefix of the per-ingredient override variables the fetch scripts read

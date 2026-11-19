@@ -1,20 +1,27 @@
 # platform: host-agnostic
 #   usage: . sdk-pins.sh     (sourced; defines the four functions below)
-#          shipyard_sdk_pin <arch>                            "<url> <sha256> <tarball> <sdk-dir>"; 1 if unknown
+#          shipyard_sdk_pin <arch> [<floor>]                  "<url> <sha256> <tarball> <sdk-dir>"; 1 if unknown
+#                                                             (x86_64 keys on the floor, default 10.9.5; arm64 ignores it)
 #          shipyard_sdk_settings_json <arch>                  the SDKSettings.json fetch_sdk.sh puts in the SDK sibling; 1 if none
-#          shipyard_sdk_rule <arch> <filetype> <minos> <sdk>  0 if compliant, else prints why and returns 1
+#          shipyard_sdk_rule <arch> <filetype> <minos> <sdk> [<floor>]  0 if compliant, else prints why and returns 1
 #          shipyard_sdk_exempt_sha256 <sha256>                0 if the bytes are a pinned third-party file
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the ONE place
 #       the pins and the per-arch rule live; fetch_sdk.sh, assert_binary_compatible.sh and
 #       check-artifact-conformance.sh all source it, so the three cannot disagree.
 
+_sdk_floor_mm() {
+  _sf_rest="${1#*.}"
+  printf '%s.%s\n' "${1%%.*}" "${_sf_rest%%.*}"
+}
+
 shipyard_sdk_pin() {
-  case "$1" in
-    x86_64) echo "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.9.sdk.tar.xz fcf88ce8ff0dd3248b97f4eb81c7909f2cc786725de277f4d05a2b935cc49de0 MacOSX10.9.sdk.tar.xz MacOSX10.9.sdk" ;;
+  _sp_mm="$(_sdk_floor_mm "${2:-10.9.5}")"
+  case "$1.$_sp_mm" in
+    x86_64.10.9) echo "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.9.sdk.tar.xz fcf88ce8ff0dd3248b97f4eb81c7909f2cc786725de277f4d05a2b935cc49de0 MacOSX10.9.sdk.tar.xz MacOSX10.9.sdk" ;;
     # platform: phracker publishes no checksum; this one was recorded on first download (2026-09-24)
     #           and cross-checked against joseluisq/macosx-sdks 11.3, whose published sha256 verified:
     #           every .tbd and framework header in the two was identical.
-    arm64)  echo "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz cd4f08a75577145b8f05245a2975f7c81401d75e9535dcffbb879ee1deefcbf4 MacOSX11.3.sdk.tar.xz MacOSX11.3.sdk" ;;
+    arm64.*) echo "https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz cd4f08a75577145b8f05245a2975f7c81401d75e9535dcffbb879ee1deefcbf4 MacOSX11.3.sdk.tar.xz MacOSX11.3.sdk" ;;
     *) return 1 ;;
   esac
 }
@@ -31,13 +38,16 @@ shipyard_sdk_settings_json() {
   esac
 }
 
-shipyard_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk
+shipyard_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk, $5 floor
   if [ "$2" = KEXTBUNDLE ]; then
     [ "$1" = x86_64 ] && return 0
     echo "a kext must be x86_64, not $1"; return 1
   fi
   case "$1" in
-    x86_64) _want_min=10.9; _want_sdk=10.9 ;;
+    x86_64)
+      _want_min="$(_sdk_floor_mm "${5:-10.9.5}")"
+      _sr_pin="$(shipyard_sdk_pin x86_64 "${5:-10.9.5}")" || { echo "no pinned SDK for x86_64 at floor ${5:-10.9.5}"; return 1; }
+      _want_sdk="${_sr_pin##* MacOSX}"; _want_sdk="${_want_sdk%.sdk}" ;;
     arm64)  _want_min=11.0; _want_sdk=11.3 ;;
     *) echo "arch $1 has no pinned SDK (only x86_64 and arm64 do)"; return 1 ;;
   esac

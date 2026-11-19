@@ -59,6 +59,9 @@ for _pd in "$root"/.mavergreen/products/*/; do
     _dv="$_dv $_v"
   done
   printf 'derived %s%s\n' "$_p" "$_dv"
+  _rc=0; _v="$(mavergreen_floor "$_p" 2>&1)" || _rc=$?
+  [ "$_rc" -eq 0 ] || abort "cannot read $_p's floor: $(printf '%s' "$_v" | tr '\n' ' ')"
+  printf 'floor %s %s\n' "$_p" "$_v"
   [ ! -f "$_pd/built-on-install" ] || printf 'built-on-install %s\n' "$_p"
   _ed="$(mg_value "products/$_p/edition" 2>/dev/null)" || _ed=""
   [ -z "$_ed" ] || printf 'edition %s %s\n' "$_p" "$(printf '%s' "$_ed" | af_enc)"

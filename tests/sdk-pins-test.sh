@@ -47,4 +47,15 @@ shipyard_sdk_exempt_sha256 4ea4718635b69a7746078674aba2af31249d20e3155010bd06f1e
 if shipyard_sdk_exempt_sha256 0000000000000000000000000000000000000000000000000000000000000000; then echo "FAIL: arbitrary bytes are not exempt"; exit 1; fi
 if shipyard_sdk_exempt_sha256 ''; then echo "FAIL: an empty digest is not exempt"; exit 1; fi
 
+eq_pin() { [ "$(shipyard_sdk_pin "$@")" = "$(shipyard_sdk_pin x86_64)" ] || { echo "FAIL: pin $*"; exit 1; }; }
+eq_pin x86_64 10.9.5
+eq_pin x86_64 10.9
+if shipyard_sdk_pin x86_64 10.6.8 >/dev/null; then echo "FAIL: 10.6 has no pin"; exit 1; fi
+[ "$(shipyard_sdk_pin arm64 10.6.8)" = "$(shipyard_sdk_pin arm64)" ] || { echo "FAIL: arm64 ignores the floor"; exit 1; }
+yes x86_64 EXECUTE 10.9 10.9 10.9.5
+no  x86_64 EXECUTE 10.6 10.9 10.9.5
+why="$(shipyard_sdk_rule x86_64 EXECUTE 10.6 10.9 10.6.8 || true)"
+[ "$why" = "no pinned SDK for x86_64 at floor 10.6.8" ] || { echo "FAIL: a floor with no pin must say so: $why"; exit 1; }
+yes arm64 EXECUTE 11.0 11.3 10.6.8
+
 echo "PASS: sdk-pins"

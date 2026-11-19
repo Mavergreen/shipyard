@@ -24,6 +24,7 @@
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
 #            product       <product>                              one per directory in the repo's .mavergreen/products/
+#            floor         <product> <version>                    the product's floor (.mavergreen/products/<product>/floor, else 10.9.5)
 #            derived       <product> <bundle-id> <label> <app> <feed|none>  the updater identity derived for it
 #            name          <product> <surface> <value>            mavergreen_name's value, at the expected version (%20-encoded)
 #            app           <product> <noun|upstream|none>         how the product's .app is named
@@ -775,10 +776,21 @@ done
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- every shipped
 #       Mach-O slice records its arch's pinned minos and SDK, unless its bytes are a pinned third-party
 #       binary or a declared sdk-pin:<glob> deviation names its path.
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a slice is
+#       judged at the floor of the product its artifact's manifest names; an artifact with no manifest, or
+#       a product with no floor fact, at 10.9.5.
+sdk_floor_file=""; sdk_floor=10.9.5
 while read -r kind file path arch ft mn sd sha; do
   [ "$kind" = macho ] || continue
   shipyard_sdk_exempt_sha256 "$sha" && continue
-  why="$(shipyard_sdk_rule "$arch" "$ft" "$mn" "$sd")" \
+  if [ "$file" != "$sdk_floor_file" ]; then
+    sdk_floor_file="$file"
+    sdk_floor="$(awk -v f="$file" '
+      $1 == "manifest" && $2 == f && !(f in m) { m[f] = $3 }
+      $1 == "floor" { fl[$2] = $3 }
+      END { print (m[f] in fl) ? fl[m[f]] : "10.9.5" }' "$facts")"
+  fi
+  why="$(shipyard_sdk_rule "$arch" "$ft" "$mn" "$sd" "$sdk_floor")" \
     || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")"
 done < "$facts"
 

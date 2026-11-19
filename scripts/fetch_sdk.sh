@@ -1,8 +1,9 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: fetch_sdk.sh [--arch x86_64|arm64]
+#   usage: fetch_sdk.sh [--arch x86_64|arm64] [--floor VERSION]
 #          Fetches + caches + checksum-verifies the family's PINNED SDK for one arch (sdk-pins.sh):
-#          MacOSX10.9.sdk for x86_64 (the default), MacOSX11.3.sdk for arm64. Prints the SDK root on
+#          MacOSX10.9.sdk for x86_64 (the default), MacOSX11.3.sdk for arm64. --floor (default 10.9.5)
+#          selects the x86_64 pin by the product's floor; one with no pin exits 2. Prints the SDK root on
 #          stdout, exactly as its archive shipped it. A native 10.9
 #          build uses this pin too, never xcrun's own SDK (MavergreenToolchain.cmake).
 #          MAVERGREEN_SDK_SETTINGS_JSON=1 prints instead, for an arch whose pin has none (x86_64), a sibling
@@ -22,16 +23,20 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen_fetch.sh"
 . "$SELF/sdk-pins.sh"
 ARCH=x86_64
-case "$#:${1:-}" in
-  0:) ;;
-  2:--arch) ARCH="$2" ;;
-  *) echo "usage: fetch_sdk.sh [--arch x86_64|arm64]" >&2; exit 2 ;;
-esac
+FLOOR=10.9.5
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --arch) [ "$#" -ge 2 ] || { echo "usage: fetch_sdk.sh [--arch x86_64|arm64] [--floor VERSION]" >&2; exit 2; }; ARCH="$2"; shift 2 ;;
+    --floor) [ "$#" -ge 2 ] || { echo "usage: fetch_sdk.sh [--arch x86_64|arm64] [--floor VERSION]" >&2; exit 2; }; FLOOR="$2"; shift 2 ;;
+    *) echo "usage: fetch_sdk.sh [--arch x86_64|arm64] [--floor VERSION]" >&2; exit 2 ;;
+  esac
+done
 case "${MAVERGREEN_SDK_SETTINGS_JSON:-}" in
   ""|1) ;;
   *) echo "fetch_sdk: MAVERGREEN_SDK_SETTINGS_JSON must be unset, empty or 1" >&2; exit 2 ;;
 esac
-pin="$(shipyard_sdk_pin "$ARCH")" || { echo "fetch_sdk: no pinned SDK for arch '$ARCH' (x86_64 and arm64 have one)" >&2; exit 2; }
+shipyard_sdk_pin "$ARCH" >/dev/null || { echo "fetch_sdk: no pinned SDK for arch '$ARCH' (x86_64 and arm64 have one)" >&2; exit 2; }
+pin="$(shipyard_sdk_pin "$ARCH" "$FLOOR")" || { echo "fetch_sdk: no pinned SDK for $ARCH at floor $FLOOR" >&2; exit 2; }
 # shellcheck disable=SC2086  # the pin is four space-free words by construction
 set -- $pin
 CACHE="${MAVERGREEN_SDK_CACHE:-$HOME/Library/Caches/mavergreen/sdk}"

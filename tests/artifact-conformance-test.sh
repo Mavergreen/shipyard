@@ -69,6 +69,14 @@ ok "a 10.9-SDK archive member records sdk n/a" "$GOOD
 $M x86_64 OBJECT 10.9 n/a aa"
 no "an i386 slice has no pin" "sdk-pin" "$GOOD
 $M i386 OBJECT 10.7 26.5 aa"
+# spec: SKILL.md "SDK pinning" -- a macho is judged at the floor of the product its artifact's manifest names; none, 10.9.5.
+no "a 10.6.8 product's slice recording the 10.9 pin" "sdk-pin" "$GOOD
+manifest p.pkg w dev.mavergreen.w w
+floor w 10.6.8
+macho p.pkg opt/mavergreen/w/bin/w x86_64 EXECUTE 10.9 10.9 aa"
+ok "the same slice with no manifest is judged at 10.9.5" "$GOOD
+floor w 10.6.8
+macho p.pkg opt/mavergreen/w/bin/w x86_64 EXECUTE 10.9 10.9 aa"
 ok "pinned Sparkle passes on its content" "$GOOD
 macho p.pkg Library/X.app/Contents/Frameworks/Sparkle.framework/Versions/A/Sparkle x86_64 DYLIB 10.9 12.0 95ad6ce1558b1ffef550455bf9aa05ad6686d434279631d170ab92fb3747c93f"
 no "a different Sparkle does not" "sdk-pin" "$GOOD

@@ -263,3 +263,12 @@ mk_readers() {
   first_is sdk-pin
   [[ "$output" == *"CANNOT MEASURE"*"shasum"* ]] || false
 }
+
+@test "products with different floors and no MAVERGREEN_FLOOR: exit 2, naming MAVERGREEN_FLOOR" {
+  mkdir -p "$WORK/repo/.mavergreen/products/old" "$WORK/repo/.mavergreen/products/new"
+  printf '10.6.8\n' > "$WORK/repo/.mavergreen/products/old/floor"
+  printf '10.9.5\n' > "$WORK/repo/.mavergreen/products/new/floor"
+  run env MAVERGREEN_DEVIATIONS_ROOT="$WORK/repo" sh "$GUARD" "$WORK/clean"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *MAVERGREEN_FLOOR* ]] || false
+}

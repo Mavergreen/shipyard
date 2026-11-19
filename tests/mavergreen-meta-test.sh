@@ -127,4 +127,22 @@ rm -r "$k/.mavergreen/upstream" "$k/.mavergreen/hooks"
 eq "no upstream at all is its own upstream" "$(kind)" own
 MAVERGREEN_REPO_ROOT="$w"
 
+# spec: scripts/mavergreen-meta.sh mavergreen_floor -- a product's floor is products/<short>/floor line 1, else 10.9.5.
+. "$here/../scripts/lib/name-rules.sh"
+mkdir -p "$m/products/flooring"
+eq "an absent floor is 10.9.5" "$(mavergreen_floor flooring)" 10.9.5
+printf '10.6.8\n' > "$m/products/flooring/floor"
+eq "a declared floor" "$(mavergreen_floor flooring)" 10.6.8
+printf ' 10.9.5 \r\nsecond\r\n' > "$m/products/flooring/floor"
+eq "blanks and a CR are trimmed" "$(mavergreen_floor flooring)" 10.9.5
+printf 'ten\n' > "$m/products/flooring/floor"
+rc=0; err="$(mavergreen_floor flooring 2>&1)" || rc=$?
+eq "a malformed floor is status 2" "$rc" 2
+case "$err" in *products/flooring/floor*) ;; *) fail "a malformed floor names its file: $err" ;; esac
+rc=0; mavergreen_floor 'Bad Name' >/dev/null 2>&1 || rc=$?
+eq "a bad short name is status 2" "$rc" 2
+rc=0; err="$(env -u MAVERGREEN_REPO_ROOT /bin/sh -c '. "$1"; mavergreen_floor flooring' sh "$here/../scripts/mavergreen-meta.sh" 2>&1)" || rc=$?
+eq "no name rules sourced is status 2" "$rc" 2
+case "$err" in *mavergreen_name_ok*) ;; *) fail "no name rules sourced says why: $err" ;; esac
+
 echo "mavergreen-meta-test: ok"

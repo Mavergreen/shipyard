@@ -195,3 +195,26 @@ mavergreen_prefix() {
   }
   printf '/opt/mavergreen/%s\n' "$1"
 }
+
+mavergreen_floor() {
+  if ! type mavergreen_name_ok >/dev/null 2>&1; then
+    echo "mavergreen_floor: mavergreen_name_ok is undefined (the name rules are not sourced), so \"$1\" cannot be checked" >&2
+    return 2
+  fi
+  mavergreen_name_ok "$1" || {
+    echo "mavergreen_floor: \"$1\" is not a product short name (lowercase ASCII letters, digits and hyphens, not reserved)" >&2
+    return 2
+  }
+  _mf_file="$(mg_dir)/products/$1/floor"
+  [ -f "$_mf_file" ] || { printf '%s\n' 10.9.5; return 0; }
+  _mf_v=
+  IFS= read -r _mf_v < "$_mf_file" || [ -n "$_mf_v" ] || :
+  _mf_v="${_mf_v%"${_mf_v##*[![:space:]]}"}"
+  _mf_v="${_mf_v#"${_mf_v%%[![:space:]]*}"}"
+  if printf '%s\n' "$_mf_v" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+    printf '%s\n' "$_mf_v"
+    return 0
+  fi
+  echo "mavergreen_floor: $_mf_file holds \"$_mf_v\", not a version like 10.9.5" >&2
+  return 2
+}

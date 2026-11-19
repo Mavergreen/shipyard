@@ -156,4 +156,16 @@ r1=0; r2=0; wait "$p1" || r1=$?; wait "$p2" || r2=$?
 [ -f "$w/c6/MacOSX10.9.sdk/usr/lib/libSystem.tbd" ] || { echo "FAIL: concurrent cold fetch lost the SDK contents"; exit 1; }
 [ -z "$(leftovers "$w/c6")" ] || { echo "FAIL: concurrent cold fetch left temp entries: $(leftovers "$w/c6")"; exit 1; }
 
+rc=0; err="$(MAVERGREEN_SDK_CACHE="$w/f1" sh "$S" --floor 10.6.8 2>&1)" || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL: --floor 10.6.8 must exit 2, got $rc"; exit 1; }
+case "$err" in *"no pinned SDK for x86_64 at floor 10.6.8"*) ;; *) echo "FAIL: --floor 10.6.8 must say no pinned SDK: $err"; exit 1 ;; esac
+[ ! -e "$w/f1" ] || { echo "FAIL: --floor 10.6.8 must download nothing"; exit 1; }
+out="$(MAVERGREEN_SDK_CACHE="$w/f2" MAVERGREEN_SDK_URL="file://$t113" MAVERGREEN_SDK_SHA256="$s113" sh "$S" --arch arm64 --floor 10.9.5)" \
+  || { echo "FAIL: --arch arm64 --floor 10.9.5 must parse"; exit 1; }
+[ "$out" = "$w/f2/MacOSX11.3.sdk" ] || { echo "FAIL: --arch arm64 --floor 10.9.5 got: $out"; exit 1; }
+out="$(MAVERGREEN_SDK_CACHE="$w/f3" MAVERGREEN_SDK_URL="file://$t109" MAVERGREEN_SDK_SHA256="$s109" sh "$S" --floor 10.9.5 --arch x86_64)" \
+  || { echo "FAIL: --floor 10.9.5 --arch x86_64 must parse"; exit 1; }
+[ "$out" = "$w/f3/MacOSX10.9.sdk" ] || { echo "FAIL: --floor 10.9.5 --arch x86_64 got: $out"; exit 1; }
+if sh "$S" --bogus >/dev/null 2>&1; then echo "FAIL: an unknown option must be refused"; exit 1; fi
+
 echo "PASS: fetch-sdk"
