@@ -23,7 +23,7 @@ if [ -z "${AR:-}" ]; then
   case "$NM" in */llvm-nm) [ -x "${NM%/*}/llvm-ar" ] && AR="${NM%/*}/llvm-ar" ;; esac
   AR="${AR:-ar}"
 fi
-case "$NM" in *llvm-nm) nm_flags=--no-llvm-bc ;; *) nm_flags= ;; esac
+nm_flags=; case "$("$NM" --version 2>/dev/null)" in *LLVM*) nm_flags=--no-llvm-bc ;; esac
 for _r in "$NM" "${LIPO:-lipo}" "${OTOOL:-otool}"; do
   command -v "$_r" >/dev/null 2>&1 || reader_died "$_r (not found)"
 done
