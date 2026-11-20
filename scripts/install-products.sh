@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: host-agnostic -- stevedore reads the pkgs and manifests; nothing here installs yet
+# platform: host-agnostic -- stevedore reads the pkgs and manifests; the installer and provisioner commands run where it does
 #   usage: install-products.sh [--root DIR] [--dry-run] SHORT@TAG...
 #          Installs each named Mavergreen product at exactly its release TAG and, first, everything it
 #          requires, transitively. A product's requires are the `requires` array of the mavergreen.plist
@@ -11,8 +11,14 @@
 #          A release's pkg is the one its appcast SHORT.xml names, else the only .pkg in its SHA256SUMS;
 #          it is fetched into ${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/REPO/TAG and
 #          verified against that SHA256SUMS. Versions compare with scripts/lib/vercmp.sh.
-#          --dry-run prints the plan on stdout, one line per product in install order:
-#          `keep SHORT VERSION`, `install SHORT VERSION` or `provision SHORT via COMMAND...`.
+#          The plan has one line per product in install order: `keep SHORT VERSION`,
+#          `install SHORT VERSION` or `provision SHORT via COMMAND...`. --dry-run prints it on stdout;
+#          otherwise each line is carried out and reported on stderr: install runs
+#          `$INSTALLER -pkg PKG -target DIR` on the verified cached pkg (default `installer`, under
+#          `sudo` unless root); provision runs COMMAND (under `sudo` unless root; SUDO= overrides) and then
+#          requires DIR/usr/local/mavergreen/SHORT/mavergreen.plist to exist. After each product, kept
+#          ones included, `SHORT VERSION` is appended to $MAVERGREEN_INSTALLED when set; the first
+#          failing step stops the run, so the file lists only what completed.
 #          Exit 1 when a product cannot be resolved, fetched or verified, or a floor cannot be met;
 #          2 on a usage error. MAVERGREEN_RELEASES replaces https://github.com (the tests serve file://);
 #          MAVERGREEN_PRODUCT_NAMES replaces the registry.
@@ -45,14 +51,13 @@ for p in "$@"; do
   esac
   seen="$seen$s@$t "
 done
-[ -n "$DRY" ] || { echo "install-products: installing is not implemented yet; pass --dry-run" >&2; exit 2; }
 ROOT="${ROOT%/}"
 STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || die "no stevedore to read the pkgs with"
 T="$(mktemp -d "${TMPDIR:-/tmp}/install-products.XXXXXX")"
 trap 'rm -rf "$T"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-mkdir "$T/pin" "$T/carry" "$T/m" "$T/w"
+mkdir "$T/pin" "$T/carry" "$T/m" "$T/w" "$T/pkg"
 for p in "$@"; do printf '%s\n' "${p#*@}" > "$T/pin/${p%%@*}"; done
 
 reg() {
@@ -122,6 +127,7 @@ manifest() {
   "$STEVEDORE" expand "$_cache/$_asset" "$_w/x" > /dev/null || die "$1 $3: could not expand $_cache/$_asset"
   _m="$(grep -lF "identifier=\"$4\"" "$_w"/x/PackageInfo "$_w"/x/*/PackageInfo 2>/dev/null || :)"
   [ "$(printf '%s\n' "$_m" | grep -c .)" = 1 ] || die "$1 $3: expected one component $4 in $_asset"
+  printf '%s\n' "$_cache/$_asset" > "${_mf%.plist}.pkgpath"
   mkdir "$_w/p" || die "$1 $3: cannot make $_w/p"
   _cr=0
   ( cd "$_w/p" && { gzip -dc "$(dirname "$_m")/Payload" || : > "$_w/gzip.failed"; } \
@@ -165,7 +171,7 @@ resolve() {
   if [ -f "$T/pin/$s" ]; then
     [ -z "$prov" ] || die "$s is set up by '$prov', not released: name its provider instead"
     tag="$(cat "$T/pin/$s")"
-    manifest "$s" "$repo" "$tag" "$id"; src=$_mf
+    manifest "$s" "$repo" "$tag" "$id"; src=$_mf; cp "${_mf%.plist}.pkgpath" "$T/pkg/$s"
     mver "$src" "$s"; v=$_v
     [ -z "$fl" ] || ge "$v" "$fl" "$s" || die "$s is named at $tag (version $v), below $s>=$fl${by:+ required by $by}"
     if [ "$inst" = "$v" ]; then act=keep; else act=install; fi
@@ -176,7 +182,7 @@ resolve() {
     act=provision; v=-
   else
     tag="$(shipyard_latest_tag "$repo")" || die "$s: no latest release of Mavergreen/$repo${by:+ (required by $by)}"
-    manifest "$s" "$repo" "$tag" "$id"; src=$_mf
+    manifest "$s" "$repo" "$tag" "$id"; src=$_mf; cp "${_mf%.plist}.pkgpath" "$T/pkg/$s"
     mver "$src" "$s"; v=$_v
     [ -z "$fl" ] || ge "$v" "$fl" "$s" \
       || die "$s>=$fl${by:+ (required by $by)} cannot be met: the latest release of Mavergreen/$repo is $tag, version $v"
@@ -217,4 +223,29 @@ while :; do
   [ "$rc" -eq 3 ] || break
 done
 [ "$rc" -eq 0 ] || exit 1
-cat "$T/plan"
+if [ -n "$DRY" ]; then cat "$T/plan"; exit 0; fi
+
+record() { [ -z "${MAVERGREEN_INSTALLED:-}" ] || printf '%s %s\n' "$1" "$2" >> "$MAVERGREEN_INSTALLED"; }
+if [ "$(id -u)" -eq 0 ]; then _sudo=""; _inst=installer; else _sudo=sudo; _inst="sudo installer"; fi
+SUDO="${SUDO-$_sudo}"; INSTALLER="${INSTALLER:-$_inst}"
+while read -r act s rest; do
+  case "$act" in
+    keep) v=$rest ;;
+    install)
+      v=$rest; pkg="$(cat "$T/pkg/$s")"
+      echo "install-products: installing $s $v from $pkg into $ROOT" >&2
+      # shellcheck disable=SC2086
+      $INSTALLER -pkg "$pkg" -target "$ROOT" < /dev/null >&2 || die "$s $v: the installer failed on $pkg"
+      ;;
+    provision)
+      cmd="${rest#via }"; cmd="${cmd#* }"
+      echo "install-products: provisioning $s via $cmd" >&2
+      # shellcheck disable=SC2086
+      $SUDO $cmd < /dev/null >&2 || die "$s: '$cmd' failed"
+      pm="$ROOT/usr/local/mavergreen/$s/mavergreen.plist"
+      [ -f "$pm" ] || die "$s: '$cmd' left no $pm"
+      mver "$pm" "$s"; v=$_v
+      ;;
+  esac
+  record "$s" "$v"
+done < "$T/plan"

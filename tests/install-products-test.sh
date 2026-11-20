@@ -169,8 +169,6 @@ done
 plan; [ "$rc" -eq 2 ] || fail "no products is a usage error"
 plan a@1 a@2; [ "$rc" -eq 2 ] || fail "one product named at two tags is a usage error"
 plan --bogus a@1; [ "$rc" -eq 2 ] || fail "an unknown option is a usage error"
-rc=0; out="$(sh "$S" --root "$w/root" a@1 2>&1)" || rc=$?
-[ "$rc" -eq 2 ] || fail "without --dry-run the script does not install yet"
 
 fresh; release a 1; installed a 0.9
 plan_stdout a@1
@@ -185,5 +183,73 @@ plan_stdout a@1
 fresh; release b 3; latest b 3
 plan c@1
 [ "$rc" -eq 1 ] && has "c" || fail "a provisioned product cannot be named at a release tag"
+
+mkdir "$top/bin"
+cat > "$top/bin/installer" <<'FAKE'
+#!/bin/sh
+[ "$1" = -pkg ] && [ "$3" = -target ] || exit 2
+echo "installer $(basename "$2")" >> "$FAKE_LOG"
+case "$2" in *"${FAKE_INSTALLER_FAIL:-//none//}"*) exit 1 ;; esac
+d="$(mktemp -d "${TMPDIR:-/tmp}/fake-installer.XXXXXX")"
+"$STEVEDORE" expand "$2" "$d/x" > /dev/null || exit 1
+for pi in "$d"/x/PackageInfo "$d"/x/*/PackageInfo; do
+  [ -f "$pi" ] || continue
+  ( cd "$4" && gzip -dc "$(dirname "$pi")/Payload" | cpio -id --quiet ) || exit 1
+done
+rm -rf "$d"
+FAKE
+cat > "$top/bin/longboat" <<'FAKE'
+#!/bin/sh
+echo "longboat $*" >> "$FAKE_LOG"
+[ -z "${FAKE_LONGBOAT_FAIL:-}" ] || exit 1
+[ -n "${FAKE_LONGBOAT_NOMANIFEST:-}" ] && exit 0
+mkdir -p "$FAKE_ROOT/usr/local/mavergreen/$2"
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>version</key>\n  <string>20261012.2</string>\n</dict>\n</plist>\n' \
+  > "$FAKE_ROOT/usr/local/mavergreen/$2/mavergreen.plist"
+FAKE
+chmod +x "$top/bin/installer" "$top/bin/longboat"
+real() {
+  printf '%s\n' 'c b longboat provision c' > "$w/provisioners"
+  : > "$w/log"; : > "$w/installed"; rm -rf "$w/root"; mkdir -p "$w/root"
+  export FAKE_LOG="$w/log" FAKE_ROOT="$w/root" MAVERGREEN_INSTALLED="$w/installed"
+  export INSTALLER="$top/bin/installer" SUDO= PATH="$top/bin:$PATH"
+  unset FAKE_INSTALLER_FAIL FAKE_LONGBOAT_FAIL FAKE_LONGBOAT_NOMANIFEST
+}
+run() { rc=0; out="$(sh "$S" --root "$w/root" "$@" 2>&1)" || rc=$?; }
+
+fresh; abc; latest b 3; real
+run a@1
+[ "$rc" -eq 0 ] || fail "installs_in_order: exit 0, got $rc"
+[ "$(cat "$w/log")" = "$(lines 'installer b-3.pkg' 'longboat provision c' 'installer a-1.pkg')" ] \
+  || fail "installs_in_order: b, then longboat provisions c, then a ($(cat "$w/log"))"
+has "installing a 1" || fail "the script says what it changed"
+[ "$(cat "$w/installed")" = "$(lines 'b 3' 'c 20261012.2' 'a 1')" ] || fail "installed_file_lists_all: $(cat "$w/installed")"
+
+fresh; abc; latest b 3; installed b 3; real; installed b 3
+run a@1
+[ "$rc" -eq 0 ] && [ "$(cat "$w/installed")" = "$(lines 'b 3' 'c 20261012.2' 'a 1')" ] \
+  || fail "kept products are recorded too"
+[ "$(grep -c '^installer' "$w/log")" -eq 1 ] || fail "a kept product is not reinstalled"
+
+fresh; abc; latest b 3; real; export FAKE_LONGBOAT_FAIL=1
+run a@1
+[ "$rc" -eq 1 ] && [ "$(cat "$w/installed")" = "b 3" ] && ! grep -q 'a-1' "$w/log" \
+  || fail "provisioner_failure_fails: exit 1, only b recorded, a not installed"
+has "'longboat provision c' failed" || fail "provisioner_failure_fails: names the command"
+
+fresh; abc; latest b 3; real; export FAKE_LONGBOAT_NOMANIFEST=1
+run a@1
+[ "$rc" -eq 1 ] && [ "$(cat "$w/installed")" = "b 3" ] && has "c:" && has "longboat provision c" \
+  || fail "provision_without_manifest_fails: names c and the command"
+
+fresh; abc; latest b 3; real; export FAKE_INSTALLER_FAIL=a-1.pkg
+run a@1
+[ "$rc" -eq 1 ] && [ "$(cat "$w/installed")" = "$(lines 'b 3' 'c 20261012.2')" ] && has "a 1" \
+  || fail "installer_failure_fails: exit 1, a not recorded"
+
+fresh; abc; latest b 3; real; export FAKE_INSTALLER_FAIL=b-3.pkg
+run a@1
+[ "$rc" -eq 1 ] && [ ! -s "$w/installed" ] && ! grep -q longboat "$w/log" \
+  || fail "a failed step stops everything after it"
 
 echo "PASS: install-products"
