@@ -76,6 +76,9 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   `scripts/`, and `MavericksShipyard_DIR` points `find_package` at that checkout. Consume the CMake
   side with `find_package` — **no `CMAKE_PREFIX_PATH`, no vendored copy, no hand-run `--install`.**
 
+  To install another family product, pass `with: { products: "SHORT@TAG ..." }`: its requires come
+  with it, so never hand-roll a `gh release download` plus `installer`. macOS runners only.
+
   On every runner it also makes **PyYAML** importable for the job's own `python3` (`pip --user`,
   only when missing; it never swaps in another interpreter). The conventions gate needs it to parse
   workflows, and a product repo's suite runs that gate in its release job. So a repo neither

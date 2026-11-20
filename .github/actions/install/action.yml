@@ -5,6 +5,14 @@ description: >
   product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. Consumers
   configure with shipyard-cmake; MavericksShipyardConfig.cmake refuses any other cmake.
 
+inputs:
+  products:
+    description: >
+      Whitespace-separated SHORT@TAG family products to install after shipyard, each with what it
+      requires (for example go127-cross@v1.27.0-1). macOS runners only; empty installs none.
+    required: false
+    default: ''
+
 runs:
   using: composite
   steps:
@@ -97,6 +105,27 @@ runs:
         [ -d "$scripts" ] || { echo "::error::the shipyard pkg installed no scripts dir at $scripts"; exit 1; }
         echo "SHIPYARD_SCRIPTS=$scripts" >> "$GITHUB_ENV"
         echo "shipyard $ver installed; SHIPYARD_SCRIPTS=$scripts"
+
+    # spec: tests/install-action-products-test.sh -- named products come
+    #       from their releases, requires first, after shipyard so the scripts it ships are the ones
+    #       that ran above. Products reach the script through env, never interpolated into it.
+    - if: runner.os == 'macOS' && inputs.products != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PRODUCTS: ${{ inputs.products }}
+      run: |
+        set -eu
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        echo "MAVERGREEN_INSTALLED=$RUNNER_TEMP/mavergreen-installed.txt" >> "$GITHUB_ENV"
+        MAVERGREEN_INSTALLED="$RUNNER_TEMP/mavergreen-installed.txt" sh "$root/scripts/install-products.sh" $PRODUCTS
+
+    # spec: tests/install-action-products-test.sh -- an empty `products` keeps today's behaviour here
+    - if: runner.os != 'macOS' && inputs.products != ''
+      shell: bash
+      run: |
+        echo "::error::products: needs a macOS runner (Installer and Longboat are macOS-only)"
+        exit 1
 
     # spec: R-P1-18 -- there is no Linux pkg, and the jobs that land here do not want one: they run
     #       shipyard's SHELL half on ubuntu-latest, where the point is that the job is cheap. Refusing
