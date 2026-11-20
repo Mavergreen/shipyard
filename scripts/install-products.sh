@@ -240,11 +240,17 @@ while read -r act s rest; do
     provision)
       cmd="${rest#via }"
       echo "install-products: provisioning $s via $cmd" >&2
+      pm="$ROOT/usr/local/mavergreen/$s/mavergreen.plist"
+      before=""; [ ! -f "$pm" ] || before="$(cksum < "$pm")"
       # shellcheck disable=SC2086
       $SUDO $cmd < /dev/null >&2 || die "$s: '$cmd' failed"
-      pm="$ROOT/usr/local/mavergreen/$s/mavergreen.plist"
       [ -f "$pm" ] || die "$s: '$cmd' left no $pm"
+      [ -z "$before" ] || [ "$before" != "$(cksum < "$pm")" ] || die "$s: '$cmd' left the existing $pm unchanged"
       mver "$pm" "$s"; v=$_v
+      if [ -f "$T/floor/$s" ]; then
+        fl="$(cat "$T/floor/$s")"
+        ge "$v" "$fl" "$s" || die "$s>=$fl cannot be met: '$cmd' provisioned version $v"
+      fi
       ;;
   esac
   record "$s" "$v"
