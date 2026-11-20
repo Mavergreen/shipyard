@@ -47,3 +47,4 @@ zig-cross dev.mavergreen.zig.zig-cross zig
 wezterm dev.mavergreen.wezterm wezterm
 iterm2 dev.mavergreen.iterm2 iterm2
 fleet dev.mavergreen.fleet fleet
+cctools dev.mavergreen.cctools cctools
