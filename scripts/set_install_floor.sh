@@ -120,13 +120,15 @@ if [ -f "$BASEDIR/comp-x/Payload" ]; then
   while IFS= read -r _rel; do
     [ -n "$_rel" ] || continue
     _full="$AF_LOC$_rel"
-    [ -n "$(af_macho_kind "$AF_ROOT/$_rel")" ] || continue
+    _kind="$(af_macho_kind "$AF_ROOT/$_rel")"
+    [ -n "$_kind" ] || continue
     ! arch_is_exempt "$_full" || continue
     case "$_full" in "$TREE"*) ! arch_is_target "${_full#"$TREE"}" "$TARGETS" || continue;; esac
     _rc=0; sh "$SELF/macho-slices.sh" "$AF_ROOT/$_rel" > "$BASEDIR/one" 2> "$BASEDIR/one.err" || _rc=$?
     case "$_rc" in
       0) ;;
-      1) continue;;
+      1) [ "$_kind" = loose ] && continue
+         echo "productbuild_floor: $_full has a Mach-O magic that macho-slices.sh rejects" >&2; cat "$BASEDIR/one.err" >&2; exit 1;;
       *) echo "productbuild_floor: cannot read the Mach-O file $_full" >&2; cat "$BASEDIR/one.err" >&2; exit 1;;
     esac
     _enc="$(printf '%s\n' "$_full" | af_enc)"

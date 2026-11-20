@@ -164,6 +164,13 @@ rc=$?
 set -e
 [ "$rc" -eq 4 ] && grep -q 'LIPO' "$uerr" || { echo "FAIL: Mach-O with no reader must exit 4 naming LIPO (rc=$rc): $(cat "$uerr")"; exit 1; }
 [ ! -e "$w/ran" ] || { echo "FAIL: a bare lipo on PATH was run"; exit 1; }
+mkdir -p "$w/ax/lib" "$w/ay/lib"
+printf '!<arch>\none' > "$w/ax/lib/libm.a"; printf '!<arch>\ntwo' > "$w/ay/lib/libm.a"
+set +e
+env -u LIPO SHIPYARD_MACHO_DIRS= PATH="$w/nr" sh "$S" --a "$w/ax" --b "$w/ay" --out "$w/uo11" >/dev/null 2>"$uerr"
+rc=$?
+set -e
+[ "$rc" -eq 4 ] && grep -q 'LIPO' "$uerr" || { echo "FAIL: differing static archives must resolve the reader, exit 4 naming LIPO (rc=$rc): $(cat "$uerr")"; exit 1; }
 
 printf '#!/bin/sh\necho "Non-fat file: $2 is architecture: x86_64 "\n' > "$w/spacelipo"; chmod +x "$w/spacelipo"
 um "$w/un"; um "$w/uo"

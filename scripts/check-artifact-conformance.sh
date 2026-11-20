@@ -329,7 +329,7 @@ while read -r _ pa_file pa_host pa_before pa_rule; do
     else arch_fail arch-distribution "$pa_file allows os-versions with $(if [ "$pa_before" = none ]; then echo "no before"; else echo "before=\"$pa_before\""; fi); $pa_how, which wants before=\"$pa_wbefore\""; fi
   }
   [ "${pa_rule%%:*}" = "$pa_want" ] \
-    || arch_fail arch-distribution "$pa_file $(if [ "$pa_rule" = none ]; then echo "has no installation-check"; else echo "has a $pa_rule installation-check"; fi); $pa_how, which wants $pa_want"
+    || arch_fail arch-distribution "$pa_file $(if [ "$pa_rule" = none ]; then echo "has no installation-check"; else echo "has an $pa_rule installation-check"; fi); $pa_how, which wants $pa_want"
 done < "$tmp/pkg-arch"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and

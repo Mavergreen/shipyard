@@ -38,7 +38,7 @@ prompting for Rosetta on Apple Silicon.
 **x86_64 by default; arm64 only with a reason.** A product exists for Mavericks, so it ships x86_64
 only. An arm64 slice is a deviation, declared as a `.mavergreen/deviations/arch-host/<label>/` whose scope is the install-path glob, and
 it is warranted only when the thing is used in CI or by developers to produce, test or investigate
-Mavericks artifacts: a cross toolchain, cmake, shipyard's own updater, the static half of a
+Mavericks artifacts: a cross toolchain, cmake, the static half of a
 reverse-engineering tool. The reason names that use. A library gets an arm64 slice only for a real
 arm64 consumer, never speculatively. Parity is about *developers'* tools, not about shipping Mavericks
 products for Apple Silicon. A product spec that plans a universal build without such a reason is

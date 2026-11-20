@@ -176,6 +176,9 @@ dist; [ "$rc" -ne 0 ] || { echo "FAIL ($label): should fail"; echo "$out"; exit 
 for id in compat-selectors compat-archs compat-imports compat-required-defined; do
   says "more: shipyard-check --explain $id"
 done
+label="a deviations root that does not exist cannot be measured, and says so"; root="$w/no-such-root"
+fails "$w/build/bin/good"; says 'CANNOT MEASURE'; says "$w/no-such-root is not a directory"; root="$w/repo"
+
 label="--dist honours a path-scoped deviation for each compat id"
 deviations_are \
   compat-selectors demo opt/mavergreen/demo/bin/demo 'it sends labelColor only after respondsToSelector:. Revisit when 10.9 leaves.' \

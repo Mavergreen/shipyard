@@ -16,6 +16,8 @@ A load is resolved from the loading binary: an absolute path to that payload pat
 way. The result is normalized lexically, with . and .. resolved and no symlink followed. @executable_path
 is approximated by the loader's own directory, and a symlinked directory is not followed. Only a load that
 resolves to a file the same pkg installs is judged, and a product that no pkg in the release ships is not.
+A load is flagged if any one of the binary's rpaths reaches a target file. Rpaths inherited from the loading
+executable are not consulted. arch-target has no deviation, so a false positive needs a code fix.
 
 ## Deviating
 No deviation is read; correct .mavergreen/products/<short>/target.

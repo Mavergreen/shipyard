@@ -6,7 +6,7 @@
 #          whose needs macOS 28, a payload with no Mach-O file with and without the deviation) from
 #          a scratch MAVERGREEN_REPO_ROOT, and installs each onto a fresh scratch disk image with
 #          installer -pkg P -target V, never onto /. On a 10.9 or 10.10 Intel Mac every archive
-#          installs; on an Apple Silicon Mac running macOS 13 through 27 the archives install or
+#          installs; on an Apple Silicon Mac running macOS 11 through 27 the archives install or
 #          are refused as the class says, and the run records which refusal message the Intel-only
 #          archive got. Exits 77 unless run as root with MAVERGREEN_E2E=1, or on a host it has no
 #          expectations for. Fetches stevedore into its own work directory unless STEVEDORE or
@@ -20,14 +20,15 @@ LC_ALL=C; export LC_ALL
 OSV="$(sw_vers -productVersion)"
 case "$OSV:$(uname -m)" in
   10.9:x86_64|10.9.*:x86_64|10.10:x86_64|10.10.*:x86_64) BOX=old-intel ;;
-  1[3-9]*:arm64|2[0-7]*:arm64) BOX=arm64 ;;
-  *) echo "SKIP: arch-distribution-e2e has expectations for 10.9 and 10.10 Intel Macs and for macOS 13 through 27 on Apple Silicon, not macOS $OSV $(uname -m)"; exit 77 ;;
+  1[1-9]*:arm64|2[0-7]*:arm64) BOX=arm64 ;;
+  *) echo "SKIP: arch-distribution-e2e has expectations for 10.9 and 10.10 Intel Macs and for macOS 11 through 27 on Apple Silicon, not macOS $OSV $(uname -m)"; exit 77 ;;
 esac
 root="$(cd "$(dirname "$0")/.." && pwd)"
 S="$root/scripts"
 FX="$root/tests/fixtures/macho"
 W="$(mktemp -d "${TMPDIR:-/tmp}/arch-distribution-e2e.XXXXXX")"
 . "$root/tests/lib/e2e-volume.sh"
+. "$root/scripts/lib/vercmp.sh"
 HOST_BEFORE="$(host_state)"; HOST_REPORTED=""
 e2e_trap
 
@@ -96,11 +97,8 @@ refused() {
     bad "$2 was refused by a failing install script, not by its Distribution; the refusal lines:" "$(refusal_lines)" || return 1
   fi
   if [ -n "${3:-}" ]; then
-    grep -qF "$3" "$_log" && { echo "    $2 refused with the installation-check's message: $3"; return 0; }
+    grep -qF "$3" "$_log" && { echo "    $2 refused with the installation-check's message: $(grep -F "$3" "$_log" | sed -n 1p)"; return 0; }
     bad "$2's refusal does not say '$3'; the refusal lines:" "$(refusal_lines)" || return 1
-  fi
-  if grep -qF "$INTEL_MSG" "$_log" && [ "${4:-}" = either ]; then
-    echo "    $2 refused with the installation-check's message: $(grep -F "$INTEL_MSG" "$_log" | sed -n 1p)"; return 0
   fi
   if grep -qiE "$OS_MSG" "$_log"; then
     echo "    $2 refused by allowed-os-versions: $(grep -iE "$OS_MSG" "$_log" | sed -n 1p)"; return 0
@@ -109,14 +107,13 @@ refused() {
 }
 
 run_case() {
-  _short="$1"; _want="$2"; _msg="$3"; _mode=""
-  [ "$_short" != x86 ] || _mode=either
+  _short="$1"; _want="$2"; _msg="$3"
   eval "_pkg=\$PKG_$_short"
   _log=""
   if fresh_volume; then
     if ( case "$_want" in
            install) installs "$_pkg" "$_short" ;;
-           *) refused "$_pkg" "$_short" "$_msg" "$_mode" ;;
+           *) refused "$_pkg" "$_short" "$_msg" ;;
          esac ); then echo "PASS $_short ($_want)"; else echo "FAIL $_short (expected $_want)"; fails=$((fails + 1)); fi
     drop_volume
   else
@@ -134,10 +131,11 @@ case "$BOX" in
     run_case neutral install ""
     run_case neutralnew install "" ;;
   arm64)
-    run_case x86 refuse ""
+    run_case x86 refuse "built for Intel Macs running Mac OS X 10.9 or 10.10."
     run_case x86new refuse "built for Intel Macs."
     run_case uni28 refuse "needs macOS 28.0 or later"
-    run_case uni13 install ""
+    if [ "$(mavergreen_vercmp "$OSV" 13.0)" = -1 ]; then run_case uni13 refuse "needs macOS 13.0 or later"
+    else run_case uni13 install ""; fi
     run_case neutral refuse ""
     run_case neutralnew install "" ;;
 esac

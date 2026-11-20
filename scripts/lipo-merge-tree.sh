@@ -43,7 +43,7 @@ trap 'rm -rf "$work" "$OUT"' EXIT
 #           has one; a LIPO the caller set is always asked.
 has_magic() {
   case "$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' ')" in
-    feedface|feedfacf|cefaedfe|cffaedfe|cafebabe|bebafeca) return 0;;
+    feedface|feedfacf|cefaedfe|cffaedfe|cafebabe|bebafeca|213c6172) return 0;;
   esac
   return 1
 }

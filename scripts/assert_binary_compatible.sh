@@ -233,7 +233,7 @@ devs_root="${MAVERGREEN_DEVIATIONS_ROOT:-${SHIPYARD_CHECK_REPO:-.}}"
 # platform: not a pipeline -- deviations.sh exits 1 on a malformed entry, and a pipeline would report
 #           shipyard_deviation_facts' status instead, turning "this declaration is malformed" into "there
 #           are no deviations".
-_fs_root="$(cd "$devs_root" && pwd)"
+_fs_root="$(cd "$devs_root" 2>/dev/null && pwd)" || cannot_measure deviation-complete "$devs_root is not a directory, so its deviations cannot be read"
 GUARD_FLOOR=
 shipyard_deviations "$devs_root" > "$work/devs" 2> "$work/devs.err" \
   || cannot_measure deviation-complete "$devs_root/.mavergreen/deviations/ holds a malformed deviation: $(cat "$work/devs.err")"

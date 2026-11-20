@@ -80,6 +80,16 @@ chmod +x "$w/stubs/reader" "$w/stubs/xcrun"
   PATH="$SAVED_PATH"; unset LIPO OTOOL SHIPYARD_MACHO_DIRS
 }
 
+{
+  SAVED_PATH="$PATH"; SAVED_FX="$FX"
+  mkdir -p "$w/fx"; printf '\317\372\355\376' > "$w/fx/thin"
+  FX="$w/fx"
+  PATH="$w/stubs:$PATH"; LIPO="$w/stubs/reader"; OTOOL="$w/stubs/reader"; SHIPYARD_MACHO_DIRS=; export PATH LIPO OTOOL SHIPYARD_MACHO_DIRS
+  build strict-rejected opt/mavergreen/w/bin/thin=thin
+  refused1 strict-rejected "opt/mavergreen/w/bin/thin has a Mach-O magic that macho-slices.sh rejects"
+  PATH="$SAVED_PATH"; FX="$SAVED_FX"; unset LIPO OTOOL SHIPYARD_MACHO_DIRS
+}
+
 if need_readers x86_64; then
   no_newer
   build x86_64 opt/mavergreen/w/bin/clean=clean; built x86_64
