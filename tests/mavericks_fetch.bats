@@ -503,3 +503,19 @@ bare_path() {  # $1 = dir: the tools a fetch uses, without shasum or sha256sum
   rm "$WORK/SHA256SUMS"
   run shipyard_release_sha "file://$WORK" a.tar; [ "$status" -eq 1 ]; [[ "$output" == *"could not fetch"* ]]
 }
+
+@test "shipyard_latest_tag: prints the tag a file:// release root names" {
+  mkdir -p "$WORK/rel/Mavergreen/longboat/releases"
+  echo 20261027.8 > "$WORK/rel/Mavergreen/longboat/releases/latest"
+  MAVERGREEN_RELEASES="file://$WORK/rel" run shipyard_latest_tag longboat
+  [ "$status" -eq 0 ]; [ "$output" = 20261027.8 ]
+}
+
+@test "shipyard_latest_tag: a missing or empty latest fails" {
+  MAVERGREEN_RELEASES="file://$WORK/rel" run shipyard_latest_tag longboat
+  [ "$status" -eq 1 ]
+  mkdir -p "$WORK/rel/Mavergreen/longboat/releases"
+  : > "$WORK/rel/Mavergreen/longboat/releases/latest"
+  MAVERGREEN_RELEASES="file://$WORK/rel" run shipyard_latest_tag longboat
+  [ "$status" -eq 1 ]
+}

@@ -58,6 +58,12 @@ sh "$S" identifier legacysupport >/dev/null 2>&1 \
 for q in repo updater-bundle-id agent-label updater-app feed; do
   sh "$S" "$q" no-such-product >/dev/null 2>&1 && fail "$q of an unregistered name must exit non-zero"
 done
+[ "$(sh "$S" provisioner sdk109)" = 'longboat sdk install 10.9' ] \
+  || fail "sdk109 is provisioned by running longboat, not by installing a release pkg"
+sh "$S" provisioner longboat >/dev/null 2>&1 && fail "a product with no provisioner must exit 1"
+sh "$S" provisioner no-such-product >/dev/null 2>&1 && fail "an unregistered name has no provisioner"
+rc=0; sh "$S" provisioner >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "provisioner with no name is a usage error, exit 2: rc $rc"
 
 w="$(mktemp -d "${TMPDIR:-/tmp}/product-names.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 printf 'a dev.mavergreen.a r\na dev.mavergreen.b r\n' > "$w/dup-name"
@@ -86,8 +92,9 @@ MAVERGREEN_PRODUCT_NAMES="$w/bad-repo" sh "$S" check 2>/dev/null \
 printf 'go127 dev.mavergreen.go127 golang-127\n' > "$w/lined-id"
 MAVERGREEN_PRODUCT_NAMES="$w/lined-id" sh "$S" check 2>/dev/null \
   && fail "a product in a line repo is identified dev.mavergreen.<product>.<short name>"
+printf '# none\n' > "$w/no-prov"
 printf '# comment\n\ngo127 dev.mavergreen.golang.go127 golang-127\nx dev.mavergreen.x one\ny dev.mavergreen.y one\n' > "$w/good"
-MAVERGREEN_PRODUCT_NAMES="$w/good" sh "$S" check \
+MAVERGREEN_PRODUCT_NAMES="$w/good" MAVERGREEN_PRODUCT_PROVISIONERS="$w/no-prov" sh "$S" check \
   || fail "comments, blank lines, a lined identifier and many short names in one repo are all allowed"
 printf 'var dev.mavergreen.var-x v\n-x dev.mavergreen.dash d\nBad dev.mavergreen.bad b\n' > "$w/unsafe"
 for n in var -x Bad; do
@@ -116,6 +123,27 @@ for q in repo feed; do
   [ "$rc" -eq 2 ] && [ -n "$err" ] \
     || fail "$q of a registered name whose row has no repo must exit 2 and say why: rc $rc [$err]"
 done
+
+printf 'sdk109 longboat sdk install 10.9\n' > "$w/prov-good"
+MAVERGREEN_PRODUCT_PROVISIONERS="$w/prov-good" sh "$S" check || fail "the committed provisioner row is valid"
+printf 'sdk109 nosuchprovider sdk install 10.9\n' > "$w/prov-bad-provider"
+MAVERGREEN_PRODUCT_PROVISIONERS="$w/prov-bad-provider" sh "$S" check 2>/dev/null \
+  && fail "a provisioner whose provider is not a registered short name must be refused"
+printf 'nosuchproduct longboat sdk install 10.9\n' > "$w/prov-bad-short"
+MAVERGREEN_PRODUCT_PROVISIONERS="$w/prov-bad-short" sh "$S" check 2>/dev/null \
+  && fail "a provisioner for an unregistered product must be refused"
+printf 'sdk109\n' > "$w/prov-no-cmd"
+MAVERGREEN_PRODUCT_PROVISIONERS="$w/prov-no-cmd" sh "$S" check 2>/dev/null \
+  && fail "a provisioner row with no command must be refused"
+printf 'sdk109 longboat a\nsdk109 longboat b\n' > "$w/prov-dup"
+MAVERGREEN_PRODUCT_PROVISIONERS="$w/prov-dup" sh "$S" check 2>/dev/null \
+  && fail "two provisioners for one product must be refused"
+MAVERGREEN_PRODUCT_PROVISIONERS="$w/prov-no-cmd" sh "$S" provisioner sdk109 >/dev/null 2>&1 \
+  && fail "a provisioner row with no command must not answer"
+MAVERGREEN_PRODUCT_PROVISIONERS="$w/absent" sh "$S" provisioner sdk109 >/dev/null 2>&1 \
+  && fail "a missing provisioner file must fail, not read as empty"
+MAVERGREEN_PRODUCT_PROVISIONERS="$w/absent" sh "$S" check >/dev/null 2>&1 \
+  && fail "check must fail when the provisioner file is missing"
 
 missing_registry() {
   err="$(MAVERGREEN_PRODUCT_NAMES="$w/absent" sh "$S" "$@" 2>&1 >/dev/null)" \
