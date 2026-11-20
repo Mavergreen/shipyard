@@ -87,7 +87,7 @@ installs() {
 }
 SCRIPTS_FAIL='error occurred while running scripts|preinstall'
 INTEL_MSG='built for Intel Macs'
-OS_MSG='incompatible with this version|requires (Mac OS X|macOS|OS X) [0-9]|newer version of (Mac OS X|macOS|OS X)'
+OS_MSG='The version of macOS is too new'
 refusal_lines() { grep -iE "$INTEL_MSG|$OS_MSG|needs macOS|refus|cannot|failed|not (supported|compatible)" "$_log" | sed -n 1,12p | sed 's/^/    | /'; }
 refused() {
   ! install_to "$1" || bad "$2 installed, and the class refuses it here" || return 1
