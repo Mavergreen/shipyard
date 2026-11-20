@@ -52,7 +52,7 @@ T="$(mktemp -d "${TMPDIR:-/tmp}/install-products.XXXXXX")"
 trap 'rm -rf "$T"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-mkdir "$T/pin" "$T/floor" "$T/m" "$T/w"
+mkdir "$T/pin" "$T/carry" "$T/m" "$T/w"
 for p in "$@"; do printf '%s\n' "${p#*@}" > "$T/pin/${p%%@*}"; done
 
 reg() {
@@ -93,8 +93,13 @@ manifest() {
   if listed "$_w/SHA256SUMS" "$_xml"; then
     shipyard_fetch_verified "$_base/$_xml" "$_ls" "$_cache" "$_xml" || die "$1 $3: could not fetch and verify $_base/$_xml"
     cp "$_cache/$_xml" "$_w/appcast" || die "$1 $3: cannot copy $_xml"
+  elif shipyard_curl --quiet "$_base/$_xml" "$_w/appcast" 2>/dev/null; then
+    die "$1 $3: $_xml is not listed (once) in $_base/SHA256SUMS"
   else
-    shipyard_curl --quiet "$_base/$_xml" "$_w/appcast" 2>/dev/null || rm -f "$_w/appcast"
+    case "$?:$shipyard_curl_http" in
+      22:404|37:*) rm -f "$_w/appcast" ;;
+      *) die "$1 $3: could not fetch $_base/$_xml" ;;
+    esac
   fi
   if [ -f "$_w/appcast" ]; then
     _u="$(enclosures "$_w/appcast")"
@@ -115,11 +120,14 @@ manifest() {
   shipyard_fetch_verified "$_base/$_asset" "$_ls" "$_cache" "$_asset" \
     || die "$1 $3: could not fetch and verify $_base/$_asset"
   "$STEVEDORE" expand "$_cache/$_asset" "$_w/x" > /dev/null || die "$1 $3: could not expand $_cache/$_asset"
-  _m="$(grep -l "identifier=\"$4\"" "$_w"/x/PackageInfo "$_w"/x/*/PackageInfo 2>/dev/null || :)"
+  _m="$(grep -lF "identifier=\"$4\"" "$_w"/x/PackageInfo "$_w"/x/*/PackageInfo 2>/dev/null || :)"
   [ "$(printf '%s\n' "$_m" | grep -c .)" = 1 ] || die "$1 $3: expected one component $4 in $_asset"
   mkdir "$_w/p" || die "$1 $3: cannot make $_w/p"
-  ( cd "$_w/p" && gzip -dc "$(dirname "$_m")/Payload" | cpio -id --quiet "*usr/local/mavergreen/$1/mavergreen.plist" ) 2>/dev/null \
-    || die "$1 $3: could not unpack the Payload of $4"
+  _cr=0
+  ( cd "$_w/p" && { gzip -dc "$(dirname "$_m")/Payload" || : > "$_w/gzip.failed"; } \
+    | cpio -id --quiet "*usr/local/mavergreen/$1/mavergreen.plist" ) 2>/dev/null || _cr=$?
+  [ ! -e "$_w/gzip.failed" ] || die "$1 $3: could not decompress the Payload of $4 in $_asset"
+  [ "$_cr" -eq 0 ] || die "$1 $3: could not unpack the Payload of $4 in $_asset"
   mv "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" "$_mf" 2>/dev/null \
     || die "$1 $3: $4 in $_asset installs no usr/local/mavergreen/$1/mavergreen.plist"
   rm -rf "$_w"
@@ -142,6 +150,7 @@ resolve() {
     v="$(cat "$T/done/$s")"
     if [ -z "$fl" ] || [ "$v" = - ] || ge "$v" "$fl" "$s"; then return 0; fi
     [ ! -f "$T/pin/$s" ] || die "$s is named at $(cat "$T/pin/$s") (version $v), below $s>=$fl${by:+ required by $by}"
+    printf '%s\n' "$fl" > "$T/carry/$s"
     exit 3
   fi
   reg repo "$s" "$by"; repo=$_rv
@@ -174,7 +183,13 @@ resolve() {
     act=install
   fi
   i=0
-  while [ -n "$src" ] && r="$("$STEVEDORE" plist get "$src" "requires:$i" 2>/dev/null)"; do
+  while [ -n "$src" ]; do
+    _rc=0; r="$("$STEVEDORE" plist get "$src" "requires:$i" 2> "$T/err")" || _rc=$?
+    if [ "$_rc" -eq 1 ] && grep -q 'no such entry' "$T/err"; then
+      [ "$i" -gt 0 ] || { _rc=0; "$STEVEDORE" plist get "$src" requires > /dev/null 2>&1 || _rc=$?; }
+      case "$_rc" in 1|3) break ;; *) die "$s: the requires in $src is not an array of strings" ;; esac
+    fi
+    [ "$_rc" -eq 0 ] || die "$s: cannot read requires:$i of $src: $(cat "$T/err")"
     rn="${r%%>=*}"; rf=""
     case "$r" in *'>='*) rf="${r#*>=}" ;; esac
     case "$rn" in ''|-*|*[!a-z0-9-]*) die "$s requires '$r', which names no product" ;; esac
@@ -188,8 +203,13 @@ resolve() {
   esac >> "$T/plan"
 }
 
+# spec: tests/install-products-test.sh -- a pass's floors come only from the requirers it chose,
+#       plus those that forced a restart
+pass=0
 while :; do
-  rm -rf "$T/done"; mkdir "$T/done"; : > "$T/plan"
+  pass=$((pass + 1))
+  [ "$pass" -le 50 ] || die "the requires did not settle after 50 passes: $(cd "$T/carry" && for f in *; do printf '%s>=%s ' "$f" "$(cat "$f")"; done)"
+  rm -rf "$T/done" "$T/floor"; mkdir "$T/done"; cp -R "$T/carry" "$T/floor"; : > "$T/plan"
   rc=0
   for p in "$@"; do
     ( resolve "${p%%@*}" "" "" ) || { rc=$?; break; }

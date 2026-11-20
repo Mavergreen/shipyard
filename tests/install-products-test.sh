@@ -12,7 +12,7 @@ n=0
 fresh() {
   n=$((n + 1)); w="$top/$n"; mkdir -p "$w/root"
   printf '%s\n' 'a dev.mavergreen.a arepo' 'b dev.mavergreen.b brepo' 'c dev.mavergreen.c crepo' \
-    'd dev.mavergreen.d drepo' > "$w/names"
+    'd dev.mavergreen.d drepo' 'x dev.mavergreen.x xrepo' > "$w/names"
   printf '%s\n' 'c b setup c --now' > "$w/provisioners"
   export MAVERGREEN_PRODUCT_NAMES="$w/names" MAVERGREEN_PRODUCT_PROVISIONERS="$w/provisioners"
   export MAVERGREEN_RELEASES="file://$w/rel" MAVERGREEN_PKG_CACHE="$w/cache"
@@ -25,6 +25,7 @@ release() {
       --version) _v=$2; shift 2 ;;
       --no-appcast) _ac=""; shift ;;
       --unlisted) _ul=1; shift ;;
+      --appcast-unlisted) _ul=xml; shift ;;
       *) break ;;
     esac
   done
@@ -50,13 +51,13 @@ DIST
     printf '<rss><channel><item>\n<enclosure url="https://github.com/Mavergreen/%s/releases/download/%s/%s-%s.pkg" type="application/octet-stream" length="1" />\n</item></channel></rss>\n' \
       "$_repo" "$_t" "$_s" "$_t" > "$_rel/$_s.xml"
   fi
-  ( cd "$_rel" && { [ -n "$_ul" ] || shasum -a 256 "$_s-$_t.pkg"; [ -z "$_ac" ] || shasum -a 256 "$_s.xml"; } > SHA256SUMS )
+  ( cd "$_rel" && { [ "$_ul" = 1 ] || shasum -a 256 "$_s-$_t.pkg"; [ -z "$_ac" ] || [ "$_ul" = xml ] || shasum -a 256 "$_s.xml"; } > SHA256SUMS )
 }
 latest() { mkdir -p "$w/rel/Mavergreen/${1}repo/releases"; echo "$2" > "$w/rel/Mavergreen/${1}repo/releases/latest"; }
 installed() {
   mkdir -p "$w/root/usr/local/mavergreen/$1"
-  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>version</key>\n  <string>%s</string>\n</dict>\n</plist>\n' \
-    "$2" > "$w/root/usr/local/mavergreen/$1/mavergreen.plist"
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>version</key>\n  <string>%s</string>\n%b</dict>\n</plist>\n' \
+    "$2" "${3:-}" > "$w/root/usr/local/mavergreen/$1/mavergreen.plist"
 }
 plan() { rc=0; out="$(sh "$S" --root "$w/root" --dry-run "$@" 2>&1)" || rc=$?; }
 plan_stdout() { rc=0; out="$(sh "$S" --root "$w/root" --dry-run "$@" 2>/dev/null)" || rc=$?; }
@@ -97,7 +98,8 @@ plan_stdout a@1
 fresh; abc; latest b 1
 plan a@1
 [ "$rc" -eq 1 ] || fail "latest_below_floor_fails: exit 1, got $rc"
-has "b" && has ">=2" && has "1" || fail "latest_below_floor_fails: the message names b, the floor 2 and the latest 1"
+has "b>=2 (required by a) cannot be met: the latest release of Mavergreen/brepo is 1, version 1" \
+  || fail "latest_below_floor_fails: the message names b, the floor 2, its requirer and the latest 1"
 
 fresh; abc; latest b 3; installed b 2; release d 1 'b>=3'
 plan_stdout a@1 d@1
@@ -108,6 +110,25 @@ plan_stdout a@1 d@1
 fresh; abc; latest b 3; release d 1 'b>=3'
 plan a@1 d@1 b@2
 [ "$rc" -eq 1 ] && has "b" && has ">=3" || fail "a named pin below a require's floor fails, naming both"
+
+fresh; release a 1 b; release x 1; release x 5; latest x 5; installed x 1
+release b 3 x; latest b 3; release d 1 'b>=3'
+installed b 1 '  <key>requires</key>\n  <array>\n    <string>x&gt;=5</string>\n  </array>\n'
+plan_stdout a@1 d@1
+[ "$rc" -eq 0 ] && [ "$out" = "$(lines 'keep x 1' 'install b 3' 'install a 1' 'install d 1')" ] \
+  || fail "a floor from a requirer the restarted pass no longer chooses does not survive the restart"
+
+fresh; release a 1 b; latest b 1; installed b 1 '  <key>requires</key>\n  <array>\n    <dict/>\n  </array>\n'
+plan a@1
+[ "$rc" -eq 1 ] && has "requires:0" || fail "an unreadable requires entry fails rather than ending the list"
+
+fresh; release a 1 b; latest b 1; installed b 1 '  <key>requires</key>\n  <string>x</string>\n'
+plan a@1
+[ "$rc" -eq 1 ] && has "not an array" || fail "a requires that is not an array fails rather than reading as none"
+
+fresh; release a 1 --appcast-unlisted
+plan a@1
+[ "$rc" -eq 1 ] && has "a.xml is not listed" || fail "an appcast SHA256SUMS does not list fails"
 
 fresh; release a 1 b; release b 1 a; latest b 1; latest a 1
 plan a@1
