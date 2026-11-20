@@ -156,8 +156,8 @@ install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
 #       and an install stages that release's reference set beside the scripts, as reference/objc, so an installed
 #       guard measures against it with no fetch. It is fetched here, at install time, and verified as every
 #       Drydock fetch is (fetch_drydock.sh header); nothing is compiled.
-install(FILES components/drydock/version components/drydock/linux-sha256 DESTINATION "${_dest}/components/drydock")
-install(FILES components/objc-receipt-clang/version components/objc-receipt-clang/linux-sha256 DESTINATION "${_dest}/components/objc-receipt-clang")
+install(FILES components/drydock/version DESTINATION "${_dest}/components/drydock")
+install(FILES components/objc-receipt-clang/version DESTINATION "${_dest}/components/objc-receipt-clang")
 set(_msc_objc_refs_code [[
   if(IS_ABSOLUTE "@_dest@")
     set(_msc_to "@_dest@")

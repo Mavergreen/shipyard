@@ -82,8 +82,8 @@ printf '#!/bin/sh\n' >"$w/fake-drydock/bin/drydock-objc"; chmod +x "$w/fake-dryd
 echo fake >"$w/fake-drydock/share/drydock/objc/reference/fake.tsv"
 MAVERGREEN_DRYDOCK_PREFIX="$w/fake-drydock" cmake --install "$b" --prefix "$p" >"$w/install.log" 2>&1 || { echo "FAIL: shipyard did not install:"; tail -20 "$w/install.log"; exit 1; }
 d="$p/share/cmake/MavericksShipyard"
-for f in components/drydock/version components/drydock/linux-sha256 components/objc-receipt-clang/version \
-  components/objc-receipt-clang/linux-sha256 scripts/objc-compat.sh scripts/objc-build-evidence.sh scripts/objc-provider-link-args.sh \
+for f in components/drydock/version components/objc-receipt-clang/version \
+  scripts/objc-compat.sh scripts/objc-build-evidence.sh scripts/objc-provider-link-args.sh \
   scripts/objc-source-inventory.sh scripts/objc-reference-dir.sh scripts/fetch_drydock.sh scripts/fetch_product_pkg.sh; do
   cmp -s "$root/$f" "$d/$f" || { echo "FAIL: the install does not stage $f"; exit 1; }
 done

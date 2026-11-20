@@ -38,7 +38,7 @@ if [ "$rc" = 0 ] && [ "$out" = "$T/cache/22.1.8-mavericks.1-pic" ]; then
 else fail "cache: exit $rc, printed '$out'"; fi
 
 if [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ]; then
-  cp "$CLANG22_PINS/version" "$CLANG22_PINS/linux-sha256" "$T/pin/"
+  cp "$CLANG22_PINS/version" "$T/pin/"
   printf '%s %s\n' "$pin" "$digest" >"$T/pin/llvm-project"
   CL=$(sh "$ROOT/scripts/fetch_clang22.sh" "$T/pin" 2>"$T/err") || { fail 'fetch clang22'; CL=; }
   if [ -n "$CL" ]; then

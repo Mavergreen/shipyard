@@ -1652,10 +1652,10 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   what ships to all of it.
 - **The updater builds with clang22 on every host, Linux and Mac alike, through the same function.**
   Pin clang22 in `components/clang22/version` (a Renovate `github-releases` manager on
-  `Mavergreen/clang-22`), with its Linux archive's line of that release's `SHA256SUMS` in
-  `components/clang22/linux-sha256`. `CL="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" components/clang22)"`
+  `Mavergreen/clang-22`); its Linux archive is verified against that release's own `SHA256SUMS`, so
+  the version is the only pin. `CL="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" components/clang22)"`
   prints the toolchain root for this host, fetched, verified and cached:
-  - Linux: the pinned `linux-x86_64` archive.
+  - Linux: the pinned `linux-x86_64` archive, verified against the release's `SHA256SUMS`.
   - A Mac: the `clang22-cross` pkg, through stevedore.
   - Mac OS X 10.9: the native `clang22` pkg, since the cross pkg does not run there and 10.9 has no
     AArch64 backend, so x86_64 only.
