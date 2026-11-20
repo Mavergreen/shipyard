@@ -37,7 +37,7 @@ while [ "$1" != --end ]; do
     --preinstall-hook) PREH="$2"; shift 2 ;;
     --postinstall-hook) POSTH="$2"; shift 2 ;;
     --name) NAME="$2"; set -- "$@" "$1" "$2"; shift 2 ;;
-    --requires) REQ="$REQ$2$nl"; shift 2 ;;
+    --requires) REQ="$REQ$2$nl"; set -- "$@" "$1" "$2"; shift 2 ;;
     --version|--group|--line|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
     --appcast|--app-dir|--agent-label) echo "stage_product: $1 is derived from shipyard's scripts/product-names; stop passing it" >&2; exit 2 ;;
     *) echo "stage_product: unknown option $1" >&2; exit 2 ;;

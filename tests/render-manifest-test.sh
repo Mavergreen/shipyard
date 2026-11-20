@@ -59,4 +59,10 @@ for bad in /Applications/X.app Applications/../X.app ./Applications/X.app usr/lo
 done
 sh "$S" --stage "$st" --product openssh --name x --version 1 --generated "$(printf 'Applications/A.app\nusr/local/mavergreen/sib')" 2>/dev/null \
   && fail "a generated entry with a newline must be refused -- it would render as two entries"
+sh "$S" --stage "$st" --product openssh --name x --version 1 --requires 'longboat>=20261019.1' --requires sdk109
+[ "$(p requires:0)" = 'longboat>=20261019.1' ] && [ "$(p requires:1)" = sdk109 ] \
+  || fail "requires entries are written verbatim, in the order given"
+p requires:2 >/dev/null 2>&1 && fail "requires has exactly the entries given"
+sh "$S" --stage "$st" --product openssh --name x --version 1
+p requires:0 >/dev/null 2>&1 && fail "a product with no requires has no requires key"
 echo "PASS: render-manifest"
