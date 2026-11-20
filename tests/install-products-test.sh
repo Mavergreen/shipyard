@@ -198,30 +198,30 @@ for pi in "$d"/x/PackageInfo "$d"/x/*/PackageInfo; do
 done
 rm -rf "$d"
 FAKE
-cat > "$top/bin/longboat" <<'FAKE'
+cat > "$top/bin/b" <<'FAKE'
 #!/bin/sh
-echo "longboat $*" >> "$FAKE_LOG"
-[ -z "${FAKE_LONGBOAT_FAIL:-}" ] || exit 1
-[ -n "${FAKE_LONGBOAT_NOMANIFEST:-}" ] && exit 0
+echo "b $*" >> "$FAKE_LOG"
+[ -z "${FAKE_B_FAIL:-}" ] || exit 1
+[ -n "${FAKE_B_NOMANIFEST:-}" ] && exit 0
 mkdir -p "$FAKE_ROOT/usr/local/mavergreen/$2"
 printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>version</key>\n  <string>20261012.2</string>\n</dict>\n</plist>\n' \
   > "$FAKE_ROOT/usr/local/mavergreen/$2/mavergreen.plist"
 FAKE
-chmod +x "$top/bin/installer" "$top/bin/longboat"
+chmod +x "$top/bin/installer" "$top/bin/b"
 real() {
-  printf '%s\n' 'c b longboat provision c' > "$w/provisioners"
+  printf '%s\n' 'c b provision c' > "$w/provisioners"
   : > "$w/log"; : > "$w/installed"; rm -rf "$w/root"; mkdir -p "$w/root"
   export FAKE_LOG="$w/log" FAKE_ROOT="$w/root" MAVERGREEN_INSTALLED="$w/installed"
   export INSTALLER="$top/bin/installer" SUDO= PATH="$top/bin:$PATH"
-  unset FAKE_INSTALLER_FAIL FAKE_LONGBOAT_FAIL FAKE_LONGBOAT_NOMANIFEST
+  unset FAKE_INSTALLER_FAIL FAKE_B_FAIL FAKE_B_NOMANIFEST
 }
 run() { rc=0; out="$(sh "$S" --root "$w/root" "$@" 2>&1)" || rc=$?; }
 
 fresh; abc; latest b 3; real
 run a@1
 [ "$rc" -eq 0 ] || fail "installs_in_order: exit 0, got $rc"
-[ "$(cat "$w/log")" = "$(lines 'installer b-3.pkg' 'longboat provision c' 'installer a-1.pkg')" ] \
-  || fail "installs_in_order: b, then longboat provisions c, then a ($(cat "$w/log"))"
+[ "$(cat "$w/log")" = "$(lines 'installer b-3.pkg' 'b provision c' 'installer a-1.pkg')" ] \
+  || fail "installs_in_order: b, then b provisions c, then a ($(cat "$w/log"))"
 has "installing a 1" || fail "the script says what it changed"
 [ "$(cat "$w/installed")" = "$(lines 'b 3' 'c 20261012.2' 'a 1')" ] || fail "installed_file_lists_all: $(cat "$w/installed")"
 
@@ -231,15 +231,15 @@ run a@1
   || fail "kept products are recorded too"
 [ "$(grep -c '^installer' "$w/log")" -eq 1 ] || fail "a kept product is not reinstalled"
 
-fresh; abc; latest b 3; real; export FAKE_LONGBOAT_FAIL=1
+fresh; abc; latest b 3; real; export FAKE_B_FAIL=1
 run a@1
 [ "$rc" -eq 1 ] && [ "$(cat "$w/installed")" = "b 3" ] && ! grep -q 'a-1' "$w/log" \
   || fail "provisioner_failure_fails: exit 1, only b recorded, a not installed"
-has "'longboat provision c' failed" || fail "provisioner_failure_fails: names the command"
+has "'b provision c' failed" || fail "provisioner_failure_fails: names the command"
 
-fresh; abc; latest b 3; real; export FAKE_LONGBOAT_NOMANIFEST=1
+fresh; abc; latest b 3; real; export FAKE_B_NOMANIFEST=1
 run a@1
-[ "$rc" -eq 1 ] && [ "$(cat "$w/installed")" = "b 3" ] && has "c:" && has "longboat provision c" \
+[ "$rc" -eq 1 ] && [ "$(cat "$w/installed")" = "b 3" ] && has "c:" && has "b provision c" \
   || fail "provision_without_manifest_fails: names c and the command"
 
 fresh; abc; latest b 3; real; export FAKE_INSTALLER_FAIL=a-1.pkg
@@ -249,7 +249,7 @@ run a@1
 
 fresh; abc; latest b 3; real; export FAKE_INSTALLER_FAIL=b-3.pkg
 run a@1
-[ "$rc" -eq 1 ] && [ ! -s "$w/installed" ] && ! grep -q longboat "$w/log" \
+[ "$rc" -eq 1 ] && [ ! -s "$w/installed" ] && ! grep -q '^b ' "$w/log" \
   || fail "a failed step stops everything after it"
 
 echo "PASS: install-products"

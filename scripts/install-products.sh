@@ -238,7 +238,7 @@ while read -r act s rest; do
       $INSTALLER -pkg "$pkg" -target "$ROOT" < /dev/null >&2 || die "$s $v: the installer failed on $pkg"
       ;;
     provision)
-      cmd="${rest#via }"; cmd="${cmd#* }"
+      cmd="${rest#via }"
       echo "install-products: provisioning $s via $cmd" >&2
       # shellcheck disable=SC2086
       $SUDO $cmd < /dev/null >&2 || die "$s: '$cmd' failed"
