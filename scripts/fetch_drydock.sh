@@ -5,8 +5,8 @@
 #          prefix holding bin/drydock-objc and share/drydock/objc/reference. PIN_DIR is shipyard's
 #          components/drydock. MAVERGREEN_DRYDOCK_PREFIX, when set, is that prefix instead: it is checked for
 #          bin/drydock-objc, and nothing is fetched. On x86_64 Linux: the release's
-#          drydock-X.Y.Z-linux-x86_64.tar.gz, verified against PIN_DIR/linux-sha256 (the archive's line of the
-#          release's SHA256SUMS). fetch_product_tar.sh cannot take it -- its asset is named for the tag and its
+#          drydock-X.Y.Z-linux-x86_64.tar.gz, verified against the release's SHA256SUMS,
+#          fetched afresh on every call. fetch_product_tar.sh cannot take it -- its asset is named for the tag and its
 #          root must be opt/mavergreen/SHORT, while Drydock's tag has a v and its archive's root is
 #          drydock-X.Y.Z/ -- so the archive is fetched with mavericks_fetch.sh's shipyard_fetch_verified, the
 #          downloader fetch_product_tar.sh uses, and unpacked here. On a Mac: an installed
@@ -15,7 +15,7 @@
 #          release's SHA256SUMS. A fetch is unpacked once into $MAVERGREEN_DRYDOCK_CACHE (default
 #          ~/Library/Caches/mavergreen-drydock on a Mac, ~/.cache/mavergreen-drydock elsewhere)/TAG and kept.
 #          MAVERGREEN_DRYDOCK_HOST (linux or mac) replaces the host's own answer. Exit 1 on a failed fetch or
-#          a missing digest, 2 on a usage error or a malformed pin.
+#          an archive SHA256SUMS does not list, 2 on a usage error or a malformed pin.
 set -eu
 S="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "fetch_drydock: $*" >&2; exit 1; }
@@ -53,10 +53,9 @@ manifest_version() {
 case "$host" in
   linux)
     asset="drydock-$N-linux-x86_64.tar.gz"
-    [ -f "$P/linux-sha256" ] || die "$P has no linux-sha256 for $asset"
-    sha="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' "$P/linux-sha256")"
-    case "$sha" in ''|*[!0-9a-f]*) die "$P/linux-sha256 names no SHA-256 for $asset (copy its line from https://github.com/Mavergreen/drydock/releases/download/$V/SHA256SUMS)" ;; esac
-    [ "${#sha}" -eq 64 ] || die "$P/linux-sha256's digest for $asset is not a SHA-256"
+    . "$S/mavericks_fetch.sh"
+    BASE="${MAVERGREEN_RELEASES:-https://github.com}/Mavergreen/drydock/releases/download/$V"
+    sha="$(shipyard_release_sha "$BASE" "$asset")" || die "no verified digest for $asset"
     d="$W/linux"
     kept() { has_objc "$d" && [ "$(cat "$d.stamp" 2>/dev/null || :)" = "$sha" ]; }
     if ! kept; then
@@ -74,8 +73,6 @@ case "$host" in
       locked=1
     fi
     if ! kept; then
-      . "$S/mavericks_fetch.sh"
-      BASE="${MAVERGREEN_RELEASES:-https://github.com}/Mavergreen/drydock/releases/download/$V"
       shipyard_fetch_verified "$BASE/$asset" "$sha" "$W" "$asset" >&2 || die "could not fetch and verify $BASE/$asset"
       tmp="$(mktemp -d "$W/linux.tmp.XXXXXX")"
       tar -xzf "$W/$asset" -C "$tmp" "drydock-$N" || die "could not unpack drydock-$N from $asset"

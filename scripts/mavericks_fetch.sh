@@ -2,6 +2,7 @@
 # platform: host-agnostic
 #   usage: shipyard_curl [--quiet|--progress-bar] URL OUT|-
 #          shipyard_fetch_pinned URL SHA256 CACHE_DIR TARBALL_NAME [tar-member...]
+#          shipyard_release_sha RELEASE_URL ASSET
 #          shipyard_fetch_verified URL SHA256 CACHE_DIR TARBALL_NAME
 #          shipyard_fetch_extract URL SHA256 CACHE_DIR TARBALL_NAME [tar-member...]
 #          shipyard_fetch_publish CACHE_DIR EXTRACT_DIR
@@ -17,6 +18,10 @@
 #          $shipyard_curl_http, which is empty when no attempt ran. Each attempt fails a transfer
 #          slower than 1KB/s for 60s. --quiet drops curl's own error line; --progress-bar shows
 #          curl's progress bar. SHIPYARD_FETCH_BACKOFF=0 skips the waits (test-only).
+#          shipyard_release_sha prints ASSET's SHA-256 from RELEASE_URL/SHA256SUMS, fetched afresh on every call, so
+#          a Mavergreen release's own published digest, never one committed beside a pin, is what verifies it. It
+#          returns 1, saying why on stderr, when SHA256SUMS cannot be fetched or does not list ASSET exactly once
+#          (a "*"-prefixed binary-mode name counts): an asset the file does not cover is never reported verified.
 #          shipyard_fetch_verified downloads URL through shipyard_curl to a unique mktemp file,
 #          CACHE_DIR/.TARBALL_NAME.XXXXXX, verifies it there against
 #          SHA256, and only then renames it to CACHE_DIR/TARBALL_NAME, so concurrent fetches never see a
@@ -95,6 +100,19 @@ shipyard_curl() {
   [ "$_sc_out" -ne 0 ] || cat "$_sc_tmp" || _sc_out=1
   rm -f "$_sc_tmp"
   return "$_sc_out"
+}
+
+shipyard_release_sha() {
+  _rs_t="$(mktemp "${TMPDIR:-/tmp}/shipyard_sums.XXXXXX")" || return 1
+  shipyard_curl --quiet "$1/SHA256SUMS" "$_rs_t" || {
+    rm -f "$_rs_t"; echo "shipyard_fetch: could not fetch $1/SHA256SUMS" >&2; return 1; }
+  _rs_sha="$(awk -v f="$2" '$2 == f || $2 == "*" f { print $1 }' "$_rs_t")"
+  rm -f "$_rs_t"
+  case "$_rs_sha" in
+    *[!0-9a-f]*|'') echo "shipyard_fetch: $2 is not listed (once) in $1/SHA256SUMS" >&2; return 1 ;;
+  esac
+  [ "${#_rs_sha}" -eq 64 ] || { echo "shipyard_fetch: $2 is not listed (once) in $1/SHA256SUMS" >&2; return 1; }
+  printf '%s\n' "$_rs_sha"
 }
 
 shipyard_fetch_verified() {

@@ -21,31 +21,32 @@ with tarfile.open(sys.argv[1], 'w:gz') as t:
         t.addfile(m, io.BytesIO(b'x'))
 PY
   SHA="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REL/$ASSET")"
+  printf '%s  %s\n' "$SHA" "$ASSET" > "$REL/SHA256SUMS"
 }
 teardown() { rm -rf "$WORK"; }
 
-@test 'linux: the pinned archive, verified against linux-sha256, is the printed root' {
-  printf '%s  %s\n' "$SHA" "$ASSET" > "$PIN/linux-sha256"
+@test 'linux: the archive, verified against the release SHA256SUMS, is the printed root' {
   out="$(CLANG22_HOST=linux sh "$HELPER" "$PIN")"
   [ "$out" = "$WORK/clang22/22.1.8-mavericks.99/linux" ] || { echo "$out"; return 1; }
   [ -x "$out/bin/ld64.lld" ]
 }
 @test 'linux: a binary-mode SHA256SUMS line (*name) is read too' {
-  printf '%s *%s\n' "$SHA" "$ASSET" > "$PIN/linux-sha256"
+  printf '%s *%s\n' "$SHA" "$ASSET" > "$REL/SHA256SUMS"
   run env CLANG22_HOST=linux sh "$HELPER" "$PIN"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
-@test 'linux: a digest pinned for another release fails, naming the SHA256SUMS to copy from' {
-  printf '%s  %s\n' "$SHA" clang22-22.1.8-mavericks.98-linux-x86_64.tar.gz > "$PIN/linux-sha256"
+@test 'linux: an archive SHA256SUMS does not list fails, naming it' {
+  printf '%s  %s\n' "$SHA" clang22-22.1.8-mavericks.98-linux-x86_64.tar.gz > "$REL/SHA256SUMS"
   run env CLANG22_HOST=linux sh "$HELPER" "$PIN"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"names no SHA-256 for $ASSET"*"22.1.8-mavericks.99/SHA256SUMS"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"$ASSET is not listed"*"22.1.8-mavericks.99/SHA256SUMS"* ]] || { echo "$output"; return 1; }
   [ ! -d "$WORK/clang22/22.1.8-mavericks.99/linux" ] || false
 }
-@test 'linux: a wrong digest is refused' {
-  printf '%064d  %s\n' 0 "$ASSET" > "$PIN/linux-sha256"
+@test 'linux: a SHA256SUMS digest that does not match the archive is refused' {
+  printf '%064d  %s\n' 0 "$ASSET" > "$REL/SHA256SUMS"
   run env CLANG22_HOST=linux sh "$HELPER" "$PIN"
   [ "$status" -ne 0 ]
+  [ ! -d "$WORK/clang22/22.1.8-mavericks.99/linux" ] || false
 }
 @test 'mac: an installed clang22-cross at the pinned release is used, with no fetch' {
   mkdir -p "$CLANG22_INSTALLED/bin"

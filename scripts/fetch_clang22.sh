@@ -4,15 +4,14 @@
 #          Prints the root of the clang22 release PIN_DIR/version names, for this host: a prefix holding
 #          bin/clang, bin/ld64.lld and bin/llvm-{lipo,otool,nm,strings}. PIN_DIR is a product's
 #          components/clang22. On x86_64 Linux: that release's linux-x86_64 archive, through
-#          fetch_product_tar.sh, verified against PIN_DIR/linux-sha256 (the archive's line of the
-#          release's SHA256SUMS). On a Mac: the clang22-cross pkg (on Mac OS X 10.9, whose cross pkg does
-#          not run there, the native clang22 pkg), through fetch_product_pkg.sh and stevedore, verified
+#          fetch_product_tar.sh, verified against the release's SHA256SUMS. On a Mac: the clang22-cross pkg
+#          (on Mac OS X 10.9, whose cross pkg does not run there, the native clang22 pkg), through fetch_product_pkg.sh and stevedore, verified
 #          against the release's SHA256SUMS; an installed /usr/local/mavergreen/clang22-cross (clang22 on
 #          10.9) at that release is used instead, and CLANG22_INSTALLED replaces that path. A fetch is
 #          unpacked once into $MAVERGREEN_CLANG22_CACHE (default ~/Library/Caches/mavergreen-clang22 on a
 #          Mac, ~/.cache/mavergreen-clang22 elsewhere)/VERSION and kept, so a CI cache of that directory
 #          skips the download. CLANG22_HOST (linux, mac or mac109) replaces the host's own answer. Exit 1
-#          on a failed fetch or a missing digest, 2 on a usage error or a malformed pin.
+#          on a failed fetch or an archive SHA256SUMS does not list, 2 on a usage error or a malformed pin.
 set -eu
 S="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "fetch_clang22: $*" >&2; exit 1; }
@@ -54,12 +53,8 @@ from_pkg() {
 case "$host" in
   linux)
     asset="clang22-$V-linux-x86_64.tar.gz"
-    [ -f "$P/linux-sha256" ] || die "$P has no linux-sha256 for $asset"
-    sha="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' "$P/linux-sha256")"
-    case "$sha" in ''|*[!0-9a-f]*) die "$P/linux-sha256 names no SHA-256 for $asset (copy its line from https://github.com/Mavergreen/clang-22/releases/download/$V/SHA256SUMS)" ;; esac
-    [ "${#sha}" -eq 64 ] || die "$P/linux-sha256's digest for $asset is not a SHA-256"
     d="$W/linux"
-    sh "$S/fetch_product_tar.sh" clang22 "$V" "$sha" "$d" >/dev/null || die "could not fetch and verify $asset" ;;
+    sh "$S/fetch_product_tar.sh" clang22 "$V" "$d" >/dev/null || die "could not fetch and verify $asset" ;;
   mac109) from_pkg clang22 "mavericks-clang-22-native-$V.pkg" ;;
   mac) from_pkg clang22-cross "mavericks-clang-22-cross-$V.pkg" ;;
 esac
