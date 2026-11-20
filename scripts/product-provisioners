@@ -1,0 +1,4 @@
+# spec: tests/product-names-test.sh -- one line per provisioned product: <short name> <command...>.
+#       The product is set up by running the command, whose first word is the registered product
+#       that provides it, rather than by installing a release pkg.
+sdk109 longboat sdk install 10.9

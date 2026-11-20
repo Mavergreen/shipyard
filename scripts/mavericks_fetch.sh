@@ -1,6 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: shipyard_curl [--quiet|--progress-bar] URL OUT|-
+#          shipyard_latest_tag REPO
 #          shipyard_fetch_pinned URL SHA256 CACHE_DIR TARBALL_NAME [tar-member...]
 #          shipyard_release_sha RELEASE_URL ASSET
 #          shipyard_fetch_verified URL SHA256 CACHE_DIR TARBALL_NAME
@@ -44,6 +45,10 @@
 #          a failed verification. A CACHE_DIR entry therefore appears only when complete, so an extract that
 #          fails or is interrupted never leaves a partial tree for a caller to trust.
 #          A tar member is extracted only as spelled in the archive (GNU tar is strict): pass "./x" for an archive whose members are "./x/...".
+#          shipyard_latest_tag prints the tag https://github.com/Mavergreen/REPO/releases/latest redirects to,
+#          read from the redirect's Location with no API call. MAVERGREEN_RELEASES replaces https://github.com;
+#          a file:// root is read as ROOT/Mavergreen/REPO/releases/latest, one line holding the tag.
+#          It returns 1 when the tag is empty or cannot be found.
 shipyard_curl_http=""
 
 _shipyard_curl_to() {
@@ -189,4 +194,19 @@ shipyard_fetch_publish() {
 
 shipyard_fetch_pinned() {
   _px="$(shipyard_fetch_extract "$@")" && shipyard_fetch_publish "$3" "$_px"
+}
+
+shipyard_latest_tag() {
+  _lt_root="${MAVERGREEN_RELEASES:-https://github.com}"
+  _lt_url="$_lt_root/Mavergreen/$1/releases/latest"
+  case "$_lt_root" in
+    file://*) _lt_tag="$(head -n 1 "${_lt_url#file://}" 2>/dev/null)" || _lt_tag="" ;;
+    *) _lt_loc="$(curl -sS --connect-timeout 20 -o /dev/null -w '%{redirect_url}' "$_lt_url")" || _lt_loc=""
+       _lt_tag="${_lt_loc##*/releases/tag/}"
+       [ "$_lt_tag" != "$_lt_loc" ] || _lt_tag="" ;;
+  esac
+  case "$_lt_tag" in
+    ''|*[!A-Za-z0-9._+-]*) echo "shipyard_latest_tag: no latest release tag for $1 at $_lt_url" >&2; return 1 ;;
+  esac
+  printf '%s\n' "$_lt_tag"
 }
