@@ -201,14 +201,14 @@ expected="$(printf '%s\n' \
   --exclude "share/man/man1/extra.1" \
   --replaces "/usr/bin/ssh=bin/ssh" \
   --replaces "/usr/bin/scp=bin/scp two" \
+  --requires container-tools \
   --has-updater)"
 [ "$(cat "$w/rm.log")" = "$expected" ] \
   || fail "every render-manifest option, in order, with repeats and embedded spaces, must reach render-manifest intact: got [$(cat "$w/rm.log")]"
-grep -qE -- '--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook|--requires' "$w/rm.log" \
+grep -qE -- '--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook' "$w/rm.log" \
   && fail "a stage_product-only option must never reach render-manifest"
 grep -qF "$w/scr3" "$w/rm.log" && fail "a stage_product-only option's VALUE must never reach render-manifest either"
 grep -qF "Application Support" "$w/rm.log" && fail "the updater's app-dir value must never reach render-manifest"
-grep -qF container-tools "$w/rm.log" && fail "--requires's value must never reach render-manifest either"
 [ "$(sed -n '/^--product$/{n;p;}' "$w/rmu.log")" = openssh ] \
   || fail "stage_updater is told the product, and derives the rest: got [$(cat "$w/rmu.log")]"
 
@@ -517,6 +517,16 @@ for v in - 1.0-rc1 dict; do
     || fail "an uncomparable installed version ($v) must leave the existing installed tree untouched"
 done
 
+SCRR="$w/scr-porthole-rec"
+sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRR" \
+  --requires 'longboat>=20261019.1' --requires sdk109 \
+  || fail "staging porthole with a minimum and a bare requirement must succeed"
+MP="$stp/usr/local/mavergreen/porthole/mavergreen.plist"
+[ "$("$SD" plist get "$MP" requires:0)" = 'longboat>=20261019.1' ] && [ "$("$SD" plist get "$MP" requires:1)" = sdk109 ] \
+  || fail "stage_product records each --requires in the manifest, in order, as given"
+"$SD" plist get "$MP" requires:2 >/dev/null 2>&1 && fail "the manifest's requires has only the entries given"
+grep -q 'longboat' "$SCRR/preinstall" && grep -q 'sdk109' "$SCRR/preinstall" \
+  || fail "recording requires in the manifest leaves the preinstall checking them"
 SCRM2="$w/scr-porthole-min2"
 sh "$S" --stage "$stp" --product porthole --name Porthole --version 1 --scripts-out "$SCRM2" \
   --requires 'container-tools>=20261019.1' --requires 'openssh>=9.9p2' \
