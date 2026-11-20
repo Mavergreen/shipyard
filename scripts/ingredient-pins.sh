@@ -80,33 +80,37 @@ own="$(awk '
 #       untouched, which is where globbing belongs here.
 set -f
 for f in $(git ls-files); do
+  # spec: tests/ingredient-pins-test.sh -- as in GitHub's paths filter, the last pattern a file
+  #       matches decides, and a '!' pattern excludes.
+  watched=no
   for p in $patterns; do
+    want=yes
+    case "$p" in '!'*) want=no; p="${p#!}" ;; esac
     pat="$(printf '%s' "$p" | sed 's/\*\*/*/g')"
     # shellcheck disable=SC2254  # $pat is intentionally a glob
     case "$f" in
-      $pat) ;;
-      *) continue ;;
+      $pat) watched=$want ;;
     esac
-    excluded=no
-    exclkey=""
-    for o in $own; do
-      case "$o" in
-        *:*)
-          ofile="${o%%:*}"; okey="${o##*:}"
-          [ "$f" = "$ofile" ] && exclkey="$okey"
-          ;;
-        *)
-          [ "$f" = "$o" ] && { excluded=yes; break; }
-          ;;
-      esac
-    done
-    if [ "$excluded" = yes ]; then
-      :
-    elif [ -n "$exclkey" ]; then
-      printf '%s:%s\n' "$f" "$exclkey"
-    else
-      printf '%s\n' "$f"
-    fi
-    break
   done
+  [ "$watched" = yes ] || continue
+  excluded=no
+  exclkey=""
+  for o in $own; do
+    case "$o" in
+      *:*)
+        ofile="${o%%:*}"; okey="${o##*:}"
+        [ "$f" = "$ofile" ] && exclkey="$okey"
+        ;;
+      *)
+        [ "$f" = "$o" ] && { excluded=yes; break; }
+        ;;
+    esac
+  done
+  if [ "$excluded" = yes ]; then
+    :
+  elif [ -n "$exclkey" ]; then
+    printf '%s:%s\n' "$f" "$exclkey"
+  else
+    printf '%s\n' "$f"
+  fi
 done

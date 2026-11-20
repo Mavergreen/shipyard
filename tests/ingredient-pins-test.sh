@@ -142,4 +142,44 @@ printf '%s\n' "$out" | grep -qx 'pins.env:SWIFT_VERSION' \
 printf '%s\n' "$out" | grep -qx 'other.txt' \
   || { echo "FAIL: a real YAML parser ends the block scalar at the first line no MORE indented than \"own-upstream-paths:\" itself -- the reader once terminated inblock only on a column-0 line, so a sibling key's own VALUE (here \"other.txt\", a real watched path) got swallowed into the own-upstream token list and wrongly excluded: block-scalar sibling keys: other.txt wrongly excluded by a sibling key's value, got '$out'"; exit 1; }
 
+# spec: SKILL.md "New-project checklist" step 8 -- a CI-only pin under components/ is excluded
+#       from the trigger with a '!' pattern ('!components/longboat/**'). GitHub reads paths in
+#       order and the LAST pattern a file matches decides, so this reader must too.
+mkdir -p components/longboat
+printf '20261027.8\n' > components/longboat/version
+printf 'keep\n' > components/longboat/keep
+git add -A; git commit -qm "add a CI-only longboat pin"
+cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
+on:
+  push:
+    branches: [main]
+    paths: ['components/**', '!components/longboat/**']
+jobs:
+  repackage:
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    with:
+      own-upstream-paths: components/tailscale/version
+YML
+out="$(sh "$S")"
+[ "$out" = components/golang/version ] \
+  || { echo "FAIL: '!components/longboat/**' must exclude what components/** matched, as GitHub's paths filter does, or the notes list a CI-only tool nothing ships as a moved build ingredient (inline form): got '$out'"; exit 1; }
+
+cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
+on:
+  push:
+    branches: [main]
+    paths:
+      - components/**
+      - '!components/longboat/**'   # CI only
+      - components/longboat/keep
+jobs:
+  repackage:
+    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
+    with:
+      own-upstream-paths: components/tailscale/version
+YML
+out="$(sh "$S" | tr '\n' ' ')"
+[ "$out" = "components/golang/version components/longboat/keep " ] \
+  || { echo "FAIL: the last matching pattern decides, as in GitHub's paths filter (block form): a positive pattern after a '!' one re-includes its files, and the '!' still excludes the rest: got '$out'"; exit 1; }
+
 echo "PASS: ingredient-pins"
