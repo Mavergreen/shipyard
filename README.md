@@ -153,6 +153,10 @@ In your `.github/workflows/*.yml` (if applicable):
 - uses: Mavergreen/shipyard/.github/actions/install@v1
 ```
 
+To install other family products in the job, name them: `with: { products: "go127-cross@v1.27.0-1" }`
+(whitespace-separated `SHORT@TAG`). Each comes from its release, with whatever it requires, and macOS
+runners only; a non-empty `products` on any other runner fails.
+
 Then build, and test:
 
 ```sh
