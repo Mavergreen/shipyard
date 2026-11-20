@@ -252,4 +252,14 @@ run a@1
 [ "$rc" -eq 1 ] && [ ! -s "$w/installed" ] && ! grep -q '^b ' "$w/log" \
   || fail "a failed step stops everything after it"
 
+fresh; release a 1 'c>=20261013'; release b 3; latest b 3; real
+run a@1
+[ "$rc" -eq 1 ] && has "c>=20261013" && has "20261012.2" && [ "$(cat "$w/installed")" = "b 3" ] \
+  || fail "a provision below the floor fails, naming the floor and version"
+
+fresh; release a 1 'c>=20261013'; release b 3; latest b 3; real; installed c 20261001; export FAKE_B_NOMANIFEST=1
+run a@1
+[ "$rc" -eq 1 ] && has "unchanged" && [ "$(cat "$w/installed")" = "b 3" ] \
+  || fail "a provision that leaves a stale manifest untouched fails"
+
 echo "PASS: install-products"
