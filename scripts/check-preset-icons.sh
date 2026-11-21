@@ -22,7 +22,7 @@
 #          accepted icon: a record that is wrong is worse than none. With GITHUB_STEP_SUMMARY set it
 #          adds the accepted and current icons side by side; with ICON_OUT_DIR, it keeps the fetched
 #          icon there as icon.png.
-# spec: tests/check-preset-icons-test.sh; .superpowers/specs/2026-11-21-preset-icon-provenance-design.md
+# spec: tests/check-preset-icons-test.sh; SKILL.md "Porthole presets' vendor icons"
 set -eu
 usage() { echo "usage: check-preset-icons.sh [--accept [--search-back N]] CONF" >&2; exit 2; }
 accept= back=0

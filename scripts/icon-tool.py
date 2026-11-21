@@ -19,7 +19,7 @@
 #          same-dhash prints the difference-hash threshold within which two icons are the same picture.
 #          A PNG this can't decode (interlaced, truncated, larger than 2048 px, or 1024 px for find)
 #          is refused by fingerprint and skipped by find, as are symlinks and unreadable archives.
-# spec: .superpowers/specs/2026-11-21-preset-icon-provenance-design.md (tests/icon-tool-test.sh)
+# spec: tests/icon-tool-test.sh; SKILL.md "Porthole presets' vendor icons"
 import hashlib, json, os, struct, sys, zlib
 
 MAX_FIND = 1024
