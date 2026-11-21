@@ -214,9 +214,12 @@ python3 - "$here/../.github/actions/install/action.yml" <<'PY'
 import re, sys, yaml
 a = yaml.safe_load(open(sys.argv[1]))
 bad = []
-if a.get("inputs"):
-    bad.append("install@v1 takes no inputs: it installs the release its ref names, and its source: build "
-               "path for shipyard's own retired macOS test job is gone; got %r" % sorted(a["inputs"]))
+ins = a.get("inputs") or {}
+if set(ins) - {"products"}:
+    bad.append("install@v1 takes no input but an optional 'products': it installs the release its ref names, "
+               "and its source: build path for shipyard's own retired macOS test job is gone; got %r" % sorted(ins))
+if "products" in ins and (ins["products"].get("required") or ins["products"].get("default") not in ("", None)):
+    bad.append("install@v1's 'products' input must be optional with an empty default; got %r" % ins["products"])
 if "'build'" in open(sys.argv[1]).read():
     bad.append("install@v1 still has a source: build path; no workflow uses it")
 if "release-version" in (a.get("inputs") or {}) or "inputs.release-version" in open(sys.argv[1]).read():
