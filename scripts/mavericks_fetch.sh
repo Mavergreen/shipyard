@@ -48,7 +48,8 @@
 #          shipyard_latest_tag prints the tag https://github.com/Mavergreen/REPO/releases/latest redirects to,
 #          read from the redirect's Location with no API call. MAVERGREEN_RELEASES replaces https://github.com;
 #          a file:// root is read as ROOT/Mavergreen/REPO/releases/latest, one line holding the tag.
-#          It returns 1 when the tag is empty or cannot be found.
+#          The https read retries like shipyard_curl (same curl exits, SHIPYARD_FETCH_TRIES, backoff) and
+#          gives up after 60s per attempt. It returns 1 when the tag is empty or cannot be found.
 shipyard_curl_http=""
 
 _shipyard_curl_to() {
@@ -201,7 +202,19 @@ shipyard_latest_tag() {
   _lt_url="$_lt_root/Mavergreen/$1/releases/latest"
   case "$_lt_root" in
     file://*) _lt_tag="$(head -n 1 "${_lt_url#file://}" 2>/dev/null)" || _lt_tag="" ;;
-    *) _lt_loc="$(curl -sS --connect-timeout 20 -o /dev/null -w '%{redirect_url}' "$_lt_url")" || _lt_loc=""
+    *) _lt_loc=""; _lt_n=1; _lt_wait=2
+       while :; do
+         _lt_rc=0
+         _lt_loc="$(curl -sS --connect-timeout 20 --max-time 60 -o /dev/null -w '%{redirect_url}' "$_lt_url")" || _lt_rc=$?
+         [ "$_lt_rc" -ne 0 ] || break
+         _lt_loc=""
+         case "$_lt_rc" in 6|7|18|28|35|52|55|56) ;; *) break ;; esac
+         [ "$_lt_n" -lt "${SHIPYARD_FETCH_TRIES:-5}" ] || break
+         echo "shipyard_latest_tag: $_lt_url: curl exit $_lt_rc; retry $_lt_n of ${SHIPYARD_FETCH_TRIES:-5} in ${_lt_wait}s" >&2
+         [ "${SHIPYARD_FETCH_BACKOFF:-}" = 0 ] || sleep "$_lt_wait"
+         _lt_n=$((_lt_n + 1))
+         [ "$_lt_wait" -ge 16 ] || _lt_wait=$((_lt_wait * 2))
+       done
        _lt_tag="${_lt_loc##*/releases/tag/}"
        [ "$_lt_tag" != "$_lt_loc" ] || _lt_tag="" ;;
   esac
