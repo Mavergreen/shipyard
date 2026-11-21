@@ -233,9 +233,9 @@ while read -r act s rest; do
     keep) v=$rest ;;
     install)
       v=$rest; pkg="$(cat "$T/pkg/$s")"
-      echo "install-products: installing $s $v from $pkg into $ROOT" >&2
+      echo "install-products: installing $s $v from $pkg into ${ROOT:-/}" >&2
       # shellcheck disable=SC2086
-      $INSTALLER -pkg "$pkg" -target "$ROOT" < /dev/null >&2 || die "$s $v: the installer failed on $pkg"
+      $INSTALLER -pkg "$pkg" -target "${ROOT:-/}" < /dev/null >&2 || die "$s $v: the installer failed on $pkg"
       ;;
     provision)
       cmd="${rest#via }"
