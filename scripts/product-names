@@ -49,3 +49,4 @@ iterm2 dev.mavergreen.iterm2 iterm2
 fleet dev.mavergreen.fleet fleet
 cctools dev.mavergreen.cctools cctools
 macfuse dev.mavergreen.macfuse macfuse
+alacritty dev.mavergreen.alacritty alacritty
