@@ -49,6 +49,12 @@ wrap objc-compat.sh 0 --artifact "$A" --root /r --references /refs --report /rep
 [ "$rc" = 0 ] && argv_is analyze --artifact "$A" --root /r --references /refs --report /rep --mode strict --root-kind volume &&
   pass 'objc-compat.sh passes --root-kind to drydock-objc analyze' ||
   fail "objc-compat.sh with --root-kind: exit $rc, argv $(cat "$T/argv" 2>/dev/null)"
+wrap objc-compat.sh 0 --artifact "$A" --root /r --references /refs --report /rep --build-evidence /e \
+  --link-map '/m m' --object-dir /o1 --object-dir '/o 2'
+[ "$rc" = 0 ] && argv_is analyze --artifact "$A" --root /r --references /refs --report /rep --build-evidence /e \
+  --link-map '/m m' --object-dir /o1 --object-dir '/o 2' &&
+  pass 'objc-compat.sh passes --link-map and every --object-dir to drydock-objc analyze' ||
+  fail "objc-compat.sh with --link-map and --object-dir: exit $rc, argv $(cat "$T/argv" 2>/dev/null)"
 wrap objc-compat.sh 0 --artifact "$A" --root /r
 [ "$rc" = 2 ] && [ ! -e "$T/argv" ] && pass 'objc-compat.sh refuses a short call' || fail "objc-compat.sh short: exit $rc"
 
@@ -57,6 +63,10 @@ wrap objc-build-evidence.sh 0 --artifact /a --prestrip /p --source-root /s --ref
   pass 'objc-build-evidence.sh runs drydock-objc evidence with its arguments' || fail "objc-build-evidence.sh: exit $rc"
 wrap objc-build-evidence.sh 4 --artifact /a --prestrip /p --source-root /s --link-map /m --provider-prefix /x --references /refs --output /o
 [ "$rc" = 4 ] && pass 'objc-build-evidence.sh exits with drydock-objc' || fail "objc-build-evidence.sh: exit $rc, want 4"
+wrap objc-build-evidence.sh 0 --artifact /a --prestrip /p --source-root /s --link-map /m --references /refs --output /o
+[ "$rc" = 0 ] && argv_is evidence --artifact /a --prestrip /p --source-root /s --link-map /m --references /refs --output /o &&
+  pass 'objc-build-evidence.sh passes --link-map without --provider-prefix' ||
+  fail "objc-build-evidence.sh with --link-map alone: exit $rc, argv $(cat "$T/argv" 2>/dev/null)"
 wrap objc-build-evidence.sh 0 --artifact /a --prestrip /p --source-root /s --output /o
 [ "$rc" = 2 ] && [ ! -e "$T/argv" ] && pass 'objc-build-evidence.sh refuses a malformed call' || fail "objc-build-evidence.sh short: exit $rc"
 
