@@ -42,6 +42,11 @@ printf '%s\n' "$out" | grep -q ";-E;env;.*;sh;.*/assert_binary_compatible.sh;" \
 probe 'set(MAVERGREEN_OBJC_BUILD_EVIDENCE /e.json)'
 [ "$rc" != 0 ] && printf '%s\n' "$out" | grep -q 'needs OBJC_STRICT' \
   || { echo "FAIL: build evidence without OBJC_STRICT did not stop the configure:"; echo "$out"; exit 1; }
+for k in MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT; do
+  probe "set($k /d)"
+  [ "$rc" != 0 ] && printf '%s\n' "$out" | grep -q "$k is the strict" \
+    || { echo "FAIL: $k without OBJC_STRICT did not stop the configure:"; echo "$out"; exit 1; }
+done
 probe '' OBJC_STRICT
 [ "$rc" = 0 ] || { echo "FAIL: the OBJC_STRICT probe did not run:"; echo "$out"; exit 1; }
 printf '%s\n' "$out" | grep -q ";MAVERGREEN_OBJC_STRICT=1;" \
@@ -56,9 +61,13 @@ probe 'set(MAVERGREEN_OBJC_BUILD_EVIDENCE "/e v/ev.json")
 set(MAVERGREEN_OBJC_ROOT "/r o")
 set(MAVERGREEN_OBJC_PROVIDER_PREFIX /p)
 set(MAVERGREEN_OBJC_SOURCE_RECEIPT /p/r.receipt)
-set(MAVERGREEN_OBJC_REFERENCES /refs)' OBJC_STRICT
+set(MAVERGREEN_OBJC_REFERENCES /refs)
+set(MAVERGREEN_OBJC_SOURCE_ROOT "/s r")
+set(MAVERGREEN_OBJC_CRATE_SOURCES /c)
+set(MAVERGREEN_OBJC_SDK_ROOT /k)' OBJC_STRICT
 for kv in "MAVERGREEN_OBJC_BUILD_EVIDENCE=/e v/ev.json" "MAVERGREEN_OBJC_ROOT=/r o" MAVERGREEN_OBJC_PROVIDER_PREFIX=/p \
-  MAVERGREEN_OBJC_SOURCE_RECEIPT=/p/r.receipt MAVERGREEN_OBJC_REFERENCES=/refs; do
+  MAVERGREEN_OBJC_SOURCE_RECEIPT=/p/r.receipt MAVERGREEN_OBJC_REFERENCES=/refs "MAVERGREEN_OBJC_SOURCE_ROOT=/s r" \
+  MAVERGREEN_OBJC_CRATE_SOURCES=/c MAVERGREEN_OBJC_SDK_ROOT=/k; do
   printf '%s\n' "$out" | grep -qF ";$kv;" || { echo "FAIL: $kv is not forwarded:"; echo "$out"; exit 1; }
 done
 # spec: MavericksCompatGuard.cmake header -- with OBJC_STRICT, a retired selector knob, in CMake or the environment, stops

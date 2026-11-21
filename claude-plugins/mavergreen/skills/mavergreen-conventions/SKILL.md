@@ -364,11 +364,16 @@ shipyard's facilities rather than trusting the runner:
     unsupported or unresolved fails, and one it cannot examine fails as cannot-measure. A binary whose
     receivers need build evidence (a Rust objc2 binding, an Objective-C provider such as Recaulk's) passes it
     through `MAVERGREEN_OBJC_BUILD_EVIDENCE`, `MAVERGREEN_OBJC_PROVIDER_PREFIX` and
-    `MAVERGREEN_OBJC_SOURCE_RECEIPT`. Opted in, `MAVERICKS_POST_10_9_SELECTORS` and
-    `MAVERICKS_ALLOW_SELECTORS` fail when set (a selector string neither proves a send nor proves a guard), and
-    a guarded send is excused only by a reviewed `- objc-api:<glob>: evidence=<file>#<record id> <reason>`
-    deviation; not opted in, an analyzer knob fails rather than be ignored. The default flips once every family
-    product's binaries have been measured, with today's findings grandfathered (maintainer, 2026-11-07).
+    `MAVERGREEN_OBJC_SOURCE_RECEIPT`. Schema-2 evidence keys each review to the files it cites, not to a
+    revision: the build fills its symbols from the artifact with `scripts/objc-resolve.sh`, and the guard hashes
+    the cited files under `MAVERGREEN_OBJC_SOURCE_ROOT` (the prepared tree, whose digest
+    `scripts/objc-build-evidence.sh --tree-digest-only` prints), `MAVERGREEN_OBJC_CRATE_SOURCES` and
+    `MAVERGREEN_OBJC_SDK_ROOT`, so a bump that leaves them unchanged keeps its review. Opted in,
+    `MAVERICKS_POST_10_9_SELECTORS` and `MAVERICKS_ALLOW_SELECTORS` fail when set (a selector string neither
+    proves a send nor proves a guard), and a guarded send is excused only by a reviewed
+    `- objc-api:<glob>: evidence=<file>#<record id> <reason>` deviation; not opted in, an analyzer knob fails
+    rather than be ignored. The default flips once every family product's binaries have been measured, with
+    today's findings grandfathered (maintainer, 2026-11-07).
   - **`MAVERICKS_REQUIRE_DEFINED_SYMBOLS` is product-specific — do NOT copy golang's blindly.** The guard
     already denies the common post-10.9 symbols (`_clock_gettime`, `_os_unfair_lock_*`, `_os_log*`, …) as
     *undefined imports* by default. `REQUIRE_DEFINED` is the opposite assertion — "this symbol MUST be

@@ -21,7 +21,7 @@
 #          deviations"); the finding stays in the report, and the guard says which deviation applied.
 #          Exit 0 clean, 1 a check failed, 2 misuse (MAVERGREEN_OBJC_STRICT neither 1 nor unset, an
 #          analyzer knob without it, a selector knob with it, evidence for more than one binary, a
-#          binary outside MAVERGREEN_OBJC_ROOT), 4 cannot measure.
+#          source root without evidence, a binary outside MAVERGREEN_OBJC_ROOT), 4 cannot measure.
 #          Knobs:
 #            MAVERICKS_DEVIATIONS_ROOT         the repo whose INGREDIENTS.md declares the deviations
 #                                               (default: the current directory;
@@ -43,12 +43,18 @@
 #                                               inside it.
 #            MAVERGREEN_OBJC_REFERENCES         the reference set (default: the pinned Drydock's,
 #                                               scripts/objc-reference-dir.sh).
-#            MAVERGREEN_OBJC_BUILD_EVIDENCE     schema-1 build evidence (scripts/objc-build-evidence.sh),
+#            MAVERGREEN_OBJC_BUILD_EVIDENCE     build evidence (scripts/objc-build-evidence.sh, and for
+#                                               schema 2 scripts/objc-resolve.sh),
 #            MAVERGREEN_OBJC_PROVIDER_PREFIX    an Objective-C provider prefix, and
 #            MAVERGREEN_OBJC_SOURCE_RECEIPT     the provider body's source receipt, each passed to the
 #                                               analyzer as its --build-evidence, --provider-prefix
 #                                               and --source-receipt. Build evidence is bound to one
 #                                               artifact, so with it the guard takes one binary.
+#            MAVERGREEN_OBJC_SOURCE_ROOT        where schema-2 build evidence's cited files are hashed:
+#            MAVERGREEN_OBJC_CRATE_SOURCES      the prepared source tree, the crate sources (as
+#            MAVERGREEN_OBJC_SDK_ROOT           NAME-VERSION/) and the SDK, each passed to the analyzer
+#                                               as its --source-root, --crate-sources and --sdk-root.
+#                                               Each needs MAVERGREEN_OBJC_BUILD_EVIDENCE.
 #            MAVERGREEN_OBJC_REPORT_DIR         keep each binary's report there, as
 #                                               N.<basename>.objc-compat.json; one already there is
 #                                               never replaced (the guard fails instead).
@@ -106,7 +112,8 @@ if [ -n "$OBJC_STRICT" ]; then
   path>: evidence=<file>#<record id> <review reason>\" deviation whose evidence record names that finding."
 else
   for _k in MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_REFERENCES MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX \
-            MAVERGREEN_OBJC_SOURCE_RECEIPT MAVERGREEN_OBJC_REPORT_DIR OBJC_COMPAT; do
+            MAVERGREEN_OBJC_SOURCE_RECEIPT MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT \
+            MAVERGREEN_OBJC_REPORT_DIR OBJC_COMPAT; do
     eval "_v=\${$_k:-}"
     [ -z "$_v" ] || shipyard_misuse "$_k needs MAVERGREEN_OBJC_STRICT=1: it is the strict Objective-C analyzer's"
   done
@@ -133,6 +140,12 @@ ALLOW_ARCHS="$(printf '%s\n' ${MAVERICKS_ALLOW_ARCHS:-x86_64} | sort -u | xargs)
 OBJC_REFS="${MAVERGREEN_OBJC_REFERENCES:-}"
 if [ -n "${MAVERGREEN_OBJC_BUILD_EVIDENCE:-}" ] && [ "$#" -ne 1 ]; then
   shipyard_misuse "MAVERGREEN_OBJC_BUILD_EVIDENCE is bound to one artifact: give exactly one binary, not $#"
+fi
+if [ -z "${MAVERGREEN_OBJC_BUILD_EVIDENCE:-}" ]; then
+  for _k in MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT; do
+    eval "_v=\${$_k:-}"
+    [ -z "$_v" ] || shipyard_misuse "$_k needs MAVERGREEN_OBJC_BUILD_EVIDENCE: it says where that evidence's cited files are"
+  done
 fi
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/compat-guard.XXXXXX")"; trap 'rm -rf "$work"' EXIT
@@ -180,6 +193,9 @@ shipyard_objc() {  # $1 binary, $2 report
   [ -z "${MAVERGREEN_OBJC_BUILD_EVIDENCE:-}" ] || set -- "$@" --build-evidence "$MAVERGREEN_OBJC_BUILD_EVIDENCE"
   [ -z "${MAVERGREEN_OBJC_PROVIDER_PREFIX:-}" ] || set -- "$@" --provider-prefix "$MAVERGREEN_OBJC_PROVIDER_PREFIX"
   [ -z "${MAVERGREEN_OBJC_SOURCE_RECEIPT:-}" ] || set -- "$@" --source-receipt "$MAVERGREEN_OBJC_SOURCE_RECEIPT"
+  [ -z "${MAVERGREEN_OBJC_SOURCE_ROOT:-}" ] || set -- "$@" --source-root "$MAVERGREEN_OBJC_SOURCE_ROOT"
+  [ -z "${MAVERGREEN_OBJC_CRATE_SOURCES:-}" ] || set -- "$@" --crate-sources "$MAVERGREEN_OBJC_CRATE_SOURCES"
+  [ -z "${MAVERGREEN_OBJC_SDK_ROOT:-}" ] || set -- "$@" --sdk-root "$MAVERGREEN_OBJC_SDK_ROOT"
   [ ! -s "$work/exceptions" ] || set -- "$@" --exceptions "$work/exceptions"
   objc_rc=0
   if [ -n "${OBJC_COMPAT:-}" ]; then
