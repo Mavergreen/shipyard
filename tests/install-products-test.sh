@@ -187,7 +187,7 @@ plan c@1
 mkdir "$top/bin"
 cat > "$top/bin/installer" <<'FAKE'
 #!/bin/sh
-[ "$1" = -pkg ] && [ "$3" = -target ] || exit 2
+[ "$1" = -pkg ] && [ "$3" = -target ] && [ -n "$4" ] || exit 2
 echo "installer $(basename "$2")" >> "$FAKE_LOG"
 case "$2" in *"${FAKE_INSTALLER_FAIL:-//none//}"*) exit 1 ;; esac
 d="$(mktemp -d "${TMPDIR:-/tmp}/fake-installer.XXXXXX")"
@@ -261,5 +261,30 @@ fresh; release a 1 'c>=20261013'; release b 3; latest b 3; real; installed c 202
 run a@1
 [ "$rc" -eq 1 ] && has "unchanged" && [ "$(cat "$w/installed")" = "b 3" ] \
   || fail "a provision that leaves a stale manifest untouched fails"
+
+cat > "$top/bin/logger-installer" <<'FAKE'
+#!/bin/sh
+echo "installer $*" >> "$FAKE_LOG"
+FAKE
+cat > "$top/bin/sudo" <<'FAKE'
+#!/bin/sh
+echo "sudo $*" >> "$FAKE_LOG"
+case "$1" in installer) shift; exec "$FAKE_SUDO_INSTALLER" "$@" ;; esac
+FAKE
+chmod +x "$top/bin/logger-installer" "$top/bin/sudo"
+
+fresh; release a 1; real
+run_root() { rc=0; out="$(sh "$S" --root / "$@" 2>&1)" || rc=$?; }
+INSTALLER="$top/bin/logger-installer" run_root a@1
+grep -q "^installer -pkg .*a-1.pkg -target /$" "$w/log" \
+  || fail "default_root_target_is_slash: the installer target is exactly /"
+[ "$(sed -n 's/.* -target //p' "$w/log")" = "/" ] || fail "default_root_target_is_slash: one target, exactly /"
+
+if [ "$(id -u)" -ne 0 ]; then
+  fresh; release a 1; real; unset INSTALLER; export FAKE_SUDO_INSTALLER="$top/bin/logger-installer"
+  run_root a@1
+  grep -q "^sudo installer -pkg .*a-1.pkg -target /$" "$w/log" \
+    || fail "default_sudo_installer: unset INSTALLER runs sudo installer -pkg PKG -target /"
+fi
 
 echo "PASS: install-products"
