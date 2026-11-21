@@ -67,5 +67,16 @@ if __name__ == "__main__":
     png(f"{d}/dark-64-greya.png", 64, 64, disc(64, dark), mode="greya")
     png(f"{d}/dark-64-interlaced.png", 64, 64, disc(64, dark), interlace=1)
     open(f"{d}/not-a.png", "wb").write(b"<html/>")
+    blob = open(f"{d}/dark-64.png", "rb").read()
+    open(f"{d}/dark-64-trailing.png", "wb").write(blob + b"trailing junk after IEND")
+    open(f"{d}/dark-64-truncated.png", "wb").write(blob[:len(blob) // 2])
+    # transparency by colour key (tRNS on an RGB image): the corners are this exact colour
+    png(f"{d}/dark-64-rgbkey.png", 64, 64, lambda x, y: disc(64, dark)(x, y)[:3] + (255,)
+        if disc(64, dark)(x, y)[3] else (1, 2, 3, 255), mode="rgb")
+    k = open(f"{d}/dark-64-rgbkey.png", "rb").read()
+    i = k.index(b"IDAT") - 4
+    open(f"{d}/dark-64-rgbkey.png", "wb").write(k[:i] + chunk(b"tRNS", b"\0\1\0\2\0\3") + k[i:])
+    png(f"{d}/huge.png", 2100, 1, lambda x, y: (0, 0, 0, 255), mode="grey")
+    open(f"{d}/bad.asar", "wb").write(struct.pack("<IIII", 4, 12, 8, 6) + b'["x"]   ')
     asar(f"{d}/app.asar", [("index.js", b"x" * 100),
                            ("images/logo.png", open(f"{d}/dark-64.png", "rb").read())])

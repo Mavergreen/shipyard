@@ -41,6 +41,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 W=$(mktemp -d "${TMPDIR:-/tmp}/check-preset-icons.XXXXXX"); trap 'rm -rf "$W"' EXIT
 fail=0 fp= pkgicon=
 tool() { python3 "$HERE/icon-tool.py" "$@"; }
+shasum_of() { python3 -c 'import hashlib, sys; print("sha256:" + hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
 was() {
   w=${ICON_URL_SOURCE}
   [ -z "$ICON_URL_ARCHIVE" ] || w="${w:+$w; }archived at $ICON_URL_ARCHIVE"
@@ -62,13 +63,24 @@ newest_package() {
   done < "$W/candidates"
 }
 # spec: tests/check-preset-icons-test.sh -- an apt pool keeps old versions after the index moves on (1Password: 8.10.80 still served 2026-11-20)
-pool_deb() { shipyard_curl "$base/$(printf '%s' "$best" | sed "s|$bestv|$1|g")" "$2" 2>/dev/null; }
+pool_deb() {
+  f=$(awk -v f="$best" -v o="$bestv" -v n="$1" 'BEGIN { i = index(f, o); if (i) print substr(f, 1, i - 1) n substr(f, i + length(o)) }')
+  [ -n "$f" ] && [ "$f" != "$best" ] && shipyard_curl "$base/$f" "$2" 2>/dev/null && [ "$(dpkg-deb -f "$2" Version)" = "$1" ]
+}
+# spec: tests/check-preset-icons-test.sh -- one member, not the whole ~100 MB package, on every weekly run
+deb_member() {
+  m=${2%%.asar:*}; [ "$m" = "$2" ] || m=$m.asar
+  mkdir -p "$3" && dpkg-deb --fsys-tarfile "$1" | tar -xf - -C "$3" "./${m#/}" 2>/dev/null
+}
+# spec: tests/check-preset-icons-test.sh -- the preset sources these lines, so a quote or an & in a URL would break or background it
+line() { case $2 in *"'"*) echo "check-preset-icons: --accept: $1 contains a quote; not printed" >&2 ;; *) echo "$1='$2'" ;; esac; }
 
 if [ -n "$accept" ]; then
   [ -n "$ICON_URL" ] || { echo "check-preset-icons: --accept: $CONF has no ICON_URL" >&2; exit 2; }
-  shipyard_curl "$ICON_URL" "$W/icon" || exit 1
-  fp=$(tool fingerprint "$W/icon") || exit 1
-  echo "ICON_URL_FINGERPRINT='$fp'"
+  shipyard_curl "$ICON_URL" "$W/icon"
+  fp=$(tool fingerprint "$W/icon") || {
+    echo "check-preset-icons: --accept: can't fingerprint $ICON_URL (see above); choose another icon URL" >&2; exit 1; }
+  line ICON_URL_FINGERPRINT "$fp"
   if [ -n "$APT_REPO" ]; then
     newest_package
     [ -n "$best" ] || { echo "check-preset-icons: --accept: $pkg is not in $base $suite $comp" >&2; exit 1; }
@@ -92,7 +104,7 @@ if [ -n "$accept" ]; then
         src="$pkg $v $path distance:$dist"; break
       fi
     done
-    echo "ICON_URL_SOURCE='${src:-none within 10 in $pkg $bestv (closest ${closest:-none})}'"
+    line ICON_URL_SOURCE "${src:-none within $(tool same-dhash) in $pkg $bestv (closest ${closest:-none})}"
   fi
   archiver=${SHIPYARD_ICON_ARCHIVER:-}
   if [ -z "$archiver" ]; then
@@ -103,7 +115,7 @@ if [ -n "$accept" ]; then
   fi
   if [ -n "$snap" ] && shipyard_curl "$snap" "$W/snap" 2>/dev/null && \
      [ "$(tool fingerprint "$W/snap" 2>/dev/null | awk '{ print $1 }')" = "${fp%% *}" ]; then
-    echo "ICON_URL_ARCHIVE=$snap"
+    line ICON_URL_ARCHIVE "$snap"
   else
     echo "check-preset-icons: --accept: the archive capture (${snap:-none}) does not hold this icon; not recorded" >&2
   fi
@@ -127,8 +139,9 @@ if [ -n "$ICON_URL" ]; then
     elif [ -z "$ICON_URL_FINGERPRINT" ]; then
       warn "no ICON_URL_FINGERPRINT: run check-preset-icons.sh --accept $CONF and commit the lines it prints"
     elif [ "${fp%% *}" != "${ICON_URL_FINGERPRINT%% *}" ]; then
-      d=$(tool distance "$ICON_URL_FINGERPRINT" "$fp")
-      if tool similar "$ICON_URL_FINGERPRINT" "$fp"; then
+      if ! d=$(tool distance "$ICON_URL_FINGERPRINT" "$fp" 2>&1); then
+        warn "ICON_URL_FINGERPRINT can't be read ($d): run --accept again"
+      elif tool similar "$ICON_URL_FINGERPRINT" "$fp"; then
         warn "ICON_URL serves different bytes than the accepted icon, the same picture ($d)"
       else
         warn "ICON_URL changed substantially from the accepted icon ($d)"
@@ -138,10 +151,12 @@ if [ -n "$ICON_URL" ]; then
 fi
 
 if [ -n "$ICON_URL_ARCHIVE" ]; then
-  if ! shipyard_curl "$ICON_URL_ARCHIVE" "$W/archived"; then
-    echo "ICON_URL_ARCHIVE: fetch failed: $ICON_URL_ARCHIVE"; fail=1
-  elif [ -n "$ICON_URL_FINGERPRINT" ] && \
-       [ "$(tool fingerprint "$W/archived" 2>/dev/null | awk '{ print $1 }')" != "${ICON_URL_FINGERPRINT%% *}" ]; then
+  # spec: tests/check-preset-icons-test.sh -- the Wayback Machine has outages and serves HTML error pages; only a PNG with other bytes is a wrong record
+  if ! shipyard_curl "$ICON_URL_ARCHIVE" "$W/archived" 2>/dev/null; then
+    warn "ICON_URL_ARCHIVE could not be fetched now: $ICON_URL_ARCHIVE"
+  elif [ "$(head -c 8 "$W/archived" | od -An -tx1 | tr -d ' \n')" != 89504e470d0a1a0a ]; then
+    warn "ICON_URL_ARCHIVE did not serve a PNG now: $ICON_URL_ARCHIVE"
+  elif [ -n "$ICON_URL_FINGERPRINT" ] && [ "$(shasum_of "$W/archived")" != "${ICON_URL_FINGERPRINT%% *}" ]; then
     echo "ICON_URL_ARCHIVE: $ICON_URL_ARCHIVE does not hold the accepted icon (${ICON_URL_FINGERPRINT%% *})"; fail=1
   else
     echo "ICON_URL_ARCHIVE ok: $ICON_URL_ARCHIVE"
@@ -164,7 +179,7 @@ if [ -n "$ICON_GLOB" ] && [ -n "$APT_REPO" ] && [ -n "$APT_KEY_URL" ]; then
     done < "$W/files"
     if [ -n "$found" ]; then
       echo "ICON_GLOB ok in $pkg $bestv: $found"
-      dpkg-deb -x "$W/pkg.deb" "$W/root"
+      deb_member "$W/pkg.deb" "$found" "$W/root"
       # spec: tests/check-preset-icons-test.sh -- an icon accepted as unlike the package's ("none ...") is not re-flagged until its bytes change
       case "$ICON_URL_SOURCE" in none\ *) [ "${fp%% *}" != "${ICON_URL_FINGERPRINT%% *}" ] || fp_known=1 ;; esac
       if [ -n "$fp" ] && [ -z "${fp_known:-}" ] && pkgicon=$(tool fingerprint "$W/root/$found" 2>/dev/null) && \
@@ -181,21 +196,27 @@ fi
 case "$ICON_URL_SOURCE" in '' | none\ *) ;; *)
   r=$ICON_URL_SOURCE; spkg=${r%% *}; r=${r#* }; sver=${r%% *}; r=${r#* }
   sdist=${r##* distance:}; spath=${r% distance:*}
-  if [ -z "${best:-}" ] || [ "$spkg" != "${pkg:-}" ]; then
+  [ -n "${best:-}" ] || [ -z "$APT_REPO" ] || newest_package
+  if [ -z "$APT_REPO" ]; then
+    warn "ICON_URL_SOURCE is not checked: this preset names no APT_REPO"
+  elif [ -z "${best:-}" ] || [ "$spkg" != "${pkg:-}" ]; then
     warn "ICON_URL_SOURCE names $spkg, which this preset's APT_PKGS does not lead with; not checked"
   elif [ -z "$ICON_URL_FINGERPRINT" ]; then
     warn "ICON_URL_SOURCE is not checked without ICON_URL_FINGERPRINT"
   else
-    if [ "$sver" = "$bestv" ]; then sdeb=$W/pkg.deb
+    if [ "$sver" = "$bestv" ]; then sdeb=$W/pkg.deb; [ -s "$sdeb" ] || shipyard_curl "$base/$best" "$sdeb" || sdeb=
     else sdeb=$W/source.deb; pool_deb "$sver" "$sdeb" || sdeb=; fi
     if [ -z "$sdeb" ]; then
-      warn "ICON_URL_SOURCE: $spkg $sver is no longer in the pool, so the source can't be re-checked"
+      warn "ICON_URL_SOURCE: $spkg $sver can't be fetched from the pool as that version, so the source can't be re-checked"
     else
-      rm -rf "$W/src"; dpkg-deb -x "$sdeb" "$W/src"
+      rm -rf "$W/src"; deb_member "$sdeb" "$spath" "$W/src" || :
       if ! tool cat "$W/src" "$spath" > "$W/srcicon" 2>/dev/null; then
         echo "ICON_URL_SOURCE: $spkg $sver has no $spath"; fail=1
-      elif got=$(tool distance "$ICON_URL_FINGERPRINT" "$(tool fingerprint "$W/srcicon")") && \
-           [ "${got%% *}" != "dhash:$sdist" ]; then
+      elif ! sfp=$(tool fingerprint "$W/srcicon" 2>&1); then
+        echo "ICON_URL_SOURCE: $spath in $spkg $sver can't be read ($sfp)"; fail=1
+      elif ! got=$(tool distance "$ICON_URL_FINGERPRINT" "$sfp" 2>&1); then
+        warn "ICON_URL_SOURCE is not checked: $got"
+      elif [ "${got%% *}" != "dhash:$sdist" ]; then
         echo "ICON_URL_SOURCE: $spath in $spkg $sver is no longer distance $sdist from the accepted icon ($got)"; fail=1
       else
         echo "ICON_URL_SOURCE ok: $spath in $spkg $sver, distance $sdist"

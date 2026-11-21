@@ -41,4 +41,16 @@ sim() { python3 "$T" similar "$(fp "$1")" "$(fp "$2")"; }
 sim dark-64.png dark-180.png || fail "the same picture at another size is similar"
 ! sim dark-180.png blue-180.png || fail "a recolour is not similar"
 ! sim dark-64.png bars-64.png || fail "a different picture is not similar"
+[ "$(dist dark-64.png dark-64-trailing.png | cut -d' ' -f1)" = "dhash:0" ] || fail "bytes after IEND are ignored"
+out=$(python3 "$T" fingerprint "$W/f/dark-64-truncated.png" 2>&1) && fail "a truncated PNG is refused"
+case $out in "icon-tool: "*) ;; *) fail "a truncated PNG is refused cleanly, not with a traceback: $out" ;; esac
+[ "$(dh dark-64.png dark-64-rgbkey.png)" -le 2 ] || fail "an RGB colour key (tRNS) is transparency: $(dist dark-64.png dark-64-rgbkey.png)"
+out=$(python3 "$T" fingerprint "$W/f/huge.png" 2>&1) && fail "an icon over 2048 px is refused"
+printf '%s' "$out" | grep -q 2048 || fail "the refusal names the limit: $out"
+out=$(python3 "$T" distance "sha256:abc" "$(fp dark-64.png)" 2>&1) && fail "a malformed fingerprint is refused"
+case $out in "icon-tool: "*) ;; *) fail "a malformed fingerprint is refused cleanly: $out" ;; esac
+ln -s /nonexistent/icon.png "$W/root/usr/share/icons/dangling.png"
+cp "$W/f/bad.asar" "$W/root/opt/app/resources/bad.asar"
+got=$(python3 "$T" find "$(fp dark-180.png)" "$W/root") || fail "a dangling symlink or a malformed asar does not stop find"
+[ "$(python3 "$T" same-dhash)" = 10 ] || fail "same-dhash prints the threshold"
 echo "ok icon-tool"

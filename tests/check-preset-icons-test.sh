@@ -21,6 +21,7 @@ for v in 2.0 3.0 1.0; do
     1.0) i= ;;
   esac
   [ -z "$i" ] || { mkdir -p "$i"; cp "$W/f/dark-64.png" "$i/demo.png"; }
+  [ "$v" != 2.0 ] || { mkdir -p "$d/usr/share/doc/demo"; cp "$W/page.png" "$d/usr/share/doc/demo/broken.png"; }
   dpkg-deb -b "$d" "$W/repo/pool/demo_$v.deb" >/dev/null
   printf 'Package: demo\nVersion: %s\nFilename: pool/demo_%s.deb\n\n' "$v" "$v" >> "$W/repo/dists/stable/main/binary-amd64/Packages"
 done
@@ -29,6 +30,7 @@ d="$W/pkg1.5"; mkdir -p "$d/DEBIAN" "$d/usr/share/pixmaps"
 printf 'Package: demo\nVersion: 1.5\nArchitecture: amd64\nMaintainer: x\nDescription: x\n' > "$d/DEBIAN/control"
 cp "$W/f/blue-180.png" "$d/usr/share/pixmaps/demo blue.png"
 dpkg-deb -b "$d" "$W/repo/pool/demo_1.5.deb" >/dev/null
+cp "$W/repo/pool/demo_3.0.deb" "$W/repo/pool/demo_2.5.deb"
 conf() {
   printf "APT_KEY_URL=file://%s/key\nAPT_REPO='deb [arch=amd64 signed-by=/x.gpg] file://%s/repo stable main'\nAPT_PKGS='demo extra'\nICON_URL=%s\nICON_GLOB='%s'\n%s\n" \
     "$W" "$W" "$1" "$2" "${3:-}" > "$W/demo.conf"
@@ -130,7 +132,7 @@ conf "file://$W/good.png" "$deep"
 lines=$(accept "$W/demo.conf" 2>"$W/err") || { echo "FAIL --accept: $(cat "$W/err")"; exit 1; }
 [ "$lines" = "ICON_URL_FINGERPRINT='$FP'
 ICON_URL_SOURCE='demo 3.0 /usr/share/icons/hicolor/512x512/extra/apps/demo.png distance:${src2##*distance:}'
-ICON_URL_ARCHIVE=file://$W/snap.png" ] || { echo "FAIL --accept prints the three lines, got: $lines"; exit 1; }
+ICON_URL_ARCHIVE='file://$W/snap.png'" ] || { echo "FAIL --accept prints the three lines, got: $lines"; exit 1; }
 printf '%s\n' "$lines" >> "$W/demo.conf"
 out=$(run) || { echo "FAIL the accepted lines pass: $out"; exit 1; }
 silent "the accepted lines round-trip to a quiet check" WARN
@@ -154,5 +156,41 @@ cp "$W/demo.conf" "$W/prod/demo.conf"
 lines=$(accept --search-back 3 "$W/prod/demo.conf" 2>"$W/err") || { echo "FAIL --search-back: $(cat "$W/err")"; exit 1; }
 printf '%s\n' "$lines" | grep -qx "ICON_URL_SOURCE='demo 1.5 /usr/share/pixmaps/demo blue.png distance:0'" \
   || { echo "FAIL --search-back finds it in an older version still in the pool: $lines"; exit 1; }
+
+conf "file://$W/good.png" "$deep" "ICON_URL_FINGERPRINT='$FP'
+ICON_URL_ARCHIVE=file://$W/no-such-capture.png"
+out=$(run) || { echo "FAIL an archive that can't be fetched (a Wayback outage) only warns: $out"; exit 1; }
+says "...and says so" "WARN: ICON_URL_ARCHIVE"
+conf "file://$W/good.png" "$deep" "ICON_URL_FINGERPRINT='$FP'
+ICON_URL_ARCHIVE=file://$W/page.png"
+out=$(run) || { echo "FAIL an archive serving an HTML page only warns: $out"; exit 1; }
+
+printf '#!/bin/sh\necho "file://%s/it'"'"'s.png"\n' "$W" > "$W/quote-archiver"; chmod +x "$W/quote-archiver"
+cp "$W/good.png" "$W/it's.png"
+conf "file://$W/good.png" "$deep"
+lines=$(ARCHIVER=quote-archiver accept "$W/demo.conf" 2>"$W/err") || :
+! printf '%s\n' "$lines" | grep -q ICON_URL_ARCHIVE || { echo "FAIL a value with a quote is not printed: $lines"; exit 1; }
+
+conf "file://$W/good.png" "$deep" "ICON_URL_FINGERPRINT='$FP'
+ICON_URL_SOURCE='demo 2.5 /usr/share/icons/hicolor/512x512/extra/apps/demo.png distance:${src2##*distance:}'"
+out=$(run) || { echo "FAIL a pool file that is another version only warns: $out"; exit 1; }
+says "a pool file that is not the version named is not trusted" "WARN: ICON_URL_SOURCE"
+
+conf "file://$W/good.png" "$deep" "ICON_URL_FINGERPRINT='$FP'
+ICON_URL_SOURCE='demo 2.0 /usr/share/doc/demo/broken.png distance:0'"
+no "a source the decoder can't read" ICON_URL_SOURCE
+
+conf "file://$W/good.png" "$deep" "ICON_URL_FINGERPRINT='sha256:abc'"
+out=$(run) || { echo "FAIL a malformed fingerprint only warns: $out"; exit 1; }
+says "...and the run still checks ICON_GLOB" "ICON_GLOB ok"
+
+conf "file://$W/f/dark-64-interlaced.png" "$deep"
+accept "$W/demo.conf" >/dev/null 2>"$W/err" && { echo "FAIL an interlaced icon can't be accepted"; exit 1; }
+grep -q interlaced "$W/err" || { echo "FAIL ...and the refusal says why: $(cat "$W/err")"; exit 1; }
+
+printf "APT_KEY_URL=file://%s/key\nAPT_REPO='deb [arch=amd64 signed-by=/x.gpg] file://%s/repo stable main'\nAPT_PKGS='demo extra'\nICON_URL=file://%s/good.png\nICON_URL_FINGERPRINT='%s'\nICON_URL_SOURCE='%s'\n" \
+  "$W" "$W" "$W" "$FP" "$src2" > "$W/demo.conf"
+out=$(run) || { echo "FAIL a source recorded without ICON_GLOB: $out"; exit 1; }
+says "a source is checked even without ICON_GLOB" "ICON_URL_SOURCE ok"
 
 echo "ok check-preset-icons"
