@@ -3,7 +3,8 @@ description: >
   Provide shipyard and shipyard-cmake to a job. A consumer references this action at the ref it pins
   (@v1 or @vX.Y.Z -- that ref IS the version) and gets exactly the pkgs a developer installs: the cmake
   product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. Consumers
-  configure with shipyard-cmake; MavericksShipyardConfig.cmake refuses any other cmake.
+  configure with shipyard-cmake; MavericksShipyardConfig.cmake refuses any other cmake. The optional `products` input also installs named family products
+  (SHORT@TAG) and their requires on macOS.
 
 inputs:
   products:
@@ -106,9 +107,8 @@ runs:
         echo "SHIPYARD_SCRIPTS=$scripts" >> "$GITHUB_ENV"
         echo "shipyard $ver installed; SHIPYARD_SCRIPTS=$scripts"
 
-    # spec: tests/install-action-products-test.sh -- named products come
-    #       from their releases, requires first, after shipyard so the scripts it ships are the ones
-    #       that ran above. Products reach the script through env, never interpolated into it.
+    # spec: tests/install-action-products-test.sh -- named products install after shipyard; products reach
+    #       the script through env
     - if: runner.os == 'macOS' && inputs.products != ''
       shell: bash
       env:
@@ -118,6 +118,7 @@ runs:
         set -eu
         root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         echo "MAVERGREEN_INSTALLED=$RUNNER_TEMP/mavergreen-installed.txt" >> "$GITHUB_ENV"
+        set -f
         MAVERGREEN_INSTALLED="$RUNNER_TEMP/mavergreen-installed.txt" sh "$root/scripts/install-products.sh" $PRODUCTS
 
     # spec: tests/install-action-products-test.sh -- an empty `products` keeps today's behaviour here
