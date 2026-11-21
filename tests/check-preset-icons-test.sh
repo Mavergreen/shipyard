@@ -24,6 +24,11 @@ for v in 2.0 3.0 1.0; do
   dpkg-deb -b "$d" "$W/repo/pool/demo_$v.deb" >/dev/null
   printf 'Package: demo\nVersion: %s\nFilename: pool/demo_%s.deb\n\n' "$v" "$v" >> "$W/repo/dists/stable/main/binary-amd64/Packages"
 done
+# spec: scripts/check-preset-icons.sh -- 1.5 is in the pool but not the index, as apt repos keep old versions
+d="$W/pkg1.5"; mkdir -p "$d/DEBIAN" "$d/usr/share/pixmaps"
+printf 'Package: demo\nVersion: 1.5\nArchitecture: amd64\nMaintainer: x\nDescription: x\n' > "$d/DEBIAN/control"
+cp "$W/f/blue-180.png" "$d/usr/share/pixmaps/demo blue.png"
+dpkg-deb -b "$d" "$W/repo/pool/demo_1.5.deb" >/dev/null
 conf() {
   printf "APT_KEY_URL=file://%s/key\nAPT_REPO='deb [arch=amd64 signed-by=/x.gpg] file://%s/repo stable main'\nAPT_PKGS='demo extra'\nICON_URL=%s\nICON_GLOB='%s'\n%s\n" \
     "$W" "$W" "$1" "$2" "${3:-}" > "$W/demo.conf"
@@ -116,5 +121,38 @@ srv=$!; n=0; while [ ! -s "$W/port" ] && [ $n -lt 50 ]; do sleep 0.1; n=$((n + 1
 conf "http://127.0.0.1:$(cat "$W/port")/old.png" "$deep" "ICON_URL_FINGERPRINT='$FP'"
 out=$(run) || :; kill $srv
 says "a redirect is noted, naming where it goes" "WARN: ICON_URL redirects to http://127.0.0.1:$(cat "$W/port")/new.png"
+
+printf '#!/bin/sh\ncp "${1#file://}" "%s/snap.png" && echo "file://%s/snap.png"\n' "$W" "$W" > "$W/archiver"
+printf '#!/bin/sh\necho "file://%s/f/bars-64.png"\n' "$W" > "$W/bad-archiver"
+chmod +x "$W/archiver" "$W/bad-archiver"
+accept() { SHIPYARD_ICON_ARCHIVER="$W/${ARCHIVER:-archiver}" sh "$S" --accept "$@"; }
+conf "file://$W/good.png" "$deep"
+lines=$(accept "$W/demo.conf" 2>"$W/err") || { echo "FAIL --accept: $(cat "$W/err")"; exit 1; }
+[ "$lines" = "ICON_URL_FINGERPRINT='$FP'
+ICON_URL_SOURCE='demo 3.0 /usr/share/icons/hicolor/512x512/extra/apps/demo.png distance:${src2##*distance:}'
+ICON_URL_ARCHIVE=file://$W/snap.png" ] || { echo "FAIL --accept prints the three lines, got: $lines"; exit 1; }
+printf '%s\n' "$lines" >> "$W/demo.conf"
+out=$(run) || { echo "FAIL the accepted lines pass: $out"; exit 1; }
+silent "the accepted lines round-trip to a quiet check" WARN
+
+conf "file://$W/good.png" "$deep"
+lines=$(ARCHIVER=bad-archiver accept "$W/demo.conf" 2>"$W/err") || { echo "FAIL --accept with a bad capture: $(cat "$W/err")"; exit 1; }
+! printf '%s\n' "$lines" | grep -q ICON_URL_ARCHIVE || { echo "FAIL a capture holding other bytes is not recorded: $lines"; exit 1; }
+grep -q "not recorded" "$W/err" || { echo "FAIL ...and says so: $(cat "$W/err")"; exit 1; }
+
+conf "file://$W/f/blue-180.png" "$deep"
+lines=$(accept "$W/demo.conf" 2>/dev/null)
+printf '%s\n' "$lines" | grep -q "^ICON_URL_SOURCE='none within 10 in demo 3.0 (closest " \
+  || { echo "FAIL an icon unlike anything in the newest package records none: $lines"; exit 1; }
+printf '%s\n' "$lines" >> "$W/demo.conf"
+out=$(run) || { echo "FAIL an accepted icon unlike the package's passes: $out"; exit 1; }
+silent "an icon accepted as unlike the package's is not re-flagged while unchanged" WARN
+conf "file://$W/f/blue-180.png" "$deep"
+mkdir -p "$W/prod"; ( cd "$W/prod" && git init -q && for v in 1.0 1.5 2.0 3.0; do echo $v > UPSTREAM_VERSION
+  git add UPSTREAM_VERSION && git -c user.name=t -c user.email=t@t commit -qm $v; done )
+cp "$W/demo.conf" "$W/prod/demo.conf"
+lines=$(accept --search-back 3 "$W/prod/demo.conf" 2>"$W/err") || { echo "FAIL --search-back: $(cat "$W/err")"; exit 1; }
+printf '%s\n' "$lines" | grep -qx "ICON_URL_SOURCE='demo 1.5 /usr/share/pixmaps/demo blue.png distance:0'" \
+  || { echo "FAIL --search-back finds it in an older version still in the pool: $lines"; exit 1; }
 
 echo "ok check-preset-icons"
