@@ -24,7 +24,12 @@
 #          icon there as icon.png.
 # spec: tests/check-preset-icons-test.sh; .superpowers/specs/2026-11-21-preset-icon-provenance-design.md
 set -eu
-CONF="${1:?usage: check-preset-icons.sh CONF}"
+usage() { echo "usage: check-preset-icons.sh [--accept [--search-back N]] CONF" >&2; exit 2; }
+accept= back=0
+[ "${1:-}" != --accept ] || { accept=1; shift; }
+[ -z "$accept" ] || [ "${1:-}" != --search-back ] || { [ $# -ge 2 ] || usage; back=$2; shift 2; }
+[ $# -eq 1 ] || usage
+CONF=$1
 for t in curl dpkg-deb dpkg python3; do
   command -v "$t" >/dev/null 2>&1 || { echo "SKIP: check-preset-icons needs $t"; exit 77; }
 done
@@ -42,6 +47,68 @@ was() {
   [ -z "$w" ] || printf ' (was: %s)' "$w"
 }
 warn() { echo "WARN: $*$(was)"; printf -- '- %s\n' "$*" >> "$W/summary"; }
+newest_package() {
+  set -- $(printf '%s\n' "$APT_REPO" | sed 's/\[[^]]*\]//')
+  base=$2 suite=$3 comp=$4
+  pkg=$(printf '%s\n' "$APT_PKGS" | awk '{ print $1 }'); pkg=${pkg%%=*}
+  shipyard_curl "$base/dists/$suite/$comp/binary-amd64/Packages" "$W/Packages"
+  awk -v p="$pkg" '
+    /^Package: / { k = $2 } /^Version: / { v = $2 } /^Filename: / { f = $2 }
+    /^$/ { if (k == p) print v, f; k = "" }
+    END { if (k == p) print v, f }' "$W/Packages" > "$W/candidates"
+  best= bestv=
+  while read -r v f; do
+    if [ -z "$bestv" ] || dpkg --compare-versions "$v" gt "$bestv"; then bestv=$v; best=$f; fi
+  done < "$W/candidates"
+}
+# spec: tests/check-preset-icons-test.sh -- an apt pool keeps old versions after the index moves on (1Password: 8.10.80 still served 2026-11-20)
+pool_deb() { shipyard_curl "$base/$(printf '%s' "$best" | sed "s|$bestv|$1|g")" "$2" 2>/dev/null; }
+
+if [ -n "$accept" ]; then
+  [ -n "$ICON_URL" ] || { echo "check-preset-icons: --accept: $CONF has no ICON_URL" >&2; exit 2; }
+  shipyard_curl "$ICON_URL" "$W/icon" || exit 1
+  fp=$(tool fingerprint "$W/icon") || exit 1
+  echo "ICON_URL_FINGERPRINT='$fp'"
+  if [ -n "$APT_REPO" ]; then
+    newest_package
+    [ -n "$best" ] || { echo "check-preset-icons: --accept: $pkg is not in $base $suite $comp" >&2; exit 1; }
+    versions=$bestv
+    if [ "$back" -gt 0 ]; then
+      # spec: tests/check-preset-icons-test.sh -- the versions this preset shipped, newest first, from its repo's history
+      d=$(cd "$(dirname "$CONF")" && pwd)
+      versions="$versions $(git -C "$d" log -p --format= -- UPSTREAM_VERSION 2>/dev/null | sed -n 's/^+\([^+].*\)$/\1/p' \
+        | awk -v n="$back" -v b="$bestv" '$0 != b && !seen[$0]++ && c++ < n')"
+    fi
+    src= closest=
+    for v in $versions; do
+      if [ "$v" = "$bestv" ]; then shipyard_curl "$base/$best" "$W/pkg.deb" || continue
+      else pool_deb "$v" "$W/pkg.deb" || { echo "check-preset-icons: $pkg $v is not in the pool" >&2; continue; }; fi
+      rm -rf "$W/root"; dpkg-deb -x "$W/pkg.deb" "$W/root"
+      hit=$(tool find "$fp" "$W/root") || continue
+      path=$(printf '%s' "$hit" | cut -f1); dist=$(printf '%s' "$hit" | cut -f2)
+      [ -n "$closest" ] || closest="$path distance:$dist"
+      tool cat "$W/root" "$path" > "$W/hit"
+      if tool similar "$fp" "$(tool fingerprint "$W/hit")"; then
+        src="$pkg $v $path distance:$dist"; break
+      fi
+    done
+    echo "ICON_URL_SOURCE='${src:-none within 10 in $pkg $bestv (closest ${closest:-none})}'"
+  fi
+  archiver=${SHIPYARD_ICON_ARCHIVER:-}
+  if [ -z "$archiver" ]; then
+    snap=$(curl -sS -o /dev/null -D - --max-time 180 "https://web.archive.org/save/$ICON_URL" 2>/dev/null \
+      | tr -d '\r' | sed -n 's/^[Ll]ocation: *//p' | sed 's|^\(https://web.archive.org/web/[0-9]*\)/|\1id_/|')
+  else
+    snap=$("$archiver" "$ICON_URL")
+  fi
+  if [ -n "$snap" ] && shipyard_curl "$snap" "$W/snap" 2>/dev/null && \
+     [ "$(tool fingerprint "$W/snap" 2>/dev/null | awk '{ print $1 }')" = "${fp%% *}" ]; then
+    echo "ICON_URL_ARCHIVE=$snap"
+  else
+    echo "check-preset-icons: --accept: the archive capture (${snap:-none}) does not hold this icon; not recorded" >&2
+  fi
+  exit 0
+fi
 
 if [ -n "$ICON_URL" ]; then
   if ! shipyard_curl "$ICON_URL" "$W/icon"; then
@@ -82,18 +149,7 @@ if [ -n "$ICON_URL_ARCHIVE" ]; then
 fi
 
 if [ -n "$ICON_GLOB" ] && [ -n "$APT_REPO" ] && [ -n "$APT_KEY_URL" ]; then
-  set -- $(printf '%s\n' "$APT_REPO" | sed 's/\[[^]]*\]//')
-  base=$2 suite=$3 comp=$4
-  pkg=$(printf '%s\n' "$APT_PKGS" | awk '{ print $1 }'); pkg=${pkg%%=*}
-  shipyard_curl "$base/dists/$suite/$comp/binary-amd64/Packages" "$W/Packages"
-  awk -v p="$pkg" '
-    /^Package: / { k = $2 } /^Version: / { v = $2 } /^Filename: / { f = $2 }
-    /^$/ { if (k == p) print v, f; k = "" }
-    END { if (k == p) print v, f }' "$W/Packages" > "$W/candidates"
-  best= bestv=
-  while read -r v f; do
-    if [ -z "$bestv" ] || dpkg --compare-versions "$v" gt "$bestv"; then bestv=$v; best=$f; fi
-  done < "$W/candidates"
+  newest_package
   if [ -z "$best" ]; then
     echo "ICON_GLOB: $pkg not found in $base $suite $comp"; fail=1
   else
@@ -109,7 +165,10 @@ if [ -n "$ICON_GLOB" ] && [ -n "$APT_REPO" ] && [ -n "$APT_KEY_URL" ]; then
     if [ -n "$found" ]; then
       echo "ICON_GLOB ok in $pkg $bestv: $found"
       dpkg-deb -x "$W/pkg.deb" "$W/root"
-      if [ -n "$fp" ] && pkgicon=$(tool fingerprint "$W/root/$found" 2>/dev/null) && ! tool similar "$pkgicon" "$fp"; then
+      # spec: tests/check-preset-icons-test.sh -- an icon accepted as unlike the package's ("none ...") is not re-flagged until its bytes change
+      case "$ICON_URL_SOURCE" in none\ *) [ "${fp%% *}" != "${ICON_URL_FINGERPRINT%% *}" ] || fp_known=1 ;; esac
+      if [ -n "$fp" ] && [ -z "${fp_known:-}" ] && pkgicon=$(tool fingerprint "$W/root/$found" 2>/dev/null) && \
+         ! tool similar "$pkgicon" "$fp"; then
         warn "ICON_URL looks unlike the package's icon $found ($(tool distance "$pkgicon" "$fp"))"
       fi
     else
@@ -128,7 +187,7 @@ case "$ICON_URL_SOURCE" in '' | none\ *) ;; *)
     warn "ICON_URL_SOURCE is not checked without ICON_URL_FINGERPRINT"
   else
     if [ "$sver" = "$bestv" ]; then sdeb=$W/pkg.deb
-    else sdeb=$W/source.deb; shipyard_curl "$base/$(printf '%s' "$best" | sed "s|$bestv|$sver|g")" "$sdeb" 2>/dev/null || sdeb=; fi
+    else sdeb=$W/source.deb; pool_deb "$sver" "$sdeb" || sdeb=; fi
     if [ -z "$sdeb" ]; then
       warn "ICON_URL_SOURCE: $spkg $sver is no longer in the pool, so the source can't be re-checked"
     else
