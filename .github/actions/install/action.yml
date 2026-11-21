@@ -3,14 +3,14 @@ description: >
   Provide shipyard and shipyard-cmake to a job. A consumer references this action at the ref it pins
   (@v1 or @vX.Y.Z -- that ref IS the version) and gets exactly the pkgs a developer installs: the cmake
   product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. Consumers
-  configure with shipyard-cmake; MavericksShipyardConfig.cmake refuses any other cmake. The optional `products` input also installs named family products
-  (SHORT@TAG) and their requires on macOS.
+  configure with shipyard-cmake; MavericksShipyardConfig.cmake refuses any other cmake. The optional
+  `products` input also installs named family products (SHORT@TAG) and their requires on macOS.
 
 inputs:
   products:
     description: >
       Whitespace-separated SHORT@TAG family products to install after shipyard, each with what it
-      requires (for example go127-cross@v1.27.0-1). macOS runners only; empty installs none.
+      requires (for example go127-cross@1.27.4-mavericks.4). macOS runners only; empty installs none.
     required: false
     default: ''
 
