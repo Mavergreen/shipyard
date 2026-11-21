@@ -55,6 +55,20 @@ wrap objc-provider-link-args.sh 0 --prefix /x --link-map /m
   pass 'objc-provider-link-args.sh runs drydock-objc link-args with its arguments' || fail "objc-provider-link-args.sh: exit $rc"
 wrap objc-provider-link-args.sh 0 --prefix /x --output /m
 [ "$rc" = 2 ] && [ ! -e "$T/argv" ] && pass 'objc-provider-link-args.sh refuses a malformed call' || fail "link-args malformed: exit $rc"
+# spec: scripts/objc-provider-link-args.sh header -- any number of --provider ID pairs, passed on in the order given.
+wrap objc-provider-link-args.sh 0 --prefix /x --link-map /m --provider openurls --provider 'an id'
+[ "$rc" = 0 ] && argv_is link-args --prefix /x --link-map /m --provider openurls --provider 'an id' &&
+  pass 'objc-provider-link-args.sh passes every --provider ID to drydock-objc link-args' ||
+  fail "objc-provider-link-args.sh with providers: exit $rc, argv $(cat "$T/argv" 2>/dev/null)"
+wrap objc-provider-link-args.sh 0 --provider openurls --link-map /m --prefix /x
+[ "$rc" = 0 ] && argv_is link-args --provider openurls --link-map /m --prefix /x &&
+  pass 'objc-provider-link-args.sh keeps its options in the order given' || fail "link-args reordered: exit $rc"
+for bad in '--prefix /x --link-map /m --provider' '--prefix /x --link-map /m --providers a' '--prefix /x --provider a' \
+           '--prefix /x --link-map /m --prefix /y' '--prefix /x --link-map /m --link-map /n' '--link-map /m --provider a --provider b'; do
+  # shellcheck disable=SC2086
+  wrap objc-provider-link-args.sh 0 $bad
+  [ "$rc" = 2 ] && [ ! -e "$T/argv" ] && pass "objc-provider-link-args.sh refuses '$bad'" || fail "link-args '$bad': exit $rc"
+done
 
 # spec: scripts/objc-compat.sh header -- on a host other than macOS, drydock-objc's analyze, evidence and link-args exit 2, so
 #       each wrapper is cannot-measure (4) there, before it fetches or runs anything.
