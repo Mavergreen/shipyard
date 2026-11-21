@@ -1786,6 +1786,21 @@ calls `preset-icons.yml@v1` with its conf on push and on a weekly schedule; its
 `check-preset-icons.sh` fails when `ICON_URL` stops serving a PNG or `ICON_GLOB` matches nothing in
 the vendor's newest package.
 
+**A preset records what its accepted icon was, so a change is noticed and a replacement judged.**
+1Password's `ICON_URL` began redirecting, then 404'd, and the check stayed red for 11 days with no
+record of what the old icon looked like; the Wayback Machine had only its redirects. So when you
+choose an icon, run `check-preset-icons.sh --accept CONF` (`--search-back N` also looks in the last N
+versions the preset shipped, from the apt pool) and commit the lines it prints:
+- `ICON_URL_FINGERPRINT`: sha256, difference hash, size and colour.
+- `ICON_URL_SOURCE`: the closest icon in the vendor's package, or `none ...` when the web icon is
+  another design.
+- `ICON_URL_ARCHIVE`: a Wayback Machine capture, recorded only once its bytes match.
+These are derived data and links, never the vendor's PNG. Each run then warns, naming the accepted
+icon, on a redirect, new bytes, a substantial change, or an icon unlike the package's. The job
+summary shows the accepted and current icons side by side, and the fetched icon is kept as an
+artifact. A recorded source or archive that no longer holds the accepted icon fails: a wrong record
+is worse than none.
+
 ## SDK pinning (checked on what ships)
 
 **Every Mach-O we compile that is installed on anyone's Mac records a PINNED SDK, never the runner's:**
