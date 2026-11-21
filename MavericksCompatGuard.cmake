@@ -23,8 +23,11 @@ set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-s
 #   MAVERGREEN_OBJC_REFERENCES         each when set: the reference set (unset, the guard's default:
 #   MAVERGREEN_OBJC_ROOT               the pinned Drydock's), the shipped root (unset, the target's own
 #   MAVERGREEN_OBJC_BUILD_EVIDENCE     directory), the analyzer's build evidence, Objective-C provider
-#   MAVERGREEN_OBJC_PROVIDER_PREFIX    prefix and provider source receipt
-#   MAVERGREEN_OBJC_SOURCE_RECEIPT
+#   MAVERGREEN_OBJC_PROVIDER_PREFIX    prefix and provider source receipt, and where schema-2 build
+#   MAVERGREEN_OBJC_SOURCE_RECEIPT     evidence's cited files are hashed: the prepared source tree, the
+#   MAVERGREEN_OBJC_SOURCE_ROOT        crate sources and the SDK
+#   MAVERGREEN_OBJC_CRATE_SOURCES
+#   MAVERGREEN_OBJC_SDK_ROOT
 # With OBJC_STRICT, MAVERICKS_POST_10_9_SELECTORS and MAVERICKS_ALLOW_SELECTORS, raw selector
 # lists the analyzer replaces, stop the configure with what replaces them. Without it, an analyzer
 # knob set in CMake stops the configure, rather than be silently ignored.
@@ -34,7 +37,8 @@ function(mavericks_assert_binary_compatible tgt)
     message(FATAL_ERROR "mavericks_assert_binary_compatible(${tgt}): unknown argument(s) ${_mabc_UNPARSED_ARGUMENTS}")
   endif()
   set(_objc_knobs MAVERGREEN_OBJC_REFERENCES MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE
-    MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT)
+    MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT MAVERGREEN_OBJC_SOURCE_ROOT
+    MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT)
   if(_mabc_OBJC_STRICT)
     # spec: scripts/assert_binary_compatible.sh header -- retired knobs fail, never silently ignored.
     foreach(_retired MAVERICKS_POST_10_9_SELECTORS MAVERICKS_ALLOW_SELECTORS)
@@ -71,7 +75,7 @@ function(mavericks_assert_binary_compatible tgt)
     list(APPEND _env "MAVERGREEN_OBJC_STRICT=1")
     # spec: scripts/objc-reference-dir.sh header -- unset, the guard beside this module defaults the reference set
     #       to the pinned Drydock's: an installed shipyard's staged reference/objc, a checkout's fetched one.
-    foreach(_objc MAVERGREEN_OBJC_REFERENCES MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT)
+    foreach(_objc ${_objc_knobs})
       if(${_objc})
         list(APPEND _env "${_objc}=${${_objc}}")
       endif()
