@@ -55,6 +55,9 @@
 #            MAVERGREEN_OBJC_SDK_ROOT           NAME-VERSION/) and the SDK, each passed to the analyzer
 #                                               as its --source-root, --crate-sources and --sdk-root.
 #                                               Each needs MAVERGREEN_OBJC_BUILD_EVIDENCE.
+#            MAVERGREEN_OBJC_ROOT_KIND          tree (default) or volume: MAVERGREEN_OBJC_ROOT is a
+#                                               staged volume as installed at /, passed to the analyzer
+#                                               as its --root-kind.
 #            MAVERGREEN_OBJC_REPORT_DIR         keep each binary's report there, as
 #                                               N.<basename>.objc-compat.json; one already there is
 #                                               never replaced (the guard fails instead).
@@ -113,7 +116,7 @@ if [ -n "$OBJC_STRICT" ]; then
 else
   for _k in MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_REFERENCES MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX \
             MAVERGREEN_OBJC_SOURCE_RECEIPT MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT \
-            MAVERGREEN_OBJC_REPORT_DIR OBJC_COMPAT; do
+            MAVERGREEN_OBJC_ROOT_KIND MAVERGREEN_OBJC_REPORT_DIR OBJC_COMPAT; do
     eval "_v=\${$_k:-}"
     [ -z "$_v" ] || shipyard_misuse "$_k needs MAVERGREEN_OBJC_STRICT=1: it is the strict Objective-C analyzer's"
   done
@@ -147,6 +150,10 @@ if [ -z "${MAVERGREEN_OBJC_BUILD_EVIDENCE:-}" ]; then
     [ -z "$_v" ] || shipyard_misuse "$_k needs MAVERGREEN_OBJC_BUILD_EVIDENCE: it says where that evidence's cited files are"
   done
 fi
+case "${MAVERGREEN_OBJC_ROOT_KIND:-tree}" in
+  tree|volume) ;;
+  *) shipyard_misuse "MAVERGREEN_OBJC_ROOT_KIND is tree or volume, not '$MAVERGREEN_OBJC_ROOT_KIND'" ;;
+esac
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/compat-guard.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
@@ -196,6 +203,7 @@ shipyard_objc() {  # $1 binary, $2 report
   [ -z "${MAVERGREEN_OBJC_SOURCE_ROOT:-}" ] || set -- "$@" --source-root "$MAVERGREEN_OBJC_SOURCE_ROOT"
   [ -z "${MAVERGREEN_OBJC_CRATE_SOURCES:-}" ] || set -- "$@" --crate-sources "$MAVERGREEN_OBJC_CRATE_SOURCES"
   [ -z "${MAVERGREEN_OBJC_SDK_ROOT:-}" ] || set -- "$@" --sdk-root "$MAVERGREEN_OBJC_SDK_ROOT"
+  [ -z "${MAVERGREEN_OBJC_ROOT_KIND:-}" ] || set -- "$@" --root-kind "$MAVERGREEN_OBJC_ROOT_KIND"
   [ ! -s "$work/exceptions" ] || set -- "$@" --exceptions "$work/exceptions"
   objc_rc=0
   if [ -n "${OBJC_COMPAT:-}" ]; then

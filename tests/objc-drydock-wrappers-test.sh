@@ -45,6 +45,10 @@ wrap objc-compat.sh 0 --artifact "$A" --root /r --references /refs --report /rep
   --source-root '/s s' --crate-sources /c --sdk-root /k &&
   pass 'objc-compat.sh passes --source-root, --crate-sources and --sdk-root to drydock-objc analyze' ||
   fail "objc-compat.sh with the source roots: exit $rc, argv $(cat "$T/argv" 2>/dev/null)"
+wrap objc-compat.sh 0 --artifact "$A" --root /r --references /refs --report /rep --mode strict --root-kind volume
+[ "$rc" = 0 ] && argv_is analyze --artifact "$A" --root /r --references /refs --report /rep --mode strict --root-kind volume &&
+  pass 'objc-compat.sh passes --root-kind to drydock-objc analyze' ||
+  fail "objc-compat.sh with --root-kind: exit $rc, argv $(cat "$T/argv" 2>/dev/null)"
 wrap objc-compat.sh 0 --artifact "$A" --root /r
 [ "$rc" = 2 ] && [ ! -e "$T/argv" ] && pass 'objc-compat.sh refuses a short call' || fail "objc-compat.sh short: exit $rc"
 

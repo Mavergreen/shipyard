@@ -368,7 +368,8 @@ shipyard's facilities rather than trusting the runner:
     revision: the build fills its symbols from the artifact with `scripts/objc-resolve.sh`, and the guard hashes
     the cited files under `MAVERGREEN_OBJC_SOURCE_ROOT` (the prepared tree, whose digest
     `scripts/objc-build-evidence.sh --tree-digest-only` prints), `MAVERGREEN_OBJC_CRATE_SOURCES` and
-    `MAVERGREEN_OBJC_SDK_ROOT`, so a bump that leaves them unchanged keeps its review. Opted in,
+    `MAVERGREEN_OBJC_SDK_ROOT`, so a bump that leaves them unchanged keeps its review. `MAVERGREEN_OBJC_ROOT_KIND=volume` says
+    `MAVERGREEN_OBJC_ROOT` is a staged volume as installed at `/` (default `tree`). Opted in,
     `MAVERICKS_POST_10_9_SELECTORS` and `MAVERICKS_ALLOW_SELECTORS` fail when set (a selector string neither
     proves a send nor proves a guard), and a guarded send is excused only by a reviewed
     `- objc-api:<glob>: evidence=<file>#<record id> <reason>` deviation; not opted in, an analyzer knob fails

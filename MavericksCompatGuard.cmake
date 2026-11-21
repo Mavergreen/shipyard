@@ -28,6 +28,7 @@ set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-s
 #   MAVERGREEN_OBJC_SOURCE_ROOT        crate sources and the SDK
 #   MAVERGREEN_OBJC_CRATE_SOURCES
 #   MAVERGREEN_OBJC_SDK_ROOT
+#   MAVERGREEN_OBJC_ROOT_KIND          tree (default) or volume
 # With OBJC_STRICT, MAVERICKS_POST_10_9_SELECTORS and MAVERICKS_ALLOW_SELECTORS, raw selector
 # lists the analyzer replaces, stop the configure with what replaces them. Without it, an analyzer
 # knob set in CMake stops the configure, rather than be silently ignored.
@@ -38,7 +39,7 @@ function(mavericks_assert_binary_compatible tgt)
   endif()
   set(_objc_knobs MAVERGREEN_OBJC_REFERENCES MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE
     MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT MAVERGREEN_OBJC_SOURCE_ROOT
-    MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT)
+    MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT MAVERGREEN_OBJC_ROOT_KIND)
   if(_mabc_OBJC_STRICT)
     # spec: scripts/assert_binary_compatible.sh header -- retired knobs fail, never silently ignored.
     foreach(_retired MAVERICKS_POST_10_9_SELECTORS MAVERICKS_ALLOW_SELECTORS)

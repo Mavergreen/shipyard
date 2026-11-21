@@ -28,6 +28,7 @@ printf '#!/bin/sh\nexit 0\n' > "$w/bin/nm"
 # spec: scripts/assert_binary_compatible.sh OBJC_COMPAT knob -- the strict analyzer's contract, a report at --report.
 cat > "$w/bin/objc-compat" <<'EOF'
 #!/bin/sh
+printf '%s\n' "$@" > "$(dirname "$0")/argv"
 while [ $# -gt 0 ]; do [ "$1" = --report ] && rep=$2; shift 2; done
 printf '{"schema": 1, "mode": "strict", "complete_within_boundary": true, "findings": []}\n' > "$rep"
 [ -e "$(dirname "$0")/objc-blocks" ] || exit 0
@@ -38,7 +39,7 @@ chmod +x "$w/bin/shasum" "$w/bin/nm" "$w/bin/objc-compat"
 PATH="$w/bin:$PATH"; OBJC_COMPAT="$w/bin/objc-compat"; export PATH OBJC_COMPAT
 unset MAVERICKS_DEVIATIONS_ROOT MAVERICKS_ALLOW_ARCHS MAVERICKS_ALLOW_SELECTORS MAVERICKS_POST_10_9_SELECTORS MAVERICKS_ALLOW_GUARDED_WEAK \
   MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT MAVERGREEN_OBJC_REPORT_DIR \
-  MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT
+  MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT MAVERGREEN_OBJC_ROOT_KIND
 MAVERGREEN_OBJC_STRICT=1; export MAVERGREEN_OBJC_STRICT
 G="$w/scripts/assert_binary_compatible.sh"
 
@@ -110,6 +111,14 @@ rm "$w/bin/objc-blocks"
 
 label="an excused file does not excuse its neighbour on the same command line"
 fails "$w/build/bin/tool" "$w/build/bin/armtool"; says 'armtool'
+# spec: scripts/assert_binary_compatible.sh header -- MAVERGREEN_OBJC_ROOT_KIND reaches the analyzer as --root-kind.
+label="MAVERGREEN_OBJC_ROOT_KIND is passed to the analyzer"
+MAVERGREEN_OBJC_ROOT_KIND=volume; export MAVERGREEN_OBJC_ROOT_KIND
+passes "$w/build/bin/good"; unset MAVERGREEN_OBJC_ROOT_KIND
+grep -x -- '--root-kind' "$w/bin/argv" >/dev/null && grep -x volume "$w/bin/argv" >/dev/null ||
+  { echo "FAIL ($label): argv lacks --root-kind volume:"; cat "$w/bin/argv"; exit 1; }
+passes "$w/build/bin/good"
+! grep -x -- '--root-kind' "$w/bin/argv" >/dev/null || { echo "FAIL ($label): --root-kind passed when unset"; exit 1; }
 # spec: scripts/assert_binary_compatible.sh header -- the reference set is resolved where the analyzer runs: misuse is still
 #       misuse (2) when no Drydock can be had, and a binary's other findings are still said before the guard fails closed (4).
 rmdir "$w/reference/objc"
