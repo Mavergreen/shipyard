@@ -16,12 +16,14 @@
 #          find prints "<path>\t<dhash distance>" for the PNG under ROOT closest to FINGERPRINT, paths
 #          from ROOT with a leading /, a PNG inside an Electron asar as "<asar path>:<entry>".
 #          cat writes such a path's bytes to stdout.
-#          A PNG this can't decode (interlaced, or larger than 1024 px for find) is refused by
-#          fingerprint and skipped by find.
+#          same-dhash prints the difference-hash threshold within which two icons are the same picture.
+#          A PNG this can't decode (interlaced, truncated, larger than 2048 px, or 1024 px for find)
+#          is refused by fingerprint and skipped by find, as are symlinks and unreadable archives.
 # spec: .superpowers/specs/2026-11-21-preset-icon-provenance-design.md (tests/icon-tool-test.sh)
 import hashlib, json, os, struct, sys, zlib
 
 MAX_FIND = 1024
+MAX_FINGERPRINT = 2048
 # Calibrated 2026-11-20 on 1Password's icons against its package's 512 px icon: the same picture from
 # another source scored dhash 4; a recoloured, similar shape scored dhash 15 / colour 80; the same
 # picture on an opaque square scored dhash 34 / colour 23.
@@ -43,20 +45,27 @@ def ihdr(data):
 def decode(data):
     """PNG bytes -> (w, h, [(r, g, b, a)] row-major, 8 bits per channel)."""
     w, h, depth, ctype, interlace = ihdr(data)
+    if not w or not h:
+        raise NotDecodable("a PNG with no pixels")
     if interlace:
         raise NotDecodable("interlaced PNG (Adam7) is not supported")
     channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(ctype)
     if channels is None:
         raise NotDecodable("unknown PNG colour type %d" % ctype)
     pos, idat, pal, trns = 8, b"", [], None
-    while pos < len(data):
+    while pos + 8 <= len(data):
         n, t = struct.unpack(">I4s", data[pos:pos + 8])
         body = data[pos + 8:pos + 8 + n]
+        if t == b"IEND": break
         if t == b"IDAT": idat += body
         elif t == b"PLTE": pal = [tuple(body[i:i + 3]) for i in range(0, len(body), 3)]
         elif t == b"tRNS": trns = body
         pos += 12 + n
     raw = zlib.decompress(idat)
+    if ctype == 3 and not pal:
+        raise NotDecodable("a palette PNG with no palette")
+    if len(raw) < h * (1 + (w * channels * depth + 7) // 8):
+        raise NotDecodable("truncated PNG data")
     bits = channels * depth
     bpp = max(1, bits // 8)
     stride = (w * bits + 7) // 8
@@ -74,6 +83,12 @@ def decode(data):
                 p = a + b - c; pa, pb, pc = abs(p - a), abs(p - b), abs(p - c)
                 line[x] = (line[x] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
         rows.append(line); prev = line
+    # tRNS on a grey or RGB image names one colour (16-bit samples) that is transparent
+    key = None
+    if trns and ctype in (0, 2) and len(trns) >= 2 * channels:
+        raw_key = struct.unpack(">%dH" % channels, trns[:2 * channels])
+        key = tuple(k >> 8 if depth == 16 else k * (255 // ((1 << depth) - 1)) if depth < 8 else k
+                    for k in raw_key)
     px = []
     for line in rows:
         if depth < 8:
@@ -92,15 +107,18 @@ def decode(data):
             if ctype == 3:
                 r, g, b = pal[s[0]]
                 a = trns[s[0]] if trns and s[0] < len(trns) else 255
-            elif ctype == 0: r = g = b = s[0]; a = 255
+            elif ctype == 0: r = g = b = s[0]; a = 0 if key == (s[0],) else 255
             elif ctype == 4: r = g = b = s[0]; a = s[1]
-            elif ctype == 2: r, g, b = s; a = 255
+            elif ctype == 2: r, g, b = s; a = 0 if key == tuple(s) else 255
             else: r, g, b, a = s
             px.append((r, g, b, a))
     return w, h, px
 
 
 def fingerprint(data):
+    w, h = ihdr(data)[:2]
+    if w > MAX_FINGERPRINT or h > MAX_FINGERPRINT:
+        raise NotDecodable("%dx%d is larger than %d px" % (w, h, MAX_FINGERPRINT))
     w, h, px = decode(data)
     cells = [[0.0] * 9 for _ in range(8)]
     count = [[0] * 9 for _ in range(8)]
@@ -128,8 +146,14 @@ def fingerprint(data):
 
 
 def parse(fp):
-    f = dict(p.split(":", 1) for p in fp.split() if ":" in p)
-    return int(f["dhash"], 16), bytes.fromhex(f["colour"])
+    try:
+        f = dict(p.split(":", 1) for p in fp.split() if ":" in p)
+        d, c = int(f["dhash"], 16), bytes.fromhex(f["colour"])
+    except (KeyError, ValueError):
+        raise NotDecodable("not a fingerprint: %r" % fp)
+    if len(c) != 6:
+        raise NotDecodable("not a fingerprint: %r" % fp)
+    return d, c
 
 
 def distance(a, b):
@@ -158,13 +182,14 @@ def candidates(root):
     for d, _, files in os.walk(root):
         for name in sorted(files):
             p = os.path.join(d, name); rel = "/" + os.path.relpath(p, root)
-            if name.lower().endswith(".png"):
-                with open(p, "rb") as f: yield rel, f.read()
-            elif name.endswith(".asar"):
-                try:
-                    for entry, blob in asar_entries(p): yield rel + ":" + entry, blob
-                except (ValueError, KeyError, struct.error):
-                    pass
+            if os.path.islink(p): continue
+            try:
+                if name.lower().endswith(".png"):
+                    with open(p, "rb") as f: yield rel, f.read()
+                elif name.endswith(".asar"):
+                    for entry, blob in list(asar_entries(p)): yield rel + ":" + entry, blob
+            except (OSError, ValueError, KeyError, TypeError, AttributeError, struct.error):
+                continue
 
 
 def find(fp, root):
@@ -174,7 +199,7 @@ def find(fp, root):
             w, h = ihdr(blob)[:2]
             if w > MAX_FIND or h > MAX_FIND: continue
             d = distance(fp, fingerprint(blob))
-        except (NotDecodable, zlib.error, struct.error, IndexError, ValueError):
+        except (NotDecodable, zlib.error, struct.error, IndexError, ValueError, KeyError, ZeroDivisionError):
             continue
         if best is None or d < best[0]: best = (d, rel)
     return best
@@ -203,12 +228,15 @@ def main(argv):
             best = find(argv[2], argv[3])
             if best is None: return 1
             print("%s\t%d" % (best[1], best[0][0]))
+        elif len(argv) == 2 and argv[1] == "same-dhash":
+            print(SAME_DHASH)
         elif len(argv) == 4 and argv[1] == "cat":
             sys.stdout.buffer.write(cat(argv[2], argv[3]))
         else:
             print(__doc__ or "usage: icon-tool.py fingerprint|distance|find|cat ...", file=sys.stderr)
             return 2
-    except (NotDecodable, zlib.error, struct.error, OSError) as e:
+    except (NotDecodable, zlib.error, struct.error, OSError, IndexError, ValueError, KeyError,
+            ZeroDivisionError) as e:
         print("icon-tool: %s" % e, file=sys.stderr)
         return 3
     return 0
