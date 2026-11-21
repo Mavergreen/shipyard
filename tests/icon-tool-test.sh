@@ -27,7 +27,6 @@ out=$(python3 "$T" fingerprint "$W/f/dark-64-interlaced.png" 2>&1) && fail "an i
 printf '%s' "$out" | grep -q interlaced || fail "the refusal says interlaced: $out"
 out=$(python3 "$T" fingerprint "$W/f/not-a.png" 2>&1) && fail "a non-PNG is refused"
 
-# find: the closest PNG under a tree, including one inside an Electron asar; interlaced ones skipped
 mkdir -p "$W/root/usr/share/icons/a b" "$W/root/opt/app/resources"
 cp "$W/f/bars-64.png" "$W/root/usr/share/icons/a b/bars.png"
 cp "$W/f/dark-64-interlaced.png" "$W/root/usr/share/icons/il.png"
