@@ -47,6 +47,15 @@
       ],
       "groupName": "Mavergreen ingredients",
       "separateMajorMinor": false
+    },
+    {
+      "description": "Go module updates run go mod tidy, so go.sum matches what a release build's own tidy writes; otherwise assert-tree-clean fails the build.",
+      "matchManagers": [
+        "gomod"
+      ],
+      "postUpdateOptions": [
+        "gomodTidy"
+      ]
     }
   ],
   "vulnerabilityAlerts": {

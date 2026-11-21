@@ -40,5 +40,7 @@ assert not grouped("Mavergreen/shipyard"), "the shipyard workflow action must no
 assert not grouped("Mavergreen/mavericks-vm"), "the mavericks-vm workflow action must not be grouped with ingredients"
 assert "holds the whole" in " ".join(c["description"]), "the exception guidance must say an automerge:false exception holds the whole group"
 assert c.get("vulnerabilityAlerts", {}).get("labels") == ["security"], "security updates must carry the security label so they can skip the queue"
+gm = [x for x in c.get("packageRules", []) if x.get("matchManagers") == ["gomod"]]
+assert len(gm) == 1 and gm[0].get("postUpdateOptions") == ["gomodTidy"], "gomod updates must run go mod tidy: a release build that tidies go.sum itself leaves the tree dirty and fails assert-tree-clean"
 print("renovate-preset OK")
 PY
