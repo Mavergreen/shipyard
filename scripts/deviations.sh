@@ -76,6 +76,12 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       print "deviations.sh: \"cxxabi\" names the install paths it covers: \"- cxxabi:<install-path glob>: <reason>; exit: <how it goes away>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
       bad = 1; next
     }
+    # spec: tests/deviations-test.sh -- build-equivalence names the payload paths it excuses; a bare form
+    #       or an all-wildcard glob would excuse every difference between two builds.
+    if ((check == "build-equivalence" || check == "build-equivalence-interface") && (!scoped || glob ~ /^[*?\/]+$/)) {
+      print "deviations.sh: \"" check "\" names the payload paths it excuses: \"- " check ":<payload-path glob>: <reason; revisit: ...>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
+      bad = 1; next
+    }
     if (check == "packager" && (!scoped || glob ~ /[*?[]/)) {
       print "deviations.sh: \"packager\" names one path: \"- packager:<path>: <reason, exit>\", never a wildcard" > "/dev/stderr"
       bad = 1; next
