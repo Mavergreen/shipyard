@@ -119,7 +119,7 @@ for line in '- cxxabi: a bare cxxabi deviation; exit: never' '- cxxabi:*: every 
 done
 printf '## Conformance deviations\n- cxxabi:usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib: the family runtime; exit: none, it is the runtime\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'cxxabi usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib the family runtime; exit: none, it is the runtime' || { echo "FAIL: an install-path glob is a cxxabi scope; got: $(sh "$S" "$w" 2>&1)"; exit 1; }
-# spec: tests/deviations-test.sh -- build-equivalence and build-equivalence-interface name the payload
+# spec: SKILL.md "Conformance deviations" (build-equivalence) -- build-equivalence and build-equivalence-interface name the payload
 #       paths they excuse; a bare form or a glob of nothing but wildcards would excuse every difference.
 for kind in build-equivalence build-equivalence-interface; do
   for line in "- $kind: everything" "- $kind:*: everything" "- $kind:*/?: everything"; do
