@@ -78,6 +78,44 @@ printf '%s\n' "$out" | grep -q 'absent-registry' \
 printf '%s\n' "$out" | grep -q 'assigns no product' \
   && { echo "FAIL: check 24 must not call an unreadable registry an unregistered repo: $out"; exit 1; }
 
+# spec: SKILL.md "Family conventions" checks 21, 24 and 29 -- they ask what a repo PUBLISHES. A
+#       build-chain library holds the pkg-building code other repos run and releases a tarball; it
+#       declares "- pkg-builder-library: <reason>", which the gate refuses once any workflow names a
+#       .pkg, signs an appcast, or runs a pkg build, directly or through a script that does.
+LIBREG=Mavergreen/nobody-registered-this
+lib() {  # $1 = dir, $2 = extra workflow lines (optional), $3 = declare (optional)
+  mkrepo "$1" novm
+  printf '#!/bin/sh\nsh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\nsh "$SHIPYARD_SCRIPTS/build_component_pkg.sh" --root stage --identifier dev.mavergreen.w out.pkg\n' > "$1/build/package.sh"
+  printf '#!/bin/sh\ngit archive --format=tar HEAD build | gzip -n > "$1/lib-1.0.0.tar.gz"\n' > "$1/build/tarball.sh"
+  printf '      - run: sh build/tarball.sh dist\n' >> "$1/.github/workflows/release.yml"
+  [ -z "${2:-}" ] || printf '%s\n' "$2" >> "$1/.github/workflows/release.yml"
+  [ -z "${3:-}" ] || printf '\n- pkg-builder-library: holds build/package.sh for the lines to run; its release is a tarball\n' >> "$1/INGREDIENTS.md"
+  (cd "$1" && git add -A) >/dev/null 2>&1
+}
+libgate() { (cd "$1" && GITHUB_REPOSITORY="$LIBREG" sh "$S" 2>&1); }
+lib_fails() {  # $1 = label, $2 = dir, $3 = phrase
+  out="$(libgate "$2")" && { echo "FAIL: $1 must fail"; exit 1; }
+  printf '%s\n' "$out" | grep -q -- "$3" || { echo "FAIL: $1 should fail with '$3': $out"; exit 1; }
+}
+lib "$work/lib" '' declare
+out="$(libgate "$work/lib")" || { echo "FAIL: a declared pkg-builder library that publishes a tarball must pass: $out"; exit 1; }
+lib "$work/lib-undeclared"
+lib_fails "an undeclared library is judged by the code it holds" "$work/lib-undeclared" 'assigns no product'
+PUB='      - run: cp "$OUT"/*.pkg dist/'
+lib "$work/lib-pub" "$PUB"
+lib_fails "a repo that publishes a .pkg, unregistered" "$work/lib-pub" 'assigns no product'
+lib_fails "a repo that publishes a .pkg, without conformance" "$work/lib-pub" 'no workflow runs check-artifact-conformance.sh'
+lib_fails "a repo that publishes a .pkg, with no 10.9 job" "$work/lib-pub" 'mavericks-vm'
+lib "$work/lib-pub-decl" "$PUB" declare
+lib_fails "pkg-builder-library on a repo that publishes a .pkg" "$work/lib-pub-decl" 'pkg-builder-library is declared, but'
+lib_fails "a refused pkg-builder-library still asks for a product" "$work/lib-pub-decl" 'assigns no product'
+lib_fails "a refused pkg-builder-library still asks for conformance" "$work/lib-pub-decl" 'no workflow runs check-artifact-conformance.sh'
+lib "$work/lib-wrap" '      - run: sh build/release.sh dist' declare
+printf '#!/bin/sh\nsh build/package.sh "$1"\n' > "$work/lib-wrap/build/release.sh"; (cd "$work/lib-wrap" && git add -A) >/dev/null 2>&1
+lib_fails "pkg-builder-library on a workflow that runs the pkg build through a wrapper" "$work/lib-wrap" 'pkg-builder-library is declared, but'
+lib "$work/lib-sign" '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg "$P"' declare
+lib_fails "pkg-builder-library on a workflow that signs an appcast" "$work/lib-sign" 'pkg-builder-library is declared, but'
+
 # spec: SKILL.md "Family conventions" check 25 -- the family is retiring Rosetta (see the
 #       conventions skill, "Rosetta"). An undeclared translated-arch call must fail, naming
 #       rosetta and the declaration form; a declared rosetta:<path> deviation must excuse it; a

@@ -641,7 +641,43 @@ for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>
 done
 [ -n "$builds_pkg" ] || [ -z "$stv_pkg" ] || builds_pkg="$stv_pkg via stevedore"
 [ -n "$builds_pkg" ] || ! ci_mentions 'sign_and_appcast' || builds_pkg="a signing workflow"
-if [ -n "$builds_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! deviated artifact-conformance "$REL"; then
+# spec: SKILL.md "Family conventions" checks 21, 24 and 29 -- they judge the repo that PUBLISHES a pkg.
+#       What a release uploads is a directory filled by scripts, so it cannot be read statically; a
+#       repo that only holds pkg-building code for other repos declares "- pkg-builder-library:
+#       <reason>", refused once any workflow names a .pkg, signs an appcast, or runs a file that
+#       builds a pkg or, through any chain of scripts naming each other, calls one.
+publishes_pkg="$builds_pkg"
+if [ -n "$builds_pkg" ] && deviated pkg-builder-library "$REL"; then
+  _lib_why=""
+  ci_mentions '\.pkg' && _lib_why="a workflow names a .pkg"
+  ci_mentions 'sign_and_appcast' && _lib_why="a workflow signs an appcast"
+  _lib_set="$(mktemp "${TMPDIR:-/tmp}/conventions-lib.XXXXXX")"
+  _lib_names="$(mktemp "${TMPDIR:-/tmp}/conventions-lib.XXXXXX")"
+  _lib_files="$(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -Ev '^tests?/' || true)"
+  for f in $_lib_files; do
+    grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
+      | grep -qE "(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|\$)|$_stv_call" && echo "$f"
+  done > "$_lib_set"
+  _lib_n=-1
+  while [ "$(($(wc -l < "$_lib_set")))" -ne "$_lib_n" ]; do
+    _lib_n="$(($(wc -l < "$_lib_set")))"
+    sed 's|.*/||' "$_lib_set" > "$_lib_names"
+    for f in $_lib_files; do
+      grep -qxF "$f" "$_lib_set" && continue
+      grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qF -f "$_lib_names" && echo "$f" >> "$_lib_set"
+    done
+  done
+  _lib_wf="$(grep '^\.github/workflows/' "$_lib_set" | head -1 || true)"
+  [ -z "$_lib_wf" ] || _lib_why="$_lib_wf builds a pkg or runs a script that does"
+  rm -f "$_lib_set" "$_lib_names"
+  if [ -n "$_lib_why" ]; then
+    fail "pkg-builder-library is declared, but $_lib_why -- this repo publishes a pkg, and is judged as one" \
+         "remove the pkg-builder-library deviation from INGREDIENTS.md, or move the pkg build and its publishing to the repo that releases the pkg"
+  else
+    publishes_pkg=""
+  fi
+fi
+if [ -n "$publishes_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && ! deviated artifact-conformance "$REL"; then
   fail "this repo builds a .pkg ($builds_pkg) but no workflow runs check-artifact-conformance.sh -- nothing checks what it installs or under which identity" \
        "pipe artifact-facts.sh into check-artifact-conformance.sh at package time (see the conventions skill, 'Artifact conformance'), or declare '- artifact-conformance: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
@@ -690,12 +726,12 @@ fi
 
 # spec: SKILL.md "Family conventions" check 24 -- every feed URL and updater identity is derived from
 #       the registry's repo, so a pkg-building repo the registry does not name publishes feeds nothing polls.
-if [ -n "$builds_pkg" ] && [ -n "${GITHUB_REPOSITORY:-}" ] && ! deviated product-layout "$REL"; then
+if [ -n "$publishes_pkg" ] && [ -n "${GITHUB_REPOSITORY:-}" ] && ! deviated product-layout "$REL"; then
   _c24=0; registry_lookup shorts "${GITHUB_REPOSITORY#*/}" || _c24=$?
   case "$_c24" in
     0) ;;
     1) fail "this repo builds a .pkg ($builds_pkg), but shipyard's scripts/product-names assigns no product to ${GITHUB_REPOSITORY#*/}" \
-            "register its short names with this repo in scripts/product-names, or rename the repo to the one registered" ;;
+            "register its short names with this repo in scripts/product-names, or rename the repo to the one registered; a repo whose release publishes no pkg, holding pkg-building code for others to run, declares '- pkg-builder-library: <reason>' under INGREDIENTS.md's ## Conformance deviations" ;;
     *) fail "cannot look up ${GITHUB_REPOSITORY#*/} in shipyard's registry
 $REG_WHY" \
             "fix shipyard's scripts/product-names -- sh product-name.sh check says what is wrong with it" ;;
@@ -751,7 +787,7 @@ done
 #       an unscoped on-target deviation stands in for the job; a scoped one declares a gap in the
 #       job's coverage. A workflow that does not parse is check 8's, and no PyYAML has already failed
 #       check 8.
-if [ -n "$builds_pkg" ] && ! printf '%s\n' "$DEVS" | grep -q '^on-target \* ' \
+if [ -n "$publishes_pkg" ] && ! printf '%s\n' "$DEVS" | grep -q '^on-target \* ' \
    && python3 -c 'import yaml' >/dev/null 2>&1; then
   _c29="$(python3 - "$REL" <<'PY'
 import sys, yaml
