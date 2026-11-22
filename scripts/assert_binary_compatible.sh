@@ -55,6 +55,12 @@
 #            MAVERGREEN_OBJC_SDK_ROOT           NAME-VERSION/) and the SDK, each passed to the analyzer
 #                                               as its --source-root, --crate-sources and --sdk-root.
 #                                               Each needs MAVERGREEN_OBJC_BUILD_EVIDENCE.
+#            MAVERGREEN_OBJC_LINK_MAP           the link map the build evidence names, passed to the
+#                                               analyzer as its --link-map; needs
+#                                               MAVERGREEN_OBJC_BUILD_EVIDENCE.
+#            MAVERGREEN_OBJC_OBJECT_DIRS        colon-separated directories holding the archives the
+#                                               link placed, each passed to the analyzer as an
+#                                               --object-dir, in order; needs MAVERGREEN_OBJC_LINK_MAP.
 #            MAVERGREEN_OBJC_ROOT_KIND          tree (default) or volume: MAVERGREEN_OBJC_ROOT is a
 #                                               staged volume as installed at /, passed to the analyzer
 #                                               as its --root-kind.
@@ -116,7 +122,7 @@ if [ -n "$OBJC_STRICT" ]; then
 else
   for _k in MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_REFERENCES MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX \
             MAVERGREEN_OBJC_SOURCE_RECEIPT MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT \
-            MAVERGREEN_OBJC_ROOT_KIND MAVERGREEN_OBJC_REPORT_DIR OBJC_COMPAT; do
+            MAVERGREEN_OBJC_ROOT_KIND MAVERGREEN_OBJC_LINK_MAP MAVERGREEN_OBJC_OBJECT_DIRS MAVERGREEN_OBJC_REPORT_DIR OBJC_COMPAT; do
     eval "_v=\${$_k:-}"
     [ -z "$_v" ] || shipyard_misuse "$_k needs MAVERGREEN_OBJC_STRICT=1: it is the strict Objective-C analyzer's"
   done
@@ -149,7 +155,11 @@ if [ -z "${MAVERGREEN_OBJC_BUILD_EVIDENCE:-}" ]; then
     eval "_v=\${$_k:-}"
     [ -z "$_v" ] || shipyard_misuse "$_k needs MAVERGREEN_OBJC_BUILD_EVIDENCE: it says where that evidence's cited files are"
   done
+  [ -z "${MAVERGREEN_OBJC_LINK_MAP:-}" ] ||
+    shipyard_misuse "MAVERGREEN_OBJC_LINK_MAP needs MAVERGREEN_OBJC_BUILD_EVIDENCE: it must be the map that evidence names"
 fi
+[ -z "${MAVERGREEN_OBJC_OBJECT_DIRS:-}" ] || [ -n "${MAVERGREEN_OBJC_LINK_MAP:-}" ] ||
+  shipyard_misuse "MAVERGREEN_OBJC_OBJECT_DIRS needs MAVERGREEN_OBJC_LINK_MAP: the analyzer finds placed archives through the map"
 case "${MAVERGREEN_OBJC_ROOT_KIND:-tree}" in
   tree|volume) ;;
   *) shipyard_misuse "MAVERGREEN_OBJC_ROOT_KIND is tree or volume, not '$MAVERGREEN_OBJC_ROOT_KIND'" ;;
@@ -204,6 +214,15 @@ shipyard_objc() {  # $1 binary, $2 report
   [ -z "${MAVERGREEN_OBJC_CRATE_SOURCES:-}" ] || set -- "$@" --crate-sources "$MAVERGREEN_OBJC_CRATE_SOURCES"
   [ -z "${MAVERGREEN_OBJC_SDK_ROOT:-}" ] || set -- "$@" --sdk-root "$MAVERGREEN_OBJC_SDK_ROOT"
   [ -z "${MAVERGREEN_OBJC_ROOT_KIND:-}" ] || set -- "$@" --root-kind "$MAVERGREEN_OBJC_ROOT_KIND"
+  [ -z "${MAVERGREEN_OBJC_LINK_MAP:-}" ] || set -- "$@" --link-map "$MAVERGREEN_OBJC_LINK_MAP"
+  if [ -n "${MAVERGREEN_OBJC_OBJECT_DIRS:-}" ]; then
+    _dirs=$MAVERGREEN_OBJC_OBJECT_DIRS
+    while :; do
+      set -- "$@" --object-dir "${_dirs%%:*}"
+      [ "$_dirs" != "${_dirs#*:}" ] || break
+      _dirs=${_dirs#*:}
+    done
+  fi
   [ ! -s "$work/exceptions" ] || set -- "$@" --exceptions "$work/exceptions"
   objc_rc=0
   if [ -n "${OBJC_COMPAT:-}" ]; then
