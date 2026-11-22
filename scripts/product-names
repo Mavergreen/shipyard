@@ -50,3 +50,4 @@ fleet dev.mavergreen.fleet fleet
 cctools dev.mavergreen.cctools cctools
 macfuse dev.mavergreen.macfuse macfuse
 alacritty dev.mavergreen.alacritty alacritty
+linuxfs dev.mavergreen.linuxfs linuxfs
