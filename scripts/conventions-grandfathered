@@ -15,7 +15,6 @@ macos-runner container-tools release.yml:build-macos
 macos-runner container-tools release.yml:package
 macos-runner drydock release.yml:build
 macos-runner fd release.yml:build
-macos-runner gh release.yml:build
 macos-runner golang-126 release.yml:build
 macos-runner golang-127 release.yml:build
 macos-runner longboat release.yml:build
