@@ -3029,7 +3029,9 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    RUNNING run, not the QUEUED one, and the gate rejects it.)
 6. `build/upstream-release-notes-url.sh` (a port: where upstream's notes for a version live — see
    Release notes); no `release-notes/README.md`, since each release adds its own
-   `release-notes/<TAG>/`; Sparkle updater target. (`SPARKLE_PRIVATE_KEY` is an org secret the
+   `release-notes/<TAG>/`, whose notes are `release-notes/<TAG>/changes/<slug>` files of one sentence
+   each, checked by `check-release-sentence.sh` (see Release notes), never a prose
+   `release-notes/<TAG>.md`; Sparkle updater target. (`SPARKLE_PRIVATE_KEY` is an org secret the
    new repo already sees, being public -- set nothing; see Sparkle updater.)
 7. Choose the upstream-verification method; note it if it deviates from a sibling.
 8. If the repo bakes in build ingredients (anything it's built WITH, not the upstream it ports): make
