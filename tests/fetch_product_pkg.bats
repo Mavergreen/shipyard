@@ -111,6 +111,20 @@ DIST
   [[ "$output" == *"$DEST.lock"* ]] || false
 }
 
+@test "a host without cpio or gzip exits 2 before fetching, naming the tool and its package" {
+  for missing in cpio gzip; do
+    rm -rf "$WORK/bin"; mkdir -p "$WORK/bin"
+    for t in dirname cpio gzip; do
+      [ "$t" = "$missing" ] || ln -s "$(command -v "$t")" "$WORK/bin/$t"
+    done
+    PATH="$WORK/bin" run /bin/sh "$HELPER" widget 1.0 "$DEST"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"needs $missing"* ]] || false
+    [[ "$output" == *"install the $missing package"* ]] || false
+    [ ! -e "$WORK/cache" ]
+  done
+}
+
 @test "a pkg whose SHA-256 does not match fails 1 and leaves no cached pkg" {
   serve widget-1.0.pkg
   printf '%064d  widget-1.0.pkg\n' 0 > "$REL/SHA256SUMS"

@@ -15,9 +15,11 @@
 #          unless DEST.stamp says DEST already holds this very pkg's tree: then DEST is kept, since a
 #          parallel build may be running a compiler out of it. Calls for one DEST take turns through the
 #          lock file DEST.lock, waiting up to SHIPYARD_LOCK_WAIT seconds (default 900) for it.
+#          It needs cpio and gzip to unpack the Payload, which a bare Linux image may lack: without either
+#          it exits 2 before fetching, naming the package to install.
 #          Prints DEST on stdout; progress goes to stderr. Exit 1 on a failed fetch, checksum or
-#          extraction, 2 on a usage error or a registry that cannot answer. MAVERGREEN_RELEASES replaces
-#          https://github.com (the tests serve a file:// tree).
+#          extraction, 2 on a usage error, a missing cpio or gzip, or a registry that cannot answer.
+#          MAVERGREEN_RELEASES replaces https://github.com (the tests serve a file:// tree).
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 usage() { echo "usage: fetch_product_pkg.sh [--asset NAME] SHORT VERSION DEST" >&2; exit 2; }
@@ -28,6 +30,10 @@ SHORT=$1; VERSION=$2; DEST=$3
 while [ "${DEST%/}" != "$DEST" ]; do DEST="${DEST%/}"; done
 case "$DEST" in ''|.|..) echo "fetch_product_pkg: refusing DEST '$DEST'" >&2; exit 2 ;; esac
 case "$VERSION" in ''|*/*|.|..) echo "fetch_product_pkg: '$VERSION' is not a release tag" >&2; exit 2 ;; esac
+for tool in cpio gzip; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "fetch_product_pkg: needs $tool to unpack the pkg's Payload; install the $tool package" >&2; exit 2; }
+done
 lookup() {
   _v="$(sh "$SELF/product-name.sh" "$1" "$SHORT")" && return 0
   _rc=$?
