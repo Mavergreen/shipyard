@@ -369,7 +369,9 @@ shipyard's facilities rather than trusting the runner:
     the cited files under `MAVERGREEN_OBJC_SOURCE_ROOT` (the prepared tree, whose digest
     `scripts/objc-build-evidence.sh --tree-digest-only` prints), `MAVERGREEN_OBJC_CRATE_SOURCES` and
     `MAVERGREEN_OBJC_SDK_ROOT`, so a bump that leaves them unchanged keeps its review. `MAVERGREEN_OBJC_ROOT_KIND=volume` says
-    `MAVERGREEN_OBJC_ROOT` is a staged volume as installed at `/` (default `tree`). Opted in,
+    `MAVERGREEN_OBJC_ROOT` is a staged volume as installed at `/` (default `tree`). Bytes the analyzer cannot decode
+    are read from their objects when `MAVERGREEN_OBJC_LINK_MAP` (the map the evidence names) and
+    `MAVERGREEN_OBJC_OBJECT_DIRS` (colon-separated directories of the placed archives) are set. Opted in,
     `MAVERICKS_POST_10_9_SELECTORS` and `MAVERICKS_ALLOW_SELECTORS` fail when set (a selector string neither
     proves a send nor proves a guard), and a guarded send is excused only by a reviewed
     `- objc-api:<glob>: evidence=<file>#<record id> <reason>` deviation; not opted in, an analyzer knob fails
