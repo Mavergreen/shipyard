@@ -201,7 +201,7 @@ run on any host, through stevedore, the C packager that `fetch_stevedore.sh` fet
 `scripts/stevedore.pin` names. None of them needs `pkgbuild`, `productbuild`, `pkgutil` or `PlistBuddy`, or a
 macOS host. A pkg's bytes depend only on the staged tree, the arguments and the mtime. The mtime is
 `SOURCE_DATE_EPOCH`, else the commit time of `$MAVERICKS_ROOT` when that is a git work tree, else the current
-directory's repo (saying on stderr which one), else the seam fails (`source-date-epoch.sh`). A 10.9 box
+directory's repo (saying on stderr which one), else the seam fails (`source-date-epoch.sh`). A product's own build exports that same value as `SOURCE_DATE_EPOCH` too: vendored builds stamp the clock otherwise (OpenSSL's `mkbuildinf.pl`, through `openssl-src` or its own Configure, writes "built on: <date>" and so a new LC_UUID), and build-equivalence reports the difference as bytes. A 10.9 box
 without the Command Line Tools has no git, so a caller there sets `SOURCE_DATE_EPOCH`; one that runs a seam
 from outside the product repo sets `SOURCE_DATE_EPOCH` or `MAVERICKS_ROOT`. `MAVERICKS_ROOT` must be exported to reach the seams; a bare shell variable does not. As root (euid 0, so `sudo` too)
 `fetch_stevedore.sh` caches in root's own home (from the passwd entry, not the caller's `$HOME`) unless `STEVEDORE_CACHE` is given. Reading a Mach-O
