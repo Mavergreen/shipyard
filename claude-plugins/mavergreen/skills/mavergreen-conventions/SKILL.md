@@ -231,7 +231,9 @@ Tools.** `fetch_clang22.sh` gives the host's clang22: the pinned Linux archive o
 on a modern Mac, the native `clang22` on 10.9. Its `clang.cfg` is part of the compiler: it places
 `librecaulk.a` at the tail of the inputs, before the driver's `-lSystem`, so a Recaulk fix to a 10.9
 function (posix_spawn; pselect in 20261107.1) reaches every product at its next build, with no
-per-product plumbing. clang22's `llvm-*` tools stand in for Xcode's: no `xcrun`, no Command Line Tools
+per-product plumbing. A link that must stay Recaulk-free (a toolchain's own test fixtures, a probe)
+passes `--no-default-config` (through rustc, `-C link-arg=--no-default-config`) rather than stripping
+flags or calling the driver's `.bin` directly. clang22's `llvm-*` tools stand in for Xcode's: no `xcrun`, no Command Line Tools
 `ld64`, `libtool`, `ar`, `otool`, `lipo` or `nm`, on any host. This is the step toward a family-owned
 distribution that replaces the Command Line Tools.
 
