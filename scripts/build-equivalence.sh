@@ -25,18 +25,21 @@ TAB="$(printf '\t')"
 NL='
 '
 die() { echo "build-equivalence: $*" >&2; exit 2; }
+. "$SELF/lib/mach-nm.sh"
+. "$SELF/lib/mach-interface.sh"
 
-# spec: tests/build-equivalence-test.sh -- a differing Mach-O or archive is compared here: one word, bytes or
-#       interface, then indented detail lines; nonzero exit when a Mach-O cannot be read.
 be_classify_macho() {
-  echo bytes
+  _ia=0; shipyard_mach_interface "$1" > "$work/ia" || _ia=$?
+  _ib=0; shipyard_mach_interface "$2" > "$work/ib" || _ib=$?
+  [ "$_ia" -le 1 ] && [ "$_ib" -le 1 ] || return 2
+  if [ "$_ia" -eq 1 ] && [ "$_ib" -eq 1 ] || cmp -s "$work/ia" "$work/ib"; then echo bytes; return 0; fi
+  echo interface
+  comm -23 "$work/ia" "$work/ib" | sed 's/^/  only in A: /'
+  comm -13 "$work/ia" "$work/ib" | sed 's/^/  only in B: /'
 }
 
 be_magic() {
-  case "$(od -An -tx1 -N8 "$1" 2>/dev/null | tr -d ' \n')" in
-    feedface*|feedfacf*|cefaedfe*|cffaedfe*|cafebabe*|bebafeca*|213c617263683e0a) echo macho ;;
-    *) echo other ;;
-  esac
+  case "$(shipyard_mach_kind "$1")" in other) echo other ;; *) echo macho ;; esac
 }
 
 repo=.

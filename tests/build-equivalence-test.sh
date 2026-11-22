@@ -88,6 +88,10 @@ entries r-space 'build-equivalence:Odd*: spaces'
 run --repo "$w/r-space" "$w/A" "$w/B"; want "glob over a path with spaces" 0 "bytes${T}Odd Dir/a * b?.txt${T}Odd*"
 echo "ok: odd names"
 
+fresh; printf '\312\376\272\276\000\000\000\064one' > "$w/A/C.class"; printf '\312\376\272\276\000\000\000\064two' > "$w/B/C.class"
+run --repo "$w/none" "$w/A" "$w/B"; want "a Java class shares the fat magic" 1 "bytes${T}C.class${T}-"
+echo "ok: a Java class file is not Mach-O"
+
 fresh; mkdir -p "$w/A/a" "$w/B/a"; put "$w/A/a/f1" 1; put "$w/B/a/f1" 2; put "$w/A/a/f2" 1; put "$w/B/a/f2" 2
 put "$w/A/a/fX" 1; put "$w/B/a/fX" 2; put "$w/A/b[1]" 1; put "$w/B/b[1]" 2
 entries r-glob 'build-equivalence:a/f[12]: class' 'build-equivalence:a/f?: any' 'build-equivalence:b[[]1]: bracket'
