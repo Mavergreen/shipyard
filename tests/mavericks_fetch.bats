@@ -130,10 +130,11 @@ dir_fixture() {
 @test "a held lock times out naming the lock" {
   dir_fixture
   x="$(shipyard_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar d)"
-  mkdir "$CACHE/.mav-publish.lock"
+  : > "$CACHE/.mav-publish.lock"
   SHIPYARD_FETCH_LOCK_TRIES=2 run shipyard_fetch_publish "$CACHE" "$x"
   [ "$status" -eq 1 ]
   [[ "$output" == *".mav-publish.lock held"* ]] || false
+  [ -f "$CACHE/.mav-publish.lock" ]
 }
 
 @test "a failing mv under set -e still releases the publish lock" {

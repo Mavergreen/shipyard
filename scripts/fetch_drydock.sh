@@ -61,15 +61,12 @@ case "$host" in
     if ! kept; then
       mkdir -p "$W"
       tmp=""; locked=""
-      trap 'rm -rf ${tmp:+"$tmp"}; [ -z "$locked" ] || rmdir "$d.lock" 2>/dev/null || :' EXIT
+      trap 'rm -rf ${tmp:+"$tmp"}; [ -z "$locked" ] || shipyard_lock_release "$d.lock"' EXIT
       trap 'exit 130' INT
       trap 'exit 143' TERM
-      # spec: scripts/fetch_product_tar.sh -- calls for one prefix take turns through a lock directory.
-      waited=0
-      until mkdir "$d.lock" 2>/dev/null; do
-        [ "$waited" -lt "${SHIPYARD_LOCK_WAIT:-900}" ] || die "$d.lock is still held after ${waited}s; remove it if no fetch of $d is running"
-        sleep 1; waited=$((waited + 1))
-      done
+      # spec: scripts/fetch_product_tar.sh -- calls for one prefix take turns through a lock file.
+      shipyard_lock_take "$d.lock" "${SHIPYARD_LOCK_WAIT:-900}" ||
+        die "$d.lock is still held after ${shipyard_lock_waited}s; remove it if no fetch of $d is running"
       locked=1
     fi
     if ! kept; then

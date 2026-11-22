@@ -23,12 +23,8 @@ shipyard_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET"
 mkdir -p "$(dirname "$DEST")"
 DEST="$(cd "$(dirname "$DEST")" && pwd -P)/$(basename "$DEST")"
 case "$(basename "$DEST")" in .|..) echo 'fetch_product_tar: unsafe destination' >&2; exit 2 ;; esac
-waited=0
-until mkdir "$DEST.lock" 2>/dev/null; do
-  [ "$waited" -lt "${SHIPYARD_LOCK_WAIT:-900}" ] || { echo "fetch_product_tar: lock timeout: $DEST.lock" >&2; exit 1; }
-  sleep 1; waited=$((waited + 1))
-done
-trap 'rmdir "$DEST.lock" 2>/dev/null || :' EXIT
+shipyard_lock_take "$DEST.lock" "${SHIPYARD_LOCK_WAIT:-900}" || { echo "fetch_product_tar: lock timeout: $DEST.lock" >&2; exit 1; }
+trap 'shipyard_lock_release "$DEST.lock"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 python3 "$SELF/product-tar.py" "$CACHE/$ASSET" "$SHORT" "$SHA" "$DEST"

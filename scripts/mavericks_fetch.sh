@@ -7,6 +7,8 @@
 #          shipyard_fetch_verified URL SHA256 CACHE_DIR TARBALL_NAME
 #          shipyard_fetch_extract URL SHA256 CACHE_DIR TARBALL_NAME [tar-member...]
 #          shipyard_fetch_publish CACHE_DIR EXTRACT_DIR
+#          shipyard_lock_take LOCK SECONDS
+#          shipyard_lock_release LOCK
 #          Sourced POSIX-sh helpers for the fetch scripts. SOURCE it, don't execute it.
 #          shipyard_curl downloads URL to its own OUT.part.XXXXXX (mktemp, so concurrent fetches of one OUT
 #          never share a file) and renames it to OUT only when an attempt succeeds;
@@ -36,7 +38,7 @@
 #          The caller may post-process the extract before publishing it.
 #          shipyard_fetch_publish moves each top-level entry of EXTRACT_DIR to CACHE_DIR/<name> only if that path
 #          does not exist yet (a present entry is a concurrent publisher's complete copy), under a
-#          `mkdir` lock at CACHE_DIR/.mav-publish.lock, then removes EXTRACT_DIR. It waits for the lock once
+#          lock file CACHE_DIR/.mav-publish.lock (shipyard_lock_take), then removes EXTRACT_DIR. It waits for the lock once
 #          a second for up to 120 tries, then returns 1 naming the lock. SHIPYARD_FETCH_LOCK_TRIES
 #          overrides the 120 (test-only).
 #          shipyard_fetch_pinned is extract-then-publish, the skeleton the fetch scripts share: the caller owns
@@ -50,7 +52,26 @@
 #          a file:// root is read as ROOT/Mavergreen/REPO/releases/latest, one line holding the tag.
 #          The https read retries like shipyard_curl (same curl exits, SHIPYARD_FETCH_TRIES, backoff) and
 #          gives up after 60s per attempt. It returns 1 when the tag is empty or cannot be found.
+#          shipyard_lock_take holds LOCK, a regular file, once this call creates it; it tries again once a
+#          second for up to SECONDS seconds, then returns 1. $shipyard_lock_waited is the seconds it waited.
+#          Anything already at LOCK, a directory an older shipyard left say, is held.
+#          shipyard_lock_release LOCK removes it. A holder that is killed leaves LOCK behind.
 shipyard_curl_http=""
+
+# platform: uutils mkdir (Ubuntu 26.04, where ubuntu-latest can land) let 6 of 200 racers win, so mkdir
+#           is no mutex; the shell's own noclobber create is open(O_CREAT|O_EXCL) in dash, bash 3.2 and 5.x.
+shipyard_lock_take() {
+  shipyard_lock_waited=0
+  until (set -C; : > "$1") 2>/dev/null; do
+    [ "$shipyard_lock_waited" -lt "$2" ] || return 1
+    sleep 1
+    shipyard_lock_waited=$((shipyard_lock_waited + 1))
+  done
+}
+
+shipyard_lock_release() {
+  rm -f "$1"
+}
 
 _shipyard_curl_to() {
   _sc_n=1; _sc_wait=2
@@ -174,20 +195,15 @@ shipyard_fetch_publish() {
   for _e in "$_x"/* "$_x"/.[!.]* "$_x"/..?*; do
     [ -e "$_e" ] || [ -h "$_e" ] || continue   # an unmatched glob stays literal
     _d="$_cache/${_e##*/}"
-    _try=1
-    until mkdir "$_lock" 2>/dev/null; do
-      [ "$_try" -lt "${SHIPYARD_FETCH_LOCK_TRIES:-120}" ] || {
-        echo "shipyard_fetch: $_lock held for ${SHIPYARD_FETCH_LOCK_TRIES:-120}s -- remove it if no fetch is running" >&2
-        rm -rf "$_x"; return 1; }
-      _try=$((_try + 1))
-      sleep 1
-    done
+    shipyard_lock_take "$_lock" "$((${SHIPYARD_FETCH_LOCK_TRIES:-120} - 1))" || {
+      echo "shipyard_fetch: $_lock held for ${SHIPYARD_FETCH_LOCK_TRIES:-120}s -- remove it if no fetch is running" >&2
+      rm -rf "$_x"; return 1; }
     # platform: mv onto an existing directory moves INTO it. Both callers fetch only when their
     #           target is absent, so a present entry is a concurrent publisher's complete copy: keep it.
     #           The `||` chain keeps a failing mv from tripping the caller's `set -e` while the lock is held.
     _rc=0
     [ -e "$_d" ] || [ -h "$_d" ] || mv "$_e" "$_d" || _rc=1
-    rmdir "$_lock"
+    shipyard_lock_release "$_lock"
     [ "$_rc" -eq 0 ] || { rm -rf "$_x"; return 1; }
   done
   rm -rf "$_x"

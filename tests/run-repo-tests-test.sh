@@ -110,11 +110,11 @@ out="$(MAVERICKS_TEST_JOBS=2 sh "$S" 2>&1)" || { echo "FAIL refill: c.sh must st
 PASS tests/b.sh
 PASS tests/c.sh" ] || { echo "FAIL refill: results must still print in file order: $out"; exit 1; }
 
-# spec: scripts/run-repo-tests.sh header (MAVERICKS_TEST_JOBS) -- each file holds a lock directory for 2 s,
+# spec: scripts/run-repo-tests.sh header (MAVERICKS_TEST_JOBS) -- each file holds a lock file for 2 s,
 #       so two files running at once make the second to take it fail, and one at a time never do.
-lockfile='#!/bin/sh\n# platform: host-agnostic\nmkdir "$LOCK" || exit 1\nsleep 2\nrmdir "$LOCK"\n'
+lockfile='#!/bin/sh\n# platform: host-agnostic\n. "$LOCKLIB"\nshipyard_lock_take "$LOCK" 0 || exit 1\nsleep 2\nshipyard_lock_release "$LOCK"\n'
 fresh; printf "$lockfile" > tests/a.sh; printf "$lockfile" > tests/b.sh
-LOCK="$work/lock"; export LOCK
+LOCK="$work/lock"; LOCKLIB="$here/../scripts/mavericks_fetch.sh"; export LOCK LOCKLIB
 if MAVERICKS_TEST_JOBS=2 sh "$S" >/dev/null 2>&1; then echo "FAIL parallel: with 2 jobs the two files must overlap, so the second to take the lock fails"; exit 1; fi
 MAVERICKS_TEST_JOBS=1 sh "$S" >/dev/null 2>&1 || { echo "FAIL serial: with 1 job the files run one after another, so neither finds the lock taken"; exit 1; }
 

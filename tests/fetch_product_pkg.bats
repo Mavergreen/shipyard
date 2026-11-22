@@ -104,7 +104,8 @@ DIST
 
 @test "a lock nobody releases fails after SHIPYARD_LOCK_WAIT seconds, naming it" {
   serve widget-1.0.pkg
-  mkdir -p "$DEST.lock"
+  mkdir -p "$(dirname "$DEST")"
+  : > "$DEST.lock"
   SHIPYARD_LOCK_WAIT=1 run sh "$HELPER" widget 1.0 "$DEST"
   [ "$status" -eq 1 ]
   [[ "$output" == *"$DEST.lock"* ]] || false
