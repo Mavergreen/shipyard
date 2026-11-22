@@ -90,6 +90,27 @@ v="$(variant escaping)"; sed -i '' 's|path = README.txt; sourceTree = SOURCE_ROO
 refused escaping_reference --project "$v" --target App
 v="$(variant stray-product)"; sed -i '' 's|productName = LibThing; productReference = F0000000000000000000001A;|productName = LibThing;|' "$v/project.pbxproj"
 refused built_reference_not_a_product --project "$v" --target App
+shader() {
+  v="$(variant "$1")"; printf 'kernel\n' > "$w/$1/Sources/With Space/Shade Code.metal"
+  sed -i '' -e "s|F0000000000000000000001A = {isa = PBXFileReference; explicitFileType = archive.ar;|B00000000000000000000017 = {isa = PBXBuildFile; fileRef = F0000000000000000000001B; }; F0000000000000000000001B = {isa = PBXFileReference; lastKnownFileType = $2; path = \"With Space/Shade Code.metal\"; sourceTree = \"<group>\"; }; &|" \
+    -e 's|children = (F0000000000000000000000A,|children = (F0000000000000000000001B, F0000000000000000000000A,|' \
+    -e 's|B00000000000000000000010, ); runOnly|B00000000000000000000010, B00000000000000000000017, ); runOnly|' "$v/project.pbxproj"
+  printf '%s\n' "$v"
+}
+echo "== not_compiled_metal"
+v="$(shader metal sourcecode.metal)"
+if "$INSPECT" --project "$v" --target App --output "$w/metal.json" > "$w/metal.log" 2>&1; then
+  json "$w/metal.json" "App sources" > "$w/metal-sources"
+  grep -qxF "not-compiled Sources/With Space/Shade Code.metal" "$w/metal-sources" \
+    || bad "inspector: the shader is not a not-compiled source: $(cat "$w/metal-sources")"
+else
+  bad "inspector refused a Metal shader in a sources phase: $(cat "$w/metal.log")"
+fi
+echo "== unknown_source_type"
+v="$(shader fortran sourcecode.fortran)"
+refused unknown_source_type --project "$v" --target App
+grep -q 'the sources phase holds F0000000000000000000001B, a PBXFileReference of type sourcecode.fortran, which this does not read' \
+  "$w/unknown_source_type.log" || bad "inspector: an unknown source type refused with another message: $(cat "$w/unknown_source_type.log")"
 
 echo "== exporter: model_classified_not_compiled, repeat_without_timestamp"
 if export_ "$P" "App;Lib Thing" "APP;LIB__THING" "$w/out1"; then
@@ -99,6 +120,7 @@ if export_ "$P" "App;Lib Thing" "APP;LIB__THING" "$w/out1"; then
   [ "$(wc -l < "$w/g-app" | tr -d ' ')" = 6 ] || bad "exporter: APP_SOURCES is not the 6 code entries: $(cat "$w/g-app")"
   grep -q xcdatamodeld "$w/g-app" && bad "exporter: the model is in APP_SOURCES"
   [ "$(entries "$g1" APP_MODELS)" = Model.xcdatamodeld ] || bad "exporter: APP_MODELS is not the model"
+  grep -q NOT_COMPILED "$g1" && bad "exporter: a project with nothing uncompiled defines a NOT_COMPILED list"
   grep -qxF "Sources/With Space/Spaced.m" "$w/g-app" || bad "exporter: the spaced path did not survive"
   [ "$(grep -cxF Shared/util.c "$w/g-app")" = 2 ] || bad "exporter: the duplicate reference was collapsed"
   [ "$(entries "$g1" LIB__THING_SOURCES)" = Lib/lib.m ] || bad "exporter: LIB__THING_SOURCES"
@@ -134,6 +156,19 @@ for drop in "Sources/main.m" "Shared/util.h" "README.txt" "Resources/fr.lproj/Ma
   grep -q 'is not' "$w/export.log" || bad "exporter_disagrees: missing $drop refused for another reason: $(cat "$w/export.log")"
   rm -rf "$w/out-drop"
 done
+
+echo "== exporter: not_compiled_metal"
+if export_ "$w/metal/fx.xcodeproj" "App;Lib Thing" "APP;LIB__THING" "$w/out-metal"; then
+  gm="$(cat "$w/result")"
+  [ "$(entries "$gm" APP_NOT_COMPILED)" = "sourcecode.metal:Sources/With Space/Shade Code.metal" ] \
+    || bad "exporter: APP_NOT_COMPILED is not the typed shader: $(entries "$gm" APP_NOT_COMPILED)"
+  entries "$gm" APP_SOURCES > "$w/gm-app"
+  grep -q 'Shade Code' "$w/gm-app" && bad "exporter: the shader is in APP_SOURCES"
+  [ "$(wc -l < "$w/gm-app" | tr -d ' ')" = 6 ] || bad "exporter: APP_SOURCES with a shader is not the 6 code entries: $(cat "$w/gm-app")"
+  grep -q LIB__THING_NOT_COMPILED "$gm" && bad "exporter: a target with nothing uncompiled defines a NOT_COMPILED list"
+else
+  bad "exporter refused a Metal shader: $(cat "$w/export.log")"
+fi
 
 echo "== wrong_prefix, unknown_target"
 if export_ "$P" "App;Lib Thing" "APPLICATION;LIB__THING" "$w/out3"; then bad "exporter: a prefix the exporter does not use was accepted"; fi

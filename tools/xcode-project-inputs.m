@@ -7,10 +7,11 @@
  *
  * Output (schema 1): {"schema":1,"targets":{NAME:{"sources":[{"path","kind"}],"headers":[...],
  * "resources":[...]}}}, paths relative to the project's directory, in phase order with every
- * duplicate kept. kind is source, model, header, file, variant or product (another target's built
- * product a Resources phase copies, by its product name). Any reference this cannot resolve
- * to a regular file or directory inside the project's directory, any record it does not know, and
- * any target it cannot find is an error: nothing is written, exit 1. Exit 2 on a usage error.
+ * duplicate kept. kind is source, model, not-compiled (a source of a type the product never
+ * compiles, such as a Metal shader, with that file type in "type"), header, file, variant or product
+ * (another target's built product a Resources phase copies, by its product name). Any reference this
+ * cannot resolve to a regular file or directory inside the project's directory, any record it does
+ * not know, and any target it cannot find is an error: nothing is written, exit 1. Exit 2 on a usage error.
  */
 #import <Foundation/Foundation.h>
 #include <limits.h>
@@ -19,6 +20,7 @@
 #include <sys/stat.h>
 
 static NSString *gError;
+static NSString *const kNotCompiledTypes[] = {@"sourcecode.metal"};
 
 static id fail(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2);
 static id fail(NSString *format, ...)
@@ -156,6 +158,15 @@ static NSString *fileType(NSDictionary *o)
                                             @"sourcecode.cpp.objcpp", @"sourcecode.cpp.cpp", nil];
         if ([recordType isEqualToString:@"PBXFileReference"] && [code containsObject:type])
             return [self add:@"source" ident:ref to:out];
+        NSSet *uncompiled = [NSSet setWithObjects:kNotCompiledTypes
+                                            count:sizeof kNotCompiledTypes / sizeof kNotCompiledTypes[0]];
+        if ([recordType isEqualToString:@"PBXFileReference"] && [uncompiled containsObject:type]) {
+            NSString *rel = [self existing:ref];
+            if (rel == nil)
+                return NO;
+            [out addObject:@{@"path": rel, @"kind": @"not-compiled", @"type": type}];
+            return YES;
+        }
     } else if ([name isEqualToString:@"headers"]) {
         if ([recordType isEqualToString:@"PBXFileReference"] && [type isEqualToString:@"sourcecode.c.h"])
             return [self add:@"header" ident:ref to:out];
@@ -361,8 +372,9 @@ int main(int argc, char **argv)
                 [json appendFormat:@"%@%@:[", k ? @"," : @"", quote(order[k])];
                 NSArray *entries = [result[name] objectForKey:order[k]];
                 for (NSUInteger e = 0; e < [entries count]; e++)
-                    [json appendFormat:@"%@\n {\"kind\":%@,\"path\":%@}", e ? @"," : @"",
-                        quote(entries[e][@"kind"]), quote(entries[e][@"path"])];
+                    [json appendFormat:@"%@\n {\"kind\":%@,\"path\":%@%@}", e ? @"," : @"",
+                        quote(entries[e][@"kind"]), quote(entries[e][@"path"]),
+                        entries[e][@"type"] ? [@",\"type\":" stringByAppendingString:quote(entries[e][@"type"])] : @""];
                 [json appendString:@"]"];
             }
             [json appendString:@"}"];

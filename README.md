@@ -298,6 +298,9 @@ appear, defining for each prefix:
 
 - `<P>_SOURCES`: the code files its sources phase compiles;
 - `<P>_MODELS`: the Core Data models that phase lists, which are not compiled;
+- `<P>_NOT_COMPILED`, only when non-empty: other sources that phase lists which the product never
+  compiles (only Metal shaders so far), each as `<file type>:<path>`, split at the first colon, such
+  as `sourcecode.metal:Shaders/A B.metal`;
 - `<P>_PRODUCT_RESOURCES`: other targets' built products its resources phase copies, by product name;
 - the exporter's `<P>_INCLUDE_DIRS`, `<P>_*_HEADERS` and `<P>_*RESOURCES`.
 

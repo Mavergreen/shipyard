@@ -12,9 +12,11 @@
 #   path must be a plain relative path to something inside the project's directory with no CMake syntax
 #   in it, and each target's sources, headers and resources must be exactly the entries (with their
 #   multiplicity) its sources, headers and resources phases list. Only then is <OUTPUT_DIR>/<key>/sources.cmake written, defining for each prefix
-#   <P>_SOURCES (code only), <P>_MODELS (Core Data models, which are not compiled), and the exporter's
-#   <P>_INCLUDE_DIRS, <P>_*_HEADERS and <P>_*RESOURCES, each a list of paths relative to the project's
-#   directory, as bracket arguments. <out_var> is set to that file. The same inputs reuse it while it
+#   <P>_SOURCES (code only), <P>_MODELS (Core Data models, which are not compiled), <P>_NOT_COMPILED
+#   (only when non-empty: other sources the product never compiles, such as Metal shaders, each entry
+#   <file type>:<path>, split at the first colon, e.g. sourcecode.metal:Shaders/A B.metal), and the
+#   exporter's <P>_INCLUDE_DIRS, <P>_*_HEADERS and <P>_*RESOURCES, each a list of paths relative to the
+#   project's directory, as bracket arguments. <out_var> is set to that file. The same inputs reuse it while it
 #   matches its stamp; a changed or unstamped export is refused and left as it is.
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/MavericksHostTools.cmake")
@@ -276,6 +278,8 @@ function(mavericks_export_xcode_sources out_var)
     endif()
     set(want)
     set(models)
+    set(uncompiled)
+    set(not_compiled)
     string(JSON ns LENGTH "${audit}" targets "${t}" sources)
     if(ns GREATER 0)
       math(EXPR sl "${ns} - 1")
@@ -285,6 +289,13 @@ function(mavericks_export_xcode_sources out_var)
         list(APPEND want "${path}")
         if(kind STREQUAL "model")
           list(APPEND models "${path}")
+        elseif(kind STREQUAL "not-compiled")
+          string(JSON type GET "${audit}" targets "${t}" sources ${s} type)
+          if(NOT type MATCHES "^[A-Za-z0-9._-]+$")
+            _mxi_fail("mavericks-xcode-inputs gave '${path}' the file type '${type}', which this refuses")
+          endif()
+          list(APPEND uncompiled "${path}")
+          list(APPEND not_compiled "${type}:${path}")
         endif()
       endforeach()
     endif()
@@ -328,7 +339,7 @@ function(mavericks_export_xcode_sources out_var)
     endforeach()
     set(code ${v_${p}_SOURCES})
     list(REMOVE_DUPLICATES models)
-    foreach(m IN LISTS models)
+    foreach(m IN LISTS models uncompiled)
       list(REMOVE_ITEM code "${m}")
     endforeach()
     set(model_entries ${v_${p}_SOURCES})
@@ -342,6 +353,10 @@ function(mavericks_export_xcode_sources out_var)
     set(v_${p}_SOURCES ${code})
     set(v_${p}_MODELS ${kept})
     set(names "${p}_SOURCES" "${p}_MODELS" "${p}_PRODUCT_RESOURCES")
+    if(not_compiled)
+      set(v_${p}_NOT_COMPILED ${not_compiled})
+      list(APPEND names "${p}_NOT_COMPILED")
+    endif()
     set(v_${p}_PRODUCT_RESOURCES)
     foreach(v IN LISTS vars)
       if(v MATCHES "^${p}_" AND NOT v STREQUAL "${p}_SOURCES")
