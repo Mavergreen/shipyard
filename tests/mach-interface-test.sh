@@ -35,9 +35,29 @@ a="$(norm _rust_metadata_std_1c4a7586348cee47)"; b="$(norm _rust_metadata_std_01
 [ "$a" = _rust_metadata_std_H ] || fail "rustc's metadata symbol has its crate hash written H: '$a'"
 [ "$a" = "$b" ] || fail "metadata symbols differing only in hash: '$a' vs '$b'"
 [ "$(norm _rust_metadata_proc_macro2_fedcba9876543210)" = _rust_metadata_proc_macro2_H ] || fail "a crate name with underscores keeps them"
-for n in _foo_1c4a7586348cee47 _rust_metadata_std_1c4a _rust_metadata_std_1C4A7586348CEE47 __rust_metadata_std_1c4a7586348cee47 \
-         _rust_metadata_std_1c4a7586348cee47x _rust_metadata__1c4a7586348cee47x; do
+[ "$(norm _rust_metadata_std_fda44cb9000b3d7)" = _rust_metadata_std_H ] || fail "rustc prints the metadata hash unpadded: 15 hex digits"
+[ "$(norm _rust_metadata_std_1c4a)" = _rust_metadata_std_H ] || fail "an unpadded metadata hash of 4 hex digits"
+[ "$(norm _rust_metadata_core_7)" = _rust_metadata_core_H ] || fail "an unpadded metadata hash of 1 hex digit"
+[ "$(norm _rust_metadata_foo_ab_0123456789abcdef)" = _rust_metadata_foo_ab_H ] || fail "the hash is the segment after the last underscore"
+[ "$(norm _rust_metadata_foo_ab)" = _rust_metadata_foo_H ] || fail "a crate name ending _<hex> with no hash reads its last segment as the hash"
+for n in _foo_1c4a7586348cee47 _rust_metadata_std_1C4A7586348CEE47 _rust_metadata_std_1c4A __rust_metadata_std_1c4a7586348cee47 \
+         _rust_metadata_std_1c4a7586348cee47x _rust_metadata__1c4a7586348cee47x _rust_metadata__1c4a7586348cee47 \
+         _rust_metadata_std_01c4a7586348cee47 _rust_metadata_std_ _rust_metadata_1c4a _rust_metadata_st-d_1c4a; do
   [ "$(norm "$n")" = "$n" ] || fail "$n is not rustc's metadata symbol, yet changed to '$(norm "$n")'"
+done
+a="$(norm _anon.0123456789abcdef0123456789abcdef.12.llvm.1234567890)"; b="$(norm _anon.fedcba9876543210fedcba9876543210.12.llvm.42)"
+[ "$a" = _anon.H.12.llvm.N ] || fail "LLVM's _anon hash is H and its .llvm suffix N: '$a'"
+[ "$a" = "$b" ] || fail "_anon names differing only in hash and .llvm number: '$a' vs '$b'"
+[ "$(norm _anon.0123456789abcdef0123456789abcdef.3)" = _anon.H.3 ] || fail "an _anon name without a .llvm suffix"
+[ "$(norm _anon.0123456789abcdef0123456789abcdef.3)" != "$(norm _anon.0123456789abcdef0123456789abcdef.4)" ] || fail "_anon keeps its index"
+[ "$(norm _compiler_builtins_helper.llvm.9876543210)" = _compiler_builtins_helper.llvm.N ] || fail "a C name's .llvm suffix is N"
+[ "$(norm __ZN4core3fmt5write17h0123456789abcdefE.llvm.17)" = __ZN4core3fmt5write17hHE.llvm.N ] || fail "a legacy name with a .llvm suffix: the suffix is set aside, then the hash is H"
+[ "$(norm __RNvNtCs1a2B3c_4core3fmt5write.llvm.5)" = __RNvNtCs_4core3fmt5write.llvm.N ] || fail "a v0 name with a .llvm suffix"
+[ "$(norm _rust_metadata_std_fda44cb9000b3d7.llvm.5)" = _rust_metadata_std_H.llvm.N ] || fail "a metadata name with a .llvm suffix"
+for n in _anon.0123456789abcdef0123456789abcde.1 _anon.0123456789ABCDEF0123456789abcdef.1 _anon.0123456789abcdef0123456789abcdef0.1 \
+         _anon.0123456789abcdef0123456789abcdef. _anon.0123456789abcdef0123456789abcdef.1x __anon.0123456789abcdef0123456789abcdef.1 \
+         _foo.llvm. _foo.llvm.12x _foo.llvm.12.x _foo.LLVM.12 _foo_llvm_12 _foo.llvmx.12; do
+  [ "$(norm "$n")" = "$n" ] || fail "$n is not an LLVM per-build name, yet changed to '$(norm "$n")'"
 done
 echo "ok: Rust symbol normaliser"
 

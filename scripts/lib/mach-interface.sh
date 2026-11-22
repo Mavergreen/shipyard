@@ -1,12 +1,16 @@
 # platform: host-agnostic
 #   usage: . scripts/lib/mach-nm.sh; . scripts/lib/mach-interface.sh
-#          shipyard_rust_sym_normalize: a filter, one Mach-O symbol per line. A legacy Rust name
+#          shipyard_rust_sym_normalize: a filter, one Mach-O symbol per line. First, on any line, LLVM's
+#          trailing .llvm.<decimal> is set aside and comes back as .llvm.N; the rules below see the rest.
+#          LLVM's _anon.<32 lowercase hex>.<n> reads _anon.H.<n>. A legacy Rust name
 #          (__ZN...17h<16 hex>E) has its hash written H. A v0 name (__R...) has each crate root's
 #          Cs<base62>_ disambiguator written Cs_, and each back-reference renumbered to its target's
-#          offset in the rewritten name, so one target compares equal and two stay distinct. Every other
-#          line, a single-underscore _R or _ZN (a C name), and a __R line that does not parse as v0 or
-#          whose back-reference has no target, passes unchanged. rustc's metadata symbol
-#          (_rust_metadata_<crate>_<16 lowercase hex>) has its hash written H.
+#          offset in the rewritten name, so one target compares equal and two stay distinct. rustc's
+#          metadata symbol (_rust_metadata_<crate>_<hash>, the hash 1 to 16 lowercase hex, unpadded) has
+#          its hash written H; the hash is the part after the last underscore, so a crate name ending
+#          _<hex> loses that part when no hash follows it, which rustc never emits. Every other line, a
+#          single-underscore _R or _ZN (a C name), and a __R line that does not parse as v0 or whose
+#          back-reference has no target, passes unchanged.
 #          shipyard_mach_kind FILE: thin, fat, archive or other, from the magic bytes. cafebabe is fat only
 #          when its big-endian slice count is below 0x2D; otherwise it is a Java class file.
 #          shipyard_mach_interface FILE: FILE's interface, sorted, one "<arch> <fact>" per line: export
@@ -137,12 +141,18 @@ shipyard_rust_sym_normalize() {
       legacy = "^__ZN.*17h"
       for (i = 0; i < 16; i++) legacy = legacy "[0-9a-f]"
       legacy = legacy "E$"
-      meta = "^_rust_metadata_[A-Za-z0-9_]+_"
-      for (i = 0; i < 16; i++) meta = meta "[0-9a-f]"
-      meta = meta "$"
+      anon = "^_anon\\."
+      for (i = 0; i < 32; i++) anon = anon "[0-9a-f]"
+      anon = anon "\\.[0-9]+$"
     }
-    $0 ~ legacy { print substr($0, 1, length($0) - 17) "HE"; next }
-    $0 ~ meta { print substr($0, 1, length($0) - 16) "H"; next }
+    { sfx = "" }
+    match($0, /\.llvm\.[0-9]+$/) { sfx = ".llvm.N"; $0 = substr($0, 1, RSTART - 1) }
+    $0 ~ anon { print "_anon.H" substr($0, 39) sfx; next }
+    $0 ~ legacy { print substr($0, 1, length($0) - 17) "HE" sfx; next }
+    /^_rust_metadata_[A-Za-z0-9_]+$/ {
+      h = $0; sub(/.*_/, "", h)
+      if (h ~ /^[0-9a-f]+$/ && length(h) <= 16 && length($0) - length(h) > 16) { print substr($0, 1, length($0) - length(h)) "H" sfx; next }
+    }
     /^__R/ {
       pre = "__R"; split("", at)
       s = substr($0, length(pre) + 1); p = 1; out = ""; bad = 0; depth = 0
@@ -150,10 +160,10 @@ shipyard_rust_sym_normalize() {
       path()
       if (!bad && p <= length(s) && peek() !~ /[.$]/) path()
       if (!bad && p <= length(s)) { out = out substr(s, p); p = length(s) + 1 }
-      if (bad || p != length(s) + 1) print; else print pre out
+      if (bad || p != length(s) + 1) print $0 sfx; else print pre out sfx
       next
     }
-    { print }'
+    { print $0 sfx }'
 }
 
 shipyard_mach_kind() {
