@@ -31,6 +31,14 @@ for n in __ZN3foo3barEv _widgetCs1a_2 __Rfoo __ZN4core3fmt5write17h0123456789abc
   [ "$(norm "$n")" = "$n" ] || fail "non-Rust name $n changed to '$(norm "$n")'"
 done
 [ "$(norm a b c | wc -l | tr -d ' ')" = 3 ] || fail "one line out per line in"
+a="$(norm _rust_metadata_std_1c4a7586348cee47)"; b="$(norm _rust_metadata_std_0123456789abcdef)"
+[ "$a" = _rust_metadata_std_H ] || fail "rustc's metadata symbol has its crate hash written H: '$a'"
+[ "$a" = "$b" ] || fail "metadata symbols differing only in hash: '$a' vs '$b'"
+[ "$(norm _rust_metadata_proc_macro2_fedcba9876543210)" = _rust_metadata_proc_macro2_H ] || fail "a crate name with underscores keeps them"
+for n in _foo_1c4a7586348cee47 _rust_metadata_std_1c4a _rust_metadata_std_1C4A7586348CEE47 __rust_metadata_std_1c4a7586348cee47 \
+         _rust_metadata_std_1c4a7586348cee47x _rust_metadata__1c4a7586348cee47x; do
+  [ "$(norm "$n")" = "$n" ] || fail "$n is not rustc's metadata symbol, yet changed to '$(norm "$n")'"
+done
 echo "ok: Rust symbol normaliser"
 
 CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/../components/clang22" 2>/dev/null)" || { echo "SKIP: no clang22"; exit 77; }
@@ -58,7 +66,7 @@ src "$F1" "$F2"; dy base.dylib
 src "$F2" "$F1"; dy reorder.dylib
 mi="$(shipyard_mach_interface "$w/base.dylib")" || fail "interface of a dylib: exit $?"
 for f in "x86_64 export _f1" "x86_64 export _f2" "x86_64 import dyld_stub_binder" "x86_64 dylib 1 load /usr/lib/libSystem.B.dylib" \
-         "x86_64 id /opt/a/libx.dylib" "x86_64 minos 10.9" "x86_64 sdk 10.9" "x86_64 section __TEXT,__text"; do
+         "x86_64 id /opt/a/libx.dylib" "x86_64 minos version_min_macosx 10.9" "x86_64 sdk version_min_macosx 10.9" "x86_64 section __TEXT,__text"; do
   printf '%s\n' "$mi" | grep -qx "$f" || fail "interface of a dylib lacks '$f': $mi"
 done
 [ "$mi" = "$(printf '%s\n' "$mi" | LC_ALL=C sort -u)" ] || fail "interface lines are sorted and unique"
@@ -73,14 +81,15 @@ pair base.dylib weak.dylib; level "weak dylib" interface
 grep -q '^  only in B: x86_64 dylib [0-9]* weak /usr/lib/libz\.1\.dylib$' "$w/out" || fail "weak dylib: no detail: $out"
 ( TGT=x86_64-apple-macos10.10; dy minos.dylib )
 pair base.dylib minos.dylib; level "deployment target" interface
-detail "deployment target" "only in A: x86_64 minos 10.9"; detail "deployment target" "only in B: x86_64 minos 10.10"
+detail "deployment target" "only in A: x86_64 minos version_min_macosx 10.9"; detail "deployment target" "only in B: x86_64 minos version_min_macosx 10.10"
 cc -dynamiclib -install_name /opt/b/libx.dylib "$w/s.c" -o "$w/id.dylib"
 pair base.dylib id.dylib; level "install name" interface; detail "install name" "only in B: x86_64 id /opt/b/libx.dylib"
 dy rpath.dylib -Wl,-rpath,/opt/r
 pair base.dylib rpath.dylib; level "rpath" interface; detail "rpath" "only in B: x86_64 rpath 1 /opt/r"
 dy sdk.dylib -Wl,-platform_version,macos,10.9,10.10
 pair base.dylib sdk.dylib; level "SDK version" interface
-detail "SDK version" "only in A: x86_64 sdk 10.9"; detail "SDK version" "only in B: x86_64 sdk 10.10"
+detail "SDK version" "only in A: x86_64 sdk version_min_macosx 10.9"; detail "SDK version" "only in B: x86_64 sdk version_min_macosx 10.10"
+grep -q 'minos' "$w/out" && fail "SDK version: the deployment target did not change: $out"
 cp "$w/weak.dylib" "$w/lazy.dylib"
 off="$("$OTOOL" -l "$w/lazy.dylib" | awk -v o=32 '$1 == "cmd" { c = $2 } $1 == "cmdsize" { if (c == "LC_LOAD_WEAK_DYLIB") { print o; exit } o += $2 }')"
 [ -n "$off" ] || fail "no LC_LOAD_WEAK_DYLIB to turn lazy"
@@ -89,6 +98,33 @@ pair weak.dylib lazy.dylib; level "lazy dylib" interface
 grep -q '^  only in B: x86_64 dylib [0-9]* lazy /usr/lib/libz\.1\.dylib$' "$w/out" || fail "lazy dylib: no detail: $out"
 echo "ok: imports, weak and lazy loads, deployment target, SDK, install name and rpaths are interface"
 
+asm() { printf '%s\n' "$@" > "$w/s.s"; }
+asm '.macosx_version_min 10, 9 sdk_version 10, 9' '.globl _f' '_f: ret'; cc -c "$w/s.s" -o "$w/vmin.o"
+asm '.build_version macos, 10, 9 sdk_version 10, 9' '.globl _f' '_f: ret'; cc -c "$w/s.s" -o "$w/bver.o"
+pair vmin.o bver.o v.o; level "LC_VERSION_MIN_MACOSX vs LC_BUILD_VERSION" interface v.o
+detail "version load command" "only in A: x86_64 minos version_min_macosx 10.9"; detail "version load command" "only in B: x86_64 minos build_version macos 10.9"
+detail "version load command" "only in A: x86_64 sdk version_min_macosx 10.9"; detail "version load command" "only in B: x86_64 sdk build_version macos 10.9"
+echo "ok: the deployment target's load command and platform are interface"
+
+BC='.section __LLVM,__bitcode'
+asm '.globl _f' '_f: ret' "$BC" '.ascii "BC\300\336junk"'; cc -c "$w/s.s" -o "$w/bc1.o"
+asm '.globl _f' '_f: nop' 'ret' "$BC" '.ascii "BC\300\336knuj"'; cc -c "$w/s.s" -o "$w/bc2.o"
+asm '.globl _f' '.globl _g' '_f: ret' '_g: ret' "$BC" '.ascii "BC\300\336junk"'; cc -c "$w/s.s" -o "$w/bc3.o"
+mi="$(shipyard_mach_interface "$w/bc1.o")" || fail "an object embedding bitcode the pinned llvm cannot parse: exit $?: $mi"
+printf '%s\n' "$mi" | grep -qx "x86_64 export _f" || fail "an object embedding bitcode: its exports are read from the Mach-O symbol table: $mi"
+pair bc1.o bc2.o b.o; level "embedded bitcode, same symbols" bytes b.o
+pair bc1.o bc3.o b.o; level "embedded bitcode, an added export" interface b.o; detail "embedded bitcode" "only in B: x86_64 export _g"
+printf 'rustc metadata\n' > "$w/lib.rmeta"; "$CL/bin/llvm-ar" rcs "$w/bc1.a" "$w/bc1.o" "$w/lib.rmeta"
+"$CL/bin/llvm-ar" rcs "$w/bc3.a" "$w/bc3.o" "$w/lib.rmeta"
+pair bc1.a bc3.a libbc.rlib; level "embedded bitcode in an archive member" interface libbc.rlib; detail "embedded bitcode in an archive" "only in B: x86_64 export _g"
+asm '.globl _f' '_f: ret'; "$CL/bin/clang" --no-default-config -target x86_64h-apple-macos10.9 -c "$w/s.s" -o "$w/h.o"
+"$CL/bin/clang" --no-default-config -target i386-apple-macos10.9 -c "$w/s.s" -o "$w/i.o"
+mi="$(shipyard_mach_interface "$w/h.o")" || fail "an x86_64h object: exit $?"
+printf '%s\n' "$mi" | grep -qx "x86_64h export _f" || fail "a thin x86_64h object's arch comes from its header: $mi"
+mi="$(shipyard_mach_interface "$w/i.o")" || fail "an i386 object: exit $?"
+printf '%s\n' "$mi" | grep -qx "i386 export _f" || fail "a thin i386 object's arch comes from its header: $mi"
+echo "ok: embedded LLVM bitcode does not stop the reader, and a thin file's arch is its header's"
+
 mkdir -p "$w/noprefix"
 rc=0; ( unset NM OTOOL LIPO; SHIPYARD_MG_PREFIX="$w/noprefix"; export SHIPYARD_MG_PREFIX; PATH="$CL/bin:$PATH"; shipyard_mach_interface "$w/base.dylib" ) > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "no pinned llvm tools: exit $rc, want 2"
@@ -96,6 +132,29 @@ grep -q 'no pinned llvm-' "$w/err" || fail "no pinned llvm tools: stderr says so
 rc=0; ( unset NM LIPO; OTOOL="$CL/bin/llvm-otool"; SHIPYARD_MG_PREFIX="$w/noprefix"; export OTOOL SHIPYARD_MG_PREFIX; shipyard_mach_interface "$w/base.dylib" ) > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 0 ] || fail "OTOOL alone finds llvm-nm, llvm-lipo and llvm-ar beside it: exit $rc: $(cat "$w/err")"
 echo "ok: readers are the pinned clang22's, never PATH's"
+
+mkdir -p "$w/sy/scripts/lib" "$w/sy/components/clang22"
+cp "$BE" "$here/../scripts/deviations.sh" "$w/sy/scripts/"
+cp "$here/../scripts/lib/mach-nm.sh" "$here/../scripts/lib/mach-interface.sh" "$w/sy/scripts/lib/"
+printf '#!/bin/sh\nprintf "%%s\\n" "$1" >> "%s/fetched"\nprintf "%%s\\n" "%s"\n' "$w" "$CL" > "$w/sy/scripts/fetch_clang22.sh"
+rm -rf "$w/A" "$w/B"; mkdir -p "$w/A/lib" "$w/B/lib"; cp "$w/base.dylib" "$w/A/lib/x.dylib"; cp "$w/import.dylib" "$w/B/lib/x.dylib"
+befetch() { rc=0; ( unset NM OTOOL LIPO; SHIPYARD_MG_PREFIX="$w/noprefix"; export SHIPYARD_MG_PREFIX; sh "$w/sy/scripts/build-equivalence.sh" --repo "$w" "$w/A" "$w/B" ) > "$w/out" 2> "$w/err" || rc=$?; out="$(cat "$w/out")"; err="$(cat "$w/err")"; }
+befetch
+[ "$rc" -eq 1 ] || fail "no reader installed: fetches the pinned clang22 beside the script: exit $rc, want 1 (err: $err)"
+grep -qx "  only in B: x86_64 import _puts" "$w/out" || fail "fetched readers compare the interface: $out"
+[ "$(cat "$w/fetched")" = "$w/sy/scripts/../components/clang22" ] || fail "fetch_clang22.sh is given the pin beside the script: $(cat "$w/fetched")"
+rm -f "$w/fetched"; rm -rf "$w/A/lib/x.dylib" "$w/B/lib/x.dylib"; printf 'a\n' > "$w/A/lib/t"; printf 'b\n' > "$w/B/lib/t"
+befetch
+[ "$rc" -eq 1 ] && [ ! -f "$w/fetched" ] || fail "no Mach-O to compare: nothing is fetched: exit $rc, fetched: $(cat "$w/fetched" 2>/dev/null)"
+cp "$w/base.dylib" "$w/A/lib/x.dylib"; cp "$w/import.dylib" "$w/B/lib/x.dylib"
+printf '#!/bin/sh\necho offline >&2\nexit 1\n' > "$w/sy/scripts/fetch_clang22.sh"
+befetch
+[ "$rc" -eq 2 ] || fail "a failed fetch: exit $rc, want 2 (err: $err)"
+case "$err" in *offline*) ;; *) fail "a failed fetch shows fetch_clang22.sh's stderr: $err" ;; esac
+rm -rf "$w/sy/components"
+befetch
+[ "$rc" -eq 2 ] || fail "no reader and no pin beside the script: exit $rc, want 2 (err: $err)"
+echo "ok: with no reader installed, the pinned clang22 beside the script is fetched"
 
 src 'int main(void) { return 0; }'; cc "$w/s.c" -o "$w/exe-a"
 src 'int main(void) { return 0; }' 'int extra(void) { return 3; }'; cc "$w/s.c" -o "$w/exe-b"
@@ -111,7 +170,7 @@ pair fat.o m64.o m.o; level "fat object vs thin" interface m.o; detail "fat obje
 if "$CL/bin/clang" --no-default-config -target arm64-apple-macos11.0 -isysroot "$SDK" -dynamiclib -install_name /opt/a/libx.dylib "$w/s.c" -o "$w/arm.dylib" 2>/dev/null \
    || "$CL/bin/clang" --no-default-config -target arm64-apple-macos11.0 -isysroot "$(sh "$here/../scripts/fetch_sdk.sh" --arch arm64)" -dynamiclib -install_name /opt/a/libx.dylib "$w/s.c" -o "$w/arm.dylib" 2>/dev/null; then
   "$CL/bin/llvm-lipo" -create "$w/base.dylib" "$w/arm.dylib" -output "$w/universal.dylib"
-  pair universal.dylib base.dylib; level "universal vs thin" interface; detail "universal vs thin" "only in A: arm64 minos 11.0"
+  pair universal.dylib base.dylib; level "universal vs thin" interface; detail "universal vs thin" "only in A: arm64 minos build_version macos 11.0"
   echo "ok: a universal binary's slice set is interface"
 else
   echo "skip: this clang22 cannot build arm64; the slice set is covered by the fat object"

@@ -163,4 +163,18 @@ mkpkg "$w/c.pkg" 1 /opt/p dup || fail "could not build the colliding fixture pkg
 run --repo "$w/none" "$w/c.pkg" "$w/staged"; [ "$rc" -eq 2 ] || fail "two components installing one path: exit $rc, want 2"
 case "$err" in *opt/p/*) ;; *) fail "the collision must name the path: $err" ;; esac
 echo "ok: pkg inputs pair relative to the install root"
+mkscripts() {
+  rm -rf "$w/pk"; mkdir -p "$w/pk/r/bin" "$w/pk/s"; printf 'tool\n' > "$w/pk/r/bin/tool"
+  printf '#!/bin/sh\nexit %s\n' "$2" > "$w/pk/s/postinstall"; chmod +x "$w/pk/s/postinstall"
+  if [ -n "${3:-}" ]; then printf '#!/bin/sh\nexit 0\n' > "$w/pk/s/preinstall"; chmod +x "$w/pk/s/preinstall"; fi
+  sh "$here/../scripts/build_component_pkg.sh" --root "$w/pk/r" --identifier t.s --version 1 --install-location /opt/s --scripts "$w/pk/s" --out "$1" >/dev/null 2>&1
+}
+mkscripts "$w/sa.pkg" 0 || fail "could not build the A scripts pkg"
+mkscripts "$w/sb.pkg" 1 pre || fail "could not build the B scripts pkg"
+run --repo "$w/none" "$w/sa.pkg" "$w/sb.pkg"
+want "pkgs differing only in their scripts" 1 "bytes${T}.pkg/t.s/scripts/postinstall${T}-
+only-b${T}.pkg/t.s/scripts/preinstall${T}-"
+mkscripts "$w/sc.pkg" 0 || fail "could not build the C scripts pkg"
+run --repo "$w/none" "$w/sa.pkg" "$w/sc.pkg"; want "pkgs with the same scripts" 0 ""
+echo "ok: each component's scripts compare under .pkg/<identifier>/scripts/"
 echo "PASS: build-equivalence"

@@ -5,12 +5,14 @@
 #          Cs<base62>_ disambiguator written Cs_, and each back-reference renumbered to its target's
 #          offset in the rewritten name, so one target compares equal and two stay distinct. Every other
 #          line, a single-underscore _R or _ZN (a C name), and a __R line that does not parse as v0 or
-#          whose back-reference has no target, passes unchanged.
+#          whose back-reference has no target, passes unchanged. rustc's metadata symbol
+#          (_rust_metadata_<crate>_<16 lowercase hex>) has its hash written H.
 #          shipyard_mach_kind FILE: thin, fat, archive or other, from the magic bytes. cafebabe is fat only
 #          when its big-endian slice count is below 0x2D; otherwise it is a Java class file.
 #          shipyard_mach_interface FILE: FILE's interface, sorted, one "<arch> <fact>" per line: export
 #          <sym> (not for MH_EXECUTE), import <sym>, dylib <n> <load|weak|reexport|upward|lazy> <path>, id
-#          <install name>, rpath <n> <path>, minos <v>, sdk <v>, section <seg>,<sect>. Symbols pass through
+#          <install name>, rpath <n> <path>, minos <kind> <v>, sdk <kind> <v>, section <seg>,<sect>, where
+#          <kind> is the load command (version_min_macosx, or build_version <platform>). Symbols pass through
 #          shipyard_rust_sym_normalize; in dylib and id paths "-<16 lowercase hex>." reads "-H.". A static
 #          archive prints only its Mach-O members' export and import lines; other members are skipped.
 #          Readers: NM, else shipyard_mach_nm's llvm-nm; OTOOL and LIPO, else the llvm-otool and llvm-lipo
@@ -135,8 +137,12 @@ shipyard_rust_sym_normalize() {
       legacy = "^__ZN.*17h"
       for (i = 0; i < 16; i++) legacy = legacy "[0-9a-f]"
       legacy = legacy "E$"
+      meta = "^_rust_metadata_[A-Za-z0-9_]+_"
+      for (i = 0; i < 16; i++) meta = meta "[0-9a-f]"
+      meta = meta "$"
     }
     $0 ~ legacy { print substr($0, 1, length($0) - 17) "HE"; next }
+    $0 ~ meta { print substr($0, 1, length($0) - 16) "H"; next }
     /^__R/ {
       pre = "__R"; split("", at)
       s = substr($0, length(pre) + 1); p = 1; out = ""; bad = 0; depth = 0
@@ -181,28 +187,42 @@ _mi_die() {
 
 _mi_syms() {
   if [ "$3" = yes ]; then
-    "$_mi_N" -gU --defined-only -j "$1" > "$_mi_t/syms" 2> "$_mi_t/err" || _mi_die "$_mi_N -gU"
+    "$_mi_N" --no-llvm-bc -gU --defined-only -j "$1" > "$_mi_t/syms" 2> "$_mi_t/err" || _mi_die "$_mi_N -gU"
     shipyard_rust_sym_normalize < "$_mi_t/syms" | awk -v a="$2" '$0 != "" { print a " export " $0 }'
   fi
-  "$_mi_N" -u -j "$1" > "$_mi_t/syms" 2> "$_mi_t/err" || _mi_die "$_mi_N -u"
+  "$_mi_N" --no-llvm-bc -u -j "$1" > "$_mi_t/syms" 2> "$_mi_t/err" || _mi_die "$_mi_N -u"
   shipyard_rust_sym_normalize < "$_mi_t/syms" | awk -v a="$2" '$0 != "" { print a " import " $0 }'
 }
 
 _mi_thin() {
-  "$_mi_L" -archs "$1" > "$_mi_t/archs" 2> "$_mi_t/err" || _mi_die "$_mi_L -archs"
-  _mi_a="$(tr -d ' \n' < "$_mi_t/archs")"
-  [ -n "$_mi_a" ] || _mi_die "$_mi_L -archs names no architecture"
-  if [ "$2" = members ]; then _mi_syms "$1" "$_mi_a" yes; return 0; fi
   "$_mi_O" -hv "$1" > "$_mi_t/h" 2> "$_mi_t/err" || _mi_die "$_mi_O -hv"
-  "$_mi_O" -l "$1" > "$_mi_t/l" 2> "$_mi_t/err" || _mi_die "$_mi_O -l"
   _mi_ft="$(awk '$1 ~ /^MH_(MAGIC|CIGAM)/ { print $5; exit }' "$_mi_t/h")"
   [ -n "$_mi_ft" ] || _mi_die "$_mi_O -hv shows no Mach header"
+  _mi_a="${3:-}"
+  if [ -z "$_mi_a" ]; then
+    _mi_a="$(awk '$1 ~ /^MH_(MAGIC|CIGAM)/ { print $2 ":" $3; exit }' "$_mi_t/h")"
+    case "$_mi_a" in
+      I386:ALL) _mi_a=i386 ;;
+      X86_64:ALL) _mi_a=x86_64 ;;
+      X86_64:Haswell) _mi_a=x86_64h ;;
+      ARM64:ALL) _mi_a=arm64 ;;
+      ARM64:E) _mi_a=arm64e ;;
+      *) _mi_die "$_mi_O -hv names cputype and cpusubtype $_mi_a, not i386, x86_64, x86_64h, arm64 or arm64e" ;;
+    esac
+  fi
+  if [ "$2" = members ]; then _mi_syms "$1" "$_mi_a" yes; return 0; fi
+  "$_mi_O" -l "$1" > "$_mi_t/l" 2> "$_mi_t/err" || _mi_die "$_mi_O -l"
   if [ "$_mi_ft" = EXECUTE ]; then _mi_syms "$1" "$_mi_a" no; else _mi_syms "$1" "$_mi_a" yes; fi
   awk -v a="$_mi_a" '
     function hash(x) { gsub(re, "-H.", x); return x }
+    function vkind(   x) { x = tolower(cmd); sub(/^lc_/, "", x); return x }
     function arg(   x) { x = $0; sub(/^[ \t]*[a-z]+[ \t]+/, "", x); sub(/ \(offset [0-9]+\)$/, "", x); return x }
-    BEGIN { re = "-"; for (i = 0; i < 16; i++) re = re "[0-9a-f]"; re = re "[.]" }
-    $1 == "cmd" { cmd = $2; next }
+    BEGIN {
+      re = "-"; for (i = 0; i < 16; i++) re = re "[0-9a-f]"; re = re "[.]"
+      split("macos ios tvos watchos bridgeos maccatalyst iossimulator tvossimulator watchossimulator driverkit visionos visionossimulator", pl, " ")
+      for (i = 1; i in pl; i++) pname[i] = pl[i]
+    }
+    $1 == "cmd" { cmd = $2; plat = "?"; next }
     $1 == "name" && cmd == "LC_ID_DYLIB" { print a " id " hash(arg()); cmd = ""; next }
     $1 == "name" && cmd ~ /^LC_(LOAD|LOAD_WEAK|REEXPORT|LOAD_UPWARD|LAZY_LOAD)_DYLIB$/ {
       k = "load"
@@ -213,9 +233,10 @@ _mi_thin() {
       print a " dylib " (++nd) " " k " " hash(arg()); cmd = ""; next
     }
     $1 == "path" && cmd == "LC_RPATH" { print a " rpath " (++nr) " " arg(); cmd = ""; next }
-    cmd ~ /^LC_VERSION_MIN_/ && $1 == "version" { print a " minos " $2; next }
-    (cmd ~ /^LC_VERSION_MIN_/ || cmd == "LC_BUILD_VERSION") && $1 == "sdk" { print a " sdk " $2; next }
-    cmd == "LC_BUILD_VERSION" && $1 == "minos" { print a " minos " $2; next }
+    cmd ~ /^LC_VERSION_MIN_/ && $1 == "version" { print a " minos " vkind() " " $2; next }
+    cmd ~ /^LC_VERSION_MIN_/ && $1 == "sdk" { print a " sdk " vkind() " " $2; next }
+    cmd == "LC_BUILD_VERSION" && $1 == "platform" { plat = ($2 in pname) ? pname[$2] : tolower($2); next }
+    cmd == "LC_BUILD_VERSION" && ($1 == "minos" || $1 == "sdk") { print a " " $1 " build_version " plat " " $2; next }
     $1 == "sectname" { sect = $2; next }
     $1 == "segname" && sect != "" { print a " section " $2 "," sect; sect = ""; next }' "$_mi_t/l"
 }
@@ -248,7 +269,7 @@ _mi_file() {
         _mf_s="$(mktemp "$_mi_t/slice.XXXXXX")" || _mi_die "mktemp"
         "$_mi_L" -thin "$_mf_a" "$1" -output "$_mf_s" 2> "$_mi_t/err" || _mi_die "$_mi_L -thin $_mf_a"
         case "$(shipyard_mach_kind "$_mf_s"):$2" in
-          thin:*) _mi_thin "$_mf_s" "$2" ;;
+          thin:*) _mi_thin "$_mf_s" "$2" "$_mf_a" ;;
           archive:full) _mi_archive "$_mf_s" ;;
           *) _mi_die "its $_mf_a slice is neither Mach-O nor an archive" ;;
         esac

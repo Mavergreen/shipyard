@@ -2,10 +2,12 @@
 # platform: host-agnostic
 #   usage: build-equivalence.sh [--repo DIR] A B
 #          Compares two builds of one product. A and B are each a flat .pkg (expanded with the pinned
-#          stevedore, every component's payload unpacked at its install location) or a directory holding
-#          a staged payload tree. Files and symlinks are paired by path relative to the install root,
-#          after one normalisation: in a file name, "-<16 lowercase hex>." compares as "-H.". Two
-#          names in one build that normalise alike are exit 2, never a guess.
+#          stevedore, every component's payload unpacked at its install location, relative to /, and its
+#          scripts, when it has any, under .pkg/<component identifier>/scripts/) or a directory holding a
+#          staged payload tree. PackageInfo and Distribution are not compared. Files and symlinks are
+#          paired by path relative to the install root, after one normalisation: in a file name,
+#          "-<16 lowercase hex>." compares as "-H.". Two names in one build that normalise alike are
+#          exit 2, never a guess.
 #          Levels: bytes (contents differ), interface (a Mach-O or archive whose interface differs),
 #          meta (a symlink target or the executable bit differs), only-a, only-b. Identical files are
 #          not printed. stdout: one line per difference, "<level>TAB<path>TAB<excusing glob or ->",
@@ -16,6 +18,10 @@
 #          build-equivalence:<glob> excuses bytes, build-equivalence-interface:<glob> excuses interface
 #          and bytes. meta, only-a and only-b are never excusable. A glob is a shell case pattern over
 #          the normalised path. A DIR without INGREDIENTS.md declares no entries.
+#          Readers: NM, OTOOL and LIPO name the pinned llvm-nm, llvm-otool and llvm-lipo; unset, an
+#          installed clang22's or clang22-cross's under SHIPYARD_MG_PREFIX (default /usr/local/mavergreen);
+#          with neither, the first Mach-O compared fetches the pin beside this script with
+#          fetch_clang22.sh ../components/clang22. With no reader at all, exit 2.
 #          Exit 0 every difference excused and no entry unused; 1 an unexcused difference or an unused
 #          entry; 2 misuse or an input it cannot read.
 set -eu
@@ -36,6 +42,19 @@ be_classify_macho() {
   echo interface
   comm -23 "$work/ia" "$work/ib" | sed 's/^/  only in A: /'
   comm -13 "$work/ia" "$work/ib" | sed 's/^/  only in B: /'
+}
+
+be_readers=
+be_readers() {
+  [ -z "$be_readers" ] || return 0
+  be_readers=1
+  [ -z "${NM:-}" ] && [ -z "${OTOOL:-}" ] && [ -z "${LIPO:-}" ] || return 0
+  for _br_d in clang22 clang22-cross; do
+    [ -x "${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/$_br_d/bin/llvm-otool" ] && return 0
+  done
+  [ -d "$SELF/../components/clang22" ] || return 0
+  _br_r="$(sh "$SELF/fetch_clang22.sh" "$SELF/../components/clang22" 2> "$work/fetch.err")" || { sed 's/^/  /' "$work/fetch.err" >&2; die "no installed clang22, and fetch_clang22.sh could not fetch the pinned one"; }
+  OTOOL="$_br_r/bin/llvm-otool"; export OTOOL
 }
 
 be_magic() {
@@ -77,7 +96,24 @@ unpack() {
       if [ ! -d "$_p" ] && { [ -e "$_p" ] || [ -L "$_p" ]; }; then die "two components of $1 install ${_loc#/}/$_m"; fi
     done < "$work/members"
     ( cd "$2/$_loc" && gzip -dc "$_comp/Payload" | cpio -id >/dev/null 2>&1 ) || die "could not unpack $_comp/Payload of $1"
+    [ -e "$_comp/Scripts" ] || continue
+    _id="$(sed -n 's/.*<pkg-info[^>]* identifier="\([^"]*\)".*/\1/p' "$_comp/PackageInfo" 2>/dev/null | head -1)"
+    case "$_id" in ''|.*|*/*) die "a component of $1 with scripts has no usable identifier: '$_id'" ;; esac
+    _sc="$work/scripts.$$/$_id"
+    [ ! -e "$_sc" ] || die "two components of $1 are both $_id"
+    mkdir -p "$_sc"
+    if [ -d "$_comp/Scripts" ]; then
+      cp -PpR "$_comp/Scripts/." "$_sc/" || die "could not copy $_comp/Scripts of $1"
+    else
+      ( cd "$_sc" && gzip -dc "$_comp/Scripts" | cpio -id >/dev/null 2>&1 ) || die "could not unpack $_comp/Scripts of $1"
+    fi
   done
+  if [ -d "$work/scripts.$$" ]; then
+    [ ! -e "$2/.pkg" ] && [ ! -L "$2/.pkg" ] || die "$1 installs a .pkg at its root, where its scripts are compared"
+    mkdir -p "$2/.pkg"
+    for _sc in "$work/scripts.$$"/*; do mkdir -p "$2/.pkg/${_sc##*/}"; mv "$_sc" "$2/.pkg/${_sc##*/}/scripts"; done
+    rm -rf "$work/scripts.$$"
+  fi
   rm -rf "$work/expanded.$$"
   [ "$_found" -eq 1 ] || die "$1 holds no payload"
 }
@@ -146,6 +182,7 @@ while IFS="$TAB" read -r n ra ka rb kb; do
   elif [ "$ka" != "$kb" ]; then level=meta
   elif ! cmp -s "$A/$ra" "$B/$rb"; then
     if [ "$(be_magic "$A/$ra")" = macho ] || [ "$(be_magic "$B/$rb")" = macho ]; then
+      be_readers
       _res="$(be_classify_macho "$A/$ra" "$B/$rb")" || die "cannot compare $n"
       level="$(printf '%s\n' "$_res" | sed -n 1p)"
       detail="$(printf '%s\n' "$_res" | sed 1d)"
