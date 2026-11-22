@@ -459,6 +459,11 @@ waits for a green build. That only works if **your repo produces a CI status che
 
 - Give `release.yml` a `pull_request: branches: [main]` trigger (or `push: branches: ['**']`) so the
   build runs on the bump PR. This is what Renovate's automerge waits on.
+- **A green PR means merging it publishes** (2026-11-22). Every job the publish job depends on runs on the
+  `pull_request` run too, macOS jobs such as `modern-smoke` included. Automerge waits only on the PR run, so a
+  job skipped there can merge a bump whose push then fails on main and silently does not release, which defeats
+  the reason Renovate PRs exist. macOS runner cost is managed by grouping bumps and cancelling superseded runs,
+  not by thinning PR gates. Revisit if macOS queue waits stay above about 2 hours for a week.
 - A repo with **no build to gate** must set `ignoreTests: true` locally (opt back into blind automerge)
   — this is the one legitimate use; shipyard itself does it.
 - **Do not restate `ignoreTests: false` locally** — the preset sets it, and a local copy silently stops
