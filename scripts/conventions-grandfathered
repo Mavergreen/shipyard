@@ -12,7 +12,6 @@ macos-runner claude-code release.yml:build
 macos-runner codex-cli builds.yml:codex-build
 macos-runner codex-cli release.yml:build
 macos-runner container-tools release.yml:build-macos
-macos-runner container-tools release.yml:package
 macos-runner drydock release.yml:build
 macos-runner fd release.yml:build
 macos-runner golang-126 release.yml:build
@@ -28,7 +27,6 @@ macos-runner make release.yml:tests
 macos-runner openssh release.yml:build
 macos-runner packer-plugin-macosx ci.yml:go-macos
 macos-runner pi release.yml:build
-macos-runner porthole release.yml:build
 macos-runner python-315 release.yml:build-arm64
 macos-runner python-315 release.yml:build-x86_64
 macos-runner python-315 release.yml:installed-arm64
