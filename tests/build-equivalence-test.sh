@@ -120,6 +120,11 @@ run --repo "$w/r-bare" "$w/A" "$w/B"; [ "$rc" -eq 2 ] || fail "an entry deviatio
 fresh; put "$w/A/new
 line" 1
 run --repo "$w/none" "$w/A" "$w/B"; [ "$rc" -eq 2 ] || fail "newline in a path: exit $rc, want 2"
+fresh; put "$w/A/new
+dir/f" 1
+run --repo "$w/none" "$w/A" "$w/B"; [ "$rc" -eq 2 ] || fail "newline in a directory name: exit $rc, want 2"
+fresh; put "$w/A/tab${T}dir/f" 1
+run --repo "$w/none" "$w/A" "$w/B"; [ "$rc" -eq 2 ] || fail "tab in a directory name: exit $rc, want 2"
 echo "ok: misuse exits 2"
 
 SD="$(sh "$here/../scripts/fetch_stevedore.sh" 2>/dev/null)" || { echo "SKIP: no stevedore, pkg inputs untested"; echo "PASS: build-equivalence"; exit 0; }
@@ -127,6 +132,7 @@ SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
 mkpkg() {
   rm -rf "$w/pk"; mkdir -p "$w/pk/c1/bin" "$w/pk/c2/share"
   printf 'tool\n' > "$w/pk/c1/bin/tool"; printf '%s\n' "$2" > "$w/pk/c2/share/data"
+  if [ -n "${4:-}" ]; then mkdir -p "$w/pk/c2/bin"; printf 'dup\n' > "$w/pk/c2/bin/tool"; fi
   sh "$here/../scripts/build_component_pkg.sh" --root "$w/pk/c1" --identifier t.one --version 1 --install-location /opt/p --out "$w/pk/one.pkg" >/dev/null 2>&1
   sh "$here/../scripts/build_component_pkg.sh" --root "$w/pk/c2" --identifier t.two --version 1 --install-location "$3" --out "$w/pk/two.pkg" >/dev/null 2>&1
   cat > "$w/pk/d.xml" <<XML
@@ -149,5 +155,8 @@ run --repo "$w/none" "$w/a.pkg" "$w/b.pkg"
 want "two products, two components each" 1 "bytes${T}opt/q/share/data${T}-"
 mkdir -p "$w/staged/opt/p/bin" "$w/staged/opt/q/share"; printf 'tool\n' > "$w/staged/opt/p/bin/tool"; printf '1\n' > "$w/staged/opt/q/share/data"
 run --repo "$w/none" "$w/a.pkg" "$w/staged"; want "a pkg against a staged tree pairs by install path" 0 ""
+mkpkg "$w/c.pkg" 1 /opt/p dup || fail "could not build the colliding fixture pkg"
+run --repo "$w/none" "$w/c.pkg" "$w/staged"; [ "$rc" -eq 2 ] || fail "two components installing one path: exit $rc, want 2"
+case "$err" in *opt/p/*) ;; *) fail "the collision must name the path: $err" ;; esac
 echo "ok: pkg inputs pair relative to the install root"
 echo "PASS: build-equivalence"

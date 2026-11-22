@@ -67,6 +67,12 @@ unpack() {
     _found=1
     _loc="$(sed -n 's/.*install-location="\([^"]*\)".*/\1/p' "$_comp/PackageInfo" 2>/dev/null | head -1)"
     mkdir -p "$2/$_loc"
+    gzip -dc "$_comp/Payload" | cpio -it 2>/dev/null | sed 's|^\./||' > "$work/members" || die "could not read $_comp/Payload of $1"
+    while IFS= read -r _m; do
+      [ -n "$_m" ] && [ "$_m" != . ] || continue
+      _p="$2/$_loc/$_m"
+      if [ ! -d "$_p" ] && { [ -e "$_p" ] || [ -L "$_p" ]; }; then die "two components of $1 install ${_loc#/}/$_m"; fi
+    done < "$work/members"
     ( cd "$2/$_loc" && gzip -dc "$_comp/Payload" | cpio -id >/dev/null 2>&1 ) || die "could not unpack $_comp/Payload of $1"
   done
   rm -rf "$work/expanded.$$"
@@ -75,8 +81,8 @@ unpack() {
 
 list() {
   _root="$1"; _side="$2"
-  _bad="$(cd "$_root" && find . \( -type f -o -type l \) \( -name '*
-*' -o -name "*$TAB*" \) -print | head -1)"
+  _bad="$(cd "$_root" && find . \( -path '*
+*' -o -path "*$TAB*" \) -print | head -1)"
   [ -z "$_bad" ] || die "$_root holds a path with a newline or tab: $_bad"
   ( cd "$_root" && {
       find . -type l | sed 's|^\./||; s|$|'"$TAB"'l|'
