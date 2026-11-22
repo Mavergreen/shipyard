@@ -19,10 +19,15 @@ a="$(norm __ZN4core3fmt5write17h0123456789abcdefE)"; b="$(norm __ZN4core3fmt5wri
 a="$(norm __RNvNtCs1a2B3c_4core3fmt5write)"; b="$(norm __RNvNtCsXyZ_4core3fmt5write)"
 [ "$a" = "$b" ] || fail "v0 names differing only in a crate disambiguator: '$a' vs '$b'"
 [ "$a" = __RNvNtCs_4core3fmt5write ] || fail "v0 disambiguator becomes Cs_: '$a'"
-a="$(norm __RINvNtCs1a_4core3ptr13drop_in_placeNtB4_3FooE)"; b="$(norm __RINvNtCs1abc_4core3ptr13drop_in_placeNtB6_3FooE)"
-[ "$a" = "$b" ] || fail "v0 back-references shifted by a disambiguator: '$a' vs '$b'"
-[ "$(norm _RNvCs9_4core4B9_x)" = _RNvCs_4core4B9_x ] || fail "v0 identifier bytes are not rewritten"
-for n in __ZN3foo3barEv _widgetCs1a_2 __Rfoo __ZN4core3fmt5write17h0123456789abcdeE; do
+a="$(norm __RINvNtCs1a_4core3ptr13drop_in_placeTNtNtCs2b_5alloc3vec3VecNtBA_3RawEE)"
+b="$(norm __RINvNtCs1abc_4core3ptr13drop_in_placeTNtNtCs2b_5alloc3vec3VecNtBC_3RawEE)"
+[ "$a" = "$b" ] || fail "v0 back-references to one target, shifted by a disambiguator: '$a' vs '$b'"
+a="$(norm __RINvNtCs1a_4core3ptr13drop_in_placeNtB4_3FooE)"; b="$(norm __RINvNtCs1a_4core3ptr13drop_in_placeNtB2_3FooE)"
+[ "$a" != "$b" ] || fail "v0 back-references to core and core::ptr stay distinct: both '$a'"
+n=__RINvNtCs1a_4core3ptr13drop_in_placeNtB7_3FooE
+[ "$(norm "$n")" = "$n" ] || fail "a back-reference with no target passes unchanged: '$(norm "$n")'"
+[ "$(norm __RNvCs9_4core4B9_x)" = __RNvCs_4core4B9_x ] || fail "v0 identifier bytes are not rewritten"
+for n in __ZN3foo3barEv _widgetCs1a_2 __Rfoo __ZN4core3fmt5write17h0123456789abcdeE _RNvCsa_3foo3bar _ZN4core3fmt5write17h0123456789abcdefE; do
   [ "$(norm "$n")" = "$n" ] || fail "non-Rust name $n changed to '$(norm "$n")'"
 done
 [ "$(norm a b c | wc -l | tr -d ' ')" = 3 ] || fail "one line out per line in"
@@ -73,7 +78,24 @@ cc -dynamiclib -install_name /opt/b/libx.dylib "$w/s.c" -o "$w/id.dylib"
 pair base.dylib id.dylib; level "install name" interface; detail "install name" "only in B: x86_64 id /opt/b/libx.dylib"
 dy rpath.dylib -Wl,-rpath,/opt/r
 pair base.dylib rpath.dylib; level "rpath" interface; detail "rpath" "only in B: x86_64 rpath 1 /opt/r"
-echo "ok: imports, weak loads, deployment target, install name and rpaths are interface"
+dy sdk.dylib -Wl,-platform_version,macos,10.9,10.10
+pair base.dylib sdk.dylib; level "SDK version" interface
+detail "SDK version" "only in A: x86_64 sdk 10.9"; detail "SDK version" "only in B: x86_64 sdk 10.10"
+cp "$w/weak.dylib" "$w/lazy.dylib"
+off="$("$OTOOL" -l "$w/lazy.dylib" | awk -v o=32 '$1 == "cmd" { c = $2 } $1 == "cmdsize" { if (c == "LC_LOAD_WEAK_DYLIB") { print o; exit } o += $2 }')"
+[ -n "$off" ] || fail "no LC_LOAD_WEAK_DYLIB to turn lazy"
+printf '\040\000\000\000' | dd of="$w/lazy.dylib" bs=1 seek="$off" conv=notrunc 2>/dev/null
+pair weak.dylib lazy.dylib; level "lazy dylib" interface
+grep -q '^  only in B: x86_64 dylib [0-9]* lazy /usr/lib/libz\.1\.dylib$' "$w/out" || fail "lazy dylib: no detail: $out"
+echo "ok: imports, weak and lazy loads, deployment target, SDK, install name and rpaths are interface"
+
+mkdir -p "$w/noprefix"
+rc=0; ( unset NM OTOOL LIPO; SHIPYARD_MG_PREFIX="$w/noprefix"; export SHIPYARD_MG_PREFIX; PATH="$CL/bin:$PATH"; shipyard_mach_interface "$w/base.dylib" ) > /dev/null 2> "$w/err" || rc=$?
+[ "$rc" -eq 2 ] || fail "no pinned llvm tools: exit $rc, want 2"
+grep -q 'no pinned llvm-' "$w/err" || fail "no pinned llvm tools: stderr says so: $(cat "$w/err")"
+rc=0; ( unset NM LIPO; OTOOL="$CL/bin/llvm-otool"; SHIPYARD_MG_PREFIX="$w/noprefix"; export OTOOL SHIPYARD_MG_PREFIX; shipyard_mach_interface "$w/base.dylib" ) > /dev/null 2> "$w/err" || rc=$?
+[ "$rc" -eq 0 ] || fail "OTOOL alone finds llvm-nm, llvm-lipo and llvm-ar beside it: exit $rc: $(cat "$w/err")"
+echo "ok: readers are the pinned clang22's, never PATH's"
 
 src 'int main(void) { return 0; }'; cc "$w/s.c" -o "$w/exe-a"
 src 'int main(void) { return 0; }' 'int extra(void) { return 3; }'; cc "$w/s.c" -o "$w/exe-b"

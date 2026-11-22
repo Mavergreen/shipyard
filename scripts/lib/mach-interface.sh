@@ -1,18 +1,21 @@
 # platform: host-agnostic
 #   usage: . scripts/lib/mach-nm.sh; . scripts/lib/mach-interface.sh
-#          shipyard_rust_sym_normalize: a filter, one symbol per line. A legacy Rust name
-#          (_ZN...17h<16 hex>E) has its hash written H. A v0 name (_R...) has each crate root's
-#          Cs<base62>_ disambiguator written Cs_ and each back-reference B<base62>_ written B_. Every
-#          other line, and a _R line that does not parse as v0, passes unchanged.
+#          shipyard_rust_sym_normalize: a filter, one Mach-O symbol per line. A legacy Rust name
+#          (__ZN...17h<16 hex>E) has its hash written H. A v0 name (__R...) has each crate root's
+#          Cs<base62>_ disambiguator written Cs_, and each back-reference renumbered to its target's
+#          offset in the rewritten name, so one target compares equal and two stay distinct. Every other
+#          line, a single-underscore _R or _ZN (a C name), and a __R line that does not parse as v0 or
+#          whose back-reference has no target, passes unchanged.
 #          shipyard_mach_kind FILE: thin, fat, archive or other, from the magic bytes. cafebabe is fat only
 #          when its big-endian slice count is below 0x2D; otherwise it is a Java class file.
 #          shipyard_mach_interface FILE: FILE's interface, sorted, one "<arch> <fact>" per line: export
-#          <sym> (not for MH_EXECUTE), import <sym>, dylib <n> <load|weak|reexport|upward> <path>, id
+#          <sym> (not for MH_EXECUTE), import <sym>, dylib <n> <load|weak|reexport|upward|lazy> <path>, id
 #          <install name>, rpath <n> <path>, minos <v>, sdk <v>, section <seg>,<sect>. Symbols pass through
 #          shipyard_rust_sym_normalize; in dylib and id paths "-<16 lowercase hex>." reads "-H.". A static
 #          archive prints only its Mach-O members' export and import lines; other members are skipped.
-#          Readers: shipyard_mach_nm; OTOOL, else the llvm-otool beside that llvm-nm, else an installed
-#          clang22's (SHIPYARD_MG_PREFIX, default /usr/local/mavergreen); llvm-lipo and llvm-ar beside them.
+#          Readers: NM, else shipyard_mach_nm's llvm-nm; OTOOL and LIPO, else the llvm-otool and llvm-lipo
+#          beside the chosen llvm-otool or llvm-nm, else an installed clang22's or clang22-cross's
+#          (SHIPYARD_MG_PREFIX, default /usr/local/mavergreen); llvm-ar likewise. Never one from PATH.
 #          Exit 0; 1 FILE is not Mach-O (an archive with no Mach-O member is not); 2 a reader is missing
 #          or cannot read FILE, which stderr names.
 
@@ -44,7 +47,20 @@ shipyard_rust_sym_normalize() {
       out = out substr(s, q, p - q)
     }
     function dis() { if (!bad && peek() == "s") raw62() }
-    function backref() { p++; b62(); out = out "B_" }
+    function backref(   d, i, n, m, e) {
+      p++; d = b62()
+      if (bad) return
+      n = 0
+      if (d != "_") {
+        for (i = 1; i < length(d); i++) n = n * 62 + index(B62, substr(d, i, 1)) - 1
+        n++
+      }
+      if (!(n in at)) { bad = 1; return }
+      m = at[n]; e = "_"
+      if (m > 0) { m--; e = ""; do { e = substr(B62, m % 62 + 1, 1) e; m = int(m / 62) } while (m > 0); e = e "_" }
+      out = out "B" e
+    }
+    function mark() { if (!((p - 1) in at)) at[p - 1] = length(out) }
     function until_e(kind) {
       while (!bad && peek() != "E") {
         if (p > length(s)) { bad = 1; return }
@@ -52,7 +68,7 @@ shipyard_rust_sym_normalize() {
       }
       if (!bad) take(1)
     }
-    function path(   c) {
+    function path(   c) { mark()
       if (bad || ++depth > 1000) { bad = 1; return }
       c = peek()
       if (c == "C") { take(1); if (peek() == "s") { p++; b62(); out = out "s_" } undis() }
@@ -71,7 +87,7 @@ shipyard_rust_sym_normalize() {
       else if (c == "K") { take(1); konst() }
       else type()
     }
-    function konst(   c) {
+    function konst(   c) { mark()
       c = peek()
       if (c == "p") take(1)
       else if (c == "B") backref()
@@ -84,7 +100,7 @@ shipyard_rust_sym_normalize() {
         take(1)
       }
     }
-    function type(   c) {
+    function type(   c) { mark()
       if (bad || ++depth > 1000) { bad = 1; return }
       c = peek()
       if (c != "" && index("abcdefhijlmnopstuvxyz", c)) take(1)
@@ -115,13 +131,14 @@ shipyard_rust_sym_normalize() {
       while (!bad && peek() == "p") { take(1); undis(); type() }
     }
     BEGIN {
-      legacy = "^_?_ZN.*17h"
+      B62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      legacy = "^__ZN.*17h"
       for (i = 0; i < 16; i++) legacy = legacy "[0-9a-f]"
       legacy = legacy "E$"
     }
     $0 ~ legacy { print substr($0, 1, length($0) - 17) "HE"; next }
-    /^_?_R/ {
-      pre = (substr($0, 1, 3) == "__R") ? "__R" : "_R"
+    /^__R/ {
+      pre = "__R"; split("", at)
       s = substr($0, length(pre) + 1); p = 1; out = ""; bad = 0; depth = 0
       while (peek() ~ /[0-9]/) take(1)
       path()
@@ -152,7 +169,8 @@ _mi_tool() {
     _mt_t="${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/$_mt_d/bin/llvm-$1"
     [ -x "$_mt_t" ] && { printf '%s\n' "$_mt_t"; return 0; }
   done
-  printf 'llvm-%s\n' "$1"
+  echo "mach-interface: no pinned llvm-$1, neither beside OTOOL or NM nor in clang22 or clang22-cross under ${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}" >&2
+  return 1
 }
 
 _mi_die() {
@@ -186,11 +204,12 @@ _mi_thin() {
     BEGIN { re = "-"; for (i = 0; i < 16; i++) re = re "[0-9a-f]"; re = re "[.]" }
     $1 == "cmd" { cmd = $2; next }
     $1 == "name" && cmd == "LC_ID_DYLIB" { print a " id " hash(arg()); cmd = ""; next }
-    $1 == "name" && cmd ~ /^LC_(LOAD|LOAD_WEAK|REEXPORT|LOAD_UPWARD)_DYLIB$/ {
+    $1 == "name" && cmd ~ /^LC_(LOAD|LOAD_WEAK|REEXPORT|LOAD_UPWARD|LAZY_LOAD)_DYLIB$/ {
       k = "load"
       if (cmd == "LC_LOAD_WEAK_DYLIB") k = "weak"
       if (cmd == "LC_REEXPORT_DYLIB") k = "reexport"
       if (cmd == "LC_LOAD_UPWARD_DYLIB") k = "upward"
+      if (cmd == "LC_LAZY_LOAD_DYLIB") k = "lazy"
       print a " dylib " (++nd) " " k " " hash(arg()); cmd = ""; next
     }
     $1 == "path" && cmd == "LC_RPATH" { print a " rpath " (++nr) " " arg(); cmd = ""; next }
@@ -243,8 +262,10 @@ shipyard_mach_interface() (
   _mi_k="$(shipyard_mach_kind "$_mi_f")"
   [ "$_mi_k" != other ] || exit 1
   _mi_N="$(shipyard_mach_nm)"
-  _mi_O=; _mi_O="${OTOOL:-$(_mi_tool otool)}"
-  _mi_L="$(_mi_tool lipo)"; _mi_A="$(_mi_tool ar)"
+  if [ -z "${NM:-}" ] && [ "$_mi_N" = nm ]; then echo "mach-interface: no pinned llvm-nm (set NM, or install clang22 under ${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen})" >&2; exit 2; fi
+  _mi_O="${OTOOL:-}"; [ -n "$_mi_O" ] || _mi_O="$(_mi_tool otool)" || exit 2
+  _mi_L="${LIPO:-}"; [ -n "$_mi_L" ] || _mi_L="$(_mi_tool lipo)" || exit 2
+  _mi_A="$(_mi_tool ar)" || exit 2
   _mi_t="$(mktemp -d "${TMPDIR:-/tmp}/mach-interface.XXXXXX")" || { echo "mach-interface: cannot make a temporary directory" >&2; exit 2; }
   trap 'rm -rf "$_mi_t"' EXIT
   : > "$_mi_t/err"
