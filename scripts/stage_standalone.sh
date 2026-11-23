@@ -1,8 +1,9 @@
 #!/bin/sh
 # platform: host-agnostic -- GNU tar on Linux, bsdtar on macOS; 10.9's bsdtar 2.8 cannot record root:wheel
 #   usage: stage_standalone.sh STAGED_PKG_ROOT SHORT VERSION ARCH OUT.tar.gz
-#          The standalone archive, from the same staged root stage_product.sh filled for the pkg: one
-#          build, two forms. OUT is SHORT-VERSION-macos-ARCH.tar.gz (ARCH universal, x86_64 or arm64),
+#          The standalone archive, from the staged root stage_product.sh filled for the pkg (pkg-first),
+#          or from a root holding the product's tree and apps alone, from which stage_pkg_from_archive.sh
+#          then derives the pkg's (archive-first). OUT is SHORT-VERSION-macos-ARCH.tar.gz (ARCH universal, x86_64 or arm64),
 #          holding one top directory SHORT-VERSION/: STAGED_PKG_ROOT/usr/local/mavergreen/SHORT exactly
 #          as the pkg installs it, without its manifest (mavergreen.plist), and beside it each app the
 #          pkg installs at Applications/<Name>.app, as SHORT-VERSION/<Name>.app. A bin/ link is resolved
