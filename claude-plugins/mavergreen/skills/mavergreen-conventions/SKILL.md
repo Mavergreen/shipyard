@@ -2166,19 +2166,55 @@ quiet without going red is not a check.
 
 **A release that publishes a product `.pkg` also publishes `<short>-<version>-macos-<arch>.tar.gz`**
 (`<arch>` is `universal`, `x86_64` or `arm64`, as the product ships): one top directory
-`<short>-<version>/` holding the product's tree exactly as the pkg installs it under
-`/usr/local/mavergreen/<short>/`, beside each app the pkg installs at `Applications/<Name>.app` (as
-`<short>-<version>/<Name>.app`, a `bin/` link into it made relative), without the manifest, the
-updater, its LaunchAgent, anything else staged outside the tree, or the install scripts. Unpacked anywhere, it needs nothing else from
-Mavergreen. Drydock shipped it first (0.6.3), and a user outside the family confirmed it works for them.
+`<short>-<version>/` holding the product's tree, beside each app the product has (as
+`<short>-<version>/<Name>.app`, a `bin/` link into it relative), without a manifest, an updater, a
+LaunchAgent or install scripts. Unpacked anywhere, it needs nothing else from Mavergreen. Drydock
+shipped it first (0.6.3), and a user outside the family confirmed it works for them.
 
-- **One build, two forms.** `sh "$SHIPYARD_SCRIPTS/stage_standalone.sh" STAGED_PKG_ROOT SHORT VERSION
-  ARCH dist/<archive>` reads the root `stage_product.sh` filled for the pkg, on Linux, 10.9 or modern
-  macOS. Entries are sorted, stamped at `source-date-epoch.sh`'s time, root:wheel where the tar can say
-  so (10.9's bsdtar 2.8 cannot, and it says so), and gzipped without a name or time: the bytes repeat.
-  The reproducible archive is the Linux-built one: 10.9's bsdtar 2.8 can neither record root:wheel nor
-  leave out pax ctime. A `bin/` link is resolved within the staged root, absolute or relative; one
-  landing in `Applications/<Name>.app` becomes `../<Name>.app/...`, and one that resolves nowhere fails.
+**The archive is the primary artifact, and the pkg is derived from it** (ruling 2026-11-23). The
+derivation is three declared steps and nothing else, so what separates the two forms can be read
+without building either:
+
+1. **Drop the bundled requirements.** `packaging/<short>.standalone-bundled` has one `SHORT PATH` line
+   per requirement the archive carries in its tree (PATH relative to `<short>-<version>/`); the pkg
+   leaves each out, with any directory that leaves empty. An empty list bundles nothing.
+2. **Keep `requires`.** Every bundled SHORT must be one of the product's `requires`, since the pkg
+   installs that product instead of carrying it; the same `--requires` go to the derivation and to
+   `stage_product.sh`.
+3. **Add the pkg-only paths**, `--pkg-only SRC=DEST`, where the archive has nothing: an uninstall
+   hook that names the install location, say.
+
+- **Archive first, then the pkg.** Stage the tree and its apps in a root holding nothing else and
+  archive it with `sh "$SHIPYARD_SCRIPTS/stage_standalone.sh" ROOT SHORT VERSION ARCH dist/<archive>`.
+  Then `sh "$SHIPYARD_SCRIPTS/stage_pkg_from_archive.sh" --repo . --requires <each> [--pkg-only
+  SRC=DEST]... dist/<archive> packaging/<short>.standalone-bundled STAGED_ROOT` runs
+  `check-standalone-archive.sh` on the archive and goes no further unless it passes, has
+  `derive_pkg_tree.sh` make `STAGED_ROOT/usr/local/mavergreen/<short>/`, and puts each app back at
+  `Applications/<Name>.app`, its `bin/` link absolute again. `STAGED_ROOT` is what `stage_product.sh
+  --stage` and `build_component_pkg.sh --root` take, as before. `derive_pkg_tree.sh [--requires
+  SHORT[>=FLOOR]]... [--pkg-only SRC=DEST]... STANDALONE_TREE BUNDLED_LIST OUT_TREE` also runs alone;
+  a bundle that is not a declared requires, a bundled path the tree lacks, or a pkg-only path the tree
+  already has fails, and a failed run leaves no output. codex-cli is the worked example.
+- **New adopters go archive-first; a product already shipping pkg-first converts at its next
+  release.** Until then pkg-first keeps working: `stage_standalone.sh STAGED_PKG_ROOT ...` reads the
+  root `stage_product.sh` filled for the pkg, leaving out the manifest, the updater, its LaunchAgent
+  and anything else staged outside the tree, and naming what it left out. `artifact-facts.sh` emits a
+  `standalone-flow <archive> archive-first|pkg-first` fact, archive-first when the repo declares
+  `packaging/<short>.standalone-bundled`; conformance names a pkg-first archive and does not fail it
+  yet. **Revisit** when a product's pkg cannot be reproduced unchanged by the derivation (static
+  dependencies linked into its binaries, say): that product declares it, and the rule is reopened
+  rather than bent.
+- **A script in the archive never names `/usr/local/mavergreen`**, not in a comment, not in a
+  fallback. It finds its own files from its own location, and a bundled sibling product relative to
+  the tree, so the one script runs from wherever the archive is unpacked and from the pkg's install
+  location alike. codex-cli's finding: `check-standalone-archive.sh` reads a comment or a fallback as it
+  reads any other line, and a fallback to the product's own install location is a self-reference.
+- **The bytes repeat.** `stage_standalone.sh` runs on Linux, 10.9 or modern macOS. Entries are sorted,
+  stamped at `source-date-epoch.sh`'s time, root:wheel where the tar can say so (10.9's bsdtar 2.8
+  cannot, and it says so), and gzipped without a name or time. The reproducible archive is the
+  Linux-built one: 10.9's bsdtar 2.8 can neither record root:wheel nor leave out pax ctime. A `bin/`
+  link is resolved within the staged root, absolute or relative; one landing in
+  `Applications/<Name>.app` becomes `../<Name>.app/...`, and one that resolves nowhere fails.
 - **AppleDouble files are refused, never stripped.** `stage_standalone.sh` fails on a `._*` file in the
   tree or a staged app, `check-standalone-archive.sh` on a `._*` entry, and `fetch_product_pkg.sh` on a
   pkg whose Payload holds one, each naming the first.
@@ -2194,7 +2230,8 @@ Mavergreen. Drydock shipped it first (0.6.3), and a user outside the family conf
   the dist (a `standalone` fact); conformance fails a refused archive, and a product pkg with no
   archive beside it (check `no-standalone`). The publish step's `SHA256SUMS` lists every asset.
 - **Standalone means no install of the product itself; its requires stay dependencies.** Given the
-  pkg's `mavergreen.plist` (`--plist`, which `artifact-facts.sh` passes), scripts and text files may
+  pkg's `mavergreen.plist` (`--plist`, which `artifact-facts.sh` passes, and `stage_pkg_from_archive.sh`
+  writes from its `--requires`), scripts and text files may
   name `/usr/local/mavergreen/<require>`; naming the product's own prefix never passes (a relocation
   bug), nor does a Mach-O load, rpath or install name into any Mavergreen prefix. Documentation
   (`share/man`, `share/doc`, `share/info`, `README*`, `LICENSE*`, `NOTICE*`, `CHANGELOG*`) and Mach-O
