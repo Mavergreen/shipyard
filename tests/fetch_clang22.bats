@@ -26,34 +26,23 @@ PY
 }
 teardown() { rm -rf "$WORK"; }
 
-@test 'linux: the pinned archive, verified against LINUX_SHA256, is the printed root' {
-  printf '%s\n' "$SHA" > "$PIN/LINUX_SHA256"
+@test 'linux: the pinned archive, verified against the release's SHA256SUMS, is the printed root' {
   out="$(CLANG22_HOST=linux sh "$HELPER" "$WORK")"
   [ "$out" = "$WORK/clang22/clang22-22.1.8-mavergreen.99" ] || { echo "$out"; return 1; }
   [ -x "$out/bin/ld64.lld" ]
 }
-@test 'linux: a LINUX_SHA256 with no final newline is read' {
-  printf '%s' "$SHA" > "$PIN/LINUX_SHA256"
-  run env CLANG22_HOST=linux sh "$HELPER" "$WORK"
-  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-}
-@test 'linux: no LINUX_SHA256 fails, naming the SHA256SUMS to copy from' {
-  run env CLANG22_HOST=linux sh "$HELPER" "$WORK"
+@test 'linux: an archive SHA256SUMS does not list fails, naming SHA256SUMS' {
+  printf '%s  %s\n' "$SHA" other.tar.gz > "$REL/SHA256SUMS"
+  run env SHIPYARD_FETCH_TRIES=1 CLANG22_HOST=linux sh "$HELPER" "$WORK"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"no LINUX_SHA256 for $ASSET"*"22.1.8-mavergreen.99/SHA256SUMS"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"SHA256SUMS"* ]] || { echo "$output"; return 1; }
   [ ! -d "$WORK/clang22/clang22-22.1.8-mavergreen.99" ] || false
 }
-@test 'linux: a LINUX_SHA256 that is not a digest fails, naming the SHA256SUMS to copy from' {
-  printf '%s  %s\n' "$SHA" "$ASSET" > "$PIN/LINUX_SHA256"
-  run env CLANG22_HOST=linux sh "$HELPER" "$WORK"
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"not the SHA-256 of $ASSET"*"22.1.8-mavergreen.99/SHA256SUMS"* ]] || { echo "$output"; return 1; }
-}
-@test 'linux: a wrong digest is refused, naming the SHA256SUMS to copy from' {
-  printf '%064d\n' 0 > "$PIN/LINUX_SHA256"
+@test 'linux: a wrong digest in SHA256SUMS is refused' {
+  printf '%064d  %s\n' 0 "$ASSET" > "$REL/SHA256SUMS"
   run env CLANG22_HOST=linux sh "$HELPER" "$WORK"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"22.1.8-mavergreen.99/SHA256SUMS"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"SHA256SUMS"* ]] || { echo "$output"; return 1; }
 }
 @test 'mac: an installed clang22-cross at the pinned release is used, with no fetch' {
   mkdir -p "$INSTALLED/bin"
@@ -75,13 +64,13 @@ teardown() { rm -rf "$WORK"; }
   run sh "$HELPER" "$WORK"
   [ "$status" -eq 2 ]
 }
-@test 'NAME names another clang22 ingredient, whose own pin and digest are used' {
+@test 'NAME names another clang22 ingredient, whose own pin is used' {
   O="$WORK/.mavergreen/ingredients/other-clang"; mkdir -p "$O"
   cp "$PIN/REPO" "$PIN/product" "$PIN/VERSION" "$O/"
-  printf '%s\n' "$SHA" > "$O/LINUX_SHA256"
+  printf '22.1.8-mavergreen.98\n' > "$PIN/VERSION"
   out="$(CLANG22_HOST=linux sh "$HELPER" "$WORK" other-clang)"
   [ "$out" = "$WORK/clang22/clang22-22.1.8-mavergreen.99" ] || { echo "$out"; return 1; }
-  run env CLANG22_HOST=linux sh "$HELPER" "$WORK"
+  run env SHIPYARD_FETCH_TRIES=1 CLANG22_HOST=linux sh "$HELPER" "$WORK"
   [ "$status" -eq 1 ] || { echo "$output"; return 1; }
 }
 @test 'a NAME that is not an ingredient name is a usage error' {

@@ -7,8 +7,8 @@
 #          product, and with --env-file writes MAVERGREEN_INGREDIENT_<name>=<path> lines (a name's
 #          non-alphanumerics become _). The copy is, in order: the installed one, when
 #          ${MAVERGREEN_ROOT}/opt/mavergreen/<product>/mavergreen.plist (else usr/local/mavergreen/<product>; MAVERGREEN_ROOT
-#          is the volume, default /) holds the pinned version; on Linux, when the ingredient has a LINUX_SHA256, the release's
-#          linux-x86_64 archive (fetch_product_tar.sh); else the pinned release's pkg
+#          is the volume, default /) holds the pinned version; on Linux, when the release's SHA256SUMS lists
+#          <product>-<version>-linux-x86_64.tar.gz, that archive (fetch_product_tar.sh); else the pinned release's pkg
 #          <product>-<version, any leading v dropped>.pkg (fetch_product_pkg.sh), extracted under DIR/<product>-<version>
 #          (default $MAVERGREEN_PKG_CACHE/extracted). A `from` ingredient takes the repo and version of
 #          the ingredient it names. With --install, and always when CI=true, a pkg is installed with
@@ -29,6 +29,7 @@ SELF="$(cd "$(dirname "$self")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/name-rules.sh"
 . "$SELF/deviation-reason.sh"
+. "$SELF/mavergreen_fetch.sh"
 
 usage() {
   echo "usage: shipyard-provision [--role R[,R...]] [--only NAME...] [--into DIR] [--install] [--env-file FILE] [--product P] [--asset A]" >&2
@@ -132,13 +133,17 @@ for name in $(mg_list ingredients); do
     if [ "$install" -eq 0 ] && shipyard_deviated relocatable "$name" >/dev/null; then
       die "$name only works from its real prefix (deviation relocatable); rerun with --install"
     fi
-    sha=""
-    if [ "$os" = Linux ]; then sha="$(mg_value "ingredients/$name/LINUX_SHA256" 2>/dev/null || :)"; fi
-    if [ -n "$sha" ]; then
-      case "$sha" in *[!0-9a-f]*) die "ingredients/$name/LINUX_SHA256 holds '$sha', not a SHA-256" 2 ;; esac
-      [ "${#sha}" -eq 64 ] || die "ingredients/$name/LINUX_SHA256 holds '$sha', not a SHA-256" 2
-      path="$(sh "$SELF/fetch_product_tar.sh" --repo "$slug" "$product" "$version" "$sha" "$dest")" \
-        || die "could not fetch and verify $product-$version-linux-x86_64.tar.gz against ingredients/$name/LINUX_SHA256"
+    tarball=""
+    if [ "$os" = Linux ]; then
+      base="${MAVERGREEN_RELEASES:-https://github.com}/$slug/releases/download/$version"
+      sums="$(mktemp "${TMPDIR:-/tmp}/shipyard-provision.XXXXXX")" || die "cannot make a temporary file"
+      shipyard_curl --quiet "$base/SHA256SUMS" "$sums" || { rm -f "$sums"; die "could not fetch $base/SHA256SUMS"; }
+      tarball="$(awk -v f="$product-$version-linux-x86_64.tar.gz" '$2 == f || $2 == "*" f { print "y"; exit }' "$sums")"
+      rm -f "$sums"
+    fi
+    if [ -n "$tarball" ]; then
+      path="$(sh "$SELF/fetch_product_tar.sh" --repo "$slug" "$product" "$version" "$dest")" \
+        || die "could not fetch and verify $product-$version-linux-x86_64.tar.gz against its release's SHA256SUMS"
     else
       asset="${asset_arg:-$product-${version#v}.pkg}"
       if [ -n "$asset_arg" ]; then

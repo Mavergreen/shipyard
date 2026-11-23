@@ -5,7 +5,7 @@ setup() {
   WORK="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/shipyard-provision-test.XXXXXX")" && pwd)"
   S="$WORK/scripts"
   mkdir -p "$S/lib" "$WORK/bin" "$WORK/repo/.mavergreen/ingredients" "$WORK/root"
-  for f in shipyard-provision mavergreen-meta.sh deviation-reason.sh deviations.sh; do cp "$BATS_TEST_DIRNAME/../scripts/$f" "$S/$f" 2>/dev/null || :; done
+  for f in shipyard-provision mavergreen-meta.sh deviation-reason.sh deviations.sh mavergreen_fetch.sh; do cp "$BATS_TEST_DIRNAME/../scripts/$f" "$S/$f" 2>/dev/null || :; done
   cp "$BATS_TEST_DIRNAME/../scripts/lib/name-rules.sh" "$S/lib/name-rules.sh"
   cat > "$S/fetch_product_pkg.sh" <<'STUB'
 #!/bin/sh
@@ -19,8 +19,8 @@ STUB
   cat > "$S/fetch_product_tar.sh" <<'STUB'
 #!/bin/sh
 echo "tar $*" >> "$STUB_LOG"
-while [ $# -gt 4 ]; do shift 2; done
-mkdir -p "$4"; printf '%s\n' "$4"
+while [ $# -gt 3 ]; do shift 2; done
+mkdir -p "$3"; printf '%s\n' "$3"
 STUB
   cat > "$WORK/bin/sudo" <<'STUB'
 #!/bin/sh
@@ -108,14 +108,25 @@ installed() {  # installed PRODUCT VERSION [PREFIX-UNDER-ROOT]
   [ "$(cat "$STUB_LOG")" = "pkg --repo Mavergreen/clang-22 libcxx22 22.1.8-mavergreen.12 $WORK/into/libcxx22-22.1.8-mavergreen.12" ]
 }
 
-@test "Linux takes the tarball path for an ingredient with a LINUX_SHA256" {
-  sha=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-  printf '%s\n' "$sha" > "$WORK/repo/.mavergreen/ingredients/cmake/LINUX_SHA256"
-  SHIPYARD_PROVISION_OS=Linux run $P --into "$WORK/into"
+sums() {  # sums SLUG VERSION ASSET...
+  d="$WORK/rel/$1/releases/download/$2"; mkdir -p "$d"; shift 2
+  for a in "$@"; do printf '%064d  %s\n' 0 "$a"; done > "$d/SHA256SUMS"
+}
+
+@test "Linux takes the tarball path for a release whose SHA256SUMS lists its linux archive" {
+  sums Mavergreen/cmake 4.4.5-mavergreen.2 cmake-4.4.5-mavergreen.2-linux-x86_64.tar.gz cmake-4.4.5-mavergreen.2.pkg
+  sums Mavergreen/stevedore 20261027.1 stevedore-20261027.1.pkg
+  MAVERGREEN_RELEASES="file://$WORK/rel" SHIPYARD_PROVISION_OS=Linux run $P --into "$WORK/into"
   [ "$status" -eq 0 ]
   [[ "$output" == *"cmake=$WORK/into/cmake-4.4.5-mavergreen.2"* ]] || false
-  grep -qx "tar --repo Mavergreen/cmake cmake 4.4.5-mavergreen.2 $sha $WORK/into/cmake-4.4.5-mavergreen.2" "$STUB_LOG"
+  grep -qx "tar --repo Mavergreen/cmake cmake 4.4.5-mavergreen.2 $WORK/into/cmake-4.4.5-mavergreen.2" "$STUB_LOG"
   grep -qx "pkg --repo Mavergreen/stevedore stevedore 20261027.1 $WORK/into/stevedore-20261027.1" "$STUB_LOG"
+}
+
+@test "Linux fails when the release's SHA256SUMS cannot be had" {
+  MAVERGREEN_RELEASES="file://$WORK/rel" SHIPYARD_FETCH_TRIES=1 SHIPYARD_PROVISION_OS=Linux run $P --only cmake --into "$WORK/into"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"SHA256SUMS"* ]] || false
 }
 
 @test "a relocatable product without --install stops, saying so" {

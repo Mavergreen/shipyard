@@ -5,14 +5,14 @@
 #          defaults to clang22), for this host: a prefix holding bin/clang, bin/ld64.lld and
 #          bin/llvm-{lipo,otool,nm,strings}. ROOT is a product repo. It is `shipyard-provision --only NAME`
 #          for the host's product: on x86_64
-#          Linux the linux-x86_64 archive, verified against the digest in the same directory's
-#          LINUX_SHA256 (the archive's digest in the release's SHA256SUMS); on a Mac the clang22-cross
+#          Linux the linux-x86_64 archive, verified against the release's SHA256SUMS, fetched afresh on
+#          every call; on a Mac the clang22-cross
 #          pkg (on Mac OS X 10.9, whose cross pkg does not run there, the native clang22 pkg), verified
 #          against the release's SHA256SUMS, or the installed one at that release. A fetch is unpacked once
 #          under $MAVERGREEN_CLANG22_CACHE (default ~/Library/Caches/mavergreen-clang22 on a Mac,
 #          ~/.cache/mavergreen-clang22 elsewhere) and kept, so a CI cache of that directory skips the
 #          download. CLANG22_HOST (linux, mac or mac109) replaces the host's own answer. Exit 1 on a
-#          failed fetch or a missing digest, 2 on a usage error or a malformed pin.
+#          failed fetch or an archive SHA256SUMS does not list, 2 on a usage error or a malformed pin.
 set -eu
 S="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "fetch_clang22: $*" >&2; exit 1; }
@@ -48,19 +48,13 @@ provision() {
   _os=$1; shift; _rc=0
   _out="$(CI= SHIPYARD_PROVISION_OS=$_os sh "$S/shipyard-provision" --only "$N" --into "$cache" "$@")" || _rc=$?
   if [ "$_rc" -ne 0 ]; then
-    [ "$_os" != Linux ] || [ "$_rc" -ne 1 ] || die "could not fetch and verify $asset against $P/LINUX_SHA256 (its digest is in $sums)"
+    [ "$_os" != Linux ] || [ "$_rc" -ne 1 ] || die "could not fetch and verify clang22-$V-linux-x86_64.tar.gz against its release's SHA256SUMS"
     exit "$_rc"
   fi
   d="${_out#"$N"=}"
 }
 case "$host" in
-  linux)
-    asset="clang22-$V-linux-x86_64.tar.gz"
-    sums="https://github.com/Mavergreen/clang-22/releases/download/$V/SHA256SUMS"
-    sha="$(mg_value "ingredients/$N/LINUX_SHA256")" || die "$P has no LINUX_SHA256 for $asset (copy its digest from $sums)"
-    case "$sha" in ''|*[!0-9a-f]*) die "$P/LINUX_SHA256 holds '$sha', not the SHA-256 of $asset (copy its digest from $sums)" ;; esac
-    [ "${#sha}" -eq 64 ] || die "$P/LINUX_SHA256 holds '$sha', not the SHA-256 of $asset (copy its digest from $sums)"
-    provision Linux ;;
+  linux) provision Linux ;;
   mac109) provision Darwin --asset "mavericks-clang-22-native-$V.pkg" ;;
   mac) provision Darwin --product clang22-cross --asset "mavericks-clang-22-cross-$V.pkg" ;;
 esac
