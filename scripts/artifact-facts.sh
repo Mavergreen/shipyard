@@ -9,7 +9,9 @@
 #          `standalone` fact per <short>-<version>-macos-<arch>.tar.gz, from check-standalone-archive.sh
 #          given --plist with the mavergreen.plist that SHORT's pkg in the dist installs, and --repo the
 #          repo root, whose standalone-text deviations it honours; a `standalone-text-unused` fact names
-#          each entry that no archive in the dist used.
+#          each entry that no archive in the dist used; and a `standalone-flow` fact per archive,
+#          archive-first when the repo root declares packaging/SHORT.standalone-bundled (the list
+#          derive_pkg_tree.sh derives SHORT's pkg with), else pkg-first.
 # platform: runs at PACKAGE TIME, on any host that has the artifacts; stevedore reads the pkgs and plists.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
@@ -343,6 +345,11 @@ while IFS= read -r f; do
   set -- "$@" --repo "$root" --defer-unused
   _sa_rc=0; _sa_out="$(sh "$SELF/check-standalone-archive.sh" "$@" "$f" 2>&1 < /dev/null)" || _sa_rc=$?
   printf '%s\n' "$_sa_out" | sed -n "s|^check-standalone-archive: $b: standalone-text used: ||p" >> "$sa_tmp/used"
+  if [ -f "$root/packaging/$_sa_short.standalone-bundled" ]; then
+    printf 'standalone-flow %s archive-first\n' "$b"
+  else
+    printf 'standalone-flow %s pkg-first\n' "$b"
+  fi
   case "$_sa_rc" in
     0) printf 'standalone %s ok\n' "$b" ;;
     1) printf 'standalone %s fail %s\n' "$b" "$(printf '%s\n' "$_sa_out" | sed -n "/^check-standalone-archive: $b: warning: /d; /^check-standalone-archive: $b: standalone-text used: /d; s|^check-standalone-archive: $b: ||p" | head -1 | enc)" ;;

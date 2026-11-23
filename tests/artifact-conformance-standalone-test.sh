@@ -6,7 +6,9 @@
 #          (a warning) or INGREDIENTS.md declares '- no-standalone[:<short glob>]: <reason>'; declaring
 #          it while publishing one fails. Then artifact-facts.sh judges the archives a dist carries, each
 #          against the requires in its product pkg's mavergreen.plist and the repo's deviations; a
-#          standalone-text entry is unused only when no archive of the release uses it.
+#          standalone-text entry is unused only when no archive of the release uses it. An archive is
+#          archive-first when its repo declares packaging/<short>.standalone-bundled, else pkg-first,
+#          which conformance names and does not yet fail.
 set -eu
 unset GITHUB_REPOSITORY
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -151,5 +153,20 @@ printf '%s\n' "$facts" | grep -qx 'standalone-text-unused bin/w' || fail "an ent
 no "a standalone-text entry no archive uses" "standalone-text: INGREDIENTS.md's standalone-text:bin/w excuses nothing" "$WITH
 standalone-text-unused bin/w"
 echo "ok: artifact-facts.sh passes the repo's deviations to check-standalone-archive.sh, judging unused entries across every archive"
+
+printf '%s\n' "$facts" | grep -qx 'standalone-flow w-1.0-macos-x86_64.tar.gz pkg-first' || fail "an archive whose repo declares no bundled list is pkg-first: $facts"
+mkdir -p "$w/repo3/packaging"; : > "$w/repo3/packaging/w.standalone-bundled"
+facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist4" 1.0-mavericks.1 "$w/repo3" 2>"$w/err")" || fail "artifact-facts.sh failed on an archive-first repo: $(cat "$w/err")"
+printf '%s\n' "$facts" | grep -qx 'standalone-flow w-1.0-macos-x86_64.tar.gz archive-first' || fail "an archive whose repo declares packaging/w.standalone-bundled is archive-first: $facts"
+mv "$w/repo3/packaging/w.standalone-bundled" "$w/repo3/packaging/v.standalone-bundled"
+facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist4" 1.0-mavericks.1 "$w/repo3" 2>"$w/err")" || fail "artifact-facts.sh failed: $(cat "$w/err")"
+printf '%s\n' "$facts" | grep -qx 'standalone-flow w-1.0-macos-x86_64.tar.gz pkg-first' || fail "another product's bundled list does not make w archive-first: $facts"
+ok "a pkg-first archive passes" "$WITH
+standalone-flow $SA pkg-first"
+printf '%s\n' "$out" | grep -q "^conformance: standalone: $SA: pkg-first" || fail "a pkg-first archive is named: $out"
+ok "an archive-first archive passes" "$WITH
+standalone-flow $SA archive-first"
+printf '%s\n' "$out" | grep -q 'pkg-first' && fail "an archive-first archive draws no note: $out"
+echo "ok: artifact-facts.sh tells an archive-first product from a pkg-first one, and conformance names the pkg-first"
 
 echo "PASS: artifact-conformance-standalone"
