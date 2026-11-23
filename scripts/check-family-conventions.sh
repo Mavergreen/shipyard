@@ -713,7 +713,20 @@ fi
 #       if/elif/while/until/!, which run the command after them. The call is sh or /bin/sh (with
 #       option flags) and a word ending stage_product.sh, or a word ending /stage_product.sh; a word
 #       holding "=" is an assignment, not a call. SKILL.md's check 23 row lists what this misses.
-if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
+# spec: SKILL.md "Family conventions" check 23 -- a line that runs a pinned build-chain library's
+#       pkg build declares "- staged-by:<library>: <reason>"; it excuses check 23 alone, and only
+#       while components/<library>/version is tracked and non-empty.
+staged_by=""
+for _sb in $(printf '%s\n' "$DEVS" | awk '$1 == "staged-by" { print $2 }'); do
+  _pin="components/$_sb/version"
+  if git ls-files --error-unmatch -- "$_pin" >/dev/null 2>&1 && grep -q '[^[:space:]]' "$_pin"; then
+    staged_by="$_sb"
+  else
+    fail "staged-by:$_sb is declared, but $_pin is not a tracked, non-empty file -- the library is not a pinned ingredient, so nothing says its build stages this pkg" \
+         "pin the library's release in $_pin, or remove the staged-by:$_sb deviation from INGREDIENTS.md"
+  fi
+done
+if [ -n "$builds_pkg" ] && [ -z "$staged_by" ] && ! deviated product-layout "$REL"; then
   staged=""
   for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>/dev/null | grep -v '^tests/'); do
     grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
@@ -721,7 +734,7 @@ if [ -n "$builds_pkg" ] && ! deviated product-layout "$REL"; then
       && { staged="$f"; break; }
   done
   [ -n "$staged" ] || fail "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh -- its install scripts and manifest are hand-rolled" \
-                          "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare '- product-layout: <reason>' under INGREDIENTS.md's ## Conformance deviations"
+                          "stage the product under usr/local/mavergreen/<name>/ and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), declare '- staged-by:<library>: <reason>' if a pinned library's build calls it (components/<library>/version), or declare '- product-layout: <reason>' under INGREDIENTS.md's ## Conformance deviations"
 fi
 
 # spec: SKILL.md "Family conventions" check 24 -- every feed URL and updater identity is derived from

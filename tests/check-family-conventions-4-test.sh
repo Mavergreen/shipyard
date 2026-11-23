@@ -116,6 +116,42 @@ lib_fails "pkg-builder-library on a workflow that runs the pkg build through a w
 lib "$work/lib-sign" '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg "$P"' declare
 lib_fails "pkg-builder-library on a workflow that signs an appcast" "$work/lib-sign" 'pkg-builder-library is declared, but'
 
+# spec: SKILL.md "Family conventions" check 23 -- a line that builds through a pinned build-chain
+#       library never names stage_product.sh itself; "- staged-by:<library>: <reason>" excuses check 23
+#       alone, and only while components/<library>/version is tracked and non-empty.
+line() {  # $1 = dir, $2 = deviation line or empty, $3 = pin contents, or "empty", or omitted
+  mkrepo "$1"
+  printf '#!/bin/sh\nsh "$PORT/build/package.sh" "$1"\n' > "$1/build/line.sh"
+  printf '      - run: sh build/line.sh dist\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product go127 --feed-dir dist --pkg "$P"\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$1/.github/workflows/release.yml"
+  [ -z "${2:-}" ] || printf '\n%s\n' "$2" >> "$1/INGREDIENTS.md"
+  if [ -n "${3:-}" ]; then
+    mkdir -p "$1/components/golang-port"
+    if [ "$3" = empty ]; then : > "$1/components/golang-port/version"; else printf '%s\n' "$3" > "$1/components/golang-port/version"; fi
+  fi
+  (cd "$1" && git add -A) >/dev/null 2>&1
+}
+linegate() { (cd "$1" && GITHUB_REPOSITORY="Mavergreen/$2" sh "$S" 2>&1); }
+STAGED="- staged-by:golang-port: the pinned golang-port tarball's build/package.sh calls stage_product.sh"
+line "$work/line" "$STAGED" 1.2.0
+out="$(linegate "$work/line" golang-127)" || { echo "FAIL: staged-by:golang-port with its pin excuses check 23: $out"; exit 1; }
+out="$(linegate "$work/line" nobody-registered-this)" && { echo "FAIL: staged-by must not excuse check 24"; exit 1; }
+printf '%s\n' "$out" | grep -q 'assigns no product' || { echo "FAIL: check 24 still runs under staged-by: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'never calls stage_product.sh' && { echo "FAIL: a verified staged-by excuses check 23: $out"; exit 1; }
+line "$work/line-nopin" "$STAGED"
+line "$work/line-emptypin" "$STAGED" empty
+for d in line-nopin line-emptypin; do
+  out="$(linegate "$work/$d" golang-127)" && { echo "FAIL: $d: staged-by without a non-empty pin must be refused"; exit 1; }
+  printf '%s\n' "$out" | grep -q 'staged-by:golang-port is declared, but components/golang-port/version' || { echo "FAIL: $d: a refused staged-by names the pin path: $out"; exit 1; }
+  printf '%s\n' "$out" | grep -q 'never calls stage_product.sh' || { echo "FAIL: $d: a refused staged-by leaves check 23 running: $out"; exit 1; }
+done
+line "$work/line-bare" '- staged-by: the library stages it'
+out="$(linegate "$work/line-bare" golang-127)" && { echo "FAIL: an unscoped staged-by must be rejected"; exit 1; }
+printf '%s\n' "$out" | grep -q 'staged-by:<library>' || { echo "FAIL: rejecting an unscoped staged-by names the form: $out"; exit 1; }
+line "$work/line-undeclared" '' 1.2.0
+out="$(linegate "$work/line-undeclared" golang-127)" && { echo "FAIL: a library-staged line with no declaration fails check 23"; exit 1; }
+printf '%s\n' "$out" | grep -q 'never calls stage_product.sh' || { echo "FAIL: check 23 is what fails undeclared: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'staged-by:<library>' || { echo "FAIL: check 23 hints at staged-by: $out"; exit 1; }
+
 # spec: SKILL.md "Family conventions" check 25 -- the family is retiring Rosetta (see the
 #       conventions skill, "Rosetta"). An undeclared translated-arch call must fail, naming
 #       rosetta and the declaration form; a declared rosetta:<path> deviation must excuse it; a

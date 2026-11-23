@@ -82,6 +82,12 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       print "deviations.sh: \"" check "\" names the payload paths it excuses: \"- " check ":<payload-path glob>: <reason; revisit: ...>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
       bad = 1; next
     }
+    # spec: SKILL.md "Family conventions" check 23 -- the gate verifies staged-by against
+    #       components/<library>/version, so the scope is one repo name, never a path or a glob.
+    if (check == "staged-by" && (!scoped || glob !~ /^[A-Za-z0-9._-]+$/)) {
+      print "deviations.sh: \"staged-by\" names the pinned library that stages the pkg: \"- staged-by:<library>: <reason>\", with components/<library>/version tracked" > "/dev/stderr"
+      bad = 1; next
+    }
     if (check == "packager" && (!scoped || glob ~ /[*?[]/)) {
       print "deviations.sh: \"packager\" names one path: \"- packager:<path>: <reason, exit>\", never a wildcard" > "/dev/stderr"
       bad = 1; next
