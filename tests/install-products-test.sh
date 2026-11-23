@@ -353,16 +353,20 @@ rc=0; out="$(PATH="$(path_without cpio)" sh "$S" --root "$w/root" a@1 2>&1)" || 
 [ "$rc" -eq 1 ] && has "needs cpio" || fail "linux_plist_cached: a plist read from another pkg digest is not used"
 
 mkdir -p "$top/badgz"
-fresh; release a 1; linux
-printf '#!/bin/sh\nexit 1\n' > "$top/badgz/gzip"; chmod +x "$top/badgz/gzip"
-rc=0; out="$(PATH="$top/badgz:$PATH" sh "$S" --root "$w/root" --dry-run a@1 2>&1)" || rc=$?
-[ "$rc" -eq 1 ] && has "could not decompress the Payload of dev.mavergreen.a" || fail "a failing gzip is named as the decompress"
-fresh; release a 1; linux
-printf '#!/bin/sh\nexec yes payload\n' > "$top/badgz/gzip"; printf '#!/bin/sh\nexit 1\n' > "$top/badgz/cpio"
-chmod +x "$top/badgz/gzip" "$top/badgz/cpio"
-rc=0; out="$(PATH="$top/badgz:$PATH" sh "$S" --root "$w/root" --dry-run a@1 2>&1)" || rc=$?
-[ "$rc" -eq 1 ] && has "could not unpack the Payload of dev.mavergreen.a" && ! has "decompress" \
-  || fail "a failing cpio is not blamed on the gzip it stops reading"
+badgz() { rc=0; out="$(PATH="$top/badgz:$PATH" sh "$S" --root "$w/root" --dry-run a@1 2>&1)" || rc=$?; }
+badgz_nopipe() { rc=0; out="$(trap '' PIPE; PATH="$top/badgz:$PATH" sh "$S" --root "$w/root" --dry-run a@1 2>&1)" || rc=$?; }
+for how in badgz badgz_nopipe; do
+  fresh; release a 1; linux
+  printf '#!/bin/sh\nexit 1\n' > "$top/badgz/gzip"; printf '#!/bin/sh\ncat > /dev/null\n' > "$top/badgz/cpio"
+  chmod +x "$top/badgz/gzip" "$top/badgz/cpio"
+  $how
+  [ "$rc" -eq 1 ] && has "could not decompress the Payload of dev.mavergreen.a" || fail "$how: a failing gzip is named as the decompress"
+  fresh; release a 1; linux
+  printf '#!/bin/sh\nexec dd if=/dev/zero bs=65536 count=256 2>/dev/null\n' > "$top/badgz/gzip"; printf '#!/bin/sh\nexit 1\n' > "$top/badgz/cpio"
+  $how
+  [ "$rc" -eq 1 ] && has "could not unpack the Payload of dev.mavergreen.a" && ! has "decompress" \
+    || fail "$how: a failing cpio is not blamed on the gzip it stops reading"
+done
 
 fresh; release a 1 'b>=2'; release b 3; latest b 3
 _rel="$w/rel/Mavergreen/arepo/releases/download/1"; rm -f "$_rel/a-1.pkg" "$_rel/a.xml"; : > "$_rel/SHA256SUMS"

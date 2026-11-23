@@ -195,14 +195,10 @@ manifest() {
   printf '%s\n' "$_cache/$_asset" > "${_mf%.plist}.pkgpath"
   cp "$_w/SHA256SUMS" "${_mf%.plist}.sums" || die "$1 $3: cannot keep $_base/SHA256SUMS"
   mkdir "$_w/p" || die "$1 $3: cannot make $_w/p"
-  _cr=0; _gr=0
-  ( cd "$_w/p" && { gzip -dc "$(dirname "$_m")/Payload" || echo $? > "$_w/gzip.rc"; } \
-    | cpio -id --quiet "*usr/local/mavergreen/$1/mavergreen.plist" ) 2>/dev/null || _cr=$?
-  [ ! -f "$_w/gzip.rc" ] || _gr="$(cat "$_w/gzip.rc")"
-  if [ "$_cr" -ne 0 ] && { [ "$_gr" -eq 0 ] || [ "$_gr" -gt 128 ]; }; then
-    die "$1 $3: could not unpack the Payload of $4 in $_asset"
-  fi
-  [ "$_gr" -eq 0 ] || die "$1 $3: could not decompress the Payload of $4 in $_asset"
+  ( cd "$_w/p" && { if gzip -dc "$(dirname "$_m")/Payload"; then echo 0 > "$_w/gzip.rc"; else echo $? > "$_w/gzip.rc"; fi; } \
+    | { if cpio -id --quiet "*usr/local/mavergreen/$1/mavergreen.plist"; then echo 0 > "$_w/cpio.rc"; else echo $? > "$_w/cpio.rc"; fi; } ) 2>/dev/null || :
+  [ "$(cat "$_w/cpio.rc" 2>/dev/null || :)" = 0 ] || die "$1 $3: could not unpack the Payload of $4 in $_asset"
+  [ "$(cat "$_w/gzip.rc" 2>/dev/null || :)" = 0 ] || die "$1 $3: could not decompress the Payload of $4 in $_asset"
   [ -f "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" ] \
     || die "$1 $3: $4 in $_asset installs no usr/local/mavergreen/$1/mavergreen.plist"
   cp "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" "$_pc.$$" && mv -f "$_pc.$$" "$_pc" || rm -f "$_pc.$$"
