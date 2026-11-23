@@ -5,7 +5,8 @@
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
-#          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each.
+#          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each, and a
+#          `standalone` fact per <short>-<version>-macos-<arch>.tar.gz, from check-standalone-archive.sh.
 # platform: runs at PACKAGE TIME, on any host that has the artifacts; stevedore reads the pkgs and plists.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
@@ -263,6 +264,15 @@ for f in "$dist"/*; do
       rm -rf "$x"
       ;;
     *.tar.gz|*.tgz|*.tar.xz|*.tar.bz2)
+      case "$b" in
+        *-macos-universal.tar.gz|*-macos-x86_64.tar.gz|*-macos-arm64.tar.gz)
+          _sa_rc=0; _sa_out="$(sh "$SELF/check-standalone-archive.sh" "$f" 2>&1)" || _sa_rc=$?
+          case "$_sa_rc" in
+            0) printf 'standalone %s ok\n' "$b" ;;
+            1) printf 'standalone %s fail %s\n' "$b" "$(printf '%s\n' "$_sa_out" | sed -n "s|^check-standalone-archive: $b: ||p" | head -1 | enc)" ;;
+            *) abort "check-standalone-archive.sh cannot judge $b: $(printf '%s\n' "$_sa_out" | tail -1)" ;;
+          esac ;;
+      esac
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
       tar -xf "$f" -C "$x" 2>/dev/null || { rm -rf "$x"; abort "cannot extract $b"; }
       macho_facts "$b" "$x" "" || { rm -rf "$x"; abort "${_mf_why:-cannot read a Mach-O in $b}"; }

@@ -251,19 +251,23 @@ MAX_PACKAGER=11
 MAX_ARTIFACT_CONFORMANCE=0
 MAX_MODERN_SMOKE=13
 MAX_CXXABI=2
+MAX_STANDALONE=50
 [ -f "$GF" ] || { echo "FAIL: scripts/conventions-grandfathered is missing"; exit 1; }
 LC_ALL=C sort -c "$GF" 2>/dev/null || { echo "FAIL: scripts/conventions-grandfathered is not sorted"; exit 1; }
 [ -z "$(LC_ALL=C sort "$GF" | uniq -d)" ] || { echo "FAIL: scripts/conventions-grandfathered has duplicate lines"; exit 1; }
+grep -qx 'standalone drydock drydock' "$GF" && { echo "FAIL: drydock ships its standalone archive, so it has no standalone line"; exit 1; }
 while read -r c r k extra; do
   [ -n "$k" ] && [ -z "$extra" ] || { echo "FAIL: conventions-grandfathered line is not '<check> <repo> <job|path>': $c $r $k $extra"; exit 1; }
-  case "$c" in macos-runner|packager|artifact-conformance|modern-smoke|cxxabi) ;; *) echo "FAIL: conventions-grandfathered names an unknown check: $c"; exit 1 ;; esac
+  case "$c" in macos-runner|packager|artifact-conformance|modern-smoke|cxxabi|standalone) ;; *) echo "FAIL: conventions-grandfathered names an unknown check: $c"; exit 1 ;; esac
   case "$c:$k" in
     macos-runner:*.yml:*|macos-runner:*.yaml:*|packager:*|artifact-conformance:*|modern-smoke:release.yml:modern-smoke|cxxabi:usr/local/mavergreen/*|cxxabi:Applications/*|cxxabi:Library/*) ;;
-    *) echo "FAIL: conventions-grandfathered key is not <workflow file>:<job> (macos-runner), release.yml:modern-smoke (modern-smoke), an installed path (cxxabi) or a path: $c $r $k"; exit 1 ;;
+    standalone:*) [ "$(sh "$here/../scripts/product-name.sh" repo "$k" 2>/dev/null)" = "$r" ] \
+                    || { echo "FAIL: conventions-grandfathered standalone line names $k, which scripts/product-names does not register to $r: $c $r $k"; exit 1; } ;;
+    *) echo "FAIL: conventions-grandfathered key is not <workflow file>:<job> (macos-runner), release.yml:modern-smoke (modern-smoke), an installed path (cxxabi), a short name of the repo (standalone) or a path: $c $r $k"; exit 1 ;;
   esac
 done < "$GF"
 count() { awk -v c="$1" '$1 == c { n++ } END { print n + 0 }' "$GF"; }
-for pair in "macos-runner:$MAX_MACOS_RUNNER" "packager:$MAX_PACKAGER" "artifact-conformance:$MAX_ARTIFACT_CONFORMANCE" "modern-smoke:$MAX_MODERN_SMOKE" "cxxabi:$MAX_CXXABI"; do
+for pair in "macos-runner:$MAX_MACOS_RUNNER" "packager:$MAX_PACKAGER" "artifact-conformance:$MAX_ARTIFACT_CONFORMANCE" "modern-smoke:$MAX_MODERN_SMOKE" "cxxabi:$MAX_CXXABI" "standalone:$MAX_STANDALONE"; do
   c="${pair%%:*}"; max="${pair#*:}"; n="$(count "$c")"
   [ "$n" -le "$max" ] || { echo "FAIL: conventions-grandfathered has $n $c lines; the ceiling is $max and may only go down"; exit 1; }
 done

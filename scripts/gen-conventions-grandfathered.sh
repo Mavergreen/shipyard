@@ -8,12 +8,13 @@
 #          reference family-conventions.yml (the repos this gate runs in, registered or not), runs a
 #          copy of this gate WITHOUT the grandfathered file in each, and prints what the checks that
 #          consult it (packager, macos-runner, artifact-conformance, modern-smoke) find, as sorted
-#          "<check> <repo> <job|path>" lines. shipyard itself is read from this working tree,
+#          "<check> <repo> <job|path>" lines (standalone's key is the product's short name). shipyard itself is read from this working tree,
 #          and the org's .github profile repo is skipped.
-#          modern-smoke and cxxabi are also found in what each repo last shipped: the latest release's pkgs,
+#          modern-smoke, cxxabi and standalone are also found in what each repo last shipped: the latest release's pkgs and standalone archives,
 #          downloaded into <clones-dir>/.releases/<repo>/<tag> (kept until the tag moves), read by
 #          artifact-facts.sh and that copy of check-artifact-conformance.sh; cxxabi is one line per
-#          installed path (%20-encoded) with a cxxabi fact and no cxxabi:<glob> declaration. A release that cannot
+#          installed path (%20-encoded) with a cxxabi fact and no cxxabi:<glob> declaration; standalone is one line per
+#          product a pkg installs with no standalone archive beside it and no no-standalone declaration. A release that cannot
 #          be read fails the run; a repo with no release, or none carrying a pkg, ships nothing.
 #          Needs gh, a python3 with PyYAML first on PATH, and lipo, otool and nm (or LIPO, OTOOL and NM).
 set -eu
@@ -71,7 +72,7 @@ while read -r repo; do
   rel="$clones/.releases/$repo"
   if [ ! -f "$rel/$tag/.complete" ]; then
     rm -rf "$rel"; mkdir -p "$rel/$tag"
-    gh release download "$tag" --repo "Mavergreen/$repo" --pattern '*.pkg' --dir "$rel/$tag" </dev/null >&2
+    gh release download "$tag" --repo "Mavergreen/$repo" --pattern '*.pkg' --pattern '*-macos-*.tar.gz' --dir "$rel/$tag" </dev/null >&2
     : > "$rel/$tag/.complete"
   fi
   (cd "$dir" && GITHUB_REPOSITORY="Mavergreen/$repo" sh "$tmp/scripts/artifact-facts.sh" "$rel/$tag" "$tag" "$dir" </dev/null 2>"$tmp/err" || :) > "$tmp/facts"
@@ -83,8 +84,10 @@ while read -r repo; do
     [ -n "$(shipyard_deviation_reason "$tmp/devs" cxxabi "$(printf '%s' "$p" | sed -e 's/%20/ /g' -e 's/%25/%/g')")" ] \
       || echo "cxxabi $repo $p"
   done
-  if sh "$tmp/scripts/check-artifact-conformance.sh" < "$tmp/facts" 2>&1 >/dev/null | grep -q '^conformance: arm64: .* with an arm64 slice'; then
+  sh "$tmp/scripts/check-artifact-conformance.sh" < "$tmp/facts" > /dev/null 2> "$tmp/conf" || :
+  if grep -q '^conformance: arm64: .* with an arm64 slice' "$tmp/conf"; then
     echo "modern-smoke $repo release.yml:modern-smoke"
   fi
+  sed -n "s/^conformance: no-standalone: \([a-z0-9][a-z0-9-]*\): .*/standalone $repo \1/p" "$tmp/conf"
 done < "$tmp/repos" > "$tmp/found"
 LC_ALL=C sort -u "$tmp/found"

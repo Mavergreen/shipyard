@@ -872,6 +872,8 @@ LAYOUT='component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
 registered x dev.mavergreen.x x
+asset x-1.0.0-mavericks.1-macos-x86_64.tar.gz 10
+standalone x-1.0.0-mavericks.1-macos-x86_64.tar.gz ok
 derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml
 installs p.pkg usr/local/mavergreen/.base/1.0.9/mavergreen
 installs p.pkg usr/local/mavergreen/x/mavergreen.plist'
@@ -1203,6 +1205,8 @@ component go.pkg dev.mavergreen.base
 component go.pkg dev.mavergreen.golang.go126
 manifest go.pkg go126 dev.mavergreen.golang.go126 go126
 registered go126 dev.mavergreen.golang.go126 golang-126
+asset go126-1.26.8-mavericks.7-macos-x86_64.tar.gz 10
+standalone go126-1.26.8-mavericks.7-macos-x86_64.tar.gz ok
 installs go.pkg usr/local/mavergreen/go126/mavergreen.plist'
 ok "line: go126 is Go 1.26, built in golang-126" "$GO
 manifest-line go.pkg 126"
@@ -1285,13 +1289,15 @@ PLIST
   sh "$here/../scripts/set_install_floor.sh" --identifier dev.mavergreen.x --title X --base-version 1.0.9 \
     --component "$_pk/comp/x-component.pkg" --out "$_pk/archive/x-1.0.0-mavericks.1.pkg" >/dev/null 2>&1 \
     || { echo "FAIL: set_install_floor.sh could not build the archive this fixture reads"; exit 1; }
+  SOURCE_DATE_EPOCH=1700000000 sh "$here/../scripts/stage_standalone.sh" "$_st" x 1.0.0-mavericks.1 x86_64 "$_pk/archive/x-1.0.0-mavericks.1-macos-x86_64.tar.gz" >/dev/null 2>&1 \
+    || { echo "FAIL: stage_standalone.sh could not build the standalone archive this fixture reads"; exit 1; }
   _f="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/dist" 1.0.0-mavericks.1 "$_pk")"
   printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"
   _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavericks.1.pkg" | tr -d ' ')"
   sh "$GA" X 1.0.0-mavericks.1 https://github.com/Mavergreen/x/releases/download/1.0.0-mavericks.1/x-1.0.0-mavericks.1.pkg \
     10.9.5 "$_pk/archive/RELEASE_NOTES.md" "sparkle:edSignature=\"x\" length=\"$_alen\"" > "$_pk/archive/x.xml"
   _fa="$(MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$AF" "$_pk/archive" 1.0.0-mavericks.1 "$_pk")"
-  mkdir -p "$_pk/rehearsal"; cp "$_pk/archive/x-1.0.0-mavericks.1.pkg" "$_pk/rehearsal/"
+  mkdir -p "$_pk/rehearsal"; cp "$_pk/archive/x-1.0.0-mavericks.1.pkg" "$_pk/archive/x-1.0.0-mavericks.1-macos-x86_64.tar.gz" "$_pk/rehearsal/"
   MAVERGREEN_PRODUCT_NAMES="$_pk/product-names" sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavericks.1 2>/dev/null \
     || { echo "FAIL: stand-in-feeds.sh must stage a feed for a build that signs nothing"; exit 1; }
   [ -f "$_pk/rehearsal/x.xml" ] && [ -s "$_pk/rehearsal/RELEASE_NOTES.md" ] \

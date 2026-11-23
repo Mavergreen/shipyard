@@ -19,6 +19,7 @@
 #            repository    <owner/name>                           $GITHUB_REPOSITORY, when set
 #            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
 #            asset         <file> <bytes>                         one per file that will be published
+#            standalone    <file> ok|fail [<finding>]             one per <short>-<version>-macos-<arch>.tar.gz, judged by check-standalone-archive.sh (%20-encoded)
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
 #            cxxabi-defines <artifact> <path> <arch> <symbol> <visible|hidden>  one per C++ runtime symbol a slice defines beyond Recaulk's back-fills
 #            cxxabi-loads  <artifact> <path> <arch> <load-path>   one per libc++abi a slice loads other than /usr/lib's or libcxx22's (%20-encoded)
@@ -279,6 +280,39 @@ EOF
       || fail repository "$pk ships $P, which scripts/product-names assigns to $repo, but this release is built in $repository" "$pk"
   fi
 done < "$tmp/prod-of"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Standalone archive"
+while read -r kind file verdict why; do
+  [ "$kind" = standalone ] || continue
+  [ "$verdict" = ok ] || { echo "conformance: standalone: $file: $(dec "${why:-check-standalone-archive.sh refused it}")" >&2; status=1; }
+done < "$facts"
+awk '!seen[$2]++' "$tmp/prod-of" > "$tmp/sa-products"
+while read -r pk P; do
+  repo="$(awk -v m="$P" '$1 == "registered" && $2 == m { print $4; exit }' "$facts")"
+  [ -n "$repo" ] && [ "$repo" != none ] || continue
+  have=""
+  for v in "$expected" "${expected#v}"; do
+    for a in universal x86_64 arm64; do
+      n="$P-$v-macos-$a.tar.gz"
+      case " $have " in *" $n "*) continue ;; esac
+      if awk -v n="$n" '$1 == "asset" && $2 == n { f = 1 } END { exit !f }' "$facts"; then have="${have:+$have }$n"; fi
+    done
+  done
+  if [ -n "$have" ]; then
+    if [ -n "$(deviation_reason no-standalone "$P")" ]; then
+      echo "conformance: standalone: $P: INGREDIENTS.md declares no-standalone for $P, but the release carries $have -- drop the declaration or the archive" >&2
+      status=1
+    fi
+    for n in $have; do
+      awk -v n="$n" '$1 == "standalone" && $2 == n { f = 1 } END { exit !f }' "$facts" \
+        || { echo "conformance: standalone: $n: artifact-facts.sh did not judge it with check-standalone-archive.sh" >&2; status=1; }
+    done
+  elif [ -f "$SELF/conventions-grandfathered" ] && grep -qxF "standalone $repo $P" "$SELF/conventions-grandfathered"; then
+    echo "::warning::conformance: standalone: $P: $pk ships $P, and the release carries no $P-${expected#v}-macos-<arch>.tar.gz (grandfathered: standalone $repo $P)"
+  else
+    fail no-standalone "$P: $pk ships $P, and the release carries no $P-${expected#v}-macos-<universal|x86_64|arm64>.tar.gz beside it -- publish one with stage_standalone.sh, or declare '- no-standalone:$P: <reason>' under INGREDIENTS.md's ## Conformance deviations where a standalone form is meaningless" "$P"
+  fi
+done < "$tmp/sa-products"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Install layout and
 #       identity" -- where a family product may put files by default. Anything else is a declared
