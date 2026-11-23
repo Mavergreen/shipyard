@@ -80,7 +80,7 @@ refused "a cmake at <Y>/cmake/bin/cmake with no <Y>/shipyard/bin/shipyard-cmake"
   "$w/lone/cmake/bin/cmake" -S "$w/c" -B "$w/b3a" -DMavericksShipyard_DIR="$fx/shipyard/share/cmake/MavericksShipyard"
 
 # spec: R-P1-23 -- the refusal is keyed on CMAKE_HOST_APPLE and must NOT fire on a non-Apple host:
-#       shipyard ships no Linux pkg and no Linux cmake, so demanding shipyard-cmake there is
+#       there is no Linux cmake product, and shipyard-cmake runs the host's cmake, so demanding it there is
 #       incoherent, and it broke container-tools' two ubuntu-latest jobs.
 # platform: CMAKE_HOST_APPLE cannot be turned off from the command line -- CMake sets it as a normal
 #           variable, which shadows any -D. In script mode a set() before the include does reach it,

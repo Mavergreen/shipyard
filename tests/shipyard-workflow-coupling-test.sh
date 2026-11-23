@@ -93,10 +93,10 @@ for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 
                   # one binary the whole pkg exists to deliver came out with both slices.
                   (r'^case " \$archs " in \*" arm64 "\*\) ;; \*\) echo "::error::the merged updater has no arm64 slice',
                    "assert the merged updater carries an arm64 slice"),
-                  # The Linux-specific half: clang22's Mach-O tools, and the runner's cmake for the payload.
+                  # The Linux-specific half: clang22's Mach-O tools, and the payload staged with the runner's cmake.
                   (r'^echo "LIPO=\$CL/bin/llvm-lipo"$', "export clang22's llvm-lipo as LIPO"),
-                  (r'^cmake -S \. -B "\$RUNNER_TEMP/payload-build"$', "configure the payload with the runner's cmake"),
-                  (r'^DESTDIR=\S+ cmake --install "\$RUNNER_TEMP/payload-build" ', "install the payload with the runner's cmake")):
+                  (r'^sh scripts/stage-shipyard-prefix\.sh --stage "\$RUNNER_TEMP/payload-stage" --build "\$RUNNER_TEMP/payload-build" ',
+                   "stage the payload with the runner's cmake (scripts/stage-shipyard-prefix.sh)")):
     if not has(rel, pat):
         bad.append("release.yml no longer does: %s" % what)
     elif not has(ci, pat):

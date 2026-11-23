@@ -142,14 +142,12 @@ for tool in ("LIPO", "OTOOL", "NM", "STRINGS"):
     if len(users) != 2 or not exp or exp[0] > min(users):
         bad.append("the build job never exports %s (clang22's llvm tool) to $GITHUB_ENV before the updater build and artifact conformance" % tool)
 
-# Linux has no shipyard-cmake: install@v1's Linux path installs no pkg, so the payload is configured
-# and installed with the runner's cmake.
+# The payload is shipyard built from this checkout, so the build job stages it with the runner's cmake
+# through stage-shipyard-prefix.sh, never through an installed shipyard's launchers.
 if any(re.search(r"(^|[\s;|&(=])shipyard-c(make|test|pack)\b", c) for st in build_steps for c in step_cmds(st)):
-    bad.append("the build job runs shipyard-cmake/ctest/cpack, which install@v1's Linux path does not provide")
-need(r'^cmake -S \. -B "\$RUNNER_TEMP/payload-build"$',
-     "the build job must configure the payload with the runner's cmake (cmake -S . -B \"$RUNNER_TEMP/payload-build\")")
-need(r'^DESTDIR="\$RUNNER_TEMP/payload-stage" cmake --install "\$RUNNER_TEMP/payload-build" --prefix /usr/local/mavergreen/shipyard$',
-     "the build job must install the payload with the runner's cmake (DESTDIR=... cmake --install ... --prefix /usr/local/mavergreen/shipyard)")
+    bad.append("the build job runs shipyard-cmake/ctest/cpack; the payload is staged by scripts/stage-shipyard-prefix.sh with the runner's cmake")
+need(r'^sh scripts/stage-shipyard-prefix\.sh --stage "\$RUNNER_TEMP/payload-stage" --build "\$RUNNER_TEMP/payload-build" --version "\$v" > /dev/null$',
+     "the build job must stage the payload with scripts/stage-shipyard-prefix.sh, the staging install@v1 shares on Linux")
 
 if find(r"^sudo (-n )?installer "):
     bad.append("release.yml installs a pkg on a runner; shipyard's release builds and publishes it, and runs no install")
@@ -284,17 +282,21 @@ if not any(re.search(r'^scripts=/usr/local/mavergreen/shipyard/share/cmake/Maver
     bad.append("the macOS release path must export SHIPYARD_SCRIPTS from the installed product "
                "tree, /usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/scripts")
 
-# R-P1-18: a non-macOS runner gets shipyard's shell half, pinned to the ref, and nothing installed.
-# repackage-on-ingredient-bump.yml runs on ubuntu-latest and wants exactly that.
+# R-P1-18: a non-macOS runner gets shipyard's pkg prefix, staged from the action's own checkout at the
+# ref the consumer pinned (tests/linux-shipyard-prefix-test.sh proves it is the pkg's payload).
 if not rel_oth:
-    bad.append("install@v1 has no non-macOS release path; ubuntu jobs that want only shipyard's "
-               "shell half (repackage-on-ingredient-bump.yml) would fail (R-P1-18)")
+    bad.append("install@v1 has no non-macOS release path; ubuntu jobs (repackage-on-ingredient-bump.yml) "
+               "would fail (R-P1-18)")
 else:
     if not exports(rel_oth, "SHIPYARD_SCRIPTS"):
         bad.append("the non-macOS release path never exports SHIPYARD_SCRIPTS")
     if not any("GITHUB_ACTION_PATH" in c for c in rel_oth):
-        bad.append("the non-macOS release path must take its scripts from the action's OWN checkout "
+        bad.append("the non-macOS release path must stage shipyard from the action's OWN checkout "
                    "($GITHUB_ACTION_PATH/../../..), which is shipyard at the ref the consumer pinned")
+    if not any(re.search(r'^p="\$\(sh "\$root/scripts/install-shipyard-prefix\.sh" ', c) for c in rel_oth):
+        bad.append("the non-macOS release path must lay down the pkg's prefix with scripts/install-shipyard-prefix.sh")
+    if not any(re.search(r'^echo "\$\{p%/\*\}/bin" >> "\$GITHUB_PATH"$', c) for c in rel_oth):
+        bad.append("the non-macOS release path must put the installed launchers' directory on GITHUB_PATH, as macOS does")
     # R-P1-23: find_package(MavericksShipyard) has to RESOLVE there too -- container-tools' two
     # ubuntu-latest jobs do exactly that. SHIPYARD_SCRIPTS alone does not make find_package work.
     if not exports(rel_oth, "MavericksShipyard_DIR"):
@@ -306,13 +308,13 @@ else:
     for pat, why in ((r'^sudo installer', "installs a pkg"),
                      (r'^gh release download|fetch-release-pkg\.sh', "downloads a release asset")):
         if any(re.search(pat, c) for c in rel_oth):
-            bad.append("the non-macOS release path %s; there is no Linux pkg to install" % why)
+            bad.append("the non-macOS release path %s; Linux stages shipyard from the action's checkout" % why)
 
-# R-P1-18: no step may refuse a non-macOS runner; those jobs get shipyard's shell half instead.
+# R-P1-18: no step may refuse a non-macOS runner; those jobs get shipyard's prefix instead.
 for c in cmds(lambda c: True):
     if re.search(r'uname -s.*Darwin', c) and "exit 1" in c:
-        bad.append("install@v1 fails on a non-macOS runner (%s) -- R-P1-18: it must hand those jobs "
-                   "shipyard's shell half instead" % c)
+        bad.append("install@v1 fails on a non-macOS runner (%s) -- R-P1-18: it must lay down "
+                   "shipyard's prefix there instead" % c)
 
 # spec: 2026-10-09 C4 -- shipyard's launchers run the cmake product, and shipyard's pkg refuses to
 #       install without it, so on macOS install@v1 installs the cmake product first, at the pin the
@@ -336,7 +338,7 @@ if any("cmake/packages" in c for c in rel_mac + rel_oth):
     bad.append("install@v1 still reads the CMake user package registry")
 for b in bad: print("FAIL: " + b)
 if bad: sys.exit(1)
-print("ok: install@v1 installs the cmake product then the released pkg on macOS, and hands non-macOS jobs the shell half")
+print("ok: install@v1 installs the cmake product then the released pkg on macOS, and lays down the pkg's prefix elsewhere")
 PY
 
 # spec: 2026-10-09 C4 -- shipyard builds no CMake, so nothing of that build survives in the files
