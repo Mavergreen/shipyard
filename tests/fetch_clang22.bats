@@ -22,6 +22,7 @@ with tarfile.open(sys.argv[1], 'w:gz') as t:
         t.addfile(m, io.BytesIO(b'x'))
 PY
   SHA="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REL/$ASSET")"
+  printf '%s  %s\n' "$SHA" "$ASSET" > "$REL/SHA256SUMS"
 }
 teardown() { rm -rf "$WORK"; }
 

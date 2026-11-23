@@ -27,9 +27,10 @@ case "$1 $2" in
     [ -d "$FAKE_SRC/$name.release" ] || { echo "release not found" >&2; exit 1; }
     cat "$FAKE_SRC/$name.release/.tag"; ls "$FAKE_SRC/$name.release" ;;
   "release download")
-    name="${5#Mavergreen/}"; dir="${9:?}"
+    name="${5#Mavergreen/}"; dir=""; for a in "$@"; do [ "${prev:-}" != --dir ] || dir="$a"; prev="$a"; done; [ -n "$dir" ] || exit 1
     [ "$3" = "$(cat "$FAKE_SRC/$name.release/.tag")" ] || { echo "fake gh: no release $3" >&2; exit 1; }
-    mkdir -p "$dir"; cp "$FAKE_SRC/$name.release/"*.pkg "$dir/" ;;
+    mkdir -p "$dir"; cp "$FAKE_SRC/$name.release/"*.pkg "$dir/"
+    for t in "$FAKE_SRC/$name.release/"*-macos-*.tar.gz; do [ ! -f "$t" ] || cp "$t" "$dir/"; done ;;
   *) echo "fake gh: $*" >&2; exit 1 ;;
 esac
 SH
@@ -114,7 +115,23 @@ mksrc foxtrot yes; mkrel foxtrot updater
 #       line per undeclared path; a cxxabi:<glob> declaration keeps a path off the list.
 mksrc golf yes; mkrel golf throws
 mksrc hotel yes cxxdecl; mkrel hotel throws
-printf '.github\nalpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\ngolf\nhotel\n' > "$work/repos"
+# spec: scripts/gen-conventions-grandfathered.sh -- standalone is found in the latest release: india's pkg
+#       installs its product with no standalone archive beside it; juliet's carries one.
+{ cat "$here/../scripts/product-names"; printf 'india dev.mavergreen.india india\njuliet dev.mavergreen.juliet juliet\n'; } > "$work/product-names"
+MAVERGREEN_PRODUCT_NAMES="$work/product-names"; export MAVERGREEN_PRODUCT_NAMES
+mkprod() {  # $1 = name, $2 = yes: the release carries its standalone archive
+  r="$work/src/$1.release"; st="$work/stage-$1"; t="$st/usr/local/mavergreen/$1"; mkdir -p "$r" "$t/bin"; printf 'v1\n' > "$r/.tag"
+  printf '#!/bin/sh\necho %s\n' "$1" > "$t/bin/$1"; chmod 755 "$t/bin/$1"
+  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>identifier</key><string>dev.mavergreen.%s</string><key>product</key><string>%s</string></dict></plist>\n' "$1" "$1" > "$t/mavergreen.plist"
+  "$STEVEDORE" component --root "$st" --identifier "dev.mavergreen.$1" --version 1 --install-location / \
+    --mtime 1700000000 --out "$r/$1-1.pkg" >/dev/null || { echo "FAIL: stevedore could not build $1's fixture pkg"; exit 1; }
+  [ "$2" = yes ] || return 0
+  SOURCE_DATE_EPOCH=1700000000 sh "$here/../scripts/stage_standalone.sh" "$st" "$1" 1 x86_64 "$r/$1-1-macos-x86_64.tar.gz" >/dev/null 2>&1 \
+    || { echo "FAIL: stage_standalone.sh could not build $1's archive"; exit 1; }
+}
+mksrc india yes; mkprod india no
+mksrc juliet yes; mkprod juliet yes
+printf '.github\nalpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\ngolf\nhotel\nindia\njuliet\n' > "$work/repos"
 
 out="$(sh "$G" "$work/clones" 2>"$work/err")" || { echo "FAIL: generator failed: $(cat "$work/err")"; exit 1; }
 want='cxxabi golf opt/mavergreen/golf/bin/throws
@@ -125,11 +142,14 @@ macos-runner echo release.yml:build
 macos-runner foxtrot release.yml:build
 macos-runner golf release.yml:build
 macos-runner hotel release.yml:build
+macos-runner india release.yml:build
+macos-runner juliet release.yml:build
 modern-smoke delta release.yml:modern-smoke
 modern-smoke echo release.yml:modern-smoke
 modern-smoke golf release.yml:modern-smoke
-modern-smoke hotel release.yml:modern-smoke'
-[ "$out" = "$want" ] || { echo "FAIL: a repo with no workflows must not swallow the repos after it; delta ships an undeclared arm64 tool, echo declares one with no job, foxtrot's arm64 is its updater's; the generator lists golf, whose latest release defines ___cxa_throw, and not hotel, which declares it: got [$out]"; exit 1; }
+modern-smoke hotel release.yml:modern-smoke
+standalone india india'
+[ "$out" = "$want" ] || { echo "FAIL: a repo with no workflows must not swallow the repos after it; delta ships an undeclared arm64 tool, echo declares one with no job, foxtrot's arm64 is its updater's; the generator lists golf, whose latest release defines ___cxa_throw, and not hotel, which declares it; india ships its product with no standalone archive, juliet with one: got [$out]"; exit 1; }
 [ -f "$work/clones/.gen-conventions-grandfathered" ] || { echo "FAIL: the generator must mark the directory it owns"; exit 1; }
 
 out="$(sh "$G" "$work/clones" 2>"$work/err")" || { echo "FAIL: a rerun in an owned directory must refresh: $(cat "$work/err")"; exit 1; }

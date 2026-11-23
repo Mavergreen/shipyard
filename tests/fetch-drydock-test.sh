@@ -1,8 +1,8 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: fetch-drydock-test.sh
-# spec: scripts/fetch_drydock.sh header -- the Linux archive of the pinned release is fetched, verified against the pinned
-#       digest, unpacked once and kept; a digest that does not match fails; a malformed pin is a usage error; a Mac
+# spec: scripts/fetch_drydock.sh header -- the Linux archive of the pinned release is fetched, verified against the release's
+#       SHA256SUMS, unpacked once and kept; a digest that does not match fails, and so does an archive SHA256SUMS does not list; a malformed pin is a usage error; a Mac
 #       uses an installed Drydock at the pinned version; MAVERGREEN_DRYDOCK_PREFIX is used as given, once checked. The
 #       release is a file:// fixture tree (MAVERGREEN_RELEASES), so nothing reaches the network.
 set -eu
@@ -29,7 +29,8 @@ asset=drydock-9.9.9-linux-x86_64.tar.gz
 P="$T/pin/.mavergreen/ingredients/drydock"; mkdir -p "$P"
 printf 'v9.9.9\n# renovate: datasource=github-releases depName=Mavergreen/drydock\n' >"$P/VERSION"
 echo Mavergreen/drydock >"$P/REPO"
-sha "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" >"$P/LINUX_SHA256"
+sums() { printf '%s  %s\n' "$(sha "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset")" "$asset" >"$T/rel/Mavergreen/drydock/releases/download/v9.9.9/SHA256SUMS"; }
+sums
 fetch() { rc=0; out=$(env "$@" sh "$ROOT/scripts/fetch_drydock.sh" "$T/pin" 2>"$T/err") || rc=$?; }
 
 fetch MAVERGREEN_DRYDOCK_HOST=linux
@@ -37,27 +38,33 @@ if [ "$rc" = 0 ] && [ -x "$out/bin/drydock-objc" ] && [ -f "$out/share/drydock/o
   pass 'the Linux archive is fetched, verified and unpacked to a prefix holding bin/drydock-objc'
 else fail "Linux fetch: exit $rc, printed '$out'"; fi
 first=$out
-rm -rf "$T/rel"
+rm "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset"
 fetch MAVERGREEN_DRYDOCK_HOST=linux
-[ "$rc" = 0 ] && [ "$out" = "$first" ] && pass 'an unpacked release is kept and reused without a fetch' ||
+[ "$rc" = 0 ] && [ "$out" = "$first" ] && pass 'an unpacked release is kept and reused without downloading its archive again' ||
   fail "reuse: exit $rc, printed '$out', want $first"
 
 rm -rf "$T/cache" "$T/tars"
-mkdir -p "$T/rel/Mavergreen/drydock/releases/download/v9.9.9"
+(cd "$T/a" && tar -czf "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" drydock-9.9.9)
+sums
 echo tampered >"$T/a/drydock-9.9.9/bin/extra"
 (cd "$T/a" && tar -czf "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" drydock-9.9.9)
 fetch MAVERGREEN_DRYDOCK_HOST=linux
-[ "$rc" = 1 ] && [ -z "$out" ] && pass 'an archive that does not match the pinned digest fails' ||
+[ "$rc" = 1 ] && [ -z "$out" ] && pass 'an archive that does not match its SHA256SUMS digest fails' ||
   fail "digest mismatch: exit $rc, printed '$out', want 1"
 
 printf 'v9.9.9 && rm\n' >"$P/VERSION"
 fetch MAVERGREEN_DRYDOCK_HOST=linux
 [ "$rc" = 2 ] && pass 'a malformed version pin is a usage error' || fail "malformed pin: exit $rc, want 2"
 printf 'v9.9.9\n' >"$P/VERSION"
-rm "$P/LINUX_SHA256"
+rm -rf "$T/cache" "$T/tars"
+: >"$T/rel/Mavergreen/drydock/releases/download/v9.9.9/SHA256SUMS"
 fetch MAVERGREEN_DRYDOCK_HOST=linux
-[ "$rc" = 1 ] && grep -q 'LINUX_SHA256' "$T/err" && pass 'a Linux pin with no digest fails, naming LINUX_SHA256' ||
+[ "$rc" = 1 ] && [ -z "$out" ] && grep -q "$asset is not listed" "$T/err" && pass 'an archive SHA256SUMS does not list fails, naming it' ||
   fail "no digest: exit $rc"
+rm "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/SHA256SUMS"
+fetch MAVERGREEN_DRYDOCK_HOST=linux
+[ "$rc" = 1 ] && [ -z "$out" ] && grep -q 'could not fetch' "$T/err" && pass 'a release with no SHA256SUMS fails' ||
+  fail "no SHA256SUMS: exit $rc"
 
 mkdir -p "$T/inst/bin" "$T/vol/opt/mavergreen/drydock/bin" "$T/old/usr/local/mavergreen/drydock/bin"
 cp "$T/a/drydock-9.9.9/bin/drydock-objc" "$T/inst/bin/"

@@ -150,6 +150,10 @@ In your `.github/workflows/*.yml` (if applicable):
 - uses: Mavergreen/shipyard/.github/actions/install@v1
 ```
 
+To install other family products in the job, name them: `with: { products: "go127-cross@1.27.4-mavericks.4" }`
+(whitespace-separated `SHORT@TAG`). Each comes from its release, with whatever it requires, and macOS
+runners only; a non-empty `products` on any other runner fails.
+
 Then build, and test:
 
 ```sh
@@ -291,6 +295,9 @@ appear, defining for each prefix:
 
 - `<P>_SOURCES`: the code files its sources phase compiles;
 - `<P>_MODELS`: the Core Data models that phase lists, which are not compiled;
+- `<P>_NOT_COMPILED`, only when non-empty: other sources that phase lists which the product never
+  compiles (only Metal shaders so far), each as `<file type>:<path>`, split at the first colon, such
+  as `sourcecode.metal:Shaders/A B.metal`;
 - `<P>_PRODUCT_RESOURCES`: other targets' built products its resources phase copies, by product name;
 - the exporter's `<P>_INCLUDE_DIRS`, `<P>_*_HEADERS` and `<P>_*RESOURCES`.
 
@@ -348,9 +355,10 @@ version, so every push to `main` is an update.
 ### Linux product archives
 
 For a product that publishes a Linux x86_64 archive, use
-`sh "$SHIPYARD_SCRIPTS/fetch_product_tar.sh" --repo OWNER/REPO SHORT VERSION SHA256 DEST`.
-Pin the version and archive SHA-256 together in the consuming repository. The helper
-fetches OWNER/REPO's release (the ingredient's `REPO`), verifies cached downloads and extracted
+`sh "$SHIPYARD_SCRIPTS/fetch_product_tar.sh" --repo OWNER/REPO SHORT VERSION DEST`.
+Pin only the version in the consuming repository. The helper fetches OWNER/REPO's release
+(the ingredient's `REPO`), verifies the archive against that release's own `SHA256SUMS`
+(fetched afresh each call; an archive it does not list fails), verifies cached downloads and extracted
 files, and prints the user-owned prefix on stdout. It requires Python 3.9 or newer,
 curl, and either shasum or sha256sum. Override `MAVERGREEN_TAR_CACHE` to choose a
 local-disk cache; no root installation is required.

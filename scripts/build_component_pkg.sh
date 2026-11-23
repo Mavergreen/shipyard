@@ -5,7 +5,10 @@
 #          Prints the output .pkg path on stdout (everything else goes to stderr), matching
 #          set_install_floor.sh. Files are stamped with $SOURCE_DATE_EPOCH, or when unset the commit
 #          time of $MAVERGREEN_REPO_ROOT when that is a git work tree, else of the repo at the caller's current
-#          directory; a caller without git must export SOURCE_DATE_EPOCH.
+#          directory; a caller without git must export SOURCE_DATE_EPOCH. Every entry under the root
+#          but a symlink loses group and world write, setuid and setgid kept, and the root itself is
+#          made 0755, so a umask-002 stage installs as a umask-022 one would; stderr counts the
+#          entries changed. Exit 1 on a missing root, 2 on a usage error.
 # platform: builds a flat component .pkg with stevedore, whose bundles install EXACTLY where
 #           declared and ALWAYS overwrite. stevedore writes every component install-in-place, so
 #           PackageKit's two "defer to whatever is already on disk" defaults are OFF on every bundle:
@@ -44,7 +47,9 @@ done
 [ -n "$ROOT" ] && [ -n "$IDENT" ] && [ -n "$VER" ] && [ -n "$LOC" ] && [ -n "$OUT" ] \
   || { echo "build_component_pkg: need --root --identifier --version --install-location --out" >&2; exit 2; }
 [ -d "$ROOT" ] || { echo "build_component_pkg: no payload root: $ROOT" >&2; exit 1; }
-chmod -R go-w "$ROOT"
+nw="$(cd "$ROOT" && find . ! -name . ! -type l \( -perm -020 -o -perm -002 \) -print -exec chmod go-w {} + | wc -l | tr -d ' ')"
+chmod 0755 "$ROOT"
+echo "build_component_pkg: normalised $nw payload entries to no group or world write, and the root to 0755" >&2
 
 SELF="$(cd "$(dirname "$0")" && pwd)"
 EPOCH="$(sh "$SELF/source-date-epoch.sh")"

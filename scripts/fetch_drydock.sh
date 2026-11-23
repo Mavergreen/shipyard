@@ -5,8 +5,8 @@
 #          vX.Y.Z), from the repo its REPO names, for this host: a prefix holding bin/drydock-objc and
 #          share/drydock/objc/reference. ROOT is shipyard, a checkout or an install. MAVERGREEN_DRYDOCK_PREFIX,
 #          when set, is that prefix instead: it is checked for bin/drydock-objc, and nothing is fetched. On x86_64 Linux: the release's
-#          drydock-X.Y.Z-linux-x86_64.tar.gz, verified against the ingredient's LINUX_SHA256 (the archive's
-#          digest in the release's SHA256SUMS). fetch_product_tar.sh cannot take it -- its asset is named for the tag and its
+#          drydock-X.Y.Z-linux-x86_64.tar.gz, verified against the release's SHA256SUMS,
+#          fetched afresh on every call. fetch_product_tar.sh cannot take it -- its asset is named for the tag and its
 #          root must be opt/mavergreen/SHORT, while Drydock's tag has a v and its archive's root is
 #          drydock-X.Y.Z/ -- so the archive is fetched with mavergreen_fetch.sh's shipyard_fetch_verified, the
 #          downloader fetch_product_tar.sh uses, and unpacked here. On a Mac: an installed
@@ -15,7 +15,7 @@
 #          release's SHA256SUMS. A fetch is unpacked once into $MAVERGREEN_DRYDOCK_CACHE (default
 #          ~/Library/Caches/mavergreen-drydock on a Mac, ~/.cache/mavergreen-drydock elsewhere)/TAG and kept.
 #          MAVERGREEN_DRYDOCK_HOST (linux or mac) replaces the host's own answer. Exit 1 on a failed fetch or
-#          a missing digest, 2 on a usage error or a malformed pin.
+#          an archive SHA256SUMS does not list, 2 on a usage error or a malformed pin.
 set -eu
 S="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "fetch_drydock: $*" >&2; exit 1; }
@@ -59,28 +59,23 @@ manifest_version() {
 case "$host" in
   linux)
     asset="drydock-$N-linux-x86_64.tar.gz"
-    sha="$(mg_value ingredients/drydock/LINUX_SHA256)" || die "$P has no LINUX_SHA256 for $asset (copy its digest from https://github.com/$SLUG/releases/download/$V/SHA256SUMS)"
-    case "$sha" in ''|*[!0-9a-f]*) die "$P/LINUX_SHA256 holds '$sha', not the SHA-256 of $asset (copy its digest from https://github.com/$SLUG/releases/download/$V/SHA256SUMS)" ;; esac
-    [ "${#sha}" -eq 64 ] || die "$P/LINUX_SHA256 holds '$sha', not the SHA-256 of $asset"
+    . "$S/mavergreen_fetch.sh"
+    BASE="${MAVERGREEN_RELEASES:-https://github.com}/$SLUG/releases/download/$V"
+    sha="$(shipyard_release_sha "$BASE" "$asset")" || die "no verified digest for $asset"
     d="$W/linux"
     kept() { has_objc "$d" && [ "$(cat "$d.stamp" 2>/dev/null || :)" = "$sha" ]; }
     if ! kept; then
       mkdir -p "$W"
       tmp=""; locked=""
-      trap 'rm -rf ${tmp:+"$tmp"}; [ -z "$locked" ] || rmdir "$d.lock" 2>/dev/null || :' EXIT
+      trap 'rm -rf ${tmp:+"$tmp"}; [ -z "$locked" ] || shipyard_lock_release "$d.lock"' EXIT
       trap 'exit 130' INT
       trap 'exit 143' TERM
-      # spec: scripts/fetch_product_tar.sh -- calls for one prefix take turns through a lock directory.
-      waited=0
-      until mkdir "$d.lock" 2>/dev/null; do
-        [ "$waited" -lt "${SHIPYARD_LOCK_WAIT:-900}" ] || die "$d.lock is still held after ${waited}s; remove it if no fetch of $d is running"
-        sleep 1; waited=$((waited + 1))
-      done
+      # spec: scripts/fetch_product_tar.sh -- calls for one prefix take turns through a lock file.
+      shipyard_lock_take "$d.lock" "${SHIPYARD_LOCK_WAIT:-900}" ||
+        die "$d.lock is still held after ${shipyard_lock_waited}s; remove it if no fetch of $d is running"
       locked=1
     fi
     if ! kept; then
-      . "$S/mavergreen_fetch.sh"
-      BASE="${MAVERGREEN_RELEASES:-https://github.com}/$SLUG/releases/download/$V"
       shipyard_fetch_verified "$BASE/$asset" "$sha" "$W" "$asset" >&2 || die "could not fetch and verify $BASE/$asset"
       tmp="$(mktemp -d "$W/linux.tmp.XXXXXX")"
       tar -xzf "$W/$asset" -C "$tmp" "drydock-$N" || die "could not unpack drydock-$N from $asset"

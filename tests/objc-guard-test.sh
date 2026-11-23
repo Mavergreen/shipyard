@@ -11,7 +11,8 @@
 #       receipt (Drydock's tests/objc/objc-provider-test.sh header): the guard on a consumer linked with it must
 #       agree with its report, passing exactly when no finding blocks and otherwise naming each
 #       one. A consumer linked with the fixture provider (tests/lib/objc_fixture_provider.sh) must
-#       pass on every host. Nothing built here is executed.
+#       pass on every host, and one guarded send reviewed by schema-2
+#       evidence passes while the files it cites are unchanged. Nothing built here is executed.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT=$(CDPATH= cd -- "$HERE/.." && pwd)
@@ -22,7 +23,8 @@ trap 'rm -rf "$T"' EXIT
 fail() { echo "FAIL: $*" >&2; [ ! -f "$T/out" ] || tail -12 "$T/out" >&2; exit 1; }
 unset MAVERGREEN_ALLOW_SELECTORS MAVERGREEN_POST_10_9_SELECTORS MAVERGREEN_ALLOW_ARCHS MAVERGREEN_POST_10_9_SYMBOLS \
   MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT \
-  MAVERGREEN_OBJC_REPORT_DIR MAVERGREEN_OBJC_REFERENCES OBJC_COMPAT MAVERGREEN_DEVIATIONS_ROOT MAVERGREEN_OBJC_STRICT
+  MAVERGREEN_OBJC_REPORT_DIR MAVERGREEN_OBJC_REFERENCES OBJC_COMPAT MAVERGREEN_DEVIATIONS_ROOT MAVERGREEN_OBJC_STRICT \
+  MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT MAVERGREEN_OBJC_ROOT_KIND
 
 unset MAVERGREEN_DRYDOCK_PREFIX
 SDK=$(sh "$ROOT/scripts/fetch_sdk.sh" --arch x86_64)
@@ -106,6 +108,16 @@ plain_guard X=1; [ "$rc" = 0 ] || fail "$label: exit $rc, want 0"; says 'binarie
 label='an analyzer knob without the opt-in'; BIN="$T/root/bin/plain"
 plain_guard MAVERGREEN_OBJC_BUILD_EVIDENCE="$T/e.json"; [ "$rc" = 2 ] || fail "$label: exit $rc, want 2"
 says 'MAVERGREEN_OBJC_BUILD_EVIDENCE needs MAVERGREEN_OBJC_STRICT=1'
+for k in MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT; do
+  label="$k without the opt-in"
+  plain_guard "$k=$T"; [ "$rc" = 2 ] || fail "$label: exit $rc, want 2"; says "$k needs MAVERGREEN_OBJC_STRICT=1"
+done
+label='MAVERGREEN_OBJC_ROOT_KIND without the opt-in'
+plain_guard MAVERGREEN_OBJC_ROOT_KIND=volume; [ "$rc" = 2 ] || fail "$label: exit $rc, want 2"
+says 'MAVERGREEN_OBJC_ROOT_KIND needs MAVERGREEN_OBJC_STRICT=1'
+label='MAVERGREEN_OBJC_ROOT_KIND=forest'
+guard MAVERGREEN_OBJC_ROOT_KIND=forest; [ "$rc" = 2 ] || fail "$label: exit $rc, want 2"
+says 'MAVERGREEN_OBJC_ROOT_KIND is tree or volume'
 label='MAVERGREEN_OBJC_STRICT=yes'
 plain_guard MAVERGREEN_OBJC_STRICT=yes; [ "$rc" = 2 ] || fail "$label: exit $rc, want 2"; says 'MAVERGREEN_OBJC_STRICT is 1 or unset'
 
@@ -261,6 +273,67 @@ passes MAVERGREEN_OBJC_ROOT="$T/fx/root" MAVERGREEN_OBJC_BUILD_EVIDENCE="$T/fx/e
 says 'binaries clean'
 label='the same consumer without its build evidence'; want=4
 fails MAVERGREEN_OBJC_ROOT="$T/fx/root" MAVERGREEN_OBJC_PROVIDER_PREFIX="$T/fixture-prefix"
+# spec: scripts/assert_binary_compatible.sh header -- schema-2 build evidence, its symbols resolved from the artifact by
+#       scripts/objc-resolve.sh, holds its review while every file it cites, under MAVERGREEN_OBJC_SOURCE_ROOT,
+#       MAVERGREEN_OBJC_CRATE_SOURCES and MAVERGREEN_OBJC_SDK_ROOT, has its recorded hash. A changed cited file, or a root
+#       not given, is cannot-measure, naming why.
+CK="$T/ck"
+mkdir -p "$CK/root/bin" "$CK/src/tui" "$CK/crates/fixture-0.1.0/src"
+cc -DFORM=4 "$FX/guard.c" -o "$CK/root/bin/g" -lobjc
+printf 'if !ws.respondsToSelector(sel) { return 0; }\n' >"$CK/src/tui/motion.rs"
+printf 'pub fn guarded() {}\n' >"$CK/crates/fixture-0.1.0/src/lib.rs"
+HDR=System/Library/Frameworks/AppKit.framework/Headers/NSWorkspace.h
+TREE=$(sh "$ROOT/scripts/objc-build-evidence.sh" --tree-digest-only --source-root "$CK/src") || fail 'no tree digest'
+[ "$(sh "$ROOT/scripts/objc-build-evidence.sh" --sdk-digest-only --sdk-root "$SDK")" = \
+  "$(sed -n 's/.*"header_tree_sha256": "\([0-9a-f]*\)".*/\1/p' "$REFS/manifest.json" | head -1)" ] ||
+  fail 'the pinned floor SDK does not have the reference manifest header digest'
+cat >"$CK/reviewed.json" <<JSON
+{"schema": 2, "kind": "objc-build-evidence",
+ "artifact": {"path": "bin/g", "sha256": "$(sha "$CK/root/bin/g")"},
+ "source": {"tree_sha256": "$TREE"},
+ "crates": [{"name": "fixture", "version": "0.1.0"}], "type_map": [], "type_evidence": [], "binding_receipt": [],
+ "position_evidence": [],
+ "guards": [{"id": "g-motion", "path": "fixture::guarded", "selector": "accessibilityDisplayShouldReduceMotion",
+   "guard": "respondsToSelector:", "fallback": "returns 0",
+   "sources": [{"cite": "tree:tui/motion.rs", "sha256": "$(sha "$CK/src/tui/motion.rs")"},
+     {"cite": "crate:fixture-0.1.0/src/lib.rs", "sha256": "$(sha "$CK/crates/fixture-0.1.0/src/lib.rs")"},
+     {"cite": "sdk:$HDR", "sha256": "$(sha "$SDK/$HDR")"}],
+   "covers": [{"selector": "accessibilityDisplayShouldReduceMotion", "count": 1}],
+   "provenance": {"revision": "r", "patches_sha256": "p", "features": "f"},
+   "review": {"status": "reviewed", "reviewer": "A. Reviewer", "reason": "NO falls back to 0"}}]}
+JSON
+sh "$ROOT/scripts/objc-resolve.sh" --artifact "$CK/root/bin/g" --reviewed "$CK/reviewed.json" --output "$CK/ev.json" ||
+  fail 'objc-resolve.sh did not resolve the reviewed evidence'
+grep -F '"symbol": "__RNvCs1Fx_7fixture7guarded"' "$CK/ev.json" >/dev/null || fail 'objc-resolve.sh wrote no symbol'
+rc=0; sh "$ROOT/scripts/objc-resolve.sh" --artifact "$CK/root/bin/g" --reviewed "$CK/reviewed.json" --output "$CK/ev.json" \
+  2>"$T/out" || rc=$?
+[ "$rc" = 2 ] || fail "objc-resolve.sh over an existing output: exit $rc, want 2"
+S2="MAVERGREEN_OBJC_SOURCE_ROOT=$CK/src"
+label='the guarded send without a review'; BIN="$CK/root/bin/g"; want=1
+fails MAVERGREEN_OBJC_ROOT="$CK/root"; says 'accessibilityDisplayShouldReduceMotion'
+label='schema-2 evidence with its sources'
+passes MAVERGREEN_OBJC_ROOT="$CK/root" MAVERGREEN_OBJC_BUILD_EVIDENCE="$CK/ev.json" "$S2" \
+  MAVERGREEN_OBJC_CRATE_SOURCES="$CK/crates" MAVERGREEN_OBJC_SDK_ROOT="$SDK"
+says 'binaries clean'
+label='schema-2 evidence without its crate sources'; want=4
+fails MAVERGREEN_OBJC_ROOT="$CK/root" MAVERGREEN_OBJC_BUILD_EVIDENCE="$CK/ev.json" "$S2" MAVERGREEN_OBJC_SDK_ROOT="$SDK"
+says 'citation-unverifiable'
+label='schema-2 evidence before its symbols are resolved'
+fails MAVERGREEN_OBJC_ROOT="$CK/root" MAVERGREEN_OBJC_BUILD_EVIDENCE="$CK/reviewed.json" "$S2" \
+  MAVERGREEN_OBJC_CRATE_SOURCES="$CK/crates" MAVERGREEN_OBJC_SDK_ROOT="$SDK"
+says 'malformed-build-evidence'; says 'lacks name, version, checksum or disambiguator'
+cp -R "$CK/src" "$CK/src2"; printf '// edited\n' >>"$CK/src2/tui/motion.rs"
+label='schema-2 evidence over another source tree'
+fails MAVERGREEN_OBJC_ROOT="$CK/root" MAVERGREEN_OBJC_BUILD_EVIDENCE="$CK/ev.json" MAVERGREEN_OBJC_SOURCE_ROOT="$CK/src2" \
+  MAVERGREEN_OBJC_CRATE_SOURCES="$CK/crates" MAVERGREEN_OBJC_SDK_ROOT="$SDK"
+says 'source-tree-mismatch'
+cp -R "$CK/crates" "$CK/crates2"; printf '// bumped\n' >>"$CK/crates2/fixture-0.1.0/src/lib.rs"
+label='schema-2 evidence whose cited crate file changed'
+fails MAVERGREEN_OBJC_ROOT="$CK/root" MAVERGREEN_OBJC_BUILD_EVIDENCE="$CK/ev.json" "$S2" \
+  MAVERGREEN_OBJC_CRATE_SOURCES="$CK/crates2" MAVERGREEN_OBJC_SDK_ROOT="$SDK"
+says 'guard-source-changed'; says 'crate:fixture-0.1.0/src/lib.rs'
+label='a source root without build evidence'; want=2
+fails MAVERGREEN_OBJC_ROOT="$CK/root" "$S2"; says 'MAVERGREEN_OBJC_SOURCE_ROOT needs MAVERGREEN_OBJC_BUILD_EVIDENCE'
 # spec: scripts/assert_binary_compatible.sh header -- a consumer linked with the staged Recaulk provider, with its build evidence
 #       and the provider's source receipt: the guard agrees with the report it keeps. It passes exactly when no finding is
 #       unsupported or unresolved; otherwise it exits 1 and names every such finding. Which holds depends on the provider's

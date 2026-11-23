@@ -31,4 +31,13 @@ jobs:
       - name: The preset's icon sources still work
         env:
           SHIPYARD_CHECK_PRESET_CONF: ${{ inputs.conf }}
+          ICON_OUT_DIR: ${{ runner.temp }}/preset-icon
         run: sh .shipyard/scripts/shipyard-check --only preset-icon
+
+      # spec: scripts/check-preset-icons.sh -- the icon this run fetched, kept beside its warnings
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: preset-icon
+          path: ${{ runner.temp }}/preset-icon
+          if-no-files-found: ignore

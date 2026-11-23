@@ -112,10 +112,25 @@ DIST
 
 @test "a lock nobody releases fails after SHIPYARD_LOCK_WAIT seconds, naming it" {
   serve widget-1.0.pkg
-  mkdir -p "$DEST.lock"
+  mkdir -p "$(dirname "$DEST")"
+  : > "$DEST.lock"
   SHIPYARD_LOCK_WAIT=1 run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
   [ "$status" -eq 1 ]
   [[ "$output" == *"$DEST.lock"* ]] || false
+}
+
+@test "a host without cpio or gzip exits 2 before fetching, naming the tool and its package" {
+  for missing in cpio gzip; do
+    rm -rf "$WORK/bin"; mkdir -p "$WORK/bin"
+    for t in dirname cpio gzip; do
+      [ "$t" = "$missing" ] || ln -s "$(command -v "$t")" "$WORK/bin/$t"
+    done
+    PATH="$WORK/bin" run /bin/sh "$HELPER" widget 1.0 "$DEST"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"needs $missing"* ]] || false
+    [[ "$output" == *"install the $missing package"* ]] || false
+    [ ! -e "$WORK/cache" ]
+  done
 }
 
 @test "a pkg whose SHA-256 does not match fails 1 and leaves no cached pkg" {
@@ -198,4 +213,32 @@ DIST
   run sh "$HELPER" --repo Mavergreen/widget-repo widget v1.0.3 "$DEST"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$(cat "$DEST/lib/libwidget.a")" = W ]
+}
+
+@test "a pkg whose payload holds an AppleDouble member fails 1, naming the first, and extracts nothing" {
+  mkcomp dev.mavergreen.base "$WORK/base" "$WORK/base.pkg"
+  mkcomp dev.mavergreen.widget "$WORK/prod" "$WORK/clean.pkg"
+  "$STEVEDORE" expand "$WORK/clean.pkg" "$WORK/x"
+  printf 'junk' > "$WORK/prod/usr/local/mavergreen/widget/lib/._libwidget.a"
+  printf 'junk' > "$WORK/prod/usr/local/mavergreen/widget/include/._widget"
+  ( cd "$WORK/prod" && find . | LC_ALL=C sort | cpio -o -H odc 2>/dev/null | gzip -n ) > "$WORK/x/Payload"
+  "$STEVEDORE" xar --mtime 1700000000 --out "$WORK/prod.pkg" none Bom "$WORK/x/Bom" none Payload "$WORK/x/Payload" none PackageInfo "$WORK/x/PackageInfo"
+  cat > "$WORK/dist.xml" <<DIST
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+  <pkg-ref id="dev.mavergreen.base" version="1.0">base.pkg</pkg-ref>
+  <pkg-ref id="dev.mavergreen.widget" version="1.0">prod.pkg</pkg-ref>
+  <choices-outline><line choice="dev.mavergreen.base"/><line choice="dev.mavergreen.widget"/></choices-outline>
+  <choice id="dev.mavergreen.base"><pkg-ref id="dev.mavergreen.base"/></choice>
+  <choice id="dev.mavergreen.widget"><pkg-ref id="dev.mavergreen.widget"/></choice>
+</installer-gui-script>
+DIST
+  "$STEVEDORE" product --distribution "$WORK/dist.xml" --package "$WORK/base.pkg" --package "$WORK/prod.pkg" \
+    --mtime 1700000000 --out "$REL/widget-1.0.pkg" > /dev/null
+  ( cd "$REL" && shasum -a 256 widget-1.0.pkg > SHA256SUMS )
+  run sh "$HELPER" --repo Mavergreen/widget-repo widget 1.0 "$DEST"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"AppleDouble"*"usr/local/mavergreen/widget/include/._widget"* ]] || false
+  [[ "$output" != *"lib/._libwidget.a"* ]] || false
+  [ ! -e "$DEST" ]
 }

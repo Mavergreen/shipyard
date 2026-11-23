@@ -15,10 +15,13 @@
 #          pkgs from before the /opt layout carry), extracted beside DEST and swapped in,
 #          unless DEST.stamp says DEST already holds this very pkg's tree: then DEST is kept, since a
 #          parallel build may be running a compiler out of it. Calls for one DEST take turns through the
-#          lock directory DEST.lock, waiting up to SHIPYARD_LOCK_WAIT seconds (default 900) for it.
+#          lock file DEST.lock, waiting up to SHIPYARD_LOCK_WAIT seconds (default 900) for it.
+#          It needs cpio and gzip to unpack the Payload, which a bare Linux image may lack: without either
+#          it exits 2 before fetching, naming the package to install.
+#          A Payload holding an AppleDouble member (._*) is refused, naming the first.
 #          Prints DEST on stdout; progress goes to stderr. Exit 1 on a failed fetch, checksum or
-#          extraction, 2 on a usage error. MAVERGREEN_RELEASES replaces
-#          https://github.com (the tests serve a file:// tree).
+#          extraction, or an AppleDouble member; 2 on a usage error, or a missing cpio or gzip.
+#          MAVERGREEN_RELEASES replaces https://github.com (the tests serve a file:// tree).
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 usage() { echo "usage: fetch_product_pkg.sh --repo OWNER/REPO [--asset NAME] SHORT VERSION DEST" >&2; exit 2; }
@@ -36,6 +39,10 @@ SHORT=$1; VERSION=$2; DEST=$3
 while [ "${DEST%/}" != "$DEST" ]; do DEST="${DEST%/}"; done
 case "$DEST" in ''|.|..) echo "fetch_product_pkg: refusing DEST '$DEST'" >&2; exit 2 ;; esac
 case "$VERSION" in ''|*/*|.|..) echo "fetch_product_pkg: '$VERSION' is not a release tag" >&2; exit 2 ;; esac
+for tool in cpio gzip; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "fetch_product_pkg: needs $tool to unpack the pkg's Payload; install the $tool package" >&2; exit 2; }
+done
 [ -n "$SLUG" ] || { echo "fetch_product_pkg: --repo OWNER/REPO is required: the release is the dependency's ingredient REPO" >&2; exit 2; }
 case "$SLUG" in
   */*/*|/*|*/|*[!a-zA-Z0-9._/-]*|*..*) echo "fetch_product_pkg: '$SLUG' is not OWNER/REPO" >&2; exit 2 ;;
@@ -54,7 +61,7 @@ tmp=""; old=""; locked=""
 cleanup() {
   if [ -n "$old" ] && [ -e "$old/dest" ] && [ ! -e "$DEST" ]; then mv "$old/dest" "$DEST"; fi
   rm -rf ${tmp:+"$tmp"} ${old:+"$old"}
-  [ -z "$locked" ] || rmdir "$DEST.lock" 2>/dev/null || :
+  [ -z "$locked" ] || shipyard_lock_release "$DEST.lock"
 }
 trap cleanup EXIT
 trap 'exit 130' INT
@@ -67,12 +74,8 @@ case "$SHA" in
   *[!0-9a-f]*|'') echo "fetch_product_pkg: $ASSET is not listed (once) in $BASE/SHA256SUMS" >&2; exit 1 ;;
 esac
 [ "${#SHA}" -eq 64 ] || { echo "fetch_product_pkg: $ASSET is not listed (once) in $BASE/SHA256SUMS" >&2; exit 1; }
-waited=0
-until mkdir "$DEST.lock" 2>/dev/null; do
-  [ "$waited" -lt "${SHIPYARD_LOCK_WAIT:-900}" ] || {
-    echo "fetch_product_pkg: $DEST.lock is still held after ${waited}s; remove it if no fetch of $DEST is running" >&2; exit 1; }
-  sleep 1; waited=$((waited + 1))
-done
+shipyard_lock_take "$DEST.lock" "${SHIPYARD_LOCK_WAIT:-900}" || {
+  echo "fetch_product_pkg: $DEST.lock is still held after ${shipyard_lock_waited}s; remove it if no fetch of $DEST is running" >&2; exit 1; }
 locked=1
 stamp="$SHORT $VERSION $SHA"
 if [ -d "$DEST" ] && [ "$(cat "$DEST.stamp" 2>/dev/null || :)" = "$stamp" ]; then
@@ -100,6 +103,10 @@ n="$(printf '%s\n' "$matches" | grep -c . || true)"
   echo "fetch_product_pkg: expected one component dev.mavergreen.$SHORT in $ASSET, found $n" >&2; exit 1; }
 ID="$(sed -n 's/.*identifier="\([^"]*\)".*/\1/p' "$matches" | head -n 1)"
 comp="$(dirname "$matches")"
+gzip -dc "$comp/Payload" | cpio -it --quiet 2>/dev/null > "$tmp/members" || {
+  echo "fetch_product_pkg: could not list the Payload of $ID" >&2; exit 1; }
+ad="$(sed 's|^\./||' "$tmp/members" | awk '{ n = split($0, c, "/") } c[n] ~ /^\._/ { print; exit }')"
+[ -z "$ad" ] || { echo "fetch_product_pkg: $ID's Payload holds an AppleDouble member, $ad: a family pkg carries none" >&2; exit 1; }
 mkdir "$tmp/payload"
 ( cd "$tmp/payload" && gzip -dc "$comp/Payload" | cpio -id --quiet 2>/dev/null ) || {
   echo "fetch_product_pkg: could not unpack the Payload of $ID" >&2; exit 1; }

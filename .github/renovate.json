@@ -3,14 +3,14 @@
   "extends": ["github>Mavergreen/shipyard"],
   "packageRules": [
     {
-      "description": "Renovate moves .mavergreen/ingredients/clang22/VERSION and .mavergreen/ingredients/objc-receipt-clang/VERSION but cannot write the Linux archive's digest beside either, so the Linux job fails on the bump until the LINUX_SHA256 beside the moved VERSION holds the new release's archive digest.",
+      "description": "A clang22 bump moves .mavergreen/ingredients/clang22/VERSION and .mavergreen/ingredients/objc-receipt-clang/VERSION; the Linux archive is verified against the release's own SHA256SUMS, so nothing else moves with it.",
       "matchDepNames": ["Mavergreen/clang-22"],
-      "prBodyNotes": ["Before this can merge, write the digest of `clang22-<version>-linux-x86_64.tar.gz` from the new release's SHA256SUMS, alone, to the LINUX_SHA256 beside each moved VERSION (.mavergreen/ingredients/clang22, .mavergreen/ingredients/objc-receipt-clang): `gh release download <version> -R Mavergreen/clang-22 -p SHA256SUMS -O - | awk '$2 ~ /linux-x86_64[.]tar[.]gz$/ { print $1 }' > .mavergreen/ingredients/<name>/LINUX_SHA256`. An objc-receipt-clang bump must also pass tests/objc-source-inventory-host-test.sh on Linux and a Mac."]
+      "prBodyNotes": ["An objc-receipt-clang bump must pass tests/objc-source-inventory-host-test.sh on Linux and a Mac."]
     },
     {
-      "description": "Renovate moves .mavergreen/ingredients/drydock/VERSION but cannot write the Linux archive's digest beside it, so the Linux job fails on the bump until .mavergreen/ingredients/drydock/LINUX_SHA256 holds the new release's archive digest.",
+      "description": "A Drydock bump moves .mavergreen/ingredients/drydock/VERSION; the Linux archive is verified against the release's own SHA256SUMS, but the receipt tool's digest in a test fixture is still written by hand.",
       "matchDepNames": ["Mavergreen/drydock"],
-      "prBodyNotes": ["Before this can merge, write the digest of `drydock-<version without v>-linux-x86_64.tar.gz` from the new release's SHA256SUMS, alone, to .mavergreen/ingredients/drydock/LINUX_SHA256: `gh release download <tag> -R Mavergreen/drydock -p SHA256SUMS -O - | awk '$2 ~ /linux-x86_64[.]tar[.]gz$/ { print $1 }' > .mavergreen/ingredients/drydock/LINUX_SHA256`. Also rewrite tests/fixtures/objc-api/provider-body.tool with the new release's receipt tool digest (the `tools/objc-source-inventory.c` line of Drydock's tests/objc/IMPORTED.sha256 at the new tag). The bump must pass tests/objc-guard-test.sh on 10.9 (its report's analyzer names the new release) and tests/objc-source-inventory-host-test.sh on a Mac and in the Linux job."]
+      "prBodyNotes": ["Before this can merge, rewrite tests/fixtures/objc-api/provider-body.tool with the new release's receipt tool digest (the `tools/objc-source-inventory.c` line of Drydock's tests/objc/IMPORTED.sha256 at the new tag). The bump must pass tests/objc-guard-test.sh on 10.9 (its report's analyzer names the new release) and tests/objc-source-inventory-host-test.sh on a Mac and in the Linux job."]
     },
     {
       "description": "Renovate moves the commit in .mavergreen/ingredients/mulle-xcode-to-cmake/PIN but cannot write SHA256 beside it, so the host-tool build refuses the bump until that digest names GitHub's tarball of the new commit, checked against the commit's tree.",

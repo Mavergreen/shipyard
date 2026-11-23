@@ -91,6 +91,7 @@ def compare(archive, root, entries):
 def install(archive_path, short, digest, destination):
     if destination.is_symlink():
         raise ValueError('destination must not be a symlink')
+    destination = Path(os.path.realpath(destination.parent)) / destination.name
     with tarfile.open(archive_path, 'r:gz') as archive:
         entries = members(archive, short)
         stamp = destination / STAMP

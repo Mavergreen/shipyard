@@ -14,7 +14,7 @@ mkdir -p "$w/bin"; printf '#!/bin/sh\nexit 128\n' > "$w/bin/git"; chmod +x "$w/b
 python3 - "$root/.github/actions/install/action.yml" "$w/step" <<'PY'
 import sys, yaml
 steps = yaml.safe_load(open(sys.argv[1]))["runs"]["steps"]
-off = [s for s in steps if "runner.os != 'macOS'" in (s.get("if") or "")]
+off = [s for s in steps if "runner.os != 'macOS'" in (s.get("if") or "") and "inputs.products" not in (s.get("if") or "")]
 if len(off) != 1:
     print("FAIL: install-action-linux-version: expected one release step off macOS, got %d" % len(off)); sys.exit(1)
 open(sys.argv[2], "w").write(off[0].get("run") or "")

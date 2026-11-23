@@ -130,10 +130,11 @@ dir_fixture() {
 @test "a held lock times out naming the lock" {
   dir_fixture
   x="$(shipyard_fetch_extract "$URL" "$SHA" "$CACHE" fixture.tar d)"
-  mkdir "$CACHE/.mav-publish.lock"
+  : > "$CACHE/.mav-publish.lock"
   SHIPYARD_FETCH_LOCK_TRIES=2 run shipyard_fetch_publish "$CACHE" "$x"
   [ "$status" -eq 1 ]
   [[ "$output" == *".mav-publish.lock held"* ]] || false
+  [ -f "$CACHE/.mav-publish.lock" ]
 }
 
 @test "a failing mv under set -e still releases the publish lock" {
@@ -488,4 +489,34 @@ bare_path() {  # $1 = dir: the tools a fetch uses, without shasum or sha256sum
   [[ "$output" == *"no SHA-256 tool"* ]] || false
   [[ "$output" != *"not the pinned"* ]] || false
   [ ! -e "$CACHE/fixture.tar" ]
+}
+
+@test "shipyard_release_sha: prints the listed digest, binary-mode name included" {
+  printf '%s  a.tar\n%s *b.tar\n' "$SHA" "$SHA" > "$WORK/SHA256SUMS"
+  run shipyard_release_sha "file://$WORK" a.tar; [ "$status" -eq 0 ]; [ "$output" = "$SHA" ]
+  run shipyard_release_sha "file://$WORK" b.tar; [ "$status" -eq 0 ]; [ "$output" = "$SHA" ]
+}
+
+@test "shipyard_release_sha: an unlisted, ambiguous or missing SHA256SUMS fails" {
+  printf '%s  a.tar\n%s  a.tar\n' "$SHA" "$SHA" > "$WORK/SHA256SUMS"
+  run shipyard_release_sha "file://$WORK" c.tar; [ "$status" -eq 1 ]; [[ "$output" == *"c.tar is not listed"* ]]
+  run shipyard_release_sha "file://$WORK" a.tar; [ "$status" -eq 1 ]
+  rm "$WORK/SHA256SUMS"
+  run shipyard_release_sha "file://$WORK" a.tar; [ "$status" -eq 1 ]; [[ "$output" == *"could not fetch"* ]]
+}
+
+@test "shipyard_latest_tag: prints the tag a file:// release root names" {
+  mkdir -p "$WORK/rel/Mavergreen/longboat/releases"
+  echo 20261027.8 > "$WORK/rel/Mavergreen/longboat/releases/latest"
+  MAVERGREEN_RELEASES="file://$WORK/rel" run shipyard_latest_tag longboat
+  [ "$status" -eq 0 ]; [ "$output" = 20261027.8 ]
+}
+
+@test "shipyard_latest_tag: a missing or empty latest fails" {
+  MAVERGREEN_RELEASES="file://$WORK/rel" run shipyard_latest_tag longboat
+  [ "$status" -eq 1 ]
+  mkdir -p "$WORK/rel/Mavergreen/longboat/releases"
+  : > "$WORK/rel/Mavergreen/longboat/releases/latest"
+  MAVERGREEN_RELEASES="file://$WORK/rel" run shipyard_latest_tag longboat
+  [ "$status" -eq 1 ]
 }
