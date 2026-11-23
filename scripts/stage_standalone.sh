@@ -4,11 +4,14 @@
 #          The standalone archive, from the same staged root stage_product.sh filled for the pkg: one
 #          build, two forms. OUT is SHORT-VERSION-macos-ARCH.tar.gz (ARCH universal, x86_64 or arm64),
 #          holding one top directory SHORT-VERSION/: STAGED_PKG_ROOT/usr/local/mavergreen/SHORT exactly
-#          as the pkg installs it, without its manifest (mavergreen.plist). The updater, its LaunchAgent,
-#          the install scripts and anything else staged outside the tree stay out, and stderr names what
-#          was left out. Entries are sorted, stamped at source-date-epoch.sh's time, root:wheel with no
+#          as the pkg installs it, without its manifest (mavergreen.plist), and beside it each app the
+#          pkg installs at Applications/<Name>.app, as SHORT-VERSION/<Name>.app. A bin/ entry linking to
+#          /Applications/<Name>.app/... becomes a relative link into the archived app; one that does not
+#          resolve there fails. The updater, its LaunchAgent, the install scripts and anything else
+#          staged outside the tree stay out, and stderr names what was left out. Entries are sorted, stamped at source-date-epoch.sh's time, root:wheel with no
 #          Mac metadata where this tar can say so, and gzipped without a name or time, so one tree gives
-#          the same bytes every run. Exit 1 when STAGED_PKG_ROOT holds no tree for SHORT, 2 on a usage
+#          the same bytes every run. Exit 1 when STAGED_PKG_ROOT holds no tree for SHORT, an app's name
+#          is taken in the tree, or a bin/ link into /Applications does not resolve; 2 on a usage
 #          or naming error.
 # spec: tests/stage-standalone-test.sh
 set -eu
@@ -31,8 +34,33 @@ trap 'rm -rf "$work"' EXIT
 top="$P-$V"
 cp -pRP "$TREE" "$work/$top"
 rm -f "$work/$top/mavergreen.plist"
+: > "$work/apps"
+for app in "$ROOT"/Applications/*.app; do
+  [ -d "$app" ] && [ ! -L "$app" ] || continue
+  n="${app##*/}"
+  case "$n" in *-updater.app) continue ;; esac
+  [ ! -e "$work/$top/$n" ] && [ ! -L "$work/$top/$n" ] \
+    || { echo "stage_standalone: Applications/$n cannot sit at the top of $want: usr/local/mavergreen/$P/$n is already there" >&2; exit 1; }
+  cp -pRP "$app" "$work/$top/$n"
+  printf '%s\n' "$n" >> "$work/apps"
+done
+if [ -d "$work/$top/bin" ]; then
+  for l in "$work/$top"/bin/*; do
+    [ -L "$l" ] || continue
+    tg="$(readlink "$l")"
+    case "$tg" in /Applications/*.app/*|/Applications/*.app) ;; *) continue ;; esac
+    rest="${tg#/Applications/}"; n="${rest%%/*}"
+    if grep -qxF "$n" "$work/apps" && { [ -e "$work/$top/$rest" ] || [ -L "$work/$top/$rest" ]; }; then
+      rm -f "$l"; ln -s "../$rest" "$l"
+    else
+      echo "stage_standalone: bin/${l##*/} links to $tg, which no app staged in $ROOT/Applications holds" >&2; exit 1
+    fi
+  done
+fi
 find "$work/$top" \( -name '._*' -o -name .DS_Store \) -exec rm -rf {} + 2>/dev/null || :
-(cd "$ROOT" && find . \( -type f -o -type l \) ! -path "./usr/local/mavergreen/$P/*" | sed 's|^\./||' | LC_ALL=C sort) > "$work/left"
+(cd "$ROOT" && find . \( -type f -o -type l \) ! -path "./usr/local/mavergreen/$P/*" | sed 's|^\./||' | LC_ALL=C sort) \
+  | awk -v apps="$work/apps" 'BEGIN { while ((getline n < apps) > 0) a["Applications/" n "/"] = 1 }
+      { for (k in a) if (index($0, k) == 1) next; print }' > "$work/left"
 if [ -s "$work/left" ]; then
   echo "stage_standalone: left out of $want, as the pkg's alone:" >&2
   sed 's/^/  /' "$work/left" >&2

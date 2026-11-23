@@ -2159,8 +2159,9 @@ quiet without going red is not a check.
 **A release that publishes a product `.pkg` also publishes `<short>-<version>-macos-<arch>.tar.gz`**
 (`<arch>` is `universal`, `x86_64` or `arm64`, as the product ships): one top directory
 `<short>-<version>/` holding the product's tree exactly as the pkg installs it under
-`/usr/local/mavergreen/<short>/`, without the manifest, the updater, its LaunchAgent, anything else
-staged outside the tree, or the install scripts. Unpacked anywhere, it needs nothing else from
+`/usr/local/mavergreen/<short>/`, beside each app the pkg installs at `Applications/<Name>.app` (as
+`<short>-<version>/<Name>.app`, a `bin/` link into it made relative), without the manifest, the
+updater, its LaunchAgent, anything else staged outside the tree, or the install scripts. Unpacked anywhere, it needs nothing else from
 Mavergreen. Drydock shipped it first (0.6.3), and a user outside the family confirmed it works for them.
 
 - **One build, two forms.** `sh "$SHIPYARD_SCRIPTS/stage_standalone.sh" STAGED_PKG_ROOT SHORT VERSION

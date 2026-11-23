@@ -4,7 +4,9 @@
 #          scripts/stage_standalone.sh: from a staged pkg root carrying a product tree, its manifest, an
 #          updater and its LaunchAgent, the archive holds the product tree alone under <short>-<version>/,
 #          with its modes and links, every entry at SOURCE_DATE_EPOCH, the same bytes from two runs, and
-#          passes check-standalone-archive.sh.
+#          passes check-standalone-archive.sh; an app the root stages in Applications/ sits at the
+#          archive's top, an updater there stays out, and a bin/ link into /Applications/<Name>.app
+#          becomes relative, refused when it does not resolve.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/stage_standalone.sh"
@@ -87,5 +89,40 @@ gzip -dc "$w/one/w-1.0-macos-universal.tar.gz" | grep -a -q -E 'LIBARCHIVE\.xatt
   && fail "the archive stores extended attributes"
 
 sh "$C" "$w/one/w-1.0-macos-universal.tar.gz" > "$w/chk" 2>&1 || fail "check-standalone-archive refuses what stage_standalone made: $(cat "$w/chk")"
+
+R="$w/approot"; T="$R/usr/local/mavergreen/x"
+mkdir -p "$T/bin" "$R/Applications/X.app/Contents/MacOS" "$R/Applications/X.app/Contents/Resources"
+printf '#!/bin/sh\necho x 1.0\n' > "$R/Applications/X.app/Contents/MacOS/x"; chmod 755 "$R/Applications/X.app/Contents/MacOS/x"
+printf '<plist/>\n' > "$R/Applications/X.app/Contents/Info.plist"
+ln -s /Applications/X.app/Contents/MacOS/x "$T/bin/x"
+mkdir -p "$R/Applications/x-updater.app/Contents"; printf '<plist/>\n' > "$R/Applications/x-updater.app/Contents/Info.plist"
+printf '<plist/>\n' > "$T/mavergreen.plist"
+sh "$S" "$R" x 1.0 x86_64 "$w/one/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" \
+  || fail "staging a product with an app failed: $(cat "$w/err")"
+grep -q 'x-updater.app' "$w/err" || fail "an updater in Applications is left out: $(cat "$w/err")"
+grep -q 'Applications/X.app' "$w/err" && fail "the archived app is not named as left out: $(cat "$w/err")"
+tar -tzf "$w/one/x-1.0-macos-x86_64.tar.gz" | sed 's|/$||' > "$w/list"
+want='x-1.0
+x-1.0/X.app
+x-1.0/X.app/Contents
+x-1.0/X.app/Contents/Info.plist
+x-1.0/X.app/Contents/MacOS
+x-1.0/X.app/Contents/MacOS/x
+x-1.0/X.app/Contents/Resources
+x-1.0/bin
+x-1.0/bin/x'
+[ "$(cat "$w/list")" = "$want" ] || fail "the archive holds the tree and the app at its top: $(cat "$w/list")"
+rm -rf "$w/x"; mkdir "$w/x"; tar -xzf "$w/one/x-1.0-macos-x86_64.tar.gz" -C "$w/x"
+[ "$(ls -l "$w/x/x-1.0/bin/x" | sed 's/.* -> //')" = ../X.app/Contents/MacOS/x ] \
+  || fail "a bin/ link into /Applications/X.app becomes relative: $(ls -l "$w/x/x-1.0/bin/x")"
+[ "$("$w/x/x-1.0/bin/x")" = "x 1.0" ] || fail "the relinked tool runs from where it was unpacked"
+sh "$C" "$w/one/x-1.0-macos-x86_64.tar.gz" > "$w/chk" 2>&1 || fail "check-standalone-archive refuses the archive with an app: $(cat "$w/chk")"
+rm "$T/bin/x"; ln -s /Applications/Y.app/Contents/MacOS/y "$T/bin/x"
+rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "a bin/ link into an app the root does not stage: exit $rc, want 1: $(cat "$w/err")"
+grep -q 'bin/x' "$w/err" || fail "the unresolvable link is named: $(cat "$w/err")"
+rm "$T/bin/x"; ln -s /Applications/X.app/Contents/MacOS/gone "$T/bin/x"
+rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "a bin/ link to nothing in the app: exit $rc, want 1: $(cat "$w/err")"
 
 echo "PASS: stage-standalone"
