@@ -80,7 +80,8 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   with it, so never hand-roll a `gh release download` plus `installer`. On Linux each product lands at
   the same `/usr/local/mavergreen/SHORT` as its pkg, owned by the runner user and marked by the pkg's
   own `mavergreen.plist`: its release's `SHORT-TAG-linux-x86_64.tar.gz` when it has one, else its pkg's
-  host-neutral payload, and `sdk109`/`sdk113` from `fetch_sdk.sh`. Path parity is the point (Go build IDs hash absolute toolchain paths); revisit it
+  host-neutral payload, and `sdk109`/`sdk113` from `fetch_sdk.sh`; `fetch_clang22.sh` uses that same
+  clang22 prefix. Path parity is the point (Go build IDs hash absolute toolchain paths); revisit it
   when a Linux runner lacks sudo or a consumer needs two versions of one product side by side.
 
   On every runner it also makes **PyYAML** importable for the job's own `python3` (`pip --user`,
@@ -231,7 +232,7 @@ script does not.
 ## The compiler: clang22 on every host
 
 **Products build with clang22 on every host, and nothing a build needs comes from the Command Line
-Tools.** `fetch_clang22.sh` gives the host's clang22: the pinned Linux archive on Linux, `clang22-cross`
+Tools.** `fetch_clang22.sh` gives the host's clang22: the pinned Linux archive at `/usr/local/mavergreen/clang22` on Linux, `clang22-cross`
 on a modern Mac, the native `clang22` on 10.9. Its `clang.cfg` is part of the compiler: it places
 `librecaulk.a` at the tail of the inputs, before the driver's `-lSystem`, so a Recaulk fix to a 10.9
 function (posix_spawn; pselect in 20261107.1) reaches every product at its next build, with no

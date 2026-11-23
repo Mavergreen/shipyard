@@ -3,15 +3,21 @@
 #   usage: fetch_clang22.sh PIN_DIR
 #          Prints the root of the clang22 release PIN_DIR/version names, for this host: a prefix holding
 #          bin/clang, bin/ld64.lld and bin/llvm-{lipo,otool,nm,strings}. PIN_DIR is a product's
-#          components/clang22. On x86_64 Linux: that release's linux-x86_64 archive, through
-#          fetch_product_tar.sh, verified against the release's SHA256SUMS. On a Mac: the clang22-cross pkg
-#          (on Mac OS X 10.9, whose cross pkg does not run there, the native clang22 pkg), through fetch_product_pkg.sh and stevedore, verified
+#          components/clang22. On x86_64 Linux: the prefix /usr/local/mavergreen/clang22, where
+#          install@v1's `products: clang22@VERSION` puts it (CLANG22_INSTALLED replaces the path); when
+#          the mavergreen.plist there is not that release's, install-products.sh installs the release
+#          there from its linux-x86_64 archive, verified against its SHA256SUMS, keeping its downloads
+#          in MAVERGREEN_TAR_CACHE and MAVERGREEN_PKG_CACHE (default ~/.cache/mavergreen-clang22 for
+#          both, so a CI cache of that directory skips them). With MAVERGREEN_CLANG22_CACHE set, Linux
+#          instead unpacks the archive once into $MAVERGREEN_CLANG22_CACHE/VERSION/linux through
+#          fetch_product_tar.sh. On a Mac: the clang22-cross pkg (on Mac OS X 10.9, whose cross pkg does
+#          not run there, the native clang22 pkg), through fetch_product_pkg.sh and stevedore, verified
 #          against the release's SHA256SUMS; an installed /usr/local/mavergreen/clang22-cross (clang22 on
-#          10.9) at that release is used instead, and CLANG22_INSTALLED replaces that path. A fetch is
-#          unpacked once into $MAVERGREEN_CLANG22_CACHE (default ~/Library/Caches/mavergreen-clang22 on a
-#          Mac, ~/.cache/mavergreen-clang22 elsewhere)/VERSION and kept, so a CI cache of that directory
-#          skips the download. CLANG22_HOST (linux, mac or mac109) replaces the host's own answer. Exit 1
-#          on a failed fetch or an archive SHA256SUMS does not list, 2 on a usage error or a malformed pin.
+#          10.9) at that release is used instead, and CLANG22_INSTALLED replaces that path. A Mac fetch
+#          is unpacked once into ${MAVERGREEN_CLANG22_CACHE:-~/Library/Caches/mavergreen-clang22}/VERSION
+#          and kept, so a CI cache of that directory skips the download. CLANG22_HOST (linux, mac or
+#          mac109) replaces the host's own answer. Exit 1 on a failed fetch or install or an archive
+#          SHA256SUMS does not list, 2 on a usage error or a malformed pin.
 set -eu
 S="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "fetch_clang22: $*" >&2; exit 1; }
@@ -53,8 +59,24 @@ from_pkg() {
 case "$host" in
   linux)
     asset="clang22-$V-linux-x86_64.tar.gz"
-    d="$W/linux"
-    sh "$S/fetch_product_tar.sh" clang22 "$V" "$d" >/dev/null || die "could not fetch and verify $asset" ;;
+    inst="${CLANG22_INSTALLED:-/usr/local/mavergreen/clang22}"
+    if has_tools "$inst" && [ "$(manifest_version "$inst")" = "$V" ]; then
+      printf '%s\n' "$inst"; exit 0
+    fi
+    if [ -n "${MAVERGREEN_CLANG22_CACHE:-}" ]; then
+      d="$W/linux"
+      sh "$S/fetch_product_tar.sh" clang22 "$V" "$d" >/dev/null || die "could not fetch and verify $asset"
+    else
+      case "$inst" in
+        */usr/local/mavergreen/clang22) : ;;
+        *) die "$inst does not end in usr/local/mavergreen/clang22, so install-products.sh cannot install clang22 $V there" ;;
+      esac
+      root="${inst%/usr/local/mavergreen/clang22}"
+      INSTALL_PRODUCTS_HOST=linux MAVERGREEN_TAR_CACHE="${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-clang22}" \
+        MAVERGREEN_PKG_CACHE="${MAVERGREEN_PKG_CACHE:-$HOME/.cache/mavergreen-clang22}" \
+        sh "$S/install-products.sh" --root "${root:-/}" "clang22@$V" >&2 || die "could not install clang22 $V at $inst"
+      d=$inst
+    fi ;;
   mac109) from_pkg clang22 "mavericks-clang-22-native-$V.pkg" ;;
   mac) from_pkg clang22-cross "mavericks-clang-22-cross-$V.pkg" ;;
 esac

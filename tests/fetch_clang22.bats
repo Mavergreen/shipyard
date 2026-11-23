@@ -48,6 +48,44 @@ teardown() { rm -rf "$WORK"; }
   [ "$status" -ne 0 ]
   [ ! -d "$WORK/clang22/22.1.8-mavericks.99/linux" ] || false
 }
+tools_at() {
+  mkdir -p "$1/bin"
+  for t in clang ld64.lld llvm-lipo llvm-otool llvm-nm llvm-strings; do printf x > "$1/bin/$t"; chmod 755 "$1/bin/$t"; done
+  printf '<plist><dict>\n<key>version</key>\n<string>%s</string>\n</dict></plist>\n' "$2" > "$1/mavergreen.plist"
+}
+@test 'linux: a clang22 installed at the prefix at the pinned release is used, with no fetch' {
+  unset MAVERGREEN_CLANG22_CACHE
+  export CLANG22_INSTALLED="$WORK/root/usr/local/mavergreen/clang22"
+  tools_at "$CLANG22_INSTALLED" 22.1.8-mavericks.99
+  rm "$REL/SHA256SUMS"
+  out="$(CLANG22_HOST=linux sh "$HELPER" "$PIN")"
+  [ "$out" = "$CLANG22_INSTALLED" ] || { echo "$out"; return 1; }
+}
+@test 'linux: with no MAVERGREEN_CLANG22_CACHE, install-products.sh installs the release at the prefix, marked' {
+  unset MAVERGREEN_CLANG22_CACHE
+  export SOURCE_DATE_EPOCH=1700000000 SHIPYARD_FETCH_TRIES=1 SHIPYARD_FETCH_BACKOFF=0 SUDO= MAVERGREEN_PKG_CACHE="$WORK/pkgs"
+  export CLANG22_INSTALLED="$WORK/root/usr/local/mavergreen/clang22"
+  tools_at "$CLANG22_INSTALLED" 22.1.8-mavericks.98
+  SD="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")"
+  st="$WORK/stage/root"; mkdir -p "$st/usr/local/mavergreen/clang22"; echo pkg > "$st/usr/local/mavergreen/clang22/from-pkg"
+  sh "$BATS_TEST_DIRNAME/../scripts/render-manifest.sh" --stage "$st" --product clang22 --name clang22 --version 22.1.8-mavericks.99
+  sh "$BATS_TEST_DIRNAME/../scripts/build_component_pkg.sh" --root "$st" --identifier dev.mavergreen.clang.clang22 --version 1.0 \
+    --install-location / --out "$WORK/stage/comp.pkg" > /dev/null 2>&1
+  printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' '<installer-gui-script minSpecVersion="1">' \
+    '  <pkg-ref id="dev.mavergreen.clang.clang22" version="1.0">comp.pkg</pkg-ref>' \
+    '  <choices-outline><line choice="dev.mavergreen.clang.clang22"/></choices-outline>' \
+    '  <choice id="dev.mavergreen.clang.clang22"><pkg-ref id="dev.mavergreen.clang.clang22"/></choice>' \
+    '</installer-gui-script>' > "$WORK/stage/dist.xml"
+  PKG=mavericks-clang-22-native-22.1.8-mavericks.99.pkg
+  "$SD" product --distribution "$WORK/stage/dist.xml" --package "$WORK/stage/comp.pkg" --mtime 1700000000 --out "$REL/$PKG" > /dev/null
+  ( cd "$REL" && shasum -a 256 "$PKG" >> SHA256SUMS )
+  out="$(CLANG22_HOST=linux sh "$HELPER" "$PIN")"
+  [ "$out" = "$CLANG22_INSTALLED" ] || { echo "$out"; return 1; }
+  [ -x "$out/bin/ld64.lld" ] && [ "$(cat "$out/bin/clang")" = x ] && [ ! -e "$out/from-pkg" ]
+  [ "$("$SD" plist get "$out/mavergreen.plist" version)" = 22.1.8-mavericks.99 ]
+  [ "$("$SD" plist get "$out/mavergreen.plist" identifier)" = dev.mavergreen.clang.clang22 ]
+  [ ! -d "$WORK/clang22" ] || false
+}
 @test 'mac: an installed clang22-cross at the pinned release is used, with no fetch' {
   mkdir -p "$CLANG22_INSTALLED/bin"
   for t in clang ld64.lld llvm-lipo llvm-otool llvm-nm llvm-strings; do printf x > "$CLANG22_INSTALLED/bin/$t"; chmod 755 "$CLANG22_INSTALLED/bin/$t"; done
