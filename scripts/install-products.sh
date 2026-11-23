@@ -29,8 +29,11 @@
 #          the pkg's own mavergreen.plist marks it. An SDK product, sdk<NNN> for a pin in sdk-pins.sh,
 #          is provisioned `via fetch_sdk.sh --arch ARCH` instead of by its provider: the pinned SDK,
 #          with the SDKSettings.json longboat adds, lands in SHORT/SDKs/, marked as longboat's pkg
-#          marks it at the latest release of SHORT's repo. INSTALL_PRODUCTS_HOST (linux or mac)
-#          replaces the host's own answer from uname -s.
+#          marks it at the latest release of SHORT's repo. Installs into one prefix take turns through
+#          SHORT/.install-products.lock, created exclusively and holding the installer's pid (a lock
+#          whose process is gone is taken over; a live one is waited on up to SHIPYARD_LOCK_WAIT
+#          seconds, default 900), and one that finds the marker already at its version keeps the tree.
+#          INSTALL_PRODUCTS_HOST (linux or mac) replaces the host's own answer from uname -s.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavericks_fetch.sh"
@@ -69,8 +72,8 @@ fi
 case "$HOST" in linux|mac) : ;; *) echo "install-products: INSTALL_PRODUCTS_HOST is '$HOST', not linux or mac" >&2; exit 2 ;; esac
 STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || die "no stevedore to read the pkgs with"
 T="$(mktemp -d "${TMPDIR:-/tmp}/install-products.XXXXXX")"
-stg=""
-trap 'rm -rf "$T" ${stg:+"$stg"}' EXIT
+stg=""; lk=""
+trap 'rm -rf "$T" ${stg:+"$stg"} ${lk:+"$lk"}' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 mkdir "$T/pin" "$T/carry" "$T/m" "$T/w" "$T/pkg" "$T/tag"
@@ -264,22 +267,38 @@ prefix() {
   if [ ! -d "$P" ] || [ ! -w "$P" ]; then
     $SUDO mkdir -p "$P" && $SUDO chown "$(id -u):$(id -g)" "$P" || die "$1: cannot make $P, owned by $(id -un)"
   fi
+  _lf="$P/.install-products.lock"; _wt=0
+  until ( set -C; echo $$ > "$_lf" ) 2>/dev/null; do
+    _hp="$(cat "$_lf" 2>/dev/null || :)"
+    case "$_hp" in
+      ''|*[!0-9]*) : ;;
+      *) ps -p "$_hp" > /dev/null 2>&1 || { [ "$(cat "$_lf" 2>/dev/null || :)" != "$_hp" ] || rm -f "$_lf"; continue; } ;;
+    esac
+    [ "$_wt" -lt "${SHIPYARD_LOCK_WAIT:-900}" ] || die "$1: $_lf is still held${_hp:+ by process $_hp} after ${_wt}s"
+    sleep 1; _wt=$((_wt + 1))
+  done
+  lk=$_lf
+  if [ "$("$STEVEDORE" plist get "$P/mavergreen.plist" version 2>/dev/null || :)" = "$2" ]; then
+    echo "install-products: $1 $2 is already at $P" >&2
+    rm -f "$lk"; lk=""; return 1
+  fi
   stg="$(mktemp -d "$P/.install-products.XXXXXX")" || die "$1: cannot stage in $P"
 }
 commit() {
   [ -f "$stg/tree/mavergreen.plist" ] || die "$1: the staged tree has no mavergreen.plist"
   rm -f "$P/mavergreen.plist"
-  find "$P" -mindepth 1 -maxdepth 1 ! -name "${stg##*/}" -exec rm -rf {} + || die "$1: cannot clear $P"
+  find "$P" -mindepth 1 -maxdepth 1 ! -name '.install-products.*' -exec rm -rf {} + || die "$1: cannot clear $P"
   for _e in "$stg/tree"/* "$stg/tree"/.[!.]* "$stg/tree"/..?*; do
     [ -e "$_e" ] || [ -h "$_e" ] || continue
     [ "${_e##*/}" = mavergreen.plist ] || mv "$_e" "$P/" || die "$1: cannot move ${_e##*/} into $P"
   done
   mv "$stg/tree/mavergreen.plist" "$P/mavergreen.plist" || die "$1: cannot mark $P"
   rm -rf "$stg"; stg=""
+  rm -f "$lk"; lk=""
 }
 linux_install() {
   _tag="$(cat "$T/tag/$1")"; _pkg="$(cat "$T/pkg/$1")"; _tar="$1-$_tag-linux-x86_64.tar.gz"
-  prefix "$1"
+  prefix "$1" "$2" || return 0
   if listed "$T/m/$1@$_tag.sums" "$_tar"; then
     [ "$(uname -m)" = x86_64 ] || die "$1 $2: the release's Linux archive is $_tar, and this host is $(uname -m)"
     echo "install-products: installing $1 $2 from $_tar into $P" >&2
@@ -298,7 +317,7 @@ linux_sdk() {
   reg repo "$1"; _tag="$(shipyard_latest_tag "$_rv")" || die "$1: no latest release of Mavergreen/$_rv to version it by"
   case "$_sver" in 10.[0-9]|10.1[01]) _sn="Mac OS X $_sver SDK" ;; *) _sn="macOS $_sver SDK" ;; esac
   _sdk="$(MAVERICKS_SDK_SETTINGS_JSON='' sh "$SELF/fetch_sdk.sh" --arch "$_sa")" || die "$1: fetch_sdk.sh --arch $_sa failed"
-  prefix "$1"
+  prefix "$1" "$_tag" || return 0
   _st="$stg/root/usr/local/mavergreen/$1"
   mkdir -p "$_st/SDKs" && cp -RP "$_sdk" "$_st/SDKs/$_sdir" || die "$1: cannot copy $_sdk"
   if _js="$(shipyard_sdk_settings_json "$_sa")"; then

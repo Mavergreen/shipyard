@@ -358,4 +358,17 @@ run x@1
   || fail "linux_unextractable: no linux archive and a pkg fetch_product_pkg.sh cannot extract exits 1, naming both"
 noinstaller || fail "linux_unextractable: the installer never runs on Linux"
 
+fresh; release b 1; linux
+for k in 1 2 3; do ( sh "$S" --root "$w/root" b@1 > "$w/par.$k" 2>&1; echo $? > "$w/par.$k.rc" ) & done; wait
+for k in 1 2 3; do
+  [ "$(cat "$w/par.$k.rc")" = 0 ] || { out="$(cat "$w/par.$k")"; fail "linux_concurrent: every concurrent install of one product succeeds"; }
+done
+[ "$(cat "$(mg b)/file")" = b ] && [ "$(pget b version)" = 1 ] && [ -z "$(find "$(mg b)" -name '.*')" ] \
+  || fail "linux_concurrent: concurrent installs leave one whole, marked tree and nothing else"
+
+fresh; release b 1; linux; mkdir -p "$(mg b)"; echo 2147483646 > "$(mg b)/.install-products.lock"
+run b@1
+[ "$rc" -eq 0 ] && [ "$(pget b version)" = 1 ] && [ ! -e "$(mg b)/.install-products.lock" ] \
+  || fail "linux_stale_lock: a lock whose process is gone does not block the install"
+
 echo "PASS: install-products"
