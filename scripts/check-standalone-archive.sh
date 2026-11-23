@@ -1,26 +1,39 @@
 #!/bin/sh
 # platform: host-agnostic -- Mach-O is read with the pinned clang22's llvm tools; --run starts programs only on a Mac of the archive's arch
-#   usage: check-standalone-archive.sh [--run] ARCHIVE
+#   usage: check-standalone-archive.sh [--run] [--plist PLIST] ARCHIVE
 #          Judges a standalone archive, SHORT-VERSION-macos-ARCH.tar.gz (ARCH universal, x86_64 or
 #          arm64; SHORT runs to the first hyphen before a digit). Findings, each on its own line:
 #          an entry outside the one top directory SHORT-VERSION/; the pkg's manifest
 #          (mavergreen.plist), an updater (*-updater.app), a launchd job, or pkg install scripts or
 #          metadata at the top; an AppleDouble entry; a symlink into /usr/local/mavergreen; a script
-#          (#!) naming /usr/local/mavergreen; a Mach-O whose loads, rpaths or install name are not
-#          under /usr/lib, /System, @rpath, @loader_path or @executable_path. Mach-O is read by
+#          (#!) or other text file naming /usr/local/mavergreen; a Mach-O whose loads, rpaths or
+#          install name are not under /usr/lib, /System, @rpath, @loader_path or @executable_path,
+#          whatever --plist declares. --plist PLIST is the product's staged mavergreen.plist: a script
+#          or text file may then name /usr/local/mavergreen/S where S, a whole path component, is in
+#          its requires (SHORT or SHORT>=FLOOR, read by scripts/lib/requires.sh with fetch_stevedore.sh's
+#          stevedore); naming the archive's own SHORT is a self-reference, and any other S an
+#          undeclared dependency. A Mach-O or other binary file holding the string is a warning on
+#          stdout, never a finding. Mach-O is read by
 #          scripts/lib/mach-interface.sh; with no OTOOL, LIPO or NM set and no installed clang22, the
 #          pinned one comes from fetch_clang22.sh. --run, on a Mac that runs ARCH natively, unpacks
 #          under a directory with a space and starts every bin/ entry with --version, finding any that
 #          dyld cannot start; elsewhere it says it did not run them.
-#          Exit 0 with no findings, 1 with any, 2 on a usage or naming error or a reader that cannot
-#          read a Mach-O.
+#          Exit 0 with no findings, 1 with any, 2 on a usage or naming error, a PLIST that cannot be
+#          read, or a reader that cannot read a Mach-O.
 # spec: tests/check-standalone-archive-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-usage='usage: check-standalone-archive.sh [--run] ARCHIVE'
-run=no
-if [ "${1:-}" = --run ]; then run=yes; shift; fi
+usage='usage: check-standalone-archive.sh [--run] [--plist PLIST] ARCHIVE'
+run=no; plist=""
+while [ $# -gt 1 ]; do
+  case "$1" in
+    --run) run=yes; shift ;;
+    --plist) [ -n "${2:-}" ] || { echo "$usage" >&2; exit 2; }; plist="$2"; shift 2 ;;
+    *) break ;;
+  esac
+done
 [ $# -eq 1 ] || { echo "$usage" >&2; exit 2; }
+case "$1" in -*) echo "$usage" >&2; exit 2 ;; esac
 archive="$1"
 [ -f "$archive" ] || { echo "check-standalone-archive: no archive at $archive" >&2; exit 2; }
 b="${archive##*/}"
@@ -40,8 +53,19 @@ case "$short" in ''|-*|*[!a-z0-9-]*) short="" ;; esac
 t="$(mktemp -d "${TMPDIR:-/tmp}/check-standalone.XXXXXX")"
 trap 'chmod -R u+w "$t" 2>/dev/null; rm -rf "$t"' EXIT
 : > "$t/findings"
+: > "$t/warnings"
+reqs=""
+if [ -n "$plist" ]; then
+  [ -f "$plist" ] || { echo "check-standalone-archive: no mavergreen.plist at $plist" >&2; exit 2; }
+  . "$SELF/lib/requires.sh"
+  STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || { echo "check-standalone-archive: no stevedore to read $plist with" >&2; exit 2; }
+  mavergreen_requires "$STEVEDORE" "$plist" "$t/err" > "$t/requires" \
+    || { echo "check-standalone-archive: $short$(cat "$t/err")" >&2; exit 2; }
+  reqs="$(sed 's/>=.*//' "$t/requires" | tr '\n' ' ' | sed 's/ $//')"
+fi
 finding() { printf '%s\n' "$*" >> "$t/findings"; }
 report() {
+  sed "s|^|check-standalone-archive: $b: |" "$t/warnings"
   nf="$(wc -l < "$t/findings" | tr -d ' ')"
   if [ "$nf" -gt 0 ]; then
     head -50 "$t/findings" | sed "s|^|check-standalone-archive: $b: |" >&2
@@ -87,18 +111,56 @@ else
   : > "$t/files"
 fi
 
+mg_strings() {  # $1 = path within the archive
+  LC_ALL=C grep -q -F '/usr/local/mavergreen' "$X/$1" 2>/dev/null || return 0
+  _hit="$(LC_ALL=C tr -c '[:print:]' '\n' < "$X/$1" | grep -F '/usr/local/mavergreen' | head -1 | cut -c1-120)" || _hit=""
+  [ -z "$_hit" ] || printf 'warning: %s holds the string %s\n' "$1" "$_hit" >> "$t/warnings"
+}
 . "$SELF/lib/mach-nm.sh"
 . "$SELF/lib/mach-interface.sh"
 : > "$t/machos"
 while IFS= read -r f; do
   r="${f#./}"
   case "$(shipyard_mach_kind "$X/$r")" in
-    thin|fat) printf '%s\n' "$r" >> "$t/machos"; continue ;;
-    archive) continue ;;
+    thin|fat) printf '%s\n' "$r" >> "$t/machos"; mg_strings "$r"; continue ;;
+    archive) mg_strings "$r"; continue ;;
   esac
-  [ "$(dd if="$X/$r" bs=2 count=1 2>/dev/null)" = '#!' ] || continue
-  hit="$(grep -n '/usr/local/mavergreen' "$X/$r" 2>/dev/null | head -1)" || hit=""
-  [ -z "$hit" ] || finding "$r is a script naming /usr/local/mavergreen, which only the pkg installs (line ${hit%%:*}: $(printf '%s' "${hit#*:}" | cut -c1-120))"
+  LC_ALL=C grep -q -F '/usr/local/mavergreen' "$X/$r" 2>/dev/null || continue
+  if [ "$(dd if="$X/$r" bs=2 count=1 2>/dev/null)" = '#!' ]; then
+    kind=script
+  elif LC_ALL=C tr -d '\000' < "$X/$r" | cmp -s - "$X/$r"; then
+    kind=text
+  else
+    mg_strings "$r"; continue
+  fi
+  LC_ALL=C grep -n -F '/usr/local/mavergreen' "$X/$r" 2>/dev/null \
+    | awk -v r="$r" -v kind="$kind" -v short="$short" -v reqs="$reqs" -v plist="$plist" '
+      {
+        n = index($0, ":"); ln = substr($0, 1, n - 1); s = substr($0, n + 1)
+        if (plist == "") {
+          if (!done) {
+            done = 1
+            if (kind == "script") print r " is a script naming /usr/local/mavergreen, which only the pkg installs (line " ln ": " substr(s, 1, 120) ")"
+            else print r " names /usr/local/mavergreen, which only the pkg installs (line " ln ": " substr(s, 1, 120) ")"
+          }
+          next
+        }
+        rest = s
+        while ((i = index(rest, "/usr/local/mavergreen")) > 0) {
+          rest = substr(rest, i + 21); c = substr(rest, 1, 1)
+          if (c ~ /[A-Za-z0-9._+-]/) continue
+          S = ""
+          if (c == "/") { match(substr(rest, 2), /^[A-Za-z0-9._+-]*/); S = substr(rest, 2, RLENGTH) }
+          if (S != "" && index(" " reqs " ", " " S " ") > 0) continue
+          k = (S == short) ? "self" : "undeclared"
+          if ((k SUBSEP S) in seen) continue
+          seen[k SUBSEP S] = 1
+          where = "line " ln ": " substr(s, 1, 120)
+          if (k == "self") print r " names /usr/local/mavergreen/" S ", the product'"'"'s own prefix: a self-reference (relocation bug) (" where ")"
+          else if (S == "") print r " names /usr/local/mavergreen itself: an undeclared dependency (" where ")"
+          else print r " names /usr/local/mavergreen/" S ": an undeclared dependency; add " S " to the requires or drop the path (" where ")"
+        }
+      }' >> "$t/findings"
 done < "$t/files"
 
 nmacho="$(wc -l < "$t/machos" | tr -d ' ')"
@@ -163,4 +225,4 @@ if [ "$run" = yes ]; then
 fi
 
 report
-echo "check-standalone-archive: ok — $b: $short $ver ($arch), $entries entries, $nmacho Mach-O files read$ran"
+echo "check-standalone-archive: ok — $b: $short $ver ($arch), $entries entries, $nmacho Mach-O files read$ran${reqs:+, requires $reqs}"

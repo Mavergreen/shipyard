@@ -2,9 +2,11 @@
 # platform: host-agnostic
 #   usage: check-standalone-archive-test.sh
 #          scripts/check-standalone-archive.sh: naming, the one top directory, what the package alone
-#          carries, scripts and links naming /usr/local/mavergreen, then Mach-O fixtures built at test
+#          carries, scripts, text files and links naming /usr/local/mavergreen, --plist's declared requires
+#          against the product's own prefix and undeclared ones, then Mach-O fixtures built at test
 #          time with the pinned clang22 and 10.9 SDK: system, @rpath and @loader_path loads pass, an
-#          absolute load, rpath or install name outside the system fails, and --run, where this host
+#          absolute load, rpath or install name outside the system fails (a declared require's too), a
+#          string naming the prefix is a warning, and --run, where this host
 #          runs x86_64 natively, starts each bin/ entry from a relocated copy. Without clang22: SKIP, exit 77.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -65,8 +67,58 @@ fails "a symlink into /usr/local/mavergreen" "bin/link"
 fresh w-1.0; ln -s tool "$w/t/w-1.0/bin/link"; ln -s /usr/bin/true "$w/t/w-1.0/bin/sys"; mk w-1.0-macos-x86_64.tar.gz
 passes "a relative symlink, and one to the system"
 fresh w-1.0; printf 'prefix=/usr/local/mavergreen/w\n' > "$w/t/w-1.0/share/doc/w.pc"; mk w-1.0-macos-x86_64.tar.gz
-passes "a data file naming the prefix is not a script"
+fails "a text file naming /usr/local/mavergreen" "share/doc/w.pc names /usr/local/mavergreen"
+fresh w-1.0; printf 'a\0/usr/local/mavergreen/w/lib\0b' > "$w/t/w-1.0/share/doc/blob.bin"; mk w-1.0-macos-x86_64.tar.gz
+passes "a binary file holding the string"
+grep -q 'warning: share/doc/blob.bin holds the string /usr/local/mavergreen/w/lib' "$w/out" || fail "a binary file's string is a warning: $(cat "$w/out")"
 echo "ok: naming, the top directory, the package's pieces, scripts and links"
+
+plist() {  # $1 = file, then each require
+  _f="$1"; shift
+  { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>product</key>\n  <string>go126</string>\n'
+    if [ $# -gt 0 ]; then
+      printf '  <key>requires</key>\n  <array>\n'
+      for _r in "$@"; do printf '    <string>%s</string>\n' "$(printf '%s' "$_r" | sed 's/>/\&gt;/g')"; done
+      printf '  </array>\n'
+    fi
+    printf '</dict>\n</plist>\n'; } > "$_f"
+}
+P="$w/mavergreen.plist"
+plist "$P" clang22 'sdk109>=1.0'
+with() {  # $1 = expected exit, $2 = label, $3 = phrase (or -)
+  rc=0; sh "$C" --plist "$P" "$A" > "$w/out" 2>&1 || rc=$?
+  [ "$rc" -eq "$1" ] || fail "$2: --plist: exit $rc, want $1: $(cat "$w/out")"
+  [ "$3" = - ] || grep -q -- "$3" "$w/out" || fail "$2: --plist: should say '$3': $(cat "$w/out")"
+}
+go() {  # $1 = the extra path the wrapper names (or -)
+  fresh go126-1.26.5; G="$w/t/go126-1.26.5"
+  { printf '#!/bin/sh\nCC=/usr/local/mavergreen/clang22/bin/clang\n'
+    printf 'SDKROOT=/usr/local/mavergreen/sdk109/SDKs/MacOSX10.9.sdk\n'
+    [ "$1" = - ] || printf 'X=%s\n' "$1"
+    printf 'exec "$(dirname "$0")/../libexec/go" "$@"\n'; } > "$G/bin/tool"
+}
+go -; mk go126-1.26.5-macos-x86_64.tar.gz
+with 0 "a wrapper naming its declared requires" "requires clang22 sdk109"
+fails "a wrapper naming requires, without --plist" "bin/tool is a script naming /usr/local/mavergreen"
+go /usr/local/mavergreen/go126/lib/x; mk go126-1.26.5-macos-x86_64.tar.gz
+with 1 "a wrapper naming its own prefix" "bin/tool names /usr/local/mavergreen/go126.*self-reference (relocation bug)"
+go /usr/local/mavergreen/zig/bin/zig; mk go126-1.26.5-macos-x86_64.tar.gz
+with 1 "a wrapper naming an undeclared product" "bin/tool names /usr/local/mavergreen/zig.*undeclared dependency"
+grep -q 'clang22' "$w/out" && fail "a declared require is no finding: $(cat "$w/out")"
+go /usr/local/mavergreen/clang22x/bin/cc; mk go126-1.26.5-macos-x86_64.tar.gz
+with 1 "a path component that only begins with a require" "/usr/local/mavergreen/clang22x.*undeclared dependency"
+go -; printf 'CC=/usr/local/mavergreen/clang22/bin/clang\nGOROOT_FINAL=/opt/go\n' > "$G/go.env"; mk go126-1.26.5-macos-x86_64.tar.gz
+with 0 "a text go.env naming a require" -
+fails "a text go.env naming a require, without --plist" "go.env names /usr/local/mavergreen"
+go -; printf 'GOROOT=/usr/local/mavergreen/go126\n' > "$G/go.env"; mk go126-1.26.5-macos-x86_64.tar.gz
+with 1 "a text go.env naming its own prefix" "go.env names /usr/local/mavergreen/go126.*self-reference"
+go -; printf 'GOROOT=/usr/local/mavergreen/go126\n' > "$G/go.env"; mk go126-1.26.5-macos-x86_64.tar.gz
+plist "$P"; with 1 "a manifest with no requires" "bin/tool names /usr/local/mavergreen/clang22.*undeclared dependency"
+printf 'not a plist\n' > "$P"; with 2 "a manifest stevedore cannot read" -
+rc=0; sh "$C" --plist "$w/none.plist" "$A" > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "a missing manifest: exit $rc, want 2"
+rc=0; sh "$C" --plist > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "--plist with no path: exit $rc, want 2"
+plist "$P" clang22 'sdk109>=1.0'
+echo "ok: --plist: scripts and text files may name declared requires, never the product itself"
 
 CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/../components/clang22" 2>/dev/null)" || { echo "SKIP: no clang22"; exit 77; }
 SDK="$(sh "$here/../scripts/fetch_sdk.sh" 2>/dev/null)" || fail "no pinned 10.9 SDK"
@@ -93,6 +145,15 @@ macho @rpath/libx.dylib /usr/local/mavergreen/w/lib; mk w-1.0-macos-x86_64.tar.g
 fails "an absolute rpath into /usr/local/mavergreen" "rpath /usr/local/mavergreen/w/lib"
 macho /opt/w/lib/libx.dylib -; mk w-1.0-macos-x86_64.tar.gz
 fails "an absolute non-system load" "loads /opt/w/lib/libx.dylib"
+macho /usr/local/mavergreen/clang22/lib/libx.dylib -; mk w-1.0-macos-x86_64.tar.gz
+plist "$P" clang22
+with 1 "a Mach-O loading from a declared require" "bin/tool .*loads /usr/local/mavergreen/clang22/lib/libx.dylib"
+macho @rpath/libx.dylib @loader_path/../lib
+printf 'const char *p = "/usr/local/mavergreen/w/share";\nint main(void) { return p[0] == 0; }\n' > "$w/str.c"
+cc "$w/str.c" -o "$w/t/w-1.0/bin/str" || fail "cc could not build the tool holding a string"
+mk w-1.0-macos-x86_64.tar.gz
+passes "a Mach-O holding the string"
+grep -q 'warning: bin/str holds the string /usr/local/mavergreen/w/share' "$w/out" || fail "a Mach-O's string is a warning: $(cat "$w/out")"
 echo "ok: Mach-O loads, rpaths and install names"
 
 can_run=no

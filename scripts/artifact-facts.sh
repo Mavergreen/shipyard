@@ -6,7 +6,8 @@
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
 #          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each, and a
-#          `standalone` fact per <short>-<version>-macos-<arch>.tar.gz, from check-standalone-archive.sh.
+#          `standalone` fact per <short>-<version>-macos-<arch>.tar.gz, from check-standalone-archive.sh
+#          given --plist with the mavergreen.plist that SHORT's pkg in the dist installs.
 # platform: runs at PACKAGE TIME, on any host that has the artifacts; stevedore reads the pkgs and plists.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
@@ -48,6 +49,9 @@ enc() { sed -e 's/%/%25/g' -e 's/ /%20/g'; }
 #       "cafebabe" (and its 64-bit-offset twin "cafebabf") is also a Java class file's magic and
 #       "!<arch>" any ar archive's, so those are Mach-O only if lipo can read them.
 cxxabi_tmp=""
+sa_tmp="$(mktemp -d "${TMPDIR:-/tmp}/standalone-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+trap 'rm -rf "$sa_tmp" ${cxxabi_tmp:+"$cxxabi_tmp"}' EXIT
+: > "$sa_tmp/archives"
 cxxabi_allowlist() {  # the allow-list, fetched at most once per run, into $cxxabi_tmp/allow as "<name> <visible|hidden>". Non-zero, the reason in _mf_why, when unavailable.
   [ ! -f "$cxxabi_tmp/allow" ] || return 0
   _al="$(sh "$SELF/cxxabi-allowlist.sh" 2>"$cxxabi_tmp/err")" || {
@@ -58,7 +62,7 @@ cxxabi_allowlist() {  # the allow-list, fetched at most once per run, into $cxxa
 cxxabi_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded). Non-zero, the reason in _mf_why, on abort.
   if [ -z "$cxxabi_tmp" ]; then
     cxxabi_tmp="$(mktemp -d "${TMPDIR:-/tmp}/cxxabi-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-    trap 'rm -rf "$cxxabi_tmp"' EXIT
+    trap 'rm -rf "$sa_tmp" ${cxxabi_tmp:+"$cxxabi_tmp"}' EXIT
   fi
   command -v "$NM" >/dev/null 2>&1 \
     || { _mf_why="NM: $NM not found; set NM to a Mach-O nm such as clang22's llvm-nm"; return 1; }
@@ -162,6 +166,7 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
     for _mf in "$_root"/usr/local/mavergreen/*/mavergreen.plist; do
       [ -f "$_mf" ] || continue
       _dir="$(basename "$(dirname "$_mf")" | enc)"
+      cp "$_mf" "$sa_tmp/$(basename "$(dirname "$_mf")").plist" || { _pf_why="cannot keep $_mf"; return 1; }
       _mp="$("$STEVEDORE" plist get "$_mf" product 2>/dev/null)" || _mp=""
       _mi="$("$STEVEDORE" plist get "$_mf" identifier 2>/dev/null)" || _mi=""
       _reg=""; _repo=""; _dv=""
@@ -265,13 +270,7 @@ for f in "$dist"/*; do
       ;;
     *.tar.gz|*.tgz|*.tar.xz|*.tar.bz2)
       case "$b" in
-        *-macos-universal.tar.gz|*-macos-x86_64.tar.gz|*-macos-arm64.tar.gz)
-          _sa_rc=0; _sa_out="$(sh "$SELF/check-standalone-archive.sh" "$f" 2>&1)" || _sa_rc=$?
-          case "$_sa_rc" in
-            0) printf 'standalone %s ok\n' "$b" ;;
-            1) printf 'standalone %s fail %s\n' "$b" "$(printf '%s\n' "$_sa_out" | sed -n "s|^check-standalone-archive: $b: ||p" | head -1 | enc)" ;;
-            *) abort "check-standalone-archive.sh cannot judge $b: $(printf '%s\n' "$_sa_out" | tail -1)" ;;
-          esac ;;
+        *-macos-universal.tar.gz|*-macos-x86_64.tar.gz|*-macos-arm64.tar.gz) printf '%s\n' "$f" >> "$sa_tmp/archives" ;;
       esac
       x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
       tar -xf "$f" -C "$x" 2>/dev/null || { rm -rf "$x"; abort "cannot extract $b"; }
@@ -331,5 +330,19 @@ for f in "$dist"/*; do
       ;;
   esac
 done
+
+# spec: tests/artifact-conformance-standalone-test.sh -- judged after every pkg is read, so the
+#       product's own mavergreen.plist, from the pkg's payload, declares the requires its scripts may name.
+while IFS= read -r f; do
+  b="${f##*/}"
+  _sa_short="$(printf '%s\n' "$b" | sed 's/-[0-9].*//')"
+  if [ -f "$sa_tmp/$_sa_short.plist" ]; then set -- --plist "$sa_tmp/$_sa_short.plist"; else set --; fi
+  _sa_rc=0; _sa_out="$(sh "$SELF/check-standalone-archive.sh" "$@" "$f" 2>&1 < /dev/null)" || _sa_rc=$?
+  case "$_sa_rc" in
+    0) printf 'standalone %s ok\n' "$b" ;;
+    1) printf 'standalone %s fail %s\n' "$b" "$(printf '%s\n' "$_sa_out" | sed -n "/^check-standalone-archive: $b: warning: /d; s|^check-standalone-archive: $b: ||p" | head -1 | enc)" ;;
+    *) abort "check-standalone-archive.sh cannot judge $b: $(printf '%s\n' "$_sa_out" | tail -1)" ;;
+  esac
+done < "$sa_tmp/archives"
 
 printf 'end-of-facts\n'

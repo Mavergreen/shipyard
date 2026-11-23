@@ -2168,12 +2168,17 @@ Mavergreen. Drydock shipped it first (0.6.3), and a user outside the family conf
   macOS. Entries are sorted, stamped at `source-date-epoch.sh`'s time, root:wheel where the tar can say
   so (10.9's bsdtar 2.8 cannot, and it says so), and gzipped without a name or time: the bytes repeat.
 - **Judged by `check-standalone-archive.sh`**: the one top directory; no manifest, updater, launchd job,
-  pkg scripts or AppleDouble entry; no symlink or `#!` script naming `/usr/local/mavergreen`; every
+  pkg scripts or AppleDouble entry; no symlink, `#!` script or text file naming `/usr/local/mavergreen`; every
   Mach-O's loads, rpaths and install name under `/usr/lib`, `/System`, `@rpath`, `@loader_path` or
   `@executable_path`. `--run`, on a Mac that runs the arch natively, starts each `bin/` entry with
   `--version` from a relocated copy. `artifact-facts.sh` runs it on every `*-macos-<arch>.tar.gz` in
   the dist (a `standalone` fact); conformance fails a refused archive, and a product pkg with no
   archive beside it (check `no-standalone`). The publish step's `SHA256SUMS` lists every asset.
+- **Standalone means no install of the product itself; its requires stay dependencies.** Given the
+  pkg's `mavergreen.plist` (`--plist`, which `artifact-facts.sh` passes), scripts and text files may
+  name `/usr/local/mavergreen/<require>`; naming the product's own prefix never passes (a relocation
+  bug), nor does a Mach-O load, rpath or install name into any Mavergreen prefix. The release notes
+  name the products the archive requires.
 - **A single static binary where the product allows it**, which a user can drop into `/usr/local/bin`
   or anywhere; otherwise the directory is the unit.
 - **The release notes say the archive has "no updater, no installer".**

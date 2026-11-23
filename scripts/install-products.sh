@@ -40,6 +40,7 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavericks_fetch.sh"
 . "$SELF/lib/vercmp.sh"
+. "$SELF/lib/requires.sh"
 . "$SELF/sdk-pins.sh"
 usage() { echo "usage: install-products.sh [--root DIR] [--dry-run] SHORT@TAG..." >&2; exit 2; }
 die() { echo "install-products: $*" >&2; exit 1; }
@@ -240,20 +241,14 @@ resolve() {
       || die "$s>=$fl${by:+ (required by $by)} cannot be met: the latest release of Mavergreen/$repo is $tag, version $v"
     act=install
   fi
-  i=0
-  while [ -n "$src" ]; do
-    _rc=0; r="$("$STEVEDORE" plist get "$src" "requires:$i" 2> "$T/err")" || _rc=$?
-    if [ "$_rc" -eq 1 ] && grep -q 'no such entry' "$T/err"; then
-      [ "$i" -gt 0 ] || { _rc=0; "$STEVEDORE" plist get "$src" requires > /dev/null 2>&1 || _rc=$?; }
-      case "$_rc" in 1|3) break ;; *) die "$s: the requires in $src is not an array of strings" ;; esac
-    fi
-    [ "$_rc" -eq 0 ] || die "$s: cannot read requires:$i of $src: $(cat "$T/err")"
-    rn="${r%%>=*}"; rf=""
-    case "$r" in *'>='*) rf="${r#*>=}" ;; esac
-    case "$rn" in ''|-*|*[!a-z0-9-]*) die "$s requires '$r', which names no product" ;; esac
-    ( resolve "$rn" "$rf" "$stack $s" ) || exit $?
-    i=$((i + 1))
-  done
+  if [ -n "$src" ]; then
+    mavergreen_requires "$STEVEDORE" "$src" "$T/err" > "$T/req.$s" || die "$s$(cat "$T/err")"
+    while IFS= read -r r <&3; do
+      rn="${r%%>=*}"; rf=""
+      case "$r" in *'>='*) rf="${r#*>=}" ;; esac
+      ( resolve "$rn" "$rf" "$stack $s" ) 3<&- || exit $?
+    done 3< "$T/req.$s"
+  fi
   printf '%s\n' "$v" > "$T/done/$s"
   case "$act" in
     provision) printf 'provision %s via %s\n' "$s" "$prov" ;;
