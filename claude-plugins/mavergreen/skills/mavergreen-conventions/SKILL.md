@@ -81,8 +81,13 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   the same `/usr/local/mavergreen/SHORT` as its pkg, owned by the runner user and marked by the pkg's
   own `mavergreen.plist`: its release's `SHORT-TAG-linux-x86_64.tar.gz` when it has one, else its pkg's
   host-neutral payload, and `sdk109`/`sdk113` from `fetch_sdk.sh`; `fetch_clang22.sh` uses that same
-  clang22 prefix. Path parity is the point (Go build IDs hash absolute toolchain paths); revisit it
-  when a Linux runner lacks sudo or a consumer needs two versions of one product side by side. A Linux
+  clang22 prefix. Path parity is the point (Go build IDs hash absolute toolchain paths). A prefix holds
+  **one version**, and nothing swaps the version a caller already resolved: `install-products.sh`
+  stages a replacement beside the prefix and renames it in whole, and `fetch_clang22.sh` never
+  replaces a prefix that holds another release, putting its pin in the per-user cache beside it (one
+  job can need two: a product's own clang22 pin and shipyard's `objc-receipt-clang`), saying so on
+  stderr, without path parity for that one. Revisit when a Linux runner lacks sudo, or when a build
+  that needs path parity is handed the side-by-side copy. A Linux
   host with no root, no working `sudo -n` and no writable `/usr/local/mavergreen` (a container run as
   a bare uid) has `fetch_clang22.sh` fall back to its per-user cache, saying so on stderr: that trigger
   firing in a container, not on a runner, so it is not yet the revisit.

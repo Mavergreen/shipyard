@@ -5,15 +5,16 @@
 #          bin/clang, bin/ld64.lld and bin/llvm-{lipo,otool,nm,strings}. PIN_DIR is a product's
 #          components/clang22. On x86_64 Linux: the prefix /usr/local/mavergreen/clang22, where
 #          install@v1's `products: clang22@VERSION` puts it (CLANG22_INSTALLED replaces the path); when
-#          the mavergreen.plist there is not that release's, install-products.sh installs the release
-#          there from its linux-x86_64 archive, verified against its SHA256SUMS, keeping its downloads
+#          the prefix holds no mavergreen.plist, install-products.sh installs the release there from its
+#          linux-x86_64 archive, verified against its SHA256SUMS, keeping its downloads
 #          in MAVERGREEN_TAR_CACHE and MAVERGREEN_PKG_CACHE (default ~/.cache/mavergreen-clang22 for
 #          both, so a CI cache of that directory skips them). With MAVERGREEN_CLANG22_CACHE set, or
 #          when this user is not root, has no working `sudo -n` and cannot write /usr/local/mavergreen,
 #          Linux instead unpacks the archive once into
 #          ${MAVERGREEN_CLANG22_CACHE:-~/.cache/mavergreen-clang22}/VERSION/linux through
 #          fetch_product_tar.sh, saying on stderr in the second case that path parity is not in
-#          effect. When install-products.sh cannot install the release at the prefix, for any reason,
+#          effect. A prefix whose mavergreen.plist names another release is never replaced: the release
+#          goes to that same per-user cache, beside it, saying so on stderr in one line naming both. When install-products.sh cannot install the release at the prefix, for any reason,
 #          Linux falls back to that same per-user cache, saying on stderr in one line why, so the archive
 #          alone remains clang22 on Linux. On a Mac: the clang22-cross pkg (on Mac OS X 10.9, whose cross pkg does
 #          not run there, the native clang22 pkg), through fetch_product_pkg.sh and stevedore, verified
@@ -75,8 +76,13 @@ case "$host" in
   linux)
     asset="clang22-$V-linux-x86_64.tar.gz"
     inst="${CLANG22_INSTALLED:-/usr/local/mavergreen/clang22}"
-    if has_tools "$inst" && [ "$(manifest_version "$inst")" = "$V" ]; then
+    have="$(manifest_version "$inst" || :)"
+    if has_tools "$inst" && [ "$have" = "$V" ]; then
       printf '%s\n' "$inst"; exit 0
+    fi
+    if [ -n "$have" ] && [ "$have" != "$V" ] && [ -z "${MAVERGREEN_CLANG22_CACHE:-}" ]; then
+      echo "fetch_clang22: $inst holds clang22 $have, not $V, and is left alone, so clang22 $V goes beside it to $W/linux" >&2
+      MAVERGREEN_CLANG22_CACHE="${W%/*}"
     fi
     case "$inst" in
       */usr/local/mavergreen/clang22) : ;;

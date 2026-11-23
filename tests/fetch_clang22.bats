@@ -80,7 +80,6 @@ clang22_pkg() {
   unset MAVERGREEN_CLANG22_CACHE
   export SOURCE_DATE_EPOCH=1700000000 SHIPYARD_FETCH_TRIES=1 SHIPYARD_FETCH_BACKOFF=0 SUDO= MAVERGREEN_PKG_CACHE="$WORK/pkgs"
   export CLANG22_INSTALLED="$WORK/root/usr/local/mavergreen/clang22"
-  tools_at "$CLANG22_INSTALLED" 22.1.8-mavericks.98
   clang22_pkg
   out="$(CLANG22_HOST=linux sh "$HELPER" "$PIN")"
   [ "$out" = "$CLANG22_INSTALLED" ] || { echo "$out"; return 1; }
@@ -89,6 +88,30 @@ clang22_pkg() {
   [ "$("$SD" plist get "$out/mavergreen.plist" version)" = 22.1.8-mavericks.99 ]
   [ "$("$SD" plist get "$out/mavergreen.plist" identifier)" = dev.mavergreen.clang.clang22 ]
   [ ! -d "$WORK/clang22" ] || false
+}
+@test 'linux: a prefix holding another release is left alone, and the pinned one goes beside it, saying so once' {
+  unset MAVERGREEN_CLANG22_CACHE
+  export SOURCE_DATE_EPOCH=1700000000 SHIPYARD_FETCH_TRIES=1 SHIPYARD_FETCH_BACKOFF=0 SUDO= MAVERGREEN_PKG_CACHE="$WORK/pkgs"
+  export HOME="$WORK/home" CLANG22_INSTALLED="$WORK/root/usr/local/mavergreen/clang22"
+  mkdir -p "$HOME"
+  tools_at "$CLANG22_INSTALLED" 22.1.8-mavericks.25
+  printf old > "$CLANG22_INSTALLED/bin/clang"
+  clang22_pkg
+  out="$(CLANG22_HOST=linux sh "$HELPER" "$PIN" 2> "$WORK/err")" || { cat "$WORK/err"; return 1; }
+  [ "$out" = "$HOME/.cache/mavergreen-clang22/22.1.8-mavericks.99/linux" ] || { echo "$out"; return 1; }
+  [ -x "$out/bin/ld64.lld" ] && [ "$(cat "$out/bin/clang")" = x ]
+  [ "$(cat "$CLANG22_INSTALLED/bin/clang")" = old ] || false
+  grep -q '<string>22.1.8-mavericks.25</string>' "$CLANG22_INSTALLED/mavergreen.plist"
+  [ "$(grep -c 'fetch_clang22:' "$WORK/err")" = 1 ] || { cat "$WORK/err"; return 1; }
+  grep -q "fetch_clang22: .*$CLANG22_INSTALLED.*22.1.8-mavericks.25.*22.1.8-mavericks.99.*$out" "$WORK/err" || { cat "$WORK/err"; return 1; }
+  ! grep -q 'install-products:' "$WORK/err" || { cat "$WORK/err"; return 1; }
+}
+@test 'linux: a prefix at the pinned release is reused even with sudo, and nothing is said' {
+  unset MAVERGREEN_CLANG22_CACHE
+  export SUDO= HOME="$WORK/home" CLANG22_INSTALLED="$WORK/root/usr/local/mavergreen/clang22"
+  tools_at "$CLANG22_INSTALLED" 22.1.8-mavericks.99
+  out="$(CLANG22_HOST=linux sh "$HELPER" "$PIN" 2> "$WORK/err")" || { cat "$WORK/err"; return 1; }
+  [ "$out" = "$CLANG22_INSTALLED" ] && [ ! -s "$WORK/err" ] && [ ! -d "$HOME/.cache" ] || { echo "$out"; cat "$WORK/err"; return 1; }
 }
 path_without() {
   mkdir -p "$WORK/without-$1"
