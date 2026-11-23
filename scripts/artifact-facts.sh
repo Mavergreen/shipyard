@@ -449,8 +449,8 @@ while IFS= read -r f; do
   esac
 done < "$sa_tmp/archives"
 if [ -n "${_devs:-}" ]; then
-  printf '%s\n' "$_devs" | awk '$1 == "standalone-text" { print $2 }' | while IFS= read -r _g; do
-    grep -qxF "$_g" "$sa_tmp/used" || printf 'standalone-text-unused %s\n' "$_g"
+  printf '%s\n' "$_devs" | awk '$1 == "deviation" && index($2, "standalone-text:") == 1 { g = substr($2, 17); gsub(/%20/, " ", g); gsub(/%09/, "\t", g); gsub(/%25/, "%", g); print g }' | while IFS= read -r _g; do
+    grep -qxF "$_g" "$sa_tmp/used" || printf 'standalone-text-unused %s\n' "$(printf '%s' "$_g" | enc)"
   done
 fi
 

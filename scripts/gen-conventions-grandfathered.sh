@@ -89,6 +89,6 @@ while read -r repo; do
   if grep -q '^arch-host: .* with an arm64 slice' "$tmp/conf"; then
     echo "modern-smoke $repo release.yml:modern-smoke"
   fi
-  sed -n "s/^conformance: no-standalone: \([a-z0-9][a-z0-9-]*\): .*/standalone $repo \1/p" "$tmp/conf"
+  sed -n "s/^no-standalone: [^.]*\. \([a-z0-9][a-z0-9-]*\): [^ ]* ships .*/standalone $repo \1/p" "$tmp/conf"
 done < "$tmp/repos" > "$tmp/found"
 LC_ALL=C sort -u "$tmp/found"

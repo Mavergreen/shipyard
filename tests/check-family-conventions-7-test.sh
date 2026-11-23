@@ -259,8 +259,8 @@ while read -r c r k extra; do
   case "$c" in macos-runner|packager|artifact-checks-wired|modern-smoke|cxxabi|standalone) ;; *) echo "FAIL: conventions-grandfathered names an unknown check: $c"; exit 1 ;; esac
   case "$c:$k" in
     macos-runner:*.yml:*|macos-runner:*.yaml:*|packager:*|artifact-checks-wired:*|modern-smoke:release.yml:modern-smoke|cxxabi:opt/mavergreen/*|cxxabi:Applications/*|cxxabi:Library/*) ;;
-    standalone:*) [ "$(sh "$here/../scripts/product-name.sh" repo "$k" 2>/dev/null)" = "$r" ] \
-                    || { echo "FAIL: conventions-grandfathered standalone line names $k, which scripts/product-names does not register to $r: $c $r $k"; exit 1; } ;;
+    standalone:*) (. "$here/../scripts/lib/name-rules.sh"; mavergreen_name_ok "$k") \
+                    || { echo "FAIL: conventions-grandfathered standalone line names $k, which is not a product short name: $c $r $k"; exit 1; } ;;
     *) echo "FAIL: conventions-grandfathered key is not <workflow file>:<job> (macos-runner), release.yml:modern-smoke (modern-smoke), an installed path (cxxabi), a short name of the repo (standalone) or a path: $c $r $k"; exit 1 ;;
   esac
 done < "$GF"

@@ -5,10 +5,10 @@
 #          The archive-first entry to the pkg: ARCHIVE, SHORT-VERSION-macos-ARCH.tar.gz, is judged by
 #          check-standalone-archive.sh (--repo DIR, default ., whose standalone-text deviations it
 #          honours, unused ones left to conformance; given --requires, against a manifest declaring
-#          them), then unpacked, and derive_pkg_tree.sh makes STAGED_ROOT/usr/local/mavergreen/SHORT
+#          them), then unpacked, and derive_pkg_tree.sh makes STAGED_ROOT/$(mavergreen_prefix SHORT)
 #          from its SHORT-VERSION/ with BUNDLED_LIST, the --requires and the --pkg-only paths. Each app
-#          at the archive's top, <Name>.app, goes to STAGED_ROOT/Applications/<Name>.app, and a bin/
-#          link to ../<Name>.app/... becomes /Applications/<Name>.app/...: the inverse of
+#          at the archive's top, <Name>.app, goes to STAGED_ROOT/Applications/Mavergreen/<Name>.app, and
+#          a bin/ link to ../<Name>.app/... becomes /Applications/Mavergreen/<Name>.app/...: the inverse of
 #          stage_standalone.sh. STAGED_ROOT is then what stage_product.sh takes as --stage, given the
 #          same --requires, and build_component_pkg.sh as --root. Exit 1 when the checker refuses
 #          ARCHIVE, the derivation fails, or STAGED_ROOT already holds the product's tree or one of its
@@ -16,6 +16,8 @@
 # spec: tests/stage-pkg-from-archive-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 . "$SELF/lib/requires.sh"
 usage='usage: stage_pkg_from_archive.sh [--repo DIR] [--requires SHORT[>=FLOOR]]... [--pkg-only SRC=DEST]... ARCHIVE BUNDLED_LIST STAGED_ROOT'
 die() { echo "stage_pkg_from_archive: $1" >&2; exit "$2"; }
@@ -49,8 +51,10 @@ esac
 P="$(printf '%s\n' "$top" | sed 's/-[0-9].*//')"
 case "$P" in ''|-*|*[!a-z0-9-]*) die "$b does not read as <short>-<version>" 2 ;; esac
 [ "$P" != "$top" ] || die "$b does not read as <short>-<version>" 2
-T="$ROOT/usr/local/mavergreen/$P"
-{ [ -e "$T" ] || [ -L "$T" ]; } && die "$ROOT already holds usr/local/mavergreen/$P" 1
+REL="$(mavergreen_prefix "$P")" || exit 2
+REL="${REL#/}" APPS=Applications/Mavergreen
+T="$ROOT/$REL"
+{ [ -e "$T" ] || [ -L "$T" ]; } && die "$ROOT already holds $REL" 1
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/stage-pkg-from-archive.XXXXXX")"
 trap 'chmod -R u+w "$work" 2>/dev/null; rm -rf "$work"' EXIT
@@ -58,9 +62,15 @@ set -- --repo "$repo" --defer-unused
 if [ -n "$REQ" ]; then
   {
     printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n'
-    printf '  <key>product</key>\n  <string>%s</string>\n  <key>requires</key>\n  <array>\n' "$P"
-    printf '%s' "$REQ" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's|.*|    <string>&</string>|'
-    printf '  </array>\n</dict>\n</plist>\n'
+    printf '  <key>product</key>\n  <string>%s</string>\n  <key>requires</key>\n  <dict>\n' "$P"
+    printf '%s' "$REQ" | awk '{
+        s = $0; m = ""; i = index(s, ">="); if (i) { m = substr(s, i + 2); s = substr(s, 1, i - 1) }
+        gsub(/&/, "\\&amp;", m); gsub(/</, "\\&lt;", m); gsub(/>/, "\\&gt;", m)
+        printf "    <key>%s</key>\n    <dict>\n      <key>kind</key>\n      <string>runtime</string>\n", s
+        if (m != "") printf "      <key>min</key>\n      <string>%s</string>\n", m
+        printf "    </dict>\n"
+      }'
+    printf '  </dict>\n</dict>\n</plist>\n'
   } > "$work/mavergreen.plist"
   set -- "$@" --plist "$work/mavergreen.plist"
 fi
@@ -80,7 +90,7 @@ mkdir "$work/apps"
 for app in "$X"/*.app; do
   [ -d "$app" ] && [ ! -L "$app" ] || continue
   n="${app##*/}"
-  { [ -e "$ROOT/Applications/$n" ] || [ -L "$ROOT/Applications/$n" ]; } && die "$ROOT already holds Applications/$n" 1
+  { [ -e "$ROOT/$APPS/$n" ] || [ -L "$ROOT/$APPS/$n" ]; } && die "$ROOT already holds $APPS/$n" 1
   mv "$app" "$work/apps/$n"
 done
 
@@ -100,7 +110,7 @@ if [ -d "$work/tree/bin" ]; then
       ../*.app|../*.app/*)
         rest="${tg#../}"; n="${rest%%/*}"
         [ -d "$work/apps/$n" ] || continue
-        rm -f "$l"; ln -s "/Applications/$rest" "$l" ;;
+        rm -f "$l"; ln -s "/$APPS/$rest" "$l" ;;
     esac
   done
 fi
@@ -109,7 +119,7 @@ mkdir -p "$(dirname "$T")"
 mv "$work/tree" "$T"
 for app in "$work/apps"/*.app; do
   [ -d "$app" ] || continue
-  mkdir -p "$ROOT/Applications"
-  mv "$app" "$ROOT/Applications/"
+  mkdir -p "$ROOT/$APPS"
+  mv "$app" "$ROOT/$APPS/"
 done
 echo "stage_pkg_from_archive: staged $P from $b into $ROOT" >&2

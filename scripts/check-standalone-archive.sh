@@ -5,19 +5,20 @@
 #          arm64; SHORT runs to the first hyphen before a digit). Findings, each on its own line:
 #          an entry outside the one top directory SHORT-VERSION/; the pkg's manifest
 #          (mavergreen.plist), an updater (*-updater.app), a launchd job, or pkg install scripts or
-#          metadata at the top; an AppleDouble entry; a symlink into /usr/local/mavergreen; a script
-#          (#!) or other text file naming /usr/local/mavergreen; a Mach-O whose loads, rpaths or
+#          metadata at the top; an AppleDouble entry; a symlink into a Mavergreen prefix (/opt/mavergreen,
+#          mavergreen_prefix's, or the old prefix pinned pre-flag-day releases still install at); a script
+#          (#!) or other text file naming one; a Mach-O whose loads, rpaths or
 #          install name are not under /usr/lib, /System, @rpath, @loader_path or @executable_path,
 #          whatever --plist declares. --plist PLIST is the product's staged mavergreen.plist: a script
-#          or text file may then name /usr/local/mavergreen/S where S, a whole path component, is in
-#          its requires (SHORT or SHORT>=FLOOR, read by scripts/lib/requires.sh with fetch_stevedore.sh's
+#          or text file may then name <prefix>/S where S, a whole path component, is in
+#          its requires (read by scripts/lib/requires.sh with fetch_stevedore.sh's
 #          stevedore); naming the archive's own SHORT is a self-reference, and any other S an
 #          undeclared dependency. A Mach-O or other binary file holding the string, and documentation
 #          naming it (under share/man, share/doc or share/info, or a README*, LICENSE*, NOTICE* or
 #          CHANGELOG* at any depth), is a warning on stdout, never a finding. DIR's (default .)
-#          INGREDIENTS.md, read by deviations.sh, may declare "- standalone-text:<glob>: <reason>": a
-#          script's or text file's findings naming /usr/local/mavergreen, for an archive path (relative
-#          to SHORT-VERSION/) the shell case pattern <glob> matches, become warnings; no other finding is
+#          .mavergreen/deviations/standalone-text/, read by deviations.sh, excuses a script's or text
+#          file's findings naming a Mavergreen prefix, for an archive path (relative to SHORT-VERSION/)
+#          its scope (a shell case pattern) matches: they become warnings; no other finding is
 #          excused, and an entry excusing nothing is a finding; with --defer-unused it is not, and each
 #          entry used is named on stdout instead, "standalone-text used: <glob>", for a caller judging
 #          several archives (artifact-facts.sh). Mach-O is read by
@@ -31,6 +32,11 @@
 # spec: tests/check-standalone-archive-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
+. "$SELF/lib/macho-tools.sh"
+. "$SELF/lib/mach-interface.sh"
+MG_NEW="$(mavergreen_prefix)" MG_OLD=/usr/local/mavergreen
 usage='usage: check-standalone-archive.sh [--run] [--plist PLIST] [--repo DIR] [--defer-unused] ARCHIVE'
 run=no; plist=""; repo=.; defer=no
 while [ $# -gt 1 ]; do
@@ -74,8 +80,8 @@ if [ -n "$plist" ]; then
   reqs="$(sed 's/>=.*//' "$t/requires" | tr '\n' ' ' | sed 's/ $//')"
 fi
 [ -d "$repo" ] || { echo "check-standalone-archive: --repo $repo is not a directory" >&2; exit 2; }
-_devs="$(sh "$SELF/deviations.sh" "$repo")" || { echo "check-standalone-archive: $repo/INGREDIENTS.md declares an entry deviations.sh refuses" >&2; exit 2; }
-printf '%s\n' "$_devs" | awk '$1 == "standalone-text" { print ++n " " $2 }' > "$t/textdevs"
+_devs="$(sh "$SELF/deviations.sh" "$repo")" || { echo "check-standalone-archive: $repo/.mavergreen/deviations/ declares an entry deviations.sh refuses" >&2; exit 2; }
+printf '%s\n' "$_devs" | awk '$1 == "standalone-text" { g = $2; gsub(/%20/, " ", g); gsub(/%09/, "\t", g); gsub(/%25/, "%", g); print ++n " " g }' > "$t/textdevs"
 : > "$t/textused"
 : > "$t/used"
 finding() { printf '%s\n' "$*" >> "$t/findings"; }
@@ -119,7 +125,7 @@ if [ -d "$X" ]; then
   (cd "$X" && find . -type l | LC_ALL=C sort) > "$t/links"
   while IFS= read -r l; do
     tg="$(readlink "$X/$l")" || continue
-    case "$tg" in /usr/local/mavergreen|/usr/local/mavergreen/*) finding "${l#./} links to $tg, which only the pkg installs" ;; esac
+    case "$tg" in "$MG_NEW"|"$MG_NEW"/*|"$MG_OLD"|"$MG_OLD"/*) finding "${l#./} links to $tg, which only the pkg installs" ;; esac
   done < "$t/links"
   (cd "$X" && find . -type f | LC_ALL=C sort) > "$t/files"
 else
@@ -127,14 +133,10 @@ else
 fi
 
 mg_strings() {  # $1 = path within the archive
-  LC_ALL=C grep -q -F '/usr/local/mavergreen' "$X/$1" 2>/dev/null || return 0
-  _hit="$(LC_ALL=C tr -c '[:print:]' '\n' < "$X/$1" | grep -F '/usr/local/mavergreen' | head -1 | cut -c1-120)" || _hit=""
+  LC_ALL=C grep -q -F -e "$MG_NEW" -e "$MG_OLD" "$X/$1" 2>/dev/null || return 0
+  _hit="$(LC_ALL=C tr -c '[:print:]' '\n' < "$X/$1" | grep -F -e "$MG_NEW" -e "$MG_OLD" | head -1 | cut -c1-120)" || _hit=""
   [ -z "$_hit" ] || printf 'warning: %s holds the string %s\n' "$1" "$_hit" >> "$t/warnings"
 }
-. "$SELF/mavergreen-meta.sh"
-. "$SELF/lib/name-rules.sh"
-. "$SELF/lib/macho-tools.sh"
-. "$SELF/lib/mach-interface.sh"
 : > "$t/machos"
 while IFS= read -r f; do
   r="${f#./}"
@@ -142,7 +144,7 @@ while IFS= read -r f; do
     thin|fat) printf '%s\n' "$r" >> "$t/machos"; mg_strings "$r"; continue ;;
     archive) mg_strings "$r"; continue ;;
   esac
-  LC_ALL=C grep -q -F '/usr/local/mavergreen' "$X/$r" 2>/dev/null || continue
+  LC_ALL=C grep -q -F -e "$MG_NEW" -e "$MG_OLD" "$X/$r" 2>/dev/null || continue
   if [ "$(dd if="$X/$r" bs=2 count=1 2>/dev/null)" = '#!' ]; then
     kind=script
   elif LC_ALL=C tr -d '\000' < "$X/$r" | cmp -s - "$X/$r"; then
@@ -154,25 +156,27 @@ while IFS= read -r f; do
   case "$r" in share/man/*|share/doc/*|share/info/*) doc=yes ;; esac
   case "${r##*/}" in README*|LICENSE*|NOTICE*|CHANGELOG*) doc=yes ;; esac
   if [ "$doc" = yes ]; then
-    _hit="$(LC_ALL=C grep -n -F '/usr/local/mavergreen' "$X/$r" 2>/dev/null | head -1 | cut -c1-120)" || _hit=""
-    printf 'warning: %s is documentation naming /usr/local/mavergreen (line %s)\n' "$r" "$(printf '%s' "$_hit" | sed 's/:/: /')" >> "$t/warnings"
+    _hit="$(LC_ALL=C grep -n -F -e "$MG_NEW" -e "$MG_OLD" "$X/$r" 2>/dev/null | head -1 | cut -c1-120)" || _hit=""
+    printf 'warning: %s is documentation naming a Mavergreen prefix (line %s)\n' "$r" "$(printf '%s' "$_hit" | sed 's/:/: /')" >> "$t/warnings"
     continue
   fi
-  LC_ALL=C grep -n -F '/usr/local/mavergreen' "$X/$r" 2>/dev/null \
-    | awk -v r="$r" -v kind="$kind" -v short="$short" -v reqs="$reqs" -v plist="$plist" '
+  LC_ALL=C grep -n -F -e "$MG_NEW" -e "$MG_OLD" "$X/$r" 2>/dev/null \
+    | awk -v r="$r" -v kind="$kind" -v short="$short" -v reqs="$reqs" -v plist="$plist" -v pfxs="$MG_NEW $MG_OLD" '
+      BEGIN { np = split(pfxs, pfx, " ") }
       {
         n = index($0, ":"); ln = substr($0, 1, n - 1); s = substr($0, n + 1)
         if (plist == "") {
           if (!done) {
             done = 1
-            if (kind == "script") print r " is a script naming /usr/local/mavergreen, which only the pkg installs (line " ln ": " substr(s, 1, 120) ")"
-            else print r " names /usr/local/mavergreen, which only the pkg installs (line " ln ": " substr(s, 1, 120) ")"
+            if (kind == "script") print r " is a script naming a Mavergreen prefix, which only the pkg installs (line " ln ": " substr(s, 1, 120) ")"
+            else print r " names a Mavergreen prefix, which only the pkg installs (line " ln ": " substr(s, 1, 120) ")"
           }
           next
         }
-        rest = s
-        while ((i = index(rest, "/usr/local/mavergreen")) > 0) {
-          rest = substr(rest, i + 21); c = substr(rest, 1, 1)
+        for (q = 1; q <= np; q++) {
+        P = pfx[q]; rest = s
+        while ((i = index(rest, P)) > 0) {
+          rest = substr(rest, i + length(P)); c = substr(rest, 1, 1)
           if (c ~ /[A-Za-z0-9._+-]/) continue
           S = ""
           if (c == "/") { match(substr(rest, 2), /^[A-Za-z0-9._+-]*/); S = substr(rest, 2, RLENGTH) }
@@ -181,9 +185,10 @@ while IFS= read -r f; do
           if ((k SUBSEP S) in seen) continue
           seen[k SUBSEP S] = 1
           where = "line " ln ": " substr(s, 1, 120)
-          if (k == "self") print r " names /usr/local/mavergreen/" S ", the product'"'"'s own prefix: a self-reference (relocation bug) (" where ")"
-          else if (S == "") print r " names /usr/local/mavergreen itself: an undeclared dependency (" where ")"
-          else print r " names /usr/local/mavergreen/" S ": an undeclared dependency; add " S " to the requires or drop the path (" where ")"
+          if (k == "self") print r " names " P "/" S ", the product'"'"'s own prefix: a self-reference (relocation bug) (" where ")"
+          else if (S == "") print r " names " P " itself: an undeclared dependency (" where ")"
+          else print r " names " P "/" S ": an undeclared dependency; add " S " to the requires or drop the path (" where ")"
+        }
         }
       }' > "$t/hits"
   [ -s "$t/hits" ] || continue
@@ -196,7 +201,7 @@ while IFS= read -r f; do
   done < "$t/textdevs"
   set +f
   if [ -n "$ex" ]; then
-    sed "s|^|warning: excused by standalone-text:$ex: |" "$t/hits" >> "$t/warnings"
+    sed "s|^|warning: excused by the standalone-text deviation scoped $ex: |" "$t/hits" >> "$t/warnings"
   else
     cat "$t/hits" >> "$t/findings"
   fi
@@ -206,7 +211,7 @@ while read -r _en _eg; do
     grep -qx "$_en" "$t/textused" && printf 'standalone-text used: %s\n' "$_eg" >> "$t/used"
     continue
   fi
-  grep -qx "$_en" "$t/textused" || finding "INGREDIENTS.md's standalone-text:$_eg excuses nothing in this archive; drop it"
+  grep -qx "$_en" "$t/textused" || finding "the standalone-text deviation scoped $_eg excuses nothing in this archive; delete it"
 done < "$t/textdevs"
 
 nmacho="$(wc -l < "$t/machos" | tr -d ' ')"

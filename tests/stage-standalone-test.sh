@@ -15,7 +15,7 @@ C="$here/../scripts/check-standalone-archive.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/stage-standalone.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: stage-standalone: $*"; exit 1; }
 
-R="$w/root"; T="$R/usr/local/mavergreen/w"
+R="$w/root"; T="$R/opt/mavergreen/w"
 mkdir -p "$T/bin" "$T/libexec/w" "$T/share/doc/w" "$T/share/empty"
 printf '#!/bin/sh\nexec "$(dirname "$0")/../libexec/w/w-real" "$@"\n' > "$T/bin/w"
 printf '#!/bin/sh\necho w 1.0\n' > "$T/libexec/w/w-real"
@@ -39,8 +39,8 @@ usage "an arch the family does not ship" "$R" w 1.0 i386 "$w/w-1.0-macos-i386.ta
 usage "a short name that is not one" "$R" W 1.0 universal "$w/W-1.0-macos-universal.tar.gz"
 usage "a version with a slash" "$R" w 1/0 universal "$w/w-1/0-macos-universal.tar.gz"
 rc=0; sh "$S" "$R" v 1.0 x86_64 "$w/v-1.0-macos-x86_64.tar.gz" >/dev/null 2>"$w/err" || rc=$?
-[ "$rc" -eq 1 ] || fail "a root with no usr/local/mavergreen/v: exit $rc, want 1"
-grep -q 'usr/local/mavergreen/v' "$w/err" || fail "a missing tree is named: $(cat "$w/err")"
+[ "$rc" -eq 1 ] || fail "a root with no opt/mavergreen/v: exit $rc, want 1"
+grep -q 'opt/mavergreen/v' "$w/err" || fail "a missing tree is named: $(cat "$w/err")"
 
 export SOURCE_DATE_EPOCH=1700000000
 mkdir "$w/one" "$w/two"
@@ -91,17 +91,17 @@ gzip -dc "$w/one/w-1.0-macos-universal.tar.gz" | grep -a -q -E 'LIBARCHIVE\.xatt
 
 sh "$C" "$w/one/w-1.0-macos-universal.tar.gz" > "$w/chk" 2>&1 || fail "check-standalone-archive refuses what stage_standalone made: $(cat "$w/chk")"
 
-R="$w/approot"; T="$R/usr/local/mavergreen/x"
-mkdir -p "$T/bin" "$R/Applications/X.app/Contents/MacOS" "$R/Applications/X.app/Contents/Resources"
-printf '#!/bin/sh\necho x 1.0\n' > "$R/Applications/X.app/Contents/MacOS/x"; chmod 755 "$R/Applications/X.app/Contents/MacOS/x"
-printf '<plist/>\n' > "$R/Applications/X.app/Contents/Info.plist"
-ln -s /Applications/X.app/Contents/MacOS/x "$T/bin/x"
-mkdir -p "$R/Applications/x-updater.app/Contents"; printf '<plist/>\n' > "$R/Applications/x-updater.app/Contents/Info.plist"
+R="$w/approot"; T="$R/opt/mavergreen/x"
+mkdir -p "$T/bin" "$R/Applications/Mavergreen/X.app/Contents/MacOS" "$R/Applications/Mavergreen/X.app/Contents/Resources"
+printf '#!/bin/sh\necho x 1.0\n' > "$R/Applications/Mavergreen/X.app/Contents/MacOS/x"; chmod 755 "$R/Applications/Mavergreen/X.app/Contents/MacOS/x"
+printf '<plist/>\n' > "$R/Applications/Mavergreen/X.app/Contents/Info.plist"
+ln -s /Applications/Mavergreen/X.app/Contents/MacOS/x "$T/bin/x"
+mkdir -p "$R/Applications/Mavergreen/x-updater.app/Contents"; printf '<plist/>\n' > "$R/Applications/Mavergreen/x-updater.app/Contents/Info.plist"
 printf '<plist/>\n' > "$T/mavergreen.plist"
 sh "$S" "$R" x 1.0 x86_64 "$w/one/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" \
   || fail "staging a product with an app failed: $(cat "$w/err")"
 grep -q 'x-updater.app' "$w/err" || fail "an updater in Applications is left out: $(cat "$w/err")"
-grep -q 'Applications/X.app' "$w/err" && fail "the archived app is not named as left out: $(cat "$w/err")"
+grep -q 'Applications/Mavergreen/X.app' "$w/err" && fail "the archived app is not named as left out: $(cat "$w/err")"
 tar -tzf "$w/one/x-1.0-macos-x86_64.tar.gz" | sed 's|/$||' > "$w/list"
 want='x-1.0
 x-1.0/X.app
@@ -115,19 +115,19 @@ x-1.0/bin/x'
 [ "$(cat "$w/list")" = "$want" ] || fail "the archive holds the tree and the app at its top: $(cat "$w/list")"
 rm -rf "$w/x"; mkdir "$w/x"; tar -xzf "$w/one/x-1.0-macos-x86_64.tar.gz" -C "$w/x"
 [ "$(ls -l "$w/x/x-1.0/bin/x" | sed 's/.* -> //')" = ../X.app/Contents/MacOS/x ] \
-  || fail "a bin/ link into /Applications/X.app becomes relative: $(ls -l "$w/x/x-1.0/bin/x")"
+  || fail "a bin/ link into /Applications/Mavergreen/X.app becomes relative: $(ls -l "$w/x/x-1.0/bin/x")"
 [ "$("$w/x/x-1.0/bin/x")" = "x 1.0" ] || fail "the relinked tool runs from where it was unpacked"
 sh "$C" "$w/one/x-1.0-macos-x86_64.tar.gz" > "$w/chk" 2>&1 || fail "check-standalone-archive refuses the archive with an app: $(cat "$w/chk")"
-rm "$T/bin/x"; ln -s /Applications/Y.app/Contents/MacOS/y "$T/bin/x"
+rm "$T/bin/x"; ln -s /Applications/Mavergreen/Y.app/Contents/MacOS/y "$T/bin/x"
 rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "a bin/ link into an app the root does not stage: exit $rc, want 1: $(cat "$w/err")"
 grep -q 'bin/x' "$w/err" || fail "the unresolvable link is named: $(cat "$w/err")"
-rm "$T/bin/x"; ln -s /Applications/X.app/Contents/MacOS/gone "$T/bin/x"
+rm "$T/bin/x"; ln -s /Applications/Mavergreen/X.app/Contents/MacOS/gone "$T/bin/x"
 rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "a bin/ link to nothing in the app: exit $rc, want 1: $(cat "$w/err")"
 
-rm "$T/bin/x"; ln -s ../../../../../Applications/X.app/Contents/MacOS/x "$T/bin/x"
-ln -s ../../../../../Applications/X.app "$T/bin/X.app"
+rm "$T/bin/x"; ln -s ../../../../Applications/Mavergreen/X.app/Contents/MacOS/x "$T/bin/x"
+ln -s ../../../../Applications/Mavergreen/X.app "$T/bin/X.app"
 rm -f "$w/two/x-1.0-macos-x86_64.tar.gz"
 sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" \
   || fail "staging a product whose bin/ link reaches the app relatively failed: $(cat "$w/err")"
@@ -138,18 +138,18 @@ rm -rf "$w/x"; mkdir "$w/x"; tar -xzf "$w/two/x-1.0-macos-x86_64.tar.gz" -C "$w/
   || fail "a relative bin/ link to the app itself is rewritten: $(ls -l "$w/x/x-1.0/bin/X.app")"
 [ "$("$w/x/x-1.0/bin/x")" = "x 1.0" ] || fail "the relatively linked tool runs from where it was unpacked"
 rm "$T/bin/X.app"
-for bad in ../../../../../Applications/X.app/Contents/MacOS/gone ../../../../Applications/X.app/Contents/MacOS/x ../../../../../../x ../libexec/gone; do
+for bad in ../../../../Applications/Mavergreen/X.app/Contents/MacOS/gone ../../../Applications/Mavergreen/X.app/Contents/MacOS/x ../../../../../x ../libexec/gone; do
   rm "$T/bin/x"; ln -s "$bad" "$T/bin/x"
   rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
   [ "$rc" -eq 1 ] || fail "a relative bin/ link, $bad, that does not resolve in the root: exit $rc, want 1: $(cat "$w/err")"
   grep -q "bin/x links to $bad" "$w/err" || fail "the unresolvable relative link is named: $(cat "$w/err")"
 done
-rm "$T/bin/x"; ln -s /Applications/X.app/Contents/MacOS/x "$T/bin/x"
-printf 'junk' > "$R/Applications/X.app/Contents/._Info.plist"; rm -f "$w/two/x-1.0-macos-x86_64.tar.gz"
+rm "$T/bin/x"; ln -s /Applications/Mavergreen/X.app/Contents/MacOS/x "$T/bin/x"
+printf 'junk' > "$R/Applications/Mavergreen/X.app/Contents/._Info.plist"; rm -f "$w/two/x-1.0-macos-x86_64.tar.gz"
 rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "an AppleDouble file in a staged app: exit $rc, want 1: $(cat "$w/err")"
 grep -q 'AppleDouble.*X.app/Contents/._Info.plist' "$w/err" || fail "the AppleDouble entry is named: $(cat "$w/err")"
-rm "$R/Applications/X.app/Contents/._Info.plist"; printf 'junk' > "$T/bin/._x"
+rm "$R/Applications/Mavergreen/X.app/Contents/._Info.plist"; printf 'junk' > "$T/bin/._x"
 rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "an AppleDouble file in the tree: exit $rc, want 1: $(cat "$w/err")"
 grep -q 'AppleDouble.*bin/._x' "$w/err" || fail "the AppleDouble entry in the tree is named: $(cat "$w/err")"
