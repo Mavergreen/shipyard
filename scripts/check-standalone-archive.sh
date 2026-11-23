@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic -- Mach-O is read with the pinned clang22's llvm tools; --run starts programs only on a Mac of the archive's arch
-#   usage: check-standalone-archive.sh [--run] [--plist PLIST] [--repo DIR] ARCHIVE
+#   usage: check-standalone-archive.sh [--run] [--plist PLIST] [--repo DIR] [--defer-unused] ARCHIVE
 #          Judges a standalone archive, SHORT-VERSION-macos-ARCH.tar.gz (ARCH universal, x86_64 or
 #          arm64; SHORT runs to the first hyphen before a digit). Findings, each on its own line:
 #          an entry outside the one top directory SHORT-VERSION/; the pkg's manifest
@@ -18,7 +18,9 @@
 #          INGREDIENTS.md, read by deviations.sh, may declare "- standalone-text:<glob>: <reason>": a
 #          script's or text file's findings naming /usr/local/mavergreen, for an archive path (relative
 #          to SHORT-VERSION/) the shell case pattern <glob> matches, become warnings; no other finding is
-#          excused, and an entry excusing nothing is a finding. Mach-O is read by
+#          excused, and an entry excusing nothing is a finding; with --defer-unused it is not, and each
+#          entry used is named on stdout instead, "standalone-text used: <glob>", for a caller judging
+#          several archives (artifact-facts.sh). Mach-O is read by
 #          scripts/lib/mach-interface.sh; with no OTOOL, LIPO or NM set and no installed clang22, the
 #          pinned one comes from fetch_clang22.sh. --run, on a Mac that runs ARCH natively, unpacks
 #          under a directory with a space and starts every bin/ entry with --version, finding any that
@@ -29,11 +31,12 @@
 # spec: tests/check-standalone-archive-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-usage='usage: check-standalone-archive.sh [--run] [--plist PLIST] [--repo DIR] ARCHIVE'
-run=no; plist=""; repo=.
+usage='usage: check-standalone-archive.sh [--run] [--plist PLIST] [--repo DIR] [--defer-unused] ARCHIVE'
+run=no; plist=""; repo=.; defer=no
 while [ $# -gt 1 ]; do
   case "$1" in
     --run) run=yes; shift ;;
+    --defer-unused) defer=yes; shift ;;
     --plist) [ -n "${2:-}" ] || { echo "$usage" >&2; exit 2; }; plist="$2"; shift 2 ;;
     --repo) [ -n "${2:-}" ] || { echo "$usage" >&2; exit 2; }; repo="$2"; shift 2 ;;
     *) break ;;
@@ -74,9 +77,10 @@ fi
 _devs="$(sh "$SELF/deviations.sh" "$repo")" || { echo "check-standalone-archive: $repo/INGREDIENTS.md declares an entry deviations.sh refuses" >&2; exit 2; }
 printf '%s\n' "$_devs" | awk '$1 == "standalone-text" { print ++n " " $2 }' > "$t/textdevs"
 : > "$t/textused"
+: > "$t/used"
 finding() { printf '%s\n' "$*" >> "$t/findings"; }
 report() {
-  sed "s|^|check-standalone-archive: $b: |" "$t/warnings"
+  sed "s|^|check-standalone-archive: $b: |" "$t/used" "$t/warnings"
   nf="$(wc -l < "$t/findings" | tr -d ' ')"
   if [ "$nf" -gt 0 ]; then
     head -50 "$t/findings" | sed "s|^|check-standalone-archive: $b: |" >&2
@@ -196,6 +200,10 @@ while IFS= read -r f; do
   fi
 done < "$t/files"
 while read -r _en _eg; do
+  if [ "$defer" = yes ]; then
+    grep -qx "$_en" "$t/textused" && printf 'standalone-text used: %s\n' "$_eg" >> "$t/used"
+    continue
+  fi
   grep -qx "$_en" "$t/textused" || finding "INGREDIENTS.md's standalone-text:$_eg excuses nothing in this archive; drop it"
 done < "$t/textdevs"
 

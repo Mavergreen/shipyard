@@ -5,7 +5,8 @@
 #          passed check-standalone-archive.sh, unless conventions-grandfathered names the product
 #          (a warning) or INGREDIENTS.md declares '- no-standalone[:<short glob>]: <reason>'; declaring
 #          it while publishing one fails. Then artifact-facts.sh judges the archives a dist carries, each
-#          against the requires in its product pkg's mavergreen.plist and the repo's deviations.
+#          against the requires in its product pkg's mavergreen.plist and the repo's deviations; a
+#          standalone-text entry is unused only when no archive of the release uses it.
 set -eu
 unset GITHUB_REPOSITORY
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -137,6 +138,18 @@ mkdir -p "$w/dist3" "$w/repo3"; cp "$w/dist2/w-1.0-macos-arm64.tar.gz" "$w/dist3
 printf '## Conformance deviations\n- standalone-text:bin/w: the wrapper names zig\n' > "$w/repo3/INGREDIENTS.md"
 facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist3" 1.0-mavericks.1 "$w/repo3" 2>"$w/err")" || fail "artifact-facts.sh failed on a declared standalone-text: $(cat "$w/err")"
 printf '%s\n' "$facts" | grep -qx 'standalone w-1.0-macos-arm64.tar.gz ok' || fail "artifact-facts.sh passes the repo's standalone-text deviations to the checker: $facts"
-echo "ok: artifact-facts.sh passes the repo's deviations to check-standalone-archive.sh"
+mkdir -p "$w/dist4/good/w-1.0/bin"; printf '#!/bin/sh\necho w\n' > "$w/dist4/good/w-1.0/bin/w"
+(cd "$w/dist4/good" && tar -czf "$w/dist4/w-1.0-macos-x86_64.tar.gz" w-1.0); rm -rf "$w/dist4/good"
+cp "$w/dist2/w-1.0-macos-arm64.tar.gz" "$w/dist4/"
+facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist4" 1.0-mavericks.1 "$w/repo3" 2>"$w/err")" || fail "artifact-facts.sh failed on two archives: $(cat "$w/err")"
+printf '%s\n' "$facts" | grep -qx 'standalone w-1.0-macos-x86_64.tar.gz ok' || fail "an entry one archive uses is no finding in another: $facts"
+printf '%s\n' "$facts" | grep -qx 'standalone w-1.0-macos-arm64.tar.gz ok' || fail "the archive the entry excuses passes: $facts"
+printf '%s\n' "$facts" | grep -q '^standalone-text-unused' && fail "an entry one archive of two uses is used: $facts"
+rm "$w/dist4/w-1.0-macos-arm64.tar.gz"
+facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist4" 1.0-mavericks.1 "$w/repo3" 2>"$w/err")" || fail "artifact-facts.sh failed on one archive: $(cat "$w/err")"
+printf '%s\n' "$facts" | grep -qx 'standalone-text-unused bin/w' || fail "an entry no archive uses is a standalone-text-unused fact: $facts"
+no "a standalone-text entry no archive uses" "standalone-text: INGREDIENTS.md's standalone-text:bin/w excuses nothing" "$WITH
+standalone-text-unused bin/w"
+echo "ok: artifact-facts.sh passes the repo's deviations to check-standalone-archive.sh, judging unused entries across every archive"
 
 echo "PASS: artifact-conformance-standalone"

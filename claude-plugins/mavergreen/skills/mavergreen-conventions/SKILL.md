@@ -2201,9 +2201,10 @@ Mavergreen. Drydock shipped it first (0.6.3), and a user outside the family conf
   archive paths it matches, relative to `<short>-<version>/` (Go's
   `src/crypto/x509/root_keychainunion_darwin*.go` names the CA bundles that programs built by the
   toolchain read at run time). It never excuses a Mach-O load, rpath or install name, a symlink, or an
-  updater, manifest, launchd or AppleDouble finding; an entry that excuses nothing fails as unused, and
-  a bare form or an all-wildcard glob is refused. The checker reads `--repo DIR` (default `.`), which
-  `artifact-facts.sh` sets to the repo root.
+  updater, manifest, launchd or AppleDouble finding; an entry that excuses nothing in any standalone
+  archive of the release fails as unused, and a bare form or an all-wildcard glob is refused. The
+  checker reads `--repo DIR` (default `.`), which `artifact-facts.sh` sets to the repo root, passing
+  `--defer-unused` so that unused entries are judged across the release.
 - **A single static binary where the product allows it**, which a user can drop into `/usr/local/bin`
   or anywhere; otherwise the directory is the unit.
 - **The release notes say the archive has "no updater, no installer"**, in `release-notes/notice`, the

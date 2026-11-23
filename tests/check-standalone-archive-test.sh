@@ -4,7 +4,8 @@
 #          scripts/check-standalone-archive.sh: naming, the one top directory, what the package alone
 #          carries, scripts, text files and links naming /usr/local/mavergreen (documentation warns), --plist's declared requires
 #          against the product's own prefix and undeclared ones, --repo's standalone-text deviations
-#          excusing text findings alone and failing unused, then Mach-O fixtures built at test
+#          excusing text findings alone and failing unused (or, with --defer-unused, naming each used),
+#          then Mach-O fixtures built at test
 #          time with the pinned clang22 and 10.9 SDK: system, @rpath and @loader_path loads pass, an
 #          absolute load, rpath or install name outside the system fails (a declared require's too), a
 #          string naming the prefix is a warning, and --run, where this host
@@ -168,9 +169,19 @@ mk go126-1.26.5-macos-x86_64.tar.gz
 repo "$w/r-pkg" "standalone-text:share/*: AppleDouble" "standalone-text:Library/*: launchd" "standalone-text:mavergreen.plist?: manifest"
 withrepo 1 "standalone-text never excuses AppleDouble, launchd or manifest findings" "AppleDouble" "$w/r-pkg"
 grep -q 'LaunchAgents' "$w/out" && grep -q 'pkg manifest' "$w/out" || fail "launchd and manifest findings stay: $(cat "$w/out")"
+go -; mk go126-1.26.5-macos-x86_64.tar.gz
+rc=0; sh "$C" --plist "$P" --repo "$w/r-x509" --defer-unused "$A" > "$w/out" 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "--defer-unused: an entry excusing nothing here is no finding: exit $rc: $(cat "$w/out")"
+grep -q 'standalone-text used' "$w/out" && fail "--defer-unused: an unused entry is not reported used: $(cat "$w/out")"
+keychain -; mk go126-1.26.5-macos-x86_64.tar.gz
+rc=0; sh "$C" --plist "$P" --repo "$w/r-x509" --defer-unused "$A" > "$w/out" 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "--defer-unused: an entry excusing findings: exit $rc: $(cat "$w/out")"
+grep -qx "check-standalone-archive: go126-1.26.5-macos-x86_64.tar.gz: standalone-text used: $X509/root_keychainunion_darwin\*.go" "$w/out" \
+  || fail "--defer-unused names each entry it used on stdout: $(cat "$w/out")"
 repo "$w/r-bare" "standalone-text: everything"
 withrepo 2 "an entry deviations.sh refuses" - "$w/r-bare"
 rc=0; sh "$C" --repo "$w/nonexistent" "$A" > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "--repo not a directory: exit $rc, want 2"
+go -; mk go126-1.26.5-macos-x86_64.tar.gz
 rc=0; (cd "$w/r-x509" && sh "$C" --plist "$P" "$A") > "$w/out" 2>&1 || rc=$?
 [ "$rc" -eq 1 ] && grep -q 'excuses nothing' "$w/out" || fail "--repo defaults to the current directory: exit $rc: $(cat "$w/out")"
 echo "ok: --repo: standalone-text excuses the text findings of the archive paths it names, and nothing else"

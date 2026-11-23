@@ -20,6 +20,7 @@
 #            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
 #            asset         <file> <bytes>                         one per file that will be published
 #            standalone    <file> ok|fail [<finding>]             one per <short>-<version>-macos-<arch>.tar.gz, judged by check-standalone-archive.sh (%20-encoded)
+#            standalone-text-unused <glob>                        a standalone-text deviation no archive used
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
 #            cxxabi-defines <artifact> <path> <arch> <symbol> <visible|hidden>  one per C++ runtime symbol a slice defines beyond Recaulk's back-fills
 #            cxxabi-loads  <artifact> <path> <arch> <load-path>   one per libc++abi a slice loads other than /usr/lib's or libcxx22's (%20-encoded)
@@ -283,6 +284,9 @@ done < "$tmp/prod-of"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Standalone archive"
 while read -r kind file verdict why; do
+  if [ "$kind" = standalone-text-unused ]; then
+    echo "conformance: standalone-text: INGREDIENTS.md's standalone-text:$file excuses nothing in any standalone archive of this release -- drop it" >&2; status=1; continue
+  fi
   [ "$kind" = standalone ] || continue
   [ "$verdict" = ok ] || { echo "conformance: standalone: $file: $(dec "${why:-check-standalone-archive.sh refused it}")" >&2; status=1; }
 done < "$facts"
