@@ -1,5 +1,6 @@
 # platform: host-agnostic
-#   usage: . scripts/lib/mach-nm.sh; . scripts/lib/mach-interface.sh
+#   usage: . scripts/mavergreen-meta.sh; . scripts/lib/name-rules.sh; . scripts/lib/macho-tools.sh
+#          . scripts/lib/mach-interface.sh
 #          shipyard_rust_sym_normalize: a filter, one Mach-O symbol per line. First, on any line, LLVM's
 #          trailing .llvm.<decimal> is set aside and comes back as .llvm.N; the rules below see the rest.
 #          LLVM's _anon.<32 lowercase hex>.<n> reads _anon.H.<n>. A legacy Rust name
@@ -19,9 +20,9 @@
 #          <kind> is the load command (version_min_macosx, or build_version <platform>). Symbols pass through
 #          shipyard_rust_sym_normalize; in dylib and id paths "-<16 lowercase hex>." reads "-H.". A static
 #          archive prints only its Mach-O members' export and import lines; other members are skipped.
-#          Readers: NM, else shipyard_mach_nm's llvm-nm; OTOOL and LIPO, else the llvm-otool and llvm-lipo
-#          beside the chosen llvm-otool or llvm-nm, else an installed clang22's or clang22-cross's
-#          (SHIPYARD_MG_PREFIX, default /usr/local/mavergreen); llvm-ar likewise. Never one from PATH.
+#          Readers: NM, else the llvm-nm beside OTOOL or LIPO, else macho-tools.sh's mach_pinned nm; OTOOL
+#          and LIPO, else the llvm-otool and llvm-lipo beside the chosen llvm-otool or llvm-nm, else
+#          mach_pinned's; llvm-ar likewise. Never one from PATH.
 #          Exit 0; 1 FILE is not Mach-O (an archive with no Mach-O member is not); 2 a reader is missing
 #          or cannot read FILE, which stderr names.
 
@@ -181,12 +182,18 @@ _mi_tool() {
   for _mt_r in "$_mi_O" "$_mi_N"; do
     case "$_mt_r" in */llvm-otool|*/llvm-nm) [ -x "${_mt_r%/*}/llvm-$1" ] && { printf '%s\n' "${_mt_r%/*}/llvm-$1"; return 0; } ;; esac
   done
-  for _mt_d in clang22 clang22-cross; do
-    _mt_t="${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/$_mt_d/bin/llvm-$1"
-    [ -x "$_mt_t" ] && { printf '%s\n' "$_mt_t"; return 0; }
-  done
-  echo "mach-interface: no pinned llvm-$1, neither beside OTOOL or NM nor in clang22 or clang22-cross under ${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}" >&2
+  mach_pinned "$1" && return 0
+  echo "mach-interface: no pinned llvm-$1, neither beside OTOOL or NM nor in the family's clang22 ($(mavergreen_prefix clang22))" >&2
   return 1
+}
+_mi_nm() {
+  if [ -n "${NM:-}" ]; then printf '%s\n' "$NM"; return 0; fi
+  for _mn_r in "${OTOOL:-}" "${LIPO:-}"; do
+    case "$_mn_r" in
+      */llvm-otool|*/llvm-lipo) [ -x "${_mn_r%/*}/llvm-nm" ] && { printf '%s\n' "${_mn_r%/*}/llvm-nm"; return 0; } ;;
+    esac
+  done
+  mach_pinned nm
 }
 
 _mi_die() {
@@ -292,8 +299,7 @@ shipyard_mach_interface() (
   _mi_f="$1"
   _mi_k="$(shipyard_mach_kind "$_mi_f")"
   [ "$_mi_k" != other ] || exit 1
-  _mi_N="$(shipyard_mach_nm)"
-  if [ -z "${NM:-}" ] && [ "$_mi_N" = nm ]; then echo "mach-interface: no pinned llvm-nm (set NM, or install clang22 under ${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen})" >&2; exit 2; fi
+  _mi_N="$(_mi_nm)" || { echo "mach-interface: no pinned llvm-nm (set NM, or install clang22 at $(mavergreen_prefix clang22))" >&2; exit 2; }
   _mi_O="${OTOOL:-}"; [ -n "$_mi_O" ] || _mi_O="$(_mi_tool otool)" || exit 2
   _mi_L="${LIPO:-}"; [ -n "$_mi_L" ] || _mi_L="$(_mi_tool lipo)" || exit 2
   _mi_A="$(_mi_tool ar)" || exit 2

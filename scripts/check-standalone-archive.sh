@@ -131,7 +131,9 @@ mg_strings() {  # $1 = path within the archive
   _hit="$(LC_ALL=C tr -c '[:print:]' '\n' < "$X/$1" | grep -F '/usr/local/mavergreen' | head -1 | cut -c1-120)" || _hit=""
   [ -z "$_hit" ] || printf 'warning: %s holds the string %s\n' "$1" "$_hit" >> "$t/warnings"
 }
-. "$SELF/lib/mach-nm.sh"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
+. "$SELF/lib/macho-tools.sh"
 . "$SELF/lib/mach-interface.sh"
 : > "$t/machos"
 while IFS= read -r f; do
@@ -208,10 +210,8 @@ while read -r _en _eg; do
 done < "$t/textdevs"
 
 nmacho="$(wc -l < "$t/machos" | tr -d ' ')"
-if [ "$nmacho" -gt 0 ] && [ -z "${OTOOL:-}${LIPO:-}${NM:-}" ] \
-  && [ ! -x "${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/clang22/bin/llvm-otool" ] \
-  && [ ! -x "${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/clang22-cross/bin/llvm-otool" ]; then
-  cl="$(sh "$SELF/fetch_clang22.sh" "$SELF/../components/clang22" 2> "$t/err")" \
+if [ "$nmacho" -gt 0 ] && [ -z "${OTOOL:-}${LIPO:-}${NM:-}" ] && ! mach_pinned otool > /dev/null; then
+  cl="$(sh "$SELF/fetch_clang22.sh" "$SELF/.." 2> "$t/err")" \
     || { sed 's/^/  /' "$t/err" >&2; echo "check-standalone-archive: no Mach-O reader: no OTOOL, no installed clang22, and fetch_clang22.sh could not fetch the pinned one" >&2; exit 2; }
   OTOOL="$cl/bin/llvm-otool"; LIPO="$cl/bin/llvm-lipo"; NM="$cl/bin/llvm-nm"; export OTOOL LIPO NM
 fi

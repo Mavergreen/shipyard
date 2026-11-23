@@ -6,7 +6,8 @@
 #          build-equivalence.sh. Without clang22: SKIP, exit 77.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
-. "$here/../scripts/lib/mach-nm.sh"; . "$here/../scripts/lib/mach-interface.sh"
+. "$here/../scripts/mavergreen-meta.sh"; . "$here/../scripts/lib/name-rules.sh"; . "$here/../scripts/lib/macho-tools.sh"
+. "$here/../scripts/lib/mach-interface.sh"
 BE="$here/../scripts/build-equivalence.sh"
 w="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/mach-interface.XXXXXX")" && pwd)"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: mach-interface: $*"; exit 1; }
@@ -61,7 +62,7 @@ for n in _anon.0123456789abcdef0123456789abcde.1 _anon.0123456789ABCDEF012345678
 done
 echo "ok: Rust symbol normaliser"
 
-CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/../components/clang22" 2>/dev/null)" || { echo "SKIP: no clang22"; exit 77; }
+CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/.." 2>/dev/null)" || { echo "SKIP: no clang22"; exit 77; }
 SDK="$(sh "$here/../scripts/fetch_sdk.sh" 2>/dev/null)" || fail "no pinned 10.9 SDK"
 NM="$CL/bin/llvm-nm"; OTOOL="$CL/bin/llvm-otool"; export NM OTOOL
 cc() { "$CL/bin/clang" --no-default-config -target "${TGT:-x86_64-apple-macos10.9}" -isysroot "$SDK" "$@"; }
@@ -146,23 +147,23 @@ printf '%s\n' "$mi" | grep -qx "i386 export _f" || fail "a thin i386 object's ar
 echo "ok: embedded LLVM bitcode does not stop the reader, and a thin file's arch is its header's"
 
 mkdir -p "$w/noprefix"
-rc=0; ( unset NM OTOOL LIPO; SHIPYARD_MG_PREFIX="$w/noprefix"; export SHIPYARD_MG_PREFIX; PATH="$CL/bin:$PATH"; shipyard_mach_interface "$w/base.dylib" ) > /dev/null 2> "$w/err" || rc=$?
+rc=0; ( unset NM OTOOL LIPO; SHIPYARD_MACHO_DIRS="$w/noprefix"; export SHIPYARD_MACHO_DIRS; PATH="$CL/bin:$PATH"; shipyard_mach_interface "$w/base.dylib" ) > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "no pinned llvm tools: exit $rc, want 2"
 grep -q 'no pinned llvm-' "$w/err" || fail "no pinned llvm tools: stderr says so: $(cat "$w/err")"
-rc=0; ( unset NM LIPO; OTOOL="$CL/bin/llvm-otool"; SHIPYARD_MG_PREFIX="$w/noprefix"; export OTOOL SHIPYARD_MG_PREFIX; shipyard_mach_interface "$w/base.dylib" ) > /dev/null 2> "$w/err" || rc=$?
+rc=0; ( unset NM LIPO; OTOOL="$CL/bin/llvm-otool"; SHIPYARD_MACHO_DIRS="$w/noprefix"; export OTOOL SHIPYARD_MACHO_DIRS; shipyard_mach_interface "$w/base.dylib" ) > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 0 ] || fail "OTOOL alone finds llvm-nm, llvm-lipo and llvm-ar beside it: exit $rc: $(cat "$w/err")"
 echo "ok: readers are the pinned clang22's, never PATH's"
 
-mkdir -p "$w/sy/scripts/lib" "$w/sy/components/clang22"
-cp "$BE" "$here/../scripts/deviations.sh" "$w/sy/scripts/"
-cp "$here/../scripts/lib/mach-nm.sh" "$here/../scripts/lib/mach-interface.sh" "$w/sy/scripts/lib/"
+mkdir -p "$w/sy/scripts/lib" "$w/sy/.mavergreen/ingredients/clang22"
+cp "$BE" "$here/../scripts/deviations.sh" "$here/../scripts/mavergreen-meta.sh" "$w/sy/scripts/"
+cp "$here/../scripts/lib/name-rules.sh" "$here/../scripts/lib/macho-tools.sh" "$here/../scripts/lib/mach-interface.sh" "$w/sy/scripts/lib/"
 printf '#!/bin/sh\nprintf "%%s\\n" "$1" >> "%s/fetched"\nprintf "%%s\\n" "%s"\n' "$w" "$CL" > "$w/sy/scripts/fetch_clang22.sh"
 rm -rf "$w/A" "$w/B"; mkdir -p "$w/A/lib" "$w/B/lib"; cp "$w/base.dylib" "$w/A/lib/x.dylib"; cp "$w/import.dylib" "$w/B/lib/x.dylib"
-befetch() { rc=0; ( unset NM OTOOL LIPO; SHIPYARD_MG_PREFIX="$w/noprefix"; export SHIPYARD_MG_PREFIX; sh "$w/sy/scripts/build-equivalence.sh" --repo "$w" "$w/A" "$w/B" ) > "$w/out" 2> "$w/err" || rc=$?; out="$(cat "$w/out")"; err="$(cat "$w/err")"; }
+befetch() { rc=0; ( unset NM OTOOL LIPO; SHIPYARD_MACHO_DIRS="$w/noprefix"; export SHIPYARD_MACHO_DIRS; sh "$w/sy/scripts/build-equivalence.sh" --repo "$w" "$w/A" "$w/B" ) > "$w/out" 2> "$w/err" || rc=$?; out="$(cat "$w/out")"; err="$(cat "$w/err")"; }
 befetch
 [ "$rc" -eq 1 ] || fail "no reader installed: fetches the pinned clang22 beside the script: exit $rc, want 1 (err: $err)"
 grep -qx "  only in B: x86_64 import _puts" "$w/out" || fail "fetched readers compare the interface: $out"
-[ "$(cat "$w/fetched")" = "$w/sy/scripts/../components/clang22" ] || fail "fetch_clang22.sh is given the pin beside the script: $(cat "$w/fetched")"
+[ "$(cat "$w/fetched")" = "$w/sy/scripts/.." ] || fail "fetch_clang22.sh is given the pin beside the script: $(cat "$w/fetched")"
 rm -f "$w/fetched"; rm -rf "$w/A/lib/x.dylib" "$w/B/lib/x.dylib"; printf 'a\n' > "$w/A/lib/t"; printf 'b\n' > "$w/B/lib/t"
 befetch
 [ "$rc" -eq 1 ] && [ ! -f "$w/fetched" ] || fail "no Mach-O to compare: nothing is fetched: exit $rc, fetched: $(cat "$w/fetched" 2>/dev/null)"
@@ -171,7 +172,7 @@ printf '#!/bin/sh\necho offline >&2\nexit 1\n' > "$w/sy/scripts/fetch_clang22.sh
 befetch
 [ "$rc" -eq 2 ] || fail "a failed fetch: exit $rc, want 2 (err: $err)"
 case "$err" in *offline*) ;; *) fail "a failed fetch shows fetch_clang22.sh's stderr: $err" ;; esac
-rm -rf "$w/sy/components"
+rm -rf "$w/sy/.mavergreen"
 befetch
 [ "$rc" -eq 2 ] || fail "no reader and no pin beside the script: exit $rc, want 2 (err: $err)"
 echo "ok: with no reader installed, the pinned clang22 beside the script is fetched"

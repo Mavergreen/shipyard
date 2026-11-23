@@ -186,7 +186,7 @@ rc=0; (cd "$w/r-x509" && sh "$C" --plist "$P" "$A") > "$w/out" 2>&1 || rc=$?
 [ "$rc" -eq 1 ] && grep -q 'excuses nothing' "$w/out" || fail "--repo defaults to the current directory: exit $rc: $(cat "$w/out")"
 echo "ok: --repo: standalone-text excuses the text findings of the archive paths it names, and nothing else"
 
-CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/../components/clang22" 2>/dev/null)" || { echo "SKIP: no clang22"; exit 77; }
+CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/.." 2>/dev/null)" || { echo "SKIP: no clang22"; exit 77; }
 SDK="$(sh "$here/../scripts/fetch_sdk.sh" 2>/dev/null)" || fail "no pinned 10.9 SDK"
 OTOOL="$CL/bin/llvm-otool"; LIPO="$CL/bin/llvm-lipo"; NM="$CL/bin/llvm-nm"; export OTOOL LIPO NM
 cc() { "$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -isysroot "$SDK" "$@"; }

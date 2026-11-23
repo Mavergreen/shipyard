@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: . macho-tools.sh     (sourced; defines mach_tool)
+#   usage: . macho-tools.sh     (sourced; defines mach_tool, mach_pinned_dirs and mach_pinned)
 #          mach_tool OTOOL|LIPO|NM|STRINGS   leaves the variable set and exported, to the reader the
 #                                            caller named or else LLVM's, and returns 0. When none is found
 #                                            it says which variable to set and returns 1.
@@ -11,11 +11,28 @@
 #          sources mavergreen-meta.sh and lib/name-rules.sh first, for mavergreen_prefix.
 #          NM alone also tries, before all of those, the llvm-nm beside the llvm-otool or llvm-lipo the
 #          caller chose as OTOOL or LIPO, and after all of them a bare nm.
+#          mach_pinned_dirs prints those family directories, one per line; mach_pinned NAME prints the
+#          first llvm-NAME in them, or returns 1. Neither looks on PATH.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the Mach-O
 #       readers are LLVM's on every host, so one binary reads the same on 10.9, modern macOS and
 #       Linux. They are looked for next to clang-22 on PATH, then in the family prefix, then from xcrun on macOS, then as a
 #       version-suffixed name on PATH (what a Linux distribution ships), then bare on PATH. Apple's
 #       otool and lipo are never a fallback: the 10.9 CLT's otool cannot read LC_BUILD_VERSION.
+
+mach_pinned_dirs() {
+  type mavergreen_prefix >/dev/null 2>&1 || { echo "macho-tools: mavergreen_prefix is undefined (source mavergreen-meta.sh and lib/name-rules.sh first)" >&2; return 2; }
+  _mp_vol="${MAVERGREEN_ROOT:-}"; _mp_vol="${_mp_vol%/}"
+  for _mp_d in ${SHIPYARD_MACHO_DIRS-$_mp_vol$(mavergreen_prefix clang22)/bin $_mp_vol/usr/local/mavergreen/clang22/bin $_mp_vol/usr/local/mavergreen/clang22-cross/bin}; do
+    printf '%s\n' "$_mp_d"
+  done
+}
+mach_pinned() {
+  _mp_ds="$(mach_pinned_dirs)" || return 2
+  for _mp_t in $_mp_ds; do
+    [ -x "$_mp_t/llvm-$1" ] && { printf '%s\n' "$_mp_t/llvm-$1"; return 0; }
+  done
+  return 1
+}
 
 mach_tool() {
   case "$1" in
@@ -37,10 +54,8 @@ mach_tool() {
     done
   fi
   _mt_clang="$(command -v clang-22 2>/dev/null || true)"
-  type mavergreen_prefix >/dev/null 2>&1 || { echo "macho-tools: mavergreen_prefix is undefined (source mavergreen-meta.sh and lib/name-rules.sh first)" >&2; return 2; }
-  _mt_vol="${MAVERGREEN_ROOT:-}"; _mt_vol="${_mt_vol%/}"
-  _mt_opt="$_mt_vol$(mavergreen_prefix clang22)"
-  for _mt_dir in "${_mt_clang%/*}" ${SHIPYARD_MACHO_DIRS-$_mt_opt/bin $_mt_vol/usr/local/mavergreen/clang22/bin $_mt_vol/usr/local/mavergreen/clang22-cross/bin}; do
+  _mt_dirs="$(mach_pinned_dirs)" || return 2
+  for _mt_dir in "${_mt_clang%/*}" $_mt_dirs; do
     [ -z "$_mt_found" ] || break
     [ -n "$_mt_dir" ] || continue
     if [ -x "$_mt_dir/llvm-$_mt" ]; then _mt_found="$_mt_dir/llvm-$_mt"; break; fi

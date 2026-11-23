@@ -20,9 +20,9 @@
 #          and bytes. meta, only-a and only-b are never excusable. A glob is a shell case pattern over
 #          the normalised path. A DIR without INGREDIENTS.md declares no entries.
 #          Readers: NM, OTOOL and LIPO name the pinned llvm-nm, llvm-otool and llvm-lipo; unset, an
-#          installed clang22's or clang22-cross's under SHIPYARD_MG_PREFIX (default /usr/local/mavergreen);
-#          with neither, the first Mach-O compared fetches the pin beside this script with
-#          fetch_clang22.sh ../components/clang22. With no reader at all, exit 2.
+#          installed clang22's (lib/macho-tools.sh's mach_pinned); with neither, the first Mach-O compared
+#          fetches the pin of the shipyard beside this script with fetch_clang22.sh. With no reader at all,
+#          exit 2.
 #          Exit 0 every difference excused and no entry unused; 1 an unexcused difference or an unused
 #          entry; 2 misuse or an input it cannot read.
 set -eu
@@ -32,7 +32,9 @@ TAB="$(printf '\t')"
 NL='
 '
 die() { echo "build-equivalence: $*" >&2; exit 2; }
-. "$SELF/lib/mach-nm.sh"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
+. "$SELF/lib/macho-tools.sh"
 . "$SELF/lib/mach-interface.sh"
 
 be_classify_macho() {
@@ -50,11 +52,9 @@ be_readers() {
   [ -z "$be_readers" ] || return 0
   be_readers=1
   [ -z "${NM:-}" ] && [ -z "${OTOOL:-}" ] && [ -z "${LIPO:-}" ] || return 0
-  for _br_d in clang22 clang22-cross; do
-    [ -x "${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/$_br_d/bin/llvm-otool" ] && return 0
-  done
-  [ -d "$SELF/../components/clang22" ] || return 0
-  _br_r="$(sh "$SELF/fetch_clang22.sh" "$SELF/../components/clang22" 2> "$work/fetch.err")" || { sed 's/^/  /' "$work/fetch.err" >&2; die "no installed clang22, and fetch_clang22.sh could not fetch the pinned one"; }
+  ! mach_pinned otool > /dev/null || return 0
+  [ -d "$SELF/../.mavergreen/ingredients/clang22" ] || return 0
+  _br_r="$(sh "$SELF/fetch_clang22.sh" "$SELF/.." 2> "$work/fetch.err")" || { sed 's/^/  /' "$work/fetch.err" >&2; die "no installed clang22, and fetch_clang22.sh could not fetch the pinned one"; }
   OTOOL="$_br_r/bin/llvm-otool"; export OTOOL
 }
 
