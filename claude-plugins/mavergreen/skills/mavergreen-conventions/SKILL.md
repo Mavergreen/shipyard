@@ -96,6 +96,10 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   on stderr. Revisit when the cmake product ships a Linux build, or a family Linux build needs a
   tool the list lacks (add it there, not to the product).
 
+  The updater is no exception: `build_updater.sh` builds it on Linux, a modern Mac and 10.9 alike
+  ("The updater builds with clang22"). Package tests read the pkg with `pkg_read.sh` (`list`, `facts`,
+  `plist`, `payload`), never `pkgutil`, `lsbom` or PlistBuddy, so they run on Linux too.
+
   To install another family product, pass `with: { products: "SHORT@TAG ..." }`: its requires come
   with it, so never hand-roll a `gh release download` plus `installer`. On Linux each product lands at
   the same `/usr/local/mavergreen/SHORT` as its pkg, owned by the runner user and marked by the pkg's
@@ -226,7 +230,9 @@ updaters, signing, or compat checks:**
 | `mavericks_fetch` · `MavericksFetch` · `mavericks_fetch.sh` (`shipyard_fetch_pinned`, `shipyard_fetch_verified`) | fetches a tarball against a pinned SHA-256 | ad-hoc `curl` |
 | `shipyard_curl URL OUT\|-` · `mavericks_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
 | `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
-| `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh with `stevedore expand`; runs on 10.9 and Linux | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
+| `pkg_read.sh` | a family `.pkg` read the same way on every host: `expand`, one component's `payload`, its `list` (the format of `lsbom -p fmug`), the manifest's `plist` keys, and `facts` (identifiers, versions, install-location, `hostArchitectures`, the OS floor, scripts) | `pkgutil`, `lsbom` or PlistBuddy in a package test, or a hand-rolled `gzip -dc Payload \| cpio` |
+| `build_updater.sh` | a product's Sparkle updater `.app` from its inputs, per arch with clang22 and merged, on Linux, a modern Mac or 10.9 | a per-repo copy of the per-arch configure and `lipo-merge-tree.sh` merge |
+| `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier the registry gives its short name, extracted afresh through `pkg_read.sh`; runs on 10.9 and Linux | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
 
 **Seam hosts.** `build_component_pkg.sh`, `set_install_floor.sh`, `build-base-component.sh`,
 `package-system-replace.sh` and the pkg readers (`artifact-facts.sh`, `fetch_product_pkg.sh`)
@@ -1722,6 +1728,15 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   two apps with `lipo-merge-tree.sh` under `LIPO="$CL/bin/llvm-lipo"`, and give the compat guard
   clang22's `OTOOL`, `LIPO`, `NM` and `STRINGS` off macOS. shipyard's own updater is built this way by
   `tests/lib/build-updater.sh`, in `release.yml`, in `ci.yml` and on Linux.
+  A product does none of this itself: it calls
+  ```sh
+  app="$(sh "$SHIPYARD_SCRIPTS/build_updater.sh" --product <short> --display-name "<name>" \
+    --confirm-title "<title>" --confirm-body "<body>" --pubkey updater/ed25519_key.pub \
+    --version "$VERSION" --clang22-pin components/clang22 --arch x86_64 [--arch arm64] \
+    --generic-icon --out-dir "$OUT")"
+  ```
+  which configures shipyard's `updater/product` project per arch, merges, and prints the `.app`. The
+  arches are the product's decision; arm64 needs a cross host (Linux or a modern Mac), not 10.9.
 
   `mavericks_add_updater_app` gives the updater `--no-default-config` (clang22's `clang.cfg` would add
   Recaulk and libc++ to it) and `-fuse-ld=lld`. Given one arch and a deployment target, it also gives it
