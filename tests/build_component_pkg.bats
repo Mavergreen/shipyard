@@ -116,3 +116,28 @@ build() {
   echo "$output" | grep -q 'BundleIsRelocatable is ON'
   echo "$output" | grep -q 'BundleIsVersionChecked is ON'
 }
+
+@test "build_component_pkg: a group- or world-writable entry is refused, naming it" {
+  chmod 664 "$APP/Contents/Info.plist"
+  run build "$WORK/w.pkg"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Applications/Fake.app/Contents/Info.plist"*"writable"* ]] || false
+  [ ! -e "$WORK/w.pkg" ]
+  chmod 644 "$APP/Contents/Info.plist"; chmod 757 "$APP/Contents/MacOS"
+  run build "$WORK/w.pkg"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Applications/Fake.app/Contents/MacOS"*"writable"* ]] || false
+  chmod 755 "$APP/Contents/MacOS"; ln -s Fake "$APP/Contents/MacOS/link"
+  run build "$WORK/w.pkg"
+  [ "$status" -eq 0 ]
+}
+
+@test "build_component_pkg: the payload root entry is 0755 whatever the staged root's mode" {
+  for m in 775 700; do
+    chmod "$m" "$WORK/root"
+    build "$WORK/r$m.pkg" >/dev/null 2>&1
+    rm -rf "$WORK/x"; "$STEVEDORE" expand "$WORK/r$m.pkg" "$WORK/x"
+    [ "$(gzip -dc "$WORK/x/Payload" | cpio -itv 2>/dev/null | awk '$NF == "." { print $1 }')" = drwxr-xr-x ]
+  done
+  cmp "$WORK/r775.pkg" "$WORK/r700.pkg"
+}

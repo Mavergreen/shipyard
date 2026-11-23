@@ -8,10 +8,11 @@
 #          paired by path relative to the install root, after one normalisation: in a file name,
 #          "-<16 lowercase hex>." compares as "-H.". Two names in one build that normalise alike are
 #          exit 2, never a guess.
-#          Levels: bytes (contents differ), interface (a Mach-O or archive whose interface differs),
-#          meta (a symlink target or the executable bit differs), only-a, only-b. Identical files are
-#          not printed. stdout: one line per difference, "<level>TAB<path>TAB<excusing glob or ->",
-#          sorted by path, an interface difference followed by indented detail lines; then
+#          Levels: bytes (contents or the file mode differ), interface (a Mach-O or archive whose
+#          interface differs), meta (a symlink target or the executable bit differs), only-a, only-b.
+#          Identical files are not printed. stdout: one line per difference, "<level>TAB<path>TAB<excusing
+#          glob or ->", sorted by path, a difference of mode followed by "  mode: A <octal>, B <octal>"
+#          and an interface difference by indented detail lines; then
 #          "unused TAB - TAB <glob>" for each entry that excused nothing. stderr: "build-equivalence:
 #          N differences, M excused, K unused".
 #          Entries come from DIR's (default .) INGREDIENTS.md through deviations.sh:
@@ -123,18 +124,25 @@ list() {
   _bad="$(cd "$_root" && find . \( -path '*
 *' -o -path "*$TAB*" \) -print | head -1)"
   [ -z "$_bad" ] || die "$_root holds a path with a newline or tab: $_bad"
+  ( cd "$_root" && for _bit in 4000 2000 1000 400 200 100 40 20 10 4 2 1; do
+      find . -type f -perm -"$_bit" | sed 's|^\./||; s|$|'"$TAB$_bit"'|'
+    done ) > "$work/$_side.modes"
   ( cd "$_root" && {
       find . -type l | sed 's|^\./||; s|$|'"$TAB"'l|'
       find . -type f -perm -100 | sed 's|^\./||; s|$|'"$TAB"'x|'
       find . -type f ! -perm -100 | sed 's|^\./||; s|$|'"$TAB"'f|'
-    } ) | awk -F "$TAB" '
-      BEGIN { re = "-"; for (i = 0; i < 16; i++) re = re "[0-9a-f]"; re = re "[.]" }
+    } ) | awk -F "$TAB" -v modes="$work/$_side.modes" '
+      BEGIN {
+        re = "-"; for (i = 0; i < 16; i++) re = re "[0-9a-f]"; re = re "[.]"
+        while ((getline l < modes) > 0) { j = index(l, "\t"); m[substr(l, 1, j - 1)] += substr(l, j + 1) + 0 }
+      }
       {
+        mo = ($2 == "l") ? "-" : m[$1] + 0
         dir = ""; base = $1; n = 0
         for (i = length($1); i > 0; i--) if (substr($1, i, 1) == "/") { n = i; break }
         if (n > 0) { dir = substr($1, 1, n); base = substr($1, n + 1) }
         gsub(re, "-H.", base)
-        print dir base "\t" $1 "\t" $2
+        print dir base "\t" $1 "\t" $2 "\t" mo
       }' | sort -t "$TAB" -k1,1 > "$work/$_side.list"
   _dup="$(cut -f1 "$work/$_side.list" | uniq -d | head -1)"
   [ -z "$_dup" ] || die "two paths in $_root normalise to $_dup"
@@ -152,11 +160,11 @@ printf '%s\n' "$_entries" | awk '$1 == "build-equivalence" || $1 == "build-equiv
 : > "$work/out"
 
 awk -F "$TAB" '
-  FNR == NR { ra[$1] = $2; ka[$1] = $3; next }
-  { rb[$1] = $2; kb[$1] = $3 }
+  FNR == NR { ra[$1] = $2; ka[$1] = $3; ma[$1] = $4; next }
+  { rb[$1] = $2; kb[$1] = $3; mb[$1] = $4 }
   END {
-    for (k in ra) print k "\t" ra[k] "\t" ka[k] "\t" ((k in rb) ? rb[k] : ".") "\t" ((k in rb) ? kb[k] : ".")
-    for (k in rb) if (!(k in ra)) print k "\t.\t.\t" rb[k] "\t" kb[k]
+    for (k in ra) print k "\t" ra[k] "\t" ka[k] "\t" ((k in rb) ? rb[k] : ".") "\t" ((k in rb) ? kb[k] : ".") "\t" ma[k] "\t" ((k in rb) ? mb[k] : ".")
+    for (k in rb) if (!(k in ra)) print k "\t.\t.\t" rb[k] "\t" kb[k] "\t.\t" mb[k]
   }' "$work/a.list" "$work/b.list" | sort -t "$TAB" -k1,1 > "$work/union"
 
 set -f
@@ -173,7 +181,7 @@ excuse() {
 }
 
 ndiff=0; nex=0; nunused=0
-while IFS="$TAB" read -r n ra ka rb kb; do
+while IFS="$TAB" read -r n ra ka rb kb ma mb; do
   level=same; detail=
   if [ "$ra" = . ]; then level=only-b
   elif [ "$rb" = . ]; then level=only-a
@@ -190,7 +198,10 @@ while IFS="$TAB" read -r n ra ka rb kb; do
     else
       level=bytes
     fi
+  elif [ "$ma" != "$mb" ]; then
+    level=bytes
   fi
+  case "$level" in bytes|interface) [ "$ma" = "$mb" ] || detail="  mode: A $ma, B $mb${detail:+$NL$detail}" ;; esac
   [ "$level" != same ] || continue
   excuse "$level" "$n"
   ndiff=$((ndiff + 1))

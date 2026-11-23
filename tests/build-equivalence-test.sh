@@ -1,8 +1,8 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: build-equivalence-test.sh
-#          build-equivalence.sh over plain-file fixtures: pairing, the non-Mach-O levels, entries, output and
-#          exit codes. Mach-O interface comparison is tested separately.
+#          build-equivalence.sh over plain-file fixtures: pairing, the non-Mach-O levels, file modes,
+#          entries, output and exit codes. Mach-O interface comparison is tested separately.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; S="$here/../scripts/build-equivalence.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/be-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
@@ -81,6 +81,19 @@ run --repo "$w/none" "$w/A" "$w/B"; want "same symlink target" 0 ""
 fresh; ln -s t "$w/A/l"; put "$w/B/l" t
 run --repo "$w/none" "$w/A" "$w/B"; want "a link in one, a file in the other" 1 "meta${T}l${T}-"
 echo "ok: symlink target and exec bit are meta, never excused"
+
+fresh; put "$w/A/etc/m" x; put "$w/B/etc/m" x; chmod 644 "$w/A/etc/m"; chmod 664 "$w/B/etc/m"
+run --repo "$w/none" "$w/A" "$w/B"; want "a mode difference is bytes" 1 "bytes${T}etc/m${T}-
+  mode: A 644, B 664"
+run --repo "$w/r-text" "$w/A" "$w/B"; want "a mode difference is excusable as bytes" 0 "bytes${T}etc/m${T}etc/*
+  mode: A 644, B 664"
+put "$w/B/etc/m" y
+run --repo "$w/none" "$w/A" "$w/B"; want "contents and mode both differ" 1 "bytes${T}etc/m${T}-
+  mode: A 644, B 664"
+fresh; put "$w/A/bin/s" x; put "$w/B/bin/s" x; chmod 755 "$w/A/bin/s"; chmod 4755 "$w/B/bin/s"
+run --repo "$w/none" "$w/A" "$w/B"; want "a setuid bit is a mode difference" 1 "bytes${T}bin/s${T}-
+  mode: A 755, B 4755"
+echo "ok: file modes compare as bytes"
 
 fresh; put "$w/A/Odd Dir/a * b?.txt" 1; put "$w/B/Odd Dir/a * b?.txt" 2; put "$w/A/Odd Dir/a b.txt" 1; put "$w/B/Odd Dir/a b.txt" 1
 run --repo "$w/none" "$w/A" "$w/B"; want "space and star in a name" 1 "bytes${T}Odd Dir/a * b?.txt${T}-"
