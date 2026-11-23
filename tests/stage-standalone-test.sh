@@ -6,7 +6,7 @@
 #          with its modes and links, every entry at SOURCE_DATE_EPOCH, the same bytes from two runs, and
 #          passes check-standalone-archive.sh; an app the root stages in Applications/ sits at the
 #          archive's top, an updater there stays out, and a bin/ link into /Applications/<Name>.app
-#          becomes relative, refused when it does not resolve.
+#          becomes relative, refused when it does not resolve; an AppleDouble file is refused.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/stage_standalone.sh"
@@ -124,5 +124,17 @@ grep -q 'bin/x' "$w/err" || fail "the unresolvable link is named: $(cat "$w/err"
 rm "$T/bin/x"; ln -s /Applications/X.app/Contents/MacOS/gone "$T/bin/x"
 rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "a bin/ link to nothing in the app: exit $rc, want 1: $(cat "$w/err")"
+
+rm "$T/bin/x"; ln -s /Applications/X.app/Contents/MacOS/x "$T/bin/x"
+printf 'junk' > "$R/Applications/X.app/Contents/._Info.plist"; rm -f "$w/two/x-1.0-macos-x86_64.tar.gz"
+rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "an AppleDouble file in a staged app: exit $rc, want 1: $(cat "$w/err")"
+grep -q 'AppleDouble.*X.app/Contents/._Info.plist' "$w/err" || fail "the AppleDouble entry is named: $(cat "$w/err")"
+rm "$R/Applications/X.app/Contents/._Info.plist"; printf 'junk' > "$T/bin/._x"
+rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
+[ "$rc" -eq 1 ] || fail "an AppleDouble file in the tree: exit $rc, want 1: $(cat "$w/err")"
+grep -q 'AppleDouble.*bin/._x' "$w/err" || fail "the AppleDouble entry in the tree is named: $(cat "$w/err")"
+[ ! -e "$w/two/x-1.0-macos-x86_64.tar.gz" ] || fail "a refused stage leaves no archive"
+rm "$T/bin/._x"
 
 echo "PASS: stage-standalone"

@@ -17,8 +17,10 @@
 #          lock file DEST.lock, waiting up to SHIPYARD_LOCK_WAIT seconds (default 900) for it.
 #          It needs cpio and gzip to unpack the Payload, which a bare Linux image may lack: without either
 #          it exits 2 before fetching, naming the package to install.
+#          A Payload holding an AppleDouble member (._*) is refused, naming the first.
 #          Prints DEST on stdout; progress goes to stderr. Exit 1 on a failed fetch, checksum or
-#          extraction, 2 on a usage error, a missing cpio or gzip, or a registry that cannot answer.
+#          extraction, or an AppleDouble member; 2 on a usage error, a missing cpio or gzip, or a
+#          registry that cannot answer.
 #          MAVERGREEN_RELEASES replaces https://github.com (the tests serve a file:// tree).
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
@@ -85,6 +87,10 @@ n="$(printf '%s\n' "$matches" | grep -c . || true)"
 [ "$n" = 1 ] || {
   echo "fetch_product_pkg: expected one component $ID in $ASSET, found $n" >&2; exit 1; }
 comp="$(dirname "$matches")"
+gzip -dc "$comp/Payload" | cpio -it --quiet 2>/dev/null > "$tmp/members" || {
+  echo "fetch_product_pkg: could not list the Payload of $ID" >&2; exit 1; }
+ad="$(sed 's|^\./||' "$tmp/members" | awk '{ n = split($0, c, "/") } c[n] ~ /^\._/ { print; exit }')"
+[ -z "$ad" ] || { echo "fetch_product_pkg: $ID's Payload holds an AppleDouble member, $ad: a family pkg carries none" >&2; exit 1; }
 mkdir "$tmp/payload"
 ( cd "$tmp/payload" && gzip -dc "$comp/Payload" | cpio -id --quiet 2>/dev/null ) || {
   echo "fetch_product_pkg: could not unpack the Payload of $ID" >&2; exit 1; }

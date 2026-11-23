@@ -11,8 +11,8 @@
 #          staged outside the tree stay out, and stderr names what was left out. Entries are sorted, stamped at source-date-epoch.sh's time, root:wheel with no
 #          Mac metadata where this tar can say so, and gzipped without a name or time, so one tree gives
 #          the same bytes every run. Exit 1 when STAGED_PKG_ROOT holds no tree for SHORT, an app's name
-#          is taken in the tree, or a bin/ link into /Applications does not resolve; 2 on a usage
-#          or naming error.
+#          is taken in the tree, a bin/ link into /Applications does not resolve, or the tree or an
+#          app holds an AppleDouble file (._*); 2 on a usage or naming error.
 # spec: tests/stage-standalone-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
@@ -29,6 +29,8 @@ TREE="$ROOT/usr/local/mavergreen/$P"
 EPOCH="$(sh "$SELF/source-date-epoch.sh")"
 stamp="$(date -u -d "@$EPOCH" +%Y%m%d%H%M.%S 2>/dev/null || date -u -r "$EPOCH" +%Y%m%d%H%M.%S)"
 
+ad="$(cd "$ROOT" && find "usr/local/mavergreen/$P" Applications -name '._*' 2>/dev/null | LC_ALL=C sort | head -1)"
+[ -z "$ad" ] || { echo "stage_standalone: an AppleDouble file, $ROOT/$ad: a staged root holds none" >&2; exit 1; }
 work="$(mktemp -d "${TMPDIR:-/tmp}/stage-standalone.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 top="$P-$V"
@@ -57,7 +59,7 @@ if [ -d "$work/$top/bin" ]; then
     fi
   done
 fi
-find "$work/$top" \( -name '._*' -o -name .DS_Store \) -exec rm -rf {} + 2>/dev/null || :
+find "$work/$top" -name .DS_Store -exec rm -rf {} + 2>/dev/null || :
 (cd "$ROOT" && find . \( -type f -o -type l \) ! -path "./usr/local/mavergreen/$P/*" | sed 's|^\./||' | LC_ALL=C sort) \
   | awk -v apps="$work/apps" 'BEGIN { while ((getline n < apps) > 0) a["Applications/" n "/"] = 1 }
       { for (k in a) if (index($0, k) == 1) next; print }' > "$work/left"
