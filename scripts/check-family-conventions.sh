@@ -658,10 +658,45 @@ for f in $(grep -E "$SRC_RX" "$TF" | grep -Ev '^tests?/' || true); do
 done
 [ -n "$builds_pkg" ] || [ -z "$stv_pkg" ] || builds_pkg="$stv_pkg via stevedore"
 [ -n "$builds_pkg" ] || ! ci_mentions 'sign_and_appcast' || builds_pkg="a signing workflow"
-if [ -n "$builds_pkg" ] && ! ci_mentions 'shipyard-check[^#]*--dist' && ! deviated artifact-checks-wired "$REL"; then
+# spec: SKILL.md "Family conventions" checks 21 and 29 -- they judge the repo that PUBLISHES a pkg. What
+#       a release uploads is a directory filled by scripts, so it cannot be read statically; a repo
+#       that only holds pkg-building code for other repos declares a pkg-builder-library deviation,
+#       refused once any workflow names a .pkg, signs an appcast, or runs a file that builds a pkg or,
+#       through any chain of scripts naming each other, calls one.
+publishes_pkg="$builds_pkg"
+if [ -n "$builds_pkg" ] && deviated pkg-builder-library "$REL"; then
+  _lib_why=""
+  ci_mentions '\.pkg' && _lib_why="a workflow names a .pkg"
+  ci_mentions 'sign_and_appcast' && _lib_why="a workflow signs an appcast"
+  grep -E "$SRC_RX" "$TF" | grep -Ev '^tests?/' > "$tmp/libfiles" || :
+  : > "$tmp/libset"
+  while IFS= read -r f; do
+    grep -v '^[[:space:]]*#' "$f" 2>/dev/null \
+      | grep -qE "(^|[^A-Za-z0-9_-])(pkgbuild|productbuild)([[:space:]]|\$)|$_stv_call" && echo "$f" >> "$tmp/libset"
+  done < "$tmp/libfiles"
+  _lib_n=-1
+  while [ "$(($(wc -l < "$tmp/libset")))" -ne "$_lib_n" ]; do
+    _lib_n="$(($(wc -l < "$tmp/libset")))"
+    sed 's|.*/||' "$tmp/libset" > "$tmp/libnames"
+    while IFS= read -r f; do
+      grep -qxF "$f" "$tmp/libset" && continue
+      grep -v '^[[:space:]]*#' "$f" 2>/dev/null | grep -qF -f "$tmp/libnames" && echo "$f" >> "$tmp/libset"
+    done < "$tmp/libfiles"
+  done
+  _lib_wf="$(grep '^\.github/workflows/' "$tmp/libset" | head -1 || :)"
+  [ -z "$_lib_wf" ] || _lib_why="$_lib_wf builds a pkg or runs a script that does"
+  if [ -n "$_lib_why" ]; then
+    chk_fail artifact-checks-wired "a pkg-builder-library deviation is declared, but $_lib_why" \
+      "this repo publishes a pkg, and is judged as one" \
+      "delete the pkg-builder-library deviation, or move the pkg build and its publishing to the repo that releases the pkg"
+  else
+    publishes_pkg=""
+  fi
+fi
+if [ -n "$publishes_pkg" ] && ! ci_mentions 'shipyard-check[^#]*--dist' && ! deviated artifact-checks-wired "$REL"; then
   chk_fail artifact-checks-wired "this repo builds a .pkg ($builds_pkg) but no workflow runs shipyard-check --dist" \
     "nothing checks what it installs or under which identity" \
-    "run shipyard-check --dist <dir> at package time, with SHIPYARD_CHECK_VERSION set (see the conventions skill, 'Artifact conformance'), or declare .mavergreen/deviations/artifact-checks-wired/<label>/ (scope *, a reason, a revisit)"
+    "run shipyard-check --dist <dir> at package time, with SHIPYARD_CHECK_VERSION set (see the conventions skill, 'Artifact conformance'), or declare .mavergreen/deviations/artifact-checks-wired/<label>/ (scope *, a reason, a revisit); a repo whose release publishes no pkg, holding pkg-building code for others to run, declares .mavergreen/deviations/pkg-builder-library/<label>/ (scope *) instead"
 fi
 
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
@@ -697,7 +732,21 @@ delegate host-tools check-host-tools.sh \
 #       option flags) and a word ending stage_product.sh, or a word ending /stage_product.sh; a word
 #       holding "=" is an assignment, not a call. SKILL.md's check 23 row lists what this misses.
 chk_ran stage-product
-if [ -n "$builds_pkg" ] && ! deviated stage-product "$REL"; then
+# spec: SKILL.md "Family conventions" check 23 -- a line that runs a pinned build-chain library's pkg
+#       build declares a staged-by deviation scoped to the library; it excuses check 23 alone, and
+#       only while .mavergreen/ingredients/<library>/VERSION is tracked and non-empty.
+staged_by=""
+for _sb in $(shipyard_deviation_scopes staged-by); do
+  _pin=".mavergreen/ingredients/$_sb/VERSION"
+  if tracked "$_pin" && grep -q '[^[:space:]]' "$_pin"; then
+    staged_by="$_sb"
+  else
+    chk_fail stage-product "a staged-by deviation names $_sb, but $_pin is not a tracked, non-empty file" \
+      "the library is not a pinned ingredient, so nothing says its build stages this pkg" \
+      "pin the library's release in .mavergreen/ingredients/$_sb/, or delete the staged-by deviation"
+  fi
+done
+if [ -n "$builds_pkg" ] && [ -z "$staged_by" ] && ! deviated stage-product "$REL"; then
   staged=""
   grep -E "$SRC_RX" "$TF" | grep -v '^tests/' > "$tmp/l741" || :
   while IFS= read -r f; do
@@ -707,7 +756,7 @@ if [ -n "$builds_pkg" ] && ! deviated stage-product "$REL"; then
   done < "$tmp/l741"
   [ -n "$staged" ] || chk_fail stage-product "this repo builds a .pkg ($builds_pkg) but never calls stage_product.sh" \
                          "its install scripts and manifest are hand-rolled" \
-                         "stage the product under opt/mavergreen/<name>/ (apps under Applications/Mavergreen/) and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), or declare .mavergreen/deviations/stage-product/<label>/ (scope *, a reason, a revisit)"
+                         "stage the product under opt/mavergreen/<name>/ (apps under Applications/Mavergreen/) and call \$SHIPYARD_SCRIPTS/stage_product.sh (see the conventions skill, 'Install layout'), declare .mavergreen/deviations/staged-by/<label>/ (scope <library>) if a pinned library's build calls it, or declare .mavergreen/deviations/stage-product/<label>/ (scope *, a reason, a revisit)"
 fi
 
 # spec: SKILL.md "Family conventions" check 25, and "Rosetta" above -- the family is retiring
@@ -764,7 +813,7 @@ done < "$tmp/l28"
 #       needs that job directly; a job calling a LOCAL reusable workflow that does is that job. Only
 #       an unscoped on-target deviation stands in for the job; a scoped one declares a gap in the
 #       job's coverage. A workflow that does not parse is workflow-yaml's.
-if rel_ran on-target && [ -n "$builds_pkg" ] && ! deviated on-target \
+if rel_ran on-target && [ -n "$publishes_pkg" ] && ! deviated on-target \
    && [ "$PY_OK" -eq 1 ]; then
   rc=0
   chk_py /dev/stdin "$REL" > "$tmp/c29" <<'PY' || rc=$?

@@ -50,6 +50,14 @@ scope_refusal() {
       fi ;;
     arch-host|cxxabi)
       ! only "$_s" '*?/' || echo "$_c names the install paths it covers: a scope of <install-path glob>, never * or a glob of nothing but wildcards" ;;
+    build-equivalence|build-equivalence-interface)
+      ! only "$_s" '*?/' || echo "$_c names the payload paths it excuses: a scope of <payload-path glob>, never * or a glob of nothing but wildcards" ;;
+    standalone-text)
+      ! only "$_s" '*?/' || echo "standalone-text names the archive paths whose text it excuses: a scope of <archive-path glob>, never * or a glob of nothing but wildcards" ;;
+    staged-by)
+      case "$_s" in
+        ''|.|..|*[!A-Za-z0-9._-]*) echo "staged-by names the pinned library that stages the pkg: a scope of <library>, its .mavergreen/ingredients/<library>/, never a path or a glob" ;;
+      esac ;;
     packager)
       ! wild "$_s" || echo "packager names one path: a scope of <path>, never a wildcard" ;;
     objc-api)

@@ -147,6 +147,30 @@ deviation "$r" cxxabi runtime 'opt/mavergreen/libcxx22/lib/libc++abi.1.dylib' 't
 out="$(sh "$S" "$r")"
 has 'arch-host opt/mavergreen/cmake/\* developers on Apple Silicon run it' "an install-path glob is an arch-host scope"
 has 'cxxabi opt/mavergreen/libcxx22/lib/libc++abi.1.dylib the family runtime' "an install path is a cxxabi scope"
+# spec: scripts/build-equivalence.sh header -- build-equivalence and build-equivalence-interface name the
+#       payload paths they excuse, and standalone-text the archive paths whose text it excuses; a glob of
+#       nothing but wildcards would excuse every difference, or every script in the archive.
+for check in build-equivalence build-equivalence-interface standalone-text; do
+  for scope in '*' '*/?' '**'; do
+    fresh; deviation "$r" "$check" x "$scope" 'everything'
+    refused "$check" "the $check scope $scope"
+  done
+done
+fresh
+deviation "$r" build-equivalence rust 'opt/mavergreen/rust/*' 'crate hashes follow the build triple'
+deviation "$r" standalone-text ca 'src/crypto/x509/root_keychainunion_darwin*.go' 'CA paths the built programs read'
+out="$(sh "$S" "$r")"
+has 'build-equivalence opt/mavergreen/rust/\* crate hashes follow the build triple' "a payload-path glob is a build-equivalence scope"
+has 'standalone-text src/crypto/x509/root_keychainunion_darwin\*.go CA paths the built programs read' "an archive-path glob is a standalone-text scope"
+# spec: scripts/check-family-conventions.sh check 23 -- staged-by names the pinned library whose release
+#       stages the pkg; the gate reads .mavergreen/ingredients/<library>/VERSION, so the scope is one name.
+for scope in '*' 'golang-*' '.mavergreen/ingredients/golang-port'; do
+  fresh; deviation "$r" staged-by x "$scope" 'the library stages it'
+  refused 'staged-by' "the staged-by scope $scope"
+done
+fresh; deviation "$r" staged-by port golang-port 'its build/package.sh stages the pkg'
+out="$(sh "$S" "$r")"
+has 'staged-by golang-port its build/package.sh stages the pkg' "a library name is a staged-by scope"
 # spec: scripts/assert_binary_compatible.sh header -- an objc-api deviation names one artifact scope and points
 #       at one reviewed evidence record, evidence=<repo-relative file>#<record id>, then gives the review reason;
 #       an all-wildcard, evidence-less, record-less or reasonless one would excuse sends in silence.

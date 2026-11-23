@@ -61,21 +61,20 @@ printf '      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n
 (cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" >/dev/null 2>&1) \
   || { echo "FAIL: a pkg repo is not held to a registry: $(cd "$work/pk" && GITHUB_REPOSITORY=Mavergreen/nobody-registered-this sh "$S" 2>&1)"; exit 1; }
 
-# spec: SKILL.md "Family conventions" checks 21, 24 and 29 -- they ask what a repo PUBLISHES. A
+# spec: SKILL.md "Family conventions" checks 21 and 29 -- they ask what a repo PUBLISHES. A
 #       build-chain library holds the pkg-building code other repos run and releases a tarball; it
-#       declares "- pkg-builder-library: <reason>", which the gate refuses once any workflow names a
+#       declares a pkg-builder-library deviation, which the gate refuses once any workflow names a
 #       .pkg, signs an appcast, or runs a pkg build, directly or through a script that does.
-LIBREG=Mavergreen/nobody-registered-this
 lib() {  # $1 = dir, $2 = extra workflow lines (optional), $3 = declare (optional)
   mkrepo "$1" novm
-  printf '#!/bin/sh\nsh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\nsh "$SHIPYARD_SCRIPTS/build_component_pkg.sh" --root stage --identifier dev.mavergreen.w out.pkg\n' > "$1/build/package.sh"
-  printf '#!/bin/sh\ngit archive --format=tar HEAD build | gzip -n > "$1/lib-1.0.0.tar.gz"\n' > "$1/build/tarball.sh"
+  printf '#!/bin/sh\nsh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --version 1 --scripts-out scr\nsh "$SHIPYARD_SCRIPTS/build_component_pkg.sh" --root stage --identifier dev.mavergreen.w out.pkg\n' > "$1/build/package.sh"
+  printf '#!/bin/sh\ngit archive --format=tar HEAD build | gzip -n > "$1/lib.tar.gz"\n' > "$1/build/tarball.sh"
   printf '      - run: sh build/tarball.sh dist\n' >> "$1/.github/workflows/release.yml"
   [ -z "${2:-}" ] || printf '%s\n' "$2" >> "$1/.github/workflows/release.yml"
-  [ -z "${3:-}" ] || printf '\n- pkg-builder-library: holds build/package.sh for the lines to run; its release is a tarball\n' >> "$1/INGREDIENTS.md"
+  [ -z "${3:-}" ] || deviation "$1" pkg-builder-library library '*' 'holds build/package.sh for the lines to run; its release is a tarball'
   (cd "$1" && git add -A) >/dev/null 2>&1
 }
-libgate() { (cd "$1" && GITHUB_REPOSITORY="$LIBREG" sh "$S" 2>&1); }
+libgate() { (cd "$1" && sh "$S" 2>&1); }
 lib_fails() {  # $1 = label, $2 = dir, $3 = phrase
   out="$(libgate "$2")" && { echo "FAIL: $1 must fail"; exit 1; }
   printf '%s\n' "$out" | grep -q -- "$3" || { echo "FAIL: $1 should fail with '$3': $out"; exit 1; }
@@ -83,57 +82,54 @@ lib_fails() {  # $1 = label, $2 = dir, $3 = phrase
 lib "$work/lib" '' declare
 out="$(libgate "$work/lib")" || { echo "FAIL: a declared pkg-builder library that publishes a tarball must pass: $out"; exit 1; }
 lib "$work/lib-undeclared"
-lib_fails "an undeclared library is judged by the code it holds" "$work/lib-undeclared" 'assigns no product'
+lib_fails "an undeclared library is judged by the code it holds" "$work/lib-undeclared" 'no workflow runs shipyard-check --dist'
 PUB='      - run: cp "$OUT"/*.pkg dist/'
 lib "$work/lib-pub" "$PUB"
-lib_fails "a repo that publishes a .pkg, unregistered" "$work/lib-pub" 'assigns no product'
-lib_fails "a repo that publishes a .pkg, without conformance" "$work/lib-pub" 'no workflow runs check-artifact-conformance.sh'
+lib_fails "a repo that publishes a .pkg, without conformance" "$work/lib-pub" 'no workflow runs shipyard-check --dist'
 lib_fails "a repo that publishes a .pkg, with no 10.9 job" "$work/lib-pub" 'mavericks-vm'
 lib "$work/lib-pub-decl" "$PUB" declare
-lib_fails "pkg-builder-library on a repo that publishes a .pkg" "$work/lib-pub-decl" 'pkg-builder-library is declared, but'
-lib_fails "a refused pkg-builder-library still asks for a product" "$work/lib-pub-decl" 'assigns no product'
-lib_fails "a refused pkg-builder-library still asks for conformance" "$work/lib-pub-decl" 'no workflow runs check-artifact-conformance.sh'
+lib_fails "pkg-builder-library on a repo that publishes a .pkg" "$work/lib-pub-decl" 'a pkg-builder-library deviation is declared, but'
+lib_fails "a refused pkg-builder-library still asks for conformance" "$work/lib-pub-decl" 'no workflow runs shipyard-check --dist'
 lib "$work/lib-wrap" '      - run: sh build/release.sh dist' declare
 printf '#!/bin/sh\nsh build/package.sh "$1"\n' > "$work/lib-wrap/build/release.sh"; (cd "$work/lib-wrap" && git add -A) >/dev/null 2>&1
-lib_fails "pkg-builder-library on a workflow that runs the pkg build through a wrapper" "$work/lib-wrap" 'pkg-builder-library is declared, but'
+lib_fails "pkg-builder-library on a workflow that runs the pkg build through a wrapper" "$work/lib-wrap" 'a pkg-builder-library deviation is declared, but'
 lib "$work/lib-sign" '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg "$P"' declare
-lib_fails "pkg-builder-library on a workflow that signs an appcast" "$work/lib-sign" 'pkg-builder-library is declared, but'
+lib_fails "pkg-builder-library on a workflow that signs an appcast" "$work/lib-sign" 'a pkg-builder-library deviation is declared, but'
 
 # spec: SKILL.md "Family conventions" check 23 -- a line that builds through a pinned build-chain
-#       library never names stage_product.sh itself; "- staged-by:<library>: <reason>" excuses check 23
-#       alone, and only while components/<library>/version is tracked and non-empty.
-line() {  # $1 = dir, $2 = deviation line or empty, $3 = pin contents, or "empty", or omitted
+#       library never names stage_product.sh itself; a staged-by deviation scoped to the library
+#       excuses check 23 alone, and only while .mavergreen/ingredients/<library>/VERSION is tracked
+#       and non-empty.
+line() {  # $1 = dir, $2 = staged-by scope or empty, $3 = pin contents, or "empty", or omitted
   mkrepo "$1"
   printf '#!/bin/sh\nsh "$PORT/build/package.sh" "$1"\n' > "$1/build/line.sh"
-  printf '      - run: sh build/line.sh dist\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product go127 --feed-dir dist --pkg "$P"\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$1/.github/workflows/release.yml"
-  [ -z "${2:-}" ] || printf '\n%s\n' "$2" >> "$1/INGREDIENTS.md"
+  printf '      - run: sh build/line.sh dist\n      - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist\n      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product go127 --feed-dir dist --pkg "$P"\n  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1\n' >> "$1/.github/workflows/release.yml"
+  [ -z "${2:-}" ] || deviation "$1" staged-by port "$2" "the pinned golang-port tarball's build/package.sh calls stage_product.sh"
   if [ -n "${3:-}" ]; then
-    mkdir -p "$1/components/golang-port"
-    if [ "$3" = empty ]; then : > "$1/components/golang-port/version"; else printf '%s\n' "$3" > "$1/components/golang-port/version"; fi
+    mkdir -p "$1/.mavergreen/ingredients/golang-port"
+    if [ "$3" = empty ]; then : > "$1/.mavergreen/ingredients/golang-port/VERSION"; else printf '%s\n' "$3" > "$1/.mavergreen/ingredients/golang-port/VERSION"; fi
   fi
   (cd "$1" && git add -A) >/dev/null 2>&1
 }
-linegate() { (cd "$1" && GITHUB_REPOSITORY="Mavergreen/$2" sh "$S" 2>&1); }
-STAGED="- staged-by:golang-port: the pinned golang-port tarball's build/package.sh calls stage_product.sh"
-line "$work/line" "$STAGED" 1.2.0
-out="$(linegate "$work/line" golang-127)" || { echo "FAIL: staged-by:golang-port with its pin excuses check 23: $out"; exit 1; }
-out="$(linegate "$work/line" nobody-registered-this)" && { echo "FAIL: staged-by must not excuse check 24"; exit 1; }
-printf '%s\n' "$out" | grep -q 'assigns no product' || { echo "FAIL: check 24 still runs under staged-by: $out"; exit 1; }
+linegate() { (cd "$1" && sh "$S" 2>&1); }
+line "$work/line" golang-port 1.2.0
+out="$(linegate "$work/line")"
 printf '%s\n' "$out" | grep -q 'never calls stage_product.sh' && { echo "FAIL: a verified staged-by excuses check 23: $out"; exit 1; }
-line "$work/line-nopin" "$STAGED"
-line "$work/line-emptypin" "$STAGED" empty
+has_id "$out" stage-product && { echo "FAIL: staged-by:golang-port with its pin excuses check 23: $out"; exit 1; }
+line "$work/line-nopin" golang-port
+line "$work/line-emptypin" golang-port empty
 for d in line-nopin line-emptypin; do
-  out="$(linegate "$work/$d" golang-127)" && { echo "FAIL: $d: staged-by without a non-empty pin must be refused"; exit 1; }
-  printf '%s\n' "$out" | grep -q 'staged-by:golang-port is declared, but components/golang-port/version' || { echo "FAIL: $d: a refused staged-by names the pin path: $out"; exit 1; }
+  out="$(linegate "$work/$d")" && { echo "FAIL: $d: staged-by without a non-empty pin must be refused"; exit 1; }
+  printf '%s\n' "$out" | grep -q 'a staged-by deviation names golang-port, but .mavergreen/ingredients/golang-port/VERSION' || { echo "FAIL: $d: a refused staged-by names the pin path: $out"; exit 1; }
   printf '%s\n' "$out" | grep -q 'never calls stage_product.sh' || { echo "FAIL: $d: a refused staged-by leaves check 23 running: $out"; exit 1; }
 done
-line "$work/line-bare" '- staged-by: the library stages it'
-out="$(linegate "$work/line-bare" golang-127)" && { echo "FAIL: an unscoped staged-by must be rejected"; exit 1; }
-printf '%s\n' "$out" | grep -q 'staged-by:<library>' || { echo "FAIL: rejecting an unscoped staged-by names the form: $out"; exit 1; }
+line "$work/line-glob" 'golang-*' 1.2.0
+out="$(linegate "$work/line-glob")" && { echo "FAIL: a staged-by scoped to a glob must not be honoured"; exit 1; }
+printf '%s\n' "$out" | grep -q 'never calls stage_product.sh' || { echo "FAIL: a glob staged-by leaves check 23 running: $out"; exit 1; }
 line "$work/line-undeclared" '' 1.2.0
-out="$(linegate "$work/line-undeclared" golang-127)" && { echo "FAIL: a library-staged line with no declaration fails check 23"; exit 1; }
+out="$(linegate "$work/line-undeclared")" && { echo "FAIL: a library-staged line with no declaration fails check 23"; exit 1; }
 printf '%s\n' "$out" | grep -q 'never calls stage_product.sh' || { echo "FAIL: check 23 is what fails undeclared: $out"; exit 1; }
-printf '%s\n' "$out" | grep -q 'staged-by:<library>' || { echo "FAIL: check 23 hints at staged-by: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q 'deviations/staged-by/' || { echo "FAIL: check 23 hints at staged-by: $out"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 25 -- the family is retiring Rosetta (see the
 #       conventions skill, "Rosetta"). An undeclared translated-arch call must fail, naming

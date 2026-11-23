@@ -15,10 +15,11 @@
 #          and an interface difference by indented detail lines; then
 #          "unused TAB - TAB <glob>" for each entry that excused nothing. stderr: "build-equivalence:
 #          N differences, M excused, K unused".
-#          Entries come from DIR's (default .) INGREDIENTS.md through deviations.sh:
-#          build-equivalence:<glob> excuses bytes, build-equivalence-interface:<glob> excuses interface
-#          and bytes. meta, only-a and only-b are never excusable. A glob is a shell case pattern over
-#          the normalised path. A DIR without INGREDIENTS.md declares no entries.
+#          Entries are DIR's (default .) .mavergreen/deviations/, through deviations.sh: a
+#          build-equivalence deviation excuses bytes on the paths its scope matches, a
+#          build-equivalence-interface one interface and bytes. meta, only-a and only-b are never
+#          excusable. A scope is a shell case pattern over the normalised path. A DIR without
+#          .mavergreen/deviations/ declares no entries.
 #          Readers: NM, OTOOL and LIPO name the pinned llvm-nm, llvm-otool and llvm-lipo; unset, an
 #          installed clang22's (lib/macho-tools.sh's mach_pinned); with neither, the first Mach-O compared
 #          fetches the pin of the shipyard beside this script with fetch_clang22.sh. With no reader at all,
@@ -154,8 +155,11 @@ if [ -f "$B" ]; then unpack "$B" "$work/b"; B="$work/b"; fi
 list "$A" a
 list "$B" b
 
-_entries="$(sh "$SELF/deviations.sh" "$repo")" || die "$repo/INGREDIENTS.md declares an entry deviations.sh refuses"
-printf '%s\n' "$_entries" | awk '$1 == "build-equivalence" || $1 == "build-equivalence-interface" { print ++n "\t" $1 "\t" $2 }' > "$work/entries"
+_entries="$(sh "$SELF/deviations.sh" "$repo")" || die "$repo/.mavergreen/deviations/ declares an entry deviations.sh refuses"
+printf '%s\n' "$_entries" | awk '$1 == "build-equivalence" || $1 == "build-equivalence-interface" {
+    g = $2; gsub(/%20/, " ", g); gsub(/%09/, "\t", g); gsub(/%25/, "%", g)
+    print ++n "\t" $1 "\t" g
+  }' > "$work/entries"
 : > "$work/used"
 : > "$work/out"
 

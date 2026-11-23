@@ -117,7 +117,7 @@ kind_ran() {  # $1 = the fact kind the ids read, $2 = what it is called, then th
 chk_ran version-scheme
 if has pkg || has appcast; then chk_ran version; else chk_notrun version "no .pkg or appcast in this release"; fi
 kind_ran pkg .pkg identifier bundle-id launchd-label manifest base line install-path feed updater repository arch-host arch-target \
-  pkg-name installer-title manifest-name app-name root-runs os-overwrite
+  pkg-name installer-title manifest-name app-name root-runs os-overwrite no-standalone standalone
 kind_ran pkg-arch .pkg arch-distribution arch-floors
 kind_ran appcast appcast enclosure length enclosure-url notes feed-title
 kind_ran build-info "build record" variant-build-info
@@ -155,6 +155,8 @@ rule_of() {
     cxxabi) echo "one process gets one C++ runtime: no shipped Mach-O defines libc++abi's machinery or loads another libc++abi" ;;
     root-runs) echo "root runs a launch daemon or an install script only from a root-only chain" ;;
     os-overwrite) echo "a regular product only adds files to Mac OS X 10.9.5, and never replaces one the OS ships" ;;
+    standalone) echo "every standalone archive in a release passes check-standalone-archive.sh" ;;
+    no-standalone) echo "a release that ships a product's pkg ships its standalone archive beside it" ;;
   esac
 }
 fix_of() {
@@ -189,6 +191,8 @@ fix_of() {
     cxxabi) echo "link the family's runtime (libcxx22), or declare .mavergreen/deviations/cxxabi/<label>/ (scope <glob>, a reason, a revisit)" ;;
     root-runs) echo "never name an admin-writable path in an install script; root runs only from a root-only chain" ;;
     os-overwrite) echo "install it under /opt/mavergreen/<short>/, or make this a system edition" ;;
+    standalone) echo "build the archive with stage_standalone.sh from the staged product, and fix what check-standalone-archive.sh names; text that must name a Mavergreen prefix declares .mavergreen/deviations/standalone-text/<label>/ (scope <archive-path glob>, a reason, a revisit)" ;;
+    no-standalone) echo "publish <short>-<version>-macos-<arch>.tar.gz with stage_standalone.sh, or, where a standalone form is meaningless, declare .mavergreen/deviations/no-standalone/<label>/ (scope <short>, a reason, a revisit)" ;;
   esac
 }
 
@@ -604,19 +608,20 @@ done < "$facts"
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Standalone archive"
 while read -r kind file verdict why; do
   if [ "$kind" = standalone-text-unused ]; then
-    echo "conformance: standalone-text: INGREDIENTS.md's standalone-text:$file excuses nothing in any standalone archive of this release -- drop it" >&2; status=1; continue
+    chk_fail standalone "$(rule_of standalone)" "the standalone-text deviation scoped $(dec "$file") excuses nothing in any standalone archive of this release" \
+      "delete the .mavergreen/deviations/standalone-text/ entry scoped $(dec "$file")"
+    continue
   fi
   if [ "$kind" = standalone-flow ]; then
-    [ "$verdict" != pkg-first ] || echo "conformance: standalone: $file: pkg-first, with no packaging/<short>.standalone-bundled; convert to archive-first (derive_pkg_tree.sh) at the next release"
+    [ "$verdict" != pkg-first ] || echo "::warning::standalone: $file: pkg-first, with no packaging/<short>.standalone-bundled; convert to archive-first (derive_pkg_tree.sh) at the next release"
     continue
   fi
   [ "$kind" = standalone ] || continue
-  [ "$verdict" = ok ] || { echo "conformance: standalone: $file: $(dec "${why:-check-standalone-archive.sh refused it}")" >&2; status=1; }
+  [ "$verdict" = ok ] || chk_fail standalone "$(rule_of standalone)" "$file: $(dec "${why:-check-standalone-archive.sh refused it}")" "$(fix_of standalone)"
 done < "$facts"
 awk '!seen[$2]++' "$tmp/prod-of" > "$tmp/sa-products"
 while read -r pk P; do
-  repo="$(awk -v m="$P" '$1 == "registered" && $2 == m { print $4; exit }' "$facts")"
-  [ -n "$repo" ] && [ "$repo" != none ] || continue
+  awk -v m="$P" '$1 == "product" && $2 == m { f = 1 } END { exit !f }' "$facts" || continue
   have=""
   for v in "$expected" "${expected#v}"; do
     for a in universal x86_64 arm64; do
@@ -627,17 +632,17 @@ while read -r pk P; do
   done
   if [ -n "$have" ]; then
     if [ -n "$(deviation_reason no-standalone "$P")" ]; then
-      echo "conformance: standalone: $P: INGREDIENTS.md declares no-standalone for $P, but the release carries $have -- drop the declaration or the archive" >&2
-      status=1
+      chk_fail no-standalone "$(rule_of no-standalone)" "$P: a no-standalone deviation covers $P, but the release carries $have" \
+        "delete the no-standalone deviation for $P, or stop publishing the archive"
     fi
     for n in $have; do
       awk -v n="$n" '$1 == "standalone" && $2 == n { f = 1 } END { exit !f }' "$facts" \
-        || { echo "conformance: standalone: $n: artifact-facts.sh did not judge it with check-standalone-archive.sh" >&2; status=1; }
+        || chk_fail standalone "$(rule_of standalone)" "$n: artifact-facts.sh did not judge it with check-standalone-archive.sh" "$(fix_of standalone)"
     done
-  elif [ -f "$SELF/conventions-grandfathered" ] && grep -qxF "standalone $repo $P" "$SELF/conventions-grandfathered"; then
-    echo "::warning::conformance: standalone: $P: $pk ships $P, and the release carries no $P-${expected#v}-macos-<arch>.tar.gz (grandfathered: standalone $repo $P)"
+  elif [ -n "$repo" ] && [ -f "$SELF/conventions-grandfathered" ] && grep -qxF "standalone $repo $P" "$SELF/conventions-grandfathered"; then
+    echo "::warning::no-standalone: $P: $pk ships $P, and the release carries no $P-${expected#v}-macos-<arch>.tar.gz (grandfathered: standalone $repo $P)"
   else
-    fail no-standalone "$P: $pk ships $P, and the release carries no $P-${expected#v}-macos-<universal|x86_64|arm64>.tar.gz beside it -- publish one with stage_standalone.sh, or declare '- no-standalone:$P: <reason>' under INGREDIENTS.md's ## Conformance deviations where a standalone form is meaningless" "$P"
+    fail no-standalone "$P: $pk ships $P, and the release carries no $P-${expected#v}-macos-<universal|x86_64|arm64>.tar.gz beside it" "$P"
   fi
 done < "$tmp/sa-products"
 

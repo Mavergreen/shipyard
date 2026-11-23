@@ -9,8 +9,12 @@ w="$(mktemp -d "${TMPDIR:-/tmp}/be-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $*"; exit 1; }
 T="$(printf '\t')"
 entries() {
-  r="$1"; shift; mkdir -p "$w/$r"; printf '# x\n## Conformance deviations\n' > "$w/$r/INGREDIENTS.md"
-  for e in "$@"; do printf -- '- %s\n' "$e" >> "$w/$r/INGREDIENTS.md"; done
+  r="$1"; shift; rm -rf "$w/$r"; mkdir -p "$w/$r"; _n=10
+  for e in "$@"; do
+    _n=$((_n + 1)); _k="${e%%:*}"; _rest="${e#*:}"; _d="$w/$r/.mavergreen/deviations/$_k/e$_n"
+    mkdir -p "$_d"
+    printf '%s\n' "${_rest%%: *}" > "$_d/scope"; printf '%s\n' "${_rest#*: }" > "$_d/reason"; printf 'never\n' > "$_d/revisit"
+  done
 }
 run() {
   rc=0; sh "$S" "$@" > "$w/out" 2> "$w/err" || rc=$?
@@ -42,7 +46,7 @@ run --repo "$w/r-text" "$w/A" "$w/B"; want "text excused" 0 "bytes${T}etc/a.txt$
 echo "ok: bytes differ, excused by entry"
 
 fresh; put "$w/A/f" 1; put "$w/B/f" 1
-(cd "$w/none" && sh "$S" "$w/A" "$w/B" >/dev/null 2>&1) || fail "default --repo . with no INGREDIENTS.md there means zero entries, so identical dirs exit 0"
+(cd "$w/none" && sh "$S" "$w/A" "$w/B" >/dev/null 2>&1) || fail "default --repo . with no .mavergreen/deviations/ there means zero entries, so identical dirs exit 0"
 echo "ok: default repo"
 
 fresh; put "$w/A/lib/libfoo-0123456789abcdef.rlib" same; put "$w/B/lib/libfoo-fedcba9876543210.rlib" same
@@ -60,7 +64,7 @@ run --repo "$w/none" "$w/B" "$w/A"; [ "$rc" -eq 2 ] || fail "two names in B norm
 echo "ok: crate-hash normalisation"
 
 fresh; put "$w/A/etc/only.txt" x; put "$w/B/etc/same" y; put "$w/A/etc/same" y; put "$w/B/usr/bonly" z
-entries r-only 'build-equivalence-interface:etc/*: x, revisit: y' 'build-equivalence:usr/*: x, revisit: y'
+entries r-only 'build-equivalence:etc/*: x, revisit: y' 'build-equivalence-interface:usr/*: x, revisit: y'
 run --repo "$w/r-only" "$w/A" "$w/B"
 want "only-a, only-b never excusable" 1 "only-a${T}etc/only.txt${T}-
 only-b${T}usr/bonly${T}-
@@ -131,7 +135,7 @@ run --repo "$w/none" "$w/A" "$w/junk.pkg"; [ "$rc" -eq 2 ] || fail "a file that 
 run --repo "$w/nonexistent" "$w/A" "$w/B"; [ "$rc" -eq 2 ] || fail "--repo not a directory: exit $rc, want 2"
 run --bogus "$w/A" "$w/B"; [ "$rc" -eq 2 ] || fail "unknown option: exit $rc, want 2"
 mkdir -p "$w/empty"
-run --repo "$w/empty" "$w/A" "$w/B"; want "--repo without INGREDIENTS.md is zero entries" 0 ""
+run --repo "$w/empty" "$w/A" "$w/B"; want "--repo without .mavergreen/deviations/ is zero entries" 0 ""
 entries r-bare 'build-equivalence:*: all'
 run --repo "$w/r-bare" "$w/A" "$w/B"; [ "$rc" -eq 2 ] || fail "an entry deviations.sh refuses: exit $rc, want 2"
 fresh; put "$w/A/new
