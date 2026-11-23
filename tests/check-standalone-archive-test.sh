@@ -43,9 +43,9 @@ rc=0; sh "$C" "$A" > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "an arch t
 rc=0; sh "$C" "$w/none-1.0-macos-x86_64.tar.gz" > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "a missing archive: exit $rc, want 2"
 
 fresh w-1.0; mk w-1.0-macos-universal.tar.gz; passes "a product tree under <short>-<version>/"
-fresh go126-1.26.5-mavergreen.5; mk go126-1.26.5-mavergreen.5-macos-x86_64.tar.gz
+fresh swift-runtime-6.2.1-mavergreen.5; mk swift-runtime-6.2.1-mavergreen.5-macos-x86_64.tar.gz
 passes "a short name and a version that both carry hyphens"
-grep -q 'go126 1.26.5-mavergreen.5' "$w/out" || fail "the report names the product: $(cat "$w/out")"
+grep -q 'swift-runtime 6.2.1-mavergreen.5' "$w/out" || fail "the report names the product: $(cat "$w/out")"
 fresh w-1.1; mk w-1.0-macos-arm64.tar.gz; fails "a top directory for another version" "w-1.1"
 fresh w-1.0; mkdir "$w/t/extra"; printf 'x\n' > "$w/t/extra/f"; mk w-1.0-macos-x86_64.tar.gz
 fails "a second top-level entry" "outside w-1.0/"
