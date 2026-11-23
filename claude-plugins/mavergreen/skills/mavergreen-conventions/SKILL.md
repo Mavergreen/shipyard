@@ -2177,9 +2177,10 @@ Mavergreen. Drydock shipped it first (0.6.3), and a user outside the family conf
 - **AppleDouble files are refused, never stripped.** `stage_standalone.sh` fails on a `._*` file in the
   tree or a staged app, `check-standalone-archive.sh` on a `._*` entry, and `fetch_product_pkg.sh` on a
   pkg whose Payload holds one, each naming the first.
-- **Nothing in a payload is group- or world-writable.** `build_component_pkg.sh` refuses such an entry,
-  naming it, and makes the payload root 0755, so a umask-002 stage cannot make the installer chmod `/`
-  group-writable; `build-equivalence.sh` counts a mode difference as `bytes`.
+- **Nothing in a payload is group- or world-writable.** `build_component_pkg.sh` clears group and world
+  write on every entry but a symlink, keeping setuid and setgid (macfuse ships setuid helpers), and
+  makes the payload root 0755, so a umask-002 stage (Ubuntu's default) cannot make the installer chmod
+  `/` group-writable; `build-equivalence.sh` counts a mode difference as `bytes`.
 - **Judged by `check-standalone-archive.sh`**: the one top directory; no manifest, updater, launchd job,
   pkg scripts or AppleDouble entry; no symlink, `#!` script or text file naming `/usr/local/mavergreen`; every
   Mach-O's loads, rpaths and install name under `/usr/lib`, `/System`, `@rpath`, `@loader_path` or
