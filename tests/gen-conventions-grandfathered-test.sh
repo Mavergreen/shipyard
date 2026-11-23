@@ -117,10 +117,10 @@ mksrc golf yes; mkrel golf throws
 mksrc hotel yes cxxdecl; mkrel hotel throws
 # spec: scripts/gen-conventions-grandfathered.sh -- standalone is found in the latest release: india's pkg
 #       installs its product with no standalone archive beside it; juliet's carries one.
-{ cat "$here/../scripts/product-names"; printf 'india dev.mavergreen.india india\njuliet dev.mavergreen.juliet juliet\n'; } > "$work/product-names"
-MAVERGREEN_PRODUCT_NAMES="$work/product-names"; export MAVERGREEN_PRODUCT_NAMES
 mkprod() {  # $1 = name, $2 = yes: the release carries its standalone archive
-  r="$work/src/$1.release"; st="$work/stage-$1"; t="$st/usr/local/mavergreen/$1"; mkdir -p "$r" "$t/bin"; printf 'v1\n' > "$r/.tag"
+  r="$work/src/$1.release"; st="$work/stage-$1"; t="$st/opt/mavergreen/$1"; mkdir -p "$r" "$t/bin"; printf 'v1\n' > "$r/.tag"
+  mkdir -p "$work/src/$1/.mavergreen/products/$1"; printf '%s\n' "$1" > "$work/src/$1/.mavergreen/products/$1/noun"
+  (cd "$work/src/$1" && git add -A && git -c user.name=t -c user.email=t@t commit -q -m product)
   printf '#!/bin/sh\necho %s\n' "$1" > "$t/bin/$1"; chmod 755 "$t/bin/$1"
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>identifier</key><string>dev.mavergreen.%s</string><key>product</key><string>%s</string></dict></plist>\n' "$1" "$1" > "$t/mavergreen.plist"
   "$STEVEDORE" component --root "$st" --identifier "dev.mavergreen.$1" --version 1 --install-location / \

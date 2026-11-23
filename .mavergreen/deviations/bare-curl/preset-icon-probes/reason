@@ -1,0 +1,1 @@
+it reads the final URL of a redirect (url_effective) and the Wayback Machine save endpoint's response headers, which shipyard_curl does not return

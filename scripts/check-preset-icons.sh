@@ -25,12 +25,15 @@
 #          icon there as icon.png.
 # spec: tests/check-preset-icons-test.sh; SKILL.md "Porthole presets' vendor icons"
 set -eu
-usage() { echo "usage: check-preset-icons.sh [--accept [--search-back N]] CONF" >&2; exit 2; }
+HERE=$(cd "$(dirname "$0")" && pwd)
+. "$HERE/check-lib.sh"
+usage() { echo "usage: check-preset-icons.sh [--accept [--search-back N]] CONF (or SHIPYARD_CHECK_PRESET_CONF under shipyard-check --only preset-icon)" >&2; exit 2; }
 accept= back=0
 [ "${1:-}" != --accept ] || { accept=1; shift; }
 [ -z "$accept" ] || [ "${1:-}" != --search-back ] || { [ $# -ge 2 ] || usage; back=$2; shift 2; }
-[ $# -eq 1 ] || usage
-CONF=$1
+[ $# -le 1 ] || usage
+CONF="${1:-${SHIPYARD_CHECK_PRESET_CONF:-}}"
+[ -n "$CONF" ] || usage
 for t in curl dpkg-deb dpkg python3; do
   command -v "$t" >/dev/null 2>&1 || { echo "SKIP: check-preset-icons needs $t"; exit 77; }
 done
@@ -38,10 +41,9 @@ chk_ran preset-icon
 ICON_URL= ICON_GLOB= APT_REPO= APT_KEY_URL= APT_PKGS=
 ICON_URL_FINGERPRINT= ICON_URL_SOURCE= ICON_URL_ARCHIVE=
 case "$CONF" in */*) . "$CONF" ;; *) . "./$CONF" ;; esac
-HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/mavergreen_fetch.sh"
 W=$(mktemp -d "${TMPDIR:-/tmp}/check-preset-icons.XXXXXX"); trap 'rm -rf "$W"' EXIT
-fail=0 fp= pkgicon=
+fp= pkgicon=
 tool() { python3 "$HERE/icon-tool.py" "$@"; }
 shasum_of() { python3 -c 'import hashlib, sys; print("sha256:" + hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
 was() {
@@ -125,10 +127,12 @@ if [ -n "$accept" ]; then
 fi
 
 if [ -n "$ICON_URL" ]; then
-  if ! shipyard_curl "$ICON_URL" "$W/icon"; then
-    echo "ICON_URL: fetch failed: $ICON_URL"; fail=1
+  if ! shipyard_curl "$ICON_URL" "$W/icon" 2>"$W/curl.err"; then
+    chk_fail preset-icon "ICON_URL no longer serves the icon" "fetching $ICON_URL failed: $(tail -n 1 "$W/curl.err")" \
+      "point ICON_URL in $CONF at the vendor's current PNG"
   elif [ "$(head -c 8 "$W/icon" | od -An -tx1 | tr -d ' \n')" != 89504e470d0a1a0a ]; then
-    echo "ICON_URL: not a PNG: $ICON_URL"; fail=1
+    chk_fail preset-icon "ICON_URL no longer serves a PNG" "$ICON_URL is not a PNG" \
+      "point ICON_URL in $CONF at the vendor's current PNG"
   else
     echo "ICON_URL ok: $ICON_URL ($(wc -c < "$W/icon" | tr -d ' ') bytes)"
     [ -z "${ICON_OUT_DIR:-}" ] || { mkdir -p "$ICON_OUT_DIR" && cp "$W/icon" "$ICON_OUT_DIR/icon.png"; }
@@ -159,7 +163,8 @@ if [ -n "$ICON_URL_ARCHIVE" ]; then
   elif [ "$(head -c 8 "$W/archived" | od -An -tx1 | tr -d ' \n')" != 89504e470d0a1a0a ]; then
     warn "ICON_URL_ARCHIVE did not serve a PNG now: $ICON_URL_ARCHIVE"
   elif [ -n "$ICON_URL_FINGERPRINT" ] && [ "$(shasum_of "$W/archived")" != "${ICON_URL_FINGERPRINT%% *}" ]; then
-    echo "ICON_URL_ARCHIVE: $ICON_URL_ARCHIVE does not hold the accepted icon (${ICON_URL_FINGERPRINT%% *})"; fail=1
+    chk_fail preset-icon "ICON_URL_ARCHIVE no longer holds the accepted icon" "$ICON_URL_ARCHIVE does not hold the accepted icon (${ICON_URL_FINGERPRINT%% *})" \
+      "re-accept the icon (check-preset-icons.sh --accept $CONF) and record the lines it prints"
   else
     echo "ICON_URL_ARCHIVE ok: $ICON_URL_ARCHIVE"
   fi
@@ -215,13 +220,16 @@ case "$ICON_URL_SOURCE" in '' | none\ *) ;; *)
     else
       rm -rf "$W/src"; deb_member "$sdeb" "$spath" "$W/src" || :
       if ! tool cat "$W/src" "$spath" > "$W/srcicon" 2>/dev/null; then
-        echo "ICON_URL_SOURCE: $spkg $sver has no $spath"; fail=1
+        chk_fail preset-icon "ICON_URL_SOURCE no longer holds the accepted icon" "$spkg $sver has no $spath" \
+          "re-accept the icon (check-preset-icons.sh --accept $CONF) and record the lines it prints"
       elif ! sfp=$(tool fingerprint "$W/srcicon" 2>&1); then
-        echo "ICON_URL_SOURCE: $spath in $spkg $sver can't be read ($sfp)"; fail=1
+        chk_fail preset-icon "ICON_URL_SOURCE no longer holds the accepted icon" "$spath in $spkg $sver can't be read ($sfp)" \
+          "re-accept the icon (check-preset-icons.sh --accept $CONF) and record the lines it prints"
       elif ! got=$(tool distance "$ICON_URL_FINGERPRINT" "$sfp" 2>&1); then
         warn "ICON_URL_SOURCE is not checked: $got"
       elif [ "${got%% *}" != "dhash:$sdist" ]; then
-        echo "ICON_URL_SOURCE: $spath in $spkg $sver is no longer distance $sdist from the accepted icon ($got)"; fail=1
+        chk_fail preset-icon "ICON_URL_SOURCE no longer holds the accepted icon" "$spath in $spkg $sver is no longer distance $sdist from the accepted icon ($got)" \
+          "re-accept the icon (check-preset-icons.sh --accept $CONF) and record the lines it prints"
       else
         echo "ICON_URL_SOURCE ok: $spath in $spkg $sver, distance $sdist"
       fi
@@ -238,4 +246,4 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ] && [ -s "$W/summary" ]; then
     [ -z "$ICON_URL_SOURCE" ] || { echo; echo "Accepted icon's source: \`$ICON_URL_SOURCE\`"; }
   } >> "$GITHUB_STEP_SUMMARY"
 fi
-exit $fail
+exit "$chk_status"
