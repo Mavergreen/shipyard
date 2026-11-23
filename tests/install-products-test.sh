@@ -386,4 +386,51 @@ run b@1
 [ "$rc" -eq 0 ] && [ "$(pget b version)" = 1 ] && [ ! -e "$(mg b)/.install-products.lock" ] \
   || fail "linux_stale_lock: a lock whose process is gone does not block the install"
 
+nosudo="$top/nosudo"; mkdir -p "$nosudo"
+_ifs=$IFS; IFS=:
+for _d in $PATH; do
+  for _f in "$_d"/*; do
+    [ "${_f##*/}" != sudo ] && [ -x "$_f" ] && [ ! -e "$nosudo/${_f##*/}" ] && ln -s "$_f" "$nosudo/${_f##*/}" || :
+  done
+done
+IFS=$_ifs
+cat > "$top/bin/sudo-pw" <<'FAKE'
+#!/bin/sh
+echo "sudo $*" >> "$FAKE_LOG"
+exit 1
+FAKE
+chmod +x "$top/bin/sudo-pw"; mkdir -p "$top/pw"; ln -s "$top/bin/sudo-pw" "$top/pw/sudo"
+
+if [ "$(id -u)" -ne 0 ]; then
+  fresh; release b 1; linux; unset SUDO; chmod 555 "$w/root"
+  rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" b@1 2>&1)" || rc=$?
+  chmod 755 "$w/root"
+  [ "$rc" -eq 1 ] && has "needs root, sudo, or a writable $w/root/usr/local/mavergreen" \
+    && ! has "not found" && ! has "cannot find name" && [ ! -s "$w/installed" ] \
+    || fail "linux_no_sudo: with no sudo and no writable prefix, exit 1, saying what it needs"
+
+  fresh; release b 1; linux; unset SUDO; chmod 555 "$w/root"
+  rc=0; out="$(PATH="$top/pw:$PATH" sh "$S" --root "$w/root" b@1 2>&1)" || rc=$?
+  chmod 755 "$w/root"
+  [ "$rc" -eq 1 ] && has "needs root, sudo, or a writable" && [ "$(cat "$w/log")" = "sudo -n true" ] \
+    || fail "linux_sudo_needs_password: a sudo that cannot run without a password is probed once and not used ($(cat "$w/log"))"
+
+  fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
+  printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; latest lb 20261027.13
+  release a 1 'sdk109>=20261027'; linux; unset SUDO; printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"
+  export MAVERICKS_SDK_URL="file://$w/nosuch.tar" MAVERICKS_SDK_SHA256=0 MAVERICKS_SDK_CACHE="$w/sdkcache"
+  chmod 555 "$w/root"
+  rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" a@1 2>&1)" || rc=$?
+  chmod 755 "$w/root"
+  [ "$rc" -eq 1 ] && has "sdk109: cannot make $w/root/usr/local/mavergreen/sdk109: install-products needs root, sudo, or a writable" \
+    && ! has "fetch_sdk.sh --arch x86_64 failed" && [ ! -e "$w/sdkcache" ] && ! has "not found" && [ ! -s "$w/installed" ] \
+    || fail "linux_sdk_no_sudo: sdk109 needs the same root, sudo or writable prefix, checked before the SDK is fetched"
+  unset MAVERICKS_SDK_URL MAVERICKS_SDK_SHA256 MAVERICKS_SDK_CACHE
+fi
+
+fresh; release b 1; linux; unset SUDO; mkdir -p "$w/root/usr/local/mavergreen"
+rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" b@1 2>&1)" || rc=$?
+[ "$rc" -eq 0 ] && [ "$(pget b version)" = 1 ] && [ "$(cat "$w/installed")" = "b 1" ] \
+  || fail "linux_writable_no_sudo: a writable usr/local/mavergreen needs no sudo"
+
 echo "PASS: install-products"

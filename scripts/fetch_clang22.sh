@@ -8,9 +8,12 @@
 #          the mavergreen.plist there is not that release's, install-products.sh installs the release
 #          there from its linux-x86_64 archive, verified against its SHA256SUMS, keeping its downloads
 #          in MAVERGREEN_TAR_CACHE and MAVERGREEN_PKG_CACHE (default ~/.cache/mavergreen-clang22 for
-#          both, so a CI cache of that directory skips them). With MAVERGREEN_CLANG22_CACHE set, Linux
-#          instead unpacks the archive once into $MAVERGREEN_CLANG22_CACHE/VERSION/linux through
-#          fetch_product_tar.sh. On a Mac: the clang22-cross pkg (on Mac OS X 10.9, whose cross pkg does
+#          both, so a CI cache of that directory skips them). With MAVERGREEN_CLANG22_CACHE set, or
+#          when this user is not root, has no working `sudo -n` and cannot write /usr/local/mavergreen,
+#          Linux instead unpacks the archive once into
+#          ${MAVERGREEN_CLANG22_CACHE:-~/.cache/mavergreen-clang22}/VERSION/linux through
+#          fetch_product_tar.sh, saying on stderr in the second case that path parity is not in
+#          effect. On a Mac: the clang22-cross pkg (on Mac OS X 10.9, whose cross pkg does
 #          not run there, the native clang22 pkg), through fetch_product_pkg.sh and stevedore, verified
 #          against the release's SHA256SUMS; an installed /usr/local/mavergreen/clang22-cross (clang22 on
 #          10.9) at that release is used instead, and CLANG22_INSTALLED replaces that path. A Mac fetch
@@ -48,6 +51,16 @@ has_tools() {
 manifest_version() {
   awk '/<key>version<\/key>/ { getline; sub(/.*<string>/, ""); sub(/<\/string>.*/, ""); print; exit }' "$1/mavergreen.plist" 2>/dev/null
 }
+sudo_works() {
+  if [ "${SUDO+set}" = set ]; then [ -n "$SUDO" ]; return; fi
+  command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1
+}
+can_make() {
+  [ "$(id -u)" -ne 0 ] || return 0
+  _a=$1/clang22
+  while [ ! -e "$_a" ]; do _a="$(dirname "$_a")"; done
+  { [ -d "$_a" ] && [ -w "$_a" ]; } || sudo_works
+}
 from_pkg() {
   inst="${CLANG22_INSTALLED:-/usr/local/mavergreen/$1}"
   if has_tools "$inst" && [ "$(manifest_version "$inst")" = "$V" ]; then
@@ -63,15 +76,20 @@ case "$host" in
     if has_tools "$inst" && [ "$(manifest_version "$inst")" = "$V" ]; then
       printf '%s\n' "$inst"; exit 0
     fi
+    case "$inst" in
+      */usr/local/mavergreen/clang22) : ;;
+      *) [ -n "${MAVERGREEN_CLANG22_CACHE:-}" ] \
+           || die "$inst does not end in usr/local/mavergreen/clang22, so install-products.sh cannot install clang22 $V there" ;;
+    esac
+    root="${inst%/usr/local/mavergreen/clang22}"
+    if [ -z "${MAVERGREEN_CLANG22_CACHE:-}" ] && ! can_make "${inst%/clang22}"; then
+      echo "fetch_clang22: no root, sudo or writable ${inst%/clang22}, so clang22 $V goes to $W/linux, without path parity with $inst" >&2
+      MAVERGREEN_CLANG22_CACHE="${W%/*}"
+    fi
     if [ -n "${MAVERGREEN_CLANG22_CACHE:-}" ]; then
       d="$W/linux"
       sh "$S/fetch_product_tar.sh" clang22 "$V" "$d" >/dev/null || die "could not fetch and verify $asset"
     else
-      case "$inst" in
-        */usr/local/mavergreen/clang22) : ;;
-        *) die "$inst does not end in usr/local/mavergreen/clang22, so install-products.sh cannot install clang22 $V there" ;;
-      esac
-      root="${inst%/usr/local/mavergreen/clang22}"
       INSTALL_PRODUCTS_HOST=linux MAVERGREEN_TAR_CACHE="${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-clang22}" \
         MAVERGREEN_PKG_CACHE="${MAVERGREEN_PKG_CACHE:-$HOME/.cache/mavergreen-clang22}" \
         sh "$S/install-products.sh" --root "${root:-/}" "clang22@$V" >&2 || die "could not install clang22 $V at $inst"

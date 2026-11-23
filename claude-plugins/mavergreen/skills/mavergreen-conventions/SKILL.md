@@ -82,7 +82,10 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   own `mavergreen.plist`: its release's `SHORT-TAG-linux-x86_64.tar.gz` when it has one, else its pkg's
   host-neutral payload, and `sdk109`/`sdk113` from `fetch_sdk.sh`; `fetch_clang22.sh` uses that same
   clang22 prefix. Path parity is the point (Go build IDs hash absolute toolchain paths); revisit it
-  when a Linux runner lacks sudo or a consumer needs two versions of one product side by side.
+  when a Linux runner lacks sudo or a consumer needs two versions of one product side by side. A Linux
+  host with no root, no working `sudo -n` and no writable `/usr/local/mavergreen` (a container run as
+  a bare uid) has `fetch_clang22.sh` fall back to its per-user cache, saying so on stderr: that trigger
+  firing in a container, not on a runner, so it is not yet the revisit.
 
   On every runner it also makes **PyYAML** importable for the job's own `python3` (`pip --user`,
   only when missing; it never swaps in another interpreter). The conventions gate needs it to parse

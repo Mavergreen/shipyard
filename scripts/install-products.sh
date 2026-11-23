@@ -15,7 +15,8 @@
 #          `install SHORT VERSION` or `provision SHORT via COMMAND...`. --dry-run prints it on stdout;
 #          otherwise each line is carried out and reported on stderr: install runs
 #          `$INSTALLER -pkg PKG -target DIR` on the verified cached pkg (default `installer`, under
-#          `sudo` unless root); provision runs COMMAND (under `sudo` unless root; SUDO= overrides) and then
+#          `sudo` unless root or no sudo is installed); provision runs COMMAND (under `sudo` likewise, and
+#          on Linux only when `sudo -n true` succeeds; SUDO= overrides) and then
 #          requires DIR/usr/local/mavergreen/SHORT/mavergreen.plist to exist. After each product, kept
 #          ones included, `SHORT VERSION` is appended to $MAVERGREEN_INSTALLED when set; the first
 #          failing step stops the run, so the file lists only what completed.
@@ -23,7 +24,8 @@
 #          2 on a usage error. MAVERGREEN_RELEASES replaces https://github.com (the tests serve file://);
 #          MAVERGREEN_PRODUCT_NAMES replaces the registry.
 #          On Linux no installer runs. Each product goes to the same DIR/usr/local/mavergreen/SHORT as
-#          its pkg, made with $SUDO mkdir and chowned to the caller: a release whose SHA256SUMS lists
+#          its pkg, made with $SUDO mkdir and chowned to the caller's numeric uid:gid, or, with no sudo,
+#          made directly, failing with exit 1 unless root or DIR/usr/local/mavergreen is writable: a release whose SHA256SUMS lists
 #          SHORT-TAG-linux-x86_64.tar.gz installs that archive (fetch_product_tar.sh, on an x86_64 host),
 #          any other its pkg's usr/local/mavergreen/SHORT payload (fetch_product_pkg.sh), and either way
 #          the pkg's own mavergreen.plist marks it. An archive holding opt/mavergreen/SHORT/mavergreen.plist
@@ -273,12 +275,18 @@ done
 if [ -n "$DRY" ]; then cat "$T/plan"; exit 0; fi
 
 record() { [ -z "${MAVERGREEN_INSTALLED:-}" ] || printf '%s %s\n' "$1" "$2" >> "$MAVERGREEN_INSTALLED"; }
-if [ "$(id -u)" -eq 0 ]; then _sudo=""; _inst=installer; else _sudo=sudo; _inst="sudo installer"; fi
+if [ "$(id -u)" -eq 0 ] || ! command -v sudo > /dev/null 2>&1; then _sudo=""; _inst=installer; else _sudo=sudo; _inst="sudo installer"; fi
+if [ "${SUDO+set}" != set ] && [ -n "$_sudo" ] && [ "$HOST" = linux ] && ! sudo -n true > /dev/null 2>&1; then _sudo=""; fi
 SUDO="${SUDO-$_sudo}"; INSTALLER="${INSTALLER:-$_inst}"
 prefix() {
   P="$ROOT/usr/local/mavergreen/$1"
   if [ ! -d "$P" ] || [ ! -w "$P" ]; then
-    $SUDO mkdir -p "$P" && $SUDO chown "$(id -u):$(id -g)" "$P" || die "$1: cannot make $P, owned by $(id -un)"
+    if [ -n "$SUDO" ]; then
+      $SUDO mkdir -p "$P" && $SUDO chown "$(id -u):$(id -g)" "$P" || die "$1: cannot make $P, owned by $(id -u):$(id -g)"
+    else
+      { mkdir -p "$P" 2> /dev/null && [ -w "$P" ]; } \
+        || die "$1: cannot make $P: install-products needs root, sudo, or a writable $ROOT/usr/local/mavergreen"
+    fi
   fi
   _lf="$P/.install-products.lock"; _wt=0
   until ( set -C; echo $$ > "$_lf" ) 2>/dev/null; do
@@ -329,8 +337,8 @@ linux_sdk() {
   sdkarch "$1"
   reg repo "$1"; _tag="$(shipyard_latest_tag "$_rv")" || die "$1: no latest release of Mavergreen/$_rv to version it by"
   case "$_sver" in 10.[0-9]|10.1[01]) _sn="Mac OS X $_sver SDK" ;; *) _sn="macOS $_sver SDK" ;; esac
-  _sdk="$(MAVERICKS_SDK_SETTINGS_JSON='' sh "$SELF/fetch_sdk.sh" --arch "$_sa")" || die "$1: fetch_sdk.sh --arch $_sa failed"
   prefix "$1" "$_tag" || return 0
+  _sdk="$(MAVERICKS_SDK_SETTINGS_JSON='' sh "$SELF/fetch_sdk.sh" --arch "$_sa")" || die "$1: fetch_sdk.sh --arch $_sa failed"
   _st="$stg/root/usr/local/mavergreen/$1"
   mkdir -p "$_st/SDKs" && cp -RP "$_sdk" "$_st/SDKs/$_sdir" || die "$1: cannot copy $_sdk"
   if _js="$(shipyard_sdk_settings_json "$_sa")"; then

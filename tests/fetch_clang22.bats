@@ -86,6 +86,53 @@ tools_at() {
   [ "$("$SD" plist get "$out/mavergreen.plist" identifier)" = dev.mavergreen.clang.clang22 ]
   [ ! -d "$WORK/clang22" ] || false
 }
+nosudo_path() {
+  mkdir -p "$WORK/nosudo"
+  _ifs=$IFS; IFS=:
+  for _d in $PATH; do
+    for _f in "$_d"/*; do
+      [ "${_f##*/}" != sudo ] && [ -x "$_f" ] && [ ! -e "$WORK/nosudo/${_f##*/}" ] && ln -s "$_f" "$WORK/nosudo/${_f##*/}" || :
+    done
+  done
+  IFS=$_ifs
+  printf '%s\n' "$WORK/nosudo"
+}
+unwritable_prefix() {
+  unset MAVERGREEN_CLANG22_CACHE SUDO
+  export HOME="$WORK/home" CLANG22_INSTALLED="$WORK/ro/usr/local/mavergreen/clang22"
+  mkdir -p "$HOME" "$WORK/ro"; chmod 555 "$WORK/ro"
+}
+@test 'linux: with no root, no sudo and no writable prefix, the per-user cache is used, saying path parity is off' {
+  [ "$(id -u)" -ne 0 ] || skip 'root can always make the prefix'
+  unwritable_prefix
+  out="$(PATH="$(nosudo_path)" CLANG22_HOST=linux sh "$HELPER" "$PIN" 2> "$WORK/err")" || { cat "$WORK/err"; chmod 755 "$WORK/ro"; return 1; }
+  chmod 755 "$WORK/ro"
+  [ "$out" = "$HOME/.cache/mavergreen-clang22/22.1.8-mavericks.99/linux" ] || { echo "$out"; return 1; }
+  [ -x "$out/bin/ld64.lld" ]
+  [ "$(grep -c 'without path parity with' "$WORK/err")" = 1 ] || { cat "$WORK/err"; return 1; }
+  ! grep -q 'sudo:' "$WORK/err" || { cat "$WORK/err"; return 1; }
+}
+@test 'linux: a sudo that needs a password counts as no sudo' {
+  [ "$(id -u)" -ne 0 ] || skip 'root can always make the prefix'
+  unwritable_prefix
+  mkdir -p "$WORK/bin"
+  printf '#!/bin/sh\necho "sudo $*" >> "%s/sudo.log"\nexit 1\n' "$WORK" > "$WORK/bin/sudo"; chmod 755 "$WORK/bin/sudo"
+  out="$(PATH="$WORK/bin:$PATH" CLANG22_HOST=linux sh "$HELPER" "$PIN" 2> "$WORK/err")" || { cat "$WORK/err"; chmod 755 "$WORK/ro"; return 1; }
+  chmod 755 "$WORK/ro"
+  [ "$out" = "$HOME/.cache/mavergreen-clang22/22.1.8-mavericks.99/linux" ] || { echo "$out"; return 1; }
+  [ "$(cat "$WORK/sudo.log")" = "sudo -n true" ] || { cat "$WORK/sudo.log"; return 1; }
+}
+@test 'linux: with no sudo, a clang22 already at the pinned release in the prefix is used' {
+  unwritable_prefix
+  chmod 755 "$WORK/ro"; tools_at "$CLANG22_INSTALLED" 22.1.8-mavericks.99; chmod 555 "$WORK/ro"
+  out="$(PATH="$(nosudo_path)" CLANG22_HOST=linux sh "$HELPER" "$PIN" 2> "$WORK/err")" || { cat "$WORK/err"; chmod 755 "$WORK/ro"; return 1; }
+  chmod 755 "$WORK/ro"
+  [ "$out" = "$CLANG22_INSTALLED" ] && [ ! -s "$WORK/err" ] || { echo "$out"; cat "$WORK/err"; return 1; }
+}
+@test 'linux: MAVERGREEN_CLANG22_CACHE picks the cache with no word about path parity' {
+  out="$(CLANG22_HOST=linux sh "$HELPER" "$PIN" 2> "$WORK/err")"
+  [ "$out" = "$WORK/clang22/22.1.8-mavericks.99/linux" ] && ! grep -q 'path parity' "$WORK/err"
+}
 @test 'mac: an installed clang22-cross at the pinned release is used, with no fetch' {
   mkdir -p "$CLANG22_INSTALLED/bin"
   for t in clang ld64.lld llvm-lipo llvm-otool llvm-nm llvm-strings; do printf x > "$CLANG22_INSTALLED/bin/$t"; chmod 755 "$CLANG22_INSTALLED/bin/$t"; done
