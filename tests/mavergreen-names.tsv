@@ -18,20 +18,28 @@ MAVERGREEN_HOST_LIBCXX_CACHE	directory where fetch_host_libcxx.sh caches its bui
 MAVERGREEN_HOST_TOOLS_SYSCTL	the sysctl mavergreen_build_host_tools asks whether the host is Apple Silicon (a test seam)
 MAVERGREEN_HOST_TOOLS_UNAME	the uname mavergreen_build_host_tools asks for an Intel host's machine (a test seam)
 MAVERGREEN_INGREDIENT_	prefix of the per-ingredient override variables the fetch scripts read
+MAVERGREEN_INSTALLED	the file install-products.sh appends each SHORT VERSION it installed or kept to
 MAVERGREEN_MODE	the build mode, native or cross
 MAVERGREEN_NO_RENOVATE_SCAFFOLD	opts a configure out of scaffolding .github/renovate.json
 MAVERGREEN_OBJC_BUILD_EVIDENCE	the build evidence the compat guard hands its strict Objective-C analyzer
+MAVERGREEN_OBJC_CRATE_SOURCES	the crate sources the strict analyzer hashes schema-2 build evidence against
+MAVERGREEN_OBJC_LINK_MAP	the link map the build evidence names, handed to the strict analyzer
+MAVERGREEN_OBJC_OBJECT_DIRS	colon-separated directories holding the archives the link placed, for the strict analyzer
 MAVERGREEN_OBJC_PROVIDER_PREFIX	the Objective-C provider prefix the compat guard hands its strict analyzer
 MAVERGREEN_OBJC_REFERENCES	the Objective-C reference set the strict analyzer measures against
 MAVERGREEN_OBJC_REPORT_DIR	directory where the compat guard keeps each strict analyzer report
 MAVERGREEN_OBJC_ROOT	the shipped root the strict analyzer resolves a binary's dependencies in
+MAVERGREEN_OBJC_ROOT_KIND	whether the strict analyzer's root is a tree or a staged volume
+MAVERGREEN_OBJC_SDK_ROOT	the SDK the strict analyzer resolves schema-2 build evidence against
 MAVERGREEN_OBJC_SOURCE_RECEIPT	the provider body's source receipt the compat guard hands its strict analyzer
+MAVERGREEN_OBJC_SOURCE_ROOT	the prepared source tree where schema-2 build evidence's cited files are hashed
 MAVERGREEN_OBJC_STRICT	1 opts the compat guard in to the strict Objective-C analyzer
 MAVERGREEN_PKG_CACHE	directory where fetched product pkgs are cached
 MAVERGREEN_PLACEHOLDER_DENYLIST	path of the placeholder-icon denylist
 MAVERGREEN_POST_10_9_SELECTORS	selectors the compat guard refuses as newer than 10.9
 MAVERGREEN_POST_10_9_SYMBOLS	symbols the compat guard refuses as newer than 10.9
 MAVERGREEN_PRODUCT	the short name of the product a helper hook runs for
+MAVERGREEN_PRODUCT_PROVISIONERS	replaces scripts/product-provisioners, the products set up by a command rather than a release
 MAVERGREEN_PROGRESS	1 makes the fetch scripts report progress on stderr
 MAVERGREEN_RELEASES	the releases URL release-needed.sh queries
 MAVERGREEN_REPO_ROOT	the root of the repo being built or checked

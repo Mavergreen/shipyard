@@ -1050,6 +1050,8 @@ LAYOUT='component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
 product x
+asset x-1.0.0-mavergreen.1-macos-x86_64.tar.gz 10
+standalone x-1.0.0-mavergreen.1-macos-x86_64.tar.gz ok
 derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml
 installs p.pkg opt/mavergreen/.base/1.0.9/mavergreen
 installs p.pkg opt/mavergreen/x/mavergreen.plist'
@@ -1149,6 +1151,8 @@ component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.x
 manifest p.pkg x dev.mavergreen.x x
 product x
+asset x-1.0.0-mavergreen.1-macos-x86_64.tar.gz 10
+standalone x-1.0.0-mavergreen.1-macos-x86_64.tar.gz ok
 installs p.pkg opt/mavergreen/x/mavergreen.plist
 installs p.pkg opt/mavergreen/.base/1/x"
 
@@ -1162,6 +1166,8 @@ component p.pkg dev.mavergreen.base
 component p.pkg dev.mavergreen.golang.x
 manifest p.pkg x dev.mavergreen.golang.x x
 product x
+asset x-1.0.0-mavergreen.1-macos-x86_64.tar.gz 10
+standalone x-1.0.0-mavergreen.1-macos-x86_64.tar.gz ok
 installs p.pkg opt/mavergreen/x/mavergreen.plist"
 no "manifest: the identifier is dev.mavergreen.<product>" "manifest|dev.mavergreen.x" "$REL
 component p.pkg dev.mavergreen.base
@@ -1453,6 +1459,8 @@ component go126.pkg dev.mavergreen.base
 component go126.pkg dev.mavergreen.go126
 manifest go126.pkg go126 dev.mavergreen.go126 go126
 product go126
+asset go126-1.26.8-mavergreen.7-macos-x86_64.tar.gz 10
+standalone go126-1.26.8-mavergreen.7-macos-x86_64.tar.gz ok
 manifest-line go126.pkg 1.26
 installs go126.pkg opt/mavergreen/go126/mavergreen.plist
 pkg go127.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go127
@@ -1461,6 +1469,8 @@ component go127.pkg dev.mavergreen.base
 component go127.pkg dev.mavergreen.go127
 manifest go127.pkg go127 dev.mavergreen.go127 go127
 product go127
+asset go127-1.26.8-mavergreen.7-macos-x86_64.tar.gz 10
+standalone go127-1.26.8-mavergreen.7-macos-x86_64.tar.gz ok
 manifest-line go127.pkg 1.26
 installs go127.pkg opt/mavergreen/go127/mavergreen.plist
 asset go126.xml 700
@@ -1477,6 +1487,8 @@ component go.pkg dev.mavergreen.base
 component go.pkg dev.mavergreen.go126
 manifest go.pkg go126 dev.mavergreen.go126 go126
 product go126
+asset go126-1.26.8-mavergreen.7-macos-x86_64.tar.gz 10
+standalone go126-1.26.8-mavergreen.7-macos-x86_64.tar.gz ok
 installs go.pkg opt/mavergreen/go126/mavergreen.plist'
 G126='repository Mavergreen/golang-126'
 ok "line: go126 is Go 1.26, built in golang-126" "$GO
@@ -1799,13 +1811,15 @@ PLIST
   MAVERGREEN_REPO_ROOT="$_pk" sh "$here/../scripts/set_install_floor.sh" --short x --version 1.0.0-mavergreen.1 --base-version 1.0.9 \
     --component "$_pk/comp/x-component.pkg" --dist "$_pk/archive" >/dev/null 2>&1 \
     || { echo "FAIL: set_install_floor.sh could not build the archive this fixture reads"; exit 1; }
+  SOURCE_DATE_EPOCH=1700000000 sh "$here/../scripts/stage_standalone.sh" "$_st" x 1.0.0-mavergreen.1 x86_64 "$_pk/archive/x-1.0.0-mavergreen.1-macos-x86_64.tar.gz" >/dev/null 2>&1 \
+    || { echo "FAIL: stage_standalone.sh could not build the standalone archive this fixture reads"; exit 1; }
   _f="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"
   printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"
   _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavergreen.1.pkg" | tr -d ' ')"
   MAVERGREEN_REPO_ROOT="$_pk" sh "$GA" x 1.0.0-mavergreen.1 https://github.com/Mavergreen/x/releases/download/1.0.0-mavergreen.1/x-1.0.0-mavergreen.1.pkg \
     10.9.5 "$_pk/archive/RELEASE_NOTES.md" "sparkle:edSignature=\"x\" length=\"$_alen\"" > "$_pk/archive/x.xml"
   _fa="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/archive" 1.0.0-mavergreen.1 "$_pk")"
-  mkdir -p "$_pk/rehearsal"; cp "$_pk/archive/x-1.0.0-mavergreen.1.pkg" "$_pk/rehearsal/"
+  mkdir -p "$_pk/rehearsal"; cp "$_pk/archive/x-1.0.0-mavergreen.1.pkg" "$_pk/archive/x-1.0.0-mavergreen.1-macos-x86_64.tar.gz" "$_pk/rehearsal/"
   MAVERGREEN_REPO_ROOT="$_pk" GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavergreen.1 2>/dev/null \
     || { echo "FAIL: stand-in-feeds.sh must stage a feed for a build that signs nothing"; exit 1; }
   [ -f "$_pk/rehearsal/x.xml" ] && [ -s "$_pk/rehearsal/RELEASE_NOTES.md" ] \

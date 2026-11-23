@@ -138,10 +138,10 @@ fails "$w/build/bin/tool" "$w/build/bin/armtool"; says 'armtool'
 # spec: scripts/assert_binary_compatible.sh header -- MAVERGREEN_OBJC_ROOT_KIND reaches the analyzer as --root-kind.
 label="MAVERGREEN_OBJC_ROOT_KIND is passed to the analyzer"
 MAVERGREEN_OBJC_ROOT_KIND=volume; export MAVERGREEN_OBJC_ROOT_KIND
-passes "$w/build/bin/good"; unset MAVERGREEN_OBJC_ROOT_KIND
+strict passes "$w/build/bin/good"; unset MAVERGREEN_OBJC_ROOT_KIND
 grep -x -- '--root-kind' "$w/bin/argv" >/dev/null && grep -x volume "$w/bin/argv" >/dev/null ||
   { echo "FAIL ($label): argv lacks --root-kind volume:"; cat "$w/bin/argv"; exit 1; }
-passes "$w/build/bin/good"
+strict passes "$w/build/bin/good"
 ! grep -x -- '--root-kind' "$w/bin/argv" >/dev/null || { echo "FAIL ($label): --root-kind passed when unset"; exit 1; }
 # spec: scripts/assert_binary_compatible.sh header -- MAVERGREEN_OBJC_LINK_MAP reaches the analyzer as --link-map, and each
 #       entry of the colon-separated MAVERGREEN_OBJC_OBJECT_DIRS as its own --object-dir, in order; both need build evidence,
@@ -150,20 +150,20 @@ label="MAVERGREEN_OBJC_LINK_MAP and MAVERGREEN_OBJC_OBJECT_DIRS are passed to th
 : > "$w/ev.json"
 MAVERGREEN_OBJC_BUILD_EVIDENCE="$w/ev.json" MAVERGREEN_OBJC_LINK_MAP='/m m.map' MAVERGREEN_OBJC_OBJECT_DIRS='/o 1:/o2'
 export MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_LINK_MAP MAVERGREEN_OBJC_OBJECT_DIRS
-passes "$w/build/bin/good"
+strict passes "$w/build/bin/good"
 printf '%s\n' --link-map '/m m.map' --object-dir '/o 1' --object-dir /o2 > "$w/want"
 grep -A1 -x -e --link-map -e --object-dir "$w/bin/argv" | grep -v -x -e -- > "$w/got"
 cmp -s "$w/want" "$w/got" || { echo "FAIL ($label): argv:"; cat "$w/bin/argv"; exit 1; }
 label="MAVERGREEN_OBJC_OBJECT_DIRS without MAVERGREEN_OBJC_LINK_MAP is misuse"
 unset MAVERGREEN_OBJC_LINK_MAP
-run "$w/build/bin/good"; [ "$rc" = 2 ] || { echo "FAIL ($label): exit $rc"; echo "$out"; exit 1; }
+strict run "$w/build/bin/good"; [ "$rc" = 2 ] || { echo "FAIL ($label): exit $rc"; echo "$out"; exit 1; }
 says 'MAVERGREEN_OBJC_OBJECT_DIRS needs MAVERGREEN_OBJC_LINK_MAP'
 label="MAVERGREEN_OBJC_LINK_MAP without build evidence is misuse"
 unset MAVERGREEN_OBJC_OBJECT_DIRS MAVERGREEN_OBJC_BUILD_EVIDENCE; MAVERGREEN_OBJC_LINK_MAP=/m; export MAVERGREEN_OBJC_LINK_MAP
-run "$w/build/bin/good"; [ "$rc" = 2 ] || { echo "FAIL ($label): exit $rc"; echo "$out"; exit 1; }
+strict run "$w/build/bin/good"; [ "$rc" = 2 ] || { echo "FAIL ($label): exit $rc"; echo "$out"; exit 1; }
 says 'MAVERGREEN_OBJC_LINK_MAP needs MAVERGREEN_OBJC_BUILD_EVIDENCE'
 unset MAVERGREEN_OBJC_LINK_MAP
-passes "$w/build/bin/good"
+strict passes "$w/build/bin/good"
 ! grep -x -e --link-map -e --object-dir "$w/bin/argv" >/dev/null || { echo "FAIL ($label): passed when unset"; exit 1; }
 # spec: scripts/assert_binary_compatible.sh header -- the reference set is resolved where the analyzer runs: misuse is still
 #       misuse (2) when no Drydock can be had, and a binary's other findings are still said before the guard fails closed

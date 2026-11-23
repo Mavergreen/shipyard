@@ -80,8 +80,9 @@ if [ -n "$plist" ]; then
   reqs="$(sed 's/>=.*//' "$t/requires" | tr '\n' ' ' | sed 's/ $//')"
 fi
 [ -d "$repo" ] || { echo "check-standalone-archive: --repo $repo is not a directory" >&2; exit 2; }
-_devs="$(sh "$SELF/deviations.sh" "$repo")" || { echo "check-standalone-archive: $repo/.mavergreen/deviations/ declares an entry deviations.sh refuses" >&2; exit 2; }
-printf '%s\n' "$_devs" | awk '$1 == "standalone-text" { g = $2; gsub(/%20/, " ", g); gsub(/%09/, "\t", g); gsub(/%25/, "%", g); print ++n " " g }' > "$t/textdevs"
+. "$SELF/deviation-reason.sh"
+_devs="$(shipyard_deviations "$repo")" || { echo "check-standalone-archive: $repo/.mavergreen/deviations/ declares an entry deviations.sh refuses" >&2; exit 2; }
+printf '%s\n' "$_devs" | awk '$1 == "deviation" && index($2, "standalone-text:") == 1 { g = substr($2, 17); gsub(/%20/, " ", g); gsub(/%09/, "\t", g); gsub(/%25/, "%", g); print ++n " " g }' > "$t/textdevs"
 : > "$t/textused"
 : > "$t/used"
 finding() { printf '%s\n' "$*" >> "$t/findings"; }

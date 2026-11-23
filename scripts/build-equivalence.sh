@@ -155,10 +155,12 @@ if [ -f "$B" ]; then unpack "$B" "$work/b"; B="$work/b"; fi
 list "$A" a
 list "$B" b
 
-_entries="$(sh "$SELF/deviations.sh" "$repo")" || die "$repo/.mavergreen/deviations/ declares an entry deviations.sh refuses"
-printf '%s\n' "$_entries" | awk '$1 == "build-equivalence" || $1 == "build-equivalence-interface" {
-    g = $2; gsub(/%20/, " ", g); gsub(/%09/, "\t", g); gsub(/%25/, "%", g)
-    print ++n "\t" $1 "\t" g
+. "$SELF/deviation-reason.sh"
+_entries="$(shipyard_deviations "$repo")" || die "$repo/.mavergreen/deviations/ declares an entry deviations.sh refuses"
+printf '%s\n' "$_entries" | awk '$1 == "deviation" && (index($2, "build-equivalence:") == 1 || index($2, "build-equivalence-interface:") == 1) {
+    i = index($2, ":"); k = substr($2, 1, i - 1); g = substr($2, i + 1)
+    gsub(/%20/, " ", g); gsub(/%09/, "\t", g); gsub(/%25/, "%", g)
+    print ++n "\t" k "\t" g
   }' > "$work/entries"
 : > "$work/used"
 : > "$work/out"
