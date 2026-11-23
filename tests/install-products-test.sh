@@ -11,30 +11,37 @@ n=0
 
 fresh() {
   n=$((n + 1)); w="$top/$n"; mkdir -p "$w/root"
-  printf '%s\n' 'a dev.mavergreen.a arepo' 'b dev.mavergreen.b brepo' 'c dev.mavergreen.c crepo' \
-    'd dev.mavergreen.d drepo' 'x dev.mavergreen.x xrepo' > "$w/names"
+  for _i in a b c d x longboat; do mkdir -p "$w/repo/.mavergreen/ingredients/$_i"; echo "Mavergreen/${_i}repo" > "$w/repo/.mavergreen/ingredients/$_i/REPO"; done
   printf '%s\n' 'c b setup c --now' > "$w/provisioners"
-  export MAVERGREEN_PRODUCT_NAMES="$w/names" MAVERGREEN_PRODUCT_PROVISIONERS="$w/provisioners"
+  export MAVERGREEN_REPO_ROOT="$w/repo" MAVERGREEN_PRODUCT_PROVISIONERS="$w/provisioners"
   export MAVERGREEN_RELEASES="file://$w/rel" MAVERGREEN_PKG_CACHE="$w/cache"
 }
 
 release() {
-  _s=$1; _t=$2; shift 2; _v=$_t; _ac=1; _ul=""
+  _s=$1; _t=$2; shift 2; _v=$_t; _ac=1; _ul=""; _pfx=opt/mavergreen
   while [ $# -gt 0 ]; do
     case "$1" in
       --version) _v=$2; shift 2 ;;
       --no-appcast) _ac=""; shift ;;
       --unlisted) _ul=1; shift ;;
+      --old-prefix) _pfx=usr/local/mavergreen; shift ;;
       --appcast-unlisted) _ul=xml; shift ;;
       *) break ;;
     esac
   done
   _repo="${_s}repo"; _rel="$w/rel/Mavergreen/$_repo/releases/download/$_t"; _st="$w/stage/$_s-$_t/root"
-  mkdir -p "$_rel" "$_st/usr/local/mavergreen/$_s"
-  echo "$_s" > "$_st/usr/local/mavergreen/$_s/file"
-  _k=$#
-  while [ "$_k" -gt 0 ]; do set -- "$@" --requires "$1"; shift; _k=$((_k - 1)); done
-  sh "$here/../scripts/render-manifest.sh" --stage "$_st" --product "$_s" --name "$_s" --version "$_v" "$@"
+  _p="$_pfx/$_s"
+  mkdir -p "$_rel" "$_st/$_p"
+  echo "$_s" > "$_st/$_p/file"
+  { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n'
+    printf '  <key>identifier</key>\n  <string>dev.mavergreen.%s</string>\n  <key>product</key>\n  <string>%s</string>\n' "$_s" "$_s"
+    printf '  <key>version</key>\n  <string>%s</string>\n  <key>requires</key>\n  <dict>\n' "$_v"
+    for _r in "$@"; do
+      printf '    <key>%s</key>\n    <dict>\n      <key>kind</key>\n      <string>runtime</string>\n' "${_r%%>=*}"
+      case "$_r" in *'>='*) printf '      <key>min</key>\n      <string>%s</string>\n' "${_r#*>=}" ;; esac
+      printf '    </dict>\n'
+    done
+    printf '  </dict>\n</dict>\n</plist>\n'; } > "$_st/$_p/mavergreen.plist"
   sh "$here/../scripts/build_component_pkg.sh" --root "$_st" --identifier "dev.mavergreen.$_s" --version 1.0 \
     --install-location / --out "$w/stage/$_s-$_t/comp.pkg" > /dev/null 2>&1
   cat > "$w/stage/$_s-$_t/dist.xml" <<DIST
@@ -55,9 +62,9 @@ DIST
 }
 latest() { mkdir -p "$w/rel/Mavergreen/${1}repo/releases"; echo "$2" > "$w/rel/Mavergreen/${1}repo/releases/latest"; }
 installed() {
-  mkdir -p "$w/root/usr/local/mavergreen/$1"
+  mkdir -p "$w/root/opt/mavergreen/$1"
   printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>version</key>\n  <string>%s</string>\n%b</dict>\n</plist>\n' \
-    "$2" "${3:-}" > "$w/root/usr/local/mavergreen/$1/mavergreen.plist"
+    "$2" "${3:-}" > "$w/root/opt/mavergreen/$1/mavergreen.plist"
 }
 plan() { rc=0; out="$(sh "$S" --root "$w/root" --dry-run "$@" 2>&1)" || rc=$?; }
 plan_stdout() { rc=0; out="$(sh "$S" --root "$w/root" --dry-run "$@" 2>/dev/null)" || rc=$?; }
@@ -120,11 +127,11 @@ plan_stdout a@1 d@1
 
 fresh; release a 1 b; latest b 1; installed b 1 '  <key>requires</key>\n  <array>\n    <dict/>\n  </array>\n'
 plan a@1
-[ "$rc" -eq 1 ] && has "requires:0" || fail "an unreadable requires entry fails rather than ending the list"
+[ "$rc" -eq 1 ] && has "is not an array of strings" || fail "an unreadable requires entry fails rather than ending the list"
 
 fresh; release a 1 b; latest b 1; installed b 1 '  <key>requires</key>\n  <string>x</string>\n'
 plan a@1
-[ "$rc" -eq 1 ] && has "not an array" || fail "a requires that is not an array fails rather than reading as none"
+[ "$rc" -eq 1 ] && has "neither a dict nor an array" || fail "a requires that is neither a dict nor an array fails rather than reading as none"
 
 fresh; release a 1 --appcast-unlisted
 plan a@1
@@ -150,7 +157,7 @@ plan a@1
 
 fresh; release a 1 e
 plan a@1
-[ "$rc" -eq 1 ] && has "e" && has "not registered" || fail "unregistered_require_fails: exit 1 naming e"
+[ "$rc" -eq 1 ] && has "e" && has "has no .mavergreen/ingredients/e/REPO" || fail "unregistered_require_fails: exit 1 naming e"
 
 fresh; release a 1
 plan_stdout a@1
@@ -203,9 +210,9 @@ cat > "$top/bin/b" <<'FAKE'
 echo "b $*" >> "$FAKE_LOG"
 [ -z "${FAKE_B_FAIL:-}" ] || exit 1
 [ -n "${FAKE_B_NOMANIFEST:-}" ] && exit 0
-mkdir -p "$FAKE_ROOT/usr/local/mavergreen/$2"
+mkdir -p "$FAKE_ROOT/opt/mavergreen/$2"
 printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>version</key>\n  <string>20261012.2</string>\n</dict>\n</plist>\n' \
-  > "$FAKE_ROOT/usr/local/mavergreen/$2/mavergreen.plist"
+  > "$FAKE_ROOT/opt/mavergreen/$2/mavergreen.plist"
 FAKE
 chmod +x "$top/bin/installer" "$top/bin/b"
 real() {
@@ -303,7 +310,7 @@ with tarfile.open(sys.argv[1], "w:gz") as t:
 ' "$_rel/$1-$2-linux-x86_64.tar.gz" "$1" ${3:+"$3"}
   ( cd "$_rel" && shasum -a 256 "$1-$2-linux-x86_64.tar.gz" >> SHA256SUMS )
 }
-mg() { printf '%s\n' "$w/root/usr/local/mavergreen/$1"; }
+mg() { printf '%s\n' "$w/root/opt/mavergreen/$1"; }
 noinstaller() { ! grep -q installer "$w/log"; }
 pget() { "$SD" plist get "$(mg "$1")/mavergreen.plist" "$2" 2>/dev/null; }
 
@@ -370,7 +377,7 @@ done
 
 fresh; release a 1 'b>=2'; release b 3; latest b 3
 _rel="$w/rel/Mavergreen/arepo/releases/download/1"; rm -f "$_rel/a-1.pkg" "$_rel/a.xml"; : > "$_rel/SHA256SUMS"
-linuxtar a 1 "$w/stage/a-1/root/usr/local/mavergreen/a/mavergreen.plist"; linux
+linuxtar a 1 "$w/stage/a-1/root/opt/mavergreen/a/mavergreen.plist"; linux
 INSTALL_PRODUCTS_HOST=linux plan_stdout a@1
 [ "$rc" -eq 0 ] && [ "$out" = "$(lines 'install b 3' 'install a 1')" ] \
   || fail "linux_tarball_plist: the archive's own mavergreen.plist gives the version and the requires"
@@ -402,8 +409,8 @@ fresh; release b 1; release b 2; linux; run b@1
 rc=0; out="$(PATH="$top/mvfail:$PATH" FAIL_MV_INTO="$(mg b)" sh "$S" --root "$w/root" b@2 2>&1)" || rc=$?
 [ "$rc" -eq 1 ] && [ "$(cat "$(mg b)/file")" = b ] && [ "$(pget b version)" = 1 ] && [ -z "$(find "$(mg b)" -name '.*')" ] \
   || fail "linux_atomic_replace: a replacement whose tree cannot move in leaves the old tree whole and marked"
-[ -z "$(find "$w/root/usr/local/mavergreen" -mindepth 1 ! -path "$(mg b)" ! -path "$(mg b)/*" ! -name .install-products ! -path '*/.install-products/b')" ] \
-  || fail "linux_atomic_replace: nothing staged is left behind ($(find "$w/root/usr/local/mavergreen" -name '.*'))"
+[ -z "$(find "$w/root/opt/mavergreen" -mindepth 1 ! -path "$(mg b)" ! -path "$(mg b)/*" ! -name .install-products ! -path '*/.install-products/b')" ] \
+  || fail "linux_atomic_replace: nothing staged is left behind ($(find "$w/root/opt/mavergreen" -name '.*'))"
 
 fresh; release b 1; linux; run b@1; release b 2
 _rel="$w/rel/Mavergreen/brepo/releases/download/2"
@@ -427,7 +434,7 @@ run a@1
 [ "$rc" -eq 0 ] && [ "$(cat "$w/installed")" = "$(lines 'b 2' 'a 1')" ] && [ ! -e "$(mg b)/file" ] \
   || fail "linux_keep_at_floor: an installed require at its floor is kept, read from its marker"
 
-fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
+fresh; mkdir -p "$w/repo/.mavergreen/ingredients/sdk109"; echo Mavergreen/lbrepo > "$w/repo/.mavergreen/ingredients/sdk109/REPO"
 printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; latest lb 20261027.13
 mkdir -p "$w/sdksrc/MacOSX10.9.sdk/usr/lib"; : > "$w/sdksrc/MacOSX10.9.sdk/usr/lib/libSystem.tbd"
 ( cd "$w/sdksrc" && tar -czf "$w/sdk.tar" MacOSX10.9.sdk )
@@ -443,11 +450,19 @@ sdk="$(mg sdk109)/SDKs/MacOSX10.9.sdk"
 [ "$(cat "$sdk/SDKSettings.json")" = '{"CanonicalName":"macosx10.9","MaximumDeploymentTarget":"10.9","Version":"10.9"}' ] \
   || fail "linux_sdk: the SDK carries the SDKSettings.json longboat writes into it"
 [ "$(pget sdk109 version)" = 20261027.13 ] && [ "$(pget sdk109 name)" = "Mac OS X 10.9 SDK" ] \
-  && [ "$(pget sdk109 identifier)" = dev.mavergreen.longboat.sdk109 ] \
-  || fail "linux_sdk: the marker is the one longboat's pkg installs, at longboat's latest version"
+  && [ "$(pget sdk109 identifier)" = dev.mavergreen.sdk109 ] \
+  || fail "linux_sdk: the marker names sdk109, at its repo's latest version"
 [ "$(cat "$w/installed")" = "$(lines 'sdk109 20261027.13' 'a 1')" ] && [ ! -s "$w/log" ] \
   || fail "linux_sdk: neither longboat nor an installer runs ($(cat "$w/log"))"
 unset MAVERGREEN_SDK_URL MAVERGREEN_SDK_SHA256 MAVERGREEN_SDK_CACHE
+
+# spec: Q2 -- a pinned pre-flag-day release's pkg installs at /usr/local/mavergreen, so on Linux it goes there too
+fresh; release x 1 --old-prefix; linux
+run x@1
+[ "$rc" -eq 0 ] && [ "$(cat "$w/root/usr/local/mavergreen/x/file")" = x ] && [ ! -e "$(mg x)" ] \
+  || fail "linux_old_prefix: a release whose pkg installs at usr/local/mavergreen lands there"
+INSTALL_PRODUCTS_HOST=linux plan_stdout x@1
+[ "$rc" -eq 0 ] && [ "$out" = 'keep x 1' ] || fail "linux_old_prefix: a rerun finds it there and keeps it"
 
 fresh; release x 1 --no-appcast; linux
 cp "$w/stage/x-1/comp.pkg" "$w/rel/Mavergreen/xrepo/releases/download/1/x-1.pkg"
@@ -465,7 +480,7 @@ done
 [ "$(cat "$(mg b)/file")" = b ] && [ "$(pget b version)" = 1 ] && [ -z "$(find "$(mg b)" -name '.*')" ] \
   || fail "linux_concurrent: concurrent installs leave one whole, marked tree and nothing else"
 
-fresh; release b 1; linux; lkd="$w/root/usr/local/mavergreen/.install-products/b"; mkdir -p "$lkd"; echo 2147483646 > "$lkd/lock"
+fresh; release b 1; linux; lkd="$w/root/opt/mavergreen/.install-products/b"; mkdir -p "$lkd"; echo 2147483646 > "$lkd/lock"
 run b@1
 [ "$rc" -eq 0 ] && [ "$(pget b version)" = 1 ] && [ ! -e "$lkd/lock" ] \
   || fail "linux_stale_lock: a lock whose process is gone does not block the install"
@@ -489,7 +504,7 @@ if [ "$(id -u)" -ne 0 ]; then
   fresh; release b 1; linux; unset SUDO; chmod 555 "$w/root"
   rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" b@1 2>&1)" || rc=$?
   chmod 755 "$w/root"
-  [ "$rc" -eq 1 ] && has "needs root, sudo, or a writable $w/root/usr/local/mavergreen" \
+  [ "$rc" -eq 1 ] && has "needs root, sudo, or a writable $w/root/opt/mavergreen" \
     && ! has "not found" && ! has "cannot find name" && [ ! -s "$w/installed" ] \
     || fail "linux_no_sudo: with no sudo and no writable prefix, exit 1, saying what it needs"
 
@@ -499,22 +514,22 @@ if [ "$(id -u)" -ne 0 ]; then
   [ "$rc" -eq 1 ] && has "needs root, sudo, or a writable" && [ "$(cat "$w/log")" = "sudo -n true" ] \
     || fail "linux_sudo_needs_password: a sudo that cannot run without a password is probed once and not used ($(cat "$w/log"))"
 
-  fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
+  fresh; mkdir -p "$w/repo/.mavergreen/ingredients/sdk109"; echo Mavergreen/lbrepo > "$w/repo/.mavergreen/ingredients/sdk109/REPO"
   printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; latest lb 20261027.13
   release a 1 'sdk109>=20261027'; linux; unset SUDO; printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"
   export MAVERGREEN_SDK_URL="file://$w/nosuch.tar" MAVERGREEN_SDK_SHA256=0 MAVERGREEN_SDK_CACHE="$w/sdkcache"
   chmod 555 "$w/root"
   rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" a@1 2>&1)" || rc=$?
   chmod 755 "$w/root"
-  [ "$rc" -eq 1 ] && has "sdk109: cannot make $w/root/usr/local/mavergreen/sdk109: install-products needs root, sudo, or a writable" \
+  [ "$rc" -eq 1 ] && has "sdk109: cannot make $w/root/opt/mavergreen/sdk109: install-products needs root, sudo, or a writable" \
     && ! has "fetch_sdk.sh --arch x86_64 failed" && [ ! -e "$w/sdkcache" ] && ! has "not found" && [ ! -s "$w/installed" ] \
     || fail "linux_sdk_no_sudo: sdk109 needs the same root, sudo or writable prefix, checked before the SDK is fetched"
   unset MAVERGREEN_SDK_URL MAVERGREEN_SDK_SHA256 MAVERGREEN_SDK_CACHE
 fi
 
-fresh; release b 1; linux; unset SUDO; mkdir -p "$w/root/usr/local/mavergreen"
+fresh; release b 1; linux; unset SUDO; mkdir -p "$w/root/opt/mavergreen"
 rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" b@1 2>&1)" || rc=$?
 [ "$rc" -eq 0 ] && [ "$(pget b version)" = 1 ] && [ "$(cat "$w/installed")" = "b 1" ] \
-  || fail "linux_writable_no_sudo: a writable usr/local/mavergreen needs no sudo"
+  || fail "linux_writable_no_sudo: a writable opt/mavergreen needs no sudo"
 
 echo "PASS: install-products"

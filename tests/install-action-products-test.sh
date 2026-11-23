@@ -21,7 +21,7 @@ else:
         bad.append("`products` must default to the empty string")
 def run(s): return s.get("run") or ""
 prod = [s for s in steps if "install-products.sh" in run(s)]
-shipyard = [s for s in steps if "mavericks-shipyard-" in run(s)]
+shipyard = [s for s in steps if '"shipyard-$ver.pkg"' in run(s)]
 if len(prod) != 1:
     bad.append("expected exactly one step running install-products.sh, got %d" % len(prod))
 if len(shipyard) != 1:

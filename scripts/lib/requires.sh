@@ -23,6 +23,7 @@ mavergreen_requires() {
     function bad(m) { printf ": the requires in %s %s\n", f, m > err; failed = 1; exit 1 }
     function val(l) { sub(/^[^>]*>/, "", l); sub(/<.*$/, "", l); gsub(/&lt;/, "<", l); gsub(/&gt;/, ">", l); gsub(/&amp;/, "\\&", l); return l }
     { l = $0; gsub(/^[ \t]+|[ \t]+$/, "", l) }
+    rd && mode == "array" && d == rd && l !~ /^<string>/ && l != "</array>" { bad("is not an array of strings") }
     l == "<dict/>" || l == "<array/>" {
       if (pend) pend = 0
       else if (rd && mode == "dict" && d == rd && cur != "") { print cur; cur = "" }
@@ -40,10 +41,7 @@ mavergreen_requires() {
     }
     pend { bad("is neither a dict nor an array") }
     d == 1 && !rd && l == "<key>requires</key>" { pend = 1; next }
-    rd && mode == "array" && d == rd {
-      if (l !~ /^<string>/) bad("is not an array of strings")
-      print val(l); next
-    }
+    rd && mode == "array" && d == rd { print val(l); next }
     rd && mode == "dict" && d == rd && l ~ /^<key>/ { cur = val(l); mn = ""; next }
     rd && mode == "dict" && d == rd + 1 && l == "<key>min</key>" { wantmin = 1; next }
     wantmin { wantmin = 0; mn = val(l); next }

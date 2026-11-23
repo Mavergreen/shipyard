@@ -2,12 +2,16 @@
 # platform: host-agnostic -- stevedore reads the pkgs and manifests; the installer and provisioner commands run where it does
 #   usage: install-products.sh [--root DIR] [--dry-run] SHORT@TAG...
 #          Installs each named Mavergreen product at exactly its release TAG and, first, everything it
-#          requires, transitively. A product's requires are the `requires` array of the mavergreen.plist
-#          in its release pkg (SHORT or SHORT>=FLOOR); a require already installed under DIR (default /)
+#          requires, transitively. A product's requires are the `requires` of the mavergreen.plist in its
+#          release pkg (read by scripts/lib/requires.sh); a require already installed under DIR (default /)
 #          at or above its floor is kept, a provisioned one (scripts/product-provisioners, or
 #          $MAVERGREEN_PRODUCT_PROVISIONERS) is set up by its provider's command, and any other resolves
 #          to its repo's latest release, which must meet the highest floor any product declares. A named
-#          product is kept only when its installed manifest version is the pinned release's.
+#          product is kept only when its installed manifest version is the pinned release's. Each SHORT's
+#          repo is .mavergreen/ingredients/SHORT/REPO (owner/name) in the calling repo (mg_dir); its pkg
+#          identifier is dev.mavergreen.SHORT and its appcast SHORT.xml. A product lives at
+#          DIR$(mavergreen_prefix SHORT), or, for a pinned pre-flag-day release whose pkg installs it there,
+#          at DIR/usr/local/mavergreen/SHORT.
 #          A release's pkg is the one its appcast SHORT.xml names, else the only .pkg in its SHA256SUMS;
 #          it is fetched into ${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/REPO/TAG and
 #          verified against that SHA256SUMS. Reading the mavergreen.plist out of a pkg's Payload needs
@@ -20,19 +24,18 @@
 #          `$INSTALLER -pkg PKG -target DIR` on the verified cached pkg (default `installer`, under
 #          `sudo` unless root or no sudo is installed); provision runs COMMAND (under `sudo` likewise, and
 #          on Linux only when `sudo -n true` succeeds; SUDO= overrides) and then
-#          requires DIR/usr/local/mavergreen/SHORT/mavergreen.plist to exist. After each product, kept
+#          requires SHORT's mavergreen.plist under DIR to exist. After each product, kept
 #          ones included, `SHORT VERSION` is appended to $MAVERGREEN_INSTALLED when set; the first
 #          failing step stops the run, so the file lists only what completed.
 #          Exit 1 when a product cannot be resolved, fetched or verified, or a floor cannot be met;
-#          2 on a usage error. MAVERGREEN_RELEASES replaces https://github.com (the tests serve file://);
-#          MAVERGREEN_PRODUCT_NAMES replaces the registry.
-#          On Linux no installer runs. Each product goes to the same DIR/usr/local/mavergreen/SHORT as
-#          its pkg, staged whole in DIR/usr/local/mavergreen/.install-products/SHORT (made with $SUDO mkdir
+#          2 on a usage error. MAVERGREEN_RELEASES replaces https://github.com (the tests serve file://).
+#          On Linux no installer runs. Each product goes to the same place under DIR as its pkg installs
+#          it, staged whole in that prefix's .install-products/SHORT (made with $SUDO mkdir
 #          and chowned to the caller's numeric uid:gid, or, with no sudo, made directly, failing with exit 1
-#          unless root or DIR/usr/local/mavergreen is writable) and then renamed into place, an older tree
+#          unless root or the prefix is writable) and then renamed into place, an older tree
 #          renamed aside first and removed after, so the prefix never holds a partial tree: a release whose SHA256SUMS lists
 #          SHORT-TAG-linux-x86_64.tar.gz installs that archive (fetch_product_tar.sh, on an x86_64 host),
-#          any other its pkg's usr/local/mavergreen/SHORT payload (fetch_product_pkg.sh), and either way
+#          any other its pkg's payload for SHORT (fetch_product_pkg.sh), and either way
 #          the pkg's own mavergreen.plist marks it. An archive holding opt/mavergreen/SHORT/mavergreen.plist
 #          supplies that manifest itself, the version and requires included, and its pkg is never
 #          fetched; the archive is cached in ${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-tars}/REPO/TAG. An SDK product, sdk<NNN> for a pin in sdk-pins.sh,
@@ -46,6 +49,8 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen_fetch.sh"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 . "$SELF/lib/vercmp.sh"
 . "$SELF/lib/requires.sh"
 . "$SELF/sdk-pins.sh"
@@ -86,15 +91,26 @@ stg=""; lk=""
 trap 'rm -rf "$T" ${stg:+"$stg"} ${lk:+"$lk"}' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-mkdir "$T/pin" "$T/carry" "$T/m" "$T/w" "$T/pkg" "$T/tag"
+mkdir "$T/pin" "$T/carry" "$T/m" "$T/w" "$T/pkg" "$T/tag" "$T/repo" "$T/prefix"
 for p in "$@"; do printf '%s\n' "${p#*@}" > "$T/pin/${p%%@*}"; done
 
-reg() {
-  _rv="$(sh "$SELF/product-name.sh" "$1" "$2")" && return 0
-  case $? in
-    1) die "$2 is not registered in shipyard's scripts/product-names${3:+ (required by $3)}" ;;
-    *) die "the registry cannot look up the $1 of $2" ;;
+repo_of() {
+  _rv="$(mg_value "ingredients/$1/REPO" 2>/dev/null)" || _rv=
+  case "$_rv" in
+    Mavergreen/*) _rv="${_rv#Mavergreen/}" ;;
+    *) die "$1 has no .mavergreen/ingredients/$1/REPO naming Mavergreen/<repo> in $(mg_dir)${2:+ (required by $2)}" ;;
   esac
+  case "$_rv" in ''|*/*|*[!A-Za-z0-9._-]*) die "$1: .mavergreen/ingredients/$1/REPO does not name Mavergreen/<repo>" ;; esac
+}
+provisioner() {
+  _pf="${MAVERGREEN_PRODUCT_PROVISIONERS:-$SELF/product-provisioners}"
+  [ -r "$_pf" ] || die "cannot read the provisioners $_pf"
+  prov="$(awk -v s="$1" '$1 == s && $1 !~ /^#/ { sub(/^[^ \t]+[ \t]+/, ""); print; exit }' "$_pf")"
+}
+here_of() {  # $1 = SHORT: sets _here to the installed manifest under ROOT, new prefix first
+  _np="$(mavergreen_prefix "$1")" || die "$1 is not a product short name"
+  _here="$ROOT$_np/mavergreen.plist"
+  [ -f "$_here" ] || [ ! -f "$ROOT/usr/local/mavergreen/$1/mavergreen.plist" ] || _here="$ROOT/usr/local/mavergreen/$1/mavergreen.plist"
 }
 ge() {
   _c="$(mavergreen_vercmp "$1" "$2")" || die "$3: cannot order version $1 against $2 (see scripts/lib/vercmp.sh)"
@@ -129,6 +145,7 @@ manifest() {
   _mf="$T/m/$1@$3.plist"
   [ ! -f "$_mf" ] || return 0
   _base="${MAVERGREEN_RELEASES:-https://github.com}/Mavergreen/$2/releases/download/$3"
+  rm -f "${_mf%.plist}.prefix"
   _cache="${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/$2/$3"
   _w="$T/w/$1@$3"
   rm -rf "$_w"; mkdir -p "$_w" "$_cache" || die "$1 $3: cannot make $_w or $_cache"
@@ -149,7 +166,7 @@ manifest() {
     fi
     _cache="${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/$2/$3"
   fi
-  reg feed "$1"; _xml="${_rv##*/}"
+  _xml="$1.xml"
   if listed "$_w/SHA256SUMS" "$_xml"; then
     shipyard_fetch_verified "$_base/$_xml" "$_ls" "$_cache" "$_xml" || die "$1 $3: could not fetch and verify $_base/$_xml"
     cp "$_cache/$_xml" "$_w/appcast" || die "$1 $3: cannot copy $_xml"
@@ -182,6 +199,7 @@ manifest() {
     [ "$HOST" = linux ] || shipyard_fetch_verified "$_base/$_asset" "$_ls" "$_cache" "$_asset" \
       || die "$1 $3: could not fetch and verify $_base/$_asset"
     cp "$_pc" "$_mf" || die "$1 $3: cannot copy $_pc"
+    [ ! -f "$_pc.prefix" ] || cp "$_pc.prefix" "${_mf%.plist}.prefix" || die "$1 $3: cannot copy $_pc.prefix"
     printf '%s\n' "$_cache/$_asset" > "${_mf%.plist}.pkgpath"
     cp "$_w/SHA256SUMS" "${_mf%.plist}.sums" || die "$1 $3: cannot keep $_base/SHA256SUMS"
     rm -rf "$_w"; return 0
@@ -198,13 +216,17 @@ manifest() {
   cp "$_w/SHA256SUMS" "${_mf%.plist}.sums" || die "$1 $3: cannot keep $_base/SHA256SUMS"
   mkdir "$_w/p" || die "$1 $3: cannot make $_w/p"
   ( cd "$_w/p" && { if gzip -dc "$(dirname "$_m")/Payload"; then echo 0 > "$_w/gzip.rc"; else echo $? > "$_w/gzip.rc"; fi; } \
-    | { if cpio -id --quiet "*usr/local/mavergreen/$1/mavergreen.plist"; then echo 0 > "$_w/cpio.rc"; else echo $? > "$_w/cpio.rc"; fi; } ) 2>/dev/null || :
+    | { if cpio -id --quiet "*opt/mavergreen/$1/mavergreen.plist" "*usr/local/mavergreen/$1/mavergreen.plist"; then echo 0 > "$_w/cpio.rc"; else echo $? > "$_w/cpio.rc"; fi; } ) 2>/dev/null || :
   [ "$(cat "$_w/cpio.rc" 2>/dev/null || :)" = 0 ] || die "$1 $3: could not unpack the Payload of $4 in $_asset"
   [ "$(cat "$_w/gzip.rc" 2>/dev/null || :)" = 0 ] || die "$1 $3: could not decompress the Payload of $4 in $_asset"
-  [ -f "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" ] \
-    || die "$1 $3: $4 in $_asset installs no usr/local/mavergreen/$1/mavergreen.plist"
-  cp "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" "$_pc.$$" && mv -f "$_pc.$$" "$_pc" || rm -f "$_pc.$$"
-  mv "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" "$_mf" || die "$1 $3: cannot keep the mavergreen.plist of $4"
+  _pp="$(mavergreen_prefix "$1")"; _pp="${_pp#/}"
+  [ -f "$_w/p/$_pp/mavergreen.plist" ] || [ ! -f "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" ] || _pp="usr/local/mavergreen/$1"
+  [ -f "$_w/p/$_pp/mavergreen.plist" ] \
+    || die "$1 $3: $4 in $_asset installs no $_pp/mavergreen.plist"
+  cp "$_w/p/$_pp/mavergreen.plist" "$_pc.$$" && mv -f "$_pc.$$" "$_pc" || rm -f "$_pc.$$"
+  mv "$_w/p/$_pp/mavergreen.plist" "$_mf" || die "$1 $3: cannot keep the mavergreen.plist of $4"
+  printf '/%s\n' "$_pp" > "${_mf%.plist}.prefix"
+  cp "${_mf%.plist}.prefix" "$_pc.prefix.$$" && mv -f "$_pc.prefix.$$" "$_pc.prefix" || rm -f "$_pc.prefix.$$"
   rm -rf "$_w"
 }
 
@@ -228,22 +250,20 @@ resolve() {
     printf '%s\n' "$fl" > "$T/carry/$s"
     exit 3
   fi
-  reg repo "$s" "$by"; repo=$_rv
-  reg identifier "$s" "$by"; id=$_rv
-  prov="$(sh "$SELF/product-name.sh" provisioner "$s")" || case $? in
-    1) prov="" ;;
-    *) die "the registry cannot look up the provisioner of $s" ;;
-  esac
+  provisioner "$s"
   sdkarch "$s"
   [ -z "$_sa" ] || prov="fetch_sdk.sh --arch $_sa"
-  inst=""; ip="$ROOT/usr/local/mavergreen/$s/mavergreen.plist"
+  repo=""; [ -n "$prov" ] && [ ! -f "$T/pin/$s" ] || { repo_of "$s" "$by"; repo=$_rv; }
+  id="dev.mavergreen.$s"
+  here_of "$s"; inst=""; ip="$_here"
   if [ -f "$ip" ]; then mver "$ip" "$s"; inst=$_v; fi
   src=""
   if [ -f "$T/pin/$s" ]; then
     [ -z "$prov" ] || die "$s is set up by '$prov', not released: name its provider instead"
     tag="$(cat "$T/pin/$s")"
     manifest "$s" "$repo" "$tag" "$id"; src=$_mf; cp "${_mf%.plist}.pkgpath" "$T/pkg/$s"
-    printf '%s\n' "$tag" > "$T/tag/$s"
+    printf '%s\n' "$tag" > "$T/tag/$s"; printf '%s\n' "$repo" > "$T/repo/$s"
+    [ ! -f "${_mf%.plist}.prefix" ] || cp "${_mf%.plist}.prefix" "$T/prefix/$s"
     mver "$src" "$s"; v=$_v
     [ -z "$fl" ] || ge "$v" "$fl" "$s" || die "$s is named at $tag (version $v), below $s>=$fl${by:+ required by $by}"
     if [ "$inst" = "$v" ]; then act=keep; else act=install; fi
@@ -255,7 +275,8 @@ resolve() {
   else
     tag="$(shipyard_latest_tag "$repo")" || die "$s: no latest release of Mavergreen/$repo${by:+ (required by $by)}"
     manifest "$s" "$repo" "$tag" "$id"; src=$_mf; cp "${_mf%.plist}.pkgpath" "$T/pkg/$s"
-    printf '%s\n' "$tag" > "$T/tag/$s"
+    printf '%s\n' "$tag" > "$T/tag/$s"; printf '%s\n' "$repo" > "$T/repo/$s"
+    [ ! -f "${_mf%.plist}.prefix" ] || cp "${_mf%.plist}.prefix" "$T/prefix/$s"
     mver "$src" "$s"; v=$_v
     [ -z "$fl" ] || ge "$v" "$fl" "$s" \
       || die "$s>=$fl${by:+ (required by $by)} cannot be met: the latest release of Mavergreen/$repo is $tag, version $v"
@@ -297,18 +318,19 @@ if [ "$(id -u)" -eq 0 ] || ! command -v sudo > /dev/null 2>&1; then _sudo=""; _i
 if [ "${SUDO+set}" != set ] && [ -n "$_sudo" ] && [ "$HOST" = linux ] && ! sudo -n true > /dev/null 2>&1; then _sudo=""; fi
 SUDO="${SUDO-$_sudo}"; INSTALLER="${INSTALLER:-$_inst}"
 prefix() {
-  P="$ROOT/usr/local/mavergreen/$1"; _wd="$ROOT/usr/local/mavergreen/.install-products/$1"
+  if [ -f "$T/prefix/$1" ]; then _pfx="$(cat "$T/prefix/$1")"; else _pfx="$(mavergreen_prefix "$1")" || die "$1 is not a product short name"; fi
+  P="$ROOT$_pfx"; _top="$ROOT${_pfx%/*}"; _wd="$_top/.install-products/$1"
   if [ ! -d "$_wd" ] || [ ! -w "$_wd" ]; then
     if [ -n "$SUDO" ]; then
       $SUDO mkdir -p "$_wd" && $SUDO chown "$(id -u):$(id -g)" "$_wd" || die "$1: cannot make $_wd, owned by $(id -u):$(id -g)"
     else
       { mkdir -p "$_wd" 2> /dev/null && [ -w "$_wd" ]; } \
-        || die "$1: cannot make $P: install-products needs root, sudo, or a writable $ROOT/usr/local/mavergreen"
+        || die "$1: cannot make $P: install-products needs root, sudo, or a writable $_top"
     fi
   fi
   _ps=""
   if [ ! -w "${P%/*}" ] || { [ -d "$P" ] && [ ! -w "$P" ]; }; then
-    [ -n "$SUDO" ] || die "$1: cannot replace $P: install-products needs root, sudo, or a writable $ROOT/usr/local/mavergreen"
+    [ -n "$SUDO" ] || die "$1: cannot replace $P: install-products needs root, sudo, or a writable $_top"
     _ps=$SUDO
   fi
   _lf="$_wd/lock"; _wt=0
@@ -341,34 +363,39 @@ commit() {
   rm -f "$lk"; lk=""
 }
 linux_install() {
-  _tag="$(cat "$T/tag/$1")"; _pkg="$(cat "$T/pkg/$1")"; _tar="$1-$_tag-linux-x86_64.tar.gz"
+  _tag="$(cat "$T/tag/$1")"; _pkg="$(cat "$T/pkg/$1")"; _tar="$1-$_tag-linux-x86_64.tar.gz"; _repo="Mavergreen/$(cat "$T/repo/$1")"
   prefix "$1" "$2" || return 0
   if listed "$T/m/$1@$_tag.sums" "$_tar"; then
     [ "$(uname -m)" = x86_64 ] || die "$1 $2: the release's Linux archive is $_tar, and this host is $(uname -m)"
     echo "install-products: installing $1 $2 from $_tar into $P" >&2
-    sh "$SELF/fetch_product_tar.sh" "$1" "$_tag" "$stg/tree" > /dev/null || die "$1 $2: could not fetch, verify and unpack $_tar"
+    sh "$SELF/fetch_product_tar.sh" --repo "$_repo" "$1" "$_tag" "$stg/tree" > /dev/null || die "$1 $2: could not fetch, verify and unpack $_tar"
     rm -f "$stg/tree/.mavergreen-archive-sha256"
     cp "$T/m/$1@$_tag.plist" "$stg/tree/mavergreen.plist" || die "$1 $2: cannot copy its mavergreen.plist"
   else
     echo "install-products: installing $1 $2 from the payload of $_pkg into $P" >&2
-    sh "$SELF/fetch_product_pkg.sh" --asset "${_pkg##*/}" "$1" "$_tag" "$stg/tree" > /dev/null \
-      || die "$1 $2: the release lists no $_tar, and fetch_product_pkg.sh could not extract usr/local/mavergreen/$1 from $_pkg"
+    sh "$SELF/fetch_product_pkg.sh" --repo "$_repo" --asset "${_pkg##*/}" "$1" "$_tag" "$stg/tree" > /dev/null \
+      || die "$1 $2: the release lists no $_tar, and fetch_product_pkg.sh could not extract ${P#"$ROOT"} from $_pkg"
   fi
   commit "$1"
 }
 linux_sdk() {
   sdkarch "$1"
-  reg repo "$1"; _tag="$(shipyard_latest_tag "$_rv")" || die "$1: no latest release of Mavergreen/$_rv to version it by"
+  repo_of "$1"; _tag="$(shipyard_latest_tag "$_rv")" || die "$1: no latest release of Mavergreen/$_rv to version it by"
   case "$_sver" in 10.[0-9]|10.1[01]) _sn="Mac OS X $_sver SDK" ;; *) _sn="macOS $_sver SDK" ;; esac
   prefix "$1" "$_tag" || return 0
   _sdk="$(MAVERGREEN_SDK_SETTINGS_JSON='' sh "$SELF/fetch_sdk.sh" --arch "$_sa")" || die "$1: fetch_sdk.sh --arch $_sa failed"
-  _st="$stg/root/usr/local/mavergreen/$1"
+  _st="$stg/root${P#"$ROOT"}"
   mkdir -p "$_st/SDKs" && cp -RP "$_sdk" "$_st/SDKs/$_sdir" || die "$1: cannot copy $_sdk"
   if _js="$(shipyard_sdk_settings_json "$_sa")"; then
     printf '%s\n' "$_js" > "$_st/SDKs/$_sdir/SDKSettings.json" && chmod 644 "$_st/SDKs/$_sdir/SDKSettings.json" \
       || die "$1: cannot write SDKSettings.json"
   fi
-  sh "$SELF/render-manifest.sh" --stage "$stg/root" --product "$1" --name "$_sn" --version "$_tag" >&2 \
+  { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n'
+    printf '  <key>identifier</key>\n  <string>dev.mavergreen.%s</string>\n' "$1"
+    printf '  <key>name</key>\n  <string>%s</string>\n' "$_sn"
+    printf '  <key>product</key>\n  <string>%s</string>\n' "$1"
+    printf '  <key>version</key>\n  <string>%s</string>\n' "$(mg_xml_text "$_tag")"
+    printf '  <key>requires</key>\n  <dict/>\n</dict>\n</plist>\n'; } > "$_st/mavergreen.plist" \
     || die "$1: cannot write its mavergreen.plist"
   mv "$_st" "$stg/tree" || die "$1: cannot stage its tree"
   commit "$1"
@@ -386,13 +413,14 @@ while read -r act s rest; do
     provision)
       cmd="${rest#via }"
       echo "install-products: provisioning $s via $cmd" >&2
-      pm="$ROOT/usr/local/mavergreen/$s/mavergreen.plist"
+      here_of "$s"; pm="$_here"
       if [ "$HOST" = linux ] && [ "${cmd%% *}" = fetch_sdk.sh ]; then
         linux_sdk "$s"
       else
         before=""; [ ! -f "$pm" ] || before="$(cksum < "$pm")"
         # shellcheck disable=SC2086
         $SUDO $cmd < /dev/null >&2 || die "$s: '$cmd' failed"
+        here_of "$s"; pm="$_here"
         [ -f "$pm" ] || die "$s: '$cmd' left no $pm"
         [ -z "$before" ] || [ "$before" != "$(cksum < "$pm")" ] || die "$s: '$cmd' left the existing $pm unchanged"
       fi

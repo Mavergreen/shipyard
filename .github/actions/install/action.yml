@@ -5,13 +5,15 @@ description: >
   product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. Consumers
   configure with shipyard-cmake; MavergreenShipyardConfig.cmake refuses any other cmake. The optional
   `products` input also installs named family products (SHORT@TAG) and their requires, on macOS
-  and Linux alike, each at /usr/local/mavergreen/SHORT.
+  and Linux alike, each where its pkg installs it (/opt/mavergreen/SHORT, or /usr/local/mavergreen/SHORT
+  for a pinned pre-flag-day release). Each SHORT's repo is .mavergreen/ingredients/SHORT/REPO in the
+  consumer's checkout.
 
 inputs:
   products:
     description: >
       Whitespace-separated SHORT@TAG family products to install after shipyard, each with what it
-      requires (for example go127-cross@1.27.4-mavericks.4), on any runner; empty installs none.
+      requires (for example go127@1.27.4-mavergreen.1), on any runner; empty installs none.
     required: false
     default: ''
 
@@ -149,7 +151,7 @@ runs:
         root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         echo "MAVERGREEN_INSTALLED=$RUNNER_TEMP/mavergreen-installed.txt" >> "$GITHUB_ENV"
         set -f
-        MAVERGREEN_INSTALLED="$RUNNER_TEMP/mavergreen-installed.txt" sh "$root/scripts/install-products.sh" $PRODUCTS
+        MAVERGREEN_REPO_ROOT="$GITHUB_WORKSPACE" MAVERGREEN_INSTALLED="$RUNNER_TEMP/mavergreen-installed.txt" sh "$root/scripts/install-products.sh" $PRODUCTS
 
     # spec: R-P1-18 -- there is no Linux pkg, and the jobs that land here do not want one: they run
     #       shipyard's SHELL half on ubuntu-latest, where the point is that the job is cheap. Refusing
