@@ -92,7 +92,7 @@ rc=0; out="$(sh "$L" 2>&1)" || rc=$?
 
 mv "$root/cmake" "$w/cmake-aside"
 for t in cmake ctest cpack; do
-  rc=0; out="$("$root/bin/shipyard-$t" --version 2>"$w/err")" || rc=$?
+  rc=0; out="$(SHIPYARD_LAUNCHER_HOST=mac "$root/bin/shipyard-$t" --version 2>"$w/err")" || rc=$?
   want="shipyard-$t: shipyard needs the Mavergreen cmake product, which isn't installed: https://github.com/Mavergreen/cmake/releases/latest -- install it, then run this again."
   [ "$rc" -eq 1 ] || fail "with no cmake product, shipyard-$t must exit 1; got $rc"
   [ -z "$out" ] || fail "with no cmake product, shipyard-$t must print nothing on stdout; got: $out"
@@ -101,6 +101,35 @@ $want
 got
 $(cat "$w/err")"
 done
+
+mkdir -p "$w/host/bin"
+for t in cmake ctest cpack; do
+  sed "s/^echo \"tool=/echo \"host-tool=/" "$w/cmake-aside/bin/$t" > "$w/host/bin/$t"; chmod +x "$w/host/bin/$t"
+done
+hp="$sy/bin:$w/rust/bin:$root/bin:$w/host/bin:/usr/bin:/bin"
+expect "on Linux with no cmake product, shipyard-cmake runs the cmake on PATH, skipping links to launchers" \
+  "host-tool=cmake${nl}${args_out}${nl}CMAKE_PREFIX_PATH=$sy" \
+  env -u CMAKE_PREFIX_PATH SHIPYARD_LAUNCHER_HOST=linux PATH="$hp" "$root/bin/shipyard-cmake" "a b" "" c
+for t in ctest cpack; do
+  expect "on Linux with no cmake product, shipyard-$t runs the $t on PATH" \
+    "host-tool=$t${nl}CMAKE_PREFIX_PATH=<unset>" \
+    env -u CMAKE_PREFIX_PATH SHIPYARD_LAUNCHER_HOST=linux PATH="$hp" "$sy/bin/$t"
+done
+mkdir -p "$w/tools"
+for t in readlink uname; do ln -s "$(command -v "$t")" "$w/tools/$t"; done
+rc=0; out="$(env SHIPYARD_LAUNCHER_HOST=linux PATH="$sy/bin:$w/rust/bin:$root/bin:$w/tools" "$root/bin/shipyard-cmake" 2>"$w/err")" || rc=$?
+[ "$rc" -eq 1 ] && [ -z "$out" ] && grep -q "no cmake on PATH" "$w/err" \
+  || fail "on Linux with no cmake product and only launchers on PATH, shipyard-cmake must refuse, not run itself; got $rc: $out $(cat "$w/err")"
+mv "$w/cmake-aside" "$root/cmake"
+cp "$root/cmake/bin/ctest" "$w/ctest.sh"
+printf '\317\372\355\376' > "$root/cmake/bin/ctest"; chmod +x "$root/cmake/bin/ctest"
+expect "on Linux a Mach-O cmake product beside shipyard is passed over for the host's" \
+  "host-tool=ctest${nl}CMAKE_PREFIX_PATH=<unset>" \
+  env -u CMAKE_PREFIX_PATH SHIPYARD_LAUNCHER_HOST=linux PATH="$w/host/bin:/usr/bin:/bin" "$root/bin/shipyard-ctest"
+cp "$w/ctest.sh" "$root/cmake/bin/ctest"
+expect "on Linux a cmake product beside shipyard still wins over PATH" \
+  "tool=ctest${nl}CMAKE_PREFIX_PATH=<unset>" \
+  env -u CMAKE_PREFIX_PATH SHIPYARD_LAUNCHER_HOST=linux PATH="$w/host/bin:/usr/bin:/bin" "$root/bin/shipyard-ctest"
 
 [ "$fails" -eq 0 ] || { echo "FAIL: $fails case(s) in shipyard-launcher"; exit 1; }
 echo "PASS: shipyard-launcher"
