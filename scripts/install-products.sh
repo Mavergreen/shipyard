@@ -27,8 +27,10 @@
 #          2 on a usage error. MAVERGREEN_RELEASES replaces https://github.com (the tests serve file://);
 #          MAVERGREEN_PRODUCT_NAMES replaces the registry.
 #          On Linux no installer runs. Each product goes to the same DIR/usr/local/mavergreen/SHORT as
-#          its pkg, made with $SUDO mkdir and chowned to the caller's numeric uid:gid, or, with no sudo,
-#          made directly, failing with exit 1 unless root or DIR/usr/local/mavergreen is writable: a release whose SHA256SUMS lists
+#          its pkg, staged whole in DIR/usr/local/mavergreen/.install-products/SHORT (made with $SUDO mkdir
+#          and chowned to the caller's numeric uid:gid, or, with no sudo, made directly, failing with exit 1
+#          unless root or DIR/usr/local/mavergreen is writable) and then renamed into place, an older tree
+#          renamed aside first and removed after, so the prefix never holds a partial tree: a release whose SHA256SUMS lists
 #          SHORT-TAG-linux-x86_64.tar.gz installs that archive (fetch_product_tar.sh, on an x86_64 host),
 #          any other its pkg's usr/local/mavergreen/SHORT payload (fetch_product_pkg.sh), and either way
 #          the pkg's own mavergreen.plist marks it. An archive holding opt/mavergreen/SHORT/mavergreen.plist
@@ -37,7 +39,7 @@
 #          is provisioned `via fetch_sdk.sh --arch ARCH` instead of by its provider: the pinned SDK,
 #          with the SDKSettings.json longboat adds, lands in SHORT/SDKs/, marked as longboat's pkg
 #          marks it at the latest release of SHORT's repo. Installs into one prefix take turns through
-#          SHORT/.install-products.lock, created exclusively and holding the installer's pid (a lock
+#          .install-products/SHORT/lock, created exclusively and holding the installer's pid (a lock
 #          whose process is gone is taken over; a live one is waited on up to SHIPYARD_LOCK_WAIT
 #          seconds, default 900), and one that finds the marker already at its version keeps the tree.
 #          INSTALL_PRODUCTS_HOST (linux or mac) replaces the host's own answer from uname -s.
@@ -295,16 +297,21 @@ if [ "$(id -u)" -eq 0 ] || ! command -v sudo > /dev/null 2>&1; then _sudo=""; _i
 if [ "${SUDO+set}" != set ] && [ -n "$_sudo" ] && [ "$HOST" = linux ] && ! sudo -n true > /dev/null 2>&1; then _sudo=""; fi
 SUDO="${SUDO-$_sudo}"; INSTALLER="${INSTALLER:-$_inst}"
 prefix() {
-  P="$ROOT/usr/local/mavergreen/$1"
-  if [ ! -d "$P" ] || [ ! -w "$P" ]; then
+  P="$ROOT/usr/local/mavergreen/$1"; _wd="$ROOT/usr/local/mavergreen/.install-products/$1"
+  if [ ! -d "$_wd" ] || [ ! -w "$_wd" ]; then
     if [ -n "$SUDO" ]; then
-      $SUDO mkdir -p "$P" && $SUDO chown "$(id -u):$(id -g)" "$P" || die "$1: cannot make $P, owned by $(id -u):$(id -g)"
+      $SUDO mkdir -p "$_wd" && $SUDO chown "$(id -u):$(id -g)" "$_wd" || die "$1: cannot make $_wd, owned by $(id -u):$(id -g)"
     else
-      { mkdir -p "$P" 2> /dev/null && [ -w "$P" ]; } \
+      { mkdir -p "$_wd" 2> /dev/null && [ -w "$_wd" ]; } \
         || die "$1: cannot make $P: install-products needs root, sudo, or a writable $ROOT/usr/local/mavergreen"
     fi
   fi
-  _lf="$P/.install-products.lock"; _wt=0
+  _ps=""
+  if [ ! -w "${P%/*}" ] || { [ -d "$P" ] && [ ! -w "$P" ]; }; then
+    [ -n "$SUDO" ] || die "$1: cannot replace $P: install-products needs root, sudo, or a writable $ROOT/usr/local/mavergreen"
+    _ps=$SUDO
+  fi
+  _lf="$_wd/lock"; _wt=0
   until ( set -C; echo $$ > "$_lf" ) 2>/dev/null; do
     _hp="$(cat "$_lf" 2>/dev/null || :)"
     case "$_hp" in
@@ -319,18 +326,18 @@ prefix() {
     echo "install-products: $1 $2 is already at $P" >&2
     rm -f "$lk"; lk=""; return 1
   fi
-  stg="$(mktemp -d "$P/.install-products.XXXXXX")" || die "$1: cannot stage in $P"
+  stg="$(mktemp -d "$_wd/stage.XXXXXX")" || die "$1: cannot stage in $_wd"
 }
 commit() {
   [ -f "$stg/tree/mavergreen.plist" ] || die "$1: the staged tree has no mavergreen.plist"
-  rm -f "$P/mavergreen.plist"
-  find "$P" -mindepth 1 -maxdepth 1 ! -name '.install-products.*' -exec rm -rf {} + || die "$1: cannot clear $P"
-  for _e in "$stg/tree"/* "$stg/tree"/.[!.]* "$stg/tree"/..?*; do
-    [ -e "$_e" ] || [ -h "$_e" ] || continue
-    [ "${_e##*/}" = mavergreen.plist ] || mv "$_e" "$P/" || die "$1: cannot move ${_e##*/} into $P"
-  done
-  mv "$stg/tree/mavergreen.plist" "$P/mavergreen.plist" || die "$1: cannot mark $P"
-  rm -rf "$stg"; stg=""
+  chmod 755 "$stg/tree" || die "$1: cannot open the staged tree to every user"
+  if [ -e "$P" ] || [ -h "$P" ]; then $_ps mv "$P" "$stg/old" || die "$1: cannot move the old $P aside"; fi
+  if ! $_ps mv "$stg/tree" "$P"; then
+    [ ! -e "$stg/old" ] || $_ps mv "$stg/old" "$P" || :
+    die "$1: cannot move the new tree into $P"
+  fi
+  rm -rf "$stg" 2> /dev/null || [ -z "$_ps" ] || $_ps rm -rf "$stg" || :
+  stg=""
   rm -f "$lk"; lk=""
 }
 linux_install() {

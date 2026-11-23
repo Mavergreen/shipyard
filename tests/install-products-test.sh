@@ -389,6 +389,39 @@ release b 2; run b@2
 [ "$rc" -eq 0 ] && [ "$(pget b version)" = 2 ] && [ -z "$(find "$(mg b)" -name '.*')" ] \
   || fail "linux_pkg_payload: another pin replaces the installed product in place"
 
+fresh; release b 1; linux; run b@1; ino="$(ls -id "$(mg b)" | awk '{ print $1 }')"
+run b@1
+[ "$rc" -eq 0 ] && ! has "installing" && [ "$(ls -id "$(mg b)" | awk '{ print $1 }')" = "$ino" ] \
+  && [ "$(cat "$w/installed")" = "$(lines 'b 1' 'b 1')" ] \
+  || fail "linux_same_version_noop: a second install of the version already at the prefix leaves the tree alone"
+
+realmv="$(command -v mv)"; mkdir -p "$top/mvfail"
+printf '#!/bin/sh\nfor l; do :; done\ncase "$l" in "$FAIL_MV_INTO"|"$FAIL_MV_INTO/") case "$1" in */tree|*/tree/*) exit 1 ;; esac ;; esac\nexec %s "$@"\n' \
+  "$realmv" > "$top/mvfail/mv"; chmod +x "$top/mvfail/mv"
+fresh; release b 1; release b 2; linux; run b@1
+rc=0; out="$(PATH="$top/mvfail:$PATH" FAIL_MV_INTO="$(mg b)" sh "$S" --root "$w/root" b@2 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] && [ "$(cat "$(mg b)/file")" = b ] && [ "$(pget b version)" = 1 ] && [ -z "$(find "$(mg b)" -name '.*')" ] \
+  || fail "linux_atomic_replace: a replacement whose tree cannot move in leaves the old tree whole and marked"
+[ -z "$(find "$w/root/usr/local/mavergreen" -mindepth 1 ! -path "$(mg b)" ! -path "$(mg b)/*" ! -name .install-products ! -path '*/.install-products/b')" ] \
+  || fail "linux_atomic_replace: nothing staged is left behind ($(find "$w/root/usr/local/mavergreen" -name '.*'))"
+
+fresh; release b 1; linux; run b@1; release b 2
+_rel="$w/rel/Mavergreen/brepo/releases/download/2"
+python3 -c '
+import io, os, sys, tarfile
+with tarfile.open(sys.argv[1], "w:gz") as t:
+    for n in ("bin/one", "bin/two"):
+        d = os.urandom(65536); m = tarfile.TarInfo("opt/mavergreen/b/" + n); m.mode = 0o755; m.size = len(d)
+        t.addfile(m, io.BytesIO(d))
+d = open(sys.argv[1], "rb").read()
+open(sys.argv[1], "wb").write(d[: len(d) * 3 // 4])
+' "$_rel/b-2-linux-x86_64.tar.gz"
+( cd "$_rel" && shasum -a 256 b-2-linux-x86_64.tar.gz >> SHA256SUMS )
+run b@2
+[ "$rc" -eq 1 ] && [ "$(cat "$(mg b)/file")" = b ] && [ "$(pget b version)" = 1 ] && [ ! -e "$(mg b)/bin" ] \
+  && [ -z "$(find "$(mg b)" -name '.*')" ] \
+  || fail "linux_extract_fails: an archive that fails partway leaves the old tree whole and marked"
+
 fresh; release a 1 'b>=2'; release b 3; latest b 3; linux; installed b 2
 run a@1
 [ "$rc" -eq 0 ] && [ "$(cat "$w/installed")" = "$(lines 'b 2' 'a 1')" ] && [ ! -e "$(mg b)/file" ] \
@@ -432,9 +465,9 @@ done
 [ "$(cat "$(mg b)/file")" = b ] && [ "$(pget b version)" = 1 ] && [ -z "$(find "$(mg b)" -name '.*')" ] \
   || fail "linux_concurrent: concurrent installs leave one whole, marked tree and nothing else"
 
-fresh; release b 1; linux; mkdir -p "$(mg b)"; echo 2147483646 > "$(mg b)/.install-products.lock"
+fresh; release b 1; linux; lkd="$w/root/usr/local/mavergreen/.install-products/b"; mkdir -p "$lkd"; echo 2147483646 > "$lkd/lock"
 run b@1
-[ "$rc" -eq 0 ] && [ "$(pget b version)" = 1 ] && [ ! -e "$(mg b)/.install-products.lock" ] \
+[ "$rc" -eq 0 ] && [ "$(pget b version)" = 1 ] && [ ! -e "$lkd/lock" ] \
   || fail "linux_stale_lock: a lock whose process is gone does not block the install"
 
 nosudo="$top/nosudo"; mkdir -p "$nosudo"
