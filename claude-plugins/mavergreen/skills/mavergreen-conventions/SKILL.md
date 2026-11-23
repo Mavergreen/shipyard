@@ -2178,7 +2178,9 @@ Mavergreen. Drydock shipped it first (0.6.3), and a user outside the family conf
 - **Standalone means no install of the product itself; its requires stay dependencies.** Given the
   pkg's `mavergreen.plist` (`--plist`, which `artifact-facts.sh` passes), scripts and text files may
   name `/usr/local/mavergreen/<require>`; naming the product's own prefix never passes (a relocation
-  bug), nor does a Mach-O load, rpath or install name into any Mavergreen prefix. The release notes
+  bug), nor does a Mach-O load, rpath or install name into any Mavergreen prefix. Documentation
+  (`share/man`, `share/doc`, `share/info`, `README*`, `LICENSE*`, `NOTICE*`, `CHANGELOG*`) and Mach-O
+  strings naming a prefix only warn; configuration a program reads keeps failing. The release notes
   name the products the archive requires.
 - **A single static binary where the product allows it**, which a user can drop into `/usr/local/bin`
   or anywhere; otherwise the directory is the unit.

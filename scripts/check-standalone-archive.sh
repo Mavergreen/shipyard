@@ -12,8 +12,9 @@
 #          or text file may then name /usr/local/mavergreen/S where S, a whole path component, is in
 #          its requires (SHORT or SHORT>=FLOOR, read by scripts/lib/requires.sh with fetch_stevedore.sh's
 #          stevedore); naming the archive's own SHORT is a self-reference, and any other S an
-#          undeclared dependency. A Mach-O or other binary file holding the string is a warning on
-#          stdout, never a finding. Mach-O is read by
+#          undeclared dependency. A Mach-O or other binary file holding the string, and documentation
+#          naming it (under share/man, share/doc or share/info, or a README*, LICENSE*, NOTICE* or
+#          CHANGELOG* at any depth), is a warning on stdout, never a finding. Mach-O is read by
 #          scripts/lib/mach-interface.sh; with no OTOOL, LIPO or NM set and no installed clang22, the
 #          pinned one comes from fetch_clang22.sh. --run, on a Mac that runs ARCH natively, unpacks
 #          under a directory with a space and starts every bin/ entry with --version, finding any that
@@ -132,6 +133,14 @@ while IFS= read -r f; do
     kind=text
   else
     mg_strings "$r"; continue
+  fi
+  doc=no
+  case "$r" in share/man/*|share/doc/*|share/info/*) doc=yes ;; esac
+  case "${r##*/}" in README*|LICENSE*|NOTICE*|CHANGELOG*) doc=yes ;; esac
+  if [ "$doc" = yes ]; then
+    _hit="$(LC_ALL=C grep -n -F '/usr/local/mavergreen' "$X/$r" 2>/dev/null | head -1 | cut -c1-120)" || _hit=""
+    printf 'warning: %s is documentation naming /usr/local/mavergreen (line %s)\n' "$r" "$(printf '%s' "$_hit" | sed 's/:/: /')" >> "$t/warnings"
+    continue
   fi
   LC_ALL=C grep -n -F '/usr/local/mavergreen' "$X/$r" 2>/dev/null \
     | awk -v r="$r" -v kind="$kind" -v short="$short" -v reqs="$reqs" -v plist="$plist" '

@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: check-standalone-archive-test.sh
 #          scripts/check-standalone-archive.sh: naming, the one top directory, what the package alone
-#          carries, scripts, text files and links naming /usr/local/mavergreen, --plist's declared requires
+#          carries, scripts, text files and links naming /usr/local/mavergreen (documentation warns), --plist's declared requires
 #          against the product's own prefix and undeclared ones, then Mach-O fixtures built at test
 #          time with the pinned clang22 and 10.9 SDK: system, @rpath and @loader_path loads pass, an
 #          absolute load, rpath or install name outside the system fails (a declared require's too), a
@@ -66,8 +66,13 @@ fresh w-1.0; ln -s /usr/local/mavergreen/w/bin/tool "$w/t/w-1.0/bin/link"; mk w-
 fails "a symlink into /usr/local/mavergreen" "bin/link"
 fresh w-1.0; ln -s tool "$w/t/w-1.0/bin/link"; ln -s /usr/bin/true "$w/t/w-1.0/bin/sys"; mk w-1.0-macos-x86_64.tar.gz
 passes "a relative symlink, and one to the system"
-fresh w-1.0; printf 'prefix=/usr/local/mavergreen/w\n' > "$w/t/w-1.0/share/doc/w.pc"; mk w-1.0-macos-x86_64.tar.gz
-fails "a text file naming /usr/local/mavergreen" "share/doc/w.pc names /usr/local/mavergreen"
+fresh w-1.0; mkdir -p "$w/t/w-1.0/lib/pkgconfig"; printf 'prefix=/usr/local/mavergreen/w\n' > "$w/t/w-1.0/lib/pkgconfig/w.pc"; mk w-1.0-macos-x86_64.tar.gz
+fails "a text file naming /usr/local/mavergreen" "lib/pkgconfig/w.pc names /usr/local/mavergreen"
+fresh w-1.0; mkdir -p "$w/t/w-1.0/share/man/man1"; printf '.SH FILES\n/usr/local/mavergreen/w/etc/w.conf\n' > "$w/t/w-1.0/share/man/man1/w.1"
+mkdir -p "$w/t/w-1.0/lib"; printf 'Installs to /usr/local/mavergreen/w\n' > "$w/t/w-1.0/lib/README.md"; mk w-1.0-macos-x86_64.tar.gz
+passes "documentation naming /usr/local/mavergreen"
+grep -q 'warning: share/man/man1/w.1 is documentation naming /usr/local/mavergreen' "$w/out" || fail "a man page naming the prefix is a warning: $(cat "$w/out")"
+grep -q 'warning: lib/README.md is documentation' "$w/out" || fail "a README at any depth is documentation: $(cat "$w/out")"
 fresh w-1.0; printf 'a\0/usr/local/mavergreen/w/lib\0b' > "$w/t/w-1.0/share/doc/blob.bin"; mk w-1.0-macos-x86_64.tar.gz
 passes "a binary file holding the string"
 grep -q 'warning: share/doc/blob.bin holds the string /usr/local/mavergreen/w/lib' "$w/out" || fail "a binary file's string is a warning: $(cat "$w/out")"
@@ -112,6 +117,11 @@ with 0 "a text go.env naming a require" -
 fails "a text go.env naming a require, without --plist" "go.env names /usr/local/mavergreen"
 go -; printf 'GOROOT=/usr/local/mavergreen/go126\n' > "$G/go.env"; mk go126-1.26.5-macos-x86_64.tar.gz
 with 1 "a text go.env naming its own prefix" "go.env names /usr/local/mavergreen/go126.*self-reference"
+go -; mkdir -p "$G/share/man/man1"; printf '.SH FILES\n/usr/local/mavergreen/go126/bin/go\n' > "$G/share/man/man1/go.1"
+mkdir -p "$G/lib/pkgconfig"; printf 'prefix=/usr/local/mavergreen/go126\n' > "$G/lib/pkgconfig/go.pc"; mk go126-1.26.5-macos-x86_64.tar.gz
+with 1 "a .pc naming its own prefix, beside a man page that does" "lib/pkgconfig/go.pc names /usr/local/mavergreen/go126.*self-reference"
+grep -q 'share/man/man1/go.1 names' "$w/out" && fail "a man page naming its own prefix is no finding: $(cat "$w/out")"
+grep -q 'warning: share/man/man1/go.1 is documentation' "$w/out" || fail "a man page naming its own prefix warns: $(cat "$w/out")"
 go -; printf 'GOROOT=/usr/local/mavergreen/go126\n' > "$G/go.env"; mk go126-1.26.5-macos-x86_64.tar.gz
 plist "$P"; with 1 "a manifest with no requires" "bin/tool names /usr/local/mavergreen/clang22.*undeclared dependency"
 printf 'not a plist\n' > "$P"; with 2 "a manifest stevedore cannot read" -
