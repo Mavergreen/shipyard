@@ -456,7 +456,7 @@ sdk="$(mg sdk109)/SDKs/MacOSX10.9.sdk"
   || fail "linux_sdk: neither longboat nor an installer runs ($(cat "$w/log"))"
 unset MAVERGREEN_SDK_URL MAVERGREEN_SDK_SHA256 MAVERGREEN_SDK_CACHE
 
-# spec: Q2 -- a pinned pre-flag-day release's pkg installs at /usr/local/mavergreen, so on Linux it goes there too
+# spec: .mavergreen/deviations/retired-name/q2-pinned-releases.install-products -- on Linux an old-prefix pkg's tree goes where it installs
 fresh; release x 1 --old-prefix; linux
 run x@1
 [ "$rc" -eq 0 ] && [ "$(cat "$w/root/usr/local/mavergreen/x/file")" = x ] && [ ! -e "$(mg x)" ] \

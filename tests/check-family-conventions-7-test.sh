@@ -249,7 +249,7 @@ MAX_PACKAGER=11
 MAX_ARTIFACT_CHECKS_WIRED=0
 MAX_MODERN_SMOKE=13
 MAX_CXXABI=2
-MAX_STANDALONE=47
+MAX_STANDALONE=42
 [ -f "$GF" ] || { echo "FAIL: scripts/conventions-grandfathered is missing"; exit 1; }
 LC_ALL=C sort -c "$GF" 2>/dev/null || { echo "FAIL: scripts/conventions-grandfathered is not sorted"; exit 1; }
 [ -z "$(LC_ALL=C sort "$GF" | uniq -d)" ] || { echo "FAIL: scripts/conventions-grandfathered has duplicate lines"; exit 1; }

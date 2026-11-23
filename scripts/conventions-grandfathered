@@ -66,7 +66,6 @@ standalone avxemu avxemu
 standalone ca-certs ca-certs
 standalone cctools cctools
 standalone clang-22 clang22
-standalone clang-22 clang22-cross
 standalone clang-22 libcxx22
 standalone claude-code claude-code
 standalone cmake cmake
@@ -76,9 +75,7 @@ standalone ed25519 ed25519
 standalone fd fd
 standalone fleet fleet
 standalone golang-126 go126
-standalone golang-126 go126-cross
 standalone golang-127 go127
-standalone golang-127 go127-cross
 standalone icu icu
 standalone iterm2 iterm2
 standalone jdk-25 jdk25
@@ -97,13 +94,11 @@ standalone python-315 python315
 standalone recaulk recaulk
 standalone rg rg
 standalone rust rust
-standalone rust rust-cross
 standalone shipyard shipyard
 standalone signal-desktop signal-desktop
 standalone stevedore stevedore
 standalone swift swift-runtime
 standalone swift swift-toolchain
-standalone swift swift-toolchain-cross
 standalone tailscale tailscale
 standalone wezterm wezterm
 standalone zig zig

@@ -43,9 +43,9 @@ rc=0; sh "$C" "$A" > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "an arch t
 rc=0; sh "$C" "$w/none-1.0-macos-x86_64.tar.gz" > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "a missing archive: exit $rc, want 2"
 
 fresh w-1.0; mk w-1.0-macos-universal.tar.gz; passes "a product tree under <short>-<version>/"
-fresh go126-cross-1.26.5-mavericks.5; mk go126-cross-1.26.5-mavericks.5-macos-x86_64.tar.gz
+fresh go126-1.26.5-mavergreen.5; mk go126-1.26.5-mavergreen.5-macos-x86_64.tar.gz
 passes "a short name and a version that both carry hyphens"
-grep -q 'go126-cross' "$w/out" || fail "the report names the product: $(cat "$w/out")"
+grep -q 'go126 1.26.5-mavergreen.5' "$w/out" || fail "the report names the product: $(cat "$w/out")"
 fresh w-1.1; mk w-1.0-macos-arm64.tar.gz; fails "a top directory for another version" "w-1.1"
 fresh w-1.0; mkdir "$w/t/extra"; printf 'x\n' > "$w/t/extra/f"; mk w-1.0-macos-x86_64.tar.gz
 fails "a second top-level entry" "outside w-1.0/"
@@ -134,7 +134,7 @@ printf 'not a plist\n' > "$P"; with 2 "a manifest stevedore cannot read" -
 rc=0; sh "$C" --plist "$w/none.plist" "$A" > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "a missing manifest: exit $rc, want 2"
 rc=0; sh "$C" --plist > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "--plist with no path: exit $rc, want 2"
 plist "$P" clang22 'sdk109>=1.0'
-# spec: Q2 -- pinned pre-flag-day releases still install at the old prefix, so it is judged alike
+# spec: .mavergreen/deviations/retired-name/q2-pinned-releases.check-standalone-archive -- the old prefix is judged alike
 go /usr/local/mavergreen/zig/bin/zig; mk go126-1.26.5-macos-x86_64.tar.gz
 plist "$P" clang22 'sdk109>=1.0'
 with 1 "a wrapper naming an undeclared product at the old prefix" "bin/tool names /usr/local/mavergreen/zig.*undeclared dependency"
