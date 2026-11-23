@@ -75,7 +75,6 @@ standalone container-tools container-tools
 standalone ed25519 ed25519
 standalone fd fd
 standalone fleet fleet
-standalone gh gh
 standalone golang-126 go126
 standalone golang-126 go126-cross
 standalone golang-127 go127
