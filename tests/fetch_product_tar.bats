@@ -19,6 +19,8 @@ p='opt/mavergreen/widget/'
 with tarfile.open(sys.argv[1],'w:gz') as t:
  def file(n,data=b'W'):
   m=tarfile.TarInfo(n);m.mode=0o755;m.size=len(data);t.addfile(m,io.BytesIO(data))
+ for d in ('opt/','opt/mavergreen/',p,p+'bin/'):
+  m=tarfile.TarInfo(d);m.type=tarfile.DIRTYPE;m.mode=0o755;t.addfile(m)
  file(p+'bin/tool')
  m=tarfile.TarInfo(p+'bin/alias');m.type=tarfile.SYMTYPE;m.linkname='tool';t.addfile(m)
  kind=sys.argv[2]
@@ -111,4 +113,28 @@ PY
   printf '%s  %s\n%064d  %s\n' "$SHA" "$(basename "$ASSET")" 0 "$(basename "$ASSET")" > "$REL/SHA256SUMS"
   run sh "$HELPER" widget 1.0 "$DEST"
   [ "$status" -ne 0 ]
+}
+@test 'product-tar.py takes a destination beneath a symlinked ancestor' {
+  fixture
+  run python3 "$BATS_TEST_DIRNAME/../scripts/product-tar.py" "$ASSET" widget "$SHA" "$WORK/alias/direct"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  [ "$(cat "$WORK/direct/bin/tool")" = W ] && [ -L "$WORK/direct/bin/alias" ]
+  run python3 "$BATS_TEST_DIRNAME/../scripts/product-tar.py" "$ASSET" widget "$SHA" "$WORK/alias/direct"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+@test 'product-tar.py refuses a symlinked destination and a symlink within the tree' {
+  fixture
+  mkdir "$WORK/real"
+  ln -s real "$WORK/linked"
+  run python3 "$BATS_TEST_DIRNAME/../scripts/product-tar.py" "$ASSET" widget "$SHA" "$WORK/alias/linked"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"destination must not be a symlink"* ]] || { echo "$output"; return 1; }
+  [ -z "$(ls "$WORK/real")" ]
+  run python3 "$BATS_TEST_DIRNAME/../scripts/product-tar.py" "$ASSET" widget "$SHA" "$WORK/alias/direct"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  mv "$WORK/direct/bin" "$WORK/direct/other"
+  ln -s other "$WORK/direct/bin"
+  run python3 "$BATS_TEST_DIRNAME/../scripts/product-tar.py" "$ASSET" widget "$SHA" "$WORK/alias/direct"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *": bin"* ]] || { echo "$output"; return 1; }
 }
