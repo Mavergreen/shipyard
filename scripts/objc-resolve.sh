@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic -- the wrapper; the pinned Drydock's drydock-objc resolves on macOS only (on Linux it exits 2)
 #   usage: objc-resolve.sh --artifact FILE --reviewed FILE --output NEW_FILE
-#          Runs `drydock-objc resolve` from the pinned Drydock release (components/drydock, through
+#          Runs `drydock-objc resolve` from the pinned Drydock release (.mavergreen/ingredients/drydock, through
 #          scripts/fetch_drydock.sh) with these arguments, and exits with its status. It reads the schema-2
 #          reviewed build evidence --reviewed names and writes it to NEW_FILE, which must not exist in any form,
 #          with every guard's and R2 and R3 row's symbol(s) and every crate's disambiguator read from the
@@ -26,5 +26,5 @@ case "${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" in
   mac|Darwin) ;;
   *) echo "objc-resolve: drydock-objc resolve runs on macOS only, not on ${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" >&2; exit 4 ;;
 esac
-D=$(sh "$HERE/fetch_drydock.sh" "$HERE/../components/drydock") || { echo "objc-resolve: the pinned Drydock could not be had" >&2; exit 4; }
+D=$(sh "$HERE/fetch_drydock.sh" "$HERE/..") || { echo "objc-resolve: the pinned Drydock could not be had" >&2; exit 4; }
 exec "$D/bin/drydock-objc" resolve "$@"

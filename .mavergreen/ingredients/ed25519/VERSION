@@ -1,2 +1,2 @@
-20221003-mavericks.14
+20221003-mavericks.17
 # renovate: datasource=github-releases depName=Mavergreen/ed25519 versioning=regex:^(?<major>\d{8})-mavericks\.(?<build>\d+)$
