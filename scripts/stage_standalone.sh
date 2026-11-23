@@ -5,14 +5,15 @@
 #          build, two forms. OUT is SHORT-VERSION-macos-ARCH.tar.gz (ARCH universal, x86_64 or arm64),
 #          holding one top directory SHORT-VERSION/: STAGED_PKG_ROOT/usr/local/mavergreen/SHORT exactly
 #          as the pkg installs it, without its manifest (mavergreen.plist), and beside it each app the
-#          pkg installs at Applications/<Name>.app, as SHORT-VERSION/<Name>.app. A bin/ entry linking to
-#          /Applications/<Name>.app/... becomes a relative link into the archived app; one that does not
-#          resolve there fails. The updater, its LaunchAgent, the install scripts and anything else
-#          staged outside the tree stay out, and stderr names what was left out. Entries are sorted, stamped at source-date-epoch.sh's time, root:wheel with no
+#          pkg installs at Applications/<Name>.app, as SHORT-VERSION/<Name>.app. A bin/ link is resolved
+#          within STAGED_PKG_ROOT, its target absolute or relative: one landing in
+#          Applications/<Name>.app/... becomes ../<Name>.app/..., and one that does not resolve there,
+#          or a relative one that does not resolve in the root, fails. The updater, its LaunchAgent,
+#          the install scripts and anything else staged outside the tree stay out, and stderr names what was left out. Entries are sorted, stamped at source-date-epoch.sh's time, root:wheel with no
 #          Mac metadata where this tar can say so, and gzipped without a name or time, so one tree gives
 #          the same bytes every run. Exit 1 when STAGED_PKG_ROOT holds no tree for SHORT, an app's name
-#          is taken in the tree, a bin/ link into /Applications does not resolve, or the tree or an
-#          app holds an AppleDouble file (._*); 2 on a usage or naming error.
+#          is taken in the tree, a bin/ link does not resolve, or the tree or an app holds an
+#          AppleDouble file (._*); 2 on a usage or naming error.
 # spec: tests/stage-standalone-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
@@ -50,13 +51,29 @@ if [ -d "$work/$top/bin" ]; then
   for l in "$work/$top"/bin/*; do
     [ -L "$l" ] || continue
     tg="$(readlink "$l")"
-    case "$tg" in /Applications/*.app/*|/Applications/*.app) ;; *) continue ;; esac
-    rest="${tg#/Applications/}"; n="${rest%%/*}"
-    if grep -qxF "$n" "$work/apps" && { [ -e "$work/$top/$rest" ] || [ -L "$work/$top/$rest" ]; }; then
-      rm -f "$l"; ln -s "../$rest" "$l"
-    else
-      echo "stage_standalone: bin/${l##*/} links to $tg, which no app staged in $ROOT/Applications holds" >&2; exit 1
-    fi
+    case "$tg" in /*) p="$tg" ;; *) p="usr/local/mavergreen/$P/bin/$tg" ;; esac
+    p="$(printf '%s\n' "$p" | awk '{
+        n = split($0, c, "/"); k = 0
+        for (i = 1; i <= n; i++) {
+          if (c[i] == "" || c[i] == ".") continue
+          if (c[i] == "..") { if (k == 0) { print "/"; exit } k--; continue }
+          o[++k] = c[i]
+        }
+        s = ""; for (i = 1; i <= k; i++) s = s (i > 1 ? "/" : "") o[i]; print s
+      }')"
+    case "$p" in
+      Applications/*)
+        rest="${p#Applications/}"; n="${rest%%/*}"
+        if grep -qxF "$n" "$work/apps" && { [ -e "$work/$top/$rest" ] || [ -L "$work/$top/$rest" ]; }; then
+          rm -f "$l"; ln -s "../$rest" "$l"
+        else
+          echo "stage_standalone: bin/${l##*/} links to $tg, which no app staged in $ROOT/Applications holds" >&2; exit 1
+        fi ;;
+      *)
+        case "$tg" in /*) continue ;; esac
+        [ -n "$p" ] && [ "$p" != / ] && { [ -e "$ROOT/$p" ] || [ -L "$ROOT/$p" ]; } \
+          || { echo "stage_standalone: bin/${l##*/} links to $tg, which does not resolve within $ROOT" >&2; exit 1; } ;;
+    esac
   done
 fi
 find "$work/$top" -name .DS_Store -exec rm -rf {} + 2>/dev/null || :

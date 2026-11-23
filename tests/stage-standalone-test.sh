@@ -5,8 +5,9 @@
 #          updater and its LaunchAgent, the archive holds the product tree alone under <short>-<version>/,
 #          with its modes and links, every entry at SOURCE_DATE_EPOCH, the same bytes from two runs, and
 #          passes check-standalone-archive.sh; an app the root stages in Applications/ sits at the
-#          archive's top, an updater there stays out, and a bin/ link into /Applications/<Name>.app
-#          becomes relative, refused when it does not resolve; an AppleDouble file is refused.
+#          archive's top, an updater there stays out, and a bin/ link, absolute or relative, landing in
+#          Applications/<Name>.app becomes relative, refused when it does not resolve in the root; an
+#          AppleDouble file is refused.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/stage_standalone.sh"
@@ -125,6 +126,24 @@ rm "$T/bin/x"; ln -s /Applications/X.app/Contents/MacOS/gone "$T/bin/x"
 rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "a bin/ link to nothing in the app: exit $rc, want 1: $(cat "$w/err")"
 
+rm "$T/bin/x"; ln -s ../../../../../Applications/X.app/Contents/MacOS/x "$T/bin/x"
+ln -s ../../../../../Applications/X.app "$T/bin/X.app"
+rm -f "$w/two/x-1.0-macos-x86_64.tar.gz"
+sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" \
+  || fail "staging a product whose bin/ link reaches the app relatively failed: $(cat "$w/err")"
+rm -rf "$w/x"; mkdir "$w/x"; tar -xzf "$w/two/x-1.0-macos-x86_64.tar.gz" -C "$w/x"
+[ "$(ls -l "$w/x/x-1.0/bin/x" | sed 's/.* -> //')" = ../X.app/Contents/MacOS/x ] \
+  || fail "a relative bin/ link into Applications/X.app is rewritten into the archive: $(ls -l "$w/x/x-1.0/bin/x")"
+[ "$(ls -l "$w/x/x-1.0/bin/X.app" | sed 's/.* -> //')" = ../X.app ] \
+  || fail "a relative bin/ link to the app itself is rewritten: $(ls -l "$w/x/x-1.0/bin/X.app")"
+[ "$("$w/x/x-1.0/bin/x")" = "x 1.0" ] || fail "the relatively linked tool runs from where it was unpacked"
+rm "$T/bin/X.app"
+for bad in ../../../../../Applications/X.app/Contents/MacOS/gone ../../../../Applications/X.app/Contents/MacOS/x ../../../../../../x ../libexec/gone; do
+  rm "$T/bin/x"; ln -s "$bad" "$T/bin/x"
+  rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
+  [ "$rc" -eq 1 ] || fail "a relative bin/ link, $bad, that does not resolve in the root: exit $rc, want 1: $(cat "$w/err")"
+  grep -q "bin/x links to $bad" "$w/err" || fail "the unresolvable relative link is named: $(cat "$w/err")"
+done
 rm "$T/bin/x"; ln -s /Applications/X.app/Contents/MacOS/x "$T/bin/x"
 printf 'junk' > "$R/Applications/X.app/Contents/._Info.plist"; rm -f "$w/two/x-1.0-macos-x86_64.tar.gz"
 rc=0; sh "$S" "$R" x 1.0 x86_64 "$w/two/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" || rc=$?
