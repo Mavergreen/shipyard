@@ -10,7 +10,10 @@
 #          product is kept only when its installed manifest version is the pinned release's.
 #          A release's pkg is the one its appcast SHORT.xml names, else the only .pkg in its SHA256SUMS;
 #          it is fetched into ${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/REPO/TAG and
-#          verified against that SHA256SUMS. Versions compare with scripts/lib/vercmp.sh.
+#          verified against that SHA256SUMS. Reading the mavergreen.plist out of a pkg's Payload needs
+#          gzip and cpio, checked before the pkg is fetched; the plist is kept beside the pkg as
+#          ASSET.SHORT.SHA256.mavergreen.plist, so a later run for that very pkg reads it there instead,
+#          and on Linux does not fetch the pkg at all. Versions compare with scripts/lib/vercmp.sh.
 #          The plan has one line per product in install order: `keep SHORT VERSION`,
 #          `install SHORT VERSION` or `provision SHORT via COMMAND...`. --dry-run prints it on stdout;
 #          otherwise each line is carried out and reported on stderr: install runs
@@ -172,6 +175,18 @@ manifest() {
   fi
   case "$_asset" in ''|.|..|*[!A-Za-z0-9._+-]*) die "$1 $3: '$_asset' is not a release asset name" ;; esac
   listed "$_w/SHA256SUMS" "$_asset" || die "$1 $3: $_asset is not listed (once) in $_base/SHA256SUMS"
+  _pc="$_cache/$_asset.$1.$_ls.mavergreen.plist"
+  if [ -f "$_pc" ] && [ "$("$STEVEDORE" plist get "$_pc" identifier 2>/dev/null || :)" = "$4" ]; then
+    [ "$HOST" = linux ] || shipyard_fetch_verified "$_base/$_asset" "$_ls" "$_cache" "$_asset" \
+      || die "$1 $3: could not fetch and verify $_base/$_asset"
+    cp "$_pc" "$_mf" || die "$1 $3: cannot copy $_pc"
+    printf '%s\n' "$_cache/$_asset" > "${_mf%.plist}.pkgpath"
+    cp "$_w/SHA256SUMS" "${_mf%.plist}.sums" || die "$1 $3: cannot keep $_base/SHA256SUMS"
+    rm -rf "$_w"; return 0
+  fi
+  for _tool in gzip cpio; do
+    command -v "$_tool" > /dev/null 2>&1 || die "$1 $3: needs $_tool to read the mavergreen.plist in $_asset; install the $_tool package"
+  done
   shipyard_fetch_verified "$_base/$_asset" "$_ls" "$_cache" "$_asset" \
     || die "$1 $3: could not fetch and verify $_base/$_asset"
   "$STEVEDORE" expand "$_cache/$_asset" "$_w/x" > /dev/null || die "$1 $3: could not expand $_cache/$_asset"
@@ -180,13 +195,18 @@ manifest() {
   printf '%s\n' "$_cache/$_asset" > "${_mf%.plist}.pkgpath"
   cp "$_w/SHA256SUMS" "${_mf%.plist}.sums" || die "$1 $3: cannot keep $_base/SHA256SUMS"
   mkdir "$_w/p" || die "$1 $3: cannot make $_w/p"
-  _cr=0
-  ( cd "$_w/p" && { gzip -dc "$(dirname "$_m")/Payload" || : > "$_w/gzip.failed"; } \
+  _cr=0; _gr=0
+  ( cd "$_w/p" && { gzip -dc "$(dirname "$_m")/Payload" || echo $? > "$_w/gzip.rc"; } \
     | cpio -id --quiet "*usr/local/mavergreen/$1/mavergreen.plist" ) 2>/dev/null || _cr=$?
-  [ ! -e "$_w/gzip.failed" ] || die "$1 $3: could not decompress the Payload of $4 in $_asset"
-  [ "$_cr" -eq 0 ] || die "$1 $3: could not unpack the Payload of $4 in $_asset"
-  mv "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" "$_mf" 2>/dev/null \
+  [ ! -f "$_w/gzip.rc" ] || _gr="$(cat "$_w/gzip.rc")"
+  if [ "$_cr" -ne 0 ] && { [ "$_gr" -eq 0 ] || [ "$_gr" -gt 128 ]; }; then
+    die "$1 $3: could not unpack the Payload of $4 in $_asset"
+  fi
+  [ "$_gr" -eq 0 ] || die "$1 $3: could not decompress the Payload of $4 in $_asset"
+  [ -f "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" ] \
     || die "$1 $3: $4 in $_asset installs no usr/local/mavergreen/$1/mavergreen.plist"
+  cp "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" "$_pc.$$" && mv -f "$_pc.$$" "$_pc" || rm -f "$_pc.$$"
+  mv "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" "$_mf" || die "$1 $3: cannot keep the mavergreen.plist of $4"
   rm -rf "$_w"
 }
 

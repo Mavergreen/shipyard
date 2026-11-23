@@ -317,6 +317,53 @@ run a@1
 noinstaller && [ "$(cat "$w/installed")" = "a 1" ] || fail "linux_tarball: no installer runs, and a 1 is recorded"
 [ -f "$w/cache/arepo/1/a-1.pkg" ] || fail "linux_tarball: an archive with no mavergreen.plist falls back to the pkg's"
 
+path_without() {
+  _pw="$top/without-$1"
+  if [ ! -d "$_pw" ]; then
+    mkdir -p "$_pw"; _ifs=$IFS; IFS=:
+    for _d in $PATH; do
+      for _f in "$_d"/*; do
+        [ "${_f##*/}" != "$1" ] && [ -x "$_f" ] && [ ! -e "$_pw/${_f##*/}" ] && ln -s "$_f" "$_pw/${_f##*/}" || :
+      done
+    done
+    IFS=$_ifs
+  fi
+  printf '%s\n' "$_pw"
+}
+
+fresh; release a 1; linuxtar a 1; linux
+rc=0; out="$(PATH="$(path_without cpio)" sh "$S" --root "$w/root" a@1 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] && has "a 1: needs cpio to read the mavergreen.plist in a-1.pkg; install the cpio package" \
+  && ! has "could not decompress" && [ ! -e "$w/cache/arepo/1/a-1.pkg" ] && [ ! -s "$w/installed" ] \
+  || fail "linux_no_cpio: a pkg's plist without cpio fails before the pkg is fetched, naming cpio"
+
+fresh; release a 1; linuxtar a 1; linux
+run a@1
+[ "$rc" -eq 0 ] || fail "linux_plist_cached: the first install reads the pkg's plist"
+_rel="$w/rel/Mavergreen/arepo/releases/download/1"
+rm -rf "$(mg a)" "$w/cache/arepo/1/a-1.pkg" "$_rel/a-1.pkg"; : > "$w/installed"
+rc=0; out="$(PATH="$(path_without cpio)" sh "$S" --root "$w/root" a@1 2>&1)" || rc=$?
+[ "$rc" -eq 0 ] && [ "$(cat "$(mg a)/bin/tool")" = linux ] && [ "$(pget a version)" = 1 ] && [ "$(pget a product)" = a ] \
+  && [ ! -e "$w/cache/arepo/1/a-1.pkg" ] && [ "$(cat "$w/installed")" = "a 1" ] \
+  || fail "linux_plist_cached: a plist already read from that very pkg spares fetching and decompressing it"
+printf '%064d  a-1.pkg\n' 0 > "$_rel/SHA256SUMS.new"
+grep -v ' a-1.pkg$' "$_rel/SHA256SUMS" >> "$_rel/SHA256SUMS.new"; mv "$_rel/SHA256SUMS.new" "$_rel/SHA256SUMS"
+rm -rf "$(mg a)"
+rc=0; out="$(PATH="$(path_without cpio)" sh "$S" --root "$w/root" a@1 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] && has "needs cpio" || fail "linux_plist_cached: a plist read from another pkg digest is not used"
+
+mkdir -p "$top/badgz"
+fresh; release a 1; linux
+printf '#!/bin/sh\nexit 1\n' > "$top/badgz/gzip"; chmod +x "$top/badgz/gzip"
+rc=0; out="$(PATH="$top/badgz:$PATH" sh "$S" --root "$w/root" --dry-run a@1 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] && has "could not decompress the Payload of dev.mavergreen.a" || fail "a failing gzip is named as the decompress"
+fresh; release a 1; linux
+printf '#!/bin/sh\nexec yes payload\n' > "$top/badgz/gzip"; printf '#!/bin/sh\nexit 1\n' > "$top/badgz/cpio"
+chmod +x "$top/badgz/gzip" "$top/badgz/cpio"
+rc=0; out="$(PATH="$top/badgz:$PATH" sh "$S" --root "$w/root" --dry-run a@1 2>&1)" || rc=$?
+[ "$rc" -eq 1 ] && has "could not unpack the Payload of dev.mavergreen.a" && ! has "decompress" \
+  || fail "a failing cpio is not blamed on the gzip it stops reading"
+
 fresh; release a 1 'b>=2'; release b 3; latest b 3
 _rel="$w/rel/Mavergreen/arepo/releases/download/1"; rm -f "$_rel/a-1.pkg" "$_rel/a.xml"; : > "$_rel/SHA256SUMS"
 linuxtar a 1 "$w/stage/a-1/root/usr/local/mavergreen/a/mavergreen.plist"; linux
