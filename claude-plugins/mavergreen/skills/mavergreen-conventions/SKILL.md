@@ -2154,6 +2154,40 @@ check** before consuming (`x="$(producer)" || abort …; [ -n "$x" ] || abort �
 pass) or **end the stream with a sentinel** the consumer refuses to do without. A check that can go
 quiet without going red is not a check.
 
+## Standalone archive
+
+**A release that publishes a product `.pkg` also publishes `<short>-<version>-macos-<arch>.tar.gz`**
+(`<arch>` is `universal`, `x86_64` or `arm64`, as the product ships): one top directory
+`<short>-<version>/` holding the product's tree exactly as the pkg installs it under
+`/usr/local/mavergreen/<short>/`, without the manifest, the updater, its LaunchAgent, anything else
+staged outside the tree, or the install scripts. Unpacked anywhere, it needs nothing else from
+Mavergreen. Drydock shipped it first (0.6.3), and a user outside the family confirmed it works for them.
+
+- **One build, two forms.** `sh "$SHIPYARD_SCRIPTS/stage_standalone.sh" STAGED_PKG_ROOT SHORT VERSION
+  ARCH dist/<archive>` reads the root `stage_product.sh` filled for the pkg, on Linux, 10.9 or modern
+  macOS. Entries are sorted, stamped at `source-date-epoch.sh`'s time, root:wheel where the tar can say
+  so (10.9's bsdtar 2.8 cannot, and it says so), and gzipped without a name or time: the bytes repeat.
+- **Judged by `check-standalone-archive.sh`**: the one top directory; no manifest, updater, launchd job,
+  pkg scripts or AppleDouble entry; no symlink or `#!` script naming `/usr/local/mavergreen`; every
+  Mach-O's loads, rpaths and install name under `/usr/lib`, `/System`, `@rpath`, `@loader_path` or
+  `@executable_path`. `--run`, on a Mac that runs the arch natively, starts each `bin/` entry with
+  `--version` from a relocated copy. `artifact-facts.sh` runs it on every `*-macos-<arch>.tar.gz` in
+  the dist (a `standalone` fact); conformance fails a refused archive, and a product pkg with no
+  archive beside it (check `no-standalone`). The publish step's `SHA256SUMS` lists every asset.
+- **A single static binary where the product allows it**, which a user can drop into `/usr/local/bin`
+  or anywhere; otherwise the directory is the unit.
+- **The release notes say the archive has "no updater, no installer".**
+- **Adoption is grandfathered.** A `standalone <repo> <short>` line in `scripts/conventions-grandfathered`
+  turns the missing archive into a `::warning::`. Seeded 2026-11-22 with every registered product but
+  Drydock's; `MAX_STANDALONE` in `tests/check-family-conventions-7-test.sh` is the ceiling. A repo
+  deletes its line in the change that adopts the archive: at the product's next release or its
+  Linux-runner conversion, whichever comes first.
+- **Where a standalone form is meaningless** (a kext, a system extension, a launchd daemon, SDK or data
+  products, presets), declare `- no-standalone[:<short glob>]: <reason>` under `## Conformance
+  deviations`. Declaring it while also publishing an archive for that product fails.
+- **Revisit** when a product cannot be relocated without patching upstream, or when the Mavergreen
+  CLI's design reaches how it fetches products.
+
 ## Install layout and identity
 
 **Every product owns exactly one directory, `/usr/local/mavergreen/<product>/`.** What installed a
@@ -2692,10 +2726,12 @@ pointing back into the row below — so this table, not the script, is where a c
 | **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or a glob of only `*`, `?` and `/` is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
 
 **Grandfathered findings.** `scripts/conventions-grandfathered` holds one `<check> <repo> <job|path>` line per
-finding that predates checks 21 (widened), 35, 36 and 37 and conformance's `cxxabi`, under the check names `artifact-conformance`,
-`packager`, `macos-runner`, `modern-smoke` and `cxxabi`; a line, like a declared deviation, excuses its finding. A
+finding that predates checks 21 (widened), 35, 36 and 37 and conformance's `cxxabi` and `no-standalone`, under the check names `artifact-conformance`,
+`packager`, `macos-runner`, `modern-smoke`, `cxxabi` and `standalone`; a line, like a declared deviation, excuses its finding. A
 `cxxabi` line is keyed per installed path (`cxxabi <repo> <path>`, spaces as `%20`), so a new path with a
-second runtime in a grandfathered repo still fails. A
+second runtime in a grandfathered repo still fails. A `standalone` line is keyed per product
+(`standalone <repo> <short>`, the short registered to that repo; see "Standalone archive"), and
+conformance reads its repo from the registry, so it warns in a local run too. A
 `modern-smoke` line is keyed per repo (`modern-smoke <repo> release.yml:modern-smoke`): it skips check 37's
 job check, and conformance warns about that repo's undeclared arm64 slices instead of failing them.
 Conformance knows the repo only from `$GITHUB_REPOSITORY`, so a local conformance run without it fails a
@@ -2705,10 +2741,11 @@ runner or a packager call deletes that repo's line. `tests/check-family-conventi
 is sorted, free of duplicates and well-formed (the repo set is every org repo whose workflows call `family-conventions.yml`, registered or not), and pins each check's line count as a
 ceiling that may only go down. Regenerate with `sh scripts/gen-conventions-grandfathered.sh <clones-dir> > scripts/conventions-grandfathered`
 (an empty or new `<clones-dir>`, which it marks and owns; it lists the org's repos with `gh`, clones or refreshes each, keeps those calling `family-conventions.yml`, runs the gate
-without the file in each). For `modern-smoke` and `cxxabi` it also downloads each repo's latest release's pkgs into
+without the file in each). For `modern-smoke`, `cxxabi` and `standalone` it also downloads each repo's latest release's pkgs and standalone archives into
 `<clones-dir>/.releases/` and runs `artifact-facts.sh` and conformance on them, since a repo that ships an
 undeclared arm64 slice and has no `modern-smoke` job passes the gate, and `cxxabi` is found only in what
-shipped (each undeclared path with a `cxxabi-*` fact); that needs `lipo`, `otool` and `nm`
+shipped (each undeclared path with a `cxxabi-*` fact), as is `standalone` (each product conformance
+finds with no archive); that needs `lipo`, `otool` and `nm`
 (or `LIPO`, `OTOOL` and `NM`), and a release it cannot read fails the run. A new check that needs the
 treatment adds its name to that script, the test and this paragraph.
 
