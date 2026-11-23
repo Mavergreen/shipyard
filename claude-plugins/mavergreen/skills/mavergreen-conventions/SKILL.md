@@ -116,18 +116,20 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   side with `find_package` — **no `CMAKE_PREFIX_PATH`, no vendored copy, no hand-run `--install`.**
 
   To install another family product, pass `with: { products: "SHORT@TAG ..." }`: its requires come
-  with it, so never hand-roll a `gh release download` plus `installer`. On Linux each product lands at
-  the same `/usr/local/mavergreen/SHORT` as its pkg, owned by the runner user and marked by the pkg's
+  with it, so never hand-roll a `gh release download` plus `installer`. Each SHORT's repo is
+  `.mavergreen/ingredients/SHORT/REPO` in the consumer's checkout. On Linux each product lands where
+  its pkg installs it (`$(mavergreen_prefix SHORT)`, or `/usr/local/mavergreen/SHORT` for a pinned
+  pre-flag-day release), owned by the runner user and marked by the pkg's
   own `mavergreen.plist`: its release's `SHORT-TAG-linux-x86_64.tar.gz` when it has one, else its pkg's
-  host-neutral payload, and `sdk109`/`sdk113` from `fetch_sdk.sh`; `fetch_clang22.sh` uses that same
-  clang22 prefix. Path parity is the point (Go build IDs hash absolute toolchain paths). A prefix holds
+  host-neutral payload, and `sdk109`/`sdk113` from `fetch_sdk.sh`; `fetch_clang22.sh` provisions clang22
+  the same way. Path parity is the point (Go build IDs hash absolute toolchain paths). A prefix holds
   **one version**, and nothing swaps the version a caller already resolved: `install-products.sh`
   stages a replacement beside the prefix and renames it in whole, and `fetch_clang22.sh` never
   replaces a prefix that holds another release, putting its pin in the per-user cache beside it (one
   job can need two: a product's own clang22 pin and shipyard's `objc-receipt-clang`), saying so on
   stderr, without path parity for that one. Revisit when a Linux runner lacks sudo, or when a build
   that needs path parity is handed the side-by-side copy. A Linux
-  host with no root, no working `sudo -n` and no writable `/usr/local/mavergreen` (a container run as
+  host with no root, no working `sudo -n` and no writable `/opt/mavergreen` (a container run as
   a bare uid) has `fetch_clang22.sh` fall back to its per-user cache, saying so on stderr: that trigger
   firing in a container, not on a runner, so it is not yet the revisit.
 
@@ -2105,7 +2107,7 @@ private externals, and it is still a second runtime.
   (each such program then fails until declared), or if a product needs a second runtime that no
   path-scoped declaration can describe.
 
-**A product moving its build host proves equivalence with the tool (`build-equivalence`).** Run `sh "$SHIPYARD_SCRIPTS/build-equivalence.sh" [--repo DIR] A B`, where A and B are each a flat pkg or a staged payload tree, and `--repo DIR` is the directory whose `INGREDIENTS.md` supplies the entries (default `.`). A pkg's paths are relative to `/`, and each component's install scripts compare under `.pkg/<component identifier>/scripts/`; its PackageInfo and Distribution are not compared. The readers are the pinned clang22's `llvm-nm`, `llvm-otool` and `llvm-lipo`: `NM`, `OTOOL` and `LIPO` override them, else an installed clang22 or clang22-cross, else the tool fetches shipyard's pin with `fetch_clang22.sh`. It pairs files by path and compares two levels: `bytes` (the contents or the file mode differ; a mode difference prints `mode: A <octal>, B <octal>` beneath it) and `interface` (a Mach-O or archive whose exports, imports, linked dylibs, install name, rpaths, deployment target, SDK or section names differ). A `meta` difference (a symlink target or the executable bit) and a path in only one build (`only-a`, `only-b`) are never excusable. The product declares what remains in `INGREDIENTS.md`, under `## Conformance deviations`: `- build-equivalence:<glob>: <reason; revisit: ...>` excuses `bytes` differences on the matching paths, and `- build-equivalence-interface:<glob>: <reason; revisit: ...>` excuses `interface` differences too (and `bytes`). A glob is a shell `case` pattern over the normalised path relative to the install root, with `*` crossing `/`: a `-<16 hex>.` in a file name reads `-H.` (`lib/libstd-H.rlib`), and in symbols rustc's `_rust_metadata_<crate>_<hash>` (1 to 16 hex digits, unpadded; the hash follows the last underscore) reads `_rust_metadata_<crate>_H`, LLVM's `_anon.<32 hex>.<n>` reads `_anon.H.<n>`, and LLVM's per-build `.llvm.<decimal>` suffix on any symbol reads `.llvm.N`; it cannot name a path holding a space or a colon (`deviations.sh` reads the glob as `[^ :]*`), so spell such a character `?` or `*`. A bare form, or a glob of nothing but wildcards, is refused. A broad `build-equivalence-interface:` glob excuses every interface change under it, so name the files it means. An entry that excuses nothing in the comparison **fails** as `unused`, so a fixed cause forces its entry out and each revisit trigger is mechanical. Crate-hash and legacy Rust symbol-hash normalisation can merge symbols from two versions of one crate, and `.llvm.N` two LLVM-promoted locals of one name; that is accepted. Revisit it when the weekly recurring reproduce check is designed (it calls this same tool), or when a difference arises that two levels cannot express.
+**A product moving its build host proves equivalence with the tool (`build-equivalence`).** Run `sh "$SHIPYARD_SCRIPTS/build-equivalence.sh" [--repo DIR] A B`, where A and B are each a flat pkg or a staged payload tree, and `--repo DIR` is the directory whose `.mavergreen/deviations/` supplies the entries (default `.`). A pkg's paths are relative to `/`, and each component's install scripts compare under `.pkg/<component identifier>/scripts/`; its PackageInfo and Distribution are not compared. The readers are the pinned clang22's `llvm-nm`, `llvm-otool` and `llvm-lipo`: `NM`, `OTOOL` and `LIPO` override them, else an installed clang22 or clang22-cross, else the tool fetches shipyard's pin with `fetch_clang22.sh`. It pairs files by path and compares two levels: `bytes` (the contents or the file mode differ; a mode difference prints `mode: A <octal>, B <octal>` beneath it) and `interface` (a Mach-O or archive whose exports, imports, linked dylibs, install name, rpaths, deployment target, SDK or section names differ). A `meta` difference (a symlink target or the executable bit) and a path in only one build (`only-a`, `only-b`) are never excusable. The product declares what remains as deviations: `.mavergreen/deviations/build-equivalence/<label>/` (scope `<glob>`, a reason, a revisit) excuses `bytes` differences on the matching paths, and `.mavergreen/deviations/build-equivalence-interface/<label>/` excuses `interface` differences too (and `bytes`). A glob is a shell `case` pattern over the normalised path relative to the install root, with `*` crossing `/`: a `-<16 hex>.` in a file name reads `-H.` (`lib/libstd-H.rlib`), and in symbols rustc's `_rust_metadata_<crate>_<hash>` (1 to 16 hex digits, unpadded; the hash follows the last underscore) reads `_rust_metadata_<crate>_H`, LLVM's `_anon.<32 hex>.<n>` reads `_anon.H.<n>`, and LLVM's per-build `.llvm.<decimal>` suffix on any symbol reads `.llvm.N`; a glob of nothing but wildcards is refused. A broad `build-equivalence-interface` glob excuses every interface change under it, so name the files it means. An entry that excuses nothing in the comparison **fails** as `unused`, so a fixed cause forces its entry out and each revisit trigger is mechanical. Crate-hash and legacy Rust symbol-hash normalisation can merge symbols from two versions of one crate, and `.llvm.N` two LLVM-promoted locals of one name; that is accepted. Revisit it when the weekly recurring reproduce check is designed (it calls this same tool), or when a difference arises that two levels cannot express.
 
 **A truncated fact stream fails.** The two scripts run as a pipeline
 (`artifact-facts.sh dist "$v" | check-artifact-conformance.sh`); a pipeline's exit status is its LAST
@@ -2154,8 +2156,8 @@ without building either:
   Then `sh "$SHIPYARD_SCRIPTS/stage_pkg_from_archive.sh" --repo . --requires <each> [--pkg-only
   SRC=DEST]... dist/<archive> packaging/<short>.standalone-bundled STAGED_ROOT` runs
   `check-standalone-archive.sh` on the archive and goes no further unless it passes, has
-  `derive_pkg_tree.sh` make `STAGED_ROOT/usr/local/mavergreen/<short>/`, and puts each app back at
-  `Applications/<Name>.app`, its `bin/` link absolute again. `STAGED_ROOT` is what `stage_product.sh
+  `derive_pkg_tree.sh` make `STAGED_ROOT/opt/mavergreen/<short>/`, and puts each app back at
+  `Applications/Mavergreen/<Name>.app`, its `bin/` link absolute again. `STAGED_ROOT` is what `stage_product.sh
   --stage` and `build_component_pkg.sh --root` take, as before. `derive_pkg_tree.sh [--requires
   SHORT[>=FLOOR]]... [--pkg-only SRC=DEST]... STANDALONE_TREE BUNDLED_LIST OUT_TREE` also runs alone;
   a bundle that is not a declared requires, a bundled path the tree lacks, or a pkg-only path the tree
@@ -2165,11 +2167,11 @@ without building either:
   root `stage_product.sh` filled for the pkg, leaving out the manifest, the updater, its LaunchAgent
   and anything else staged outside the tree, and naming what it left out. `artifact-facts.sh` emits a
   `standalone-flow <archive> archive-first|pkg-first` fact, archive-first when the repo declares
-  `packaging/<short>.standalone-bundled`; conformance names a pkg-first archive and does not fail it
-  yet. **Revisit** when a product's pkg cannot be reproduced unchanged by the derivation (static
+  `packaging/<short>.standalone-bundled`; conformance warns about a pkg-first archive and does not
+  fail it yet. **Revisit** when a product's pkg cannot be reproduced unchanged by the derivation (static
   dependencies linked into its binaries, say): that product declares it, and the rule is reopened
   rather than bent.
-- **A script in the archive never names `/usr/local/mavergreen`**, not in a comment, not in a
+- **A script in the archive never names a Mavergreen prefix**, not in a comment, not in a
   fallback. It finds its own files from its own location, and a bundled sibling product relative to
   the tree, so the one script runs from wherever the archive is unpacked and from the pkg's install
   location alike. codex-cli's finding: `check-standalone-archive.sh` reads a comment or a fallback as it
@@ -2179,7 +2181,7 @@ without building either:
   cannot, and it says so), and gzipped without a name or time. The reproducible archive is the
   Linux-built one: 10.9's bsdtar 2.8 can neither record root:wheel nor leave out pax ctime. A `bin/`
   link is resolved within the staged root, absolute or relative; one landing in
-  `Applications/<Name>.app` becomes `../<Name>.app/...`, and one that resolves nowhere fails.
+  `Applications/Mavergreen/<Name>.app` becomes `../<Name>.app/...`, and one that resolves nowhere fails.
 - **AppleDouble files are refused, never stripped.** `stage_standalone.sh` fails on a `._*` file in the
   tree or a staged app, `check-standalone-archive.sh` on a `._*` entry, and `fetch_product_pkg.sh` on a
   pkg whose Payload holds one, each naming the first.
@@ -2188,7 +2190,8 @@ without building either:
   makes the payload root 0755, so a umask-002 stage (Ubuntu's default) cannot make the installer chmod
   `/` group-writable; `build-equivalence.sh` counts a mode difference as `bytes`.
 - **Judged by `check-standalone-archive.sh`**: the one top directory; no manifest, updater, launchd job,
-  pkg scripts or AppleDouble entry; no symlink, `#!` script or text file naming `/usr/local/mavergreen`; every
+  pkg scripts or AppleDouble entry; no symlink, `#!` script or text file naming a Mavergreen prefix
+  (`/opt/mavergreen`, or `/usr/local/mavergreen`, where pinned pre-flag-day releases still install); every
   Mach-O's loads, rpaths and install name under `/usr/lib`, `/System`, `@rpath`, `@loader_path` or
   `@executable_path`. `--run`, on a Mac that runs the arch natively, starts each `bin/` entry with
   `--version` from a relocated copy. `artifact-facts.sh` runs it on every `*-macos-<arch>.tar.gz` in
@@ -2197,19 +2200,20 @@ without building either:
 - **Standalone means no install of the product itself; its requires stay dependencies.** Given the
   pkg's `mavergreen.plist` (`--plist`, which `artifact-facts.sh` passes, and `stage_pkg_from_archive.sh`
   writes from its `--requires`), scripts and text files may
-  name `/usr/local/mavergreen/<require>`; naming the product's own prefix never passes (a relocation
+  name `/opt/mavergreen/<require>`; naming the product's own prefix never passes (a relocation
   bug), nor does a Mach-O load, rpath or install name into any Mavergreen prefix. Documentation
   (`share/man`, `share/doc`, `share/info`, `README*`, `LICENSE*`, `NOTICE*`, `CHANGELOG*`) and Mach-O
   strings naming a prefix only warn; configuration a program reads keeps failing. The release notes
   name the products the archive requires.
-- **Text that names a prefix on purpose is declared, path by path.** `- standalone-text:<archive-path
-  glob>: <reason>` under `## Conformance deviations` turns a script's or text file's findings (a
-  self-reference, an undeclared dependency, any `/usr/local/mavergreen` naming) into warnings for the
+- **Text that names a prefix on purpose is declared, path by path.** A
+  `.mavergreen/deviations/standalone-text/<label>/` deviation (scope an archive-path glob) turns a
+  script's or text file's findings (a self-reference, an undeclared dependency, any prefix naming) into
+  warnings for the
   archive paths it matches, relative to `<short>-<version>/` (Go's
   `src/crypto/x509/root_keychainunion_darwin*.go` names the CA bundles that programs built by the
   toolchain read at run time). It never excuses a Mach-O load, rpath or install name, a symlink, or an
   updater, manifest, launchd or AppleDouble finding; an entry that excuses nothing in any standalone
-  archive of the release fails as unused, and a bare form or an all-wildcard glob is refused. The
+  archive of the release fails as unused, and an all-wildcard glob is refused. The
   checker reads `--repo DIR` (default `.`), which `artifact-facts.sh` sets to the repo root, passing
   `--defer-unused` so that unused entries are judged across the release.
 - **A single static binary where the product allows it**, which a user can drop into `/usr/local/bin`
@@ -2217,13 +2221,13 @@ without building either:
 - **The release notes say the archive has "no updater, no installer"**, in `release-notes/notice`, the
   standing footer line; `RELEASE_NOTES.md` is generated, and the gate refuses one written by hand.
 - **Adoption is grandfathered.** A `standalone <repo> <short>` line in `scripts/conventions-grandfathered`
-  turns the missing archive into a `::warning::`. Seeded 2026-11-22 with every registered product but
+  turns the missing archive into a `::warning::`. Seeded 2026-11-22 with every product but
   Drydock's; `MAX_STANDALONE` in `tests/check-family-conventions-7-test.sh` is the ceiling. A repo
   deletes its line in the change that adopts the archive: at the product's next release or its
   Linux-runner conversion, whichever comes first.
 - **Where a standalone form is meaningless** (a kext, a system extension, a launchd daemon, SDK or data
-  products, presets), declare `- no-standalone[:<short glob>]: <reason>` under `## Conformance
-  deviations`. Declaring it while also publishing an archive for that product fails.
+  products, presets), declare `.mavergreen/deviations/no-standalone/<label>/` (scope the short, or a
+  glob of shorts). Declaring it while also publishing an archive for that product fails.
 - **Revisit** when a product cannot be relocated without patching upstream, or when the Mavergreen
   CLI's design reaches how it fetches products.
 
@@ -2831,8 +2835,8 @@ finding that predates checks 21 (widened), 35, 36 and 37 and conformance's `cxxa
 `packager`, `macos-runner`, `modern-smoke`, `cxxabi` and `standalone`; a line, like a declared deviation, excuses its finding. A
 `cxxabi` line is keyed per installed path (`cxxabi <repo> <path>`, spaces as `%20`), so a new path with a
 second runtime in a grandfathered repo still fails. A `standalone` line is keyed per product
-(`standalone <repo> <short>`, the short registered to that repo; see "Standalone archive"), and
-conformance reads its repo from the registry, so it warns in a local run too. A
+(`standalone <repo> <short>`, a short that repo declares; see "Standalone archive"), and
+conformance reads its repo from the release's `repository` fact. A
 `modern-smoke` line is keyed per repo (`modern-smoke <repo> release.yml:modern-smoke`): it skips check 37's
 job check, and conformance warns about that repo's undeclared arm64 slices instead of failing them.
 Conformance knows the repo only from `$GITHUB_REPOSITORY`, so a local conformance run without it fails a

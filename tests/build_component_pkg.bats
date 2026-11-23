@@ -134,20 +134,20 @@ build() {
 @test "build_component_pkg: a umask-002 stage gives a payload with no group or world write" {
   rm -rf "$WORK/root"
   ( umask 002
-    mkdir -p "$WORK/root/usr/local/mavergreen/w/bin" "$WORK/root/usr/local/mavergreen/w/share"
-    printf '#!/bin/sh\n' > "$WORK/root/usr/local/mavergreen/w/bin/w"; chmod +x "$WORK/root/usr/local/mavergreen/w/bin/w"
-    printf 'd\n' > "$WORK/root/usr/local/mavergreen/w/share/d"
-    printf 's\n' > "$WORK/root/usr/local/mavergreen/w/bin/s"; chmod 4775 "$WORK/root/usr/local/mavergreen/w/bin/s"
-    ln -s w "$WORK/root/usr/local/mavergreen/w/bin/l" )
+    mkdir -p "$WORK/root/opt/mavergreen/w/bin" "$WORK/root/opt/mavergreen/w/share"
+    printf '#!/bin/sh\n' > "$WORK/root/opt/mavergreen/w/bin/w"; chmod +x "$WORK/root/opt/mavergreen/w/bin/w"
+    printf 'd\n' > "$WORK/root/opt/mavergreen/w/share/d"
+    printf 's\n' > "$WORK/root/opt/mavergreen/w/bin/s"; chmod 4775 "$WORK/root/opt/mavergreen/w/bin/s"
+    ln -s w "$WORK/root/opt/mavergreen/w/bin/l" )
   build "$WORK/u.pkg" > /dev/null 2> "$WORK/err"
-  grep -q 'build_component_pkg: normalised 9 payload entries' "$WORK/err"
-  [ -L "$WORK/root/usr/local/mavergreen/w/bin/l" ]
+  grep -q 'build_component_pkg: normalised 8 payload entries' "$WORK/err"
+  [ -L "$WORK/root/opt/mavergreen/w/bin/l" ]
   "$STEVEDORE" expand "$WORK/u.pkg" "$WORK/x"
   gzip -dc "$WORK/x/Payload" | cpio -itv 2>/dev/null | awk '$1 !~ /^l/ { print $1, $NF }' | LC_ALL=C sort -k2 > "$WORK/modes"
-  printf '%s\n' 'drwxr-xr-x .' 'drwxr-xr-x ./usr' 'drwxr-xr-x ./usr/local' 'drwxr-xr-x ./usr/local/mavergreen' \
-    'drwxr-xr-x ./usr/local/mavergreen/w' 'drwxr-xr-x ./usr/local/mavergreen/w/bin' \
-    '-rwsr-xr-x ./usr/local/mavergreen/w/bin/s' '-rwxr-xr-x ./usr/local/mavergreen/w/bin/w' \
-    'drwxr-xr-x ./usr/local/mavergreen/w/share' '-rw-r--r-- ./usr/local/mavergreen/w/share/d' > "$WORK/want"
+  printf '%s\n' 'drwxr-xr-x .' 'drwxr-xr-x ./opt' 'drwxr-xr-x ./opt/mavergreen' \
+    'drwxr-xr-x ./opt/mavergreen/w' 'drwxr-xr-x ./opt/mavergreen/w/bin' \
+    '-rwsr-xr-x ./opt/mavergreen/w/bin/s' '-rwxr-xr-x ./opt/mavergreen/w/bin/w' \
+    'drwxr-xr-x ./opt/mavergreen/w/share' '-rw-r--r-- ./opt/mavergreen/w/share/d' > "$WORK/want"
   diff "$WORK/want" "$WORK/modes"
   build "$WORK/v.pkg" > /dev/null 2> "$WORK/err"
   grep -q 'build_component_pkg: normalised 0 payload entries' "$WORK/err"
