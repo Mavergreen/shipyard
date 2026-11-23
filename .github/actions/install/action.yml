@@ -4,13 +4,14 @@ description: >
   (@v1 or @vX.Y.Z -- that ref IS the version) and gets exactly the pkgs a developer installs: the cmake
   product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. Consumers
   configure with shipyard-cmake; MavericksShipyardConfig.cmake refuses any other cmake. The optional
-  `products` input also installs named family products (SHORT@TAG) and their requires on macOS.
+  `products` input also installs named family products (SHORT@TAG) and their requires, on macOS
+  and Linux alike, each at /usr/local/mavergreen/SHORT.
 
 inputs:
   products:
     description: >
       Whitespace-separated SHORT@TAG family products to install after shipyard, each with what it
-      requires (for example go127-cross@1.27.4-mavericks.4). macOS runners only; empty installs none.
+      requires (for example go127-cross@1.27.4-mavericks.4), on any runner; empty installs none.
     required: false
     default: ''
 
@@ -109,7 +110,7 @@ runs:
 
     # spec: tests/install-action-products-test.sh -- named products install after shipyard; products reach
     #       the script through env
-    - if: runner.os == 'macOS' && inputs.products != ''
+    - if: inputs.products != ''
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -120,13 +121,6 @@ runs:
         echo "MAVERGREEN_INSTALLED=$RUNNER_TEMP/mavergreen-installed.txt" >> "$GITHUB_ENV"
         set -f
         MAVERGREEN_INSTALLED="$RUNNER_TEMP/mavergreen-installed.txt" sh "$root/scripts/install-products.sh" $PRODUCTS
-
-    # spec: tests/install-action-products-test.sh -- an empty `products` keeps today's behaviour here
-    - if: runner.os != 'macOS' && inputs.products != ''
-      shell: bash
-      run: |
-        echo "::error::products: needs a macOS runner (Installer and Longboat are macOS-only)"
-        exit 1
 
     # spec: R-P1-18 -- there is no Linux pkg, and the jobs that land here do not want one: they run
     #       shipyard's SHELL half on ubuntu-latest, where the point is that the job is cheap. Refusing

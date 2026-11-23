@@ -77,7 +77,11 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   side with `find_package` — **no `CMAKE_PREFIX_PATH`, no vendored copy, no hand-run `--install`.**
 
   To install another family product, pass `with: { products: "SHORT@TAG ..." }`: its requires come
-  with it, so never hand-roll a `gh release download` plus `installer`. macOS runners only.
+  with it, so never hand-roll a `gh release download` plus `installer`. On Linux each product lands at
+  the same `/usr/local/mavergreen/SHORT` as its pkg, owned by the runner user and marked by the pkg's
+  own `mavergreen.plist`: its release's `SHORT-TAG-linux-x86_64.tar.gz` when it has one, else its pkg's
+  host-neutral payload, and `sdk109`/`sdk113` from `fetch_sdk.sh`. Path parity is the point (Go build IDs hash absolute toolchain paths); revisit it
+  when a Linux runner lacks sudo or a consumer needs two versions of one product side by side.
 
   On every runner it also makes **PyYAML** importable for the job's own `python3` (`pip --user`,
   only when missing; it never swaps in another interpreter). The conventions gate needs it to parse

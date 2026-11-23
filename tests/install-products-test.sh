@@ -6,7 +6,7 @@ S="$here/../scripts/install-products.sh"
 SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed"; exit 1; }; export STEVEDORE="$SD"
 top="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/install-products.XXXXXX")" && pwd)"; trap 'rm -rf "$top"' EXIT
 fail() { echo "FAIL: $1"; [ -z "${out:-}" ] || printf '%s\n' "--- output:" "$out"; exit 1; }
-export SOURCE_DATE_EPOCH=1700000000 SHIPYARD_FETCH_BACKOFF=0 SHIPYARD_FETCH_TRIES=1
+export SOURCE_DATE_EPOCH=1700000000 SHIPYARD_FETCH_BACKOFF=0 SHIPYARD_FETCH_TRIES=1 INSTALL_PRODUCTS_HOST=mac
 n=0
 
 fresh() {
@@ -286,5 +286,76 @@ if [ "$(id -u)" -ne 0 ]; then
   grep -q "^sudo installer -pkg .*a-1.pkg -target /$" "$w/log" \
     || fail "default_sudo_installer: unset INSTALLER runs sudo installer -pkg PKG -target /"
 fi
+
+linux() {
+  real; export INSTALL_PRODUCTS_HOST=linux MAVERGREEN_TAR_CACHE="$w/tars"
+  export INSTALLER="$top/bin/logger-installer" FAKE_SUDO_INSTALLER="$top/bin/logger-installer"
+}
+linuxtar() {
+  _rel="$w/rel/Mavergreen/${1}repo/releases/download/$2"
+  python3 -c '
+import io, sys, tarfile
+with tarfile.open(sys.argv[1], "w:gz") as t:
+    m = tarfile.TarInfo("opt/mavergreen/%s/bin/tool" % sys.argv[2]); m.mode = 0o755; m.size = 5
+    t.addfile(m, io.BytesIO(b"linux"))
+' "$_rel/$1-$2-linux-x86_64.tar.gz" "$1"
+  ( cd "$_rel" && shasum -a 256 "$1-$2-linux-x86_64.tar.gz" >> SHA256SUMS )
+}
+mg() { printf '%s\n' "$w/root/usr/local/mavergreen/$1"; }
+noinstaller() { ! grep -q installer "$w/log"; }
+pget() { "$SD" plist get "$(mg "$1")/mavergreen.plist" "$2" 2>/dev/null; }
+
+fresh; release a 1; linuxtar a 1; linux
+run a@1
+[ "$rc" -eq 0 ] || fail "linux_tarball: exit 0, got $rc"
+[ "$(cat "$(mg a)/bin/tool")" = linux ] && [ -x "$(mg a)/bin/tool" ] && [ ! -e "$(mg a)/file" ] \
+  || fail "linux_tarball: the linux-x86_64 archive, not the pkg payload, is unpacked at the prefix"
+[ "$(pget a version)" = 1 ] && [ "$(pget a product)" = a ] || fail "linux_tarball: the pkg's own mavergreen.plist marks the prefix"
+[ -z "$(find "$(mg a)" -name '.*')" ] || fail "linux_tarball: nothing but the product is left in the prefix"
+noinstaller && [ "$(cat "$w/installed")" = "a 1" ] || fail "linux_tarball: no installer runs, and a 1 is recorded"
+
+fresh; release b 1; linux
+run b@1
+[ "$rc" -eq 0 ] && [ "$(cat "$(mg b)/file")" = b ] && [ "$(pget b version)" = 1 ] \
+  || fail "linux_pkg_payload: a release with no linux archive installs its pkg's payload, marker included"
+noinstaller && [ "$(cat "$w/installed")" = "b 1" ] || fail "linux_pkg_payload: no installer runs, and b 1 is recorded"
+release b 2; run b@2
+[ "$rc" -eq 0 ] && [ "$(pget b version)" = 2 ] && [ -z "$(find "$(mg b)" -name '.*')" ] \
+  || fail "linux_pkg_payload: another pin replaces the installed product in place"
+
+fresh; release a 1 'b>=2'; release b 3; latest b 3; linux; installed b 2
+run a@1
+[ "$rc" -eq 0 ] && [ "$(cat "$w/installed")" = "$(lines 'b 2' 'a 1')" ] && [ ! -e "$(mg b)/file" ] \
+  || fail "linux_keep_at_floor: an installed require at its floor is kept, read from its marker"
+
+fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
+printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; latest lb 20261027.13
+mkdir -p "$w/sdksrc/MacOSX10.9.sdk/usr/lib"; : > "$w/sdksrc/MacOSX10.9.sdk/usr/lib/libSystem.tbd"
+( cd "$w/sdksrc" && tar -czf "$w/sdk.tar" MacOSX10.9.sdk )
+export MAVERICKS_SDK_URL="file://$w/sdk.tar" MAVERICKS_SDK_SHA256="$(shasum -a 256 "$w/sdk.tar" | awk '{print $1}')" MAVERICKS_SDK_CACHE="$w/sdkcache"
+release a 1 'sdk109>=20261027'
+INSTALL_PRODUCTS_HOST=linux plan_stdout a@1
+[ "$rc" -eq 0 ] && [ "$out" = "$(lines 'provision sdk109 via fetch_sdk.sh --arch x86_64' 'install a 1')" ] \
+  || fail "linux_sdk: the plan provisions sdk109 with fetch_sdk.sh, and needs no longboat"
+linux; printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"
+run a@1
+sdk="$(mg sdk109)/SDKs/MacOSX10.9.sdk"
+[ "$rc" -eq 0 ] && [ -f "$sdk/usr/lib/libSystem.tbd" ] || fail "linux_sdk: the pinned SDK lands at the prefix's SDKs/"
+[ "$(cat "$sdk/SDKSettings.json")" = '{"CanonicalName":"macosx10.9","MaximumDeploymentTarget":"10.9","Version":"10.9"}' ] \
+  || fail "linux_sdk: the SDK carries the SDKSettings.json longboat writes into it"
+[ "$(pget sdk109 version)" = 20261027.13 ] && [ "$(pget sdk109 name)" = "Mac OS X 10.9 SDK" ] \
+  && [ "$(pget sdk109 identifier)" = dev.mavergreen.longboat.sdk109 ] \
+  || fail "linux_sdk: the marker is the one longboat's pkg installs, at longboat's latest version"
+[ "$(cat "$w/installed")" = "$(lines 'sdk109 20261027.13' 'a 1')" ] && [ ! -s "$w/log" ] \
+  || fail "linux_sdk: neither longboat nor an installer runs ($(cat "$w/log"))"
+unset MAVERICKS_SDK_URL MAVERICKS_SDK_SHA256 MAVERICKS_SDK_CACHE
+
+fresh; release x 1 --no-appcast; linux
+cp "$w/stage/x-1/comp.pkg" "$w/rel/Mavergreen/xrepo/releases/download/1/x-1.pkg"
+( cd "$w/rel/Mavergreen/xrepo/releases/download/1" && shasum -a 256 x-1.pkg > SHA256SUMS )
+run x@1
+[ "$rc" -eq 1 ] && has "x 1" && has "x-1-linux-x86_64.tar.gz" && [ ! -e "$(mg x)/mavergreen.plist" ] && [ ! -s "$w/installed" ] \
+  || fail "linux_unextractable: no linux archive and a pkg fetch_product_pkg.sh cannot extract exits 1, naming both"
+noinstaller || fail "linux_unextractable: the installer never runs on Linux"
 
 echo "PASS: install-products"
