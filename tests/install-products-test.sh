@@ -298,7 +298,9 @@ import io, sys, tarfile
 with tarfile.open(sys.argv[1], "w:gz") as t:
     m = tarfile.TarInfo("opt/mavergreen/%s/bin/tool" % sys.argv[2]); m.mode = 0o755; m.size = 5
     t.addfile(m, io.BytesIO(b"linux"))
-' "$_rel/$1-$2-linux-x86_64.tar.gz" "$1"
+    if len(sys.argv) > 3:
+        t.add(sys.argv[3], "opt/mavergreen/%s/mavergreen.plist" % sys.argv[2])
+' "$_rel/$1-$2-linux-x86_64.tar.gz" "$1" ${3:+"$3"}
   ( cd "$_rel" && shasum -a 256 "$1-$2-linux-x86_64.tar.gz" >> SHA256SUMS )
 }
 mg() { printf '%s\n' "$w/root/usr/local/mavergreen/$1"; }
@@ -313,6 +315,19 @@ run a@1
 [ "$(pget a version)" = 1 ] && [ "$(pget a product)" = a ] || fail "linux_tarball: the pkg's own mavergreen.plist marks the prefix"
 [ -z "$(find "$(mg a)" -name '.*')" ] || fail "linux_tarball: nothing but the product is left in the prefix"
 noinstaller && [ "$(cat "$w/installed")" = "a 1" ] || fail "linux_tarball: no installer runs, and a 1 is recorded"
+[ -f "$w/cache/arepo/1/a-1.pkg" ] || fail "linux_tarball: an archive with no mavergreen.plist falls back to the pkg's"
+
+fresh; release a 1 'b>=2'; release b 3; latest b 3
+_rel="$w/rel/Mavergreen/arepo/releases/download/1"; rm -f "$_rel/a-1.pkg" "$_rel/a.xml"; : > "$_rel/SHA256SUMS"
+linuxtar a 1 "$w/stage/a-1/root/usr/local/mavergreen/a/mavergreen.plist"; linux
+INSTALL_PRODUCTS_HOST=linux plan_stdout a@1
+[ "$rc" -eq 0 ] && [ "$out" = "$(lines 'install b 3' 'install a 1')" ] \
+  || fail "linux_tarball_plist: the archive's own mavergreen.plist gives the version and the requires"
+run a@1
+[ "$rc" -eq 0 ] && [ "$(cat "$(mg a)/bin/tool")" = linux ] && [ "$(pget a version)" = 1 ] && [ "$(pget a product)" = a ] \
+  || fail "linux_tarball_plist: the release installs from its archive, marked by the archive's plist, with no pkg in the release"
+[ -z "$(find "$w/cache/arepo" -type f 2>/dev/null)" ] && [ "$(cat "$w/installed")" = "$(lines 'b 3' 'a 1')" ] \
+  || fail "linux_tarball_plist: no pkg of a is requested or cached"
 
 fresh; release b 1; linux
 run b@1

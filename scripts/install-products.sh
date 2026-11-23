@@ -26,7 +26,9 @@
 #          its pkg, made with $SUDO mkdir and chowned to the caller: a release whose SHA256SUMS lists
 #          SHORT-TAG-linux-x86_64.tar.gz installs that archive (fetch_product_tar.sh, on an x86_64 host),
 #          any other its pkg's usr/local/mavergreen/SHORT payload (fetch_product_pkg.sh), and either way
-#          the pkg's own mavergreen.plist marks it. An SDK product, sdk<NNN> for a pin in sdk-pins.sh,
+#          the pkg's own mavergreen.plist marks it. An archive holding opt/mavergreen/SHORT/mavergreen.plist
+#          supplies that manifest itself, the version and requires included, and its pkg is never
+#          fetched; the archive is cached in ${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-tars}/REPO/TAG. An SDK product, sdk<NNN> for a pin in sdk-pins.sh,
 #          is provisioned `via fetch_sdk.sh --arch ARCH` instead of by its provider: the pinned SDK,
 #          with the SDKSettings.json longboat adds, lands in SHORT/SDKs/, marked as longboat's pkg
 #          marks it at the latest release of SHORT's repo. Installs into one prefix take turns through
@@ -123,6 +125,22 @@ manifest() {
   _w="$T/w/$1@$3"
   rm -rf "$_w"; mkdir -p "$_w" "$_cache" || die "$1 $3: cannot make $_w or $_cache"
   shipyard_curl --quiet "$_base/SHA256SUMS" "$_w/SHA256SUMS" || die "$1 $3: could not fetch $_base/SHA256SUMS"
+  _tar="$1-$3-linux-x86_64.tar.gz"
+  if [ "$HOST" = linux ] && [ "$(uname -m)" = x86_64 ] && listed "$_w/SHA256SUMS" "$_tar"; then
+    _tc="${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-tars}/$2/$3"
+    shipyard_fetch_verified "$_base/$_tar" "$_ls" "$_tc" "$_tar" || die "$1 $3: could not fetch and verify $_base/$_tar"
+    mkdir "$_w/t" || die "$1 $3: cannot make $_w/t"
+    if tar -xzf "$_tc/$_tar" -C "$_w/t" "opt/mavergreen/$1/mavergreen.plist" 2>/dev/null \
+      && [ -f "$_w/t/opt/mavergreen/$1/mavergreen.plist" ]; then
+      [ "$("$STEVEDORE" plist get "$_w/t/opt/mavergreen/$1/mavergreen.plist" identifier 2>/dev/null || :)" = "$4" ] \
+        || die "$1 $3: the mavergreen.plist in $_tar is not $4's"
+      mv "$_w/t/opt/mavergreen/$1/mavergreen.plist" "$_mf" || die "$1 $3: cannot keep the mavergreen.plist in $_tar"
+      : > "${_mf%.plist}.pkgpath"
+      cp "$_w/SHA256SUMS" "${_mf%.plist}.sums" || die "$1 $3: cannot keep $_base/SHA256SUMS"
+      rm -rf "$_w"; return 0
+    fi
+    _cache="${MAVERGREEN_PKG_CACHE:-$HOME/Library/Caches/mavergreen-pkgs}/$2/$3"
+  fi
   reg feed "$1"; _xml="${_rv##*/}"
   if listed "$_w/SHA256SUMS" "$_xml"; then
     shipyard_fetch_verified "$_base/$_xml" "$_ls" "$_cache" "$_xml" || die "$1 $3: could not fetch and verify $_base/$_xml"
