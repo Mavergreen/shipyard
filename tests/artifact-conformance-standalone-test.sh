@@ -5,7 +5,7 @@
 #          passed check-standalone-archive.sh, unless conventions-grandfathered names the product
 #          (a warning) or INGREDIENTS.md declares '- no-standalone[:<short glob>]: <reason>'; declaring
 #          it while publishing one fails. Then artifact-facts.sh judges the archives a dist carries, each
-#          against the requires in its product pkg's mavergreen.plist.
+#          against the requires in its product pkg's mavergreen.plist and the repo's deviations.
 set -eu
 unset GITHUB_REPOSITORY
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -133,5 +133,10 @@ printf '%s\n' "$facts" | grep -qx "standalone $SA ok" || fail "artifact-facts.sh
 printf '%s\n' "$facts" | grep -q '^standalone w-1.0-macos-arm64.tar.gz fail bin/w%20names%20/usr/local/mavergreen/zig:%20an%20undeclared%20dependency' \
   || fail "artifact-facts.sh carries an undeclared dependency: $facts"
 echo "ok: artifact-facts.sh judges each archive against its pkg's declared requires"
+mkdir -p "$w/dist3" "$w/repo3"; cp "$w/dist2/w-1.0-macos-arm64.tar.gz" "$w/dist3/"
+printf '## Conformance deviations\n- standalone-text:bin/w: the wrapper names zig\n' > "$w/repo3/INGREDIENTS.md"
+facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist3" 1.0-mavericks.1 "$w/repo3" 2>"$w/err")" || fail "artifact-facts.sh failed on a declared standalone-text: $(cat "$w/err")"
+printf '%s\n' "$facts" | grep -qx 'standalone w-1.0-macos-arm64.tar.gz ok' || fail "artifact-facts.sh passes the repo's standalone-text deviations to the checker: $facts"
+echo "ok: artifact-facts.sh passes the repo's deviations to check-standalone-archive.sh"
 
 echo "PASS: artifact-conformance-standalone"

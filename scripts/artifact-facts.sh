@@ -7,7 +7,8 @@
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
 #          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each, and a
 #          `standalone` fact per <short>-<version>-macos-<arch>.tar.gz, from check-standalone-archive.sh
-#          given --plist with the mavergreen.plist that SHORT's pkg in the dist installs.
+#          given --plist with the mavergreen.plist that SHORT's pkg in the dist installs, and --repo the
+#          repo root, whose standalone-text deviations it honours.
 # platform: runs at PACKAGE TIME, on any host that has the artifacts; stevedore reads the pkgs and plists.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
 #       conformance (checked at package time)" -- distinct in scope from the conventions gate, which
@@ -337,6 +338,7 @@ while IFS= read -r f; do
   b="${f##*/}"
   _sa_short="$(printf '%s\n' "$b" | sed 's/-[0-9].*//')"
   if [ -f "$sa_tmp/$_sa_short.plist" ]; then set -- --plist "$sa_tmp/$_sa_short.plist"; else set --; fi
+  set -- "$@" --repo "$root"
   _sa_rc=0; _sa_out="$(sh "$SELF/check-standalone-archive.sh" "$@" "$f" 2>&1 < /dev/null)" || _sa_rc=$?
   case "$_sa_rc" in
     0) printf 'standalone %s ok\n' "$b" ;;

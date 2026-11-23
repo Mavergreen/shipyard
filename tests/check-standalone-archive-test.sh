@@ -3,7 +3,8 @@
 #   usage: check-standalone-archive-test.sh
 #          scripts/check-standalone-archive.sh: naming, the one top directory, what the package alone
 #          carries, scripts, text files and links naming /usr/local/mavergreen (documentation warns), --plist's declared requires
-#          against the product's own prefix and undeclared ones, then Mach-O fixtures built at test
+#          against the product's own prefix and undeclared ones, --repo's standalone-text deviations
+#          excusing text findings alone and failing unused, then Mach-O fixtures built at test
 #          time with the pinned clang22 and 10.9 SDK: system, @rpath and @loader_path loads pass, an
 #          absolute load, rpath or install name outside the system fails (a declared require's too), a
 #          string naming the prefix is a warning, and --run, where this host
@@ -129,6 +130,50 @@ rc=0; sh "$C" --plist "$w/none.plist" "$A" > /dev/null 2>&1 || rc=$?; [ "$rc" -e
 rc=0; sh "$C" --plist > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "--plist with no path: exit $rc, want 2"
 plist "$P" clang22 'sdk109>=1.0'
 echo "ok: --plist: scripts and text files may name declared requires, never the product itself"
+
+repo() {  # $1 = directory, then each deviation line
+  _d="$1"; shift; mkdir -p "$_d"; printf '# x\n## Conformance deviations\n' > "$_d/INGREDIENTS.md"
+  for _e in "$@"; do printf -- '- %s\n' "$_e" >> "$_d/INGREDIENTS.md"; done
+}
+withrepo() {  # $1 = expected exit, $2 = label, $3 = phrase (or -), $4 = repo
+  rc=0; sh "$C" --plist "$P" --repo "$4" "$A" > "$w/out" 2>&1 || rc=$?
+  [ "$rc" -eq "$1" ] || fail "$2: --repo: exit $rc, want $1: $(cat "$w/out")"
+  [ "$3" = - ] || grep -q -- "$3" "$w/out" || fail "$2: --repo: should say '$3': $(cat "$w/out")"
+}
+X509=src/crypto/x509
+keychain() {  # a Go tree whose x509 source names CA bundles, beside $1 (a Mach-O-free extra, or -)
+  go -; mkdir -p "$G/$X509"
+  printf 'package x509\nvar paths = []string{"/usr/local/mavergreen/openssl3/etc/cert.pem", "/usr/local/mavergreen/go126/etc/ca.pem"}\n' > "$G/$X509/root_keychainunion_darwin.go"
+  printf 'package x509\nvar more = "/usr/local/mavergreen/ca-certs/cert.pem"\n' > "$G/$X509/root_keychainunion_darwin_test.go"
+  case "$1" in
+    link) ln -s /usr/local/mavergreen/go126/bin/go "$G/$X509/root_keychainunion_darwin_link.go" ;;
+    *) ;;
+  esac
+}
+keychain -; mk go126-1.26.5-macos-x86_64.tar.gz
+with 1 "Go's x509 source naming CA bundles, undeclared" "root_keychainunion_darwin.go names /usr/local/mavergreen/openssl3"
+repo "$w/r-x509" "standalone-text:$X509/root_keychainunion_darwin*.go: CA bundles a built program reads at run time"
+withrepo 0 "standalone-text excuses the matching text files" "excused by standalone-text:$X509/root_keychainunion_darwin\*.go" "$w/r-x509"
+grep -q 'go126, the product' "$w/out" || fail "an excused self-reference is still reported: $(cat "$w/out")"
+repo "$w/r-one" "standalone-text:$X509/root_keychainunion_darwin.go: CA bundles"
+withrepo 1 "standalone-text excuses only the paths its glob matches" "root_keychainunion_darwin_test.go names /usr/local/mavergreen/ca-certs" "$w/r-one"
+grep -v 'warning: excused' "$w/out" | grep -q 'root_keychainunion_darwin.go names' && fail "the matching file is excused: $(cat "$w/out")"
+keychain link; mk go126-1.26.5-macos-x86_64.tar.gz
+withrepo 1 "standalone-text never excuses a symlink into /usr/local/mavergreen" "root_keychainunion_darwin_link.go links to /usr/local/mavergreen" "$w/r-x509"
+go -; mk go126-1.26.5-macos-x86_64.tar.gz
+withrepo 1 "a standalone-text entry excusing nothing" "standalone-text:$X509/root_keychainunion_darwin\*.go excuses nothing" "$w/r-x509"
+fresh go126-1.26.5; printf 'x\n' > "$w/t/go126-1.26.5/share/._README"; mkdir -p "$w/t/go126-1.26.5/Library/LaunchAgents"
+printf 'x\n' > "$w/t/go126-1.26.5/Library/LaunchAgents/dev.mavergreen.go126.plist"; printf '<plist/>\n' > "$w/t/go126-1.26.5/mavergreen.plist"
+mk go126-1.26.5-macos-x86_64.tar.gz
+repo "$w/r-pkg" "standalone-text:share/*: AppleDouble" "standalone-text:Library/*: launchd" "standalone-text:mavergreen.plist?: manifest"
+withrepo 1 "standalone-text never excuses AppleDouble, launchd or manifest findings" "AppleDouble" "$w/r-pkg"
+grep -q 'LaunchAgents' "$w/out" && grep -q 'pkg manifest' "$w/out" || fail "launchd and manifest findings stay: $(cat "$w/out")"
+repo "$w/r-bare" "standalone-text: everything"
+withrepo 2 "an entry deviations.sh refuses" - "$w/r-bare"
+rc=0; sh "$C" --repo "$w/nonexistent" "$A" > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "--repo not a directory: exit $rc, want 2"
+rc=0; (cd "$w/r-x509" && sh "$C" --plist "$P" "$A") > "$w/out" 2>&1 || rc=$?
+[ "$rc" -eq 1 ] && grep -q 'excuses nothing' "$w/out" || fail "--repo defaults to the current directory: exit $rc: $(cat "$w/out")"
+echo "ok: --repo: standalone-text excuses the text findings of the archive paths it names, and nothing else"
 
 CL="$(sh "$here/../scripts/fetch_clang22.sh" "$here/../components/clang22" 2>/dev/null)" || { echo "SKIP: no clang22"; exit 77; }
 SDK="$(sh "$here/../scripts/fetch_sdk.sh" 2>/dev/null)" || fail "no pinned 10.9 SDK"

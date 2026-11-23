@@ -130,6 +130,15 @@ for kind in build-equivalence build-equivalence-interface; do
   printf '## Conformance deviations\n- %s:usr/local/mavergreen/rust/*: crate hashes follow the build triple\n' "$kind" > "$w/INGREDIENTS.md"
   sh "$S" "$w" | grep -qx "$kind usr/local/mavergreen/rust/\\* crate hashes follow the build triple" || { echo "FAIL: a payload-path glob is a $kind scope; got: $(sh "$S" "$w" 2>&1)"; exit 1; }
 done
+# spec: SKILL.md "Standalone archive" -- standalone-text names the archive paths whose text it excuses;
+#       a bare form or a glob of nothing but wildcards would excuse every script in the archive.
+for line in '- standalone-text: every script' '- standalone-text:*: every script' '- standalone-text:*/*: every script'; do
+  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
+  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: [$line] must be refused"; exit 1; fi
+  printf '%s\n' "$out" | grep -q -- '- standalone-text:<archive-path glob>: <reason>' || { echo "FAIL: refusing [$line] names the form: $out"; exit 1; }
+done
+printf '## Conformance deviations\n- standalone-text:src/crypto/x509/root_keychainunion_darwin*.go: CA paths the built programs read\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'standalone-text src/crypto/x509/root_keychainunion_darwin\*.go CA paths the built programs read' || { echo "FAIL: an archive-path glob is a standalone-text scope; got: $(sh "$S" "$w" 2>&1)"; exit 1; }
 # spec: SKILL.md "Family conventions" check 23 -- staged-by names the pinned library whose release
 #       stages the pkg; the gate reads components/<library>/version, so the scope is one repo name.
 for line in '- staged-by: the library stages it' '- staged-by:*: every library' '- staged-by:golang-*: a glob' '- staged-by:components/golang-port: a path'; do

@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic -- Mach-O is read with the pinned clang22's llvm tools; --run starts programs only on a Mac of the archive's arch
-#   usage: check-standalone-archive.sh [--run] [--plist PLIST] ARCHIVE
+#   usage: check-standalone-archive.sh [--run] [--plist PLIST] [--repo DIR] ARCHIVE
 #          Judges a standalone archive, SHORT-VERSION-macos-ARCH.tar.gz (ARCH universal, x86_64 or
 #          arm64; SHORT runs to the first hyphen before a digit). Findings, each on its own line:
 #          an entry outside the one top directory SHORT-VERSION/; the pkg's manifest
@@ -14,22 +14,28 @@
 #          stevedore); naming the archive's own SHORT is a self-reference, and any other S an
 #          undeclared dependency. A Mach-O or other binary file holding the string, and documentation
 #          naming it (under share/man, share/doc or share/info, or a README*, LICENSE*, NOTICE* or
-#          CHANGELOG* at any depth), is a warning on stdout, never a finding. Mach-O is read by
+#          CHANGELOG* at any depth), is a warning on stdout, never a finding. DIR's (default .)
+#          INGREDIENTS.md, read by deviations.sh, may declare "- standalone-text:<glob>: <reason>": a
+#          script's or text file's findings naming /usr/local/mavergreen, for an archive path (relative
+#          to SHORT-VERSION/) the shell case pattern <glob> matches, become warnings; no other finding is
+#          excused, and an entry excusing nothing is a finding. Mach-O is read by
 #          scripts/lib/mach-interface.sh; with no OTOOL, LIPO or NM set and no installed clang22, the
 #          pinned one comes from fetch_clang22.sh. --run, on a Mac that runs ARCH natively, unpacks
 #          under a directory with a space and starts every bin/ entry with --version, finding any that
 #          dyld cannot start; elsewhere it says it did not run them.
 #          Exit 0 with no findings, 1 with any, 2 on a usage or naming error, a PLIST that cannot be
-#          read, or a reader that cannot read a Mach-O.
+#          read, a DIR that is not one or declares an entry deviations.sh refuses, or a reader that
+#          cannot read a Mach-O.
 # spec: tests/check-standalone-archive-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-usage='usage: check-standalone-archive.sh [--run] [--plist PLIST] ARCHIVE'
-run=no; plist=""
+usage='usage: check-standalone-archive.sh [--run] [--plist PLIST] [--repo DIR] ARCHIVE'
+run=no; plist=""; repo=.
 while [ $# -gt 1 ]; do
   case "$1" in
     --run) run=yes; shift ;;
     --plist) [ -n "${2:-}" ] || { echo "$usage" >&2; exit 2; }; plist="$2"; shift 2 ;;
+    --repo) [ -n "${2:-}" ] || { echo "$usage" >&2; exit 2; }; repo="$2"; shift 2 ;;
     *) break ;;
   esac
 done
@@ -64,6 +70,10 @@ if [ -n "$plist" ]; then
     || { echo "check-standalone-archive: $short$(cat "$t/err")" >&2; exit 2; }
   reqs="$(sed 's/>=.*//' "$t/requires" | tr '\n' ' ' | sed 's/ $//')"
 fi
+[ -d "$repo" ] || { echo "check-standalone-archive: --repo $repo is not a directory" >&2; exit 2; }
+_devs="$(sh "$SELF/deviations.sh" "$repo")" || { echo "check-standalone-archive: $repo/INGREDIENTS.md declares an entry deviations.sh refuses" >&2; exit 2; }
+printf '%s\n' "$_devs" | awk '$1 == "standalone-text" { print ++n " " $2 }' > "$t/textdevs"
+: > "$t/textused"
 finding() { printf '%s\n' "$*" >> "$t/findings"; }
 report() {
   sed "s|^|check-standalone-archive: $b: |" "$t/warnings"
@@ -169,8 +179,25 @@ while IFS= read -r f; do
           else if (S == "") print r " names /usr/local/mavergreen itself: an undeclared dependency (" where ")"
           else print r " names /usr/local/mavergreen/" S ": an undeclared dependency; add " S " to the requires or drop the path (" where ")"
         }
-      }' >> "$t/findings"
+      }' > "$t/hits"
+  [ -s "$t/hits" ] || continue
+  ex=""
+  set -f
+  while read -r _en _eg; do
+    case "$r" in $_eg) ;; *) continue ;; esac
+    echo "$_en" >> "$t/textused"
+    [ -n "$ex" ] || ex="$_eg"
+  done < "$t/textdevs"
+  set +f
+  if [ -n "$ex" ]; then
+    sed "s|^|warning: excused by standalone-text:$ex: |" "$t/hits" >> "$t/warnings"
+  else
+    cat "$t/hits" >> "$t/findings"
+  fi
 done < "$t/files"
+while read -r _en _eg; do
+  grep -qx "$_en" "$t/textused" || finding "INGREDIENTS.md's standalone-text:$_eg excuses nothing in this archive; drop it"
+done < "$t/textdevs"
 
 nmacho="$(wc -l < "$t/machos" | tr -d ' ')"
 if [ "$nmacho" -gt 0 ] && [ -z "${OTOOL:-}${LIPO:-}${NM:-}" ] \
