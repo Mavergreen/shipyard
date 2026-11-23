@@ -61,11 +61,7 @@ tools_at() {
   out="$(CLANG22_HOST=linux sh "$HELPER" "$PIN")"
   [ "$out" = "$CLANG22_INSTALLED" ] || { echo "$out"; return 1; }
 }
-@test 'linux: with no MAVERGREEN_CLANG22_CACHE, install-products.sh installs the release at the prefix, marked' {
-  unset MAVERGREEN_CLANG22_CACHE
-  export SOURCE_DATE_EPOCH=1700000000 SHIPYARD_FETCH_TRIES=1 SHIPYARD_FETCH_BACKOFF=0 SUDO= MAVERGREEN_PKG_CACHE="$WORK/pkgs"
-  export CLANG22_INSTALLED="$WORK/root/usr/local/mavergreen/clang22"
-  tools_at "$CLANG22_INSTALLED" 22.1.8-mavericks.98
+clang22_pkg() {
   SD="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")"
   st="$WORK/stage/root"; mkdir -p "$st/usr/local/mavergreen/clang22"; echo pkg > "$st/usr/local/mavergreen/clang22/from-pkg"
   sh "$BATS_TEST_DIRNAME/../scripts/render-manifest.sh" --stage "$st" --product clang22 --name clang22 --version 22.1.8-mavericks.99
@@ -79,23 +75,47 @@ tools_at() {
   PKG=mavericks-clang-22-native-22.1.8-mavericks.99.pkg
   "$SD" product --distribution "$WORK/stage/dist.xml" --package "$WORK/stage/comp.pkg" --mtime 1700000000 --out "$REL/$PKG" > /dev/null
   ( cd "$REL" && shasum -a 256 "$PKG" >> SHA256SUMS )
+}
+@test 'linux: with no MAVERGREEN_CLANG22_CACHE, install-products.sh installs the release at the prefix, marked' {
+  unset MAVERGREEN_CLANG22_CACHE
+  export SOURCE_DATE_EPOCH=1700000000 SHIPYARD_FETCH_TRIES=1 SHIPYARD_FETCH_BACKOFF=0 SUDO= MAVERGREEN_PKG_CACHE="$WORK/pkgs"
+  export CLANG22_INSTALLED="$WORK/root/usr/local/mavergreen/clang22"
+  tools_at "$CLANG22_INSTALLED" 22.1.8-mavericks.98
+  clang22_pkg
   out="$(CLANG22_HOST=linux sh "$HELPER" "$PIN")"
   [ "$out" = "$CLANG22_INSTALLED" ] || { echo "$out"; return 1; }
   [ -x "$out/bin/ld64.lld" ] && [ "$(cat "$out/bin/clang")" = x ] && [ ! -e "$out/from-pkg" ]
+  SD="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")"
   [ "$("$SD" plist get "$out/mavergreen.plist" version)" = 22.1.8-mavericks.99 ]
   [ "$("$SD" plist get "$out/mavergreen.plist" identifier)" = dev.mavergreen.clang.clang22 ]
   [ ! -d "$WORK/clang22" ] || false
 }
-nosudo_path() {
-  mkdir -p "$WORK/nosudo"
+path_without() {
+  mkdir -p "$WORK/without-$1"
   _ifs=$IFS; IFS=:
   for _d in $PATH; do
     for _f in "$_d"/*; do
-      [ "${_f##*/}" != sudo ] && [ -x "$_f" ] && [ ! -e "$WORK/nosudo/${_f##*/}" ] && ln -s "$_f" "$WORK/nosudo/${_f##*/}" || :
+      [ "${_f##*/}" != "$1" ] && [ -x "$_f" ] && [ ! -e "$WORK/without-$1/${_f##*/}" ] && ln -s "$_f" "$WORK/without-$1/${_f##*/}" || :
     done
   done
   IFS=$_ifs
-  printf '%s\n' "$WORK/nosudo"
+  printf '%s\n' "$WORK/without-$1"
+}
+nosudo_path() { path_without sudo; }
+@test 'linux: when install-products.sh cannot install at the prefix, the archive alone goes to the per-user cache, saying why' {
+  unset MAVERGREEN_CLANG22_CACHE
+  export SOURCE_DATE_EPOCH=1700000000 SHIPYARD_FETCH_TRIES=1 SHIPYARD_FETCH_BACKOFF=0 SUDO= MAVERGREEN_PKG_CACHE="$WORK/pkgs"
+  STEVEDORE="$(sh "$BATS_TEST_DIRNAME/../scripts/fetch_stevedore.sh")"; export STEVEDORE
+  export HOME="$WORK/home" CLANG22_INSTALLED="$WORK/root/usr/local/mavergreen/clang22"
+  mkdir -p "$HOME"
+  clang22_pkg
+  out="$(PATH="$(path_without cpio)" CLANG22_HOST=linux sh "$HELPER" "$PIN" 2> "$WORK/err")" || { cat "$WORK/err"; return 1; }
+  [ "$out" = "$HOME/.cache/mavergreen-clang22/22.1.8-mavericks.99/linux" ] || { echo "$out"; return 1; }
+  [ -x "$out/bin/ld64.lld" ]
+  [ "$(grep -c 'fetch_clang22:' "$WORK/err")" = 1 ] && [ "$(grep -c 'install-products:' "$WORK/err")" = 1 ] || { cat "$WORK/err"; return 1; }
+  grep -q 'fetch_clang22: could not install clang22 22.1.8-mavericks.99 at .*(install-products: .*needs cpio.*), so .* without path parity' "$WORK/err" \
+    || { cat "$WORK/err"; return 1; }
+  [ ! -e "$CLANG22_INSTALLED/mavergreen.plist" ] || false
 }
 unwritable_prefix() {
   unset MAVERGREEN_CLANG22_CACHE SUDO

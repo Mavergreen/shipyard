@@ -13,7 +13,9 @@
 #          Linux instead unpacks the archive once into
 #          ${MAVERGREEN_CLANG22_CACHE:-~/.cache/mavergreen-clang22}/VERSION/linux through
 #          fetch_product_tar.sh, saying on stderr in the second case that path parity is not in
-#          effect. On a Mac: the clang22-cross pkg (on Mac OS X 10.9, whose cross pkg does
+#          effect. When install-products.sh cannot install the release at the prefix, for any reason,
+#          Linux falls back to that same per-user cache, saying on stderr in one line why, so the archive
+#          alone remains clang22 on Linux. On a Mac: the clang22-cross pkg (on Mac OS X 10.9, whose cross pkg does
 #          not run there, the native clang22 pkg), through fetch_product_pkg.sh and stevedore, verified
 #          against the release's SHA256SUMS; an installed /usr/local/mavergreen/clang22-cross (clang22 on
 #          10.9) at that release is used instead, and CLANG22_INSTALLED replaces that path. A Mac fetch
@@ -86,14 +88,25 @@ case "$host" in
       echo "fetch_clang22: no root, sudo or writable ${inst%/clang22}, so clang22 $V goes to $W/linux, without path parity with $inst" >&2
       MAVERGREEN_CLANG22_CACHE="${W%/*}"
     fi
+    if [ -z "${MAVERGREEN_CLANG22_CACHE:-}" ]; then
+      ipe="$(mktemp "${TMPDIR:-/tmp}/fetch_clang22.XXXXXX")" || die "cannot make a temporary file"
+      if INSTALL_PRODUCTS_HOST=linux MAVERGREEN_TAR_CACHE="${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-clang22}" \
+        MAVERGREEN_PKG_CACHE="${MAVERGREEN_PKG_CACHE:-$HOME/.cache/mavergreen-clang22}" \
+        sh "$S/install-products.sh" --root "${root:-/}" "clang22@$V" 2> "$ipe"; then
+        cat "$ipe" >&2; rm -f "$ipe"
+        d=$inst
+      else
+        why="$(grep '^install-products: ' "$ipe" | tail -n 1)"
+        [ -n "$why" ] || why="$(grep . "$ipe" | tail -n 1)"
+        grep -v '^install-products: ' "$ipe" >&2 || :
+        rm -f "$ipe"
+        echo "fetch_clang22: could not install clang22 $V at $inst (${why:-install-products.sh failed}), so clang22 $V goes to $W/linux, without path parity with $inst" >&2
+        MAVERGREEN_CLANG22_CACHE="${W%/*}"
+      fi
+    fi
     if [ -n "${MAVERGREEN_CLANG22_CACHE:-}" ]; then
       d="$W/linux"
       sh "$S/fetch_product_tar.sh" clang22 "$V" "$d" >/dev/null || die "could not fetch and verify $asset"
-    else
-      INSTALL_PRODUCTS_HOST=linux MAVERGREEN_TAR_CACHE="${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-clang22}" \
-        MAVERGREEN_PKG_CACHE="${MAVERGREEN_PKG_CACHE:-$HOME/.cache/mavergreen-clang22}" \
-        sh "$S/install-products.sh" --root "${root:-/}" "clang22@$V" >&2 || die "could not install clang22 $V at $inst"
-      d=$inst
     fi ;;
   mac109) from_pkg clang22 "mavericks-clang-22-native-$V.pkg" ;;
   mac) from_pkg clang22-cross "mavericks-clang-22-cross-$V.pkg" ;;
