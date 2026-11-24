@@ -9,6 +9,8 @@
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the ONE parser
 #       of recorded versions, shared by the compat guard and artifact-facts.sh.
 set -eu
+. "$(cd "$(dirname "$0")" && pwd)/lib/mach-nm.sh"
+LIPO="$(shipyard_mach_tool lipo)"; OTOOL="$(shipyard_mach_tool otool)"
 [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "usage: macho-slices.sh FILE" >&2; exit 2; }
 f="$1"
 # platform: `lipo -info` exists on every macOS; -archs does not exist on 10.9. It prints either
@@ -22,23 +24,23 @@ t="$(mktemp -d "${_tmp%/}/macho-slices.XXXXXX")"; trap 'rm -rf "$t"' EXIT
 #           as "not Mach-O".
 reader_died() { echo "macho-slices: $1 could not read $f" >&2; cat "$t/err" >&2; exit 4; }
 : > "$t/err"
-command -v "${LIPO:-lipo}" >/dev/null 2>&1 || reader_died "${LIPO:-lipo} (not found)"
-command -v "${OTOOL:-otool}" >/dev/null 2>&1 || reader_died "${OTOOL:-otool} (not found)"
-info="$("${LIPO:-lipo}" -info "$f" 2>/dev/null)" || exit 1
+command -v "$LIPO" >/dev/null 2>&1 || reader_died "$LIPO (not found)"
+command -v "$OTOOL" >/dev/null 2>&1 || reader_died "$OTOOL (not found)"
+info="$("$LIPO" -info "$f" 2>/dev/null)" || exit 1
 archs="$(printf '%s\n' "$info" | sed -n 's/.*: //p' | xargs)"
 [ -n "$archs" ] || exit 1
 for a in $archs; do
   s="$f"
-  case "$info" in Architectures*) "${LIPO:-lipo}" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>"$t/err" || reader_died "${LIPO:-lipo} -thin $a"; s="$t/$a" ;; esac
+  case "$info" in Architectures*) "$LIPO" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>"$t/err" || reader_died "$LIPO -thin $a"; s="$t/$a" ;; esac
   # platform: `otool -hv` prints the header table; the filetype is the 5th column of its data row. An
   #           archive prints one table per member, and every member of one arch shares a filetype.
-  hv="$("${OTOOL:-otool}" -hv "$s" 2>"$t/err")" || reader_died "${OTOOL:-otool} -hv"
+  hv="$("$OTOOL" -hv "$s" 2>"$t/err")" || reader_died "$OTOOL -hv"
   ft="$(printf '%s\n' "$hv" | awk '$1 ~ /^MH_MAGIC/ {print $5; exit}')"
   [ -n "$ft" ] || exit 1
   # platform: LC_VERSION_MIN_MACOSX carries "version" and "sdk". LC_BUILD_VERSION carries "sdk" BEFORE
   #           "minos", then a tools list whose "version" lines are the LINKER's version -- so minos is
   #           read only from "minos" there, and the pair is emitted when the load command ends.
-  lc="$("${OTOOL:-otool}" -l "$s" 2>"$t/err")" || reader_died "${OTOOL:-otool} -l"
+  lc="$("$OTOOL" -l "$s" 2>"$t/err")" || reader_died "$OTOOL -l"
   printf '%s\n' "$lc" | awk -v a="$a" -v ft="$ft" '
     function flush() { if (inv) { print a, ft, (mn == "" ? "?" : mn), (sd == "" ? "?" : sd); seen = 1 } inv = 0 }
     $1 == "cmd" { flush(); if ($2 == "LC_VERSION_MIN_MACOSX" || $2 == "LC_BUILD_VERSION") { inv = 1; kind = $2; mn = ""; sd = "" } next }

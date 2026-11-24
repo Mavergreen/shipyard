@@ -293,7 +293,7 @@ shipyard_mach_interface() (
   _mi_k="$(shipyard_mach_kind "$_mi_f")"
   [ "$_mi_k" != other ] || exit 1
   _mi_N="$(shipyard_mach_nm)"
-  if [ -z "${NM:-}" ] && [ "$_mi_N" = nm ]; then echo "mach-interface: no pinned llvm-nm (set NM, or install clang22 under ${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen})" >&2; exit 2; fi
+  if [ -z "${NM:-}" ] && { [ "$_mi_N" = nm ] || [ "$_mi_N" = llvm-nm ]; }; then echo "mach-interface: no pinned llvm-nm (set NM, or install clang22 under ${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen})" >&2; exit 2; fi
   _mi_O="${OTOOL:-}"; [ -n "$_mi_O" ] || _mi_O="$(_mi_tool otool)" || exit 2
   _mi_L="${LIPO:-}"; [ -n "$_mi_L" ] || _mi_L="$(_mi_tool lipo)" || exit 2
   _mi_A="$(_mi_tool ar)" || exit 2

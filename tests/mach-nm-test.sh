@@ -2,8 +2,9 @@
 # platform: host-agnostic
 #   usage: mach-nm-test.sh
 #          With NM unset, the C++ runtime check reads Mach-O with the llvm-nm beside the LIPO/OTOOL the
-#          caller chose, then an installed clang22's, and only then a bare nm: GNU nm (Linux) and the 10.9
-#          CLT nm (arm64 slices) cannot read what it must. An explicit NM always wins.
+#          caller chose, then an installed clang22's, and only then a bare nm on macOS and llvm-nm
+#          elsewhere: GNU nm and the 10.9 CLT nm (arm64 slices) cannot read what it must. An explicit NM
+#          always wins.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/../scripts/lib/mach-nm.sh"
@@ -19,5 +20,8 @@ for t in llvm-nm llvm-otool llvm-lipo; do printf '#!/bin/sh\n' > "$w/llvm/bin/$t
 mkdir -p "$w/mg/clang22/bin"; cp "$w/llvm/bin/llvm-nm" "$w/mg/clang22/bin/"
 [ "$(unset NM OTOOL LIPO; SHIPYARD_MG_PREFIX="$w/mg" shipyard_mach_nm)" = "$w/mg/clang22/bin/llvm-nm" ] \
   || fail "NM unset, no llvm readers chosen: an installed clang22's llvm-nm"
-[ "$(unset NM OTOOL LIPO; SHIPYARD_MG_PREFIX="$w/empty" shipyard_mach_nm)" = nm ] || fail "last resort: nm"
+[ "$(unset NM OTOOL LIPO; SHIPYARD_MG_PREFIX="$w/empty" SHIPYARD_MACH_HOST=Darwin shipyard_mach_nm)" = nm ] \
+  || fail "last resort on macOS: nm"
+[ "$(unset NM OTOOL LIPO; SHIPYARD_MG_PREFIX="$w/empty" SHIPYARD_MACH_HOST=Linux shipyard_mach_nm)" = llvm-nm ] \
+  || fail "last resort elsewhere: llvm-nm, never GNU nm"
 echo "PASS: mach-nm"

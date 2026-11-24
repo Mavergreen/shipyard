@@ -12,19 +12,17 @@
 #          or a member with Mach-O magic could not be read.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/lib/mach-nm.sh"; NM="$(shipyard_mach_nm)"; export NM
+. "$SELF/lib/mach-nm.sh"
+LIPO="$(shipyard_mach_tool lipo)"; OTOOL="$(shipyard_mach_tool otool)"; NM="$(shipyard_mach_nm)"; export NM
 [ "$#" -eq 1 ] && [ -f "$1" ] || { echo "usage: macho-cxxabi.sh FILE" >&2; exit 2; }
 f="$1"
 _tmp="${TMPDIR:-/tmp}"
 t="$(mktemp -d "${_tmp%/}/macho-cxxabi.XXXXXX")"; trap 'rm -rf "$t"' EXIT
 reader_died() { echo "macho-cxxabi: $1 could not read $f" >&2; cat "$t/err" >&2; exit 4; }
 : > "$t/err"
-if [ -z "${AR:-}" ]; then
-  case "$NM" in */llvm-nm) [ -x "${NM%/*}/llvm-ar" ] && AR="${NM%/*}/llvm-ar" ;; esac
-  AR="${AR:-ar}"
-fi
+AR="$(shipyard_mach_tool ar)"
 nm_flags=; case "$("$NM" --version 2>/dev/null)" in *LLVM*) nm_flags=--no-llvm-bc ;; esac
-for _r in "$NM" "${LIPO:-lipo}" "${OTOOL:-otool}"; do
+for _r in "$NM" "$LIPO" "$OTOOL"; do
   command -v "$_r" >/dev/null 2>&1 || reader_died "$_r (not found)"
 done
 is_archive() { [ "$(dd if="$1" bs=8 count=1 2>/dev/null)" = '!<arch>' ]; }
@@ -55,7 +53,7 @@ read_slice() {
          n = $0; sub(/ \(for [^)]*\)$/, "", n); sub(/.* /, "", n); sub(/\.eh$/, "", n)
          print n, ((/ external / && !/ private external /) ? "visible" : "hidden") }' "$t/nm" \
     | grep -E -f "$SELF/cxxabi-machinery.txt" | LC_ALL=C sort -u | sed "s/^/$_a defines /"
-  "${OTOOL:-otool}" -l "$_s" > "$t/l" 2>"$t/err" || reader_died "${OTOOL:-otool} -l"
+  "$OTOOL" -l "$_s" > "$t/l" 2>"$t/err" || reader_died "$OTOOL -l"
   awk -v a="$_a" '
     $1 == "cmd" { load = ($2 ~ /^LC_(LOAD|LOAD_WEAK|REEXPORT|LAZY_LOAD|LOAD_UPWARD)_DYLIB$/); next }
     load && $1 == "name" {
@@ -67,12 +65,12 @@ read_slice() {
 }
 read_member() {
 if _ma="$(thin_arch "$1")"; then read_slice "$1" "$_ma"; return; fi
-  _mi="$("${LIPO:-lipo}" -info "$1" 2>"$t/err")" || reader_died "${LIPO:-lipo} -info"
+  _mi="$("$LIPO" -info "$1" 2>"$t/err")" || reader_died "$LIPO -info"
   _marchs="$(printf '%s\n' "$_mi" | sed -n 's/.*: //p' | xargs)"
-  [ -n "$_marchs" ] || reader_died "${LIPO:-lipo} -info"
+  [ -n "$_marchs" ] || reader_died "$LIPO -info"
   for _ma in $_marchs; do
     _ms="$1"
-    case "$_mi" in Architectures*) "${LIPO:-lipo}" -thin "$_ma" "$1" -output "$t/mt.$_ma" >/dev/null 2>"$t/err" || reader_died "${LIPO:-lipo} -thin $_ma"; _ms="$t/mt.$_ma" ;; esac
+    case "$_mi" in Architectures*) "$LIPO" -thin "$_ma" "$1" -output "$t/mt.$_ma" >/dev/null 2>"$t/err" || reader_died "$LIPO -thin $_ma"; _ms="$t/mt.$_ma" ;; esac
     read_slice "$_ms" "$_ma"
   done
 }
@@ -98,11 +96,11 @@ if is_archive "$f"; then
   LC_ALL=C sort -u "$t/res"
   exit 0
 fi
-info="$("${LIPO:-lipo}" -info "$f" 2>/dev/null)" || exit 1
+info="$("$LIPO" -info "$f" 2>/dev/null)" || exit 1
 archs="$(printf '%s\n' "$info" | sed -n 's/.*: //p' | xargs)"
 [ -n "$archs" ] || exit 1
 for a in $archs; do
   s="$f"
-  case "$info" in Architectures*) "${LIPO:-lipo}" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>"$t/err" || reader_died "${LIPO:-lipo} -thin $a"; s="$t/$a" ;; esac
+  case "$info" in Architectures*) "$LIPO" -thin "$a" "$f" -output "$t/$a" >/dev/null 2>"$t/err" || reader_died "$LIPO -thin $a"; s="$t/$a" ;; esac
   if is_archive "$s"; then _seen=0; read_archive "$s" > "$t/res"; [ "$_seen" -eq 1 ] || exit 1; LC_ALL=C sort -u "$t/res"; else read_slice "$s" "$a"; fi
 done
