@@ -98,6 +98,7 @@ jobs:
           # spec: scripts/stage-shipyard-prefix.sh -- the one staging of the prefix, which install@v1 lays down
           #       on Linux too; the install bakes its prefix into mavergreen-presets.json, so it installs INTO
           #       the pkg's prefix, staged under DESTDIR, and package-pkg.sh refuses presets naming any other.
+          . scripts/mavergreen-meta.sh && . scripts/lib/name-rules.sh
           sh scripts/stage-shipyard-prefix.sh --stage "$RUNNER_TEMP/payload-stage" --build "$RUNNER_TEMP/payload-build" \
             --version "$v" > /dev/null
           sh scripts/package-pkg.sh \
