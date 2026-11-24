@@ -9,6 +9,7 @@
 #          `standalone` fact per <short>-<version>-macos-<arch>.tar.gz, from check-standalone-archive.sh
 #          given --plist with the mavergreen.plist that SHORT's pkg in the dist installs, and --repo the
 #          repo root, whose standalone-text and standalone-install-name deviations it honours; a
+#          `pure-go` fact per arm64 slice an arm64-pure-go deviation covers, from macho-pure-go.py; a
 #          `standalone-text-unused` or `standalone-install-name-unused` fact names each entry that no
 #          archive in the dist used; and a `standalone-flow` fact per archive,
 #          archive-first when the repo root declares packaging/SHORT.standalone-bundled (the list
@@ -92,6 +93,15 @@ cxxabi_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded). Non-
     esac
   done
 }
+# spec: SKILL.md "Family conventions" check 37 -- an arm64 slice an '- arm64-pure-go:<glob>: <reason>'
+#       covers is read by macho-pure-go.py, with no codesign, so the checker can prove it on any host.
+pure_go_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded), $4 = its macho-slices.sh lines. Non-zero, the reason in _mf_why, on abort.
+  printf '%s\n' "$4" | grep -q '^arm64e\{0,1\} ' || return 0
+  [ -s "$sa_tmp/devs" ] || return 0
+  [ -n "$(shipyard_deviation_reason "$sa_tmp/devs" arm64-pure-go "$(printf '%s' "$3" | sed -e 's/%20/ /g' -e 's/%25/%/g')")" ] || return 0
+  _pg="$(python3 "$SELF/macho-pure-go.py" "$2" 2>&1)" || { _mf_why="cannot read the arm64 slice of $1:$3 for arm64-pure-go (macho-pure-go.py): $(printf '%s' "$_pg" | head -1)"; return 1; }
+  printf '%s\n' "$_pg" | while read -r _pa _prest; do printf 'pure-go %s %s %s %s\n' "$1" "$3" "$_pa" "$_prest"; done
+}
 macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded, may be empty). Non-zero on abort, the reason in _mf_why when known.
   # platform: the file list is captured to a temp file and the loop below reads it via "< $_ml",
   #           not piped in -- a `while` fed by a pipe is the LAST stage of that pipeline, which runs
@@ -122,6 +132,7 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
       printf 'macho %s %s %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_ft" "$_mn" "$_sd" "$_sha"
     done
     cxxabi_facts "$1" "$2/$_mf" "$_p" || { rm -f "$_ml"; return 1; }
+    pure_go_facts "$1" "$2/$_mf" "$_p" "$_sl" || { rm -f "$_ml"; return 1; }
   done < "$_ml"
   rm -f "$_ml"
 }
@@ -230,7 +241,8 @@ if [ -f "$root/INGREDIENTS.md" ]; then
   #           reports the `while`'s status instead, turning "this declaration is malformed" into
   #           "there are no deviations".
   _devs="$(sh "$SELF/deviations.sh" "$root")" || exit 1
-  printf '%s\n' "$_devs" | shipyard_deviation_facts
+  printf '%s\n' "$_devs" | shipyard_deviation_facts > "$sa_tmp/devs"
+  cat "$sa_tmp/devs"
 fi
 
 for f in "$dist"/*; do
