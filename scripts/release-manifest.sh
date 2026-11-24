@@ -8,7 +8,8 @@
 #            requires <short> <dep> <kind> <min|->
 #            relocatable <short>                each product a relocatable deviation's scope names; a
 #                                               scope of * is a consumer's, for every ingredient, and names none
-#            dylib <short> <install-name>       each LC_ID_DYLIB of each Mach-O in DIST/<short>-<VERSION>.pkg
+#            dylib <short> <install-name>       each LC_ID_DYLIB of each Mach-O in DIST/<short>-<VERSION>.pkg,
+#                                               but in components dev.mavergreen.base and dev.mavergreen.mavergreen
 #          An ingredient with neither file is left out. Never normalized and never compared. Exit 0; 1 on
 #          an unreadable artifact or a Mach-O reader that is missing or fails; 2 on usage.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Reproducible builds" -- build
@@ -62,7 +63,13 @@ for s in $products; do
   [ -f "$pkg" ] || continue
   rc=0; af_pkg_tree "$pkg" "$w/x" || rc=$?
   [ "$rc" -eq 0 ] || die "cannot expand $pkg${AF_WHY:+: $AF_WHY}"
-  find "$AF_TREE" -name '*.root' -prune -o -name Payload -type f -print > "$w/payloads"
+  find "$AF_TREE" -name '*.root' -prune -o -name PackageInfo -type f -print > "$w/infos"
+  : > "$w/payloads"
+  while IFS= read -r pi; do
+    id="$(sed -n '/<pkg-info/ s/.*[[:space:]]identifier="\([^"]*\)".*/\1/p' "$pi" | head -n 1)"
+    case "$id" in dev.mavergreen.base|dev.mavergreen.mavergreen) continue ;; esac
+    printf '%s/Payload\n' "${pi%/PackageInfo}" >> "$w/payloads"
+  done < "$w/infos"
   while IFS= read -r pl; do
     [ -s "$pl" ] || continue
     af_unpack_payload "$pl" || die "cannot unpack a payload of $pkg"

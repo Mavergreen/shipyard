@@ -52,6 +52,14 @@ $out"
 else
   echo "SKIP the dylib row: no LLVM Mach-O readers here"
 fi
+if readers; then
+  "$SD" component --root "$w/root" --identifier dev.mavergreen.base --version 1.0.1 --install-location / \
+    --mtime "$SOURCE_DATE_EPOCH" --out "$w/dist/w-1.0-mavergreen.1.pkg" >/dev/null
+  run "$w/dist" 1.0-mavergreen.1 "$R"
+  [ "$rc" -eq 0 ] || fail "a base component's pkg exits 0: rc $rc: $err"
+  printf '%s\n' "$out" | grep -q '^dylib ' && fail "the bundled base component's dylibs are no product's: $out"
+  echo "ok: the bundled base component's dylibs are left out"
+fi
 rm -f "$w/dist"/*.pkg
 run "$w/dist" 1.0-mavergreen.1 "$R"
 [ "$rc" -eq 0 ] || fail "a dist with no pkg exits 0: rc $rc: $err"
