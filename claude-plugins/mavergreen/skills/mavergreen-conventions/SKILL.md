@@ -1036,6 +1036,66 @@ sentence's word count, and recaulk's runs failed in Linux-checkable steps, on th
 queues. **Revisit when** GitHub changes macOS runner availability or pricing, or the family's last
 macOS job leaves.
 
+### A Rust product builds on Linux
+
+**A Rust product's 10.9 binary is built by cargo on `ubuntu-latest`, with the environment
+`cargo-env.sh` prints.** It names the pinned Mavergreen/rust (`fetch_rust.sh components/rust`: an
+installed `/usr/local/mavergreen/rust` at the pin, else the release's `rust-<pin>-linux-x86_64.tar.gz`,
+verified and unpacked into `~/.cache/mavergreen-rust`, no root needed), shipyard's pinned clang22
+(`fetch_clang22.sh`) and the 10.9 SDK (`fetch_sdk.sh`). On Linux the rust's `rustc` wrapper adds the
+10.9 floor and hands `SDKROOT` to the link as `-isysroot`; clang22's `clang.cfg` links Recaulk, so the binary
+defines `_clock_gettime` and `_CCRandomGenerateBytes` itself. The build job:
+
+```yaml
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: Mavergreen/shipyard/.github/actions/install@v1
+      - name: Build out of tree
+        run: echo "MAVERICKS_BUILD_ROOT=$RUNNER_TEMP/mm-build" >> "$GITHUB_ENV"
+      - name: The 10.9 cargo environment (pinned rust, clang22, SDK)
+        run: sh "$SHIPYARD_SCRIPTS/cargo-env.sh" components/rust >> "$GITHUB_ENV"
+      - name: Build and gate
+        run: sh build/build.sh
+      - name: Package
+        run: sh build/package.sh
+      # ... tests, notes, feed, artifact conformance and upload, unchanged ...
+```
+
+`build.sh` runs `"$CARGO" build --release --locked`: `CARGO_BUILD_TARGET` is `x86_64-apple-darwin`, so
+the binary lands in `$CARGO_TARGET_DIR/x86_64-apple-darwin/release/`. Anything that must **run** at
+build time (man pages, completions) comes from a second, host build with
+`--target x86_64-unknown-linux-gnu`, as Apple Silicon already does. No product sets `RUSTFLAGS`,
+`CC` or `CXX`: the target-specific `CC_x86_64_apple_darwin`, `CXX_…`, `AR_…` and `RANLIB_…` keep the
+host's build scripts and proc macros on the host's `cc`. Never pass `products: rust@…` to install@v1
+for this: the rust archive carries no manifest, so it fetches the 200 MB pkg only to read one.
+
+| On a Mac | On Linux |
+|---|---|
+| `pkgutil --expand` + `tar` of a toolchain pkg (`build/fetch-rust.sh`) | `fetch_rust.sh`, `fetch_product_pkg.sh`, `pkg_read.sh` |
+| `plutil`, `PlistBuddy` | `stevedore plist get`, `pkg_read.sh plist` |
+| `otool`, `lipo`, `nm`, `ar`, `strip`, `install_name_tool` | `$OTOOL`, `$LIPO`, `$NM`, `$AR`, `$STRIP`, `$INSTALL_NAME_TOOL` (clang22's `llvm-*`, which `cargo-env.sh` sets) |
+| `ditto`, `pkgbuild`, `productbuild` | `stage_product.sh`, `build_component_pkg.sh`, `set_install_floor.sh` |
+| the updater from `/usr/bin/clang` and RequireAppleClang | `build_updater.sh ... --clang22-pin "$SHIPYARD_SCRIPTS/../components/clang22" --arch x86_64` |
+| `codesign` | nothing: a 10.9 x86_64 binary needs no signature |
+
+Off macOS, shipyard's own Mach-O readers default to clang22's `llvm-*` even with none of those
+variables set, and never to the host's GNU `ar` or `nm`, which cannot read Mach-O and mangle Darwin
+archives whose members share a name. arm64 is not covered: `cargo-env.sh` builds x86_64 only, and an
+arm64 slice still builds on a Mac.
+
+**Why:** the rust release ships a Linux-hosted toolchain that targets 10.9, so a Rust product's
+macOS runner bought nothing a Linux one cannot do. ripgrep 16.0.0 built this way passes the compat
+guard and artifact conformance and runs on 10.9.5 (2026-11-24). **What it costs:** the Linux binary
+loads only the dylibs it uses (`clang.cfg` passes `-dead_strip_dylibs`), where the macOS-built one
+also loaded CoreFoundation, Security and the rest, so the two builds are not byte-for-byte alike.
+**Revisit when** the rust release's Linux archive carries its manifest (install@v1's `products:`
+becomes the cheaper path), a Rust product needs an arm64 slice, or a crate's build script needs a
+Mac at build time.
+
 ### Smoke only in a publishing run
 
 **`modern-smoke` runs only when the run will publish** (check 39): a release dispatch, a
