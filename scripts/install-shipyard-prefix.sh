@@ -51,7 +51,7 @@ writable() {
 if [ -z "$SUDO" ] && [ "$(id -u)" -ne 0 ] && ! writable "$MG"; then
   MG="${MAVERGREEN_USER_PREFIX:-$HOME/.local/mavergreen}"
   MG="${MG%/}"; AS="$MG/shipyard"
-  echo "install-shipyard-prefix: no root, sudo or writable $ROOT${AS%/*}, so shipyard goes to $AS" >&2
+  echo "install-shipyard-prefix: cannot write $ROOT${AS%/*} (not root, and no passwordless elevation), so shipyard goes to $AS" >&2
 fi
 P="$MG/shipyard"
 
