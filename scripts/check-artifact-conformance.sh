@@ -28,6 +28,7 @@
 #            cxxabi-loads  <artifact> <path> <arch> <load-path>   one per libc++abi a slice loads other than /usr/lib's or libcxx22's (%20-encoded)
 #            pure-go       <artifact> <path> <arch> <cgo> <linker> <loads> <platform> <minos> <codesig>
 #                                                                 one per arm64 slice an arm64-pure-go deviation covers (macho-pure-go.py)
+#            go-trimpath   <artifact> <path> <arch> yes|no|unreadable  one per slice of every Go binary: does its build info record -trimpath=true
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
 #            appcast-notes <appcast-file> [<sha256>]               digest of the appcast's <description> CDATA
 #            kext          <file> <path> <id> boot|library        one per kext a "/" payload carries (%20-encoded)
@@ -582,6 +583,21 @@ while read -r file path arch; do
   [ "$pg_ok" = no ] || pg_n=$((pg_n + 1))
 done < "$tmp/pure-go"
 [ "$pg_n" -eq 0 ] || echo "conformance: arm64-pure-go: proved $pg_n arm64 slices statically"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact conformance" -- every
+#       Go binary in a pkg or archive, any arch, records -trimpath=true: without it Go stamps CGO_* flags
+#       and host paths into the binary, so the 10.9 box and Linux build different bytes. A
+#       '- go-trimpath:<glob>: <reason>' excuses the paths it names.
+awk '$1 == "go-trimpath" && $5 != "yes" { k = $2 " " $3; if (!(k in w) || $5 == "unreadable") w[k] = $5 }
+     END { for (k in w) print k, w[k] }' "$facts" | sort > "$tmp/go-trimpath"
+while read -r file path why; do
+  p="$(dec "$path")"
+  if [ "$why" = unreadable ]; then
+    fail go-trimpath "$p in $file is a Go binary whose build info cannot be read, so nothing shows it was built with -trimpath -- build with go build -trimpath (or GOFLAGS=-trimpath), or declare '- go-trimpath:$p: <reason>; exit: <how it goes away>' under INGREDIENTS.md's ## Conformance deviations" "$p" "$file"
+  else
+    fail go-trimpath "$p in $file is a Go binary built without -trimpath; Go stamps CGO_* flags and host paths into it, so builds differ by host -- build with go build -trimpath (or GOFLAGS=-trimpath), or declare '- go-trimpath:$p: <reason>; exit: <how it goes away>' under INGREDIENTS.md's ## Conformance deviations" "$p" "$file"
+  fi
+done < "$tmp/go-trimpath"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact conformance" -- one C++
 #       runtime per process; '- cxxabi:<glob>: <reason>' excuses a path, and a path grandfathered as cxxabi

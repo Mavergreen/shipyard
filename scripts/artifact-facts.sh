@@ -9,7 +9,8 @@
 #          `standalone` fact per <short>-<version>-macos-<arch>.tar.gz, from check-standalone-archive.sh
 #          given --plist with the mavergreen.plist that SHORT's pkg in the dist installs, and --repo the
 #          repo root, whose standalone-text and standalone-install-name deviations it honours; a
-#          `pure-go` fact per arm64 slice an arm64-pure-go deviation covers, from macho-pure-go.py; a
+#          `pure-go` fact per arm64 slice an arm64-pure-go deviation covers, and a `go-trimpath` fact per
+#          slice of every Go binary, from macho-pure-go.py; a
 #          `standalone-text-unused` or `standalone-install-name-unused` fact names each entry that no
 #          archive in the dist used; and a `standalone-flow` fact per archive,
 #          archive-first when the repo root declares packaging/SHORT.standalone-bundled (the list
@@ -102,6 +103,13 @@ pure_go_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded), $4 
   _pg="$(python3 "$SELF/macho-pure-go.py" "$2" 2>&1)" || { _mf_why="cannot read the arm64 slice of $1:$3 for arm64-pure-go (macho-pure-go.py): $(printf '%s' "$_pg" | head -1)"; return 1; }
   printf '%s\n' "$_pg" | while read -r _pa _prest; do printf 'pure-go %s %s %s %s\n' "$1" "$3" "$_pa" "$_prest"; done
 }
+# spec: SKILL.md "Artifact conformance" -- every Go binary of any arch records whether it was built
+#       with -trimpath; grep spares python3 the Mach-O files that carry no Go build info at all.
+go_trimpath_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded). Non-zero, the reason in _mf_why, on abort.
+  LC_ALL=C grep -q 'Go buildinf:' "$2" 2>/dev/null || return 0
+  _gt="$(python3 "$SELF/macho-pure-go.py" --go-trimpath "$2" 2>&1)" || { _mf_why="cannot read the Go build info of $1:$3 (macho-pure-go.py --go-trimpath): $(printf '%s' "$_gt" | head -1)"; return 1; }
+  [ -z "$_gt" ] || printf '%s\n' "$_gt" | while read -r _ga _gv; do printf 'go-trimpath %s %s %s %s\n' "$1" "$3" "$_ga" "$_gv"; done
+}
 macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded, may be empty). Non-zero on abort, the reason in _mf_why when known.
   # platform: the file list is captured to a temp file and the loop below reads it via "< $_ml",
   #           not piped in -- a `while` fed by a pipe is the LAST stage of that pipeline, which runs
@@ -133,6 +141,7 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
     done
     cxxabi_facts "$1" "$2/$_mf" "$_p" || { rm -f "$_ml"; return 1; }
     pure_go_facts "$1" "$2/$_mf" "$_p" "$_sl" || { rm -f "$_ml"; return 1; }
+    go_trimpath_facts "$1" "$2/$_mf" "$_p" || { rm -f "$_ml"; return 1; }
   done < "$_ml"
   rm -f "$_ml"
 }

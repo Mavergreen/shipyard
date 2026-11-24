@@ -240,6 +240,29 @@ deviation arm64-pure-go:bin/* a tarball's own path
 macho tools.tar.gz bin/go arm64 EXECUTE 11.0 11.3 aa
 pure-go tools.tar.gz bin/go arm64 1 external - none - unsigned"
 
+# spec: SKILL.md "Artifact conformance" -- every Go binary in a pkg or archive, any arch, records
+#       -trimpath=true, or Go's stamped CGO_* flags and host paths make builds differ by host;
+#       '- go-trimpath:<glob>: <reason>' excuses the paths it names, in pkg terms for an archive too.
+GT='go-trimpath golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/go'
+ok "a Go binary built with -trimpath" "$GOOD
+$GT x86_64 yes
+$GT arm64 yes"
+no "a Go binary built without -trimpath" "go-trimpath: usr/local/mavergreen/go126/bin/go in golang-1.26.5-native-mavericks.5.pkg is a Go binary built without -trimpath; Go stamps CGO_\* flags and host paths into it, so builds differ by host -- build with go build -trimpath (or GOFLAGS=-trimpath)" "$GOOD
+$GT x86_64 no"
+no "one slice without -trimpath is enough" "built without -trimpath" "$GOOD
+$GT x86_64 yes
+$GT arm64 no"
+no "unreadable Go build info" "go-trimpath: .*bin/go in golang-1.26.5-native-mavericks.5.pkg is a Go binary whose build info cannot be read" "$GOOD
+$GT x86_64 unreadable"
+no "an archive's Go binary too" "go-trimpath: bin/go in tools.tar.gz is a Go binary built without -trimpath" "$GOOD
+go-trimpath tools.tar.gz bin/go x86_64 no"
+ok "a go-trimpath deviation excuses the paths it names" "$GOOD
+deviation go-trimpath:usr/local/mavergreen/go126/bin/* make.bash builds the toolchain; exit: when it passes -trimpath
+$GT x86_64 no"
+no "a go-trimpath deviation excuses only the paths it names" "built without -trimpath" "$GOOD
+deviation go-trimpath:usr/local/mavergreen/go126/pkg/* the tools only
+$GT x86_64 no"
+
 _gfs="$(mktemp -d "${TMPDIR:-/tmp}/conformance-gf.XXXXXX")"   # template: 10.9 BSD mktemp requires one
 cp -R "$here/../scripts" "$_gfs/scripts"
 printf 'modern-smoke golang-126 release.yml:modern-smoke\n' > "$_gfs/scripts/conventions-grandfathered"

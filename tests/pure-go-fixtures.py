@@ -2,6 +2,7 @@
 # platform: host-agnostic
 """usage: pure-go-fixtures.py OUT [--cgo V] [--ldflags V] [--ntools N] [--load PATH]... [--platform N]
                               [--minos X.Y] [--unsigned] [--corrupt-page N] [--no-buildinfo] [--thin]
+                              [--trimpath]
 
 Writes OUT: a fat x86_64 + arm64 Mach-O whose arm64 slice is shaped the way Go's own linker shapes a
 CGO_ENABLED=0 darwin/arm64 executable -- a __DATA,__go_buildinfo section, LC_LOAD_DYLIBs,
@@ -25,8 +26,10 @@ def uvarint(n):
     return out + bytes([n])
 
 
-def buildinfo(cgo, ldflags):
+def buildinfo(cgo, ldflags, trimpath):
     text = "path\tfixture\nmod\tfixture\t(devel)\t\nbuild\t-buildmode=exe\nbuild\t-compiler=gc\n"
+    if trimpath:
+        text += "build\t-trimpath=true\n"
     if ldflags is not None:
         text += "build\t-ldflags=%s\n" % ldflags
     if cgo is not None:
@@ -39,7 +42,7 @@ def buildinfo(cgo, ldflags):
 
 
 def arm64_slice(a):
-    bi = b"" if a.no_buildinfo else buildinfo(a.cgo, a.ldflags)
+    bi = b"" if a.no_buildinfo else buildinfo(a.cgo, a.ldflags, a.trimpath)
     loads = a.load if a.load else ["/usr/lib/libSystem.B.dylib"]
     cmds = []
     cmds.append([b"", None])
@@ -101,6 +104,7 @@ def main():
     p.add_argument("--corrupt-page", type=int)
     p.add_argument("--no-buildinfo", action="store_true")
     p.add_argument("--thin", action="store_true")
+    p.add_argument("--trimpath", action="store_true")
     a = p.parse_args()
     if a.cgo == "absent":
         a.cgo = None

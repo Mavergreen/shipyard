@@ -72,6 +72,12 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       print "deviations.sh: \"" check "\" names the install paths it covers: \"- " check ":<install-path glob>: <reason>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
       bad = 1; next
     }
+    # spec: SKILL.md "Artifact conformance" -- go-trimpath names the Go binaries it excuses; a bare form
+    #       or an all-wildcard glob would let every Go binary differ by host.
+    if (check == "go-trimpath" && (!scoped || glob ~ /^[*?\/]+$/)) {
+      print "deviations.sh: \"go-trimpath\" names the install paths it covers: \"- go-trimpath:<install-path glob>: <reason>; exit: <how it goes away>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
+      bad = 1; next
+    }
     if (check == "cxxabi" && (!scoped || glob ~ /^[*?\/]+$/)) {
       print "deviations.sh: \"cxxabi\" names the install paths it covers: \"- cxxabi:<install-path glob>: <reason>; exit: <how it goes away>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
       bad = 1; next

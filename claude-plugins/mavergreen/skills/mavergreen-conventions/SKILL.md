@@ -2148,6 +2148,16 @@ toolchain, a boot2docker iso, libswiftCore, an openssh — and making those look
 uniformity by inventing a bespoke "kind" per product. If a check can only pass by changing *how* a
 product is built rather than *what it emits*, it is the wrong check.
 
+**Every Go binary is built with `-trimpath`.** Conformance reads the Go build info of every Mach-O in
+a pkg or archive, any arch, and fails one that does not record `-trimpath=true`: without it Go stamps
+`CGO_*` flags and host paths into the binary, so the same source builds different bytes on the 10.9
+box and on Linux (tailscale's did, 2026-11-24), and build equivalence cannot hold. The fix is
+`go build -trimpath` or `GOFLAGS=-trimpath`; `- go-trimpath:<install-path glob>: <reason>; exit: <how
+it goes away>` excuses a binary that cannot be rebuilt so yet, and a bare form or an all-wildcard glob
+is refused. A build info the reader cannot parse fails too. **Revisit when** Go stops stamping host
+paths without `-trimpath`, or a family Go binary needs its host paths for a reason that outweighs
+equivalence.
+
 **Structure matters more than it looks.** A product archive (`Distribution`) declares an install
 floor; a component package (`PackageInfo`) cannot — a floor belongs to a product archive — so its
 minimum lives in the appcast instead. golang's cross product is exactly that: it TARGETS 10.9 but RUNS

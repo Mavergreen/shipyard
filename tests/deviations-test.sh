@@ -120,6 +120,13 @@ for line in '- arm64-pure-go: every path' '- arm64-pure-go:*: every path' '- arm
 done
 printf '## Conformance deviations\n- arm64-pure-go:usr/local/mavergreen/fleet/bin/*: maintainers run fleet on Apple Silicon\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'arm64-pure-go usr/local/mavergreen/fleet/bin/\* maintainers run fleet on Apple Silicon' || { echo "FAIL: an install-path glob is an arm64-pure-go scope"; exit 1; }
+# spec: SKILL.md "Artifact conformance" -- go-trimpath names the Go binaries it excuses, never all of them.
+for line in '- go-trimpath: every binary' '- go-trimpath:*: every binary' '- go-trimpath:*/*: every binary'; do
+  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
+  if sh "$S" "$w" >/dev/null 2>&1; then echo "FAIL: [$line] must be refused"; exit 1; fi
+done
+printf '## Conformance deviations\n- go-trimpath:usr/local/mavergreen/go126/bin/*: make.bash builds the toolchain; exit: when it passes -trimpath\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'go-trimpath usr/local/mavergreen/go126/bin/\* make.bash builds the toolchain; exit: when it passes -trimpath' || { echo "FAIL: an install-path glob is a go-trimpath scope"; exit 1; }
 for line in '- cxxabi: a bare cxxabi deviation; exit: never' '- cxxabi:*: every path; exit: never' '- cxxabi:*/*: every path; exit: never' '- cxxabi:**: every path; exit: never'; do
   printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
   if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: a bare cxxabi deviation is refused: [$line] got: $out"; exit 1; fi

@@ -2,7 +2,8 @@
 # platform: host-agnostic
 #   usage: [PURE_GO_ARM64=<a Go darwin/arm64 executable>] macho-pure-go-test.sh
 #          Reads tests/pure-go-fixtures.py's synthetic slices everywhere; a real Go darwin/arm64
-#          executable too, cross-built when go is on PATH, else PURE_GO_ARM64's; and artifact-facts.sh's
+#          executable too, cross-built when go is on PATH, else PURE_GO_ARM64's (one built with -trimpath);
+#          and artifact-facts.sh's
 #          pure-go facts when this host can read Mach-O (LIPO and OTOOL, or lipo and otool).
 set -eu
 unset GITHUB_REPOSITORY
@@ -33,6 +34,16 @@ reads "a minos above the floor" "arm64 0 internal $SYS 1 13.0 ok" --minos 13.0
 reads "an unsigned slice" "arm64 0 internal $SYS 1 11.0 unsigned" --unsigned
 reads "a corrupted first page" "arm64 0 internal $SYS 1 11.0 page-0-hash-mismatch" --corrupt-page 0
 reads "a corrupted middle page" "arm64 0 internal $SYS 1 11.0 page-2-hash-mismatch" --corrupt-page 2
+# spec: SKILL.md "Artifact conformance" -- every Go binary records -trimpath=true, whatever its arch.
+trim() {  # $1 = label, $2 = the lines --go-trimpath must print, then fixture options
+  _l="$1"; _want="$2"; shift 2
+  python3 -I "$FX" "$w/f" "$@" || fail "$_l: the fixture could not be built"
+  _got="$(python3 -I "$P" --go-trimpath "$w/f")" || fail "$_l: --go-trimpath failed: $_got"
+  [ "$_got" = "$_want" ] || fail "$_l: want '$_want', got '$_got'"
+}
+trim "build info with -trimpath=true" "arm64 yes" --trimpath
+trim "build info without -trimpath" "arm64 no"
+trim "no Go build info prints nothing" "" --no-buildinfo
 printf 'not a Mach-O\n' > "$w/text"
 python3 -I "$P" "$w/text" >/dev/null 2>&1 && fail "a file that is not Mach-O exits non-zero"
 _rc=0; python3 -I "$P" >/dev/null 2>&1 || _rc=$?
@@ -60,6 +71,12 @@ if [ -n "$real" ]; then
       *) fail "a real pure-Go executable loads only what check-artifact-conformance.sh allows, not $_l: $_got" ;;
     esac
   done
+  [ "$(python3 -I "$P" --go-trimpath "$real")" = "arm64 $([ -n "${PURE_GO_ARM64:-}" ] && echo yes || echo no)" ] \
+    || fail "a real Go executable's -trimpath setting is read: $(python3 -I "$P" --go-trimpath "$real")"
+  if [ -z "${PURE_GO_ARM64:-}" ]; then
+    (cd "$w/gosrc" && CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 GOFLAGS= go build -trimpath -o "$w/realtrim" .) || fail "go cannot cross-build darwin/arm64 with -trimpath"
+    [ "$(python3 -I "$P" --go-trimpath "$w/realtrim")" = "arm64 yes" ] || fail "a real go build -trimpath reads yes: $(python3 -I "$P" --go-trimpath "$w/realtrim")"
+  fi
   cp "$real" "$w/bad"
   python3 -I - "$w/bad" <<'PY'
 import sys
@@ -86,9 +103,13 @@ if command -v "${LIPO:-lipo}" >/dev/null 2>&1 && command -v "${OTOOL:-otool}" >/
   printf '%s\n' "$facts" | grep -qxF "pure-go t-1.0.0-mavericks.1.tgz bin/tool arm64 0 internal $SYS 1 11.0 ok" \
     || fail "a covered slice gets its pure-go fact: $facts"
   printf '%s\n' "$facts" | grep -q '^pure-go .* bin/other ' && fail "an uncovered slice gets none: $facts"
+  printf '%s\n' "$facts" | grep -qxF "go-trimpath t-1.0.0-mavericks.1.tgz bin/other arm64 no" \
+    || fail "every Go binary gets a go-trimpath fact, covered or not: $facts"
   rm -f "$w/repo/INGREDIENTS.md"
   facts="$(sh "$here/../scripts/artifact-facts.sh" "$w/dist" 1.0.0-mavericks.1 "$w/repo" 2>"$w/err")" || fail "artifact-facts failed: $(cat "$w/err")"
   printf '%s\n' "$facts" | grep -q '^pure-go ' && fail "no declaration, no pure-go fact: $facts"
+  printf '%s\n' "$facts" | grep -qxF "go-trimpath t-1.0.0-mavericks.1.tgz bin/tool arm64 no" \
+    || fail "a go-trimpath fact needs no declaration: $facts"
 else
   echo "macho-pure-go: skip: artifact-facts.sh needs ${LIPO:-lipo} and ${OTOOL:-otool} to read Mach-O"
 fi

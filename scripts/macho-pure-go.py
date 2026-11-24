@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # platform: host-agnostic
 """usage: macho-pure-go.py FILE
+       macho-pure-go.py --go-trimpath FILE
 
 Prints one line per arm64 or arm64e slice of the Mach-O FILE, read without codesign, otool or lipo:
 
@@ -17,7 +18,12 @@ Prints one line per arm64 or arm64e slice of the Mach-O FILE, read without codes
   codesig   "ok" when the embedded CodeDirectory is an ad-hoc SHA-256 one whose every code-page
             hash matches the slice; otherwise the first finding, one word
 
-Exit 0 with lines; 1 if FILE is not Mach-O or has no arm64 slice; 2 on a usage error.
+--go-trimpath prints instead one line per slice of any arch that carries Go build info:
+
+  <arch> yes|no|unreadable    whether the build info records -trimpath=true
+
+Exit 0 with lines; 1 if FILE is not Mach-O or has no arm64 slice (with --go-trimpath, 0 with no lines
+for a Mach-O that is not Go); 2 on a usage error.
 """
 import hashlib
 import struct
@@ -130,6 +136,32 @@ def verify_signature(m, dataoff, datasize):
     return "ok"
 
 
+ARCHS = {0x01000007: "x86_64", 0x0100000C: "arm64", 7: "i386", 18: "ppc", 0x01000012: "ppc64"}
+
+
+def go_trimpath(m):
+    sections = {}
+    if m[:4] == b"\xcf\xfa\xed\xfe":
+        ncmds = struct.unpack("<I", m[16:20])[0]
+        pos = 32
+        for _ in range(ncmds):
+            cmd, size = struct.unpack("<II", m[pos:pos + 8])
+            if cmd == LC_SEGMENT_64:
+                nsects = struct.unpack("<I", m[pos + 64:pos + 68])[0]
+                for j in range(nsects):
+                    s = pos + 72 + 80 * j
+                    ssize = struct.unpack("<Q", m[s + 40:s + 48])[0]
+                    soff = struct.unpack("<I", m[s + 48:s + 52])[0]
+                    sections[(m[s + 16:s + 32].rstrip(b"\0"), m[s:s + 16].rstrip(b"\0"))] = m[soff:soff + ssize]
+            pos += size
+    settings = build_settings(m, sections)
+    if settings is None:
+        return None
+    if settings == "unreadable":
+        return "unreadable"
+    return "yes" if settings.get("-trimpath") == "true" else "no"
+
+
 def judge(m):
     if m[:4] != b"\xcf\xfa\xed\xfe":
         return None
@@ -173,8 +205,11 @@ def judge(m):
 
 
 def main(argv):
-    if len(argv) != 2:
-        print("usage: macho-pure-go.py FILE", file=sys.stderr)
+    trim = len(argv) == 3 and argv[1] == "--go-trimpath"
+    if trim:
+        argv = argv[:1] + argv[2:]
+    if len(argv) != 2 or argv[1].startswith("--"):
+        print("usage: macho-pure-go.py [--go-trimpath] FILE", file=sys.stderr)
         return 2
     try:
         with open(argv[1], "rb") as f:
@@ -185,6 +220,16 @@ def main(argv):
     slices = thin_slices(data)
     if not slices:
         return 1
+    if trim:
+        for ct, cs, m in slices:
+            try:
+                t = go_trimpath(m)
+            except (struct.error, IndexError):
+                t = "unreadable"
+            if t:
+                arch = ARCHS.get(ct, "cpu-%x" % ct)
+                print("%s %s" % ("arm64e" if arch == "arm64" and cs == 2 else arch, t))
+        return 0
     printed = False
     for ct, cs, m in slices:
         if ct != CPU_ARM64:
