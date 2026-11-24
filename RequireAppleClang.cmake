@@ -27,13 +27,13 @@ list(REMOVE_ITEM MAVERICKS_REQUIRE_LANGS NONE)
 
 if(MAVERICKS_REQUIRE_APPLECLANG)
   # spec: tests/linux-toolchain-test.sh -- on Linux the family's compiler is the pinned clang22
-  #       MavericksToolchain.cmake chose (MAVERICKS_CLANG22), which reports itself as Clang.
-  if(MAVERICKS_CLANG22)
-    get_filename_component(_mav_cl_real "${MAVERICKS_CLANG22}" REALPATH)
+  #       MavergreenToolchain.cmake chose (MAVERGREEN_CLANG22), which reports itself as Clang.
+  if(MAVERGREEN_CLANG22)
+    get_filename_component(_mav_cl_real "${MAVERGREEN_CLANG22}" REALPATH)
   endif()
   foreach(_lang IN LISTS MAVERICKS_REQUIRE_LANGS)
     set(_mav_pinned FALSE)
-    if(MAVERICKS_CLANG22 AND CMAKE_${_lang}_COMPILER_ID STREQUAL "Clang")
+    if(MAVERGREEN_CLANG22 AND CMAKE_${_lang}_COMPILER_ID STREQUAL "Clang")
       get_filename_component(_mav_cc_real "${CMAKE_${_lang}_COMPILER}" REALPATH)
       string(FIND "${_mav_cc_real}" "${_mav_cl_real}/" _mav_at)
       if(_mav_at EQUAL 0)

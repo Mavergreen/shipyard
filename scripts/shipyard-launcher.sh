@@ -34,7 +34,7 @@ host="${SHIPYARD_LAUNCHER_HOST:-}"
 [ -n "$host" ] || case "$(uname -s)" in Darwin) host=mac ;; *) host=linux ;; esac
 # spec: tests/shipyard-launcher-test.sh -- the cmake product ships only Mach-O, so on Linux a
 #       product beside shipyard runs only if it is not one; otherwise the host's cmake runs, as
-#       MavericksShipyardConfig.cmake already accepts there.
+#       MavergreenShipyardConfig.cmake already accepts there.
 macho() {
   case "$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')" in
     cffaedfe|cefaedfe|cafebabe|feedfacf|feedface) return 0 ;;

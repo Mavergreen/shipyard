@@ -128,7 +128,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   `/usr/local/mavergreen/shipyard` from the ref you pinned, staged as the pkg is
   (`stage-shipyard-prefix.sh`, `package-pkg.sh --tree-only`; a test holds the trees equal, less the
   updater), links the launchers into `/usr/local/mavergreen/bin` on `PATH`, and points
-  `SHIPYARD_SCRIPTS` and `MavericksShipyard_DIR` into it. There the launchers run the host's
+  `SHIPYARD_SCRIPTS` and `MavergreenShipyard_DIR` into it. There the launchers run the host's
   `cmake`, and the toolchain file gives every compiler not named the pinned clang22 with its
   `ld64.lld`. Never hand-roll `-DCMAKE_TOOLCHAIN_FILE`/`-DCMAKE_C_COMPILER` on Linux. Without root,
   `sudo -n` or a writable `/usr/local/mavergreen`, the prefix is `~/.local/mavergreen/shipyard`, said
@@ -1697,7 +1697,7 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   ```sh
   app="$(sh "$SHIPYARD_SCRIPTS/build_updater.sh" --product <short> --display-name "<name>" \
     --confirm-title "<title>" --confirm-body "<body>" --pubkey updater/ed25519_key.pub \
-    --version "$VERSION" --clang22-pin components/clang22 --arch x86_64 [--arch arm64] \
+    --version "$VERSION" --repo . --arch x86_64 [--arch arm64] \
     --generic-icon --out-dir "$OUT")"
   ```
   which configures shipyard's `updater/product` project per arch, merges, and prints the `.app`. The

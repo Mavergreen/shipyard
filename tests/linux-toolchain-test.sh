@@ -12,10 +12,10 @@ printf '%s\n' "$TEST_SDK"
 SH
 cat > "$T/shipyard/scripts/fetch_clang22.sh" <<'SH'
 #!/bin/sh
-[ "${1##*/}" = clang22 ] && [ -d "$1" ] || { echo "fetch_clang22 stub: not a components/clang22: $1" >&2; exit 2; }
+[ -s "$1/.mavergreen/ingredients/clang22/VERSION" ] || { echo "fetch_clang22 stub: $1 pins no clang22" >&2; exit 2; }
 printf '%s\n' "$TEST_LLVM"
 SH
-mkdir -p "$T/shipyard/components/clang22" "$T/llvm/bin"
+mkdir -p "$T/shipyard/.mavergreen/ingredients/clang22" "$T/llvm/bin"; echo 22.1.8-mavericks.26 > "$T/shipyard/.mavergreen/ingredients/clang22/VERSION"
 for t in clang clang++ ld64.lld llvm-install-name-tool llvm-ar llvm-ranlib llvm-strip llvm-nm; do
   printf '#!/bin/sh\n' > "$T/llvm/bin/$t"; chmod 755 "$T/llvm/bin/$t"
 done
@@ -46,8 +46,8 @@ foreach(lang C OBJC CXX OBJCXX)
     message(FATAL_ERROR "${lang} compiler is '${CMAKE_${lang}_COMPILER}', not ${want}")
   endif()
 endforeach()
-if(NOT MAVERICKS_CLANG22 STREQUAL "$ENV{TEST_LLVM}")
-  message(FATAL_ERROR "MAVERICKS_CLANG22 is '${MAVERICKS_CLANG22}', so include(Mavericks) would refuse the clang22 it chose")
+if(NOT MAVERGREEN_CLANG22 STREQUAL "$ENV{TEST_LLVM}")
+  message(FATAL_ERROR "MAVERGREEN_CLANG22 is '${MAVERGREEN_CLANG22}', so include(Mavergreen) would refuse the clang22 it chose")
 endif()
 if(NOT CMAKE_EXE_LINKER_FLAGS_INIT STREQUAL "-fuse-ld=lld --ld-path=$ENV{TEST_LLVM}/bin/ld64.lld")
   message(FATAL_ERROR "links with '${CMAKE_EXE_LINKER_FLAGS_INIT}', not clang22's ld64.lld")

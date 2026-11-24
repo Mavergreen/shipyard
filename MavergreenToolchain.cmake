@@ -39,12 +39,12 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
     endif()
     if(NOT _mav_cl)
       execute_process(
-        COMMAND sh "${CMAKE_CURRENT_LIST_DIR}/scripts/fetch_clang22.sh" "${CMAKE_CURRENT_LIST_DIR}/components/clang22"
+        COMMAND sh "${CMAKE_CURRENT_LIST_DIR}/scripts/fetch_clang22.sh" "${CMAKE_CURRENT_LIST_DIR}"
         OUTPUT_VARIABLE _mav_cl OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _mav_rc)
       if(NOT _mav_rc EQUAL 0 OR NOT EXISTS "${_mav_cl}/bin/clang")
-        message(FATAL_ERROR "MavericksToolchain.cmake: fetch_clang22.sh could not provide the pinned clang22")
+        message(FATAL_ERROR "MavergreenToolchain.cmake: fetch_clang22.sh could not provide the pinned clang22")
       endif()
-      set(MAVERICKS_CLANG22 "${_mav_cl}")
+      set(MAVERGREEN_CLANG22 "${_mav_cl}")
       foreach(_mav_kind EXE SHARED MODULE)
         set(CMAKE_${_mav_kind}_LINKER_FLAGS_INIT "-fuse-ld=lld --ld-path=${_mav_cl}/bin/ld64.lld")
       endforeach()

@@ -1,11 +1,11 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: build-updater-test.sh
-#          scripts/build_updater.sh builds a registered product's updater from its inputs alone: a .app
+#          scripts/build_updater.sh builds a declared product's updater from its inputs alone: a .app
 #          with Contents/{Info.plist,MacOS/SHORT-updater,Frameworks/Sparkle.framework,Resources}, the
 #          asked-for Mach-O arches (x86_64 at minos 10.9; also arm64 at minos 11.0 off 10.9, where
 #          the toolchain allows a cross build), an Info.plist carrying the display name, version,
-#          public key and the registry's bundle id and feed, and an executable holding the confirm
+#          public key and the bundle id and feed its repo's .mavergreen/products/ declares, and an executable holding the confirm
 #          strings. Fetches clang22, the SDKs and Sparkle over the network.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,15 +16,17 @@ esac
 _tmp="${TMPDIR:-/tmp}"
 T="$(mktemp -d "${_tmp%/}/build-updater.XXXXXX")"; trap 'rm -rf "$T"' EXIT
 fail() { echo "FAIL: $*"; exit 1; }
-CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT/components/clang22")"
+CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT")"
 SD="$(sh "$ROOT/scripts/fetch_stevedore.sh")"
-printf 'widget dev.mavergreen.widget widget-repo\n' > "$T/names"
-MAVERGREEN_PRODUCT_NAMES="$T/names"; export MAVERGREEN_PRODUCT_NAMES
+mkdir -p "$T/repo/.mavergreen/products/widget" "$T/repo/.mavergreen/ingredients"
+cp -R "$ROOT/.mavergreen/ingredients/clang22" "$T/repo/.mavergreen/ingredients/"
+git -C "$T/repo" init -q && git -C "$T/repo" remote add origin https://github.com/Mavergreen/widget-repo.git
+unset GITHUB_REPOSITORY
 printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n' > "$T/key.pub"
 build() {
   sh "$ROOT/scripts/build_updater.sh" --product widget --display-name 'Mavericks Widget' \
     --confirm-title 'Widget for Mavericks updated' --confirm-body 'New shells get the new widget.' \
-    --pubkey "$T/key.pub" --version 1.2.3-mavericks.4 --clang22-pin "$ROOT/components/clang22" "$@"
+    --pubkey "$T/key.pub" --version 1.2.3-mavericks.4 --repo "$T/repo" "$@"
 }
 
 rc=0; build --generic-icon --out-dir "$T/u" > /dev/null 2> "$T/err" || rc=$?
@@ -35,7 +37,7 @@ rc=0; build --arch x86_64 --arch x86_64 --generic-icon --out-dir "$T/u" > /dev/n
 [ "$rc" -eq 2 ] || fail "--arch x86_64 twice: exit $rc, want 2"
 
 archs="x86_64"; want='x86_64 10.9 '
-[ "$(sh "$ROOT/scripts/mavericks_mode.sh")" = native ] || { archs="x86_64 arm64"; want='arm64 11.0 x86_64 10.9 '; }
+[ "$(sh "$ROOT/scripts/mavergreen_mode.sh")" = native ] || { archs="x86_64 arm64"; want='arm64 11.0 x86_64 10.9 '; }
 set --
 for a in $archs; do set -- "$@" --arch "$a"; done
 out="$(build "$@" --generic-icon --out-dir "$T/out" 2> "$T/build.log")" || { cat "$T/build.log"; fail "build_updater.sh failed for$archs"; }

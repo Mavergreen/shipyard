@@ -1,25 +1,25 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: build_updater.sh --product SHORT --display-name NAME --confirm-title TITLE --confirm-body BODY
-#                           --pubkey FILE --version VERSION --clang22-pin DIR --arch x86_64|arm64 [--arch ...]
+#                           --pubkey FILE --version VERSION --repo ROOT --arch x86_64|arm64 [--arch ...]
 #                           (--icon ICNS | --generic-icon) --out-dir DIR
 #                           [--log-prefix PREFIX] [--relaunch-marker PATH]
 #          Builds SHORT's Sparkle updater, SHORT-updater.app, from shipyard's own updater sources
 #          (updater/product/CMakeLists.txt, mavericks_add_updater_app) on Linux, a modern Mac and 10.9
-#          alike: one configure per --arch through MavericksToolchain.cmake with the clang22 release DIR
-#          pins (a product's components/clang22, through fetch_clang22.sh), x86_64 at minos 10.9 and
+#          alike: one configure per --arch through MavergreenToolchain.cmake with the clang22 release
+#          ROOT/.mavergreen/ingredients/clang22 pins (through fetch_clang22.sh), x86_64 at minos 10.9 and
 #          arm64 at minos 11.0. Two arches are merged by lipo-merge-tree.sh with llvm-lipo; which arches
-#          to build is the product's decision, never this script's. SHORT must be in the registry
-#          (scripts/product-names, or $MAVERGREEN_PRODUCT_NAMES), which derives the bundle id and feed.
+#          to build is the product's decision, never this script's. ROOT is the product's repo: SHORT
+#          must be declared in ROOT/.mavergreen/products/SHORT/, which derives the bundle id and feed.
 #          DIR/SHORT-updater.app is replaced, and its path is the only line on stdout; the build logs go
 #          to stderr. CMAKE names the cmake (default: shipyard-cmake, else cmake). Work goes under
-#          ${MAVERICKS_BUILD_ROOT:-$TMPDIR/mm-build} and is removed. Exit 1 on a failed build, 2 on a
+#          ${MAVERGREEN_BUILD_ROOT:-$TMPDIR/mavergreen-build} and is removed. Exit 1 on a failed build, 2 on a
 #          usage error.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 SY="$(dirname "$SELF")"
 usage() {
-  echo "usage: build_updater.sh --product SHORT --display-name NAME --confirm-title TITLE --confirm-body BODY --pubkey FILE --version VERSION --clang22-pin DIR --arch x86_64|arm64 [--arch ...] (--icon ICNS | --generic-icon) --out-dir DIR [--log-prefix PREFIX] [--relaunch-marker PATH]" >&2
+  echo "usage: build_updater.sh --product SHORT --display-name NAME --confirm-title TITLE --confirm-body BODY --pubkey FILE --version VERSION --repo ROOT --arch x86_64|arm64 [--arch ...] (--icon ICNS | --generic-icon) --out-dir DIR [--log-prefix PREFIX] [--relaunch-marker PATH]" >&2
   exit 2
 }
 die() { echo "build_updater: $*" >&2; exit 1; }
@@ -39,7 +39,7 @@ while [ "$#" -gt 0 ]; do
     --confirm-body) body=$2 ;;
     --pubkey) pubkey=$2 ;;
     --version) version=$2 ;;
-    --clang22-pin) pin=$2 ;;
+    --repo) pin=$2 ;;
     --arch)
       case "$2" in x86_64|arm64) ;; *) echo "build_updater: --arch is x86_64 or arm64, not '$2'" >&2; usage ;; esac
       case " $archs " in *" $2 "*) echo "build_updater: --arch $2 given twice" >&2; usage ;; esac
@@ -59,16 +59,17 @@ done
   || { echo "build_updater: pass exactly one of --icon ICNS and --generic-icon" >&2; usage; }
 case "$product" in *[!a-z0-9-]*|-*) echo "build_updater: '$product' is not a product short name" >&2; usage ;; esac
 [ -f "$pubkey" ] || die "no public key file $pubkey"
-[ -d "$pin" ] || die "no clang22 pin directory $pin"
+[ -d "$pin/.mavergreen/products/$product" ] || die "$pin declares no product $product in .mavergreen/products/"
+pin="$(cd "$pin" && pwd)"; MAVERGREEN_REPO_ROOT="$pin"; export MAVERGREEN_REPO_ROOT
 [ -z "$icon" ] || [ -f "$icon" ] || die "no icon $icon"
 pubkey="$(abs "$pubkey")"; [ -z "$icon" ] || icon="$(abs "$icon")"
 
 CMAKE="${CMAKE:-$(command -v shipyard-cmake || echo cmake)}"
-CL="$(sh "$SELF/fetch_clang22.sh" "$pin")" || die "could not fetch the clang22 that $pin pins"
+CL="$(sh "$SELF/fetch_clang22.sh" "$pin")" || die "could not fetch the clang22 that $pin/.mavergreen/ingredients/clang22 pins"
 LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; STRINGS="$CL/bin/llvm-strings"
 export LIPO OTOOL NM STRINGS
 _tmp="${TMPDIR:-/tmp}"
-root="${MAVERICKS_BUILD_ROOT:-${_tmp%/}/mm-build}"
+root="${MAVERGREEN_BUILD_ROOT:-${_tmp%/}/mavergreen-build}"
 mkdir -p "$root" "$out" || die "cannot make $root or $out"
 out="$(cd "$out" && pwd)"
 work="$(mktemp -d "$root/$product-updater.XXXXXX")" || die "cannot make a work directory under $root"
@@ -89,7 +90,7 @@ app="$product-updater.app"
 for a in $archs; do
   case "$a" in x86_64) floor=10.9 ;; arm64) floor=11.0 ;; esac
   "$CMAKE" -S "$SY/updater/product" -B "$work/$a" -DUPDATER_ARGS_FILE="$work/args.cmake" \
-    -DCMAKE_TOOLCHAIN_FILE="$SY/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES="$a" \
+    -DCMAKE_TOOLCHAIN_FILE="$SY/MavergreenToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES="$a" \
     -DCMAKE_OBJC_COMPILER="$CL/bin/clang" -DCMAKE_OBJC_COMPILER_TARGET="$a-apple-macos$floor" \
     -DCMAKE_OBJC_FLAGS=--no-default-config -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld >&2 \
     || die "the $a updater of $product did not configure"
