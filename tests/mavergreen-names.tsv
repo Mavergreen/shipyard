@@ -5,6 +5,7 @@ MAVERGREEN_ALLOW_SELECTORS	selectors the compat guard accepts although they are 
 MAVERGREEN_ALLOW_VENDORED	opts a build into vendoring shipyard
 MAVERGREEN_BUILD_ROOT	where the shared presets and build scripts put out-of-tree builds
 MAVERGREEN_CHAIN_UID	the uid the root-only chain trusts, default 0; only tests set it
+MAVERGREEN_CLANG22	the clang22 prefix the toolchain chose on Linux, which RequireAppleClang.cmake accepts
 MAVERGREEN_CLANG22_CACHE	directory where fetch_clang22.sh caches the clang22 archive
 MAVERGREEN_CODELOAD	the host fetch_pinned_source.sh downloads GitHub tarballs from
 MAVERGREEN_DECISIONS_DIR	the shipyard root MavergreenDecisions.cmake reads the placeholder-icon denylist from
@@ -55,4 +56,5 @@ MAVERGREEN_SOURCE_CACHE	directory where fetch_pinned_source.sh caches source tar
 MAVERGREEN_TAGS	the newline-separated tag list version.sh reads in place of git tag
 MAVERGREEN_TAR_CACHE	directory where fetched tarballs are cached
 MAVERGREEN_TEST_JOBS	the number of test files run-repo-tests.sh runs in parallel
+MAVERGREEN_USER_PREFIX	where install-shipyard-prefix.sh installs per user when it cannot write /opt/mavergreen
 MAVERGREEN_VERSION	the shipyard version the base component is built with
