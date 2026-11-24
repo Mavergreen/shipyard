@@ -1085,8 +1085,8 @@ for this: the rust archive carries no manifest, so it fetches the 200 MB pkg onl
 
 Off macOS, shipyard's own Mach-O readers default to clang22's `llvm-*` even with none of those
 variables set, and never to the host's GNU `ar` or `nm`, which cannot read Mach-O and mangle Darwin
-archives whose members share a name. arm64 is not covered: `cargo-env.sh` builds x86_64 only, and an
-arm64 slice still builds on a Mac.
+archives whose members share a name. `cargo-env.sh --arch arm64` is the arm64 entry point ("arm64 is
+built on Linux", below); it waits on rust shipping the aarch64 standard library.
 
 **Why:** the rust release ships a Linux-hosted toolchain that targets 10.9, so a Rust product's
 macOS runner bought nothing a Linux one cannot do. ripgrep 16.0.0 built this way passes the compat
@@ -1094,8 +1094,43 @@ guard and artifact conformance and runs on 10.9.5 (2026-11-24). **What it costs:
 loads only the dylibs it uses (`clang.cfg` passes `-dead_strip_dylibs`), where the macOS-built one
 also loaded CoreFoundation, Security and the rest, so the two builds are not byte-for-byte alike.
 **Revisit when** the rust release's Linux archive carries its manifest (install@v1's `products:`
-becomes the cheaper path), a Rust product needs an arm64 slice, or a crate's build script needs a
-Mac at build time.
+becomes the cheaper path), or a crate's build script needs a Mac at build time.
+
+### arm64 is built on Linux
+
+**An arm64 slice is built on Linux, never on a macOS runner without a named blocker.** Three entries
+produce it, all with clang22 and `ld64.lld` against the pinned 11.3 SDK at deployment target 11.0:
+the hidden `macos-arm64` preset (a product's preset inherits it as `arm64`, binary directory
+`$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-arm64`), `scripts/build_universal.sh --source DIR --out DIR
+[--x86_64-preset NAME] [--arm64-preset NAME]` (each arch built with its preset, merged by
+`lipo-merge-tree.sh --require-archs "x86_64 arm64"`; it refuses a non-Mach-O file that differs between
+the arches and an existing `--out`), and `cargo-env.sh --arch arm64` (target-scoped `aarch64_apple_darwin`
+variables, the 11.3 SDK, `MACOSX_DEPLOYMENT_TARGET=11.0`, `CARGO_BUILD_TARGET`, never a global
+`SDKROOT`; it refuses a rust with no `lib/rustlib/aarch64-apple-darwin`). Rust arm64 waits on rust
+shipping the aarch64 standard library: the released pin has none, so that path is unproven end to end.
+Presets cannot express a `TMPDIR` fallback, so plain `cmake --preset` fails when `TMPDIR` is unset;
+`shipyard-cmake` is the entry point that works everywhere.
+
+**arm64 must not link `/usr/lib/libc++.1.dylib` with mismatched headers.** Linux arm64 C and Objective-C
+compile with clang22 and `--no-default-config`; C++ and Objective-C++ also get `-nostdinc++ -isystem
+<SDK>/usr/include/c++/v1`, the 11.3 SDK's own libc++ 12 headers, which match the SDK's
+`/usr/lib/libc++.1.dylib` that 11.0 ships. An API beyond that floor then fails at compile time through
+the SDK's availability annotations (proven with `std::atomic::wait`) instead of at launch with a missing
+symbol. clang22's newer libc++ headers would compile and then break on 11.0.
+
+**Where it is smoked.** Pure-Go arm64 is proven statically, with no macOS ("Pure-Go arm64 slices are
+proven on Linux"). Every other arm64 slice keeps one late `modern-smoke` on a macOS arm64 runner, which
+check 39 gates to publishing runs only. Check 36 keeps pushing build jobs to Linux: an arm64 build on
+macOS needs a named blocker.
+
+**Why:** the family's own toolchain targets arm64 from Linux, so the macOS runner bought only the
+launch, and that is the smoke's job. A scarce runner is spent once per release instead of once per
+build. **What it costs:** a Linux build is not proven to match a Mac build bit for bit; the smoke is the
+backstop. Fetch scripts also stamp a verified unpacked pin (`.mavergreen-tree-verified`, keyed on the pin
+sha256 plus the tree's identity) and trust it afterwards, which took a Linux three-language configure
+from 57-74 s to 3-4 s. **Revisit when** GitHub changes macOS arm64 runner availability or pricing;
+clang22 gains a 10.9-hosted AArch64 backend (the universal toolchain has shipped); or a Linux-built
+arm64 binary fails `modern-smoke` in a way a Mac build would not have.
 
 ### Smoke only in a publishing run
 
@@ -2083,9 +2118,11 @@ compiler itself passes `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch 
 ships `fetch_sdk.sh` (in a toolchain's `libexec/`, e.g.) ships `sdk-pins.sh` and `mavericks_fetch.sh`
 beside it; without `sdk-pins.sh` it exits 2 naming the missing file.
 `include(Mavericks)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
-Linux cross-builds both arches: the toolchain file selects Darwin and the configured arch, and the
+Linux builds both arches: the toolchain file selects Darwin and the configured arch, and the
 compiler is clang22's Linux archive with `ld64.lld` (`--target=arm64-apple-macos11.0 -fuse-ld=lld
---ld-path=<clang22>/bin/ld64.lld` for arm64).
+--ld-path=<clang22>/bin/ld64.lld` for arm64, with `--no-default-config`; arm64 C++ and Objective-C++ also
+`-nostdinc++ -isystem <SDK>/usr/include/c++/v1`, the 11.3 SDK's own libc++ headers; see "arm64 is built
+on Linux").
 Native mode (on the 10.9 box, x86_64 only) pins too, because Xcode 6.1+ defaults to the 10.10 SDK
 there: the toolchain file uses the same fetched pin and never asks xcrun, so a native build is the
 same with or without the Command Line Tools (vision area 18 A; swift-gg found the old xcrun probe
