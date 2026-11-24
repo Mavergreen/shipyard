@@ -25,6 +25,11 @@ run minos "MIN=\$$tok" && fail "$tok is retired: $(cat "$w/out")"
 grep -q "^retired-name: scripts/x.sh uses $tok, a retired family name" "$w/out" || fail "the failure names $tok: $(cat "$w/out")"
 grep -q '^  fix: write .mavergreen/products/<short>/floor (mavergreen_floor)$' "$w/out" || fail "the fix names the floor file: $(cat "$w/out")"
 
+tok=release-needed.sh
+run declared "sh \"\$SHIPYARD_SCRIPTS/$tok\"" && fail "$tok is retired: $(cat "$w/out")"
+grep -q "^retired-name: scripts/x.sh uses $tok, a retired family name" "$w/out" || fail "the failure names $tok: $(cat "$w/out")"
+grep -q '^  fix: write release-decision.sh' "$w/out" || fail "the fix names release-decision.sh: $(cat "$w/out")"
+
 for text in 'clang -arch arm64 -c x.c' "sysctl -n hw.optional.arm64" 'tar xf go1.26.5.darwin_arm64.tar.gz'; do
   run arch "$text" || fail "arm64 as an arch string is no retired name, in '$text': $(cat "$w/out")"
 done

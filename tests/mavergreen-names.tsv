@@ -42,7 +42,7 @@ MAVERGREEN_POST_10_9_SYMBOLS	symbols the compat guard refuses as newer than 10.9
 MAVERGREEN_PRODUCT	the short name of the product a helper hook runs for
 MAVERGREEN_PRODUCT_PROVISIONERS	replaces scripts/product-provisioners, the products set up by a command rather than a release
 MAVERGREEN_PROGRESS	1 makes the fetch scripts report progress on stderr
-MAVERGREEN_RELEASES	the releases URL release-needed.sh queries
+MAVERGREEN_RELEASES	the releases URL fetch-release-pkg.sh queries
 MAVERGREEN_REPO_ROOT	the root of the repo being built or checked
 MAVERGREEN_REQUIRE_DEFINED_SYMBOLS	symbols the compat guard requires a binary to define
 MAVERGREEN_ROOT	the volume the family is installed on, default /; the one override of where installed products are looked for

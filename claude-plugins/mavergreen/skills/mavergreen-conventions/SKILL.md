@@ -754,12 +754,12 @@ it **drops the `-mavergreen` suffix** and versions itself directly:
   that day and starts again at `.1`; an ingredient-only release keeps the date and takes `.N+1`. `.N`
   is never omitted. `$SHIPYARD_SCRIPTS/self-upstream-version.sh` derives it from git history
   (`fetch-depth: 0`). Own code is every path but `.mavergreen/upstream/**`, `.mavergreen/ingredients/**`,
-  `.mavergreen/deviations/**`, `.mavergreen/release-notes/**`, `.github/**`, `tests/**`, top-level `*.md`, each file `## Declared state` names,
+  `.mavergreen/deviations/**`, `.mavergreen/release-notes/**`, `.github/**`, `tests/**`, top-level `*.md`,
   and the scope of each `.mavergreen/deviations/self-upstream-exclude/<label>/` deviation (a git
   pathspec glob: `*` stays in one directory, `**/` spans any). It sets the version only; publishing
-  is unchanged — declared state or a `workflow_dispatch`, which is how own code ships on purpose.
-  `.mavergreen/upstream/VERSION` stays the declared `upstream` entry but is no longer read for the date: editing
-  it changes the digest, so it cuts a release by itself, the other lever besides a dispatch. Under
+  is a `workflow_dispatch`, whose release decision publishes only changed content.
+  `.mavergreen/upstream/VERSION` is not read for the date; moving it dispatches a release through
+  `repackage-on-ingredient-bump.yml`, like any upstream bump. Under
   this rule a version says whether our code moved (container-tools shipped 37 releases
   as `20260727-mavericks.N`, 21 of them its own code, two of them breaking, all under one date);
 - **semver `vX.Y.Z`**, or dimmit's `v0.0.YYYYMMDD.N`.
@@ -1023,102 +1023,34 @@ the build, not a property of the product. **Revisit when** a product's build can
 in principle: it declares that as its `macos-runner` deviation, with the reason, and this rule names
 the exception.
 
-### A release is a declared state, not an event
+### Reproducible builds
 
-A release is the realisation of a declared state, not the side effect of an event. The design spec
-was a superpowers working file and is not tracked; this section is its durable form. It changes what "should this push
-publish" means: not "did something happen" but "does a release already carry this exact state" —
-which is why publishing is idempotent rather than triggered.
+A release is decided by its content, not by an event. Every push builds and tests, for feedback; only a
+`workflow_dispatch` of `release.yml` can publish, and its release decision publishes only when what a
+user installs changed. The design spec was a superpowers working file and is not tracked; this section
+is its durable form.
 
-**The declared state EXCLUDES the source tree.** That is what makes "a push causes CI feedback and
-almost never a release" a *property of the design* rather than a rule somebody has to remember: an
-ordinary commit moves no declared input, so it renders the same digest and publishes nothing.
-
-- **A product declares its state in a `## Declared state` section of `INGREDIENTS.md`**:
-  `- <name>: <path>` or `- <name>: <path>:<KEY>`, one entry per line, names **canonical** so renaming
-  a pin file can't move the digest. Exactly one entry must be named `upstream` — the upstream version
-  file for a port, or (for a product that IS its own source) the version file it commits itself.
-  **`upstream` must name the very file `version.sh` reads**, i.e. `.mavergreen/upstream/VERSION` (or `COMMIT` or `PIN`,
-  whichever the directory holds),
-  and `release-state.sh` **exits 2 naming both paths** when it does not. Otherwise a product could
-  track one file for its digest while the version came from another, and then publish `N+1` of the
-  *previous* upstream carrying the new upstream's contents.
-  **A derived pin is not an exception.** A repo whose upstream is DERIVED from a committed pin —
-  ca-certs' `NSS_TAG`, ed25519's commit — commits `.mavergreen/upstream/PIN` or `COMMIT`, and
-  `.mavergreen/hooks/derive-upstream-version` turns it into `version.sh`'s input. The no-drift property holds
-  because the version and the digest come from the *same* pin: a change to it moves both together.
-  **One list**: this section is authoritative for release identity, and is deliberately a SUBSET of
-  the ingredients under `.mavergreen/ingredients/`, which document everything baked in — including things that must
-  never cut a release (bats; an SDK pinned by hash that will never move). `scripts/declared-state.sh`
-  parses it and documents the grammar. Inside the section, un-bulleted prose is ignored — and so is a
-  dash-line with no colon, skipped by that same rule. But a dash-line that DOES contain a colon is
-  parsed as an entry, the text before the colon its name and the rest its path: if the name doesn't
-  look canonical, the parser rejects it and `release-state.sh` fails loudly, naming the entry; if the
-  name looks canonical but the "path" resolves to nothing, `release-state.sh` still fails loudly,
-  naming the file it couldn't read. The failure mode that matters is the one that ISN'T loud: if the
-  text after the colon happens to name a file that exists, the digest silently gains an entry nobody
-  intended. So explanatory text in this section must never start with a dash — not because a dash
-  always reads as an entry, but because when it does, the failure can be the silent kind this whole
-  design exists to prevent.
-- **`sh "$SHIPYARD_SCRIPTS/release-state.sh" [--root DIR] [--ref REV] [--render]` renders the
-  declaration canonically and hashes it** → `v1:sha256:<hex>` (`--render` prints the canonical bytes
-  instead, for debugging and the golden test). `release-state-record.sh --notes-file dist/RELEASE_NOTES.md
-  --digest "$(...)"` writes `Mavergreen-State: v1:sha256:<hex>` into the notes file **before
-  `sign_and_appcast.sh` runs — never at publish time.** That one file is rendered into both the
-  Sparkle appcast `<description>` and the GitHub Release body, so writing the marker before packaging
-  keeps them in agreement — `check-artifact-conformance.sh`'s `notes` check (see Release notes, "Three
-  enforcement layers", above) now asserts that equality at package time. The reason stands regardless: a
-  10.9 user's Sparkle update dialog should show the same notes the Release page shows, and a marker
-  added later would leave it one line short of that. **The marker is appended as its OWN paragraph —
-  the blank line above it is load-bearing, not cosmetic.** Markdown joins consecutive lines, so a
-  marker welded to the footer's last line renders in that same dialog as one run-on sentence ending in
-  a raw 64-character hash: `Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5
-  Mavergreen-State: v1:sha256:3f78…`. And the marker's *shape* is read by one family rule
-  (`lib.sh`'s `state_marker`), never re-implemented per caller: while the reader and the writer
-  disagreed, an older-format marker was "nothing recorded" to `release-needed.sh` and "a CONFLICTING
-  record" to `release-state-record.sh`, which exits 3 — every migrated repo red, nightly, with no
-  self-healing path. `release-needed.sh --digest D --version V [--repo R]`
-  answers whether that state is already out — `PUBLISH`, `SKIP=already-released/<tag>`, or
-  `SKIP=unreadable-marker/<tag>` when some release records a marker in a format this shipyard cannot
-  read (see the wire-format rule below). Drafts are excluded; a `gh` failure is a failure, never a
-  decision. `reconcile.yml` is the nightly backstop that calls both and dispatches the real release
-  workflow when nothing realises the declared state — it reads and dispatches only
-  (`contents: read`, `actions: write`) and never writes a release body. **Deliberately cheap**: a
-  quiet night costs one API call per repo, not a build — a scheduled job that built each product to
-  check it would be fourteen macOS builds a night. **Idempotent only if the caller's `release.yml`
-  makes it so**: `reconcile.yml` dispatches unconditionally once `release-needed.sh` says `PUBLISH`;
-  nothing stops a second dispatch, or a reconcile run racing a push-triggered release, from also
-  answering `PUBLISH` before the first run's release lands. The dispatched run is safe from
-  double-publishing only when its own `release.yml` re-checks before it cuts a tag — gates its
-  publish decision on `release-needed.sh` (or an equivalent digest check) rather than on version.sh
-  alone. A `workflow_dispatch` mode that always cuts `N+1` (a `local_release=true` path whose
-  version.sh runs in `local` mode unconditionally, the way ed25519's does today) has no such gate:
-  it gets a new release on every dispatch, race or not, and "recomputes the same digest and stops"
-  does not hold for it. ca-certs shows the gated shape. Its `reconcile.yml` caller dispatches with
-  `dispatch-field: reconcile=true`, and `release.yml`'s `reconcile` input selects `local` mode and
-  then publishes only if `release-needed.sh` still says `PUBLISH`. A human's `local_release=true`
-  stays ungated, because choosing it by hand is the decision to publish.
-- **A version match is NEVER a state match, and `release-needed.sh` does not look at the version.**
-  `version.sh auto` returns the *existing* tag's `N` whenever the upstream already has one, so it maps
-  every declared state of a given upstream to **one** version. An earlier cut inferred
-  "already released" from a version match and then backfilled the digest onto the release it had
-  guessed — cementing an unreleased ingredient bump as released, with no later reconcile ever looking
-  again. **To mark a release that predates this design**, compute its digest from the tree it
-  published and record it once, by hand or in a migration workflow:
-  `release-state-record.sh --tag T --digest "$(release-state.sh --ref T)" [--repo R]`. `--ref` renders
-  the *current* declaration using *that revision's* values, which is exactly the question worth
-  asking — a pre-migration tag has no `## Declared state` section of its own.
-- **Two rules an implementer otherwise gets wrong.** An automatic publish also requires
-  `refs/heads/main` — the digest says whether a state *should* be released, not whether it is
-  *declared*; a `workflow_dispatch` may target any ref, because a human choosing one IS the
-  declaration. And the rendering is a **wire format**: changing it invalidates every recorded digest,
-  so a format bump means recompute, never republish — recompute each affected release's digest with
-  `--ref <tag>` and re-record it. Until then `release-needed.sh` refuses to publish rather than read
-  an unreadable marker as an absent one.
-- **shipyard itself does not adopt this.** Its version is `<.mavergreen/upstream/VERSION>.<commit count>`, so its
-  own state changes on every push, and every push already publishes by design (see "Release
-  workflow" above and shipyard's own `repackage-wiring` deviation). That is shipyard's declared exception, not a
-  pattern to copy — shipyard has no `## Declared state` section of its own.
+- **The content manifest.** After conformance, `content-manifest.sh DIST VERSION REPO_ROOT` writes
+  `dist/CONTENT-MANIFEST.txt`: every installed file's path, mode and normalized bytes, every symlink's
+  target, the pkg metadata (identifier, install location, install scripts, floor) and the feed metadata
+  (minimum OS, feed URL, `requires`), with the version normalized to `@VERSION@`. Not the `.pkg`
+  container, its timestamps or signatures, `SHA256SUMS`, the feed file or the notes.
+  `release-manifest.sh` writes `dist/RELEASE-MANIFEST.txt` beside it, the build facts (shipyard,
+  ingredient pins, `requires`, install names), which are published and never compared.
+- **The release decision.** `publish-release.yml` runs `release-decision.sh` on the candidate manifest
+  against the line's latest release: `publish` when any product changed, else `skip`, a green run that
+  publishes nothing (no tag, no release, no feed item, no `-mavergreen.N` consumed). An unchanged
+  product in a release that publishes is carried: its feed keeps offering the release it last changed
+  in (`carry-forward.sh`). `force_publish` with a reason, or a `publish-unchanged` deviation scoped
+  `*`, publishes anyway; the reason goes into the notes.
+- **The reproduce check.** Weekly, and on a `reproduce_tag` dispatch, `release.yml` rebuilds a release
+  tag cold and `reproduce.sh` compares the rebuild's manifest with the release's, naming each
+  differing row with `build-equivalence.sh`'s detail. A path that can't be made stable is a
+  `reproducible` deviation; `reproduce-wired` checks the wiring.
+- **install@v1 exports `SOURCE_DATE_EPOCH`** (the committer time of the workspace's `HEAD`, unless
+  already set) and `ZERO_AR_DATE=1`, on every OS.
+- **shipyard publishes every rebuild.** Its `publish-unchanged` deviation says why: consumers take its
+  workflows through a moving `@v1`. It still writes both manifests and reproduces weekly.
 
 ## Version scaffolding (shared, wrapped)
 
@@ -1270,8 +1202,8 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   written directly under the floor line renders in the Sparkle dialog as one run-on sentence whose
   second half is a link (`Requires Mac OS X 10.9.5 or later. All changes since 9.9p2-mavericks.5`).
   That shipped in every release from the generator's landing until it was fixed. The rule binds
-  anything appended **after** the generator hands the file off, in another repo's script — the
-  `Mavergreen-State:` marker above is the live case — and the separator is emitted only when
+  anything appended **after** the generator hands the file off, in another repo's script, such as a
+  machine-readable marker line — and the separator is emitted only when
   something already precedes it, since a footer that opens with a blank line renders an empty leading
   `<p>`.
 - **Release notes are files, not prose.** What a release says beyond the generated sections is a few
@@ -2925,7 +2857,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **36.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` runner (as a string, a list, or `${{ matrix.X }}` read through the job's matrix) is grandfathered or declares a `macos-runner` deviation scoped to `<workflow file>:<job>` (`ci.yml:build`; shipyard has none, since it runs no macOS job) | macOS runners are scarce, and a job lands on one by default. The deviation names the reason it needs macOS and what would let it leave; the key is `<workflow file>:<job>`, so a new `build` job in another workflow is caught. Needs PyYAML, which check 8 already requires |
 | **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when an `arch-host` deviation is declared; a declaration with no such job and a job with no declaration fail with different messages. At package time, `check-artifact-conformance.sh`'s `arch-host` check fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arch-host:<glob>` matches, except a target file (one a `.mavergreen/products/<short>/target` glob names) and a path under `Library/Application Support/Mavergreen/`, the one exemption packaging uses. An `arch-host` deviation scoped to a glob of only `*`, `?` and `/` is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
 | **`pr-trigger`.** `release.yml` runs on a pull request to `main` (or on every push), or a `ci.yml` does, unless `renovate.json` sets `ignoreTests: true` | Renovate's automerge waits on a CI check; without one on the bump PR it stalls forever. fd and rg each asserted this themselves |
-| **`publish-order`.** In `release.yml` the first mentions of `release-notes.sh`, `release-state-record.sh`, `sign_and_appcast.sh` and `publish-release.yml` come in that order | The appcast and the Release must carry the same notes. A step a repo lacks takes no part |
+| **`publish-order`.** In `release.yml` the first mentions of `release-notes.sh`, `sign_and_appcast.sh` and `publish-release.yml` come in that order | The appcast and the Release must carry the same notes. A step a repo lacks takes no part |
 | **`renovate-extends-preset`, `renovate-json-valid`.** `.github/renovate.json` parses and its `extends` names `github>Mavergreen/shipyard` | The preset carries the automerge and `ignoreTests` defaults; Renovate ignores a config it cannot parse. Five repos asserted one or both |
 | **`no-hardcoded-version`.** No tracked file under `build/`, `packaging/`, `.github/workflows/` or `CMakeLists.txt` contains `.mavergreen/upstream/VERSION`'s whole dotted version | The next Renovate bump changes the pin and the stale copy fails the bump's own CI. gh and icu asserted this themselves |
 | **`no-tags-trigger`.** No workflow has a `tags:` key under `push:` | Tags are retired as a release input; a `workflow_dispatch` covers every case a tag used to |
@@ -2981,8 +2913,8 @@ It fails when a needed job failed or was cancelled; skipped passes. `needs` is t
 and an empty one is a misconfiguration (exit 2). `required-checks.sh [DIR]` prints what a repo's
 protection must require, read from its workflows, and `setup-family-repo.sh settle` uses it. A
 release workflow's `publish` job gets a caller of `retry-release.yml`, which re-dispatches the release,
-gated, when publish lost its tag to another run (`retry-decision.sh` decides: on `main`, not already a
-reconcile run, tag taken):
+plainly, when publish lost its tag to another run (`retry-decision.sh` decides: on `main`, tag
+taken); the re-dispatched run's decision skips content already published:
 
 ```yaml
   retry:
@@ -3345,25 +3277,14 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    - refresh is suppressed — `DISABLE_AUTOUPDATER`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, a
      seeded plugin dir, managed settings blocking the marketplace, or being offline.
    Docs: code.claude.com/docs/en/discover-plugins, /plugins-reference, /plugin-marketplaces.
-13. Declare release state (see "A release is a declared state, not an event" above): add a
-    `## Declared state` section to `INGREDIENTS.md` (`- upstream: .mavergreen/upstream/VERSION`, or the version
-    file the product commits if it is its own source); call `release-state-record.sh --notes-file
-    dist/RELEASE_NOTES.md --digest "$(release-state.sh)"` in the build job, BEFORE
-    `sign_and_appcast.sh` — never at publish time; mark the repo's existing release once, with
-    `release-state-record.sh --tag T --digest "$(release-state.sh --ref T)"`, so the backstop's first
-    night finds it (a version match will NOT be inferred on your behalf); **`upstream` must be the file
-    `version.sh` reads** (`.mavergreen/upstream/VERSION`, or `COMMIT` or `PIN` where the directory holds that), because `release-state.sh` exits 2 when the
-    declared `upstream` is not that file, which would hard-fail the backstop nightly from its first run (a repo whose upstream is
-    a committed pin — ca-certs, ed25519 — declares `upstream` as that `PIN` or `COMMIT`, with a
-    `.mavergreen/hooks/derive-upstream-version`; see
-    "A release is a declared state, not an event" above); add the ten-line
-    `reconcile.yml` caller **with its own `permissions: {contents: read, actions: write}`** — a called
-    workflow may not ask for more than its caller grants, so a stub that omits them leaves the
-    backstop unable to read state or
-    dispatch, failing as silently as the lost release it exists to catch (the family already
-    documents this trap in `scan-for-key.yml`'s header; say it here too, because this is the caller
-    people will copy); do not add a `tags:` trigger — tags are retired as an input, and dispatch
-    covers every case they served (`gh workflow run … --ref <any ref>`).
+13. Wire the release (see "Reproducible builds" above): `release.yml` takes the `workflow_dispatch`
+    inputs `force_publish` (a string) and `reproduce_tag`, and a weekly `schedule:`; the build writes
+    `dist/CONTENT-MANIFEST.txt` and `dist/RELEASE-MANIFEST.txt` after conformance; the publish job runs
+    only on a dispatch and never in a reproduce run, and passes `force-reason: ${{ inputs.force_publish }}`
+    to `publish-release.yml`; a `reproduce` job runs `reproduce.sh` (`release-dispatch` and
+    `reproduce-wired` hold all of it); add `repackage-on-ingredient-bump.yml`'s caller; do not add a
+    `tags:` trigger — tags are retired as an input, and dispatch covers every case they served
+    (`gh workflow run … --ref <any ref>`).
 14. If it ships a `.pkg`: write `.mavergreen/products/<short>/noun` (and `line` for a lined product); stage
     everything under `opt/mavergreen/<short name>/` (apps under `Applications/Mavergreen/`); get the install scripts and manifest from
     `stage_product.sh` (product-specific steps as hooks); wrap with `set_install_floor.sh`, which

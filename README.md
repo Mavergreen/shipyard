@@ -399,11 +399,12 @@ On a bump:
 
 ## Release-doctrine surface
 
-Four more scripts (`scripts/declared-state.sh`, `scripts/release-state.sh`,
-`scripts/release-needed.sh`, `scripts/release-state-record.sh`) and one more reusable workflow
-(`.github/workflows/reconcile.yml`) ship as of this release. Consumers reach all five the same way
-they reach everything else here: through the moving `@v1` tag. What they do and how a product wires
-them in is documented in the conventions skill, "A release is a declared state, not an event".
+`scripts/content-manifest.sh`, `scripts/release-manifest.sh`, `scripts/release-decision.sh`,
+`scripts/carry-forward.sh` and `scripts/reproduce.sh` decide and check a release: a dispatched
+`release.yml` publishes only when what a user installs changed, and a weekly run rebuilds the latest
+release to prove it reproduces. `publish-release.yml` runs the decision; consumers reach all of it
+through the moving `@v1` tag. How a product wires them in is documented in the conventions skill,
+"Reproducible builds".
 
 ## Comment-reasons surface
 

@@ -62,14 +62,10 @@ if chk_selected legacy-top-level; then
     _gone="nothing reads it any more, and it still looks as if something does"
     _lt() { grep -Fqx -e "$1" "$w/legacy"; }
     _ltd() { grep -q "^$1/" "$w/legacy"; }
-    if _lt INGREDIENTS.md && ! awk '
-        !seen && /^## Declared state[ \t]*$/ { seen = 1; on = 1; next }
-        on && /^##? / { on = 0 }
-        !on && NF { bad = 1 }
-        END { exit !(seen && !bad) }' INGREDIENTS.md 2>/dev/null; then
-      _legacy INGREDIENTS.md "it may hold a ## Declared state section and nothing else, and the rest has a place under .mavergreen/" \
-        "nothing reads it but that section: a ## Conformance deviations line excuses nothing, and no reader checks its table or its prose" \
-        "move each deviation to .mavergreen/deviations/<check>/<label>/ (scope, reason, revisit), each table row to .mavergreen/ingredients/<name>/, a 'No upstream release notes:' line to .mavergreen/deviations/upstream-notes/<label>/, and other prose to an unusual-reason.md beside what it explains or to README.md; then keep only the ## Declared state section, or delete the file"
+    if _lt INGREDIENTS.md; then
+      _legacy INGREDIENTS.md "everything it held has a place under .mavergreen/" \
+        "nothing reads it: a ## Conformance deviations line excuses nothing, no reader checks its table or its prose, and the release decision replaced its Declared state section" \
+        "move each deviation to .mavergreen/deviations/<check>/<label>/ (scope, reason, revisit), each table row to .mavergreen/ingredients/<name>/, a 'No upstream release notes:' line to .mavergreen/deviations/upstream-notes/<label>/, and other prose to an unusual-reason.md beside what it explains or to README.md; then delete it"
     fi
     if _lt UPSTREAM_VERSION; then
       _legacy UPSTREAM_VERSION "it belongs in .mavergreen/upstream/VERSION" "$_moved" \

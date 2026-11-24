@@ -2,8 +2,7 @@ notes: an appcast's description is the release body.
 
 ## Why
 The Sparkle update dialog on a 10.9 Mac must show the same words the Release page shows. One file,
-RELEASE_NOTES.md, becomes both the appcast description and the Release body, so they cannot disagree, and
-the Mavergreen-State marker is written into it before signing so both carry it. This check compares them
+RELEASE_NOTES.md, becomes both the appcast description and the Release body, so they cannot disagree. This check compares them
 at package time, the one point where the appcast exists. It fails when an appcast has no description, when
 its description is not the body, and when no notes-render fact exists to compare it against.
 

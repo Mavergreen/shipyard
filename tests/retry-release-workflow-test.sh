@@ -30,7 +30,7 @@ steps = job["steps"]
 dec = [s for s in steps if s.get("id") == "decide"]
 if not dec: fail("no decide step")
 if "retry-decision.sh" not in dec[0].get("run", ""): fail("decide step does not run retry-decision.sh")
-if "reconcile" in str(dec[0]): fail("the decide step reads no reconcile input: every re-dispatch is plain")
+if sorted((dec[0].get("env") or {}).keys()) != ["REF", "REPO_URL", "VERSION"]: fail("the decide step reads VERSION, REPO_URL and REF, and no dispatch input: every re-dispatch is plain")
 
 disp = [s for s in steps if "gh workflow run" in (s.get("run") or "")]
 if len(disp) != 1: fail("expected exactly one dispatch step")

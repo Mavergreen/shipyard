@@ -100,3 +100,11 @@ upstream_release	a plain dispatch	a new upstream dispatches plainly, like an ing
 reconcile=true	a plain dispatch	the release decision skips content already published, so no re-dispatch needs a mode
 dispatch-field	nothing: repackage-on-ingredient-bump.yml dispatches plainly	every release.yml takes one dispatch shape
 --if-needed	nothing: cut-release.sh dispatches plainly by default	a plain dispatch is already the if-needed one
+release-state.sh	release-decision.sh	a release is decided by its content manifest, not a declared state
+release-needed.sh	release-decision.sh	a release is decided by its content manifest, not a declared state
+release-state-record.sh	nothing: CONTENT-MANIFEST.txt is the record	the content manifest a release carries replaces the state marker
+declared-state.sh	release-decision.sh	a release is decided by its content manifest, not a declared state
+reconcile.yml	release-decision.sh, in every dispatched release	a dispatch publishes only changed content, so no nightly backstop is needed
+Mavergreen-State:	CONTENT-MANIFEST.txt	the content manifest a release carries replaces the state marker
+## Declared state	CONTENT-MANIFEST.txt	a release is decided by its content manifest, not a declared state
+MAVERICKS_RELEASES	MAVERGREEN_RELEASES	the releases URL override took the family name

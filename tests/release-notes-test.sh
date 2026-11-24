@@ -925,13 +925,13 @@ printf '%s\n' "$html" | grep -q '<p>Release 9\.9p2-mavergreen\.2 .* Requires Mac
 printf '%s\n' "$html" | grep -q 'or later.*<a href' \
   && { echo "FAIL footerpara: the compare link is welded onto the install-floor sentence"; printf '%s\n' "$html"; exit 1; }
 
-# spec: scripts/release-notes.sh -- a trailing machine-readable marker (the release-doctrine
-#       session appends one before packaging) must also stand alone rather than trailing a
+# spec: scripts/release-notes.sh -- a trailing machine-readable marker (a repo may append one
+#       before packaging) must also stand alone rather than trailing a
 #       sentence a human is reading. This script cannot enforce that on an append that happens
 #       afterwards in a different
 #       repository's script -- it can only get its OWN footer right -- so this simulates that
 #       append and checks the marker does not fuse to it either.
-printf 'Mavergreen-State: v1:sha256:3f786850e387550fdab836ed7e6dc881de23001b\n' >> "$r/OUT.md"
+printf 'Build-Marker: v1:sha256:3f786850e387550fdab836ed7e6dc881de23001b\n' >> "$r/OUT.md"
 html="$(sh "$here/../scripts/gen_appcast.sh" --render-notes "$r/OUT.md")"
 printf '%s\n' "$html" | grep -q 'or later\..*sha256' \
   && { echo "FAIL footerpara: a state marker must not render inside the install-floor sentence"; printf '%s\n' "$html"; exit 1; }

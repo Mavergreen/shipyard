@@ -12,9 +12,8 @@ release-notes/. Each failure names where that file goes now, or says that it is 
 None recorded.
 
 ## Limits
-It reads the tracked-file list, so an untracked or ignored file of one of those names passes. An INGREDIENTS.md
-holding nothing but a "## Declared state" section passes, because declared state still lives there until it
-retires with the rest of the nightly backstop; any other line outside that section, a title included, fails.
+It reads the tracked-file list, so an untracked or ignored file of one of those names passes. Any tracked
+INGREDIENTS.md fails, one holding only its old declared-state section included: the release decision replaced it.
 updater/ is not refused yet: it holds template sources, not metadata, and is named once the updaters retire.
 It does not look below the top level, except for build/msc.sh.
 

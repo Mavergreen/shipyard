@@ -106,21 +106,6 @@ git -C "$R" tag 20261012.3
 at 2026-10-19T12:00:00Z docs/x.md
 want 20261019.1 "only TOP-LEVEL *.md is excluded: docs/x.md is own code"
 
-fresh declared
-printf '%s\n' '# Build ingredients' '' '## Declared state' '' '- upstream: UPSTREAM_VERSION' \
-  '- shipyard-scripts: components/shipyard/scripts.sha256' '- cmake: pins.env:CMAKE_VERSION' \
-  > "$R/INGREDIENTS.md"
-at 2026-10-12T13:00:00Z INGREDIENTS.md
-git -C "$R" tag 20261012.3
-at 2026-10-19T12:00:00Z components/shipyard/scripts.sha256
-want 20261012.4 "a declared-state path is an ingredient, not own code"
-git -C "$R" tag 20261012.4
-at 2026-10-20T12:00:00Z pins.env
-want 20261012.5 "a declared path:KEY counts its whole file as ingredient" --ref HEAD
-git -C "$R" tag 20261012.5
-at 2026-10-21T12:00:00Z src/y.c
-want 20261021.1 "own code beside declared state still counts"
-
 fresh deviation
 deviation "$R" self-upstream-exclude vm-acceptance 'build/vm-acceptance.sh' 'runs only in CI'
 deviation "$R" self-upstream-exclude go-tests '**/*_test.go' 'tests never ship'
@@ -143,9 +128,9 @@ fresh unscoped
 deviation "$R" self-upstream-exclude x '*' 'everything'
 refuses "self-upstream-exclude" "an unscoped exclusion would make no change own code, so it is refused" --root "$R"
 
-fresh malformed
+fresh old-ingredients-md
 printf '%s\n' '# Build ingredients' '' '## Declared state' '' '- upstream:' > "$R/INGREDIENTS.md"
-refuses "Declared state" "a malformed declared state is refused, never read as no exclusions" --root "$R"
+want 20261012.1 "an INGREDIENTS.md is no longer read" --root "$R"
 
 fresh ref
 git -C "$R" tag 20261012.3

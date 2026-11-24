@@ -28,45 +28,6 @@ upstream_version() {
   printf '%s\n' "$_uv"
 }
 
-# spec: SKILL.md "A release is a declared state, not an event" -- a marker in another format is NOT
-#       "no marker"; release-needed.sh must refuse to publish rather than treat it as absent, or a
-#       future format bump would republish every product.
-state_digest_readable() {
-  case "${1:-}" in
-    v1:sha256:*) case "${1#v1:sha256:}" in ''|*[!0-9a-f]*) return 1;; *) return 0;; esac ;;
-    *) return 1 ;;
-  esac
-}
-
-# spec: SKILL.md "A release is a declared state, not an event" -- marker format is
-#       "Mavergreen-State: <value>" (spec 2026-09-12, decision 2). ONE reader for the family:
-#       release-needed.sh once recognised only `v1:sha256:<hex>` while release-state-record.sh took
-#       anything after the key, so an older-format marker was "no digest recorded" to the first and
-#       "a CONFLICTING digest" to the second (ruling 1: the second exits 3 and fails the job) -- every
-#       migrated repo would have gone red nightly with no self-healing path. See
-#       tests/release-needed-test.sh "THE FIRST READABLE MARKER WINS" for why the first READABLE
-#       marker wins, not simply the first: release-needed.sh refuses to publish while the marker it
-#       reads is unreadable, so plain first-wins would let an unreadable line earlier in a body WEDGE
-#       a repo whose valid digest sat two lines below it.
-state_marker() {
-  _sm_all="$(sed -n 's/^Mavergreen-State:[[:space:]]*//p' | sed 's/[[:space:]]*$//')"
-  _sm_pick=""
-  while IFS= read -r _sm_one || [ -n "$_sm_one" ]; do
-    [ -n "$_sm_one" ] || continue
-    [ -n "$_sm_pick" ] || _sm_pick="$_sm_one"
-    if state_digest_readable "$_sm_one"; then _sm_pick="$_sm_one"; break; fi
-  done <<EOF
-$_sm_all
-EOF
-  printf '%s\n' "$_sm_pick"
-}
-
-# spec: tests/release-state-test.sh -- a "path:KEY" Declared-state entry's value: KEY's first
-#       assignment in the file, one pair of surrounding double quotes dropped, whitespace removed.
-pin_value() {
-  sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1 | sed 's/^"//; s/"$//' | tr -d '[:space:]'
-}
-
 # spec: tests/version-lib-test.sh -- lib/vercmp.sh and mavergreen-meta.sh are found via $SELF,
 #       $SHIPYARD or $SHIPYARD_SCRIPTS: a sourced file cannot learn its own path in POSIX sh.
 _lib_vercmp=""

@@ -20,6 +20,7 @@ goes() {  # $1 = fixture, $2 = the legacy name, $3 = where the failure says it g
 
 goes fail INGREDIENTS.md ".mavergreen/"
 goes fail-ingredients-title INGREDIENTS.md ".mavergreen/"
+goes fail-state-only INGREDIENTS.md "everything it held has a place"
 goes fail-upstream-version UPSTREAM_VERSION ".mavergreen/upstream/VERSION"
 goes fail-upstream-commit UPSTREAM_COMMIT ".mavergreen/upstream/COMMIT"
 goes fail-pins-env pins.env ".mavergreen/ingredients/<name>/"
@@ -33,7 +34,7 @@ goes fail-build-msc build/msc.sh "it is retired"
 printf '%s\n' "$out" | grep -Fq 'shipyard-scripts' \
   || { echo "FAIL: a retired msc.sh should name what replaces it: $out"; exit 1; }
 goes fail-release-notes release-notes/ ".mavergreen/release-notes/"
-goes fail INGREDIENTS.md "it may hold a ## Declared state section and nothing else"
+goes fail INGREDIENTS.md "everything it held has a place under .mavergreen/"
 printf '%s\n' "$out" | grep -Fq '.mavergreen/deviations/<check>/<label>/' \
   || { echo "FAIL: an INGREDIENTS.md with deviations should say where deviations go now: $out"; exit 1; }
 

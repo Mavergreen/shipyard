@@ -464,7 +464,7 @@ if [ -n "$PREV" ]; then
     # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release
     #       notes" -- "Every footer line gets a blank line BEFORE it, never after the line it
     #       follows": the rule binds anything appended after this generator hands the file off too
-    #       (the release-doctrine session's `Mavergreen-State:` marker is the live case), which
+    #       (a machine-readable marker line appended before packaging is the case), which
     #       is why it is written down here even though this file cannot enforce that append itself.
     # platform: `[ -s "$f" ] && cmd`, as the LAST command of a script or function, returns non-zero
     #           under `set -e` and aborts the caller when the test is false.
