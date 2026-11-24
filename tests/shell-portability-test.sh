@@ -100,10 +100,9 @@ EOF
 (cd "$work/br2" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/br2" && sh "$S" >/dev/null) || { echo "FAIL: well-formed [[:class:]] expressions must pass"; exit 1; }
 
-# spec: scripts/check-shell-portability.sh -- preserve every draft fixture, including
-#       unchanged HEAD limitations: multiline literals/heredocs, split conditions,
-#       groups, inline negations and continued pipelines get no context analysis.
-#       Only complete final simple-command/pipeline lines may lose a HEAD hit.
+# spec: scripts/check-shell-portability.sh -- a ! anywhere inside an if/elif/while/until
+#       condition passes, after || or && and across continued lines; a ! that is a statement
+#       of its own, in a body, a group or a $( ), still fails. Heredoc bodies stay unparsed.
 #       Escaped fixture newlines keep the original regex from scanning test data.
 diagnostic_case() {  # $1 name of written fixture, $2 exact diagnostic lines
   rc=0
@@ -123,23 +122,20 @@ syntax_case() {  # $1 name, $2 exact diagnostic lines, $3 printf-escaped source
 syntax_case sockets '' 'if [ "$label" != expected ] ||\n    ! "$PLISTBUDDY" -c "Print :Sockets:A" "$plist" >/dev/null 2>&1 ||\n    ! "$PLISTBUDDY" -c "Print :Sockets:B" "$plist" >/dev/null 2>&1; then\n    :\nfi'
 syntax_case wrapper '' 'if [ ! -f "$wrapper" ] || [ -L "$wrapper" ] ||\n    ! printf "%s\\n" "#!/bin/sh" "exec \\"\\$@\\"" | cmp -s "$wrapper" -; then\n    :\nfi'
 syntax_case elif '' 'if false; then :\nelif ! has "auth: verified" "$log" ||\n    ! has "auto-login: on" "$log"; then\n    :\nfi'
-syntax_case loops '2
-4' 'while false ||\n    ! probe; do break; done\nuntil false &&\n    ! probe\ndo :; done'
-syntax_case continuations 10 'if \\\n    ! probe && # then is only a comment\n    # spec: scripts/check-shell-portability.sh -- comment within a predicate\n    ! printf "%s" "a || b; then" \\\n        | cmp -s file -\nthen :; fi\nif ! probe\nthen\n    if ! other ||\n        ! final; then :; fi\nfi'
+syntax_case loops '' 'while false ||\n    ! probe; do break; done\nuntil false &&\n    ! probe\ndo :; done'
+syntax_case continuations '' 'if \\\n    ! probe && # then is only a comment\n    # spec: scripts/check-shell-portability.sh -- comment within a predicate\n    ! printf "%s" "a || b; then" \\\n        | cmp -s file -\nthen :; fi\nif ! probe\nthen\n    if ! other ||\n        ! final; then :; fi\nfi'
 syntax_case guarded '' '! probe || false\n! printf x \\\n    | cmp -s file - || exit 1\nrun ! probe'
 syntax_case standalone '1
 3
 5
 7
 8' '! false # ; then\nprintf "%s" "if"; true\n! false "then"\nprintf "%s" "if probe ||"\n! false "; then"; true\nfoo && ! bar\n! printf x | cmp -s file -\n! false; printf "%s" "then"\n! false "|| false"'
-syntax_case later_command '2
-5' 'if\n    ! probe\n    true\nthen\n    ! body\n    true\nfi'
+syntax_case later_command 5 'if\n    ! probe\n    true\nthen\n    ! body\n    true\nfi'
 syntax_case quoted_keywords '2
 4
 5
 7' '"if" probe || true\n! false\nprintf "%s" "if\n! data; then"\n! false\nprintf "%s" '"'"'if; then'"'"'\n! false\n! false # || exit 1'
 syntax_case heredoc '7
-11
 12' 'cat <<"END" <<-\\SECOND\nif false ||\nthen\nEND\nuntil false ||\nSECOND\n! false\nif cat <<END &&\nif fake; then\nEND\n    ! probe; then :; fi\n! false'
 syntax_case boundaries '3
 5' 'if ! probe; then :; fi\n# spec: scripts/check-shell-portability.sh -- then is comment text\n! body\nwhile ! probe; do\n    ! body\n    break\ndone; ! tail'
@@ -161,7 +157,7 @@ syntax_case redirect_words '2
 syntax_case nested_predicate '' 'if if false; then :; fi ||\n    ! false; then\n    :\nfi'
 syntax_case nested_predicate_group 5 'if if { :; }; then :; fi ||\n    ! false; then\n    :\nfi\n! false'
 syntax_case redirect_substitution 2 ': < "$(\n    ! true\n    printf "%s" /dev/null\n)"'
-syntax_case brace_argument 3 'if {\n    printf "%s\\n" }\n    ! false\n}; then\n    :\nfi'
+syntax_case brace_argument '' 'if {\n    printf "%s\\n" }\n    ! false\n}; then\n    :\nfi'
 syntax_case actual_sockets '' 'if false ||\n        ! "$PLISTBUDDY" -c '"'"'Print :Sockets:NetbiosDatagramServices'"'"' "$NETBIOSD_PLIST" >/dev/null 2>&1; then\n    :\nfi'
 syntax_case actual_wrapper '' 'if false ||\n        ! printf '"'"'%s\\n'"'"' '"'"'#!/bin/sh'"'"' '"'"'# guest-macosx: initialize HUP before netbiosd exec (docs/decisions/0037)'"'"' "trap '"'"''"'"' HUP" '"'"'exec "$@"'"'"' | cmp -s "$nbv_wrapper" -; then\n    :\nfi'
 syntax_case actual_mavericks_login '' 'if false ||\n        ! has "auto-login: on: $autologin'"'"'s password" "$FBLOG"; then\n    :\nfi'
@@ -171,39 +167,44 @@ syntax_case quoted_hash_pipeline '' 'if false ||\n    ! printf "%s" "a#;b" | cmp
 syntax_case terminal_loops '' 'while false ||\n    ! probe; do\n    break\ndone\nuntil false &&\n    ! probe; do\n    :\ndone'
 syntax_case negated_compound_if 1 '! if true; then :; fi\n:'
 syntax_case negated_pipeline 1 '! printf x | cmp -s file -\n:'
-syntax_case skipped_status_then 2 'if false ||\n    ! true; :; then\n    :\nfi'
-syntax_case skipped_status_do 2 'while false ||\n    ! true; :; do\n    break\ndone'
+syntax_case skipped_status_then '' 'if false ||\n    ! true; :; then\n    :\nfi'
+syntax_case skipped_status_do '' 'while false ||\n    ! true; :; do\n    break\ndone'
 syntax_case heredoc_substitution 3 'cat <<EOF\n$(\n    ! true\n    printf x\n)\nEOF'
 syntax_case nested_case '' 'if case x in x) :;; esac ||\n    ! false; then\n    :\nfi'
-syntax_case hash_inside_word 2 'if false ||\n    ! true;foo#;then\n    :\nfi'
+syntax_case hash_inside_word '' 'if false ||\n    ! true;foo#;then\n    :\nfi'
 syntax_case quoted_terminal 1 '! true; "then"\n:'
 syntax_case comment_terminal 1 '! true; # then\n:'
-syntax_case uncertain_group 2 'if false ||\n    ! (true); then\n    :\nfi'
-syntax_case uncertain_braces 2 'if false ||\n    ! { true; }; then\n    :\nfi'
-syntax_case uncertain_substitution 2 'if false ||\n    ! echo "$(true)"; then\n    :\nfi'
-syntax_case uncertain_backticks 2 'if false ||\n    ! echo "`true`"; then\n    :\nfi'
-syntax_case background 2 'if false ||\n    ! true & :; then\n    :\nfi'
-syntax_case escaped_redirect 2 'if false ||\n    ! true \\>& :; then\n    :\nfi'
-syntax_case quoted_redirect 2 'if false ||\n    ! true ">"& :; then\n    :\nfi'
-syntax_case background_after_dup 2 'if false ||\n    ! true 2>&1& :; then\n    :\nfi'
-syntax_case escaped_hash_boundary 2 'if false ||\n    ! true x\\ #; :; then\n    :\nfi'
-syntax_case quoted_hash_boundary 2 'if false ||\n    ! true " "#; :; then\n    :\nfi'
-syntax_case uncertain_heredoc 2 'if false ||\n    ! cat <<END; then\nx\nEND\n    :\nfi'
+syntax_case uncertain_group '' 'if false ||\n    ! (true); then\n    :\nfi'
+syntax_case uncertain_braces '' 'if false ||\n    ! { true; }; then\n    :\nfi'
+syntax_case uncertain_substitution '' 'if false ||\n    ! echo "$(true)"; then\n    :\nfi'
+syntax_case uncertain_backticks '' 'if false ||\n    ! echo "`true`"; then\n    :\nfi'
+syntax_case background '' 'if false ||\n    ! true & :; then\n    :\nfi'
+syntax_case escaped_redirect '' 'if false ||\n    ! true \\>& :; then\n    :\nfi'
+syntax_case quoted_redirect '' 'if false ||\n    ! true ">"& :; then\n    :\nfi'
+syntax_case background_after_dup '' 'if false ||\n    ! true 2>&1& :; then\n    :\nfi'
+syntax_case escaped_hash_boundary '' 'if false ||\n    ! true x\\ #; :; then\n    :\nfi'
+syntax_case quoted_hash_boundary '' 'if false ||\n    ! true " "#; :; then\n    :\nfi'
+syntax_case uncertain_heredoc '' 'if false ||\n    ! cat <<END; then\nx\nEND\n    :\nfi'
 
-syntax_case nonterminal_then '2' 'if false ||\n    ! true; then :\nfi'
-syntax_case nonterminal_do '2' 'while false ||\n    ! true; do break\ndone'
+syntax_case nonterminal_then '' 'if false ||\n    ! true; then :\nfi'
+syntax_case nonterminal_do '' 'while false ||\n    ! true; do break\ndone'
 
-# spec: scripts/check-shell-portability.sh -- HEAD can match logical operators
-#       after an escaped ampersand. Raw operators, even quoted, stay uncertain.
-syntax_case escaped_ampersand_or 2 'if false ||\n    ! true \\&|| :; then\n    :\nfi'
-syntax_case escaped_ampersand_and 2 'if false ||\n    ! true \\|&& :; then\n    :\nfi'
-syntax_case quoted_or 2 'if false ||\n    ! printf "%s" "&||"; then\n    :\nfi'
-syntax_case quoted_and 2 'if false ||\n    ! printf "%s" "|&&"; then\n    :\nfi'
+syntax_case escaped_ampersand_or '' 'if false ||\n    ! true \\&|| :; then\n    :\nfi'
+syntax_case escaped_ampersand_and '' 'if false ||\n    ! true \\|&& :; then\n    :\nfi'
+syntax_case quoted_or '' 'if false ||\n    ! printf "%s" "&||"; then\n    :\nfi'
+syntax_case quoted_and '' 'if false ||\n    ! printf "%s" "|&&"; then\n    :\nfi'
 syntax_case negated_if_prefix 1 '! if true; then\n    :\nfi\n:'
 syntax_case negated_for_prefix 1 '! for x in a; do\n    :\ndone\n:'
-# spec: scripts/check-shell-portability.sh -- this mid-brace predicate remains a
-#       HEAD false positive; the filter does not inspect surrounding lines.
-syntax_case midbrace_predicate 3 'if {\n    :\n    ! false\n}; then\n    :\nfi'
+syntax_case midbrace_predicate '' 'if {\n    :\n    ! false\n}; then\n    :\nfi'
+syntax_case codex_objc_gate '' 'if ( sh "$ROOT/x.sh" --check "$MODE" ) > "$T/c.log" 2>&1 ||\n       ! grep -q "host changed since its proof" "$T/c.log"; then\n    :\nfi'
+syntax_case condition_continued '' 'if probe || \\\n    ! grep -q x f\nthen :; fi'
+syntax_case condition_and_final '' 'while probe &&\n    ! other\ndo break; done'
+syntax_case condition_substitution '' 'if probe ||\n    ! grep -q x "$(other)"; then :; fi'
+syntax_case condition_nonfinal_or '' 'until\n    ! probe ||\n    other\ndo break; done'
+syntax_case condition_elif_list '' 'if false; then :\nelif probe\n    ! other\nthen :; fi'
+syntax_case body_after_condition '3
+6' 'if probe ||\n    ! other; then\n    ! body\nfi\nwhile ! probe; do\n    ! body\n    break\ndone'
+syntax_case and_statement 2 'probe &&\n    ! other\n:'
 
 # spec: scripts/check-shell-portability.sh -- static Bash sources, reviewed with
 #       bash -n separately. The suite inspects their diagnostics without requiring
@@ -225,12 +226,12 @@ diagnostic_case bash_pipeline_select 1
 printf '%s\n' "! true \$'x\\'\"'; : \"; then #\"" > "$work/bash_ansi_quote.sh"
 diagnostic_case bash_ansi_quote 1
 printf '%s\n' 'if false ||' "    ! true \$'x'; then" ':' 'fi' > "$work/bash_ansi_predicate.sh"
-diagnostic_case bash_ansi_predicate 2
+diagnostic_case bash_ansi_predicate ''
 printf '%s\n' 'if false ||' '    ! true $"x"; then' ':' 'fi' > "$work/bash_locale_predicate.sh"
-diagnostic_case bash_locale_predicate 2
-syntax_case uncertain_parameter 2 'if false ||\n    ! true "${x:-value}"; then\n    :\nfi'
+diagnostic_case bash_locale_predicate ''
+syntax_case uncertain_parameter '' 'if false ||\n    ! true "${x:-value}"; then\n    :\nfi'
 printf '%s\n' 'if false ||' '    ! true "$[1+2]"; then' ':' 'fi' > "$work/bash_arithmetic_predicate.sh"
-diagnostic_case bash_arithmetic_predicate 2
+diagnostic_case bash_arithmetic_predicate ''
 
 # spec: scripts/check-shell-portability.sh -- parsing must never execute source.
 #       Extract only the functions so direct guard and mutation probes share them.
@@ -305,6 +306,11 @@ if out="$(cd "$work/ok" && sh "$work/dead-negation.sh" 2>&1)"; then
   echo "FAIL a filter hiding its original sample must refuse clean"; exit 1
 fi
 printf '%s\n' "$out" | grep -qi 'lint is dead' || { echo "FAIL should name the dead filter: $out"; exit 1; }
+sed 's/  if (ign\[i\]) return 1/  return 1/' "$S" > "$work/dead-condition.sh"
+if out="$(cd "$work/ok" && sh "$work/dead-condition.sh" 2>&1)"; then
+  echo "FAIL a condition parser hiding the original sample must refuse clean"; exit 1
+fi
+printf '%s\n' "$out" | grep -qi 'condition parser hides' || { echo "FAIL should name the dead condition parser: $out"; exit 1; }
 
 sed 's/^sort\[\[:space:\]\]/sortXX[[:space:]]/' "$S" > "$work/dead.sh"
 if out="$(cd "$work/ok" && sh "$work/dead.sh" 2>&1)"; then echo "FAIL: a rule that no longer matches its own sample is DEAD and must say so rather than pass"; exit 1; fi

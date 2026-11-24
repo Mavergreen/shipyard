@@ -27,6 +27,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 tmpd="$(mktemp -d "${TMPDIR:-/tmp}/shell-portability.XXXXXX")"
 trap 'rm -rf "$tmpd"' EXIT
 rulesfile="$tmpd/rules"
+: > "$tmpd/negok"
 cat > "$rulesfile" <<'RULES'
 sort[[:space:]]+(-[A-Za-z]*V\b|--version-sort)	git tag --list | sort -V | tail -1	sort -V	compare numerically instead (shipyard's lib.sh ver_cmp; see previous-release-tag.sh) -- 10.9's BSD sort has no -V and exits 2 having printed NOTHING, so a caller that swallows stderr gets a silently empty result
 \$\(mktemp([[:space:]]+-[A-Za-z]+)*[[:space:]]*\)	work="$(mktemp -d)"	mktemp with no template	give it one: mktemp -d "${TMPDIR:-/tmp}/<name>.XXXXXX" -- 10.9 BSD mktemp rejects a bare -d with a usage error
@@ -61,6 +62,11 @@ function flush(   i, t) {
   CUR = 0; CIGN = 0
   t = parse_list("top", 0, 0)
   if (!ABORT) { next_token(); if (TT != "EOF") die("unexpected '" TV "'") }
+  if (mode == "neg") {
+    if (ABORT) return
+    for (i = 1; i <= NN; i++) if (kind[i] == "neg" && in_condition(i)) print unit "\t" ln[line[i]]
+    return
+  }
   if (ABORT) { print unit "\tparse\t" ln[ERRL] "\t" ERR; return }
   if (t) tailof[t] = -1
   for (i = 1; i <= NN; i++) {
@@ -69,6 +75,12 @@ function flush(   i, t) {
     if (exempt(line[i]) || exempt(cline[i])) continue
     print unit "\t" ln[line[i]] "\t" kind[i]
   }
+}
+
+function in_condition(i,   a) {
+  if (ign[i]) return 1
+  for (a = anc[i]; a > 0; a = anc[a]) if (ign[a]) return 1
+  return 0
 }
 
 function exempt(l) { return l > 0 && l <= n && raw[l] ~ /portability-ok:[ \t]*[^ \t]/ }
@@ -334,7 +346,7 @@ function parse_andor(   t) {
 function parse_pipeline(   t, neg, si) {
   neg = 0
   next_token()
-  if (TT == "W" && !TQ && TV == "!") neg = 1
+  if (TT == "W" && !TQ && TV == "!") { neg = 1; newnode("neg", TL) }
   else if (!(TT == "W" && !TQ && TV == "time")) unget()
   si = CIGN; if (neg) CIGN = 1
   for (;;) {
@@ -555,9 +567,11 @@ conditional_predicate() {
     printf 'while : ||\n%s\n:\ndone\n' "$1" | /bin/sh -n 2>/dev/null
 }
 
-# spec: tests/shell-portability-test.sh -- preserve grep hits unless both gates accept.
-filter_negation_hits() {
+# spec: tests/shell-portability-test.sh -- a hit inside an if/elif/while/until condition, as the
+#       parser places it, passes; a file it cannot parse falls back to the one-line predicate.
+filter_negation_hits() {  # $1 = the file the hits are from
   while IFS= read -r hit; do
+    if grep -qxF "$1$TAB${hit%%:*}" "$tmpd/negok"; then continue; fi
     if conditional_predicate "${hit#*:}"; then continue; fi
     printf '%s\n' "$hit"
   done
@@ -579,7 +593,11 @@ done < "$rulesfile"
 
 while IFS="$TAB" read -r pat sample what instead; do
   [ "$what" = 'a bare !-negated command' ] || continue
-  if [ -z "$(printf '1:%s\n' "$sample" | filter_negation_hits)" ]; then
+  if [ -n "$(printf '@@unit\tsample\n1\t%s\n' "$sample" | awk -v mode=neg -f "$tmpd/subshell.awk")" ]; then
+    echo "check-shell-portability: the condition parser hides the negation sample -- the lint is dead, not clean" >&2
+    status=1
+  fi
+  if [ -z "$(printf '1:%s\n' "$sample" | filter_negation_hits sample)" ]; then
     echo "check-shell-portability: the negation filter hides its own sample -- the lint is dead, not clean" >&2
     status=1
   fi
@@ -607,6 +625,8 @@ fi
 #       `# shellcheck disable=... # <reason>` lines -- mainly for the lint's OWN test fixtures, which
 #       must contain violations to be worth anything. sed preserves the line count, so grep -n still
 #       reports the real line number.
+# shellcheck disable=SC2086  # $files is a deliberate word-split list of paths
+units $files | awk -v mode=neg -f "$tmpd/subshell.awk" > "$tmpd/negok"
 while IFS="$TAB" read -r pat sample what instead; do
   [ -n "$pat" ] || continue
   for f in $files; do
@@ -617,7 +637,7 @@ while IFS="$TAB" read -r pat sample what instead; do
       *) hits="$(sed -e 's/^[[:space:]]*#.*//' -e '/portability-ok:[[:space:]]*[^[:space:]]/s/.*//' "$f" | grep -nE "$pat" || true)" ;;
     esac
     if [ "$what" = 'a bare !-negated command' ] && [ -n "$hits" ]; then
-      hits="$(printf '%s\n' "$hits" | filter_negation_hits)"
+      hits="$(printf '%s\n' "$hits" | filter_negation_hits "$f")"
     fi
     [ -n "$hits" ] || continue
     printf '%s\n' "$hits" | while IFS= read -r h; do
