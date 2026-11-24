@@ -2,7 +2,8 @@
 # platform: host-agnostic
 #   usage: resolve-version.sh [auto|local]
 #          With no mode, a workflow_dispatch run ($GITHUB_EVENT_NAME) resolves local, the line's next N,
-#          and any other run auto, its current N.
+#          unless its event ($GITHUB_EVENT_PATH) names a non-empty inputs.reproduce_tag, which is then
+#          the version; any other run resolves auto, its current N.
 #          Prints this repo's full version (<upstream>-mavergreen.N), writing VERSION if it is not
 #          there yet. VERSION is a build PRODUCT -- written here, read by cmake,
 #          gitignored, never committed. An existing VERSION is reused as-is: within one CI run, an
@@ -15,8 +16,12 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # MAVERGREEN_REPO_ROOT, mg_dir
 
+rtag=""
 if [ $# -gt 0 ]; then mode="$1"
-elif [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then mode=local
+elif [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then
+  mode=local
+  [ ! -r "${GITHUB_EVENT_PATH:-}" ] \
+    || rtag="$(sed -n 's/.*"reproduce_tag"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$GITHUB_EVENT_PATH" | head -n 1 | tr -d '[:space:]')"
 else mode=auto
 fi
 vfile="$MAVERGREEN_REPO_ROOT/VERSION"
@@ -34,7 +39,9 @@ fi
   exit 1
 }
 
-ver="$(sh "$SELF/version.sh" "$mode" | sed -n 's/^FULL=//p')"
+if [ -n "$rtag" ]; then ver="$rtag"
+else ver="$(sh "$SELF/version.sh" "$mode" | sed -n 's/^FULL=//p')"
+fi
 [ -n "$ver" ] || { echo "resolve-version: version.sh produced no FULL=" >&2; exit 1; }
 printf '%s\n' "$ver" > "$vfile"
 printf '%s\n' "$ver"

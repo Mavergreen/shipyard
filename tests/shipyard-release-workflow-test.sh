@@ -251,8 +251,15 @@ for st in caches:
     c = re.sub(r"\s+", " ", str(st.get("if") or ""))
     if "steps.target.outputs.tag == ''" not in c:
         bad.append("a reproduce build is cold: actions/cache %r runs only when steps.target.outputs.tag == ''" % (st.get("with") or {}).get("path"))
+for st in steps:
+    if "assert_appcast_upgradeable.sh" in (st.get("run") or ""):
+        c = re.sub(r"\s+", " ", str(st.get("if") or ""))
+        if "steps.target.outputs.tag == ''" not in c:
+            bad.append("a reproduce build rebuilds an older tag, which newer tags outrank: feed-upgradeable runs only when steps.target.outputs.tag == ''")
 r = jobs.get("reproduce") or {}
 runs = " ".join((st.get("run") or "") for st in (r.get("steps") or []))
+if not re.search(r'cd "\$RUNNER_TEMP/tagtree" && sh scripts/shipyard-version\.sh', runs):
+    bad.append("the reproduce job's SHIPYARD_VERSION is the tag's own (the rebuild ran on the tag's tree), not main's")
 if not re.search(r'sh scripts/reproduce\.sh --dist \S+ --repo "\$GITHUB_REPOSITORY" --tag "\$TAG" --repo-root ', runs):
     bad.append("the reproduce job runs scripts/reproduce.sh on the build's dist against its tag")
 for b in bad: print("FAIL: " + b)

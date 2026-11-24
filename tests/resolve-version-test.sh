@@ -33,6 +33,14 @@ out="$(MAVERGREEN_REPO_ROOT="$work/b" MAVERGREEN_TAGS="20260727-mavergreen.14" s
 new_repo dispatched 1.5.2
 out="$(MAVERGREEN_REPO_ROOT="$work/dispatched" MAVERGREEN_TAGS="1.5.2-mavergreen.3" GITHUB_EVENT_NAME=workflow_dispatch sh "$S")"
 [ "$out" = "1.5.2-mavergreen.4" ] || { echo "FAIL: a dispatched run resolves local, the line's next N: got '$out'"; exit 1; }
+new_repo reproduced 1.5.2
+printf '{\n  "inputs": {\n    "force_publish": "",\n    "reproduce_tag": "1.5.2-mavergreen.2"\n  }\n}\n' > "$work/event.json"
+out="$(MAVERGREEN_REPO_ROOT="$work/reproduced" MAVERGREEN_TAGS="1.5.2-mavergreen.3" GITHUB_EVENT_NAME=workflow_dispatch GITHUB_EVENT_PATH="$work/event.json" sh "$S")"
+[ "$out" = "1.5.2-mavergreen.2" ] || { echo "FAIL: a reproduce_tag dispatch rebuilds that tag, so its version is the tag, not the line's next N: got '$out'"; exit 1; }
+new_repo blank 1.5.2
+printf '{\n  "inputs": {\n    "reproduce_tag": ""\n  }\n}\n' > "$work/event.json"
+out="$(MAVERGREEN_REPO_ROOT="$work/blank" MAVERGREEN_TAGS="1.5.2-mavergreen.3" GITHUB_EVENT_NAME=workflow_dispatch GITHUB_EVENT_PATH="$work/event.json" sh "$S")"
+[ "$out" = "1.5.2-mavergreen.4" ] || { echo "FAIL: an empty reproduce_tag is a plain dispatch: got '$out'"; exit 1; }
 new_repo pushed 1.5.2
 out="$(MAVERGREEN_REPO_ROOT="$work/pushed" MAVERGREEN_TAGS="1.5.2-mavergreen.3" GITHUB_EVENT_NAME=push sh "$S")"
 [ "$out" = "1.5.2-mavergreen.3" ] || { echo "FAIL: a push resolves auto, the line's current N: got '$out'"; exit 1; }

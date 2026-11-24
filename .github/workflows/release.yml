@@ -139,9 +139,13 @@ jobs:
             --pkg-url "https://github.com/Mavergreen/shipyard/releases/download/v$v/shipyard-$v.pkg" \
             --notes-file dist/RELEASE_NOTES.md \
             --pkg "dist/shipyard-$v.pkg"
-          # spec: mavergreen-conventions SKILL.md, "A self-upstream repo gets a real baseline
-          #       too, via --tag-glob" -- this is the worked example the rule book names.
-          sh scripts/assert_appcast_upgradeable.sh --appcast dist/shipyard.xml --version "v$v" --tag-glob 'v*.*.*'
+
+      # spec: mavergreen-conventions SKILL.md, "A self-upstream repo gets a real baseline
+      #       too, via --tag-glob" -- this is the worked example the rule book names. A reproduce
+      #       run rebuilds a tag that newer tags outrank, and publishes nothing.
+      - name: The feed must be an upgrade
+        if: steps.target.outputs.tag == ''
+        run: sh scripts/assert_appcast_upgradeable.sh --appcast dist/shipyard.xml --version "v${{ steps.ver.outputs.version }}" --tag-glob 'v*.*.*'
 
       - name: Artifact checks
         env:
@@ -226,8 +230,8 @@ jobs:
           TAG: ${{ needs.build.outputs.reproduce-tag }}
         run: |
           set -eu
-          SHIPYARD_VERSION="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"; export SHIPYARD_VERSION
           git worktree add -q "$RUNNER_TEMP/tagtree" "refs/tags/$TAG"
+          SHIPYARD_VERSION="$(cd "$RUNNER_TEMP/tagtree" && sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"; export SHIPYARD_VERSION
           sh scripts/reproduce.sh --dist "$RUNNER_TEMP/rebuilt" --repo "$GITHUB_REPOSITORY" --tag "$TAG" --repo-root "$RUNNER_TEMP/tagtree"
 
   major-tag:
