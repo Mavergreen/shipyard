@@ -182,17 +182,17 @@ clean "no linked image, no dSYM needed" dsym-asset "$GOOD"
 P='golang-1.26.5-native-mavergreen.5.pkg'
 L="load $P opt/mavergreen/go126/bin/go x86_64"
 R="rpath $P opt/mavergreen/go126/bin/go x86_64"
-ok "libc++ by @rpath, the installed libcxx22 first" "$GOOD
+clean "libc++ by @rpath, the installed libcxx22 first" link-rpath "$GOOD
 $L @rpath/libc++.1.dylib
 $R 1 @loader_path/../../libcxx22/lib
 $R 2 @loader_path/../lib"
-ok "@executable_path resolves from the image too" "$GOOD
+clean "@executable_path resolves from the image too" link-rpath "$GOOD
 $L @rpath/libc++.1.dylib
 $R 1 @executable_path/../../../mavergreen/libcxx22/lib/"
-ok "an absolute installed rpath" "$GOOD
+clean "an absolute installed rpath" link-rpath "$GOOD
 $L @rpath/libc++.1.dylib
 $R 1 /opt/mavergreen/libcxx22/lib"
-ok "a load by @rpath of a dylib other than libc++ needs no particular rpath" "$GOOD
+clean "a load by @rpath of a dylib other than libc++ needs no particular rpath" link-rpath "$GOOD
 $L @rpath/libt.dylib
 $R 1 @loader_path/../lib"
 no "the bundled copy before the installed libcxx22" "link-rpath|opt/mavergreen/go126/bin/go (x86_64), which loads @rpath/libc++.1.dylib, and its first LC_RPATH, @loader_path/../lib, resolves to opt/mavergreen/go126/lib" "$GOOD
@@ -207,27 +207,67 @@ no "a pinned release's dylib by its absolute path" "link-rpath|loads /usr/local/
 $L /usr/local/mavergreen/zlib/lib/libz.1.dylib"
 no "libcxx22's libc++abi from outside libcxx22" "link-rpath|loads /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib by its absolute path" "$GOOD
 $L /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib"
-ok "libcxx22's libc++abi, absolute, from inside libcxx22" "$GOOD
+clean "libcxx22's libc++abi, absolute, from inside libcxx22" link-rpath "$GOOD
 load libcxx22-22.1.8-mavergreen.1.pkg opt/mavergreen/libcxx22/lib/libc++.1.dylib x86_64 /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib"
-ok "a product's own dylib by its absolute path, from its own tree" "$GOOD
+clean "a product's own dylib by its absolute path, from its own tree" link-rpath "$GOOD
 $L /opt/mavergreen/go126/lib/libgo.dylib"
-ok "system dylibs are not family dylibs" "$GOOD
+clean "system dylibs are not family dylibs" link-rpath "$GOOD
 $L /usr/lib/libSystem.B.dylib
 $L /usr/lib/libc++.1.dylib"
 A='go126-1.26.5-mavergreen.5-macos-x86_64.tar.gz'
-ok "a standalone archive's image resolves from where the pkg installs it" "$GOOD
+clean "a standalone archive's image resolves from where the pkg installs it" link-rpath "$GOOD
 load $A go126-1.26.5-mavergreen.5/bin/go x86_64 @rpath/libc++.1.dylib
 rpath $A go126-1.26.5-mavergreen.5/bin/go x86_64 1 @loader_path/../../libcxx22/lib
 rpath $A go126-1.26.5-mavergreen.5/bin/go x86_64 2 @loader_path/../lib"
 no "a standalone archive's bundled copy first" "link-rpath|go126-1.26.5-mavergreen.5/bin/go (x86_64), which loads @rpath/libc++.1.dylib, and its first LC_RPATH, @loader_path/../lib, resolves to opt/mavergreen/go126/lib" "$GOOD
 load $A go126-1.26.5-mavergreen.5/bin/go x86_64 @rpath/libc++.1.dylib
 rpath $A go126-1.26.5-mavergreen.5/bin/go x86_64 1 @loader_path/../lib"
-ok "a load is judged per slice: the other slice's rpath does not count" "$GOOD
+clean "a load is judged per slice: the other slice's rpath does not count" link-rpath "$GOOD
 $L @rpath/libc++.1.dylib
 $R 1 @loader_path/../../libcxx22/lib
 rpath $P opt/mavergreen/go126/bin/go arm64 1 @loader_path/../lib"
 no "weak-bind info out of name order" "weak-bind-sorted|opt/mavergreen/go126/bin/go (x86_64), whose weak-bind info is not sorted by name (first out of order: __ZTI1A)" "$GOOD
 weakbind-unsorted $P opt/mavergreen/go126/bin/go x86_64 __ZTI1A"
+
+# spec: explain/link-requires.md -- every linked family dylib is listed by a declared library dependency's
+#       release manifest, and every library requirement is linked.
+LC="$L @rpath/libc++.1.dylib
+$R 1 @loader_path/../../libcxx22/lib"
+ok "a family dylib a declared library dependency's manifest lists" "$GOOD
+$LC
+repo-requires go126 libcxx22 library
+dep-manifest libcxx22 ok
+dep-dylib libcxx22 @rpath/libc++.1.dylib"
+no "a family dylib no declared dependency lists" "link-requires|opt/mavergreen/go126/bin/go (x86_64), which loads @rpath/libc++.1.dylib, which no declared library dependency's release manifest lists" "$GOOD
+$LC"
+no "a library requirement nothing loads" "link-requires|go126 requires zlib as a library, and nothing this release ships loads it" "$GOOD
+$LC
+repo-requires go126 libcxx22 library
+dep-manifest libcxx22 ok
+dep-dylib libcxx22 @rpath/libc++.1.dylib
+repo-requires go126 zlib library
+dep-manifest zlib ok
+dep-dylib zlib @rpath/libz.1.dylib"
+ok "a pre-flag-day library dependency with no manifest is tolerated" "$GOOD
+$LC
+repo-requires go126 libcxx22 library
+dep-manifest libcxx22 q2
+dep-prefix libcxx22 /usr/local/mavergreen/libcxx22/"
+clean "a pre-flag-day dependency's dylib under its install prefix" link-requires "$GOOD
+$L /usr/local/mavergreen/libcxx22/lib/libc++.1.dylib
+repo-requires go126 libcxx22 library
+dep-manifest libcxx22 q2
+dep-prefix libcxx22 /usr/local/mavergreen/libcxx22/"
+no "an unreadable dependency manifest fails closed" "link-requires|cannot read libcxx22's release manifest: no RELEASE-MANIFEST.txt" "$GOOD
+$LC
+repo-requires go126 libcxx22 library
+dep-manifest libcxx22 fail no%20RELEASE-MANIFEST.txt"
+ok "a product's own dylib needs no requirement" "$GOOD
+$L @rpath/libgo.dylib
+$R 1 @loader_path/../lib
+dylib-id $P opt/mavergreen/go126/lib/libgo.dylib x86_64 @rpath/libgo.dylib"
+clean "a tool requirement is not linked" link-requires "$GOOD
+repo-requires go126 cmake tool"
 
 X='macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
 C='golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go'

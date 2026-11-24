@@ -169,9 +169,10 @@ debug_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded), $4 = 
 #       LC_RPATHs in order, and the first symbol its weak-bind info lists out of name order.
 link_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded), $4 = its linked arches, $5 = macho-loads.sh's output. Non-zero, the reason in _mf_why, on abort.
   printf '%s\n' "$5" | awk -v art="$1" -v p="$3" -v lk=" $4 " '
-    index(lk, " " $1 " ") && ($2 == "dylib" || $2 == "rpath") {
+    index(lk, " " $1 " ") && ($2 == "dylib" || $2 == "rpath" || $2 == "id") {
       v = $0; sub(/^[^ ]+ [^ ]+ /, "", v); gsub(/%/, "%25", v); gsub(/ /, "%20", v)
       if ($2 == "dylib") { print "load", art, p, $1, v; next }
+      if ($2 == "id") { print "dylib-id", art, p, $1, v; next }
       print "rpath", art, p, $1, ++n[$1], v }'
   need_objdump || return 1
   _lf_def="$(macho_archs "$2" | head -1)"
@@ -546,5 +547,27 @@ if [ -n "${_devs:-}" ]; then
     grep -qxF "$_g" "$sa_tmp/used" || printf 'standalone-text-unused %s\n' "$(printf '%s' "$_g" | enc)"
   done
 fi
+
+# spec: explain/link-requires.md -- the repo's declared requirements, and of each library dependency the
+#       dylibs its pinned release's manifest lists; a -mavericks.N pin that publishes none resolves by its
+#       install prefix.
+_rlibs=""
+for _rq in "$root"/.mavergreen/products/*/requires/*/kind; do
+  [ -f "$_rq" ] || continue
+  _rd="${_rq%/kind}"; _rdep="${_rd##*/}"; _rs="${_rd%/requires/*}"; _rs="${_rs##*/}"
+  _rk="$(sed -n 1p "$_rq" | tr -d '\r')"
+  printf 'repo-requires %s %s %s\n' "$_rs" "$_rdep" "${_rk:-none}"
+  [ "$_rk" = library ] || continue
+  case " $_rlibs " in *" $_rdep "*) continue ;; esac
+  _rlibs="$_rlibs $_rdep"
+  _rc=0; _rm="$(MAVERGREEN_REPO_ROOT="$root" sh "$SELF/dep-manifest.sh" "$_rdep" 2>"$sa_tmp/dm.err")" || _rc=$?
+  case "$_rc" in
+    0) printf 'dep-manifest %s ok\n' "$_rdep"
+       printf '%s\n' "$_rm" | awk -v d="$_rdep" '$1 == "dylib" { v = $0; sub(/^dylib [^ ]+ /, "", v); gsub(/%/, "%25", v); gsub(/ /, "%20", v); print "dep-dylib", d, v }' ;;
+    3) _rp="$(sed -n 1p "$root/.mavergreen/ingredients/$_rdep/product" 2>/dev/null)" || _rp=""
+       printf 'dep-manifest %s q2\ndep-prefix %s /usr/local/mavergreen/%s/\n' "$_rdep" "$_rdep" "${_rp:-$_rdep}" ;;
+    *) printf 'dep-manifest %s fail %s\n' "$_rdep" "$(sed -n 's/^dep-manifest: //p' "$sa_tmp/dm.err" | tail -1 | enc)" ;;
+  esac
+done
 
 printf 'end-of-facts\n'

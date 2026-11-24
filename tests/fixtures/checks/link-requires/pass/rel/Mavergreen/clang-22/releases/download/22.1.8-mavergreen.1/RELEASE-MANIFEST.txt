@@ -1,0 +1,3 @@
+dylib libcxx22 @rpath/libc++.1.dylib
+dylib libcxx22 /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib
+shipyard 1.0.880

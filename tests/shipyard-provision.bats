@@ -22,6 +22,12 @@ echo "tar $*" >> "$STUB_LOG"
 while [ $# -gt 3 ]; do shift 2; done
 mkdir -p "$3"; printf '%s\n' "$3"
 STUB
+  cat > "$S/dep-manifest.sh" <<'STUB'
+#!/bin/sh
+if [ -n "${STUB_MANIFEST+x}" ]; then printf '%s\n' "$STUB_MANIFEST"; exit 0; fi
+if [ -n "${STUB_MANIFEST_FAIL:-}" ]; then echo "dep-manifest: $STUB_MANIFEST_FAIL" >&2; exit 1; fi
+echo "dep-manifest: Mavergreen/$1 has no RELEASE-MANIFEST.txt: a -mavericks.N release predates them" >&2; exit 3
+STUB
   cat > "$WORK/bin/sudo" <<'STUB'
 #!/bin/sh
 echo "sudo $*" >> "$STUB_LOG"
@@ -135,6 +141,33 @@ sums() {  # sums SLUG VERSION ASSET...
   run $P --only cmake --into "$WORK/into"
   [ "$status" -eq 1 ]
   [ "$output" = "shipyard-provision: cmake only works from its real prefix (deviation relocatable); rerun with --install" ]
+  [ ! -s "$STUB_LOG" ]
+}
+
+@test "a dependency whose release manifest says relocatable stops without --install, with no deviation of ours" {
+  export STUB_MANIFEST='relocatable cmake
+shipyard 1.0.880'
+  run $P --only cmake --into "$WORK/into"
+  [ "$status" -eq 1 ]
+  [ "$output" = "shipyard-provision: cmake only works from its real prefix (its release manifest says relocatable); rerun with --install" ]
+  [ ! -s "$STUB_LOG" ]
+}
+
+@test "a dependency whose release manifest lists no relocatable row is fetched, whatever our deviation says" {
+  d="$WORK/repo/.mavergreen/deviations/relocatable/cmake"; mkdir -p "$d"
+  echo cmake > "$d/scope"; echo 'loads its modules from its real prefix' > "$d/reason"; echo 'when cmake finds its modules relative to itself' > "$d/revisit"
+  export STUB_MANIFEST='relocatable other
+shipyard 1.0.880'
+  run $P --only cmake --into "$WORK/into"
+  [ "$status" -eq 0 ]
+  [ "$output" = "cmake=$WORK/into/cmake-4.4.5-mavergreen.2" ]
+}
+
+@test "a dependency whose release manifest cannot be read stops, naming it" {
+  export STUB_MANIFEST_FAIL='cannot read the release manifest of Mavergreen/cmake 4.4.5-mavergreen.2'
+  run $P --only cmake --into "$WORK/into"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cannot read the release manifest of Mavergreen/cmake 4.4.5-mavergreen.2"* ]] || false
   [ ! -s "$STUB_LOG" ]
 }
 

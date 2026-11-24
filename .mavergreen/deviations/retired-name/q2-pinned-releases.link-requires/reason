@@ -1,0 +1,1 @@
+a dependency pinned to a pre-flag-day release has no manifest, so its dylibs resolve by the prefix it installs at

@@ -53,6 +53,11 @@
 #            load          <artifact> <path> <arch> <dylib>       one per dylib a linked slice loads (%20-encoded)
 #            rpath         <artifact> <path> <arch> <n> <rpath>   one per LC_RPATH of a linked slice, n its order from 1 (%20-encoded)
 #            weakbind-unsorted <artifact> <path> <arch> <symbol>  a linked slice whose weak-bind info is out of name order, and the first such symbol
+#            dylib-id      <artifact> <path> <arch> <install-name> one per LC_ID_DYLIB of a linked slice (%20-encoded)
+#            repo-requires <short> <dep> <kind>                   one per .mavergreen/products/<short>/requires/<dep>/kind
+#            dep-manifest  <dep> ok|q2|fail [<why>]               whether a library dependency's pinned release manifest was read (%20-encoded)
+#            dep-dylib     <dep> <install-name>                   one per dylib row of that manifest (%20-encoded)
+#            dep-prefix    <dep> <prefix>                         the install prefix a q2 dependency's dylibs resolve by
 #            oso           <artifact> <path> <arch>               one per linked slice that keeps a debug map
 #            homepath      <artifact> <path> <string>             a string in a linked file naming /Users/<u>/, /home/<u>/ or /var/folders/ (%20-encoded)
 #            dsym          <tarball> <path> <arch> <uuid>         one per DWARF slice in a *-dSYM.tar.gz
@@ -135,8 +140,11 @@ kind_ran appcast appcast enclosure length enclosure-url notes feed-title
 kind_ran build-info "build record" variant-build-info
 kind_ran macho Mach-O sdk-pin cxxabi
 kind_ran uuid "linked Mach-O" debug-map dsym-asset
-if grep -Eq '^macho [^ ]+ [^ ]+ [^ ]+ (EXECUTE|DYLIB|BUNDLE) ' "$facts"; then chk_ran link-rpath; chk_ran weak-bind-sorted
-else chk_notrun link-rpath "no linked Mach-O in this release"; chk_notrun weak-bind-sorted "no linked Mach-O in this release"; fi
+if grep -Eq '^macho [^ ]+ [^ ]+ [^ ]+ (EXECUTE|DYLIB|BUNDLE) ' "$facts"; then chk_ran link-rpath; chk_ran weak-bind-sorted; chk_ran link-requires
+else
+  chk_notrun link-rpath "no linked Mach-O in this release"; chk_notrun weak-bind-sorted "no linked Mach-O in this release"
+  if grep -q '^repo-requires [^ ]* [^ ]* library$' "$facts"; then chk_ran link-requires; else chk_notrun link-requires "no linked Mach-O and no library requirement"; fi
+fi
 
 rule_of() {
   case "$1" in
@@ -171,6 +179,7 @@ rule_of() {
     dsym-asset) echo "every shipped linked Mach-O slice has its dSYM, by LC_UUID, in a *-dSYM.tar.gz of the same release" ;;
     link-rpath) echo "a family dylib is loaded by @rpath from outside its own product tree, and libc++ through an LC_RPATH that finds the installed libcxx22 first" ;;
     weak-bind-sorted) echo "every shipped linked Mach-O slice lists its weak-bind info in name order" ;;
+    link-requires) echo "every family dylib a shipped image loads is listed by the release manifest of a dependency declared as a library, and every library requirement is loaded" ;;
     root-runs) echo "root runs a launch daemon or an install script only from a root-only chain" ;;
     os-overwrite) echo "a regular product only adds files to Mac OS X 10.9.5, and never replaces one the OS ships" ;;
     standalone) echo "every standalone archive in a release passes check-standalone-archive.sh" ;;
@@ -210,6 +219,7 @@ fix_of() {
     cxxabi) echo "link the family's runtime (libcxx22), or declare .mavergreen/deviations/cxxabi/<label>/ (scope <glob>, a reason, a revisit)" ;;
     debug-map) echo "build through MavergreenToolchain.cmake, which maps the build paths away, and run split-debug.sh on the staged root, or declare .mavergreen/deviations/debug-map/<label>/ (scope <path glob>, a reason, a revisit)" ;;
     link-rpath) echo "link the family dylib by its @rpath install name, with the installed tree's LC_RPATH first (for libcxx22, one resolving to opt/mavergreen/libcxx22/lib), or declare .mavergreen/deviations/link-rpath/<label>/ (scope <path glob>, a reason, a revisit)" ;;
+    link-requires) echo "declare .mavergreen/products/<short>/requires/<dep>/kind as library for each dependency whose dylibs the product loads, and drop a library requirement nothing loads, or declare .mavergreen/deviations/link-requires/<label>/ (scope <path glob or dep>, a reason, a revisit)" ;;
     weak-bind-sorted) echo "relink with clang22 22.1.8-mavericks.5 or later, whose lld writes weak-bind info in name order, or declare .mavergreen/deviations/weak-bind-sorted/<label>/ (scope <path glob>, a reason, a revisit)" ;;
     dsym-asset) echo "run split-debug.sh on the staged root and publish the S-V-dSYM.tar.gz it writes beside the pkg and archive, or declare .mavergreen/deviations/dsym-asset/<label>/ (scope <path glob>, a reason, a revisit)" ;;
     root-runs) echo "never name an admin-writable path in an install script; root runs only from a root-only chain" ;;
@@ -1171,6 +1181,39 @@ while read -r how file path arch val to; do
     order) fail link-rpath "$file ships $p ($arch), which loads @rpath/libc++.1.dylib, and its first LC_RPATH, $(dec "$val"), resolves to $(dec "$to"), not opt/mavergreen/libcxx22/lib -- the installed libcxx22 comes first, so one libc++ serves the process" "$p" ;;
   esac
 done < "$tmp/link-rpath"
+
+# spec: explain/link-requires.md -- every family dylib a linked slice loads, other than the release's own, is a
+#       dylib row of a library dependency's manifest, or under a q2 dependency's install prefix, and an
+#       @rpath load nothing else resolves is a q2 library dependency's; every library requirement is
+#       loaded; an unreadable manifest fails closed. A deviation excuses a path or a dependency.
+awk '$1 == "dylib-id" { own[$5] = 1; next }
+     $1 == "repo-requires" { if ($4 == "library") { lib[$3] = 1; if (index(" " of[$3] " ", " " $2 " ") == 0) of[$3] = (of[$3] == "" ? $2 : of[$3] "," $2) }; next }
+     $1 == "dep-manifest" { st[$2] = $3; if ($3 == "fail") { w = $0; sub(/^dep-manifest [^ ]+ fail ?/, "", w); why[$2] = w }; next }
+     $1 == "dep-dylib" { if (!($3 in by)) by[$3] = $2; next }
+     $1 == "dep-prefix" { np++; pd[np] = $2; pp[np] = $3; next }
+     $1 == "load" { nl++; la[nl] = $2; lp[nl] = $3; lh[nl] = $4; lv[nl] = $5; next }
+     END {
+       for (d in lib) if (st[d] == "fail" || !(d in st)) { bad = 1; print "unreadable", d, (why[d] == "" ? "-" : why[d]) }
+       for (i = 1; i <= nl; i++) {
+         v = lv[i]
+         if (v !~ /^@rpath\// && v !~ /^\/(opt|usr\/local)\/mavergreen\//) continue
+         if (v in own) continue
+         if ((v in by) && (by[v] in lib)) { used[by[v]] = 1; continue }
+         hit = 0
+         for (j = 1; j <= np; j++) if (index(v, pp[j]) == 1 && (pd[j] in lib)) { used[pd[j]] = 1; hit = 1 }
+         if (!hit && v ~ /^@rpath\//) for (d in lib) if (st[d] == "q2") { used[d] = 1; hit = 1 }
+         if (hit || bad) continue
+         print "undeclared", la[i], lp[i], lh[i], v
+       }
+       for (d in lib) if (!(d in used) && st[d] != "fail" && (d in st)) print "stale", of[d], d
+     }' "$facts" | LC_ALL=C sort > "$tmp/link-requires"
+while read -r how a b c d; do
+  case "$how" in
+    unreadable) fail link-requires "cannot read $a's release manifest: $(dec "$b") -- its dylibs cannot be told from undeclared ones, so nothing is assumed" "$a" ;;
+    undeclared) fail link-requires "$a ships $(dec "$b") ($c), which loads $(dec "$d"), which no declared library dependency's release manifest lists" "$(dec "$b")" ;;
+    stale) fail link-requires "$a requires $b as a library, and nothing this release ships loads it" "$b" ;;
+  esac
+done < "$tmp/link-requires"
 
 # spec: explain/weak-bind-sorted.md -- 10.9's dyld coalesces weak symbols across images only from
 #       name-sorted weak-bind info; a deviation excuses a path.

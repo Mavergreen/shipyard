@@ -13,8 +13,10 @@
 #          (default $MAVERGREEN_PKG_CACHE/extracted). A `from` ingredient takes the repo and version of
 #          the ingredient it names. With --install, and always when CI=true, a pkg is installed with
 #          `sudo installer` and the printed path is the installed copy; Linux installs nothing.
-#          An ingredient the repo deviates from as `relocatable` (scope: its name, or *) only works
-#          from its real prefix, so without --install it stops. --product and --asset replace the
+#          An ingredient whose pinned release's RELEASE-MANIFEST.txt (dep-manifest.sh) lists
+#          `relocatable <product>` only works from its real prefix, so without --install it stops; a
+#          -mavericks.N pin, which predates manifests, stops instead when the repo deviates from it as
+#          `relocatable` (scope: its name, or *), and an unreadable manifest stops too. --product and --asset replace the
 #          product name and the pkg filename, for the one ingredient --only names.
 #          SHIPYARD_PROVISION_OS (Linux or Darwin) replaces uname -s. Exit 1 on a failed fetch or a
 #          stop, 2 on a usage error or a malformed pin.
@@ -109,6 +111,8 @@ release_value() {
 }
 
 results=""; envlines=""; seen=""
+errf="$(mktemp "${TMPDIR:-/tmp}/shipyard-provision-err.XXXXXX")" || die "cannot make a temporary file"
+trap 'rm -f "$errf"' EXIT
 for name in $(mg_list ingredients); do
   mg_has "ingredients/$name/product" || continue
   wanted "$name" || continue
@@ -130,8 +134,17 @@ for name in $(mg_list ingredients); do
   if [ "$os" != Linux ] && path="$(installed_copy "$product" "$version")"; then
     :
   else
-    if [ "$install" -eq 0 ] && shipyard_deviated relocatable "$name" >/dev/null; then
-      die "$name only works from its real prefix (deviation relocatable); rerun with --install"
+    if [ "$install" -eq 0 ]; then
+      mrc=0; man="$(sh "$SELF/dep-manifest.sh" "$name" 2>"$errf")" || mrc=$?
+      case "$mrc" in
+        0) if printf '%s\n' "$man" | grep -qx "relocatable $product"; then
+             die "$name only works from its real prefix (its release manifest says relocatable); rerun with --install"
+           fi ;;
+        3) if shipyard_deviated relocatable "$name" >/dev/null; then
+             die "$name only works from its real prefix (deviation relocatable); rerun with --install"
+           fi ;;
+        *) die "$(sed 's/^dep-manifest: //' "$errf" | tail -n 1)" ;;
+      esac
     fi
     tarball=""
     if [ "$os" = Linux ]; then
