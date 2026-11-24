@@ -22,6 +22,21 @@ elseif(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
 else()
   message(FATAL_ERROR "MavericksToolchain.cmake: arch '${CMAKE_OSX_ARCHITECTURES}' has no pinned SDK (x86_64 and arm64 do)")
 endif()
+execute_process(COMMAND sw_vers -productVersion OUTPUT_VARIABLE _mav_osv
+                OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(_mav_osv MATCHES "^10\\.9\\.")
+  if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
+    message(FATAL_ERROR "MavericksToolchain.cmake: a native build (on 10.9) is x86_64 only (got '${CMAKE_OSX_ARCHITECTURES}') -- "
+                        "build ${CMAKE_OSX_ARCHITECTURES} cross, on a modern host")
+  endif()
+endif()
+execute_process(
+  COMMAND sh "${CMAKE_CURRENT_LIST_DIR}/scripts/fetch_sdk.sh" --arch "${CMAKE_OSX_ARCHITECTURES}"
+  OUTPUT_VARIABLE _mav_sdk OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _mav_rc)
+if(NOT _mav_rc EQUAL 0)
+  message(FATAL_ERROR "MavericksToolchain.cmake: fetch_sdk.sh --arch ${CMAKE_OSX_ARCHITECTURES} failed")
+endif()
+set(CMAKE_OSX_SYSROOT "${_mav_sdk}" CACHE PATH "the pinned SDK" FORCE)
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
   set(CMAKE_SYSTEM_NAME Darwin)
   set(CMAKE_SYSTEM_PROCESSOR "${CMAKE_OSX_ARCHITECTURES}")
@@ -31,7 +46,8 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
   #       so a Linux cross build needs nothing beyond the preset.
   # spec: tests/linux-cxx-own-libcxx-test.sh -- x86_64 keeps clang22's own clang.cfg and clang++.cfg,
   #       so it links as clang22 on 10.9 does: Recaulk, the toolchain's libc++ and the cfg's linker.
-  # platform: arm64 skips them -- their libc++.a is x86_64 only, and 11.0's own libc++ suffices.
+  # spec: tests/linux-arm64-sdk-libcxx-test.sh -- arm64 C++ compiles against the SDK's libc++ headers.
+  # platform: arm64 skips them and uses the SDK's own libc++, headers and dylib together.
   set(_mav_cl "")
   foreach(_mav_lang C CXX OBJC OBJCXX)
     if(DEFINED CMAKE_${_mav_lang}_COMPILER OR DEFINED ENV{${_mav_lang}})
@@ -62,6 +78,9 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
     set(CMAKE_${_mav_lang}_COMPILER_TARGET "${CMAKE_OSX_ARCHITECTURES}-apple-macos${_mav_target}")
     if(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
       set(CMAKE_${_mav_lang}_FLAGS_INIT "--no-default-config")
+      if(_mav_lang MATCHES "XX$")
+        string(APPEND CMAKE_${_mav_lang}_FLAGS_INIT " -nostdinc++ -isystem \"${CMAKE_OSX_SYSROOT}/usr/include/c++/v1\"")
+      endif()
     endif()
   endforeach()
   foreach(_mav_lang OBJC C CXX OBJCXX)
@@ -82,19 +101,3 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
   endforeach()
 endif()
 set(CMAKE_OSX_DEPLOYMENT_TARGET "${_mav_target}" CACHE STRING "pinned per arch" FORCE)
-
-execute_process(COMMAND sw_vers -productVersion OUTPUT_VARIABLE _mav_osv
-                OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-if(_mav_osv MATCHES "^10\\.9\\.")
-  if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
-    message(FATAL_ERROR "MavericksToolchain.cmake: a native build (on 10.9) is x86_64 only (got '${CMAKE_OSX_ARCHITECTURES}') -- "
-                        "build ${CMAKE_OSX_ARCHITECTURES} cross, on a modern host")
-  endif()
-endif()
-execute_process(
-  COMMAND sh "${CMAKE_CURRENT_LIST_DIR}/scripts/fetch_sdk.sh" --arch "${CMAKE_OSX_ARCHITECTURES}"
-  OUTPUT_VARIABLE _mav_sdk OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE _mav_rc)
-if(NOT _mav_rc EQUAL 0)
-  message(FATAL_ERROR "MavericksToolchain.cmake: fetch_sdk.sh --arch ${CMAKE_OSX_ARCHITECTURES} failed")
-endif()
-set(CMAKE_OSX_SYSROOT "${_mav_sdk}" CACHE PATH "the pinned SDK" FORCE)
