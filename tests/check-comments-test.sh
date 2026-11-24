@@ -277,7 +277,7 @@ spacedrepo="$w/repo with space"
 mkdir -p "$spacedrepo/scripts"
 printf 'platform\nspec\n' > "$spacedrepo/comment-reasons"
 printf '#!/bin/sh\nx=1\n# untagged in a checkout whose path contains a space\n' > "$spacedrepo/scripts/named.sh"
-( cd "$spacedrepo" && git init -q . && git add -A ) >/dev/null 2>&1
+( cd "$spacedrepo" && git init -q . && git add -A ) >/dev/null 2>&1 || exit 1
 rc=0
 ( cd "$spacedrepo" && sh "$S" ) > "$w/spacedrepo.out" 2>&1 || rc=$?
 [ "$rc" -eq 1 ] \
@@ -298,7 +298,7 @@ amprepo="$w/repo & co"
 mkdir -p "$amprepo/scripts"
 printf 'platform\nspec\n' > "$amprepo/comment-reasons"
 printf '#!/bin/sh\nx=1\n# untagged in a checkout whose path contains an ampersand\n' > "$amprepo/scripts/named.sh"
-( cd "$amprepo" && git init -q . && git add -A ) >/dev/null 2>&1
+( cd "$amprepo" && git init -q . && git add -A ) >/dev/null 2>&1 || exit 1
 rc=0
 ( cd "$amprepo" && sh "$S" ) > "$w/amprepo.out" 2>&1 || rc=$?
 [ "$rc" -eq 1 ] \

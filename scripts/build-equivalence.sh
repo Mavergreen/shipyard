@@ -127,6 +127,7 @@ list() {
   ( cd "$_root" && for _bit in 4000 2000 1000 400 200 100 40 20 10 4 2 1; do
       find . -type f -perm -"$_bit" | sed 's|^\./||; s|$|'"$TAB$_bit"'|'
     done ) > "$work/$_side.modes"
+  [ $? -eq 0 ] || return 1
   ( cd "$_root" && {
       find . -type l | sed 's|^\./||; s|$|'"$TAB"'l|'
       find . -type f -perm -100 | sed 's|^\./||; s|$|'"$TAB"'x|'

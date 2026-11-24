@@ -18,7 +18,7 @@ ln -s Versions/Current/Resources "$fw/Resources"
 mkdir -p "$w/src/Extras"; : > "$w/src/Extras/other"
 # platform: "./"-prefixed members, exactly as upstream's Sparkle-1.27.3.tar.xz spells them -- GNU tar
 #           matches a named member only as spelled, which is how the unprefixed name broke on Linux.
-( cd "$w/src" && tar -czf "$w/sparkle.tar" ./Sparkle.framework ./Extras )
+( cd "$w/src" && tar -czf "$w/sparkle.tar" ./Sparkle.framework ./Extras ) || exit 1
 sha="$(shasum -a 256 "$w/sparkle.tar" | awk '{print $1}')"
 
 out="$(MT2_SPARKLE_CACHE="$w/c" MAVERICKS_SPARKLE_URL="file://$w/sparkle.tar" MAVERICKS_SPARKLE_SHA256="$sha" sh "$S")" \

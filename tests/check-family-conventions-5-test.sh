@@ -77,14 +77,14 @@ vm otherfile "$PUB
     needs: [build]"
 printf 'name: e2e\non: push\njobs:\n%s\n' "$VMJOB" | sed '/needs: \[build\]/d' \
   > "$work/vm-otherfile/.github/workflows/e2e.yml"
-(cd "$work/vm-otherfile" && git add -A) >/dev/null 2>&1
+(cd "$work/vm-otherfile" && git add -A) >/dev/null 2>&1 || exit 1
 vm_fails otherfile "$NOVM"
 
 vm declared "$PUB
     needs: [build]"
 printf '\n- on-target: drives a kext that needs the real trackpad; exit: a VM with USB passthrough\n' \
   >> "$work/vm-declared/INGREDIENTS.md"
-(cd "$work/vm-declared" && git add -A) >/dev/null 2>&1
+(cd "$work/vm-declared" && git add -A) >/dev/null 2>&1 || exit 1
 vm_passes declared
 
 # spec: SKILL.md "Acceptance on real 10.9" -- a scoped on-target:<part> declares one gap in the VM
@@ -93,7 +93,7 @@ vm scoped "$PUB
     needs: [build]"
 printf '\n- on-target:docker-vm: Fusion cannot nest inside the QEMU guest; exit: a nested-virt runner\n' \
   >> "$work/vm-scoped/INGREDIENTS.md"
-(cd "$work/vm-scoped" && git add -A) >/dev/null 2>&1
+(cd "$work/vm-scoped" && git add -A) >/dev/null 2>&1 || exit 1
 vm_fails scoped "$NOVM"
 
 vm gap "$(printf '%s\n    if: needs.ver.outputs.publish == '"'"'true'"'"'' "$VMJOB" | sed 's/^  vm-test:/  on-mavericks:/')
@@ -101,7 +101,7 @@ $PUB
     needs: [build, on-mavericks]"
 printf '\n- on-target:menubar-gui: the guest has no logged-in GUI session; exit: a guest with one\n' \
   >> "$work/vm-gap/INGREDIENTS.md"
-(cd "$work/vm-gap" && git add -A) >/dev/null 2>&1
+(cd "$work/vm-gap" && git add -A) >/dev/null 2>&1 || exit 1
 vm_passes gap
 
 # spec: SKILL.md "Acceptance on real 10.9" -- a release.yml job calling a LOCAL reusable workflow
@@ -150,13 +150,13 @@ vm_fails remote "$NOVM"
 vm globpart "$PUB
     needs: [build]"
 printf '\n- on-target:*: everything is a gap\n' >> "$work/vm-globpart/INGREDIENTS.md"
-(cd "$work/vm-globpart" && git add -A) >/dev/null 2>&1
+(cd "$work/vm-globpart" && git add -A) >/dev/null 2>&1 || exit 1
 vm_fails globpart 'on-target:<part> is one word'
 
 # spec: scripts/check-family-conventions.sh check 21 -- test/ holds fixtures exactly as tests/ does.
 mkrepo "$work/vm-testdir" novm; mkdir -p "$work/vm-testdir/test"
 printf '#!/bin/sh\npkgbuild --root x t.pkg\n' > "$work/vm-testdir/test/fixture.sh"
-(cd "$work/vm-testdir" && git add -A) >/dev/null 2>&1
+(cd "$work/vm-testdir" && git add -A) >/dev/null 2>&1 || exit 1
 vm_passes testdir
 
 (cd "$work/ok" && sh "$S" >/dev/null 2>&1) \

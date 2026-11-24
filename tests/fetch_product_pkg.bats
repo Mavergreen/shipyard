@@ -185,7 +185,7 @@ DIST
   "$STEVEDORE" expand "$WORK/clean.pkg" "$WORK/x"
   printf 'junk' > "$WORK/prod/usr/local/mavergreen/widget/lib/._libwidget.a"
   printf 'junk' > "$WORK/prod/usr/local/mavergreen/widget/include/._widget"
-  ( cd "$WORK/prod" && find . | LC_ALL=C sort | cpio -o -H odc 2>/dev/null | gzip -n ) > "$WORK/x/Payload"
+  ( cd "$WORK/prod" && find . | LC_ALL=C sort | cpio -o -H odc 2>/dev/null | gzip -n ) > "$WORK/x/Payload" || return 1
   "$STEVEDORE" xar --mtime 1700000000 --out "$WORK/prod.pkg" none Bom "$WORK/x/Bom" none Payload "$WORK/x/Payload" none PackageInfo "$WORK/x/PackageInfo"
   cat > "$WORK/dist.xml" <<DIST
 <?xml version="1.0" encoding="utf-8"?>
@@ -199,7 +199,7 @@ DIST
 DIST
   "$STEVEDORE" product --distribution "$WORK/dist.xml" --package "$WORK/base.pkg" --package "$WORK/prod.pkg" \
     --mtime 1700000000 --out "$REL/widget-1.0.pkg" > /dev/null
-  ( cd "$REL" && shasum -a 256 widget-1.0.pkg > SHA256SUMS )
+  ( cd "$REL" && shasum -a 256 widget-1.0.pkg > SHA256SUMS ) || return 1
   run sh "$HELPER" widget 1.0 "$DEST"
   [ "$status" -eq 1 ]
   [[ "$output" == *"AppleDouble"*"usr/local/mavergreen/widget/include/._widget"* ]] || false

@@ -36,7 +36,7 @@ printf '%s\n' "$out" | grep -qx 'FULL=1.26.5-mavericks.1' || { echo "FAIL: a non
 if sh "$V" sideways >/dev/null 2>&1; then echo "FAIL: an unknown mode must be an error, not a silent default"; exit 1; fi
 
 ( cd "$w" && git init -q -b main . && git config user.email t@e.com && git config user.name t \
-  && git add UPSTREAM_VERSION && git commit -qm base && git tag 1.26.5-mavericks.9 )
+  && git add UPSTREAM_VERSION && git commit -qm base && git tag 1.26.5-mavericks.9 ) || exit 1
 out="$(sh "$V" auto)"
 printf '%s\n' "$out" | grep -qx 'FULL=1.26.5-mavericks.9' || { echo "FAIL: with no MAVERICKS_TAGS it must read the repo's own git tags: $out"; exit 1; }
 

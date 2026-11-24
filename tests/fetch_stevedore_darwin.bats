@@ -22,7 +22,7 @@ fake_stevedore() {
   mkdir -p "$WORK/root/usr/local/mavergreen/stevedore/bin"
   fake_stevedore "$WORK/root/usr/local/mavergreen/stevedore/bin/stevedore" "$PIN"
   pkgbuild --quiet --root "$WORK/root" --identifier dev.mavergreen.stevedore --version 1 "$REL/stevedore-$PIN.pkg"
-  ( cd "$REL" && shasum -a 256 "stevedore-$PIN.pkg" > SHA256SUMS )
+  ( cd "$REL" && shasum -a 256 "stevedore-$PIN.pkg" > SHA256SUMS ) || return 1
   export STEVEDORE_HOST=Darwin
   output="$(sh "$FETCH" 2>/dev/null)"
   [ "$output" = "$WORK/cache/$PIN/stevedore" ]

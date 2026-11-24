@@ -144,7 +144,7 @@ plan_stdout a@1
 
 fresh; release a 1 --no-appcast
 cp "$w/rel/Mavergreen/arepo/releases/download/1/a-1.pkg" "$w/rel/Mavergreen/arepo/releases/download/1/a-x.pkg"
-( cd "$w/rel/Mavergreen/arepo/releases/download/1" && shasum -a 256 a-1.pkg a-x.pkg > SHA256SUMS )
+( cd "$w/rel/Mavergreen/arepo/releases/download/1" && shasum -a 256 a-1.pkg a-x.pkg > SHA256SUMS ) || exit 1
 plan a@1
 [ "$rc" -eq 1 ] && has "a" && has "1" || fail "no appcast and more than one .pkg fails, naming the product and release"
 
@@ -425,7 +425,7 @@ with tarfile.open(sys.argv[1], "w:gz") as t:
 d = open(sys.argv[1], "rb").read()
 open(sys.argv[1], "wb").write(d[: len(d) * 3 // 4])
 ' "$_rel/b-2-linux-x86_64.tar.gz"
-( cd "$_rel" && shasum -a 256 b-2-linux-x86_64.tar.gz >> SHA256SUMS )
+( cd "$_rel" && shasum -a 256 b-2-linux-x86_64.tar.gz >> SHA256SUMS ) || exit 1
 run b@2
 [ "$rc" -eq 1 ] && [ "$(cat "$(mg b)/file")" = b ] && [ "$(pget b version)" = 1 ] && [ ! -e "$(mg b)/bin" ] \
   && [ -z "$(find "$(mg b)" -name '.*')" ] \
@@ -439,7 +439,7 @@ run a@1
 fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
 printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; latest lb 20261027.13
 mkdir -p "$w/sdksrc/MacOSX10.9.sdk/usr/lib"; : > "$w/sdksrc/MacOSX10.9.sdk/usr/lib/libSystem.tbd"
-( cd "$w/sdksrc" && tar -czf "$w/sdk.tar" MacOSX10.9.sdk ); cp "$w/sdk.tar" "$top/sdk.tar"
+( cd "$w/sdksrc" && tar -czf "$w/sdk.tar" MacOSX10.9.sdk ) || exit 1; cp "$w/sdk.tar" "$top/sdk.tar"
 export MAVERICKS_SDK_URL="file://$w/sdk.tar" MAVERICKS_SDK_SHA256="$(shasum -a 256 "$w/sdk.tar" | awk '{print $1}')" MAVERICKS_SDK_CACHE="$w/sdkcache"
 release a 1 'sdk109>=20261027'
 INSTALL_PRODUCTS_HOST=linux plan_stdout a@1
@@ -494,10 +494,10 @@ FAKE_LB_JSON=1 run a@1
 fresh; release x 1 --no-appcast; linux
 "$SD" expand "$w/stage/x-1/comp.pkg" "$w/stage/x-1/cx"
 printf junk > "$w/stage/x-1/root/usr/local/mavergreen/x/._file"
-( cd "$w/stage/x-1/root" && find . | LC_ALL=C sort | cpio -o -H odc 2>/dev/null | gzip -n ) > "$w/stage/x-1/cx/Payload"
+( cd "$w/stage/x-1/root" && find . | LC_ALL=C sort | cpio -o -H odc 2>/dev/null | gzip -n ) > "$w/stage/x-1/cx/Payload" || exit 1
 "$SD" xar --mtime 1700000000 --out "$w/rel/Mavergreen/xrepo/releases/download/1/x-1.pkg" none Bom "$w/stage/x-1/cx/Bom" \
   none Payload "$w/stage/x-1/cx/Payload" none PackageInfo "$w/stage/x-1/cx/PackageInfo"
-( cd "$w/rel/Mavergreen/xrepo/releases/download/1" && shasum -a 256 x-1.pkg > SHA256SUMS )
+( cd "$w/rel/Mavergreen/xrepo/releases/download/1" && shasum -a 256 x-1.pkg > SHA256SUMS ) || exit 1
 run x@1
 [ "$rc" -eq 1 ] && has "x 1" && has "x-1-linux-x86_64.tar.gz" && has AppleDouble && [ ! -e "$(mg x)/mavergreen.plist" ] && [ ! -s "$w/installed" ] \
   || fail "linux_unextractable: no linux archive and a pkg fetch_product_pkg.sh refuses (an AppleDouble member) exits 1, naming both"

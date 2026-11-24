@@ -52,7 +52,7 @@ conf "file://$W/good.png" '/opt/moved/*.png';                         no "an ICO
 conf "file://$W/good.png" '/usr/share/icons/hicolor/*/apps/demo.png'; no "an icon moved one directory deeper (a * never crosses /)" ICON_GLOB
 conf "" "$deep";                                                      ok "no ICON_URL is fine"
 conf "file://$W/good.png" "$deep"
-( cd "$W" && sh "$S" demo.conf >/dev/null 2>&1 ) || { echo "FAIL a conf named relative to the current directory (as preset-icons.yml passes it)"; ( cd "$W" && sh "$S" demo.conf ); exit 1; }
+( cd "$W" && sh "$S" demo.conf >/dev/null 2>&1 ) || { echo "FAIL a conf named relative to the current directory (as preset-icons.yml passes it)"; ( cd "$W" && sh "$S" demo.conf ) || exit 1; exit 1; }
 
 fpr() { python3 "$here/../scripts/icon-tool.py" fingerprint "$1"; }
 FP=$(fpr "$W/good.png"); SHA=${FP%% *}
@@ -152,6 +152,7 @@ silent "an icon accepted as unlike the package's is not re-flagged while unchang
 conf "file://$W/f/blue-180.png" "$deep"
 mkdir -p "$W/prod"; ( cd "$W/prod" && git init -q && for v in 1.0 1.5 2.0 3.0; do echo $v > UPSTREAM_VERSION
   git add UPSTREAM_VERSION && git -c user.name=t -c user.email=t@t commit -qm $v; done )
+[ $? -eq 0 ] || exit 1
 cp "$W/demo.conf" "$W/prod/demo.conf"
 lines=$(accept --search-back 3 "$W/prod/demo.conf" 2>"$W/err") || { echo "FAIL --search-back: $(cat "$W/err")"; exit 1; }
 printf '%s\n' "$lines" | grep -qx "ICON_URL_SOURCE='demo 1.5 /usr/share/pixmaps/demo blue.png distance:0'" \

@@ -896,7 +896,7 @@ NOTES
 #           fixture is not about, the same trap the comment above already names for .pkg.
 mkdir -p "$_e2e/good-src"
 printf 'payload\n' > "$_e2e/good-src/payload.txt"
-( cd "$_e2e/good-src" && tar -czf "$_e2e/good/thing-9.9p2-mavericks.6.tgz" payload.txt )
+( cd "$_e2e/good-src" && tar -czf "$_e2e/good/thing-9.9p2-mavericks.6.tgz" payload.txt ) || exit 1
 rm -rf "$_e2e/good-src"
 _good_len="$(wc -c < "$_e2e/good/thing-9.9p2-mavericks.6.tgz" | tr -d ' ')"
 sh "$GA" "Test Channel" "9.9p2-mavericks.6" \
@@ -920,7 +920,7 @@ rm -rf "$_e2e"
 _fc1="$(mktemp -d "${TMPDIR:-/tmp}/af-failclosed-a.XXXXXX")"
 mkdir -p "$_fc1/src" "$_fc1/dist"
 printf '\317\372\355\376x' > "$_fc1/src/tiny"
-( cd "$_fc1/src" && tar -czf "$_fc1/dist/broken.tar.gz" tiny )
+( cd "$_fc1/src" && tar -czf "$_fc1/dist/broken.tar.gz" tiny ) || exit 1
 _fc1_facts="$(sh "$AF" "$_fc1/dist" 1.0.0-mavericks.1 "$_fc1" 2>/dev/null)" \
   && { rm -rf "$_fc1"; echo "FAIL: a tarball holding an unreadable Mach-O-magic file must abort, not succeed; got: $_fc1_facts"; exit 1; }
 printf '%s\n' "$_fc1_facts" | grep -q '^abort cannot read a Mach-O' \
@@ -945,7 +945,7 @@ if clang -arch x86_64 -mmacosx-version-min=10.9 "$_fc4/m.c" -o "$_fc4/x" 2>/dev/
   lipo -create "$_fc4/x" "$_fc4/a" -output "$_fc4/src/fat" 2>/dev/null && _fc4_ok=1
 fi
 if [ "$_fc4_ok" = 1 ]; then
-  ( cd "$_fc4/src" && tar -czf "$_fc4/dist/fat.tar.gz" fat )
+  ( cd "$_fc4/src" && tar -czf "$_fc4/dist/fat.tar.gz" fat ) || exit 1
   for _fc4_sub in -l -hv; do
     printf '#!/bin/sh\ncase "$1" in %s) echo "otool: %s broke" >&2; exit 1 ;; esac\nexec otool "$@"\n' "$_fc4_sub" "$_fc4_sub" > "$_fc4/bin/otool"
     chmod +x "$_fc4/bin/otool"
@@ -995,7 +995,7 @@ else
   # platform: --mode overrides the archived permission bits without needing to actually read a
   #           mode-000 source file at archive time (which even its owner cannot do); GNU tar
   #           (this host) restores that exact mode on extraction.
-  ( cd "$_fc3/src" && tar --mode=000 -czf "$_fc3/dist/noperm.tar.gz" noperm )
+  ( cd "$_fc3/src" && tar --mode=000 -czf "$_fc3/dist/noperm.tar.gz" noperm ) || exit 1
   _fc3_facts="$(sh "$AF" "$_fc3/dist" 1.0.0-mavericks.1 "$_fc3" 2>/dev/null)" \
     && { rm -rf "$_fc3"; echo "FAIL: a tarball holding an unreadable (mode 000) Mach-O-magic file must abort, not succeed; got: $_fc3_facts"; exit 1; }
   printf '%s\n' "$_fc3_facts" | grep -q '^abort ' \
@@ -1430,7 +1430,7 @@ export STEVEDORE="$SD"
     printf 'int main(void){return 0;}\n' > "$_pk/h.c"
     # platform: the runner's SDK would make this fixture fail the sdk-pin rule the archive assertion below now enforces; clang honours SDKROOT
     SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/usr/local/mavergreen/x/bin/hello"
-    ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
+    ( cd "$_st/usr/local/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello ) || exit 1
   fi
   cat > "$_st/usr/local/mavergreen/x/mavergreen.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

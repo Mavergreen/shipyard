@@ -153,7 +153,7 @@ mkrepo "$work/v1"
 
 mkrepo "$work/v2"
 printf '1.0.0-mavericks.3\n' > "$work/v2/VERSION"
-(cd "$work/v2" && git add -f VERSION) >/dev/null 2>&1
+(cd "$work/v2" && git add -f VERSION) >/dev/null 2>&1 || exit 1
 if out="$(cd "$work/v2" && sh "$S" 2>&1)"; then echo "FAIL tracked VERSION should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'VERSION' || { echo "FAIL should name VERSION: $out"; exit 1; }
 
@@ -170,7 +170,7 @@ printf '%s\n' "$out" | grep -q 'UPSTREAM_VERSION' || { echo "FAIL should name UP
 #       still pass.
 mkrepo "$work/v5"; rm "$work/v5/UPSTREAM_VERSION"
 mkdir -p "$work/v5/build"; printf '#!/bin/sh\n: > UPSTREAM_VERSION\n' > "$work/v5/build/derive-upstream-version.sh"
-(cd "$work/v5" && git add -A) >/dev/null 2>&1
+(cd "$work/v5" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/v5" && sh "$S" >/dev/null) || { echo "FAIL derived upstream should pass"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- check 7b fails a repo with a TRACKED lines/ dir --
@@ -180,7 +180,7 @@ mkdir -p "$work/v5/build"; printf '#!/bin/sh\n: > UPSTREAM_VERSION\n' > "$work/v
 #       stays satisfied and this fixture isolates 7b's failure.
 mkrepo "$work/v6"
 mkdir -p "$work/v6/lines/126"; printf '1.26.5\n' > "$work/v6/lines/126/UPSTREAM_VERSION"
-(cd "$work/v6" && git add -A) >/dev/null 2>&1
+(cd "$work/v6" && git add -A) >/dev/null 2>&1 || exit 1
 if out="$(cd "$work/v6" && sh "$S" 2>&1)"; then echo "FAIL: a reappearing tracked lines/ dir should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'lines/' || { echo "FAIL should name lines/: $out"; exit 1; }
 
@@ -200,7 +200,7 @@ mkrepo "$work/v8"
 mkdir -p "$work/v8/lines/126"
 printf '._AppleDouble\n' > "$work/v8/lines/126/._patches"     # untracked -- .gitignore below covers it
 printf '._*\n' >> "$work/v8/.gitignore"
-(cd "$work/v8" && git add -A) >/dev/null 2>&1
+(cd "$work/v8" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/v8" && sh "$S" >/dev/null) || { echo "FAIL: an untracked (ignored-AppleDouble) lines/ dir should pass"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- `git ls-files -- lines/` (trailing slash) matches
@@ -208,14 +208,14 @@ printf '._*\n' >> "$work/v8/.gitignore"
 #       the retired shape and must pass.
 mkrepo "$work/v9"
 printf 'not a directory\n' > "$work/v9/lines"
-(cd "$work/v9" && git add -A) >/dev/null 2>&1
+(cd "$work/v9" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/v9" && sh "$S" >/dev/null) || { echo "FAIL: a plain file named 'lines' (not a directory) should pass"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- the check only cares about lines/ AT THE REPO ROOT;
 #       a nested sub/lines/ is some other directory's business, not this family convention's.
 mkrepo "$work/v10"
 mkdir -p "$work/v10/sub/lines/22"; printf '22.1.1\n' > "$work/v10/sub/lines/22/UPSTREAM_VERSION"
-(cd "$work/v10" && git add -A) >/dev/null 2>&1
+(cd "$work/v10" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/v10" && sh "$S" >/dev/null) || { echo "FAIL: a nested sub/lines/ should pass"; exit 1; }
 
 # spec: check 7d is the mirror of 7c: a build OUTPUT dir that is NOT ignored. tailscale's
@@ -301,7 +301,7 @@ printf 'binary-\000-junk\n' > "$work/buntracked/._decoy.sh"
 (cd "$work/buntracked" && sh "$S" 2>&1 | grep -qi 'illegal byte sequence') && { echo "FAIL: a binary ._*.sh must not reach sed"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- but once committed, the very same file counts.
-(cd "$work/buntracked" && git add stray.sh >/dev/null 2>&1)
+(cd "$work/buntracked" && git add stray.sh >/dev/null 2>&1) || exit 1
 if (cd "$work/buntracked" && sh "$S" >/dev/null 2>&1); then echo "FAIL: a COMMITTED build script's dir must be required to be ignored"; exit 1; fi
 (cd "$work/buntracked" && sh "$S" 2>&1 | grep -q 'never-committed-build') || { echo "FAIL: should name the tracked script's build dir"; exit 1; }
 
@@ -357,7 +357,7 @@ printf '%s\n' "$out" | grep -q 'no python3' || { echo "FAIL should name python3:
 #       tests while this gate quietly stopped calling it, and nothing would go red.
 mkrepo "$work/p1"
 printf '#!/bin/sh\nd="$(mktemp -d)"\n' > "$work/p1/tool.sh"  # portability-ok: fixture must contain the violation
-(cd "$work/p1" && git add -A) >/dev/null 2>&1
+(cd "$work/p1" && git add -A) >/dev/null 2>&1 || exit 1
 if out="$(cd "$work/p1" && sh "$S" 2>&1)"; then echo "FAIL a 10.9-unportable script should fail the gate"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'tool.sh:2' || { echo "FAIL should name file:line: $out"; exit 1; }
 

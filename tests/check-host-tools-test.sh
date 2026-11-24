@@ -25,7 +25,7 @@ mk() {
   (cd "$d" && git init -q && git add -A) >/dev/null 2>&1
 }
 passes() {  # $1 = fixture, $2 = why
-  (cd "$work/$1" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: $2 -- should pass:"; (cd "$work/$1" && sh "$S" 2>&1 | sed 's/^/    | /'); exit 1; }
+  (cd "$work/$1" && sh "$S" >/dev/null 2>&1) || { echo "FAIL: $2 -- should pass:"; (cd "$work/$1" && sh "$S" 2>&1 | sed 's/^/    | /') || return 1; exit 1; }
 }
 fails() {  # $1 = fixture, $2 = why
   if (cd "$work/$1" && sh "$S" >/dev/null 2>&1); then echo "FAIL: $2 -- should fail"; exit 1; fi
@@ -34,7 +34,7 @@ fails() {  # $1 = fixture, $2 = why
 mk ok; passes ok "an adopted repo whose one script is clean"
 
 mkdir -p "$work/none/scripts"; printf '#!/bin/sh\necho hi\n' > "$work/none/scripts/x.sh"
-(cd "$work/none" && git init -q && git add -A) >/dev/null 2>&1
+(cd "$work/none" && git init -q && git add -A) >/dev/null 2>&1 || exit 1
 passes none "a repo where no script declares a host has not adopted the split"
 if (cd "$work/none" && sh "$S" --required >/dev/null 2>&1); then echo "FAIL: --required must fail a repo that has not adopted the split"; exit 1; fi
 
@@ -61,15 +61,15 @@ fails bats "a .bats file"
 mk testsh "tests/t-test.sh${T}$AGN\notool -L x\n"
 fails testsh "a tests/*.sh file"
 mk extless "bin/tool${T}$AGN\notool -L x\n"
-chmod +x "$work/extless/bin/tool"; (cd "$work/extless" && git add -A) >/dev/null 2>&1
+chmod +x "$work/extless/bin/tool"; (cd "$work/extless" && git add -A) >/dev/null 2>&1 || exit 1
 fails extless "an extensionless executable"
 mk compiled "tests/fixture.macho${T}\317\372\355\376\007\000\000\001\nnot a script\n"
-chmod +x "$work/compiled/tests/fixture.macho"; (cd "$work/compiled" && git add -A) >/dev/null 2>&1
+chmod +x "$work/compiled/tests/fixture.macho"; (cd "$work/compiled" && git add -A) >/dev/null 2>&1 || exit 1
 passes compiled "a tracked-executable binary (a NUL byte, no #!) is compiled, not a script, and declares nothing"
 (cd "$work/compiled" && sh "$S" 2>&1) | grep -q '1 tracked scripts' \
   || { echo "FAIL: a compiled executable must not be counted as a script: $(cd "$work/compiled" && sh "$S" 2>&1)"; exit 1; }
 mk latin1exe "bin/tool${T}$AGN\necho caf\351\notool -L x\n"
-chmod +x "$work/latin1exe/bin/tool"; (cd "$work/latin1exe" && git add -A) >/dev/null 2>&1
+chmod +x "$work/latin1exe/bin/tool"; (cd "$work/latin1exe" && git add -A) >/dev/null 2>&1 || exit 1
 out="$(cd "$work/latin1exe" && LC_ALL=en_US.UTF-8 sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'bin/tool:3' \
   || { echo "FAIL: an executable script holding a non-UTF-8 byte is text, not compiled, under a UTF-8 locale too: $out"; exit 1; }
@@ -88,14 +88,14 @@ passes tmpl "scripts/templates/ holds other repos' canonical copies (check 17's)
 mk tmplcopy
 mkdir -p "$work/tmplcopy/build"
 cp "$here/../scripts/templates/msc.sh" "$work/tmplcopy/build/msc.sh"
-(cd "$work/tmplcopy" && git add -A) >/dev/null 2>&1
+(cd "$work/tmplcopy" && git add -A) >/dev/null 2>&1 || exit 1
 passes tmplcopy "a consumer's build/msc.sh, byte-identical to shipyard's own template, is skipped too"
 
 mk tmplcopydiff
 mkdir -p "$work/tmplcopydiff/build"
 cat "$here/../scripts/templates/msc.sh" > "$work/tmplcopydiff/build/msc.sh"
 printf '# a local edit\n' >> "$work/tmplcopydiff/build/msc.sh"
-(cd "$work/tmplcopydiff" && git add -A) >/dev/null 2>&1
+(cd "$work/tmplcopydiff" && git add -A) >/dev/null 2>&1 || exit 1
 fails tmplcopydiff "a build/msc.sh that DIFFERS from the template and declares nothing is not exempt -- the skip is identity, not name"
 
 # spec: scripts/host-tools.awk -- command position, as a shell sees it.
@@ -106,7 +106,7 @@ for call in '(otool -L x)' '/usr/bin/otool -L x' 'sudo -u "$u" launchctl list' '
             '/usr/libexec/PlistBuddy -c Print x' 'exec lipo -info x' 'x="$(true)"; lipo -info x' \
             'case "$1" in a) otool -L x ;; esac' 'n=$((n + 1)) otool -L x'; do
   n=$((n + 1)); mk "call$n"
-  printf '#!/bin/sh\n%s\n%s\n' "$AGN" "$call" > "$work/call$n/scripts/c.sh"; (cd "$work/call$n" && git add -A) >/dev/null 2>&1
+  printf '#!/bin/sh\n%s\n%s\n' "$AGN" "$call" > "$work/call$n/scripts/c.sh"; (cd "$work/call$n" && git add -A) >/dev/null 2>&1 || exit 1
   fails "call$n" "a call: $call"
 done
 n=0
@@ -114,7 +114,7 @@ for notcall in 'command -v otool >/dev/null' 'echo "use otool to look"' 'otools 
                'lipo() { echo stub; }' '# otool -L x' 'echo x  # not run; otool -L x would be' "printf '%%s\\\\n' 'a
 otool -L x'"; do
   n=$((n + 1)); mk "notcall$n"
-  printf '#!/bin/sh\n%s\n%s\n' "$AGN" "$notcall" > "$work/notcall$n/scripts/c.sh"; (cd "$work/notcall$n" && git add -A) >/dev/null 2>&1
+  printf '#!/bin/sh\n%s\n%s\n' "$AGN" "$notcall" > "$work/notcall$n/scripts/c.sh"; (cd "$work/notcall$n" && git add -A) >/dev/null 2>&1 || exit 1
   passes "notcall$n" "not a call: $notcall"
 done
 mk heredoc "scripts/h.sh${T}#!/bin/sh\n$AGN\ncat <<'EOF2'\notool -L x\nEOF2\necho after\n"
@@ -135,7 +135,7 @@ fails guardcomment "an unrelated comment line between the guard and the call mus
 #       ("towc: multibyte conversion failure"), exited 2, and the file was reported unreadable.
 mk latin1 "scripts/l.sh${T}#!/bin/sh\n$AGN\necho caf\351\n"
 (cd "$work/latin1" && LC_ALL=en_US.UTF-8 sh "$S" >/dev/null 2>&1) \
-  || { echo "FAIL: a host-agnostic script holding a non-UTF-8 byte must pass under a UTF-8 locale:"; (cd "$work/latin1" && LC_ALL=en_US.UTF-8 sh "$S" 2>&1 | sed 's/^/    | /'); exit 1; }
+  || { echo "FAIL: a host-agnostic script holding a non-UTF-8 byte must pass under a UTF-8 locale:"; (cd "$work/latin1" && LC_ALL=en_US.UTF-8 sh "$S" 2>&1 | sed 's/^/    | /') || exit 1; exit 1; }
 mk latin1tool "scripts/l.sh${T}#!/bin/sh\n$AGN\necho caf\351\notool -L x\n"
 out="$(cd "$work/latin1tool" && LC_ALL=en_US.UTF-8 sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'scripts/l.sh:4' \
@@ -148,6 +148,6 @@ printf '%s\n' "$out" | grep -q 'whole tree' || { echo "FAIL: the ok line must sa
 
 # spec: SKILL.md check 22 -- shipyard itself has adopted the split, and must stay adopted.
 (cd "$here/.." && sh "$S" --required >/dev/null 2>&1) \
-  || { echo "FAIL: shipyard's own tree must pass check-host-tools --required:"; (cd "$here/.." && sh "$S" --required 2>&1 | sed 's/^/    | /'); exit 1; }
+  || { echo "FAIL: shipyard's own tree must pass check-host-tools --required:"; (cd "$here/.." && sh "$S" --required 2>&1 | sed 's/^/    | /') || exit 1; exit 1; }
 
 echo "PASS: check-host-tools"

@@ -9,7 +9,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 if [ -d "$SELF/../reference/objc" ]; then
-  (cd "$SELF/../reference/objc" && pwd -P); exit 0
+  (cd "$SELF/../reference/objc" && pwd -P) || exit 1; exit 0
 fi
 d="$(sh "$SELF/fetch_drydock.sh" "$SELF/../components/drydock")" || {
   echo "objc-reference-dir: no reference/objc beside $SELF, and the pinned Drydock could not be had" >&2; exit 1; }

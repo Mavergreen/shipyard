@@ -19,7 +19,7 @@ printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|--
 
 # spec: scripts/check-family-conventions.sh -- a release shipping a new upstream links upstream's notes: the repo commits the hook that
 #       says where, or says in INGREDIENTS.md why there is nothing to link.
-mkrepo "$work/u1"; (cd "$work/u1" && git rm -q --cached build/upstream-release-notes-url.sh && rm -r build)
+mkrepo "$work/u1"; (cd "$work/u1" && git rm -q --cached build/upstream-release-notes-url.sh && rm -r build) || exit 1
 if out="$(cd "$work/u1" && sh "$S" 2>&1)"; then echo "FAIL no hook and no reason should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'upstream-release-notes-url.sh' || { echo "FAIL should name the hook: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'No upstream release notes:' || { echo "FAIL should name the declaration: $out"; exit 1; }
@@ -27,14 +27,14 @@ printf '# Build ingredients\n\nNo upstream release notes: this repo is its own u
 (cd "$work/u1" && sh "$S" >/dev/null) || { echo "FAIL: the declaration, with a reason (a self-upstream repo; a bundle), is the other way to comply -- should pass"; exit 1; }
 printf '# Build ingredients\n\nNo upstream release notes:\n' > "$work/u1/INGREDIENTS.md"
 if (cd "$work/u1" && sh "$S" >/dev/null 2>&1); then echo "FAIL: an empty reason is not a reason -- a reasonless declaration should fail"; exit 1; fi
-mkrepo "$work/u2"; (cd "$work/u2" && mkdir scripts && git mv build/upstream-release-notes-url.sh scripts/)
+mkrepo "$work/u2"; (cd "$work/u2" && mkdir scripts && git mv build/upstream-release-notes-url.sh scripts/) || exit 1
 [ -f "$work/u2/scripts/upstream-release-notes-url.sh" ] && [ ! -e "$work/u2/build/upstream-release-notes-url.sh" ] \
   || { echo "FAIL fixture: hook did not move to scripts/"; exit 1; }
 (cd "$work/u2" && sh "$S" >/dev/null) || { echo "FAIL: the swift repos keep their scripts, and so the hook, in scripts/ -- a hook there should pass"; exit 1; }
 # spec: scripts/check-family-conventions.sh -- a hook that exists but is not committed is the trap: a .gitignore'd build/ drops it
 #       without a word (macports-legacy-support ignores build/ wholesale), and CI's fresh
 #       checkout never sees it.
-mkrepo "$work/u3"; (cd "$work/u3" && git rm -q --cached build/upstream-release-notes-url.sh && printf 'build/\n' >> .gitignore)
+mkrepo "$work/u3"; (cd "$work/u3" && git rm -q --cached build/upstream-release-notes-url.sh && printf 'build/\n' >> .gitignore) || exit 1
 if out="$(cd "$work/u3" && sh "$S" 2>&1)"; then echo "FAIL an uncommitted hook should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -qi 'not committed' || { echo "FAIL should say it is not committed: $out"; exit 1; }
 
@@ -45,7 +45,7 @@ mkrepo "$work/k"
 #       (check 21's fallback), so it needs stage_product.sh the same as a direct pkgbuild caller.
 printf '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg\n      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n      - run: sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' \
   >> "$work/k/.github/workflows/release.yml"
-(cd "$work/k" && git add -A) >/dev/null 2>&1
+(cd "$work/k" && git add -A) >/dev/null 2>&1 || exit 1
 if out="$(cd "$work/k" && sh "$S" 2>&1)"; then echo "FAIL a signing workflow with no scan job should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'scan-for-key.yml' || { echo "FAIL should name scan-for-key.yml: $out"; exit 1; }
 cat >> "$work/k/.github/workflows/release.yml" <<'YML'
@@ -55,7 +55,7 @@ cat >> "$work/k/.github/workflows/release.yml" <<'YML'
     uses: Mavergreen/shipyard/.github/workflows/scan-for-key.yml@v1
     with: { artifact: dist }
 YML
-(cd "$work/k" && git add -A) >/dev/null 2>&1
+(cd "$work/k" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/k" && sh "$S" >/dev/null) || { echo "FAIL a signing workflow with a scan job should pass: $(cd "$work/k" && sh "$S" 2>&1)"; exit 1; }
 
 SA='sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh"'
@@ -88,7 +88,7 @@ mkrepo "$work/mv"   # swift-runtime's shape: an inline pin in a shared file, def
 printf 'TOOLCHAIN_REF="6.3.3-mavericks.1"\n' > "$work/mv/build.sh"
 printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^build\\.sh$/"],"matchStrings":["TOOLCHAIN_REF=\"(?<currentValue>[^\"]+)\""],"depNameTemplate":"Mavergreen/swift-toolchain","datasourceTemplate":"github-releases"}]}' \
   > "$work/mv/.github/renovate.json"
-(cd "$work/mv" && git add -A) >/dev/null 2>&1
+(cd "$work/mv" && git add -A) >/dev/null 2>&1 || exit 1
 if out="$(cd "$work/mv" && sh "$S" 2>&1)"; then echo "FAIL a -mavericks.N pin with default versioning should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'Mavergreen/swift-toolchain' || { echo "FAIL should name the dep: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'mavericks' || { echo "FAIL should name the -mavericks.N versioning: $out"; exit 1; }
@@ -100,7 +100,7 @@ p = sys.argv[1]; c = json.load(open(p))
 c["customManagers"][0]["versioningTemplate"] = sys.argv[2]
 json.dump(c, open(p, "w"))
 PY
-(cd "$work/mv" && git add -A) >/dev/null 2>&1
+(cd "$work/mv" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/mv" && sh "$S" >/dev/null) || { echo "FAIL a -mavericks.N pin with the family versioning should pass"; exit 1; }
 # spec: scripts/check-family-conventions.sh -- but a regex that matches the version without capturing N is the same bug, spelled
 #       differently.
@@ -108,7 +108,7 @@ mkrepo "$work/mv2"
 printf '6.3.3-mavericks.1\n' > "$work/mv2/components-version"
 printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^components-version$/"],"matchStrings":["^(?<currentValue>.+?)\\s*$"],"depNameTemplate":"x","datasourceTemplate":"github-releases","versioningTemplate":"regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)"}]}' \
   > "$work/mv2/.github/renovate.json"
-(cd "$work/mv2" && git add -A) >/dev/null 2>&1
+(cd "$work/mv2" && git add -A) >/dev/null 2>&1 || exit 1
 if (cd "$work/mv2" && sh "$S" >/dev/null 2>&1); then echo "FAIL versioning that ignores N should fail"; exit 1; fi
 # spec: scripts/check-family-conventions.sh -- and a pin that is NOT a -mavericks.N release needs nothing (openssh's own upstream, tag
 #       form).
@@ -116,7 +116,7 @@ mkrepo "$work/mv3"
 printf 'V_9_9_P2\n' > "$work/mv3/components-version"
 printf '%s\n' '{"extends":["github>Mavergreen/shipyard"],"customManagers":[{"customType":"regex","managerFilePatterns":["/^components-version$/"],"matchStrings":["^(?<currentValue>V_[0-9_P]+)\\s*$"],"depNameTemplate":"openssh/openssh-portable","datasourceTemplate":"github-tags"}]}' \
   > "$work/mv3/.github/renovate.json"
-(cd "$work/mv3" && git add -A) >/dev/null 2>&1
+(cd "$work/mv3" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/mv3" && sh "$S" >/dev/null) || { echo "FAIL a non-mavericks pin should pass"; exit 1; }
 
 # spec: SKILL.md "Family conventions" check 14 -- the release body comes from the shared
@@ -426,7 +426,7 @@ mkrepo "$work/cm1"
 mkdir -p "$work/cm1/scripts"
 printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm1/scripts/x.sh"
 printf 'platform\nspec\n' > "$work/cm1/comment-reasons"
-(cd "$work/cm1" && git add -A) >/dev/null 2>&1
+(cd "$work/cm1" && git add -A) >/dev/null 2>&1 || exit 1
 if out="$(cd "$work/cm1" && sh "$S" 2>&1)"; then echo "FAIL: an untagged comment, with comment-reasons present, should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -qi 'cite a reason' || { echo "FAIL should name what to cite: $out"; exit 1; }
 
@@ -436,7 +436,7 @@ mkrepo "$work/cm2"
 mkdir -p "$work/cm2/scripts"
 printf '#!/bin/sh\n# platform: a fact about the platform or a tool\nexit 0\n' > "$work/cm2/scripts/x.sh"
 printf 'platform\nspec\n' > "$work/cm2/comment-reasons"
-(cd "$work/cm2" && git add -A) >/dev/null 2>&1
+(cd "$work/cm2" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/cm2" && sh "$S" >/dev/null) || { echo "FAIL: a comment tagged # platform: should pass"; exit 1; }
 
 # spec: SKILL.md "Comments cite a reason" -- check-comments.sh itself exits 0 with
@@ -447,7 +447,7 @@ printf 'platform\nspec\n' > "$work/cm2/comment-reasons"
 mkrepo "$work/cm3"
 mkdir -p "$work/cm3/scripts"
 printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm3/scripts/x.sh"
-(cd "$work/cm3" && git add -A) >/dev/null 2>&1
+(cd "$work/cm3" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/cm3" && sh "$S" >/dev/null) || { echo "FAIL: no comment-reasons file at all must pass despite an untagged comment -- this is the opt-in promise"; exit 1; }
 
 echo "PASS: check-family-conventions-2"

@@ -36,7 +36,7 @@ pkg_release() {  # pkg_release: serve a Recaulk release holding the fixture arch
 DIST
   "$STEVEDORE" product --distribution "$WORK/dist.xml" --package "$WORK/base.pkg" --package "$WORK/prod.pkg" \
     --mtime 1700000000 --out "$REL/recaulk-$PIN.pkg" > /dev/null
-  ( cd "$REL" && shasum -a 256 "recaulk-$PIN.pkg" > SHA256SUMS )
+  ( cd "$REL" && shasum -a 256 "recaulk-$PIN.pkg" > SHA256SUMS ) || return 1
   export MAVERGREEN_RELEASES="file://$WORK/rel" MAVERGREEN_PKG_CACHE="$WORK/cache" SHIPYARD_FETCH_BACKOFF=0
   export TMPDIR="$WORK"
 }
@@ -54,7 +54,7 @@ DIST
 
 @test "a private external is on the allow-list as hidden" {
   printf '\t.globl ___cxa_uncaught_exceptions\n___cxa_uncaught_exceptions:\n\tret\n\t.private_extern __ZTVN10__cxxabiv119__pointer_type_infoE\n\t.globl __ZTVN10__cxxabiv119__pointer_type_infoE\n\t.data\n__ZTVN10__cxxabiv119__pointer_type_infoE:\n\t.quad 0\n' > "$WORK/p.s"
-  ( cd "$WORK" && asm p.s && "$AR" rcs private.a p.o ) > /dev/null 2>&1
+  ( cd "$WORK" && asm p.s && "$AR" rcs private.a p.o ) > /dev/null 2>&1 || return 1
   run sh "$ROOT/scripts/cxxabi-allowlist.sh" "$WORK/private.a"
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf '%s\n' '__ZTVN10__cxxabiv119__pointer_type_infoE hidden' '___cxa_uncaught_exceptions visible' | LC_ALL=C sort)" ] || false
@@ -77,7 +77,7 @@ DIST
 }
 
 @test "an archive with no machinery is no allow-list" {
-  ( cd "$WORK" && "$AR" rcs plain.a b.o )
+  ( cd "$WORK" && "$AR" rcs plain.a b.o ) || return 1
   run sh -c "sh '$ROOT/scripts/cxxabi-allowlist.sh' '$WORK/plain.a' 2>/dev/null"
   [ "$status" -eq 1 ]
   [ -z "$output" ]

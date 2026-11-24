@@ -67,7 +67,7 @@ build fat.c -o fat-x86_64
 build -target i386-apple-macos10.9 -c fat.c -o fat-other
 "$LIPO" -create fat-x86_64 fat-other -output src/bin/fat
 
-( cd src && tar -czf "$w/dist/t-1.0.0-mavericks.1.tgz" bin lib )
+( cd src && tar -czf "$w/dist/t-1.0.0-mavericks.1.tgz" bin lib ) || exit 1
 
 facts="$(sh "$AF" "$w/dist" 1.0.0-mavericks.1 "$w" 2>"$w/err")" || fail "artifact-facts failed: $(cat "$w/err")"
 has() { printf '%s\n' "$facts" | grep -qxF "$1" || fail "$2 -- want '$1' in: $facts"; }
@@ -98,7 +98,7 @@ printf '%s\n' "$out" | grep -q '^conformance: cxxabi: ' || fail "the failure is 
 printf 'void x(void) {}\n' > plain.c
 mkdir -p plain/bin plain-dist
 build plain.c -dynamiclib -o plain/bin/plain.dylib
-( cd plain && tar -czf "$w/plain-dist/p.tgz" bin )
+( cd plain && tar -czf "$w/plain-dist/p.tgz" bin ) || exit 1
 nofacts="$(NM=/nonexistent/nm sh "$AF" "$w/plain-dist" 1.0.0-mavericks.1 "$w" 2>/dev/null)" \
   && fail "a Mach-O with no NM to read it must abort: $nofacts"
 printf '%s\n' "$nofacts" | grep -q '^abort .*NM.*/nonexistent/nm' || fail "the abort record names NM: $nofacts"
@@ -115,14 +115,14 @@ nomachinery="$(MAVERGREEN_RELEASES="file://$w/no-releases" MAVERGREEN_PKG_CACHE=
   || fail "a Mach-O with no C++ runtime machinery never fetches Recaulk (the fixture release URL fails if touched): $nomachinery"
 printf '%s\n' "$nomachinery" | grep -qx end-of-facts || fail "a Mach-O with no machinery ends its stream: $nomachinery"
 mkdir -p throws-dist
-( cd src && tar -czf "$w/throws-dist/t.tgz" bin/throws )
+( cd src && tar -czf "$w/throws-dist/t.tgz" bin/throws ) || exit 1
 nofacts="$(MAVERGREEN_RELEASES="file://$w/no-releases" MAVERGREEN_PKG_CACHE="$w/no-cache" sh "$AF" "$w/throws-dist" 1.0.0-mavericks.1 "$w" 2>/dev/null)" \
   && fail "no allow-list, no facts: $nofacts"
 printf '%s\n' "$nofacts" | grep -q '^abort cxxabi allow-list unavailable: ' || fail "a failed Recaulk fetch aborts naming the allow-list: $nofacts"
 printf '%s\n' "$nofacts" | sh "$S" >/dev/null 2>&1 && fail "an aborted stream never passes conformance"
 
 mkdir -p txt-src txt-dist; echo x > txt-src/f
-( cd txt-src && tar -czf "$w/txt-dist/x.tgz" f )
+( cd txt-src && tar -czf "$w/txt-dist/x.tgz" f ) || exit 1
 txtfacts="$(NM=/nonexistent/nm MAVERGREEN_RELEASES="file://$w/no-releases" MAVERGREEN_PKG_CACHE="$w/no-cache" sh "$AF" "$w/txt-dist" 1.0.0-mavericks.1 "$w" 2>&1)" \
   || fail "a release with no Mach-O needs neither NM nor the allow-list: $txtfacts"
 

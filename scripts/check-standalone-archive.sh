@@ -134,12 +134,12 @@ mkdir "$u"
 tar -xzf "$archive" -C "$u" 2> "$t/err" || { finding "tar cannot unpack it: $(head -1 "$t/err")"; report; }
 X="$u/$top"
 if [ -d "$X" ]; then
-  (cd "$X" && find . -type l | LC_ALL=C sort) > "$t/links"
+  (cd "$X" && find . -type l | LC_ALL=C sort) > "$t/links" || exit 1
   while IFS= read -r l; do
     tg="$(readlink "$X/$l")" || continue
     case "$tg" in /usr/local/mavergreen|/usr/local/mavergreen/*) finding "${l#./} links to $tg, which only the pkg installs" ;; esac
   done < "$t/links"
-  (cd "$X" && find . -type f | LC_ALL=C sort) > "$t/files"
+  (cd "$X" && find . -type f | LC_ALL=C sort) > "$t/files" || exit 1
 else
   : > "$t/files"
 fi

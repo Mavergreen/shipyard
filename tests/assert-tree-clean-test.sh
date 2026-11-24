@@ -21,7 +21,7 @@ mkrepo "$work/clean"
   || say "a build that wrote nothing should pass"
 
 mkrepo "$work/dirty"
-(cd "$work/dirty" && sh "$S" --record) >/dev/null 2>&1
+(cd "$work/dirty" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 mkdir -p "$work/dirty/build-native"; : > "$work/dirty/build-native/CMakeCache.txt"
 if (cd "$work/dirty" && sh "$S" >/dev/null 2>&1); then
   say "an undeclared in-tree write should fail"; fi
@@ -31,8 +31,8 @@ if (cd "$work/dirty" && sh "$S" >/dev/null 2>&1); then
 mkrepo "$work/declared"
 printf 'VERSION  # the build stamps the resolved version\n' > "$work/declared/.mavericks-intree"
 (cd "$work/declared" && git add .mavericks-intree \
-   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
-(cd "$work/declared" && sh "$S" --record) >/dev/null 2>&1
+   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1 || exit 1
+(cd "$work/declared" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 printf '1.0.0\n' > "$work/declared/VERSION"
 (cd "$work/declared" && sh "$S" >/dev/null 2>&1) \
   || say "a declared in-tree path should pass"
@@ -47,8 +47,8 @@ if (cd "$work/nomanifest" && sh "$S" >/dev/null 2>&1); then
 mkrepo "$work/stale"
 printf 'NEVER_WRITTEN  # nothing writes this any more\n' > "$work/stale/.mavericks-intree"
 (cd "$work/stale" && git add .mavericks-intree \
-   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
-(cd "$work/stale" && sh "$S" --record) >/dev/null 2>&1
+   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1 || exit 1
+(cd "$work/stale" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 (cd "$work/stale" && sh "$S" 2>&1 | grep -q 'NEVER_WRITTEN') \
   || say "an allowlist entry nothing wrote should be reported"
 (cd "$work/stale" && sh "$S" >/dev/null 2>&1) \
@@ -57,8 +57,8 @@ printf 'NEVER_WRITTEN  # nothing writes this any more\n' > "$work/stale/.maveric
 mkrepo "$work/prefix"
 printf 'VERSION  # the build stamps the resolved version\n' > "$work/prefix/.mavericks-intree"
 (cd "$work/prefix" && git add .mavericks-intree \
-   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
-(cd "$work/prefix" && sh "$S" --record) >/dev/null 2>&1
+   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1 || exit 1
+(cd "$work/prefix" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 printf '1.0.0\n' > "$work/prefix/VERSION"
 printf 'oops\n' > "$work/prefix/VERSION_HISTORY_DUMP.log"
 if (cd "$work/prefix" && sh "$S" >/dev/null 2>&1); then
@@ -69,7 +69,7 @@ if (cd "$work/prefix" && sh "$S" >/dev/null 2>&1); then
 mkrepo "$work/masked-untracked"
 mkdir -p "$work/masked-untracked/build-native"
 : > "$work/masked-untracked/build-native/old.txt"
-(cd "$work/masked-untracked" && sh "$S" --record) >/dev/null 2>&1
+(cd "$work/masked-untracked" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 : > "$work/masked-untracked/build-native/CMakeCache.txt"
 if (cd "$work/masked-untracked" && sh "$S" >/dev/null 2>&1); then
   say "an untracked directory present at --record should not hide a later write beneath it"; fi
@@ -78,10 +78,10 @@ if (cd "$work/masked-untracked" && sh "$S" >/dev/null 2>&1); then
 
 mkrepo "$work/masked-ignored"
 (cd "$work/masked-ignored" && printf 'build-native/\n' > .gitignore && git add .gitignore \
-   && git -c user.email=t@t -c user.name=t commit -qm ignore) >/dev/null 2>&1
+   && git -c user.email=t@t -c user.name=t commit -qm ignore) >/dev/null 2>&1 || exit 1
 mkdir -p "$work/masked-ignored/build-native"
 : > "$work/masked-ignored/build-native/old.txt"
-(cd "$work/masked-ignored" && sh "$S" --record) >/dev/null 2>&1
+(cd "$work/masked-ignored" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 : > "$work/masked-ignored/build-native/CMakeCache.txt"
 if (cd "$work/masked-ignored" && sh "$S" >/dev/null 2>&1); then
   say "an ignored directory present at --record should not hide a later write beneath it"; fi
@@ -104,7 +104,7 @@ if (cd "$work/brokenindex" && sh "$S" >/dev/null 2>&1); then
 
 mkrepo "$work/leftover"
 mkdir -p "$work/leftover/build-native"; : > "$work/leftover/build-native/CMakeCache.txt"
-(cd "$work/leftover" && sh "$S" --record) >/dev/null 2>&1
+(cd "$work/leftover" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 (cd "$work/leftover" && sh "$S" >/dev/null 2>&1) \
   || say "a manifest recorded with the write already present should pass once"
 if (cd "$work/leftover" && sh "$S" >/dev/null 2>&1); then
@@ -113,13 +113,13 @@ if (cd "$work/leftover" && sh "$S" >/dev/null 2>&1); then
 mkrepo "$work/keyed-a"
 mkrepo "$work/keyed-b"
 mkdir -p "$work/keyed-a/build-native"; : > "$work/keyed-a/build-native/CMakeCache.txt"
-(cd "$work/keyed-a" && sh "$S" --record) >/dev/null 2>&1
+(cd "$work/keyed-a" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 mkdir -p "$work/keyed-b/build-native"; : > "$work/keyed-b/build-native/CMakeCache.txt"
 if (cd "$work/keyed-b" && sh "$S" >/dev/null 2>&1); then
   say "one checkout's manifest should not certify another checkout"; fi
 
 mkrepo "$work/untracked-allow"
-(cd "$work/untracked-allow" && sh "$S" --record) >/dev/null 2>&1
+(cd "$work/untracked-allow" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 printf '.mavericks-intree  # self\nbuild/  # mine\n' > "$work/untracked-allow/.mavericks-intree"
 mkdir -p "$work/untracked-allow/build"; : > "$work/untracked-allow/build/CMakeCache.txt"
 if (cd "$work/untracked-allow" && sh "$S" >/dev/null 2>&1); then
@@ -133,8 +133,8 @@ mkrepo "$work/dirallow"
 mkdir -p "$work/dirallow/dist"; : > "$work/dirallow/dist/.gitkeep"
 printf 'dist/  # the build stages the package here\n' > "$work/dirallow/.mavericks-intree"
 (cd "$work/dirallow" && git add .mavericks-intree dist/.gitkeep \
-   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
-(cd "$work/dirallow" && sh "$S" --record) >/dev/null 2>&1
+   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1 || exit 1
+(cd "$work/dirallow" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 : > "$work/dirallow/dist/thing.pkg"
 (cd "$work/dirallow" && sh "$S" >/dev/null 2>&1) \
   || say "a declared directory should cover what the build writes inside it"
@@ -143,8 +143,8 @@ mkrepo "$work/noslash"
 mkdir -p "$work/noslash/dist"; : > "$work/noslash/dist/.gitkeep"
 printf 'dist  # missing the trailing slash\n' > "$work/noslash/.mavericks-intree"
 (cd "$work/noslash" && git add .mavericks-intree dist/.gitkeep \
-   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1
-(cd "$work/noslash" && sh "$S" --record) >/dev/null 2>&1
+   && git -c user.email=t@t -c user.name=t commit -qm allow) >/dev/null 2>&1 || exit 1
+(cd "$work/noslash" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 : > "$work/noslash/dist/thing.pkg"
 (cd "$work/noslash" && sh "$S" 2>&1 | grep -q 'trailing slash') \
   || say "a directory declared without a trailing slash should be called out"
@@ -159,7 +159,7 @@ grep -q 'LC_ALL=C comm' "$S" || pinned=1
   || say "the snapshot sort and the manifest comm must both be pinned to LC_ALL=C"
 
 mkrepo "$work/deleted"
-(cd "$work/deleted" && sh "$S" --record) >/dev/null 2>&1
+(cd "$work/deleted" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 rm "$work/deleted/tracked.txt"
 if (cd "$work/deleted" && sh "$S" >/dev/null 2>&1); then
   say "a deleted tracked file should still fail"; fi
@@ -170,9 +170,9 @@ if (cd "$work/deleted" && sh "$S" 2>&1 | grep -q 'wrote into the source tree: tr
 
 mkrepo "$work/renamed"
 (cd "$work/renamed" && printf 'y\n' > longfilename.txt && git add longfilename.txt \
-   && git -c user.email=t@t -c user.name=t commit -qm add) >/dev/null 2>&1
-(cd "$work/renamed" && sh "$S" --record) >/dev/null 2>&1
-(cd "$work/renamed" && git mv longfilename.txt renamed.txt) >/dev/null 2>&1
+   && git -c user.email=t@t -c user.name=t commit -qm add) >/dev/null 2>&1 || exit 1
+(cd "$work/renamed" && sh "$S" --record) >/dev/null 2>&1 || exit 1
+(cd "$work/renamed" && git mv longfilename.txt renamed.txt) >/dev/null 2>&1 || exit 1
 if (cd "$work/renamed" && sh "$S" >/dev/null 2>&1); then
   say "a renamed tracked file should still fail"; fi
 if (cd "$work/renamed" && sh "$S" 2>&1 | grep -q ': gfilename.txt$'); then
@@ -183,7 +183,7 @@ if (cd "$work/renamed" && sh "$S" 2>&1 | grep -q ': gfilename.txt$'); then
   || say "a rename should name the new path too"
 
 mkrepo "$work/newline"
-(cd "$work/newline" && sh "$S" --record) >/dev/null 2>&1
+(cd "$work/newline" && sh "$S" --record) >/dev/null 2>&1 || exit 1
 : > "$work/newline/$(printf 'we\nird')"
 if (cd "$work/newline" && sh "$S" >/dev/null 2>&1); then
   say "a path containing a newline should still fail"; fi

@@ -13,7 +13,7 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/release-notes.XXXXXX")"; trap 'rm -rf "$work"
 
 mkrepo() {  # a product repo fixture: a git repo with a hook, a pin, and a repackage caller naming that pin. $1 = dir
   mkdir -p "$1/build" "$1/components/libressl" "$1/.github/workflows" "$1/release-notes"
-  ( cd "$1" && git init -q -b main . && git config user.email t@example.com && git config user.name tester )
+  ( cd "$1" && git init -q -b main . && git config user.email t@example.com && git config user.name tester ) || return 1
   printf '3.8.2\n' > "$1/components/libressl/version"
   cat > "$1/.github/workflows/repackage-on-ingredient-bump.yml" <<'YML'
 on:
@@ -57,7 +57,7 @@ gen() {  # $1 = repo, $2 = tag/version, rest = extra args
 # spec: scripts/release-notes.sh -- a new upstream must name the upstream, link its notes, and
 #       say what it replaced.
 r="$work/new"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git tag 9.9p2-mavericks.1 ) || exit 1
 gen "$r" 9.9p2-mavericks.1 >/dev/null
 grep -q '^## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.1)$' "$r/OUT.md" \
   || { echo "FAIL new: title"; cat "$r/OUT.md"; exit 1; }
@@ -70,9 +70,9 @@ sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 9.9p2-mavericks.1 >/dev
 # spec: scripts/release-notes.sh -- an ingredient repackage must name the pin that moved, and
 #       the baseline it moved from.
 r="$work/ing"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git tag 9.9p2-mavericks.1 ) || exit 1
 printf '3.9.2\n' > "$r/components/libressl/version"
-( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q 'rebuilt because build ingredients moved' "$r/OUT.md" || { echo "FAIL ing: kind"; cat "$r/OUT.md"; exit 1; }
 grep -q '3.8.2 -> 3.9.2' "$r/OUT.md" || { echo "FAIL ing: pin diff (the openssh pN bug)"; cat "$r/OUT.md"; exit 1; }
@@ -90,9 +90,9 @@ cat > "$r/.github/renovate.json" <<'JSON'
   "datasourceTemplate": "github-tags", "extractVersionTemplate": "^v?(?<version>.+)$"}]}
 JSON
 printf 'VERSION=3.8.2\n' > "$r/components/libressl/version"
-( cd "$r" && git add -A && git commit -qm "no manager" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm "no manager" && git tag 9.9p2-mavericks.1 ) || exit 1
 printf 'VERSION=3.9.2\n' > "$r/components/libressl/version"
-( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 ) || exit 1
 if out="$(gen "$r" 9.9p2-mavericks.2 2>&1)"; then echo "FAIL bare: a link-less moved pin must not ship"; cat "$r/OUT.md"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'libressl' || { echo "FAIL bare: the complaint must name the pin: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'unlinked:' || { echo "FAIL bare: the complaint must name the fix: $out"; exit 1; }
@@ -101,7 +101,7 @@ printf '%s\n' "$out" | grep -q 'bug in release-notes.sh' \
 printf '%s\n' "$out" | grep -q 'the fix is in this repo' \
   || { echo "FAIL bare: the generator must say where the fix goes: $out"; exit 1; }
 printf '# Build ingredients\n\n## Conformance deviations\n\n- unlinked:components/libressl/version:VERSION: a fixture with no notes\n' > "$r/INGREDIENTS.md"
-( cd "$r" && git add -A && git commit -qm declare )
+( cd "$r" && git add -A && git commit -qm declare ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL bare: a declared reason must let it ship"; exit 1; }
 grep -q '3.8.2 -> 3.9.2 (no change notes: a fixture with no notes)$' "$r/OUT.md" \
   || { echo "FAIL bare: the declared reason must be in the bullet"; cat "$r/OUT.md"; exit 1; }
@@ -113,7 +113,7 @@ grep -q 'Upstream release notes' "$r/OUT.md" && { echo "FAIL ing: a repackage mu
 #       moved.
 r="$work/pkgonly"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 && echo x >> build/upstream-release-notes-url.sh \
-    && git commit -qam "ci: unrelated" && git tag 9.9p2-mavericks.2 )
+    && git commit -qam "ci: unrelated" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q 'packaging changes only' "$r/OUT.md" || { echo "FAIL pkgonly: kind"; cat "$r/OUT.md"; exit 1; }
 grep -q '### Build ingredients' "$r/OUT.md" && { echo "FAIL pkgonly: no pin moved, no section"; exit 1; }
@@ -125,8 +125,8 @@ M='<!-- edited by a human -->'
 hp() {
   r="$work/hp-$1"; mkrepo "$r"
   printf "$3" > "$r/release-notes/9.9p2-mavericks.1.md"
-  ( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 )
-  if [ "$2" = minted ]; then ( cd "$r" && echo x >> README.md && git add -A && git commit -qm later ); fi
+  ( cd "$r" && git add -A && git commit -qm notes && git tag 9.9p2-mavericks.1 ) || return 1
+  if [ "$2" = minted ]; then ( cd "$r" && echo x >> README.md && git add -A && git commit -qm later ) || return 1; fi
   rc=0; gen "$r" 9.9p2-mavericks.1 >/dev/null 2>"$r/ERR" || rc=$?
 }
 hp legacy-minted minted "Some prose.\n$M\nMore.\n"
@@ -152,7 +152,7 @@ hp twice minted "$M\nSome prose.\n$M\n"
 grep -q 'edited by a human' "$r/OUT.md" && { echo "FAIL every mark line is stripped"; exit 1; }
 hp markonly minted "$M\n"
 [ "$rc" -eq 0 ] || { echo "FAIL mark-only file inserts nothing"; cat "$r/ERR"; exit 1; }
-r1="$r"; r="$work/hp-none"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 && echo x >> README.md && git add -A && git commit -qm later ); gen "$r" 9.9p2-mavericks.1 >/dev/null
+r1="$r"; r="$work/hp-none"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 && echo x >> README.md && git add -A && git commit -qm later ) || exit 1; gen "$r" 9.9p2-mavericks.1 >/dev/null
 [ "$(cat "$r1/OUT.md")" = "$(cat "$r/OUT.md")" ] || { echo "FAIL mark-only file inserts nothing: body differs from no prose"; diff "$r/OUT.md" "$r1/OUT.md"; exit 1; }
 for c in legacy-new legacy-new-marked; do
   case "$c" in legacy-new) f='Some prose.\n' ;; *) f="Some prose.\n$M\n" ;; esac
@@ -169,12 +169,12 @@ done
 #       minted; the tree's shape is checked always.
 T=9.9p2-mavericks.2
 dset() {  # $1 = case; leaves $r with tag 9.9p2-mavericks.1 and $d = its release-notes/$T
-  r="$work/dir-$1"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 ); d="$r/release-notes/$T"
+  r="$work/dir-$1"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 ) || return 1; d="$r/release-notes/$T"
 }
 dgen() {  # $1 = minted|new, rest = extra args; tags $T, generates $T, leaves $rc and $r/ERR
   m="$1"; shift
-  ( cd "$r" && git add -A && git commit -q --allow-empty -m notes && git tag "$T" )
-  if [ "$m" = minted ]; then ( cd "$r" && echo x >> README.md && git add -A && git commit -qm later ); fi
+  ( cd "$r" && git add -A && git commit -q --allow-empty -m notes && git tag "$T" ) || return 1
+  if [ "$m" = minted ]; then ( cd "$r" && echo x >> README.md && git add -A && git commit -qm later ) || return 1; fi
   rc=0; gen "$r" "$T" "$@" >/dev/null 2>"$r/ERR" || rc=$?
 }
 refused() {  # $1 = label, $2 = text the complaint must carry
@@ -193,9 +193,9 @@ dgen new
 grep -q 'packaging changes only' "$r/OUT.md" && { echo "FAIL dir-changes: changes are not packaging only"; cat "$r/OUT.md"; exit 1; }
 grep -q '### Before you update' "$r/OUT.md" && { echo "FAIL dir-changes: no requires/ or rebuild, no section"; exit 1; }
 r="$work/dir-changes-self"; mkrepo "$r"
-( cd "$r" && git tag 20260802.4 && git tag 20260802.5 )
+( cd "$r" && git tag 20260802.4 && git tag 20260802.5 ) || exit 1
 mkdir -p "$r/release-notes/20260802.6/changes"; printf 'Pure-Go programs now run on Mavericks.\n' > "$r/release-notes/20260802.6/changes/go"
-( cd "$r" && git add -A && git commit -qm notes )
+( cd "$r" && git add -A && git commit -qm notes ) || exit 1
 gen "$r" 20260802.6 --product Porthole --min-os 10.9 >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==3{exit}' "$r/OUT.md")" = "$(printf -- '- Pure-Go programs now run on Mavericks.\n- New release of Porthole 20260802.6 (was 20260802.5).\n  [Changes since 20260802.5](https://github.com/Mavergreen/mavericks-openssh/compare/20260802.5...20260802.6)')" ] \
   || { echo "FAIL dir-changes-self: a same-date release with changes is a new release"; cat "$r/OUT.md"; exit 1; }
@@ -239,7 +239,7 @@ for c in notes.md .DS_Store 'changes/Foo Bar' changes/ requires/; do
   for m in new minted; do
     dset "stray-$m-$(printf %s "$c" | tr -c a-zA-Z -)"; mkdir -p "$d/changes"
     case "$c" in
-      */) rm -rf "$d/changes"; mkdir -p "$d/$c"; printf 'Keep going.\n' > "$d/rebuild"; ( cd "$r" && git add -A && git commit -qm keep ); want="$d/${c%/}" ;;
+      */) rm -rf "$d/changes"; mkdir -p "$d/$c"; printf 'Keep going.\n' > "$d/rebuild"; ( cd "$r" && git add -A && git commit -qm keep ) || exit 1; want="$d/${c%/}" ;;
       *) printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Stray.\n' > "$d/$c"; want="$d/$c" ;;
     esac
     dgen "$m"
@@ -259,7 +259,7 @@ refused dir-both "release-notes/$T.md"
 for c in 'nosuch 1.0' 'clang22 1 .0' 'clang22 v1.0'; do
   dset "requires-bad-$(printf %s "$c" | tr -c a-z0-9 -)"; mkdir -p "$d/requires"; printf '%s\n' "${c#* }" > "$d/requires/${c%% *}"
   for m in new minted; do
-    [ "$m" = new ] || { rm -f "$r/OUT.md"; ( cd "$r" && git tag -d "$T" >/dev/null ); }
+    [ "$m" = new ] || { rm -f "$r/OUT.md"; ( cd "$r" && git tag -d "$T" >/dev/null ) || exit 1; }
     dgen "$m"
     refused "dir-requires-bad $c $m" "$d/requires/${c%% *}"
   done
@@ -276,9 +276,9 @@ grep -q 'Top-level' "$r/OUT.md" && { echo "FAIL dir-short: the top-level tree is
 rm -f "$r/OUT.md"; rc=0; gen "$r" "$T" --short openssh >/dev/null 2>"$r/ERR" || rc=$?
 refused dir-short-fallback "$d/notes.md"
 r="$work/dir-changes-self-ing"; mkrepo "$r"
-( cd "$r" && git tag 20260802.5 && printf '3.9.2\n' > components/libressl/version )
+( cd "$r" && git tag 20260802.5 && printf '3.9.2\n' > components/libressl/version ) || exit 1
 mkdir -p "$r/release-notes/20260802.6/changes"; printf 'Pure-Go programs now run on Mavericks.\n' > "$r/release-notes/20260802.6/changes/go"
-( cd "$r" && git add -A && git commit -qm "bump libressl" )
+( cd "$r" && git add -A && git commit -qm "bump libressl" ) || exit 1
 gen "$r" 20260802.6 --product Porthole --min-os 10.9 >/dev/null 2>"$r/ERR" || { echo "FAIL dir-changes-self-ing: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- Pure-Go programs now run on Mavericks.\n- Rebuilt because build ingredients moved (below).')" ] \
   || { echo "FAIL dir-changes-self-ing: changes are a change to the product itself"; cat "$r/OUT.md"; exit 1; }
@@ -321,7 +321,7 @@ if [ "$(id -u)" != 0 ]; then
   for mode in 000 644; do
     for sub in "" changes; do
       dset "unreadable-$mode-$sub"; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/keys"
-      ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
+      ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" ) || exit 1
       chmod "$mode" "$d${sub:+/$sub}"
       rc=0; gen "$r" "$T" >/dev/null 2>"$r/ERR" || rc=$?
       chmod 755 "$d${sub:+/$sub}"
@@ -337,7 +337,7 @@ if [ "$(id -u)" != 0 ]; then
       dset "unreadable-$level-$mode"; n="$r/release-notes"
       mkdir -p "$d/changes" "$n/swift-runtime/$T/changes"
       printf 'Keys load again.\n' > "$d/changes/keys"; printf 'Runtime loads faster.\n' > "$n/swift-runtime/$T/changes/x"
-      ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
+      ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" ) || exit 1
       if [ "$level" = top ]; then victim="$n"; extra=""; else victim="$n/swift-runtime"; extra="--short swift-runtime"; fi
       chmod "$mode" "$victim"
       rc=0; gen "$r" "$T" $extra >/dev/null 2>"$r/ERR" || rc=$?
@@ -346,7 +346,7 @@ if [ "$(id -u)" != 0 ]; then
     done
   done
   dset requires-unreadable; mkdir -p "$d/requires"; printf '22.1.8\n' > "$d/requires/clang22"
-  ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" )
+  ( cd "$r" && git add -A && git commit -qm notes && git tag "$T" ) || exit 1
   chmod 000 "$d/requires/clang22"
   rc=0; gen "$r" "$T" >/dev/null 2>"$r/ERR" || rc=$?
   chmod 644 "$d/requires/clang22"
@@ -396,7 +396,7 @@ dgen new
 [ "$(awk '/^### Before you update$/{f=1; next} f&&/^$/{exit} f{print}' "$r/OUT.md")" = '- Rebuild your Go programs to use the new SDK.' ] \
   || { echo "FAIL dir-rebuild-only: only the rebuild bullet"; cat "$r/OUT.md"; exit 1; }
 r="$work/dir-notice-first"; mkrepo "$r"; printf 'Never publish an image that contains macOS.\n' > "$r/release-notes/notice"
-( cd "$r" && git add -A && git commit -qm notice && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm notice && git tag 9.9p2-mavericks.1 ) || exit 1
 gen "$r" 9.9p2-mavericks.1 --min-os '' >/dev/null 2>"$r/ERR" || { echo "FAIL dir-notice-first: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^---$/{f=1; next} f' "$r/OUT.md")" = 'Never publish an image that contains macOS.' ] \
   || { echo "FAIL dir-notice-first: the footer is the notice alone"; cat "$r/OUT.md"; exit 1; }
@@ -413,15 +413,16 @@ grep -q 'Built on upstream' "$r/OUT.md" && { echo "FAIL dir-changes-ing: not 'Bu
 #       dictionary collation reverses. Capitals are not slugs, so a-z and aa stand in for B-x and a-x.
 dset slug-order; mkdir -p "$d/changes"; printf 'Second thing.\n' > "$d/changes/aa"; printf 'First thing.\n' > "$d/changes/a-z"
 ( LC_ALL=en_US.UTF-8; export LC_ALL; dgen new; echo "$rc" > "$r/RC" )
+[ $? -eq 0 ] || exit 1
 rc="$(cat "$r/RC")"
 [ "$rc" -eq 0 ] || { echo "FAIL dir-slug-order: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^### What changed$/{f=1; next} f{print} f&&++n==2{exit}' "$r/OUT.md")" = "$(printf -- '- First thing.\n- Second thing.')" ] \
   || { echo "FAIL dir-slug-order: C-locale order"; cat "$r/OUT.md"; exit 1; }
 
 for p in Shipyard Porthole; do
-  r="$work/dir-shipyard-$p"; mkrepo "$r"; ( cd "$r" && git tag v1.0.1 )
+  r="$work/dir-shipyard-$p"; mkrepo "$r"; ( cd "$r" && git tag v1.0.1 ) || exit 1
   mkdir -p "$r/release-notes/v1.0.2/changes"; printf 'Shipyard now installs beside cmake.\n' > "$r/release-notes/v1.0.2/changes/x"
-  ( cd "$r" && git add -A && git commit -qm notes )
+  ( cd "$r" && git add -A && git commit -qm notes ) || exit 1
   rc=0; gen "$r" v1.0.2 --product "$p" >/dev/null 2>"$r/ERR" || rc=$?
   if [ "$p" = Shipyard ]; then
     [ "$rc" -eq 0 ] || { echo "FAIL dir-shipyard: shipyard's own notes may name it"; cat "$r/ERR"; exit 1; }
@@ -434,9 +435,9 @@ done
 #       and a plain title.
 r="$work/self"; mkrepo "$r"; rm "$r/build/upstream-release-notes-url.sh"
 printf 'No upstream release notes: this repo is its own upstream.\n' > "$r/INGREDIENTS.md"
-( cd "$r" && git add -A && git commit -qm self && git tag 20260802.5 )
+( cd "$r" && git add -A && git commit -qm self && git tag 20260802.5 ) || exit 1
 ( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag 20260802.6 --version 20260802.6 \
-    --product Porthole --out "$r/OUT.md" ) >/dev/null
+    --product Porthole --out "$r/OUT.md" ) >/dev/null || exit 1
 grep -q '^## Porthole 20260802.6$' "$r/OUT.md" || { echo "FAIL self: title"; cat "$r/OUT.md"; exit 1; }
 grep -q 'for Mavericks (' "$r/OUT.md" && { echo "FAIL self: port-shaped title"; exit 1; }
 
@@ -447,7 +448,7 @@ grep -q 'for Mavericks (' "$r/OUT.md" && { echo "FAIL self: port-shaped title"; 
 #       this overrides both to exercise the porthole (YYYYMMDD.N) tag shape through the shared
 #       fixture.
 r="$work/selfglob"; mkrepo "$r"
-( cd "$r" && git tag 20260802.4 && git tag 20260802.5 )
+( cd "$r" && git tag 20260802.4 && git tag 20260802.5 ) || exit 1
 gen "$r" 20260802.6 --product Porthole --min-os 10.9 >/dev/null
 grep -q '^## Porthole 20260802.6$' "$r/OUT.md" \
   || { echo "FAIL selfglob: title"; cat "$r/OUT.md"; exit 1; }
@@ -460,7 +461,7 @@ grep -q '^\[All changes since 20260802\.5\](.*compare/20260802\.5\.\.\.20260802\
 #       leaves the v-shaped branch (shipyard/magic-trackpad2) uncovered: deleting the v[0-9]*
 #       case left the whole suite green until this was added.
 r="$work/selfvglob"; mkrepo "$r"
-( cd "$r" && git tag v0.5.1 && git tag v0.5.2 )
+( cd "$r" && git tag v0.5.1 && git tag v0.5.2 ) || exit 1
 gen "$r" v0.5.3 --product MagicTrackpad2 --min-os 10.9 >/dev/null
 grep -q '^## MagicTrackpad2 v0.5.3$' "$r/OUT.md" \
   || { echo "FAIL selfvglob: title"; cat "$r/OUT.md"; exit 1; }
@@ -471,18 +472,18 @@ grep -q '^\[All changes since v0\.5\.2\](.*compare/v0\.5\.2\.\.\.v0\.5\.3)$' "$r
 
 r="$work/badhook"; mkrepo "$r"
 printf '#!/bin/sh\nexit 1\n' > "$r/build/upstream-release-notes-url.sh"
-( cd "$r" && git commit -qam badhook && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git commit -qam badhook && git tag 9.9p2-mavericks.1 ) || exit 1
 if gen "$r" 9.9p2-mavericks.1 >/dev/null 2>&1; then echo "FAIL badhook: should be fatal"; exit 1; fi
 out="$(gen "$r" 9.9p2-mavericks.1 2>&1 || true)"
 printf '%s\n' "$out" | grep -qi 'upstream' || { echo "FAIL badhook: cause not named: $out"; exit 1; }
 
 r="$work/nohook"; mkrepo "$r"; rm "$r/build/upstream-release-notes-url.sh"
-( cd "$r" && git add -A && git commit -qm nohook && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm nohook && git tag 9.9p2-mavericks.1 ) || exit 1
 if gen "$r" 9.9p2-mavericks.1 >/dev/null 2>&1; then echo "FAIL: a new upstream with no hook and no declared reason must be fatal"; exit 1; fi
 
 # spec: but a DECLARED reason in INGREDIENTS.md is the sanctioned way to have none.
 printf 'No upstream release notes: upstream publishes none.\n' > "$r/INGREDIENTS.md"
-( cd "$r" && git add -A && git commit -qm declare )
+( cd "$r" && git add -A && git commit -qm declare ) || exit 1
 gen "$r" 9.9p2-mavericks.1 >/dev/null || { echo "FAIL nohook+declared: should pass"; exit 1; }
 
 # spec: scripts/release-notes.sh -- whether this repo owns an upstream-notes hook and whether
@@ -503,7 +504,7 @@ gen "$r" 9.9p2-mavericks.1 >/dev/null || { echo "FAIL nohook+declared: should pa
 #       due no link.
 r="$work/nohook-repack"; mkrepo "$r"; rm "$r/build/upstream-release-notes-url.sh"
 ( cd "$r" && git add -A && git commit -qm nohook && git tag 9.9p2-mavericks.1 \
-    && echo x >> README.md && git add -A && git commit -qm "ci: unrelated" && git tag 9.9p2-mavericks.2 )
+    && echo x >> README.md && git add -A && git commit -qm "ci: unrelated" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL nohook-repack: a repackage is due no upstream link, so a missing hook must not block it"; exit 1; }
 grep -q 'Repackage of upstream OpenSSH 9.9p2' "$r/OUT.md" \
@@ -514,7 +515,7 @@ grep -q 'New upstream' "$r/OUT.md" \
 # spec: scripts/release-notes.sh -- and the declared-reason variant must not turn that false
 #       claim into a GREEN one.
 printf 'No upstream release notes: upstream publishes none.\n' > "$r/INGREDIENTS.md"
-( cd "$r" && git add -A && git commit -qm declare )
+( cd "$r" && git add -A && git commit -qm declare ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL nohook-repack+declared: should pass"; exit 1; }
 grep -q 'Repackage of upstream OpenSSH 9.9p2' "$r/OUT.md" \
   || { echo "FAIL nohook-repack+declared: kind"; cat "$r/OUT.md"; exit 1; }
@@ -528,7 +529,7 @@ grep -q 'New upstream' "$r/OUT.md" \
 #       catch-all die), so "some die fired" is not enough to prove the shallow guard itself is
 #       doing anything.
 r="$work/shallow"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git tag 9.9p2-mavericks.1 ) || exit 1
 sr="$work/shallow-clone"
 git clone -q --depth 1 "file://$r" "$sr" 2>/dev/null || git clone -q --depth 1 "$r" "$sr"
 if ( cd "$sr" && MAVERICKS_ROOT="$sr" sh "$S" --tag 9.9p2-mavericks.2 --version 9.9p2-mavericks.2 \
@@ -544,7 +545,7 @@ printf '%s\n' "$shallow_out" | grep -qi shallow \
 #           guard above does not fire here at all -- so a repackage (-mavericks.2) must not be
 #           silently read as a first release with no baseline.
 r="$work/notags"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git tag 9.9p2-mavericks.1 ) || exit 1
 nr="$work/notags-clone"
 git clone -q --no-tags "$r" "$nr" 2>/dev/null
 if ( cd "$nr" && MAVERICKS_ROOT="$nr" sh "$S" --tag 9.9p2-mavericks.2 --version 9.9p2-mavericks.2 \
@@ -567,7 +568,7 @@ fi
 #       spellings of --line must work: the human-friendly "1.26" (the original bug: a bare prefix
 #       matched nothing) and the already-a-glob "1.26.*".
 r="$work/golang"; mkrepo "$r"
-( cd "$r" && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 )
+( cd "$r" && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 ) || exit 1
 for line in "1.26" "1.26.*"; do
   ( cd "$r" && GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=Mavergreen/mavericks-golang \
       MAVERICKS_ROOT="$r" sh "$S" --tag 1.26.7-mavericks.1 --version 1.26.7-mavericks.1 \
@@ -586,9 +587,9 @@ done
 #       not ship as packaging-only.
 r="$work/badcaller"; mkrepo "$r"
 mv "$r/.github/workflows/repackage-on-ingredient-bump.yml" "$r/.github/workflows/renovate-repackage.yml"
-( cd "$r" && git add -A && git commit -qm "rename caller" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm "rename caller" && git tag 9.9p2-mavericks.1 ) || exit 1
 printf '3.9.2\n' > "$r/components/libressl/version"
-( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL badcaller: should succeed once the caller is discovered by content, not by name"; exit 1; }
 grep -q 'rebuilt because build ingredients moved' "$r/OUT.md" \
@@ -603,7 +604,7 @@ jobs:
   repackage:
     uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
 YML
-( cd "$r" && git add -A && git commit -qm "caller with no paths" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm "caller with no paths" && git tag 9.9p2-mavericks.1 ) || exit 1
 if gen "$r" 9.9p2-mavericks.1 >/dev/null 2>&1; then
   echo "FAIL nopins: a wired-up caller deriving zero pins should be fatal"; exit 1
 fi
@@ -622,9 +623,9 @@ cat > "$r/.github/workflows/repackage-on-ingredient-bump.yml" <<'YML'
 on:
   workflow_dispatch: {}
 YML
-( cd "$r" && git add -A && git commit -qm "scaffold placeholder caller" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm "scaffold placeholder caller" && git tag 9.9p2-mavericks.1 ) || exit 1
 printf '3.9.2\n' > "$r/components/libressl/version"
-( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL unwired: a half-wired placeholder at the conventional path must not be fatal"; exit 1; }
 grep -q 'packaging changes only' "$r/OUT.md" \
@@ -650,10 +651,10 @@ jobs:
   release:
     uses: ./.github/workflows/publish-release.yml
 YML
-( cd "$r" && git add -A && git commit -qm "add release.yml" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm "add release.yml" && git tag 9.9p2-mavericks.1 ) || exit 1
 printf '3.9.2\n' > "$r/components/libressl/version"
 printf 'cmake_minimum_required(VERSION 3.10)\n' > "$r/CMakeLists.txt"
-( cd "$r" && git add -A && git commit -qm "bump libressl, add CMakeLists" && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git add -A && git commit -qm "bump libressl, add CMakeLists" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL decoytrap: should succeed (the real caller sits right next to the decoy)"; exit 1; }
 grep -q '3.8.2 -> 3.9.2' "$r/OUT.md" \
@@ -682,9 +683,9 @@ jobs:
     with:
       own-upstream-paths: UPSTREAM_VERSION
 YML
-( cd "$r" && git add -A && git commit -qm "folded-scalar caller" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm "folded-scalar caller" && git tag 9.9p2-mavericks.1 ) || exit 1
 printf '3.9.2\n' > "$r/components/libressl/version"
-( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL foldedcaller: a folded-scalar 'uses:' is a real call and must not be fatal"; exit 1; }
 grep -q '### Build ingredients' "$r/OUT.md" \
@@ -714,10 +715,10 @@ jobs:
   release:
     uses: ./.github/workflows/publish-release.yml
 YML
-( cd "$r" && git add -A && git commit -qm "rename caller, add commenting decoy" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm "rename caller, add commenting decoy" && git tag 9.9p2-mavericks.1 ) || exit 1
 printf '3.9.2\n' > "$r/components/libressl/version"
 printf 'cmake_minimum_required(VERSION 3.10)\n' > "$r/CMakeLists.txt"
-( cd "$r" && git add -A && git commit -qm "bump libressl, add CMakeLists" && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git add -A && git commit -qm "bump libressl, add CMakeLists" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null \
   || { echo "FAIL commentonly: a comment mention is not a second caller, so discovery is unambiguous"; exit 1; }
 grep -q '3.8.2 -> 3.9.2' "$r/OUT.md" \
@@ -746,10 +747,10 @@ jobs:
     steps:
       - run: echo "dispatched by repackage-on-ingredient-bump.yml"
 YML
-( cd "$r" && git add -A && git commit -qm "rename caller, add mentioning decoy" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm "rename caller, add mentioning decoy" && git tag 9.9p2-mavericks.1 ) || exit 1
 printf '3.9.2\n' > "$r/components/libressl/version"
 printf 'cmake_minimum_required(VERSION 3.10)\n' > "$r/CMakeLists.txt"
-( cd "$r" && git add -A && git commit -qm "bump libressl, add CMakeLists" && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git add -A && git commit -qm "bump libressl, add CMakeLists" && git tag 9.9p2-mavericks.2 ) || exit 1
 if gen "$r" 9.9p2-mavericks.2 >/dev/null 2>&1; then
   echo "FAIL twocallers: two discovery candidates must not be resolved by glob order"; cat "$r/OUT.md"; exit 1
 fi
@@ -767,9 +768,9 @@ printf '%s\n' "$out" | grep -q 'renovate-repackage.yml' \
 #       release can be both at once (a new upstream tarball that also bumps a vendored ingredient
 #       in the same cut), and nothing else here exercises that combination or its ordering.
 r="$work/combo"; mkrepo "$r"
-( cd "$r" && git tag 9.9p1-mavericks.1 )                       # baseline: a DIFFERENT upstream (9.9p1)
+( cd "$r" && git tag 9.9p1-mavericks.1 ) || exit 1                       # baseline: a DIFFERENT upstream (9.9p1)
 printf '3.9.2\n' > "$r/components/libressl/version"            # an ingredient pin moves too
-( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.1 )  # this cut ships new upstream 9.9p2
+( cd "$r" && git commit -qam "bump libressl" && git tag 9.9p2-mavericks.1 ) || exit 1  # this cut ships new upstream 9.9p2
 gen "$r" 9.9p2-mavericks.1 >/dev/null
 grep -q 'New upstream: OpenSSH 9.9p2 (was 9.9p1)' "$r/OUT.md" \
   || { echo "FAIL combo: missing new-upstream bullet"; cat "$r/OUT.md"; exit 1; }
@@ -790,7 +791,7 @@ i="$(grep -n '### Build ingredients' "$r/OUT.md" | cut -d: -f1)"
 #       than to print nothing: previous-release-tag.sh itself failing must not read as "no
 #       baseline".
 r="$work/prevtagfails"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git tag 9.9p2-mavericks.1 ) || exit 1
 scripts_stub="$work/scripts-stub"
 cp -R "$here/../scripts" "$scripts_stub"
 printf '#!/bin/sh\necho "previous-release-tag.sh: boom, cannot list tags" >&2\nexit 7\n' \
@@ -805,7 +806,7 @@ prevtag_out="$(cd "$r" && MAVERICKS_ROOT="$r" sh "$scripts_stub/release-notes.sh
 printf '%s\n' "$prevtag_out" | grep -qi 'previous-release-tag' \
   || { echo "FAIL prevtagfails: cause not named: $prevtag_out"; exit 1; }
 
-r="$work/args"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 )
+r="$work/args"; mkrepo "$r"; ( cd "$r" && git tag 9.9p2-mavericks.1 ) || exit 1
 if ( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag 9.9p2-mavericks.1 --version 9.9p2-mavericks.1 \
        --out "$r/OUT.md" ) >/dev/null 2>&1; then echo "FAIL args: --product must be required"; exit 1; fi
 
@@ -815,10 +816,10 @@ if ( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag 9.9p2-mavericks.1 --version 9.
 #       conditionally appended the floor/link, so a body with neither ended in a dangling <hr>
 #       and nothing after it -- the footer '---' must not be emitted with nothing after it.
 r="$work/nofooter"; mkdir -p "$r/release-notes"
-( cd "$r" && git init -q -b main . && git config user.email t@example.com && git config user.name tester )
-( cd "$r" && echo x > README.md && git add -A && git commit -qm base && git tag v1.0.0 )
+( cd "$r" && git init -q -b main . && git config user.email t@example.com && git config user.name tester ) || exit 1
+( cd "$r" && echo x > README.md && git add -A && git commit -qm base && git tag v1.0.0 ) || exit 1
 ( cd "$r" && MAVERICKS_ROOT="$r" sh "$S" --tag v1.0.0 --version 1.0.0 \
-    --product Shipyard --out "$r/OUT.md" ) >/dev/null
+    --product Shipyard --out "$r/OUT.md" ) >/dev/null || exit 1
 grep -q -- '^---$' "$r/OUT.md" \
   && { echo "FAIL G3: a footer rule with nothing after it was emitted"; cat "$r/OUT.md"; exit 1; }
 [ -n "$(tail -1 "$r/OUT.md")" ] \
@@ -829,7 +830,7 @@ sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 1.0.0 >/dev/null \
 # spec: scripts/release-notes.sh -- but when a floor line applies, the rule must still be
 #       emitted, right above it.
 r="$work/withfooter"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git tag 9.9p2-mavericks.1 ) || exit 1
 gen "$r" 9.9p2-mavericks.1 >/dev/null
 grep -q -- '^---$' "$r/OUT.md" || { echo "FAIL G3: footer rule missing when a floor line applies"; cat "$r/OUT.md"; exit 1; }
 
@@ -843,7 +844,7 @@ grep -q -- '^---$' "$r/OUT.md" || { echo "FAIL G3: footer rule missing when a fl
 #       truth at exit 0 -- a --line glob that matches no tag would silently ship a repackage
 #       short.
 r="$work/linefatal"; mkrepo "$r"
-( cd "$r" && git tag 1.26.7-mavericks.1 )
+( cd "$r" && git tag 1.26.7-mavericks.1 ) || exit 1
 if gen "$r" 1.26.7-mavericks.2 --product Go --line 126 --min-os 10.9.5 >/dev/null 2>&1; then
   echo "FAIL linefatal: --line matching no tag must be fatal for a repackage"; exit 1
 fi
@@ -875,7 +876,7 @@ grep -q '^## Go 1.27.0 for Mavericks' "$r/OUT.md" \
 #       --render-notes, not on OUT.md: the footer's lines are separate statements and must
 #       render as separate paragraphs.
 r="$work/footerpara"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git tag 9.9p2-mavericks.1 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 html="$(sh "$here/../scripts/gen_appcast.sh" --render-notes "$r/OUT.md")"
 printf '%s\n' "$html" | grep -q '<p>Requires Mac OS X 10\.9\.5 or later\.</p>' \
@@ -900,7 +901,7 @@ printf '%s\n' "$html" | grep -q 'or later\..*sha256' \
 #       behaviour change, so their section comes FIRST, before any ingredient section.
 r="$work/patchadd"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 && mkdir patches && echo p > patches/darwin-exit-nodes.patch \
-    && git add -A && git commit -qm "exit nodes" && git tag 9.9p2-mavericks.2 )
+    && git add -A && git commit -qm "exit nodes" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q 'packaging changes only' "$r/OUT.md" \
   && { echo "FAIL patchadd: a patch change is not packaging-only"; cat "$r/OUT.md"; exit 1; }
@@ -921,7 +922,7 @@ printf '1\n2\n3\n4\n5\n6\n' > "$r/patches/before.patch"
 ( cd "$r" && git add -A && git commit -qm overlays && git tag 9.9p2-mavericks.1 \
     && echo 'int y;' > overlays/systray_darwin.m && git rm -q patches/gone.patch \
     && git mv patches/before.patch patches/after.patch \
-    && git add -A && git commit -qm "touch overlays" && git tag 9.9p2-mavericks.2 )
+    && git add -A && git commit -qm "touch overlays" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q '^- Changed `overlays/systray_darwin.m`$' "$r/OUT.md" || { echo "FAIL patchmisc: changed"; cat "$r/OUT.md"; exit 1; }
 grep -q '^- Removed `patches/gone.patch`$' "$r/OUT.md" || { echo "FAIL patchmisc: removed"; cat "$r/OUT.md"; exit 1; }
@@ -933,7 +934,7 @@ grep -q '^- Renamed `patches/before.patch` to `patches/after.patch`$' "$r/OUT.md
 r="$work/patching"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 && mkdir patches && echo p > patches/fix.patch \
     && printf '3.9.2\n' > components/libressl/version \
-    && git add -A && git commit -qm "both" && git tag 9.9p2-mavericks.2 )
+    && git add -A && git commit -qm "both" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q '^- Repackage of upstream OpenSSH 9.9p2, rebuilt because build ingredients moved and our patches changed (below)\.$' "$r/OUT.md" \
   || { echo "FAIL patching: kind"; cat "$r/OUT.md"; exit 1; }
@@ -950,7 +951,7 @@ sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 9.9p2-mavericks.2 >/dev
 r="$work/patchnewup"; mkrepo "$r"
 mkdir -p "$r/patches"; echo v1 > "$r/patches/fix.patch"
 ( cd "$r" && git add -A && git commit -qm p && git tag 9.9p1-mavericks.1 \
-    && echo v2 > patches/fix.patch && git commit -qam rebase && git tag 9.9p2-mavericks.1 )
+    && echo v2 > patches/fix.patch && git commit -qam rebase && git tag 9.9p2-mavericks.1 ) || exit 1
 gen "$r" 9.9p2-mavericks.1 >/dev/null
 grep -q 'New upstream: OpenSSH 9.9p2 (was 9.9p1)' "$r/OUT.md" || { echo "FAIL patchnewup: kind"; cat "$r/OUT.md"; exit 1; }
 grep -q '^- Changed `patches/fix.patch`$' "$r/OUT.md" || { echo "FAIL patchnewup: section"; cat "$r/OUT.md"; exit 1; }
@@ -959,7 +960,7 @@ grep -q '^- Changed `patches/fix.patch`$' "$r/OUT.md" || { echo "FAIL patchnewup
 #       upstream.
 r="$work/patchprose"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 && printf 'Words.\n<!-- edited by a human -->\n' > release-notes/README.md \
-    && git add -A && git commit -qm prose && git tag 9.9p2-mavericks.2 )
+    && git add -A && git commit -qm prose && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 grep -q '^- Repackage of upstream OpenSSH 9.9p2; packaging changes only\.$' "$r/OUT.md" \
   || { echo "FAIL patchprose: prose alone is packaging-only"; cat "$r/OUT.md"; exit 1; }
@@ -969,7 +970,7 @@ grep -q '### Our patches' "$r/OUT.md" && { echo "FAIL patchprose: no section"; e
 #       was before patch-notes existed.
 r="$work/patchnone"; mkrepo "$r"
 ( cd "$r" && git tag 9.9p2-mavericks.1 && echo x >> README.md && git add -A \
-    && git commit -qm unrelated && git tag 9.9p2-mavericks.2 )
+    && git commit -qm unrelated && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null
 want="$(printf '%s\n' '## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.2)' '' '### What changed' \
   '- Repackage of upstream OpenSSH 9.9p2; packaging changes only.' '' '---' \
@@ -980,7 +981,7 @@ want="$(printf '%s\n' '## OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.2)' '' '#
 # spec: scripts/release-notes.sh -- notes that cannot say whether our patches changed must not
 #       ship.
 r="$work/patchfails"; mkrepo "$r"
-( cd "$r" && git tag 9.9p2-mavericks.1 && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git tag 9.9p2-mavericks.1 && git tag 9.9p2-mavericks.2 ) || exit 1
 pstub="$work/scripts-pstub"
 cp -R "$here/../scripts" "$pstub"
 printf '#!/bin/sh\necho "patch-notes.sh: boom" >&2\nexit 5\n' > "$pstub/patch-notes.sh"
@@ -1007,20 +1008,20 @@ grep -qx -- '- First release of Porthole 20260802.1\.' "$r/OUT.md" \
 
 r="$work/r3ing"; mkrepo "$r"
 ( cd "$r" && git tag 20260802.1 && printf '3.9.2\n' > components/libressl/version \
-    && git commit -qam "bump libressl" )
+    && git commit -qam "bump libressl" ) || exit 1
 selfgen "$r" 20260802.2
 grep -qx -- '- Rebuilt because build ingredients moved (below); no change to Porthole itself\.' "$r/OUT.md" \
   || { echo "FAIL r3ing"; cat "$r/OUT.md"; exit 1; }
 grep -q '^### Build ingredients$' "$r/OUT.md" || { echo "FAIL r3ing: section"; cat "$r/OUT.md"; exit 1; }
 
 r="$work/r3pkg"; mkrepo "$r"
-( cd "$r" && git tag 20260802.1 && echo x >> README.md && git add -A && git commit -qm unrelated )
+( cd "$r" && git tag 20260802.1 && echo x >> README.md && git add -A && git commit -qm unrelated ) || exit 1
 selfgen "$r" 20260802.2
 grep -qx -- '- Repackage of Porthole 20260802; packaging changes only\.' "$r/OUT.md" \
   || { echo "FAIL r3pkg"; cat "$r/OUT.md"; exit 1; }
 
 r="$work/r3new"; mkrepo "$r"
-( cd "$r" && git tag 20260802.3 && echo x >> README.md && git add -A && git commit -qm code )
+( cd "$r" && git tag 20260802.3 && echo x >> README.md && git add -A && git commit -qm code ) || exit 1
 selfgen "$r" 20260815.1 GITHUB_REPOSITORY=Mavergreen/porthole-fork
 grep -qx -- '- New release of Porthole 20260815.1 (was 20260802.3)\.' "$r/OUT.md" \
   || { echo "FAIL r3new"; cat "$r/OUT.md"; exit 1; }
@@ -1033,7 +1034,7 @@ selfgen "$r" 20260815.1 GITHUB_REPOSITORY=
 grep -qx -- '  \[Changes since 20260802.3\](https://github.com/Mavergreen/porthole/compare/20260802.3...20260815.1)' "$r/OUT.md" \
   || { echo "FAIL r3new: the registry names the compare"; cat "$r/OUT.md"; exit 1; }
 ( cd "$r" && env MAVERICKS_ROOT="$r" GITHUB_REPOSITORY= sh "$S" --tag 20260815.1 --version 20260815.1 \
-    --product Unregistered --out "$r/OUT.md" ) >/dev/null
+    --product Unregistered --out "$r/OUT.md" ) >/dev/null || exit 1
 grep -qx -- '- New release of Unregistered 20260815.1 (was 20260802.3)\.' "$r/OUT.md" \
   || { echo "FAIL r3new: unregistered"; cat "$r/OUT.md"; exit 1; }
 grep -q 'Changes since' "$r/OUT.md" && { echo "FAIL r3new: no repo, so no guessed link"; cat "$r/OUT.md"; exit 1; }
@@ -1041,9 +1042,9 @@ grep -q 'Changes since' "$r/OUT.md" && { echo "FAIL r3new: no repo, so no guesse
 # spec: scripts/release-notes.sh -- a vX.Y.Z self-upstream's tag carries a v its version does not, so
 #       the compare names the tags.
 r="$work/r3v"; mkrepo "$r"
-( cd "$r" && git tag v1.0.208 && echo x >> README.md && git add -A && git commit -qm code )
+( cd "$r" && git tag v1.0.208 && echo x >> README.md && git add -A && git commit -qm code ) || exit 1
 ( cd "$r" && env MAVERICKS_ROOT="$r" GITHUB_REPOSITORY=Mavergreen/shipyard sh "$S" --tag v1.0.209 \
-    --version 1.0.209 --product Shipyard --out "$r/OUT.md" ) >/dev/null
+    --version 1.0.209 --product Shipyard --out "$r/OUT.md" ) >/dev/null || exit 1
 grep -qx -- '- New release of Shipyard 1.0.209 (was 1.0.208)\.' "$r/OUT.md" \
   || { echo "FAIL r3v"; cat "$r/OUT.md"; exit 1; }
 grep -qx -- '  \[Changes since v1.0.208\](https://github.com/Mavergreen/shipyard/compare/v1.0.208...v1.0.209)' "$r/OUT.md" \
@@ -1070,9 +1071,9 @@ jobs:
     with:
       own-upstream-paths: UPSTREAM_VERSION
 YML
-( cd "$r" && git add -A && git commit -qm pins && git tag 9.9p2-mavericks.1 )
+( cd "$r" && git add -A && git commit -qm pins && git tag 9.9p2-mavericks.1 ) || exit 1
 printf 'Subject: [PATCH] one\n+x\n' > "$r/patches/x.patch"; printf 'line one\nline two\n' > "$r/vendor/cacert.pem"
-( cd "$r" && git commit -qam "move our own pins" && git tag 9.9p2-mavericks.2 )
+( cd "$r" && git commit -qam "move our own pins" && git tag 9.9p2-mavericks.2 ) || exit 1
 gen "$r" 9.9p2-mavericks.2 >/dev/null || { echo "FAIL r1d: whole-file pins link the repo's own compare"; exit 1; }
 grep -q '^- \*\*x.patch\*\*: updated (.*) (\[diff\](https://github.com/Mavergreen/mavericks-openssh/compare/9.9p2-mavericks.1...9.9p2-mavericks.2))$' "$r/OUT.md" \
   || { echo "FAIL r1d: patch"; cat "$r/OUT.md"; exit 1; }

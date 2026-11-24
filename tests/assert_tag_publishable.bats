@@ -18,7 +18,7 @@ setup() {
   (cd "$T/remote" && git config user.email t@example.invalid && git config user.name t \
      && echo one > a && git add a && git commit -qm one \
      && git tag 1.0.0-mavericks.1 \
-     && echo two > a && git commit -qam two)
+     && echo two > a && git commit -qam two) || return 1
   URL="$T/remote"
   TAGGED="$(git -C "$T/remote" rev-parse 1.0.0-mavericks.1)"
   HEAD_SHA="$(git -C "$T/remote" rev-parse HEAD)"
@@ -55,7 +55,7 @@ guard() { sh "$ROOT/scripts/assert_tag_publishable.sh" "$@"; }
 }
 
 @test "an annotated tag is recognised by the commit it points at" {
-  (cd "$T/remote" && git tag -a -m v 1.0.0-mavericks.3 HEAD)
+  (cd "$T/remote" && git tag -a -m v 1.0.0-mavericks.3 HEAD) || return 1
   run --separate-stderr guard 1.0.0-mavericks.3 "$URL" tag 1.0.0-mavericks.3 "$HEAD_SHA"
   [ "$status" -eq 0 ]
 }

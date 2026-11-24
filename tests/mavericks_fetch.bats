@@ -7,7 +7,7 @@ setup() {
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/shipyard_fetch_test.XXXXXX")"
   mkdir -p "$WORK/stage/payload"
   echo hello > "$WORK/stage/payload/file.txt"
-  ( cd "$WORK/stage" && tar cf "$WORK/fixture.tar" payload )
+  ( cd "$WORK/stage" && tar cf "$WORK/fixture.tar" payload ) || return 1
   SHA="$(shasum -a 256 "$WORK/fixture.tar" | awk '{print $1}')"
   URL="file://$WORK/fixture.tar"
   CACHE="$WORK/cache"
@@ -64,7 +64,7 @@ teardown() { rm -rf "$WORK"; }
   mkdir -p "$WORK/stage2/payload"
   echo first > "$WORK/stage2/payload/a.txt"
   head -c 65536 /dev/zero > "$WORK/stage2/payload/b.bin"
-  ( cd "$WORK/stage2" && tar cf "$WORK/whole.tar" payload/a.txt payload/b.bin )
+  ( cd "$WORK/stage2" && tar cf "$WORK/whole.tar" payload/a.txt payload/b.bin ) || return 1
   head -c 10240 "$WORK/whole.tar" > "$WORK/cut.tar"
   CUTSHA="$(shasum -a 256 "$WORK/cut.tar" | awk '{print $1}')"
   run shipyard_fetch_pinned "file://$WORK/cut.tar" "$CUTSHA" "$CACHE" cut.tar
@@ -88,7 +88,7 @@ teardown() { rm -rf "$WORK"; }
 dir_fixture() {
   mkdir -p "$WORK/dstage/d"
   echo hello > "$WORK/dstage/d/f"
-  ( cd "$WORK/dstage" && tar cf "$WORK/fixture.tar" d )
+  ( cd "$WORK/dstage" && tar cf "$WORK/fixture.tar" d ) || return 1
   SHA="$(shasum -a 256 "$WORK/fixture.tar" | awk '{print $1}')"
 }
 

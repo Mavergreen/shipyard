@@ -145,7 +145,7 @@ echo "== executable_member"
 mkdir -p "$w/exetree/My App.app/Contents/Resources"
 cp "$w/tree/My App.app/Contents/Info.plist" "$w/exetree/My App.app/Contents/"
 cp "$X" "$w/exetree/My App.app/Contents/Resources/helper"
-(cd "$w/exetree" && zip -qr "$w/exe.zip" "My App.app")
+(cd "$w/exetree" && zip -qr "$w/exe.zip" "My App.app") || exit 1
 { head -1 "$w/good.tsv"; printf 'helper\thelper\tfile\t%s\t%s\n' "$(size "$X")" "$(sha "$X")"; } > "$w/exe.tsv"
 refused executable_member "ARCHIVE=$w/exe.zip" "ASHA=$(sha "$w/exe.zip")" "MAN=$w/exe.tsv" "WHY=is a Mach-O executable or library"
 echo "== duplicate_archive_name"
@@ -153,13 +153,13 @@ mkdir -p "$w/duptree/My App.app/Contents/Resources"
 cp "$w/tree/My App.app/Contents/Info.plist" "$w/duptree/My App.app/Contents/"
 cp "$R/Main Menu.nib" "$w/duptree/My App.app/Contents/Resources/Main Menu.nib"
 cp "$R/Main Menu.nib" "$w/duptree/My App.app/Contents/Resources/Main Menx.nib"
-(cd "$w/duptree" && zip -qr "$w/dup.zip" "My App.app")
+(cd "$w/duptree" && zip -qr "$w/dup.zip" "My App.app") || exit 1
 perl -pi -e 's/Main Menx\.nib/Main Menu.nib/g' "$w/dup.zip"
 refused duplicate_archive_name "ARCHIVE=$w/dup.zip" "ASHA=$(sha "$w/dup.zip")" "WHY=twice"
 echo "== truncated_or_encrypted_archive"
 head -c 200 "$w/app.zip" > "$w/trunc.zip"
 refused truncated_archive "ARCHIVE=$w/trunc.zip" "ASHA=$(sha "$w/trunc.zip")"
-(cd "$w/tree" && rm -f "$w/enc.zip" && zip -qry -P secret "$w/enc.zip" "My App.app")
+(cd "$w/tree" && rm -f "$w/enc.zip" && zip -qry -P secret "$w/enc.zip" "My App.app") || exit 1
 refused encrypted_archive "ARCHIVE=$w/enc.zip" "ASHA=$(sha "$w/enc.zip")"
 echo "== escaping_output_parent, no_partial_publish"
 mkdir -p "$w/existing"; : > "$w/existing/keep"
@@ -177,7 +177,7 @@ U="$w/utftree/My App.app/Contents/Resources"
 utf="$(printf 'Pr\303\251f.nib')"
 printf 'pref\n' > "$U/$utf"
 printf 'semi\n' > "$U/a;b.nib"
-(cd "$w/utftree" && zip -qr "$w/utf.zip" "My App.app")
+(cd "$w/utftree" && zip -qr "$w/utf.zip" "My App.app") || exit 1
 { head -1 "$w/good.tsv"; printf '%s\t%s\tfile\t%s\t%s\n' "$utf" "$utf" "$(size "$U/$utf")" "$(sha "$U/$utf")"; } > "$w/utf.tsv"
 { head -1 "$w/good.tsv"; printf 'a;b.nib\ta;b.nib\tfile\t5\t%s\n' "$(sha "$U/a;b.nib")"; } > "$w/semi.tsv"
 refused list_separator_name "ARCHIVE=$w/utf.zip" "ASHA=$(sha "$w/utf.zip")" "MAN=$w/semi.tsv" "WHY=is not a plain relative path"
@@ -234,7 +234,7 @@ if [ "${SHIPYARD_ON_TARGET:-}" = 1 ]; then
   ARCHIVE="$w/dl/iTerm2-3_0_15.zip"; ASHA=90e6f2bd3eb2d245f4ab2c9f856c627c8a1536bac024fb3989db417bc3147565
   MAN="$fx/iterm2-3.0.15.tsv"; PREFIX="iTerm.app/Contents/Resources/"; VER="iTerm.app/Contents/Info.plist"
   if run "$w/it"; then
-    (cd "$w/it" && find . -type f | sed 's|^\./||' | sort) > "$w/it-got"
+    (cd "$w/it" && find . -type f | sed 's|^\./||' | sort) > "$w/it-got" || exit 1
     cmp -s "$w/it-want" "$w/it-got" || bad "iTerm2: the output is not exactly the 31 selected members"
     [ "$(wc -l < "$w/it-got" | tr -d ' ')" = 31 ] || bad "iTerm2: $(wc -l < "$w/it-got") members, want 31"
     [ -z "$(find "$w/it" -type f -perm -100)" ] || bad "iTerm2: an executable file was staged"

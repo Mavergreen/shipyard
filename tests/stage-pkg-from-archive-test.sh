@@ -43,8 +43,8 @@ mkdir -p "$w/want/usr/local/mavergreen"
 cp -pRP "$R0/." "$w/want/"
 rm -rf "$w/want/usr/local/mavergreen/w/libexec/w"
 cp -pRP "$w/hooks/mavergreen" "$w/want/usr/local/mavergreen/w/libexec/"
-(cd "$w/want" && find . | LC_ALL=C sort) > "$w/want.list"
-(cd "$R" && find . | LC_ALL=C sort) > "$w/got.list"
+(cd "$w/want" && find . | LC_ALL=C sort) > "$w/want.list" || exit 1
+(cd "$R" && find . | LC_ALL=C sort) > "$w/got.list" || exit 1
 diff "$w/want.list" "$w/got.list" > "$w/diff" || fail "the staged root is the pkg root less the bundle, plus the pkg-only path: $(cat "$w/diff")"
 [ "$(readlink "$R/usr/local/mavergreen/w/bin/x")" = /Applications/X.app/Contents/MacOS/x ] \
   || fail "a bin/ link into the app is absolute again: $(readlink "$R/usr/local/mavergreen/w/bin/x")"

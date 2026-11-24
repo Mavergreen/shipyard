@@ -44,7 +44,7 @@ mkrepo "$work/pkt"; printf '#!/bin/sh\npkgbuild --root x t.pkg\n' > "$work/pkt/t
 #       tests/check-family-conventions-1-test.sh); one declared script adopts it.
 mkrepo "$work/host"; printf '#!/bin/sh\n# platform: host-agnostic\notool -L x\n' > "$work/host/tests/a-test.sh"
 printf '#!/bin/sh\n# platform: host-agnostic\nprintf "https://example.com/v%%s\\n" "$1"\n' > "$work/host/build/upstream-release-notes-url.sh"
-(cd "$work/host" && git add -A) >/dev/null 2>&1
+(cd "$work/host" && git add -A) >/dev/null 2>&1 || exit 1
 out="$(cd "$work/host" && sh "$S" 2>&1)" && { echo "FAIL: a host-agnostic script running otool should fail check 22"; exit 1; }
 printf '%s\n' "$out" | grep -q 'check-host-tools' || { echo "FAIL: check 22 should report through check-host-tools: $out"; exit 1; }
 printf '#!/bin/sh\n# platform: host-agnostic\nexit 0\n' > "$work/host/tests/a-test.sh"
@@ -56,7 +56,7 @@ printf '#!/bin/sh\n# platform: host-agnostic\nexit 0\n' > "$work/host/tests/a-te
 mkrepo "$work/pk"; printf '#!/bin/sh\npkgbuild --root stage --identifier dev.mavergreen.w out.pkg\n' > "$work/pk/build/package.sh"
 printf 'sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr\n' >> "$work/pk/build/package.sh"
 printf '      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"\n' >> "$work/pk/.github/workflows/release.yml"
-(cd "$work/pk" && git add -A) >/dev/null 2>&1
+(cd "$work/pk" && git add -A) >/dev/null 2>&1 || exit 1
 
 # spec: SKILL.md "Family conventions" check 24 -- a pkg-building repo is one scripts/product-names
 #       assigns products to, compared by name (a fork runs the same gate).
@@ -111,7 +111,7 @@ lib_fails "pkg-builder-library on a repo that publishes a .pkg" "$work/lib-pub-d
 lib_fails "a refused pkg-builder-library still asks for a product" "$work/lib-pub-decl" 'assigns no product'
 lib_fails "a refused pkg-builder-library still asks for conformance" "$work/lib-pub-decl" 'no workflow runs check-artifact-conformance.sh'
 lib "$work/lib-wrap" '      - run: sh build/release.sh dist' declare
-printf '#!/bin/sh\nsh build/package.sh "$1"\n' > "$work/lib-wrap/build/release.sh"; (cd "$work/lib-wrap" && git add -A) >/dev/null 2>&1
+printf '#!/bin/sh\nsh build/package.sh "$1"\n' > "$work/lib-wrap/build/release.sh"; (cd "$work/lib-wrap" && git add -A) >/dev/null 2>&1 || exit 1
 lib_fails "pkg-builder-library on a workflow that runs the pkg build through a wrapper" "$work/lib-wrap" 'pkg-builder-library is declared, but'
 lib "$work/lib-sign" '      - run: sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg "$P"' declare
 lib_fails "pkg-builder-library on a workflow that signs an appcast" "$work/lib-sign" 'pkg-builder-library is declared, but'
@@ -163,7 +163,7 @@ printf '%s\n' "$out" | grep -q 'staged-by:<library>' || { echo "FAIL: check 23 h
 _arch="arch"; _x64="-x86_64"
 mkrepo "$work/rosetta"
 printf '#!/bin/sh\narch -x86_64 ./host-tool\n' > "$work/rosetta/build/cross.sh"
-(cd "$work/rosetta" && git add -A) >/dev/null 2>&1
+(cd "$work/rosetta" && git add -A) >/dev/null 2>&1 || exit 1
 out="$(cd "$work/rosetta" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call must fail"; exit 1; }
 printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'Rosetta' || { echo "FAIL: check 25 should point at the SKILL \"Rosetta\" section: $out"; exit 1; }
@@ -173,10 +173,10 @@ printf '\n- rosetta:build/cross.sh: the cross build runs a host tool under Roset
 
 # spec: scripts/check-family-conventions.sh check 25 -- the other two spellings the gate scans for.
 mkrepo "$work/rosetta2"; printf '#!/bin/sh\narch -arch x86_64 ./host-tool\n' > "$work/rosetta2/build/cross.sh"
-(cd "$work/rosetta2" && git add -A) >/dev/null 2>&1
+(cd "$work/rosetta2" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/rosetta2" && sh "$S" >/dev/null 2>&1) && { echo "FAIL: check 25: undeclared 'arch -arch x86_64' must fail"; exit 1; }
 mkrepo "$work/rosetta3"; printf '#!/bin/sh\n/usr/bin/arch -x86_64 ./host-tool\n' > "$work/rosetta3/build/cross.sh"
-(cd "$work/rosetta3" && git add -A) >/dev/null 2>&1
+(cd "$work/rosetta3" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/rosetta3" && sh "$S" >/dev/null 2>&1) && { echo "FAIL: check 25: undeclared '/usr/bin/arch -x86_64' must fail"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh check 25 -- a comment-only mention is prose, not a call.
@@ -190,7 +190,7 @@ printf '#!/bin/sh\n# %s %s ./host-tool -- no longer true, kept as a note\nexit 0
 #       doesn't skip, so a hit under tests/ fails undeclared and passes declared, like any other.
 mkrepo "$work/rosettat"
 printf '#!/bin/sh\narch -x86_64 ./product --version\n' > "$work/rosettat/tests/rosetta-smoke.sh"
-(cd "$work/rosettat" && git add -A) >/dev/null 2>&1
+(cd "$work/rosettat" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/rosettat" && sh "$S" >/dev/null 2>&1) \
   && { echo "FAIL: check 25: a call under tests/ must fail undeclared: $(cd "$work/rosettat" && sh "$S" 2>&1)"; exit 1; }
 printf '\n- rosetta:tests/rosetta-smoke.sh: best-effort smoke that runs the shipped x86_64 product under Rosetta when present, SKIPping (77) otherwise; reconsider when an arm64 test box exists, and at the latest before macOS 28\n' >> "$work/rosettat/INGREDIENTS.md"
@@ -217,7 +217,7 @@ printf '#!/bin/sh\necho "legacy builds used %s %s here"\n' "$_arch" "$_x64" > "$
 #       does not matter.
 mkrepo "$work/rosettayml"
 printf 'jobs:\n  build:\n    steps:\n      - run: |\n          %s %s ./cross-tool\n' "$_arch" "$_x64" > "$work/rosettayml/.github/workflows/x.yml"
-(cd "$work/rosettayml" && git add -A) >/dev/null 2>&1
+(cd "$work/rosettayml" && git add -A) >/dev/null 2>&1 || exit 1
 out="$(cd "$work/rosettayml" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared translated-arch call inside a workflow run: block must fail"; exit 1; }
 printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta for a workflow-file hit: $out"; exit 1; }
 printf '\n- rosetta:.github/workflows/x.yml: the release job cross-builds a host tool under Rosetta\n' >> "$work/rosettayml/INGREDIENTS.md"
@@ -228,7 +228,7 @@ printf '\n- rosetta:.github/workflows/x.yml: the release job cross-builds a host
 #       Rosetta dependency there is: it installs the translator itself.
 mkrepo "$work/rosettainstall"
 printf '#!/bin/sh\nsoftwareupdate --install-rosetta --agree-to-license\n' > "$work/rosettainstall/build/prep.sh"
-(cd "$work/rosettainstall" && git add -A) >/dev/null 2>&1
+(cd "$work/rosettainstall" && git add -A) >/dev/null 2>&1 || exit 1
 out="$(cd "$work/rosettainstall" && sh "$S" 2>&1)" && { echo "FAIL: check 25: an undeclared softwareupdate Rosetta-install call must fail"; exit 1; }
 printf '%s\n' "$out" | grep -q 'rosetta' || { echo "FAIL: check 25 should name rosetta for a softwareupdate Rosetta-install hit: $out"; exit 1; }
 printf '\n- rosetta:build/prep.sh: installs Rosetta so a later step can run x86_64 tools\n' >> "$work/rosettainstall/INGREDIENTS.md"
@@ -246,7 +246,7 @@ for loc in renovate.json renovate.json5 .renovaterc .renovaterc.json .renovaterc
   d="$work/rp-$(printf '%s' "$loc" | tr '/.' '__')"
   mkrepo "$d"
   mkdir -p "$d/$(dirname "$loc")"; printf '{"extends":["github>Mavergreen/shipyard"]}\n' > "$d/$loc"
-  (cd "$d" && git add -A) >/dev/null 2>&1
+  (cd "$d" && git add -A) >/dev/null 2>&1 || exit 1
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 26: tracked $loc beside .github/renovate.json must fail"; exit 1; }
   printf '%s\n' "$out" | grep -q "$loc is a tracked Renovate config" || { echo "FAIL: check 26 should name $loc: $out"; exit 1; }
   printf '%s\n' "$out" | grep -q 'git mv .* .github/renovate.json' || { echo "FAIL: check 26 should say to git mv to .github/renovate.json: $out"; exit 1; }
@@ -298,7 +298,7 @@ for dir in .superpowers docs/superpowers .idea; do
   tracked="$dir/sub/f.txt"
   d="$work/tr-$(printf '%s' "$dir" | tr -c 'A-Za-z' _)"; mkrepo "$d"
   mkdir -p "$d/$dir/sub"; printf 'x\n' > "$d/$tracked"
-  (cd "$d" && git add -f "$tracked") >/dev/null 2>&1
+  (cd "$d" && git add -f "$tracked") >/dev/null 2>&1 || exit 1
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a file tracked under $dir must fail"; exit 1; }
   printf '%s\n' "$out" | grep -q "git rm -r --cached $dir " || { echo "FAIL: check 27 should say git rm -r --cached $dir: $out"; exit 1; }
 done
@@ -306,7 +306,7 @@ done
 for f in BACKLOG.md docs/TODO.md notes/queue.txt Backlog; do
   d="$work/bl-$(printf '%s' "$f" | tr -c 'A-Za-z' _)"; mkrepo "$d"
   mkdir -p "$(dirname "$d/$f")"; printf 'x\n' > "$d/$f"
-  (cd "$d" && git add "$f") >/dev/null 2>&1
+  (cd "$d" && git add "$f") >/dev/null 2>&1 || exit 1
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a tracked $f must fail"; exit 1; }
   printf '%s\n' "$out" | grep -q "$f is a tracked backlog" || { echo "FAIL: check 27 should name the tracked $f: $out"; exit 1; }
 done
@@ -321,7 +321,7 @@ q="QUEUE"; b="BACKLOG"
 for cite in "$q #12" "$q.md #3" "shipyard $b #30" "$q#7"; do
   d="$work/ci-$(printf '%s' "$cite" | tr -c 'A-Za-z0-9' _)"; mkrepo "$d"
   printf '# wait for %s before this\n' "$cite" > "$d/notes.sh"
-  (cd "$d" && git add notes.sh) >/dev/null 2>&1
+  (cd "$d" && git add notes.sh) >/dev/null 2>&1 || exit 1
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a tracked line citing '$cite' must fail"; exit 1; }
   printf '%s\n' "$out" | grep -q "notes.sh:1 cites a queue entry" || { echo "FAIL: check 27 should name notes.sh:1 for '$cite': $out"; exit 1; }
 done
@@ -331,7 +331,7 @@ for wrap in md sh; do
     md) printf 'a fetcher (shipyard %s\n#52), never by hand\n' "$q" > "$d/notes.$wrap" ;;
     sh) printf '# a fetcher (shipyard %s\n#   #52), never by hand\necho\n' "$b" > "$d/notes.$wrap" ;;
   esac
-  (cd "$d" && git add "notes.$wrap") >/dev/null 2>&1
+  (cd "$d" && git add "notes.$wrap") >/dev/null 2>&1 || exit 1
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 27: a citation wrapped across lines in notes.$wrap must fail"; exit 1; }
   printf '%s\n' "$out" | grep -q "notes.$wrap:1 cites a queue entry" || { echo "FAIL: check 27 should name notes.$wrap:1: $out"; exit 1; }
 done
@@ -354,7 +354,7 @@ _g="gh"; _r="release"; _l="latest"
 unpinned() {  # $1 = name, $2 = file, $3 = line: undeclared must fail naming unpinned; declared must pass
   d="$work/unp-$1"; mkrepo "$d"; mkdir -p "$(dirname "$d/$2")"
   printf '%s\n' "$3" > "$d/$2"
-  (cd "$d" && git add -A) >/dev/null 2>&1
+  (cd "$d" && git add -A) >/dev/null 2>&1 || return 1
   out="$(cd "$d" && sh "$S" 2>&1)" && { echo "FAIL: check 28: $1 must fail undeclared: $3"; exit 1; }
   printf '%s\n' "$out" | grep -q "unpinned:$2" || { echo "FAIL: check 28 should name unpinned:$2 for $1: $out"; exit 1; }
   printf '\n- unpinned:%s: a canary of the newest release on purpose; reconsider if it ever gates a release\n' "$2" >> "$d/INGREDIENTS.md"

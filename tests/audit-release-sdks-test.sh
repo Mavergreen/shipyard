@@ -20,8 +20,8 @@ build() {  # $1 = recorded sdk  $2 = output
 }
 build 10.9 "$w/good/h"
 build 26.5 "$w/h"
-( cd "$w/good" && tar -czf dist/t-1.0.0-mavericks.1.tar.gz h )
-( cd "$w" && tar -czf bad/dist/t-1.0.0-mavericks.1.tar.gz h )
+( cd "$w/good" && tar -czf dist/t-1.0.0-mavericks.1.tar.gz h ) || exit 1
+( cd "$w" && tar -czf bad/dist/t-1.0.0-mavericks.1.tar.gz h ) || exit 1
 out="$(sh "$S" --dist "$w/good/dist" "$w/repo")" || { echo "FAIL: a pinned release must pass the audit"; exit 1; }
 printf '%s' "$out" | grep -q '1 Mach-O slices' || { echo "FAIL: the verdict must name 1 Mach-O slices: $out"; exit 1; }
 if out="$(sh "$S" --dist "$w/bad/dist" "$w/repo" 2>&1)"; then echo "FAIL: the runner's SDK must fail the audit"; exit 1; fi

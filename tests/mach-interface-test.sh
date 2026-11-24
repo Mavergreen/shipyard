@@ -99,7 +99,7 @@ pair base.dylib import.dylib; level "added import" interface; detail "added impo
 src "$F1" "$F2"; dy weak.dylib -Wl,-weak_library,"$SDK/usr/lib/libz.dylib"
 pair base.dylib weak.dylib; level "weak dylib" interface
 grep -q '^  only in B: x86_64 dylib [0-9]* weak /usr/lib/libz\.1\.dylib$' "$w/out" || fail "weak dylib: no detail: $out"
-( TGT=x86_64-apple-macos10.10; dy minos.dylib )
+( TGT=x86_64-apple-macos10.10; dy minos.dylib ) || exit 1
 pair base.dylib minos.dylib; level "deployment target" interface
 detail "deployment target" "only in A: x86_64 minos version_min_macosx 10.9"; detail "deployment target" "only in B: x86_64 minos version_min_macosx 10.10"
 cc -dynamiclib -install_name /opt/b/libx.dylib "$w/s.c" -o "$w/id.dylib"

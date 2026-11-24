@@ -140,6 +140,7 @@ build() {
     printf 'd\n' > "$WORK/root/usr/local/mavergreen/w/share/d"
     printf 's\n' > "$WORK/root/usr/local/mavergreen/w/bin/s"; chmod 4775 "$WORK/root/usr/local/mavergreen/w/bin/s"
     ln -s w "$WORK/root/usr/local/mavergreen/w/bin/l" )
+  [ $? -eq 0 ] || return 1
   build "$WORK/u.pkg" > /dev/null 2> "$WORK/err"
   grep -q 'build_component_pkg: normalised 9 payload entries' "$WORK/err"
   [ -L "$WORK/root/usr/local/mavergreen/w/bin/l" ]

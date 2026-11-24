@@ -65,7 +65,7 @@ mkdir -p "$w2/build"
 ( cd "$w2" && git init -q -b main . && git config user.email t@example.com && git config user.name tester \
    && printf '9.9p2\n' > UPSTREAM_VERSION \
    && printf '#!/bin/sh\nprintf "https://example.com/%%s\\n" "$1"\n' > build/upstream-release-notes-url.sh \
-   && git add -A && git commit -qm base && git tag 9.9p2-mavericks.1 )
+   && git add -A && git commit -qm base && git tag 9.9p2-mavericks.1 ) || exit 1
 p="$(cd "$w2" && MAVERICKS_ROOT="$w2" sh "$here/../scripts/release-notes-file.sh" 9.9p2-mavericks.1 9.9p2-mavericks.1 OpenSSH)"
 [ -s "$p" ] || { echo "FAIL delegate: empty file at '$p'"; exit 1; }
 sh "$here/../scripts/check-release-notes.sh" "$p" 9.9p2-mavericks.1 >/dev/null \
@@ -77,7 +77,7 @@ lw="$(mktemp -d "${TMPDIR:-/tmp}/rnf-line.XXXXXX")"
     && mkdir -p build && printf '1.26.7\n' > UPSTREAM_VERSION \
     && printf '#!/bin/sh\nprintf "https://go.dev/doc/devel/release#go%%s\\n" "$1"\n' > build/upstream-release-notes-url.sh \
     && git add -A && git commit -qm base \
-    && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 )
+    && git tag 1.26.5-mavericks.1 && git tag 1.27.0-mavericks.1 ) || exit 1
 
 p="$(cd "$lw" && MAVERICKS_ROOT="$lw" GITHUB_SERVER_URL=https://github.com \
     GITHUB_REPOSITORY=Mavergreen/mavericks-golang \

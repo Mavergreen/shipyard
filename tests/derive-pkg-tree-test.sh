@@ -32,12 +32,12 @@ ln -s ../share/w/version "$SA/bin/version"
 L="$w/bundled list"
 printf 'rg libexec/w/bundled/rg\n\ned25519 libexec/w/bundled/ed25519\n' > "$L"
 mkdir -p "$w/hooks/mavergreen"; printf '#!/bin/sh\n' > "$w/hooks/mavergreen/uninstall"; chmod 755 "$w/hooks/mavergreen/uninstall"
-(cd "$SA" && find . | LC_ALL=C sort) > "$w/before"
+(cd "$SA" && find . | LC_ALL=C sort) > "$w/before" || exit 1
 
 want 0 "a derivation" --requires rg --requires 'ed25519>=1.2' --pkg-only "$w/hooks/mavergreen=libexec/mavergreen" "$SA" "$L" "$w/pkg tree"
 grep -q 'dropped 2 bundled requirement(s), added 1 pkg-only path(s)' "$w/err" || fail "it says what it did: $(cat "$w/err")"
 P="$w/pkg tree"
-(cd "$P" && find . | LC_ALL=C sort) > "$w/list"
+(cd "$P" && find . | LC_ALL=C sort) > "$w/list" || exit 1
 expect='.
 ./bin
 ./bin/version
@@ -55,7 +55,7 @@ expect='.
 [ -x "$P/bin/w" ] && [ -x "$P/libexec/mavergreen/uninstall" ] || fail "executables keep their mode"
 [ "$(ls -l "$P/share/w/version" | cut -c1-10)" = "-rw-------" ] || fail "a file keeps its mode: $(ls -l "$P/share/w/version")"
 [ -L "$P/bin/version" ] && [ "$(readlink "$P/bin/version")" = ../share/w/version ] || fail "a link stays the same link"
-(cd "$SA" && find . | LC_ALL=C sort) > "$w/after"
+(cd "$SA" && find . | LC_ALL=C sort) > "$w/after" || exit 1
 cmp -s "$w/before" "$w/after" || fail "the standalone tree is left as it was"
 
 mkdir "$w/round"; cp -pRP "$P/." "$w/round/"; rm -rf "$w/round/libexec/mavergreen"

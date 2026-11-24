@@ -176,7 +176,7 @@ case "$cmd" in
     C="$(awk -F '\t' -v id="$id" '$1 == id { print $4 }' "$T/comps")"
     case "$C" in /*) : ;; *) C="$(pwd)/$C" ;; esac
     mkdir "$T/m"
-    ( cd "$T/m" && cpio_from "$id" -id --quiet "$member" )
+    ( cd "$T/m" && cpio_from "$id" -id --quiet "$member" ) || exit 1
     [ -f "$T/m/$member" ] || die "could not unpack $member from $id in $PKG"
     for k in "$@"; do
       v="$(stevedore plist get "$T/m/$member" "$k" 2>/dev/null)" || die "the manifest $member in $PKG has no scalar $k"

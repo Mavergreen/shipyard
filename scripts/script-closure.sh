@@ -11,7 +11,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 [ "$#" -gt 0 ] || { echo "usage: script-closure.sh NAME..." >&2; exit 2; }
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/script-closure.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
-( cd "$SELF" && find . -type f | sed 's|^\./||' | LC_ALL=C sort ) > "$WORK/all"
+( cd "$SELF" && find . -type f | sed 's|^\./||' | LC_ALL=C sort ) > "$WORK/all" || exit 1
 : > "$WORK/todo"
 for n in "$@"; do
   grep -Fxq -- "$n" "$WORK/all" || { echo "script-closure: $n is not a file under $SELF" >&2; exit 2; }

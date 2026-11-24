@@ -14,7 +14,7 @@ setup() {
   printf '#!/bin/sh\necho run\n' > "$WORK/stage/widget-$D/run.sh"; chmod 755 "$WORK/stage/widget-$D/run.sh"
   ln -s sub/file.txt "$WORK/stage/widget-$D/link"
   mkdir -p "$WORK/codeload/acme/widget/tar.gz"
-  ( cd "$WORK/stage" && tar czf "$WORK/codeload/acme/widget/tar.gz/$D" "widget-$D" )
+  ( cd "$WORK/stage" && tar czf "$WORK/codeload/acme/widget/tar.gz/$D" "widget-$D" ) || return 1
   SHA="$(shasum -a 256 < "$WORK/codeload/acme/widget/tar.gz/$D" | cut -c1-64)"
   export MAVERICKS_CODELOAD="file://$WORK/codeload" MAVERICKS_SOURCE_CACHE="$WORK/cache"
   DEST="$WORK/build/widget"
@@ -60,7 +60,7 @@ teardown() { rm -rf "$WORK"; }
 
 @test "a tarball holding anything beside its one NAME-DIGEST directory is refused" {
   mkdir -p "$WORK/stage/other"
-  ( cd "$WORK/stage" && tar czf "$WORK/codeload/acme/widget/tar.gz/$D" "widget-$D" other )
+  ( cd "$WORK/stage" && tar czf "$WORK/codeload/acme/widget/tar.gz/$D" "widget-$D" other ) || return 1
   S2="$(shasum -a 256 < "$WORK/codeload/acme/widget/tar.gz/$D" | cut -c1-64)"
   run sh "$HELPER" "$REPO" "$D" "$S2" "$DEST"
   [ "$status" -eq 1 ]

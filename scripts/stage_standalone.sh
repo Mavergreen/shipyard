@@ -86,8 +86,8 @@ if [ -s "$work/left" ]; then
   sed 's/^/  /' "$work/left" >&2
 fi
 [ ! -f "$TREE/mavergreen.plist" ] || echo "stage_standalone: left out of $want, as the pkg's alone: usr/local/mavergreen/$P/mavergreen.plist" >&2
-(cd "$work" && find "$top" -exec env TZ=UTC0 touch -h -t "$stamp" {} +)
-(cd "$work" && find "$top" | LC_ALL=C sort) > "$work/list"
+(cd "$work" && find "$top" -exec env TZ=UTC0 touch -h -t "$stamp" {} +) || exit 1
+(cd "$work" && find "$top" | LC_ALL=C sort) > "$work/list" || exit 1
 
 mkdir -p "$(dirname "$OUT")"
 if tar --version 2>/dev/null | head -1 | grep -q 'GNU tar'; then
@@ -99,7 +99,7 @@ else
     set --
   fi
 fi
-(cd "$work" && COPYFILE_DISABLE=1 tar -c -f out.tar --no-recursion "$@" -T list)
+(cd "$work" && COPYFILE_DISABLE=1 tar -c -f out.tar --no-recursion "$@" -T list) || exit 1
 gzip -n -9 "$work/out.tar"
 mv "$work/out.tar.gz" "$OUT"
 echo "stage_standalone: built $OUT"

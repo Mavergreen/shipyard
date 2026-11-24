@@ -11,7 +11,7 @@ w="$(mktemp -d "${_tmp%/}/fetch-sdk-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 leftovers() { find "$1" -mindepth 1 -name '.*'; }
 fixture() {  # $1 = sdk dir name; prints "<tarball> <sha256>"
   mkdir -p "$w/src/$1/usr/lib"; : > "$w/src/$1/usr/lib/libSystem.tbd"
-  ( cd "$w/src" && tar -czf "$w/$1.tar" "$1" )
+  ( cd "$w/src" && tar -czf "$w/$1.tar" "$1" ) || return 1
   printf '%s %s\n' "$w/$1.tar" "$(shasum -a 256 "$w/$1.tar" | awk '{print $1}')"
 }
 set -- $(fixture MacOSX11.3.sdk); t113="$1"; s113="$2"
@@ -130,7 +130,7 @@ printf 'stub' > "$w/stub/MacOSX10.9.sdk/usr/lib/libSystem.B.dylib"
 ln -s libSystem.B.dylib "$w/stub/MacOSX10.9.sdk/usr/lib/libSystem.dylib"
 printf 'stub' > "$w/stub/MacOSX10.9.sdk/usr/lib/system/libsystem_c.dylib"
 printf 'stub' > "$w/stub/MacOSX10.9.sdk/System/Library/Frameworks/Foo.framework/Foo"
-( cd "$w/stub" && tar -czf "$w/stub.tar" MacOSX10.9.sdk )
+( cd "$w/stub" && tar -czf "$w/stub.tar" MacOSX10.9.sdk ) || exit 1
 sstub="$(shasum -a 256 "$w/stub.tar" | awk '{print $1}')"
 for os in 10.9.5 13.0; do
   : > "$w/tools.log"

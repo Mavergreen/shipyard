@@ -22,7 +22,7 @@ die() { echo "fetch_drydock: $*" >&2; exit 1; }
 has_objc() { [ -x "$1/bin/drydock-objc" ]; }
 if [ -n "${MAVERGREEN_DRYDOCK_PREFIX:-}" ]; then
   has_objc "$MAVERGREEN_DRYDOCK_PREFIX" || die "MAVERGREEN_DRYDOCK_PREFIX $MAVERGREEN_DRYDOCK_PREFIX holds no bin/drydock-objc"
-  (cd "$MAVERGREEN_DRYDOCK_PREFIX" && pwd -P); exit 0
+  (cd "$MAVERGREEN_DRYDOCK_PREFIX" && pwd -P) || exit 1; exit 0
 fi
 [ $# -eq 1 ] && [ -d "$1" ] || { echo "usage: fetch_drydock.sh PIN_DIR (a components/drydock directory)" >&2; exit 2; }
 P="$(cd "$1" && pwd)"

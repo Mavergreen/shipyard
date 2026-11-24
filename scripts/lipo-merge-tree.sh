@@ -38,8 +38,8 @@ has_arch() {
   case " $archs " in *" $2 "*) return 0;; esac; return 1
 }
 
-( cd "$A" && find . \( -type f -o -type l \) | sort ) > "$work/lmt-a"
-( cd "$B" && find . \( -type f -o -type l \) | sort ) > "$work/lmt-b"
+( cd "$A" && find . \( -type f -o -type l \) | sort ) > "$work/lmt-a" || exit 1
+( cd "$B" && find . \( -type f -o -type l \) | sort ) > "$work/lmt-b" || exit 1
 if ! cmp -s "$work/lmt-a" "$work/lmt-b"; then
   echo "lipo-merge-tree: the trees do not hold the same files:" >&2
   diff "$work/lmt-a" "$work/lmt-b" >&2 || true

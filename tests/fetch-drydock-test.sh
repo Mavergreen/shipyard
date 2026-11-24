@@ -24,7 +24,7 @@ mkdir -p "$T/a/drydock-9.9.9/bin" "$T/a/drydock-9.9.9/share/drydock/objc/referen
 printf '#!/bin/sh\necho fixture drydock-objc\n' >"$T/a/drydock-9.9.9/bin/drydock-objc"; chmod +x "$T/a/drydock-9.9.9/bin/drydock-objc"
 echo '{}' >"$T/a/drydock-9.9.9/share/drydock/objc/reference/manifest.json"
 asset=drydock-9.9.9-linux-x86_64.tar.gz
-(cd "$T/a" && tar -czf "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" drydock-9.9.9)
+(cd "$T/a" && tar -czf "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" drydock-9.9.9) || exit 1
 mkdir -p "$T/pin"
 printf 'v9.9.9\n' >"$T/pin/version"
 sums() { printf '%s  %s\n' "$(sha "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset")" "$asset" >"$T/rel/Mavergreen/drydock/releases/download/v9.9.9/SHA256SUMS"; }
@@ -42,10 +42,10 @@ fetch MAVERGREEN_DRYDOCK_HOST=linux
   fail "reuse: exit $rc, printed '$out', want $first"
 
 rm -rf "$T/cache" "$T/tars"
-(cd "$T/a" && tar -czf "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" drydock-9.9.9)
+(cd "$T/a" && tar -czf "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" drydock-9.9.9) || exit 1
 sums
 echo tampered >"$T/a/drydock-9.9.9/bin/extra"
-(cd "$T/a" && tar -czf "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" drydock-9.9.9)
+(cd "$T/a" && tar -czf "$T/rel/Mavergreen/drydock/releases/download/v9.9.9/$asset" drydock-9.9.9) || exit 1
 fetch MAVERGREEN_DRYDOCK_HOST=linux
 [ "$rc" = 1 ] && [ -z "$out" ] && pass 'an archive that does not match its SHA256SUMS digest fails' ||
   fail "digest mismatch: exit $rc, printed '$out', want 1"
@@ -90,7 +90,7 @@ for a in "\$@"; do printf '%s\n' "\$a"; done >"$T/argv"
 exit 0
 SH
 chmod +x "$T/p/drydock-$PN/bin/drydock-objc"
-(cd "$T/p" && tar -czf "$PR/drydock-$PN-linux-x86_64.tar.gz" "drydock-$PN")
+(cd "$T/p" && tar -czf "$PR/drydock-$PN-linux-x86_64.tar.gz" "drydock-$PN") || exit 1
 printf '%s  %s\n' "$(sha "$PR/drydock-$PN-linux-x86_64.tar.gz")" "drydock-$PN-linux-x86_64.tar.gz" >"$PR/SHA256SUMS"
 printf '#!/bin/sh\ncase "$1" in -m) echo x86_64 ;; *) echo Linux ;; esac\n' >"$T/linux-bin/uname"
 chmod +x "$T/linux-bin/uname"

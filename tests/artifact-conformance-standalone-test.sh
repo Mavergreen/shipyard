@@ -114,7 +114,7 @@ printf '#!/bin/sh\necho w\n' > "$R/bin/w"; chmod 755 "$R/bin/w"
 SOURCE_DATE_EPOCH=1700000000 sh "$w/scripts/stage_standalone.sh" "$w/root" w 1.0-mavericks.1 x86_64 "$w/dist/$SA" 2>/dev/null \
   || fail "stage_standalone.sh could not build the dist's archive"
 mkdir -p "$w/bad/w-1.0/bin"; printf '#!/usr/local/mavergreen/w/bin/sh\n' > "$w/bad/w-1.0/bin/w"
-(cd "$w/bad" && tar -czf "$w/dist/w-1.0-macos-arm64.tar.gz" w-1.0)
+(cd "$w/bad" && tar -czf "$w/dist/w-1.0-macos-arm64.tar.gz" w-1.0) || exit 1
 printf 'x\n' > "$w/dist/w-1.0-linux-x86_64.tar.gz.txt"
 facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist" 1.0-mavericks.1 "$w/repo" 2>"$w/err")" || fail "artifact-facts.sh failed: $(cat "$w/err")"
 printf '%s\n' "$facts" | grep -qx "standalone $SA ok" || fail "artifact-facts.sh judges a good archive ok: $facts"
@@ -128,7 +128,7 @@ printf '#!/bin/sh\nexec /usr/local/mavergreen/clang22/bin/clang "$@"\n' > "$R/bi
 SOURCE_DATE_EPOCH=1700000000 sh "$w/scripts/stage_standalone.sh" "$w/root2" w 1.0-mavericks.1 x86_64 "$w/dist2/$SA" > /dev/null 2>&1 \
   || fail "stage_standalone.sh could not build the archive naming a require"
 mkdir -p "$w/zig/w-1.0/bin"; printf '#!/bin/sh\nexec /usr/local/mavergreen/zig/bin/zig "$@"\n' > "$w/zig/w-1.0/bin/w"
-(cd "$w/zig" && tar -czf "$w/dist2/w-1.0-macos-arm64.tar.gz" w-1.0)
+(cd "$w/zig" && tar -czf "$w/dist2/w-1.0-macos-arm64.tar.gz" w-1.0) || exit 1
 printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>product</key>\n  <string>w</string>\n  <key>identifier</key>\n  <string>dev.mavergreen.w</string>\n  <key>version</key>\n  <string>1.0-mavericks.1</string>\n  <key>requires</key>\n  <array>\n    <string>clang22</string>\n  </array>\n</dict>\n</plist>\n' > "$R/mavergreen.plist"
 "$ST" component --root "$w/root2" --identifier dev.mavergreen.w --version 1.0-mavericks.1 --install-location / --mtime 1700000000 --out "$w/dist2/$PK" > /dev/null \
   || fail "stevedore could not build the pkg"
@@ -142,7 +142,7 @@ printf '## Conformance deviations\n- standalone-text:bin/w: the wrapper names zi
 facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist3" 1.0-mavericks.1 "$w/repo3" 2>"$w/err")" || fail "artifact-facts.sh failed on a declared standalone-text: $(cat "$w/err")"
 printf '%s\n' "$facts" | grep -qx 'standalone w-1.0-macos-arm64.tar.gz ok' || fail "artifact-facts.sh passes the repo's standalone-text deviations to the checker: $facts"
 mkdir -p "$w/dist4/good/w-1.0/bin"; printf '#!/bin/sh\necho w\n' > "$w/dist4/good/w-1.0/bin/w"
-(cd "$w/dist4/good" && tar -czf "$w/dist4/w-1.0-macos-x86_64.tar.gz" w-1.0); rm -rf "$w/dist4/good"
+(cd "$w/dist4/good" && tar -czf "$w/dist4/w-1.0-macos-x86_64.tar.gz" w-1.0) || exit 1; rm -rf "$w/dist4/good"
 cp "$w/dist2/w-1.0-macos-arm64.tar.gz" "$w/dist4/"
 facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist4" 1.0-mavericks.1 "$w/repo3" 2>"$w/err")" || fail "artifact-facts.sh failed on two archives: $(cat "$w/err")"
 printf '%s\n' "$facts" | grep -qx 'standalone w-1.0-macos-x86_64.tar.gz ok' || fail "an entry one archive uses is no finding in another: $facts"
@@ -190,7 +190,7 @@ if CL="$(sh "$w/scripts/fetch_clang22.sh" "$here/../components/clang22" 2>/dev/n
       && "$CL/bin/llvm-lipo" -create "$w/m32.o" "$w/m64.o" -output "$w/fat/w-1.0/bin/w" || fail "clang22 could not make a fat object"
     printf '## Conformance deviations\n- sdk-pin:*/bin/w: i386 has no pinned SDK; this clang22 builds no arm64\n' > "$w/dist5/INGREDIENTS.md"
   fi
-  (cd "$w/fat" && tar -czf "$w/dist5/$U" w-1.0)
+  (cd "$w/fat" && tar -czf "$w/dist5/$U" w-1.0) || exit 1
   rc=0; facts="$(unset NM OTOOL LIPO
     # platform: off macOS artifact-facts.sh reads Mach-O only through the LIPO and OTOOL its caller sets
     [ "$(uname -s)" = Darwin ] || { LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; export LIPO OTOOL; }

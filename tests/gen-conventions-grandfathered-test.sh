@@ -70,7 +70,7 @@ printf '!<arch>\n' > "$work/rc/usr/local/mavergreen/recaulk/lib/librecaulk.a"
 printf '<?xml version="1.0" encoding="utf-8"?>\n<installer-gui-script minSpecVersion="1">\n  <pkg-ref id="dev.mavergreen.recaulk" version="%s">rc.pkg</pkg-ref>\n  <choices-outline><line choice="r"/></choices-outline>\n  <choice id="r"><pkg-ref id="dev.mavergreen.recaulk"/></choice>\n</installer-gui-script>\n' "$rv" > "$work/rc.xml"
 "$STEVEDORE" product --distribution "$work/rc.xml" --package "$work/rc.pkg" --mtime 1700000000 --out "$rr/recaulk-$rv.pkg" >/dev/null \
   || { echo "FAIL: stevedore could not build the Recaulk fixture pkg"; exit 1; }
-(cd "$rr" && shasum -a 256 "recaulk-$rv.pkg" > SHA256SUMS)
+(cd "$rr" && shasum -a 256 "recaulk-$rv.pkg" > SHA256SUMS) || exit 1
 MAVERGREEN_RELEASES="file://$work/rel"; MAVERGREEN_PKG_CACHE="$work/cache"; export MAVERGREEN_RELEASES MAVERGREEN_PKG_CACHE
 PATH="$work/bin:$PATH"; export PATH
 FAKE_REPOS="$work/repos"; FAKE_SRC="$work/src"; export FAKE_REPOS FAKE_SRC
@@ -110,7 +110,7 @@ mksrc alpha yes; mksrc bravo no; mksrc charlie yes
 #       findings: every fixture's macOS build needs no Linux job, and charlie's modern-smoke has no if:.
 printf '  publish:\n    needs: [build, modern-smoke]\n    if: needs.build.outputs.publish == '"'yes'"'\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n  modern-smoke:\n    needs: [build]\n    runs-on: macos-26\n    steps:\n      - run: true\n' \
   >> "$work/src/charlie/.github/workflows/release.yml"
-(cd "$work/src/charlie" && git add -A && git -c user.name=t -c user.email=t@t commit -q -m smoke)
+(cd "$work/src/charlie" && git add -A && git -c user.name=t -c user.email=t@t commit -q -m smoke) || exit 1
 mksrc delta yes; mkrel delta tool
 mksrc echo yes decl; mkrel echo none
 mksrc foxtrot yes; mkrel foxtrot updater

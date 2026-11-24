@@ -89,7 +89,7 @@ grep -q 'upstream-notes' "$w/err" || { echo "FAIL empty not warned"; exit 1; }
 mk_repo_with_hook() {   # $1 = dir, $2 = hook body
   mkdir -p "$1/build"; ( cd "$1" && git init -q -b main . \
     && git config user.email t@example.com && git config user.name tester \
-    && echo x > f && git add f && git commit -qm base )
+    && echo x > f && git add f && git commit -qm base ) || return 1
   printf '%s\n' "$2" > "$1/build/upstream-release-notes-url.sh"
 }
 
@@ -131,7 +131,7 @@ out="$(cd "$u3" && MAVERICKS_ROOT="$u3" sh "$S" 1.2.3-mavericks.1 2>/dev/null)" 
 u4="$work/u-shallow-src"
 mk_repo_with_hook "$u4" '#!/bin/sh
 printf "https://example.com/notes/%s\n" "$1"'
-( cd "$u4" && git tag 1.2.3-mavericks.1 && git commit -q --allow-empty -m later )
+( cd "$u4" && git tag 1.2.3-mavericks.1 && git commit -q --allow-empty -m later ) || exit 1
 u4s="$work/u-shallow"
 git clone -q --depth 1 "file://$u4" "$u4s"
 [ -z "$(git -C "$u4s" tag)" ] || { echo "FAIL fixture: shallow clone carried tags"; exit 1; }

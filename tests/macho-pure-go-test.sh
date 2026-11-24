@@ -98,7 +98,7 @@ if command -v "${LIPO:-lipo}" >/dev/null 2>&1 && command -v "${OTOOL:-otool}" >/
   python3 -I "$FX" "$w/src/bin/tool"
   python3 -I "$FX" "$w/src/bin/other"
   printf '# x\n## Conformance deviations\n- arm64-pure-go:bin/tool: maintainers run it on Apple Silicon\n' > "$w/repo/INGREDIENTS.md"
-  (cd "$w/src" && tar -czf "$w/dist/t-1.0.0-mavericks.1.tgz" bin)
+  (cd "$w/src" && tar -czf "$w/dist/t-1.0.0-mavericks.1.tgz" bin) || exit 1
   facts="$(sh "$here/../scripts/artifact-facts.sh" "$w/dist" 1.0.0-mavericks.1 "$w/repo" 2>"$w/err")" || fail "artifact-facts failed: $(cat "$w/err")"
   printf '%s\n' "$facts" | grep -qxF "pure-go t-1.0.0-mavericks.1.tgz bin/tool arm64 0 internal $SYS 1 11.0 ok" \
     || fail "a covered slice gets its pure-go fact: $facts"
