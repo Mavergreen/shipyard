@@ -90,8 +90,7 @@ arch_is_target bin/other "$g" && fail "unrelated path"
 printf 'lib/z' > "$g"
 arch_is_target lib/z "$g" || fail "last line with no newline"
 
-arch_is_exempt "Library/Application Support/Mavergreen/w-updater.app/Contents/MacOS/w" || fail "updater is exempt"
-arch_is_exempt "Applications/Mavergreen/W.app/Contents/MacOS/w" && fail "the app is not exempt"
+command -v arch_is_exempt >/dev/null 2>&1 && fail "arch_is_exempt is gone: no product ships an updater, so no payload path is exempt"
 
 as_built() {
   { echo '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'

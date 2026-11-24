@@ -1,1 +1,0 @@
---clang22-pin	build_updater.sh --repo ROOT	shipped in v1.0.859 and adopted by codex and gh before the flag day; build_updater.sh accepts it as a deprecated alias

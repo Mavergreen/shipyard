@@ -4,7 +4,7 @@ installed-shipyard: an installed shipyard is what we meant to ship.
 Asserts that the cmake product beside shipyard is the CMake in .mavergreen/ingredients/cmake/VERSION and universal;
 that the farm's shipyard-cmake, shipyard-ctest, shipyard-cpack and shipyard-check are executable on the
 default PATH, and shipyard-check runs from there; that a probe under a stripped environment finds shipyard
-through shipyard-cmake; that the installed updater is universal; that an installed
+through shipyard-cmake; that an installed
 /opt/mavergreen/bin/mavergreen helper passes its own check; and that any other cmake is refused, by name.
 --root defaults to "/" (a real install); a fixture root makes it unit-testable. It is shipyard's own check, run by hand on a real install
 (tests/installed-shipyard-test.sh, listed in tests/maintainer-tests).

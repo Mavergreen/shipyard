@@ -128,8 +128,8 @@ if need_readers universal; then
   build target opt/mavergreen/w/lib/x/a130=a130 opt/mavergreen/w/bin/clean=clean; built target
   has target 'before="10.11"'; installs_check target; has target 'Built for Intel Macs'
   rm -f "$P/target"
-  build exempt "Library/Application Support/Mavergreen/w-updater.app/a130=a130"; built exempt
-  has exempt 'min="10.9.5" before="10.11"'; no_check exempt
+  build exempt "Library/Application Support/Mavergreen/w-helper.app/a130=a130" opt/mavergreen/w/bin/clean=clean
+  refused1 exempt 'w-helper.app/a130 is arm64 only'
 fi
 
 for flag in "--host-arch x86_64" "--min-os 10.9.5"; do

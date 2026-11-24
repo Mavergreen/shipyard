@@ -4,7 +4,6 @@
 #                                                             (x86_64 keys on the floor, default 10.9.5; arm64 ignores it)
 #          shipyard_sdk_settings_json <arch>                  the SDKSettings.json fetch_sdk.sh puts in the SDK sibling; 1 if none
 #          shipyard_sdk_rule <arch> <filetype> <minos> <sdk> [<floor>]  0 if compliant, else prints why and returns 1
-#          shipyard_sdk_exempt_sha256 <sha256>                0 if the bytes are a pinned third-party file
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- the ONE place
 #       the pins and the per-arch rule live; fetch_sdk.sh, assert_binary_compatible.sh and
 #       check-artifact-conformance.sh all source it, so the three cannot disagree.
@@ -66,9 +65,3 @@ shipyard_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk, $5 floor
   echo "$1 records minos $3 sdk $4; the pin is minos $_want_min sdk $_want_sdk"; return 1
 }
 
-# platform: Sparkle 1.27.3 is prebuilt upstream against SDK 12.0 and embedded verbatim in every updater;
-#           exempted by CONTENT, so only these exact bytes pass -- a patched or different Sparkle does not.
-SHIPYARD_SDK_EXEMPT_SHA256='95ad6ce1558b1ffef550455bf9aa05ad6686d434279631d170ab92fb3747c93f
-afc568f0d8d2a93eb9e59cda546cafab0a14cc60a4d78b4c611800d33ad5dced
-4ea4718635b69a7746078674aba2af31249d20e3155010bd06f1e9d5487c94b2'
-shipyard_sdk_exempt_sha256() { [ -n "$1" ] && printf '%s\n' "$SHIPYARD_SDK_EXEMPT_SHA256" | grep -qx "$1"; }

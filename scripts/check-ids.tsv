@@ -48,7 +48,7 @@ enclosure-url	dist	scripts/check-artifact-conformance.sh	conformance enclosure-u
 notes	dist	scripts/check-artifact-conformance.sh	conformance notes	P1
 sdk-pin	dist	scripts/check-artifact-conformance.sh	conformance sdk-pin	P1
 base	dist	scripts/check-artifact-conformance.sh	conformance base	P1
-updater	dist	scripts/check-artifact-conformance.sh	conformance updater	P6
+updater	retired	scripts/check-artifact-conformance.sh	conformance updater	P6
 repository	dist	scripts/check-artifact-conformance.sh	conformance repository	P3
 pkg-name	dist	scripts/check-artifact-conformance.sh	new	P3
 installer-title	dist	scripts/check-artifact-conformance.sh	new	P3
@@ -70,7 +70,7 @@ preset-icon	only	scripts/check-preset-icons.sh	check-preset-icons.sh	P1
 feed-upgradeable	publish	scripts/assert_appcast_upgradeable.sh	assert_appcast_upgradeable.sh	P1
 pkg-in-place	dist	scripts/assert_pkg_installs_in_place.sh	assert_pkg_installs_in_place.sh	P1
 gui-relaunch-safe	dist	scripts/assert_gui_relaunch_safe.sh	assert_gui_relaunch_safe.sh	P1
-sparkle-pristine	build	scripts/assert_sparkle_pristine.sh	assert_sparkle_pristine.sh	P6
+sparkle-pristine	retired	scripts/check-artifact-conformance.sh	assert_sparkle_pristine.sh	P6
 tag-publishable	publish	scripts/assert_tag_publishable.sh	assert_tag_publishable.sh	P1
 update-trusted	publish	scripts/assert_update_trusted.sh	assert_update_trusted.sh	P1
 deviation-known-check	checkout	scripts/check-deviations.sh	new (K5)	P1

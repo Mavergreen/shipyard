@@ -11,10 +11,9 @@ None recorded. The rule follows the decision that arm64 ships only with a reason
 running what is declared.
 
 ## Limits
-It reads pkgs, not shipped tarballs. The one exemption is the one packaging uses: a path under
-Library/Application Support/Mavergreen/, where the updater lives. Failures are listed for the first twenty
-paths, then counted. A repo grandfathered as modern-smoke, known from $GITHUB_REPOSITORY, is warned rather
-than failed, so a local run without that variable fails its slices.
+It reads pkgs, not shipped tarballs. Failures are listed for the first twenty paths, then counted. A repo
+grandfathered as modern-smoke, known from $GITHUB_REPOSITORY, is warned rather than failed, so a local run
+without that variable fails its slices.
 
 ## Deviating
 Write .mavergreen/deviations/arch-host/<label>/ with a scope (<install-path glob>), a reason (who runs it as

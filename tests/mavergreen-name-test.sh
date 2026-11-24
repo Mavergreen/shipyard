@@ -36,6 +36,8 @@ eq manifest-name "$(mavergreen_name manifest-name go127)" "Go 1.27"
 eq component "$(mavergreen_name component go127)" go127.pkg
 eq feed "$(mavergreen_name feed go127)" go127.xml
 eq identifier "$(mavergreen_name identifier go127)" dev.mavergreen.go127
+eq feed-url "$(GITHUB_REPOSITORY=Mavergreen/x mavergreen_name feed-url go127)" https://github.com/Mavergreen/x/releases/latest/download/go127.xml
+eq feed-url-unknown-repo "$(cd "$w" && GITHUB_REPOSITORY= status mavergreen_name feed-url go127)" 2
 eq link-suffix-none "$(mavergreen_name link-suffix shipyard)" ""
 eq no-newline "$(mavergreen_name name porthole)" Porthole
 

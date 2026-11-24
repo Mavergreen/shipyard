@@ -2,7 +2,7 @@ sign-call-shape: every call to sign_and_appcast.sh passes --product and --feed-d
 
 ## Why
 sign_and_appcast.sh writes the feed itself, as <feed-dir>/<product>.xml, and every release carries one feed
-per updater its pkgs install. The retired shape, sign_and_appcast.sh --pkg ... > dist/appcast.xml, wrote
+per product its pkgs ship. The retired shape, sign_and_appcast.sh --pkg ... > dist/appcast.xml, wrote
 a single appcast.xml that nothing polls any more; this fails it on the pull request instead of at signing
 time. The call is read as one command across lines that end in a backslash, so a flag on a continuation
 line counts. A redirection (> other than 2>) fails, because output on stdout is not the feed.
@@ -12,7 +12,7 @@ None recorded.
 
 ## Limits
 It reads the call as text. It cannot tell that the product name is one this repo declares (the conformance
-repository, feed and updater ids hold the artifacts to it), and it does not follow a call hidden behind a
+repository and feed ids hold the artifacts to it), and it does not follow a call hidden behind a
 variable or a wrapper script.
 
 ## Deviating

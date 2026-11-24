@@ -1,12 +1,12 @@
 ---
 name: mavergreen-conventions
-description: Use when creating or modifying a Mavergreen project — its release workflow, Renovate/automerge config, versioning, shipyard usage, or Sparkle updater — when deciding whether a deviation from the family conventions is warranted, or when asked to queue, track or note a work item, backlog entry, todo, bug or feature for later (it goes in .superpowers/QUEUE.md, never a GitHub issue).
+description: Use when creating or modifying a Mavergreen project — its release workflow, Renovate/automerge config, versioning, shipyard usage, or feeds and signing — when deciding whether a deviation from the family conventions is warranted, or when asked to queue, track or note a work item, backlog entry, todo, bug or feature for later (it goes in .superpowers/QUEUE.md, never a GitHub issue).
 ---
 
 # Mavergreen project conventions
 
 Mavergreen repos (`github.com/Mavergreen/*`, checked out as `mavergreen-*`) each cross-build one upstream thing into a **Mac OS X 10.9
-(Mavericks)**-compatible `.pkg` with a **Sparkle** auto-updater, on a modern Apple-Silicon runner,
+(Mavericks)**-compatible `.pkg` with a signed feed the Engine updates it from, on a modern Apple-Silicon runner,
 with **no 10.9 build runner anywhere**. They share a CMake/Renovate helper (`Mavergreen/shipyard`)
 and a common release/versioning shape. This skill is the family's conventions plus the judgment calls
 that copying one repo can't teach.
@@ -30,10 +30,9 @@ cheaper option is usually the one that degrades. It applies wherever a design co
 developer better than the other: what a `.pkg` installs, what a script assumes about its host, which
 box a test can run on, which arch an artifact carries. Where the two genuinely cannot be served by one
 artifact, ship one artifact that decides *for* the developer rather than two that make them choose:
-**choosing wrong is silent**, and the person who chose wrong is the one least able to notice. shipyard's
-own `.pkg` is the worked example — it carries both updater slices and a postinstall that picks by
-hardware, because an x86_64-only updater would be cheaper and match every other family product while
-prompting for Rosetta on Apple Silicon.
+**choosing wrong is silent**, and the person who chose wrong is the one least able to notice. A universal
+host tool beside an x86_64 product is the usual case: an x86_64-only build would be cheaper and match
+every other family product while prompting for Rosetta on Apple Silicon.
 
 **x86_64 by default; arm64 only with a reason.** A product exists for Mavericks, so it ships x86_64
 only. An arm64 slice is a deviation, declared as a `.mavergreen/deviations/arch-host/<label>/` whose scope is the install-path glob, and
@@ -76,8 +75,7 @@ The arm64 floor is the highest minimum OS any arm64 host slice records, compared
 its tree under `opt/mavergreen/<short>/`, for the files it ships *for the target* rather than to run on the
 host: an SDK's stubs, a cross toolchain's target runtime. A target file never decides a class or a floor and
 `arch-host` does not judge its slices. `arch-target` fails a glob that matches no file the product installs,
-and a host binary of the pkg that loads a target file. The one other path outside the rule is
-`arch_is_exempt`: a payload path under `Library/Application Support/Mavergreen/`, where the updater lives.
+and a host binary of the pkg that loads a target file.
 
 **One product, one name; a merge declares its one-sided files.** The x86_64 and arm64 builds of a product
 are two slices of one product, so a native/`-cross` pair is one universal product under the native short
@@ -126,8 +124,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   certificates), installing the missing ones with apt as root or under `sudo -n`, else failing once
   naming them all. So no product keeps an apt list for shipyard. It then lays down the pkg's own
   `/opt/mavergreen/shipyard` from the ref you pinned, staged as the pkg is
-  (`stage-shipyard-prefix.sh`, `package-pkg.sh --tree-only`; a test holds the trees equal, less the
-  updater), links the launchers into `/opt/mavergreen/bin` on `PATH`, and points
+  (`stage-shipyard-prefix.sh`, `package-pkg.sh --tree-only`; a test holds the trees equal), links the launchers into `/opt/mavergreen/bin` on `PATH`, and points
   `SHIPYARD_SCRIPTS` and `MavergreenShipyard_DIR` into it. There the launchers run the host's
   `cmake` (a consumer's stand-in `cmake` must not exec `shipyard-cmake`: the launcher refuses the
   loop), and the toolchain file gives every compiler not named the pinned clang22 with its
@@ -140,8 +137,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   one line naming root; there is no per-user prefix, since a consumer's presets could not find one.
   Revisit when a Linux consumer cannot get root at all (rootless CI).
 
-  The updater is no exception: `build_updater.sh` builds it on Linux, a modern Mac and 10.9 alike
-  ("The updater builds with clang22"). Package tests read the pkg with `pkg_read.sh` (`list`, `facts`,
+  Package tests read the pkg with `pkg_read.sh` (`list`, `facts`,
   `plist`, `payload`), never `pkgutil`, `lsbom` or PlistBuddy, so they run on Linux too.
 
   To install another family product, pass `with: { products: "SHORT@TAG ..." }`: its requires come
@@ -177,8 +173,8 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` the `mavergreen` helper links into
   `/opt/mavergreen/bin` (never the bare `cmake`/`ctest`/`cpack`: its manifest excludes them).
   `/etc/paths.d/mavergreen-opt` puts that directory on every *login* shell's `PATH`, so open a new
-  terminal after the first install. The pkg also installs a Sparkle updater that keeps it current,
-  and cmake has its own updater. CMake lives at `/opt/mavergreen/cmake`.
+  terminal after the first install. The Engine (`mavergreen update`) keeps it and cmake current.
+  CMake lives at `/opt/mavergreen/cmake`.
 
   **Configure, test and package with `shipyard-cmake` / `shipyard-ctest` / `shipyard-cpack`** — in
   workflows and in `build/*.sh` alike. These POSIX sh launchers exec the sibling cmake product's tools.
@@ -227,7 +223,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   fifteen repos would consume it within minutes of the move. shipyard runs no macOS job and no 10.9 VM
   job: it is unlikely to break on 10.9, and a break is found quickly. Its tests that need a 10.9 box or
   a modern Mac are listed in `tests/maintainer-tests`, by box, and run by hand: after a release that
-  changes the installer, the updater or the 10.9 path, run `sh scripts/maintainer-tests.sh BOX` on each box.
+  changes the installer or the 10.9 path, run `sh scripts/maintainer-tests.sh BOX` on each box.
 - **After `install@v1`, use `$SHIPYARD_SCRIPTS`** — the action exports the installed scripts dir.
   **Everywhere else, run `shipyard-scripts`**: `SHIPYARD_SCRIPTS="${SHIPYARD_SCRIPTS:-$(shipyard-scripts)}"`.
   It honours `SHIPYARD_SCRIPTS` when CI has set it, and otherwise
@@ -242,7 +238,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   or run beside them, and the pin or data files those read), transitively. Longboat and any other copier asks
   it instead of keeping its own list, so a helper a script grows later (`fetch_stevedore.sh`,
   `fetch-release-pkg.sh`, `source-date-epoch.sh`) arrives with it. It is a static scan of non-comment lines,
-  so a sibling named through a computed path is missed, and so is a file outside `scripts/` (`../.mavergreen`, `../updater`).
+  so a sibling named through a computed path is missed, and so is a file outside `scripts/` (`../.mavergreen`, `../keys`).
 
 **Pinning shipyard: `@v1` normally, `@vX.Y.Z` when you need to stand still.** `@v1` is a *moving*
 tag — it advances on every push to shipyard's `main` and reaches every consumer within minutes, which
@@ -261,7 +257,7 @@ any literal written here is stale by the time you read it — always look up the
 `gh api repos/Mavergreen/shipyard/git/ref/tags/v1 --jq .object.sha` says where `@v1` points now.
 
 **Use its facilities for 10.9-correctness — do NOT reinvent SDK fetching, floors, build-mode handling,
-updaters, signing, or compat checks:**
+signing, or compat checks:**
 
 | Facility (CMake fn · script) | Does | Don't hand-roll |
 |---|---|---|
@@ -269,7 +265,6 @@ updaters, signing, or compat checks:**
 | `mavergreen_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
 | `RequireAppleClang` | enforces Apple `/usr/bin/clang` for a configure that still declares it; every caller is a leftover, not an exception (see "The compiler: clang22 on every host") | assuming the toolchain |
 | `mavergreen_assert_binary_compatible` · `MavergreenCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set; with `OBJC_STRICT`, every Objective-C send) | a bespoke compat check |
-| `mavericks_add_updater_app` · `MavericksSparkle` · `stage_updater.sh` | builds/stages the Sparkle updater (self-fetches the framework) | wiring Sparkle by hand |
 | `apply_patches.sh SRC PATCHDIR` | applies `PATCHDIR/*.patch` to an unpacked source once, in name order with no fuzz; records their SHA-256s in `SRC/.mavergreen-patches`, no-ops on the same set, refuses a tree patched with another | a hand-rolled `patch` loop |
 | `build_component_pkg.sh` · `set_install_floor.sh` | builds a component `.pkg`; writes a product `.pkg`'s Distribution, its floors and its architecture rule derived from the payload (see "Seam hosts", below) | `pkgbuild`, `productbuild`, editing the pkg Distribution |
 | `sign_and_appcast.sh` · `gen_appcast.sh` | EdDSA-signs + renders the appcast (fetches `ed25519-sign` via `gh`) | rolling your own signing |
@@ -277,7 +272,6 @@ updaters, signing, or compat checks:**
 | `shipyard_curl URL OUT\|-` · `mavergreen_fetch.sh` | one download, retried from scratch on a reset, a stall, HTTP 429 or 5xx (up to `SHIPYARD_FETCH_TRIES`, default 5); a 404 fails at once; `OUT` appears only complete, and `-` prints the body only after the attempt that succeeded; runs on 10.9's curl 7.30 | a bare `curl`, or `curl --retry` (it does not retry a connection reset) |
 | `fetch_pinned_source.sh` | a GitHub source at its pinned commit, as GitHub's tarball of it, verified by a pinned SHA-256 and extracted afresh: no git | `curl … \| tar` of an archive URL |
 | `pkg_read.sh` | a family `.pkg` read the same way on every host: `expand`, one component's `payload`, its `list` (the format of `lsbom -p fmug`), the manifest's `plist` keys, and `facts` (identifiers, versions, install-location, `hostArchitectures`, the OS floor, scripts) | `pkgutil`, `lsbom` or PlistBuddy in a package test, or a hand-rolled `gzip -dc Payload \| cpio` |
-| `build_updater.sh` | a product's Sparkle updater `.app` from its inputs, per arch with clang22 and merged, on Linux, a modern Mac or 10.9 | a per-repo copy of the per-arch configure and `lipo-merge-tree.sh` merge |
 | `fetch_product_pkg.sh` | one component of a pinned Mavergreen release's `.pkg` (`librecaulk.a` out of Recaulk's, say), verified against that release's `SHA256SUMS`, picked by the identifier `dev.mavergreen.<short>` (or one ending `.<short>`) from the release `--repo` names, extracted afresh through `pkg_read.sh`; runs on 10.9 and Linux | `pkgutil --expand-full` (absent on 10.9), or a per-repo copy of this fetch |
 
 **Seam hosts.** `build_component_pkg.sh`, `set_install_floor.sh`, `build-base-component.sh`,
@@ -301,7 +295,7 @@ A release tagged before its repo moved to them rebuilds only against a shipyard 
 rebuild a tag with the shipyard version it was built with, never the newest.
 
 **`MAVERGREEN_PROGRESS=1` makes the fetch scripts report progress.** Set it and `mavergreen_fetch.sh`
-(and so `fetch_sdk.sh`, `fetch_pinned_source.sh`, `fetch_sparkle_framework.sh`) say what they are
+(and so `fetch_sdk.sh` and `fetch_pinned_source.sh`) say what they are
 doing on stderr: downloading, verifying and unpacking. At a terminal the download shows curl's progress
 bar; anywhere else, whole lines only, never a carriage return. Unset, or any value but `1`, output is
 exactly what it was, so CI logs and every existing consumer see no change. Stdout is untouched. A
@@ -731,8 +725,8 @@ upstream's own names, kept by declaration. Keep the "unofficial community build,
 
 Never rename **functional identifiers** to match a display name: bundle IDs, executable names, `launchd`
 labels, `hostinfo.SetPackage`/equivalent, internal helper bundles and asset filenames stay as they are. A
-Sparkle updater's functional identifiers are not chosen at all: its bundle id, app name, update-check
-label and feed are derived from the product's identifier and repo (see "Sparkle updater"). What those
+product's feed is not chosen at all: it is derived from the product's short name and repo (see "Feeds
+and signing"). What those
 identifiers must LOOK like, and where a product may install, is checked at package time: see "Install
 layout and identity" below. A product's **short name** (`go126`, `openssh`, `shipyard`) is a functional
 register: it names the product's directory and is what people type to the `mavergreen` helper.
@@ -841,7 +835,7 @@ repo (`golang-126` ships `go126`). The line repo serves its line from the root:
 `.mavergreen/upstream/VERSION` and `patches/` live there, the line is *derived* from it, never a
 separate input, and Renovate caps the repo at the next line (`matchDepNames: ["go-126"]`,
 `allowedVersions: "<1.27"`). A lined product's pkg identifier is `dev.mavergreen.<short
-name>`, derived, and its updater's bundle id, app, label and feed follow
+name>`, derived, and its feed follows
 from it and the repo, so two lines never share one. Every feed is
 `/releases/latest/download/<short name>.xml` on the line's own repo, whose newest release is always
 that line's, so no line needs a fixed per-line feed release. Renaming a line repo is a flag-day step
@@ -856,7 +850,7 @@ identity".
 
 **Ports.** A product with several lines that carries changes or infrastructure every line needs
 splits into `<product>-port` and `<product>-<line>` repos. The port is a self-upstream ingredient
-product: semver, a source tarball + `SHA256SUMS` via `publish-release.yml`, no `.pkg`, no updater, no
+product: semver, a source tarball + `SHA256SUMS` via `publish-release.yml`, no `.pkg`, no
 short name. Lines pin it (`.mavergreen/ingredients/<product>-port/VERSION`, verified against the port release's
 `SHA256SUMS`, Renovate `github-releases`, `repackage-on-ingredient-bump`) — never a moving tag, since
 it is baked into shipped artifacts. Line repos keep only what is genuinely per-line:
@@ -883,7 +877,7 @@ a new line repo is warranted.
    job where a caller exists (read from `main`'s tracked workflow files), and the rest of the family's
    settings.
 6. Nothing to set for `SPARKLE_PRIVATE_KEY`: it is an org secret every public repo already sees (see
-   Sparkle updater).
+   Feeds and signing).
 7. Get a README a human has read (`publish-release.yml` refuses a first release without one).
 8. Pass `--short <short>` and `--line <tag prefix>` to `release-notes.sh` (`--line 1.27`, the prefix the tags carry), and `short: <short>` to `publish-release.yml`.
 9. Consumers move by hand, repo and short name, when one of their own bumps needs the line.
@@ -1175,7 +1169,7 @@ is its durable form.
   `check-release-notes.sh <file> <version> --short <short> --tag <tag>` checks a body against the derived
   heading and the `Release <tag>` line; `publish-release.yml` runs it on what it is about to publish.
 - **macho-tools is deliberately out of scope for this migration.** It has no release infrastructure at
-  all (no `release.yml`, no `.pkg`, no updater) to point at the generator; its own plan needs
+  all (no `release.yml`, no `.pkg`) to point at the generator; its own plan needs
   correcting before any release-notes work applies to it.
 - **`--line` takes the prefix the TAGS carry, not the repo's own product id or any other per-repo
   identifier.** golang's product id is `126` (tree `/opt/mavergreen/go126`), but its release
@@ -1253,7 +1247,7 @@ is its durable form.
   - `YYYYMMDD.N` (porthole, longboat): what `self-upstream-version.sh` prints for the commit that will
     be released: run `sh "$SHIPYARD_SCRIPTS/self-upstream-version.sh"` at that commit.
     `.mavergreen/release-notes/` is not own code, so committing the notes does not move the version.
-  - `vX.Y.Z` (magic-trackpad2): `v` plus the `MAVERICKS_VERSION` in `CMakeLists.txt` that the release will
+  - `vX.Y.Z` (magic-trackpad2): `v` plus the version its `CMakeLists.txt` declares for the release it will
     publish, such as `v0.5.6`. `publish-release.yml` mints the tag; never push it by hand (the pre-push
     hook refuses).
   - `<upstream>-mavergreen.N` (every port): N is 1 for a new upstream, else the highest
@@ -1601,91 +1595,36 @@ keeps the bot's commit from marking the branch as someone else's. Until the bot 
 at the fetch, naming the pin. GitHub's generated archives have been byte-stable (the same SHA-256 from
 10.9's curl and a modern Mac's); if they ever change, the fetch fails rather than build other bytes.
 
-## Sparkle updater
+## Feeds and signing
 
-- **An update of a large pkg can sit forever after it has installed** (Sparkle 1.27.3, measured
-  2026-10-18 updating the pinned pre-flag-day clang22 on Golden Gate). The privileged helper runs
-  `installer -verboseR`, whose output goes to an 8 KB socket nothing reads, so a long install's
-  output fills it and installer blocks on its last write. Check the receipt
-  (`pkgutil --pkg-info <identifier>`); if it shows the new version, quit the updater's Autoupdate
-  process (no sudo needed), and installer exits at once. No fix is coming to the Sparkle updaters,
-  since the flag day retires them; the Engine that replaces them must never leave installer's
-  output unread.
-- Every product ships a Sparkle updater `.app` that **must not link the product it updates** (self-update
-  circularity — assert with `otool -L`). EdDSA-signed; private key is the `SPARKLE_PRIVATE_KEY` secret.
+No product ships an updater: the Engine (`mavergreen update`) updates every product from its feed, the
+Sparkle-format `<short>.xml` each release carries. The Sparkle updaters are retired.
+
+- **The Engine must never leave installer's output unread.** An update of a large pkg through Sparkle
+  1.27.3 sat forever after it had installed (measured 2026-10-18 on Golden Gate): its privileged helper
+  ran `installer -verboseR`, whose output went to an 8 KB socket nothing read, so installer blocked on
+  its last write.
+- Every feed is EdDSA-signed; the private key is the `SPARKLE_PRIVATE_KEY` secret.
 - **`SPARKLE_PRIVATE_KEY` is an ORGANIZATION secret, visible to every public Mavergreen repo: a new repo
   sets nothing.** It keeps being listed as a per-repo setup step; it is not one. A private repo gets it
   empty, on the org's free plan, though
   `gh api repos/Mavergreen/<repo>/actions/organization-secrets --jq '[.secrets[].name]'` lists it all
   the same: so check the repo is public (see "Creating a family repo"). Never add a
   repo-level secret of the same name: it shadows the org one, so a key rotation would miss that repo.
-- **An updater's identity is derived, never chosen.** From the product's identifier and repo
-  (`mg_repo`), `updater-identity.sh bundle-id|agent-label|app|feed <short>` derives the bundle id `<pkg identifier>.updater`, the app
-  `Library/Application Support/Mavergreen/<short>-updater.app` (installed under `/`), the
-  update-check LaunchAgent `<pkg identifier>-updatecheck` (plist `<label>.plist`), and the feed
-  `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`. Where git is absent (10.9),
-  configuring an updater needs `GITHUB_REPOSITORY` exported.
-  `mavericks_add_updater_app(PRODUCT <short> …)` builds the app with that bundle id and feed and refuses
-  `NAME`, `BUNDLE_ID` and `FEED_URL`. Its CMake target and the app it builds are both `<short>-updater`,
-  and the bundle id is also the updater's defaults (prefs) domain: product code that launches the
-  updater, names its app path or reads its defaults takes them from `MAVERICKS_UPDATER_TARGET` and
-  `MAVERICKS_UPDATER_BUNDLE_ID`, which `mavericks_add_updater_app` sets in the caller's scope (or from
-  `updater-identity.sh`), and never hardcodes them. `stage_product.sh` stages none: it refuses `--updater-app`,
-  `--appcast`, `--app-dir` and `--agent-label`.
+- **A product's feed is derived, never chosen.** From the product's short name and repo (`mg_repo`),
+  `mavergreen_name feed-url <short>` derives `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`.
   `sign_and_appcast.sh --product <short> --feed-dir dist` writes the feed as `dist/<short>.xml`, and
   `publish-release.yml` attaches it with the other assets, publishing only after every upload, so
   `/latest/` always has it. There is no `appcast.xml`: every release carries `<short>.xml` for every
-  updater its pkgs install, and `release-assets.sh` refuses the retired name. A manifest's `feed` is its
-  product's derived feed, and empty only for a product built on install. Conformance's `updater` and `feed` checks hold
+  product its pkgs ship, and `release-assets.sh` refuses the retired name. A manifest's `feed` is its
+  product's derived feed, and empty only for a product built on install. Conformance's `feed` check holds
   what ships to all of it.
-- **The updater builds with clang22 on every host, Linux and Mac alike, through the same function.**
-  Pin clang22 in `.mavergreen/ingredients/clang22/VERSION` (line 2 a Renovate `github-releases` annotation on
-  `Mavergreen/clang-22`); its Linux archive is verified against that release's own `SHA256SUMS`, so
-  the version is the only pin. `CL="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" .)"`
-  prints the toolchain root for this host, fetched, verified and cached:
-  - Linux: the pinned `linux-x86_64` archive, verified against the release's `SHA256SUMS`.
-  - A Mac: until P11, the pinned pre-flag-day clang22, installed under the old prefix as its cross product, through stevedore.
-  - Mac OS X 10.9: until P11, that release's native pkg, since the cross pkg does not run there and 10.9 has no
-    AArch64 backend, so x86_64 only. P11's re-pin to a merged universal clang22 retires the split.
-  - Either Mac: the installed one at the pinned release.
-  An updater-only configure sets `MAVERICKS_REQUIRE_APPLECLANG OFF` before `include(Mavergreen)`. The
-  AppleClang gate is per configure, not per target, and it stays for every other caller. Configure once
-  per arch through `MavergreenToolchain.cmake` with:
-  ```sh
-  -DCMAKE_OBJC_COMPILER="$CL/bin/clang" -DCMAKE_OBJC_COMPILER_TARGET=<arch>-apple-macos<floor>
-  -DCMAKE_OBJC_FLAGS=--no-default-config -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld
-  ```
-  x86_64 is at 10.9 and arm64 at 11.0. CMake's own compiler checks need these flags on Linux. Merge the
-  two apps with `lipo-merge-tree.sh` under `LIPO="$CL/bin/llvm-lipo"`, and give the compat guard
-  clang22's `OTOOL`, `LIPO`, `NM` and `STRINGS` off macOS. shipyard's own pkg ships no updater.
-  A product does none of this itself: it calls
-  ```sh
-  app="$(sh "$SHIPYARD_SCRIPTS/build_updater.sh" --product <short> --display-name "<name>" \
-    --confirm-title "<title>" --confirm-body "<body>" --pubkey updater/ed25519_key.pub \
-    --version "$VERSION" --repo . --arch x86_64 [--arch arm64] \
-    --generic-icon --out-dir "$OUT")"
-  ```
-  which configures shipyard's `updater/product` project per arch, merges, and prints the `.app`. The
-  arches are the product's decision; arm64 needs a cross host (Linux or a modern Mac), not 10.9.
-
-  `mavericks_add_updater_app` gives the updater `--no-default-config` (clang22's `clang.cfg` would add
-  Recaulk and libc++ to it) and `-fuse-ld=lld`. Given one arch and a deployment target, it also gives it
-  `--target=<arch>-apple-macos<floor>`. So the updater's compile and link lines are the same on every
-  host. The function refuses any other LLVM clang, and a compiler target that disagrees with the
-  configure's arch and floor. An updater still configured with AppleClang builds as before, with a
-  warning naming this rule, until its product moves to clang22.
-- `mavericks_add_updater_app()` self-fetches the Sparkle framework at configure time; signing/appcast use
-  the shared `sign_and_appcast.sh`. **The signer is per-host, and signing may run on Linux.** With no
-  `--signer` it takes `ed25519-sign` and `ed25519-verify` from the ed25519 release `.mavergreen/ingredients/ed25519/VERSION` names,
+- **The signer is per-host, and signing may run on Linux.** With no `--signer`, `sign_and_appcast.sh`
+  takes `ed25519-sign` and `ed25519-verify` from the ed25519 release `.mavergreen/ingredients/ed25519/VERSION` names,
   verified against that release's `SHA256SUMS`: the `linux-x86_64` tarball on Linux, the `.pkg` (read by
   stevedore, no `pkgutil`) elsewhere. A pin older than the first release with a tarball fails on Linux,
   naming the asset. `assert_update_trusted.sh` reads pkgs with stevedore too, so the whole signing step,
   trust check included, runs on either host.
-- **The app's `Info.plist` is refreshed on every build**, from the configured
-  `<short>-updater-Info.plist`, by a target the updater depends on. The version lives only there, not
-  in the executable, so when the copy ran only on relink, a rebuild at a new `VERSION` in the same
-  build directory kept the old one and re-offered the release it was built from
-  (`tests/updater_rebuild.bats`).
 - **The signing key never meets a command line or a trace.** A public repo's Actions logs are public,
   and GitHub masks only the *literal* secret: a trace, a slice or a re-encoding goes out as-is.
   `sign_and_appcast.sh` feeds the key to `ed25519-sign -f -` with `printenv SPARKLE_PRIVATE_KEY |`, so
@@ -1717,23 +1656,13 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   `ed25519-verify`s the new signature against that file and nothing else, with no network. No appcast
   is emitted on a refusal. A rotation is a commit to `keys/feed-ed25519.pub`; the Engine embeds the
   same file, so it needs an Engine release first. A per-call key override is refused.
-- **A menu/systray "Check for Updates" MUST launch the updater via LaunchServices, not fork+exec.** Run
-  `/usr/bin/open "/Library/Application Support/Mavergreen/<short>-updater.app" --args --user`, NOT
-  `NSTask`/`exec.Command` on the executable inside `Contents/MacOS`. Sparkle's package install runs its
-  privileged helper via `AuthorizationExecuteWithPrivileges`, which needs a LaunchServices session; a
-  fork+exec'd host has none, so the install dies with `SUSparkleErrorDomain 4005` /
-  `errAuthorizationInternal (-60008)` (or hangs).
-  The updater's `Info.plist` (a normal app, not `LSUIElement`) exists to satisfy this — the caller must too.
-  `--user` = interactive check; the daily LaunchAgent uses `--background` and is unaffected (it never
-  runs a privileged install).
 - **The Sparkle comparison version must be dotted-numeric AND monotonic — the shared derivation makes
   it so; never hand-roll it per product.** `SUStandardVersionComparator` only totally orders `X.Y.Z.N`,
   and it reads the `-mavergreen.N` suffix (or any stray letter) as EQUAL — so a same-upstream repackage
   would be invisible to auto-update ("you're up to date"). The human string (`9.9p2-mavergreen.3`) stays
-  in `<sparkle:shortVersionString>` / `CFBundleShortVersionString`; the *compared* value
-  (`<sparkle:version>` / `CFBundleVersion`) is derived to a numeric-only form by **both**
-  `scripts/gen_appcast.sh` and `MavericksSparkle.cmake`, which MUST stay identical (a mismatch means the
-  updater silently believes it's current). The derivation, in order:
+  in `<sparkle:shortVersionString>`; the *compared* value (`<sparkle:version>`, and the manifest's
+  `build-version`) is derived to a numeric-only form by `comparison_key()` in `scripts/lib/vercmp.sh`,
+  the one derivation `gen_appcast.sh` and `render-manifest.sh` share. The derivation, in order:
   - `-mavergreen.N` → `.N` (the packaging axis; the comparison also reads a pre-flag-day `-mavericks.N` the same way);
   - a **monotonic** in-version patch letter → `.` — the only one in the family is OpenSSH-portable
     `X.YpZ` → `X.Y.Z` (`p2` is *newer* than `p1`, so `9.9p2` → `9.9.2` is order-preserving, and
@@ -1742,8 +1671,8 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   Most upstreams need no special case: semver (`1.26.5`), bare date (`20260727`), and self-upstream
   dates/semver are all already dotted-numeric — variable length is fine (a date is one component, semver
   three). Only a **letter** needs a rule, and openssh's `pN` is the family's first.
-  - **Adding a new non-numeric upstream shape:** put the transform in the shared derivation (both files,
-    identically) — never in a product's build, or the appcast and the updater's `CFBundleVersion` drift.
+  - **Adding a new non-numeric upstream shape:** put the transform in the shared derivation — never in a
+    product's build, or the feed and the manifest's `build-version` drift.
     Fold in a separator ONLY if it is monotonic (a higher suffix = *newer*, like `pN`). A **non-monotonic**
     prerelease suffix (`-rc1`, `beta` — the suffix means *older* than the release) must NOT be dot-joined
     (`1.2.3rc1` → `1.2.3.1` would sort ABOVE `1.2.3`); leave the fail-closed check to force an explicit
@@ -1752,18 +1681,16 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
 
 ## App icons (forced decision — no unopted placeholders)
 
-Every shipped app — **including the Sparkle updater** — must make an EXPLICIT icon decision.
-`mavergreen_require_icon(TARGET t ICNS <path>)` and `mavericks_add_updater_app(… ICON <path>)` both
-FATAL at configure time if the icon is missing OR is a **registered placeholder** — its sha256 is
+Every shipped app must make an EXPLICIT icon decision.
+`mavergreen_require_icon(TARGET t ICNS <path>)` FATALs at configure time if the icon is missing OR is a **registered placeholder** — its sha256 is
 listed in shipyard's `scripts/placeholder-icons.sha256`. The one way to ship a generic/
 placeholder icon is the explicit opt-in `-DMAVERGREEN_ALLOW_GENERIC_ICON=ON` (or `ALLOW_GENERIC`).
 
 This gate exists because an agent-generated solid-colour stand-in once shipped in a product as if it
 were real artwork, waved off as a "minor" follow-up. **If you generate a placeholder icon, register
 its sha256 in `placeholder-icons.sha256`** in the same change — then the product cannot build a
-release until real artwork (a different hash) replaces it, or someone opts in on purpose. Both icon
-entry points call the shared `mavergreen_reject_placeholder_icon`, so neither the main-app nor the
-updater path can smuggle one through.
+release until real artwork (a different hash) replaces it, or someone opts in on purpose. Every icon
+entry point calls the shared `mavergreen_reject_placeholder_icon`, so none can smuggle one through.
 
 **Porthole presets' vendor icons.** A preset never ships its app's icon; it names where the user's
 Mac gets it: `ICON_URL` (a vendor-hosted PNG, fetched at install) and `ICON_GLOB` (the icon's path in
@@ -1807,7 +1734,7 @@ arm64 slice). The pins and the rule live in exactly one place, `scripts/sdk-pins
 
 **Why:** a 2026-09-24 audit of every family release found builds that go through `mavericks-clang`, the
 Go wrapper or an explicit sysroot recorded 10.9, while plain CMake builds with AppleClang silently linked
-the runner's SDK (26.5). That included every Sparkle updater and every arm64 slice in the family, and
+the runner's SDK (26.5). That included every Sparkle updater (retired since) and every arm64 slice in the family, and
 nothing noticed: the compat guard read minos and never the SDK. Linking the runner's SDK lets a post-10.9
 declaration compile and fail only on the target, and a Linux host has no runner SDK at all. So the family
 needs one policy for both hosts.
@@ -1875,8 +1802,6 @@ Recaulk, which clang-22 22.1.8-mavericks.12 removed by linking Recaulk last. Art
 `cxxabi` check ("One C++ runtime per process", under "Artifact conformance") catches such a binary
 in a pkg it reads, unless the binary is stripped. It does not read a binary fetched from another
 release at build time, which is how codex-cli's two-runtime `codex-code-mode-host` arrives.
-- Sparkle 1.27.3 is exempt **by content**: `sdk-pins.sh` lists the sha256 of its three Mach-O files, so
-  only the exact pinned bytes pass.
 
 **Known limits, stated rather than hidden:**
 - **A kext records no version load command.** It is checked for arch only (x86_64), and its build must
@@ -2127,7 +2052,7 @@ quiet without going red is not a check.
 **A release that publishes a product `.pkg` also publishes `<short>-<version>-macos-<arch>.tar.gz`**
 (`<arch>` is `universal`, `x86_64` or `arm64`, as the product ships): one top directory
 `<short>-<version>/` holding the product's tree, beside each app the product has (as
-`<short>-<version>/<Name>.app`, a `bin/` link into it relative), without a manifest, an updater, a
+`<short>-<version>/<Name>.app`, a `bin/` link into it relative), without a manifest, a
 LaunchAgent or install scripts. Unpacked anywhere, it needs nothing else from Mavergreen. Drydock
 shipped it first (0.6.3), and a user outside the family confirmed it works for them.
 
@@ -2157,7 +2082,7 @@ without building either:
   already has fails, and a failed run leaves no output. codex-cli is the worked example.
 - **New adopters go archive-first; a product already shipping pkg-first converts at its next
   release.** Until then pkg-first keeps working: `stage_standalone.sh STAGED_PKG_ROOT ...` reads the
-  root `stage_product.sh` filled for the pkg, leaving out the manifest, the updater, its LaunchAgent
+  root `stage_product.sh` filled for the pkg, leaving out the manifest, any LaunchAgent
   and anything else staged outside the tree, and naming what it left out. `artifact-facts.sh` emits a
   `standalone-flow <archive> archive-first|pkg-first` fact, archive-first when the repo declares
   `packaging/<short>.standalone-bundled`; conformance warns about a pkg-first archive and does not
@@ -2182,7 +2107,7 @@ without building either:
   write on every entry but a symlink, keeping setuid and setgid (macfuse ships setuid helpers), and
   makes the payload root 0755, so a umask-002 stage (Ubuntu's default) cannot make the installer chmod
   `/` group-writable; `build-equivalence.sh` counts a mode difference as `bytes`.
-- **Judged by `check-standalone-archive.sh`**: the one top directory; no manifest, updater, launchd job,
+- **Judged by `check-standalone-archive.sh`**: the one top directory; no manifest, launchd job,
   pkg scripts or AppleDouble entry; no symlink, `#!` script or text file naming a Mavergreen prefix
   (`/opt/mavergreen`, or `/usr/local/mavergreen`, where pinned pre-flag-day releases still install); every
   Mach-O's loads, rpaths and install name under `/usr/lib`, `/System`, `@rpath`, `@loader_path` or
@@ -2204,14 +2129,14 @@ without building either:
   warnings for the
   archive paths it matches, relative to `<short>-<version>/` (Go's
   `src/crypto/x509/root_keychainunion_darwin*.go` names the CA bundles that programs built by the
-  toolchain read at run time). It never excuses a Mach-O load, rpath or install name, a symlink, or an
-  updater, manifest, launchd or AppleDouble finding; an entry that excuses nothing in any standalone
+  toolchain read at run time). It never excuses a Mach-O load, rpath or install name, a symlink, or a
+  manifest, launchd or AppleDouble finding; an entry that excuses nothing in any standalone
   archive of the release fails as unused, and an all-wildcard glob is refused. The
   checker reads `--repo DIR` (default `.`), which `artifact-facts.sh` sets to the repo root, passing
   `--defer-unused` so that unused entries are judged across the release.
 - **A single static binary where the product allows it**, which a user can drop into `/usr/local/bin`
   or anywhere; otherwise the directory is the unit.
-- **The release notes say the archive has "no updater, no installer"**, in `release-notes/notice`, the
+- **The release notes say the archive has "no installer"**, in `release-notes/notice`, the
   standing footer line; `RELEASE_NOTES.md` is generated, and the gate refuses one written by hand.
 - **Adoption is grandfathered.** A `standalone <repo> <short>` line in `scripts/conventions-grandfathered`
   turns the missing archive into a `::warning::`. Seeded 2026-11-22 with every product but
@@ -2345,7 +2270,7 @@ has nothing left to prune.
 | `group` | `.mavergreen/products/<short>/group` | defaults to `product`; `--group` is refused |
 | `line` | line 1 of `.mavergreen/products/<short>/line`, as upstream spells it (`1.27`) | empty for a product with one line; `--line` is refused |
 | `version` | `--version` | |
-| `feed` | derived | the product's feed (`updater-identity.sh feed <product>`), empty only for a product with `.mavergreen/products/<short>/built-on-install`; `--appcast` is refused |
+| `feed` | derived | the product's feed (`mavergreen_name feed-url <product>`), empty only for a product with `.mavergreen/products/<short>/built-on-install`; `--appcast` is refused |
 | `requires` | `.mavergreen/products/<short>/requires/<dep>/` | each dependency's `kind`, and its `min` when it has one |
 | `restart-to-update` | `.mavergreen/products/<short>/restart-to-update` exists | a boolean |
 | `exports-exclude` | `--exclude`, repeatable | tree-relative paths kept out of the farm |
@@ -2354,7 +2279,7 @@ has nothing left to prune.
 | `generated` | `--generated REL`, repeatable | files the product creates at install time outside its tree, which no payload carries (a preset's materialized viewer app); same shape rules as `outside`, never required to exist |
 
 `outside` is read from whatever is staged when the manifest is rendered, which is why
-`stage_product.sh` renders it last, after the updater is staged. Every scalar value must read back
+`stage_product.sh` renders it last, after everything else is staged. Every scalar value must read back
 exactly as written, or rendering fails: a manifest quietly missing its `name` is worse than a failed build.
 
 ### Groups, lines and selection
@@ -2484,7 +2409,7 @@ manifest and both scripts, each carrying `lib/root-chain.sh` inline:
   <product>` if a helper exists; then the product's
   `--preinstall-hook`, which still sees the outgoing version's tree and bundles; then removes each
   bundle directory (`.app`, `.kext`, `.prefPane`, `.plugin`, `.bundle`, `.framework`, `.jdk`, `.fs`) that the
-  installed manifest lists in `outside`, so a file the new version drops (from Sparkle, say) cannot
+  installed manifest lists in `outside`, so a file the new version drops (from a framework, say) cannot
   linger inside a bundle and break its code-signature seal; then removes
   `/opt/mavergreen/<product>` (never `var/`). Listed files are left for the payload to
   overwrite, and an entry the helper's uninstall would refuse (absolute, `.`/`..`, in the tree, a
@@ -2521,7 +2446,7 @@ scripts, never in a hand-written script: that is what keeps unlink-remove-link t
 product, and check 23 enforces the call. Hooks see the volume as `$ROOT` (empty for the boot
 volume), and **a hook touches the running system (`launchctl`, `kextload`, `open`, …) only inside
 `if [ -z "$ROOT" ]; then … fi`**: an install to another volume must not load that volume's jobs or
-kexts into the system doing the installing. The updater's agent load follows the same rule. **Each
+kexts into the system doing the installing. **Each
 hook runs in a subshell, and its last command's status is its verdict.** `stage_product.sh` refuses
 to stage a hook that `sh -n` rejects. A failing preinstall hook stops the install before the tree is
 removed, which is how a preset refuses a missing dependency. When a helper is installed, the
@@ -2556,7 +2481,7 @@ is not XML or whose first `CFBundleVersion` is not its top-level one. Then:
   `libexec/mavergreen/pre-uninstall` that removes each id from the target volume's list, so
   uninstall needs no shipyard. A `pre-uninstall` the product staged itself is kept as
   `pre-uninstall.product` and runs first; its failure stops the uninstall, as before.
-- the generated postinstall, right after `mavergreen link` and before the updater's agent and the
+- the generated postinstall, right after `mavergreen link` and before the
   `--postinstall-hook`, lists each id at the installed kext's `CFBundleVersion` in the target
   volume's list and, on the boot volume only, runs `launchctl stop com.apple.kextd` (launchd starts
   it again). So a hook that loads the kext's LaunchDaemon runs after kextd has reread the list. A
@@ -2582,15 +2507,14 @@ is the fact), these checks, each excusable only by a scoped, reasoned deviation:
 | Check | Default rule | Deviation scoped to |
 |---|---|---|
 | `identifier` | the pkg's identifier is `dev.mavergreen.*`, and a product's is `dev.mavergreen.<short>` | the pkg filename |
-| `bundle-id` | every TOP-LEVEL bundle (`.app`, `.prefPane`, `.kext`, `.bundle`, `.framework`, `.jdk`, …; not one nested inside another, so Sparkle.framework inside an updater is not asked) has a `CFBundleIdentifier` under `dev.mavergreen.*` | the identifier |
+| `bundle-id` | every TOP-LEVEL bundle (`.app`, `.prefPane`, `.kext`, `.bundle`, `.framework`, `.jdk`, …; not one nested inside another, so a framework inside an app is not asked) has a `CFBundleIdentifier` under `dev.mavergreen.*` | the identifier |
 | `launchd-label` | every `Library/Launch{Agents,Daemons}/*.plist` has a `Label` under `dev.mavergreen.*`, and is named `<Label>.plist` | the Label |
-| `install-path` | every installed file or link is under `opt/mavergreen/<the product its manifest names>/` or `Applications/Mavergreen/`, is a `dev.mavergreen.*` launchd plist, or is in a place the OS dictates (`Library/Extensions/*.kext/`, `System/Library/Extensions/*.kext/`, `System/Library/Filesystems/*.fs/`, `Library/PreferencePanes/*.prefPane/`, `Library/Application Support/Apple/BezelServices/*.plugin/`, `Library/Application Support/SIMBL/Plugins/*.bundle/`, and `Library/Application Support/Mavergreen/*-updater.app/` until the updaters retire) — or is under `opt/mavergreen/.base/` in an archive that carries `dev.mavergreen.base`. Nothing installs under `usr/local/`, and no deviation excuses it | the installed path (glob; `*` spans `/` and spaces) |
+| `install-path` | every installed file or link is under `opt/mavergreen/<the product its manifest names>/` or `Applications/Mavergreen/`, is a `dev.mavergreen.*` launchd plist, or is in a place the OS dictates (`Library/Extensions/*.kext/`, `System/Library/Extensions/*.kext/`, `System/Library/Filesystems/*.fs/`, `Library/PreferencePanes/*.prefPane/`, `Library/Application Support/Apple/BezelServices/*.plugin/`, `Library/Application Support/SIMBL/Plugins/*.bundle/`) — or is under `opt/mavergreen/.base/` in an archive that carries `dev.mavergreen.base`. Nothing installs under `usr/local/`, and no deviation excuses it | the installed path (glob; `*` spans `/` and spaces) |
 | `root-runs` | a `Library/LaunchDaemons` plist's `Program` (else `ProgramArguments` item 0) starts with `/opt/mavergreen/`, `/bin/`, `/sbin/`, `/usr/bin/`, `/usr/sbin/`, `/usr/libexec/` or `/System/`; each component's preinstall and postinstall starts `#!/bin/sh` or `#!/bin/bash` and names no admin-writable root (`/usr/local`, `/Users`, `/tmp`, `/private/tmp`, a home directory, or `/Applications` other than `/Applications/Mavergreen`) | the pkg filename |
 | `os-overwrite` | a regular product's pkg installs no path that 10.9.5 ships (`scripts/os-inventory-10.9.5.gz`); a system edition's pkg is not read | the installed path |
 | `manifest` | a pkg that installs anything besides the base's staged helper carries exactly one manifest; its `product` is its directory; its `identifier` is `dev.mavergreen.<short>`, and one of the pkg's components; its `outside` names everything installed outside the tree, exactly as uninstall would remove it (the entry itself, or a bundle directory and what is inside it), with no entry left unused and none in a shape the helper refuses; every `generated` entry has a shape the helper accepts, and need not be in the payload | the pkg filename |
 | `base` | a pkg carrying a manifest lists `dev.mavergreen.base` as its first component | the pkg filename |
-| `updater` | a Sparkle updater (a top-level bundle with `SUFeedURL`) is `Library/Application Support/Mavergreen/<short>-updater.app` with bundle id `<pkg identifier>.updater`; a pkg with an updater installs the LaunchAgent `<pkg identifier>-updatecheck`; every launchd Label containing `updatecheck` is that one | the pkg filename |
-| `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `feed` is the product's derived feed, and empty for a product built on install; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
+| `feed` | a manifest's `feed` is the product's derived feed (`https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`), and empty for a product built on install; the dist carries `<short>.xml` for every product its pkgs ship unless it is built on install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
 | `line` | a product of a line repo (one whose repo ends in `-<number>`) declares a line; a lined product's line is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | every product a release ships is one of this repo's `.mavergreen/products/` | the pkg filename |
 | `pkg-name` | the pkg is `<short>-<version without a leading v>.pkg` and its component `<short>.pkg` (System Replace: `<short>-system-replace-<version>.pkg`, `<short>-system-replace.pkg`) | the pkg filename |
@@ -2612,8 +2536,7 @@ other the OS dictates says so with a deviation that names the OS rule. (swift-ru
 this ground; since 6.4.0-mavericks.2 programs find it through an rpath into its tree,
 `/opt/mavergreen/swift-runtime/lib/swift`, so it needs no exception.) Each such file is still in `outside`,
 because rendering lists it, so uninstall removes it; and even a product whose every file lives where
-the OS dictates still stages a tree, since its manifest is how uninstall finds them. Sparkle updaters
-stay in `Library/Application Support/Mavergreen/` until Mavericks Lineup retires them.
+the OS dictates still stages a tree, since its manifest is how uninstall finds them.
 
 ```markdown
 .mavergreen/deviations/install-path/jdk/scope     Library/Java/JavaVirtualMachines/*
@@ -3090,7 +3013,7 @@ jobs:
 
 It checks out shipyard itself rather than expecting `$SHIPYARD_SCRIPTS`, so it also gates repos that do
 not consume shipyard's CMake side at all (swift-toolchain builds and mirrors — no install step, no
-updater, no `.pkg`). A gate only some repos can run is not a family convention.
+`.pkg`). A gate only some repos can run is not a family convention.
 
 Adding a check is cheap; adding one **without its rule here** is a trap for the next person. Land both
 in the same commit.
@@ -3212,8 +3135,8 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    for a version live — see Release notes); no `release-notes/README.md`, since each release adds its
    own `.mavergreen/release-notes/<TAG>/`, whose notes are `.mavergreen/release-notes/<TAG>/changes/<slug>` files
    of one sentence each, checked by `check-release-sentence.sh` (see Release notes), never a prose
-   `<TAG>.md`; Sparkle updater target. (`SPARKLE_PRIVATE_KEY` is an org secret the
-   new repo already sees, being public -- set nothing; see Sparkle updater.)
+   `<TAG>.md`. (`SPARKLE_PRIVATE_KEY` is an org secret the
+   new repo already sees, being public -- set nothing; see Feeds and signing.)
 7. Choose the upstream-verification method; note it if it deviates from a sibling.
 8. If the repo bakes in build ingredients (anything it's built WITH, not the upstream it ports): make
    each pin a **file** in its own `.mavergreen/ingredients/<n>/`, give each a Renovate line 2, add the `repackage-on-ingredient-bump`

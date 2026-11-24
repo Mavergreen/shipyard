@@ -2,7 +2,7 @@ identifier: a pkg's identifier is inside dev.mavergreen.*, and a product's is it
 
 ## Why
 An identifier that is not ours collides with someone else's. The pkg identifier is what Installer keys its
-receipt on. It is dev.mavergreen.<short>, derived from the product's short name, and the updater, the feed
+receipt on. It is dev.mavergreen.<short>, derived from the product's short name, and the feed
 and the manifest are derived from it. The 2026-09-22 flag day moved every identifier from
 dev.modernmavericks.* to dev.mavergreen.*, with no code to retire the old names from existing installs,
 because there were none to protect. A pkg carrying product P's manifest, and P's component in it, are

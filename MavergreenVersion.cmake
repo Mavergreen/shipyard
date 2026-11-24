@@ -18,8 +18,8 @@ function(mavergreen_resolve_version outvar)
   if(NOT A_MODE)
     set(A_MODE auto)
   endif()
-  # ROOT is the REPO root, which is not always the project root: container-tools builds updater/ and
-  # menubar/ as standalone projects that still take their version from the repo they live in.
+  # ROOT is the REPO root, which is not always the project root: container-tools builds menubar/ as
+  # a standalone project that still takes its version from the repo it lives in.
   if(NOT A_ROOT)
     set(A_ROOT "${CMAKE_SOURCE_DIR}")
   endif()

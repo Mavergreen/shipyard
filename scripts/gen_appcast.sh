@@ -122,7 +122,7 @@ ITEM_TITLE="$(mavergreen_name item-title "$SHORT" "$VER")" || exit 1
 #       order the "-mavergreen.N" suffix (it reads 1.2.3-mavergreen.3 and .4 as EQUAL), so
 #       <sparkle:version> must be numeric-only; the human string stays in shortVersionString. The
 #       derivation itself is lib/vercmp.sh's mavergreen_build_version(), which render-manifest.sh's
-#       build-version also uses; MavericksSparkle.cmake mirrors comparison_key().
+#       build-version also uses.
 BUILD_VER=$(mavergreen_build_version "$VER")
 
 # spec: tests/gen_appcast.bats -- fail closed if the derived key is not purely dotted-numeric

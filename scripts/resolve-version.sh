@@ -4,7 +4,7 @@
 #          With no mode, a workflow_dispatch run ($GITHUB_EVENT_NAME) resolves local, the line's next N,
 #          and any other run auto, its current N.
 #          Prints this repo's full version (<upstream>-mavergreen.N), writing VERSION if it is not
-#          there yet. VERSION is a build PRODUCT -- written here, read by cmake and the updater,
+#          there yet. VERSION is a build PRODUCT -- written here, read by cmake,
 #          gitignored, never committed. An existing VERSION is reused as-is: within one CI run, an
 #          earlier job already resolved it and every job must agree.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning" --

@@ -1,8 +1,8 @@
 repository: every product a release ships is one of this repo's .mavergreen/products/.
 
 ## Why
-A product's identity is derived from its short name: the pkg identifier is dev.mavergreen.<short>, and the
-updater, its feed and the manifest follow from it. A repo declares the products it releases as directories
+A product's identity is derived from its short name: the pkg identifier is dev.mavergreen.<short>, and its
+feed and the manifest follow from it. A repo declares the products it releases as directories
 in .mavergreen/products/, so a pkg whose manifest names a product the repo does not declare ships an
 identity nothing here derived: a product copied from another repo, or a short name typed wrong. The check
 reads the manifest of every pkg in the release and fails each product that has no .mavergreen/products/

@@ -5,7 +5,7 @@ A lined product's line lives in .mavergreen/products/<short>/line, dotted as ups
 and the manifest's line is a copy of it. The version is the
 line or starts with the line and a dot: 1.26.8 is line 1.26, 22.1.1 is line 22. A line repo's numeric
 suffix is the line with its dots removed (golang-126, clang-22), and a product of a line repo must declare
-its line. Without this agreement two lines could share a bare-name selection or an updater, and a line
+its line. Without this agreement two lines could share a bare-name selection or a feed, and a line
 repo could release another line's version.
 
 ## Incident

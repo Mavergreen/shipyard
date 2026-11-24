@@ -6,8 +6,7 @@ set(MAVERGREEN_DECISIONS_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyar
 #   FATAL if <icns> is a registered PLACEHOLDER (scripts/placeholder-icons.sha256), unless
 #   MAVERGREEN_ALLOW_GENERIC_ICON=ON (the explicit opt-in). A Mavergreen product must not ship
 #   a placeholder icon it never chose. The denylist path is overridable via
-#   MAVERGREEN_PLACEHOLDER_DENYLIST (for tests). Reused by mavergreen_require_icon and the Sparkle
-#   updater so BOTH icon entry points are gated.
+#   MAVERGREEN_PLACEHOLDER_DENYLIST (for tests). Reused by mavergreen_require_icon.
 function(mavergreen_reject_placeholder_icon target icns)
   if(MAVERGREEN_ALLOW_GENERIC_ICON)
     return()

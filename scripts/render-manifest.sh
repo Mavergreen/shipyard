@@ -6,7 +6,7 @@
 #          whatever is staged at that moment.
 #          build-version is mavergreen_build_version V, what the feed's sparkle:version holds.
 #          Everything else is read from .mavergreen/products/P/: group, line, requires/, restart-to-update.
-#          Its feed is scripts/updater-identity.sh feed P, empty only when P is built-on-install.
+#          Its feed is mavergreen_name feed-url P, empty only when P is built-on-install.
 # spec: tests/render-manifest-test.sh
 set -eu
 LC_ALL=C; export LC_ALL
@@ -64,7 +64,7 @@ G="${G:-$P}"
 if mg_has "products/$P/built-on-install"; then
   AC=
 else
-  AC="$(sh "$SELF/updater-identity.sh" feed "$P")" || exit $?
+  AC="$(mavergreen_name feed-url "$P")" || exit $?
 fi
 if mg_has "products/$P/restart-to-update"; then RESTART=true; else RESTART=false; fi
 case "$G" in *[!a-z0-9-]*|-*) echo "render-manifest: bad group $G" >&2; exit 2 ;; esac

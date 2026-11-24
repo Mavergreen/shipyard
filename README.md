@@ -49,8 +49,8 @@ release URL and ask you to install it.
 In GitHub Actions, `install@v1` verifies and installs the pinned CMake package before shipyard.
 Consumers keep using the same action and `shipyard-*` commands.
 
-The pkg also keeps itself current: its updater checks daily and installs each new release. The same
-pkg works on Intel, on Apple Silicon and on 10.9.
+The Engine (`mavergreen update`) keeps the pkg current. The same pkg works on Intel, on Apple Silicon
+and on 10.9.
 
 GUI tools that want a CMake executable (CLion, VS Code's CMake Tools, Xcode wrappers), launchd jobs and
 anything else that never runs a login shell do not see `paths.d`: point them at
@@ -98,7 +98,7 @@ sh scripts/run-repo-tests.sh --strict-host      # every host-agnostic suite; a s
 sh scripts/check-family-conventions.sh          # the gate every product repo runs
 ```
 
-**What you cannot do on Linux** is anything that inspects an Apple artifact: shipyard-cmake, the updater,
+**What you cannot do on Linux** is anything that inspects an Apple artifact: shipyard-cmake
 and the `lipo`/`otool` assertions on real Mach-O files. The pkg seams are not on that list: they run on any
 host, through stevedore. There is no Linux shipyard-cmake. On Linux, shipyard's CMake config accepts any
 `cmake`, because there is nothing else to demand. Those suites are listed in `tests/maintainer-tests`, which the maintainer runs by hand on a 10.9 box and a modern Mac.
@@ -166,25 +166,12 @@ shipyard-cpack --preset native    # where the product packages with CPack
 On macOS, a foreign or too-old CMake is refused by `find_package(MavergreenShipyard)`, with a
 message naming the minimum version and `shipyard-cmake`. On Linux, any CMake may configure it.
 
-## Sparkle
+## Feeds
 
-Configure a keypair with
-[ed25519](https://github.com/Mavergreen/ed25519).
-
-In your `CMakeLists.txt`:
-
-```cmake
-include(MavericksSparkle)
-mavericks_add_updater_app(
-  PRODUCT       foo
-  ICON          updater/foo.icns
-  CONFIRM_TITLE "Foo updated"
-  CONFIRM_BODY  "Foo was updated in the background."
-)
-```
-
-`foo` is the product's short name, the directory `.mavergreen/products/foo/`; the app (`foo-updater.app`),
-its bundle id and its feed are derived from it and the repo.
+Each release carries a signed `<short>.xml` feed for every product it ships, and the Engine
+(`mavergreen update`) updates installed products from it. `sign_and_appcast.sh --product <short>` signs
+the pkg with the family key's private half and writes the feed; `keys/feed-ed25519.pub` is the one public
+key every signature must verify against.
 
 ## SDK declaration metadata
 
@@ -377,8 +364,8 @@ Everything baked into what shipyard ships, and how a change to it reaches a rele
 under `upstream/`, the product under `products/` and each declared deviation under `deviations/`.
 `sh scripts/ingredients-table.sh` prints the ingredients as a table. shipyard no longer compiles CMake:
 `shipyard-cmake`, `shipyard-ctest` and `shipyard-cpack` are launchers into the Mavergreen cmake product,
-which shipyard pins and its pkg requires. The only thing shipyard compiles is its Sparkle updater app,
-with clang22, alongside the CMake modules and shell scripts it has always shipped.
+which shipyard pins and its pkg requires. It ships the CMake modules and shell scripts it has always shipped, and
+compiles nothing of its own.
 The compat guard's strict Objective-C analyzer is Drydock's `drydock-objc`, from a pinned Drydock release:
 shipyard's `objc-*.sh` scripts fetch it and run it, and its pkg stages that release's reference set
 (`share/drydock/objc/reference`, facts derived from the pinned SDKs and a floor runtime capture, with their

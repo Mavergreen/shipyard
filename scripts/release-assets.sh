@@ -33,7 +33,7 @@ for f in "$dir"/*; do
   b="${f##*/}"
   case "$b" in
     "$notes"|SHA256SUMS) continue ;;
-    appcast*.xml) echo "release-assets: $b is a retired feed name -- a product's feed is <short name>.xml (sign_and_appcast.sh --product), the file its updater polls" >&2; exit 1 ;;
+    appcast*.xml) echo "release-assets: $b is a retired feed name -- a product's feed is <short name>.xml (sign_and_appcast.sh --product), the file the Engine reads" >&2; exit 1 ;;
   esac
   [ "$notes_only" -eq 0 ] \
     || { echo "release-assets: --notes-only, but $dir holds $b -- a notes-only release attaches nothing" >&2; exit 1; }

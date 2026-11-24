@@ -93,14 +93,14 @@ mksrc() {  # $1 = name, $2 = yes: has a release workflow that calls the gate and
 #       static finding, and the latest release's pkgs read by artifact-facts.sh and the conformance
 #       checker, since a repo that ships an undeclared arm64 slice and has no modern-smoke job passes
 #       the static half.
-mkrel() {  # $1 = name, $2 = tool|throws|updater|none: where the pkg's arm64 Mach-O is (throws: one that defines ___cxa_throw)
+mkrel() {  # $1 = name, $2 = tool|throws|helper|none: where the pkg's arm64 Mach-O is (throws: one that defines ___cxa_throw)
   r="$work/src/$1.release"; st="$work/stage-$1"; mkdir -p "$r" "$st"; printf 'v1\n' > "$r/.tag"
   case "$2" in
     tool|throws) mkdir -p "$st/opt/mavergreen/$1/bin"; m="$st/opt/mavergreen/$1/bin/$2" ;;
-    updater)
-      a="$st/Library/Application Support/Mavergreen/$1-updater.app/Contents"; mkdir -p "$a/MacOS"
-      printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.%s.updater</string><key>SUFeedURL</key><string>https://github.com/Mavergreen/%s/releases/latest/download/%s.xml</string></dict></plist>\n' "$1" "$1" "$1" > "$a/Info.plist"
-      m="$a/MacOS/$1-updater" ;;
+    helper)
+      a="$st/Library/Application Support/Mavergreen/$1-helper.app/Contents"; mkdir -p "$a/MacOS"
+      printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.%s.helper</string></dict></plist>\n' "$1" > "$a/Info.plist"
+      m="$a/MacOS/$1-helper" ;;
     none) printf 'x\n' > "$r/notes.txt"; return 0 ;;
   esac
   printf '\317\372\355\376\014\000\000\001\000\000\000\000\002\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000' > "$m"
@@ -110,7 +110,7 @@ mkrel() {  # $1 = name, $2 = tool|throws|updater|none: where the pkg's arm64 Mac
 mksrc alpha yes; mksrc bravo no; mksrc charlie yes
 mksrc delta yes; mkrel delta tool
 mksrc echo yes decl; mkrel echo none
-mksrc foxtrot yes; mkrel foxtrot updater
+mksrc foxtrot yes; mkrel foxtrot helper
 # spec: scripts/gen-conventions-grandfathered.sh -- cxxabi is found in the latest release's pkgs, one
 #       line per undeclared path; a cxxabi:<glob> declaration keeps a path off the list.
 mksrc golf yes; mkrel golf throws
@@ -146,10 +146,11 @@ macos-runner india release.yml:build
 macos-runner juliet release.yml:build
 modern-smoke delta release.yml:modern-smoke
 modern-smoke echo release.yml:modern-smoke
+modern-smoke foxtrot release.yml:modern-smoke
 modern-smoke golf release.yml:modern-smoke
 modern-smoke hotel release.yml:modern-smoke
 standalone india india'
-[ "$out" = "$want" ] || { echo "FAIL: a repo with no workflows must not swallow the repos after it; delta ships an undeclared arm64 tool, echo declares one with no job, foxtrot's arm64 is its updater's; the generator lists golf, whose latest release defines ___cxa_throw, and not hotel, which declares it; india ships its product with no standalone archive, juliet with one: got [$out]"; exit 1; }
+[ "$out" = "$want" ] || { echo "FAIL: a repo with no workflows must not swallow the repos after it; delta ships an undeclared arm64 tool, echo declares one with no job, foxtrot's arm64 under Library/Application Support/Mavergreen/ is a host binary like any other; the generator lists golf, whose latest release defines ___cxa_throw, and not hotel, which declares it; india ships its product with no standalone archive, juliet with one: got [$out]"; exit 1; }
 [ -f "$work/clones/.gen-conventions-grandfathered" ] || { echo "FAIL: the generator must mark the directory it owns"; exit 1; }
 
 out="$(sh "$G" "$work/clones" 2>"$work/err")" || { echo "FAIL: a rerun in an owned directory must refresh: $(cat "$work/err")"; exit 1; }

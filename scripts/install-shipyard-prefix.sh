@@ -4,7 +4,7 @@
 #          Lays down shipyard's pkg payload from this checkout, without a pkg, where install@v1 on Linux
 #          wants it: DIR$(mavergreen_prefix shipyard) (DIR default /), staged by
 #          stage-shipyard-prefix.sh and package-pkg.sh --tree-only, so it is the pkg's prefix and
-#          mavergreen.plist, less the updater. Its exported names (bin/ less the manifest's
+#          mavergreen.plist. Its exported names (bin/ less the manifest's
 #          exports-exclude) are linked into the bin/ beside that prefix, as the mavergreen helper
 #          links them on a Mac. Prints the installed prefix on stdout.
 #          The prefix is root-owned, as the pkg leaves it: every write there runs as root, or under

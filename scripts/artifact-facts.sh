@@ -57,18 +57,13 @@ for _pd in "$root"/.mavergreen/products/*/; do
   [ -d "$_pd" ] || continue
   _p="$(basename "$_pd")"
   printf 'product %s\n' "$_p"
-  _dv=""
-  for _q in bundle-id agent-label app feed; do
-    _rc=0; _v="$(sh "$SELF/updater-identity.sh" "$_q" "$_p" 2>&1)" || _rc=$?
-    case "$_q.$_rc" in
-      *.0) ;;
-      feed.2) _v=none ;;
-      *) abort "cannot derive $_p's updater identity: $(printf '%s' "$_v" | tr '\n' ' ')" ;;
-    esac
-    [ "$_q" != app ] || _v="$(printf '%s' "$_v" | af_enc)"
-    _dv="$_dv $_v"
-  done
-  printf 'derived %s%s\n' "$_p" "$_dv"
+  _rc=0; _v="$(mavergreen_name feed-url "$_p" 2>&1)" || _rc=$?
+  case "$_rc" in
+    0) ;;
+    2) _v=none ;;
+    *) abort "cannot derive $_p's feed: $(printf '%s' "$_v" | tr '\n' ' ')" ;;
+  esac
+  printf 'derived %s %s\n' "$_p" "$_v"
   _rc=0; _v="$(mavergreen_floor "$_p" 2>&1)" || _rc=$?
   [ "$_rc" -eq 0 ] || abort "cannot read $_p's floor: $(printf '%s' "$_v" | tr '\n' ' ')"
   printf 'floor %s %s\n' "$_p" "$_v"
@@ -210,19 +205,16 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
                for (i = 1; i < n; i++) if (c[i] ~ /\.(app|prefPane|kext|bundle|plugin|framework|appex|xpc|jdk)$/) nested = 1
                if (!nested) print }' \
       | while IFS= read -r _bd; do
-          _id=none; _feed=""; _bn=""; _bdn=""
+          _id=none; _bn=""; _bdn=""
           for _ip in Contents/Info.plist Resources/Info.plist Info.plist; do
             [ -f "$_root/$_bd/$_ip" ] || continue
             _id="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" CFBundleIdentifier 2>/dev/null || echo none)"
             _bn="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" CFBundleName 2>/dev/null || true)"
-            _bdn="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" CFBundleDisplayName 2>/dev/null || true)"
-            _feed="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" SUFeedURL 2>/dev/null || true)"; break
+            _bdn="$("$STEVEDORE" plist get "$_root/$_bd/$_ip" CFBundleDisplayName 2>/dev/null || true)"; break
           done
           printf 'bundle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" "$(printf '%s' "$_bd" | enc)" "${_id:-none}"
           printf 'bundle-name %s %s%s %s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" "$(printf '%s' "$_bd" | enc)" \
             "$(field "$_bn")" "$(field "$_bdn")"
-          [ -z "$_feed" ] || printf 'sparkle %s %s%s %s\n' "$1" "$(printf '%s' "$_loc" | enc)" \
-            "$(printf '%s' "$_bd" | enc)" "$(printf '%s' "$_feed" | tr -s '[:space:]' '_')"
         done
     for _ld in Library/LaunchAgents Library/LaunchDaemons; do
       [ -z "$_loc" ] && [ -d "$_root/$_ld" ] || continue

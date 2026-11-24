@@ -108,7 +108,7 @@ done
 
 for s in $(mg_list products); do
   fl="$(mavergreen_floor "$s")" || die "cannot read $s's floor"
-  url="$(sh "$SELF/updater-identity.sh" feed "$s")" || die "cannot derive $s's feed URL"
+  url="$(mavergreen_name feed-url "$s")" || die "cannot derive $s's feed URL"
   printf 'meta %s feed-min-os %s\nmeta %s feed-url %s\n' "$s" "$fl" "$s" "$url" >> "$rows"
   for d in $(mg_list "products/$s/requires"); do
     k="$(mg_value "products/$s/requires/$d/kind")" || die "products/$s/requires/$d has no kind"

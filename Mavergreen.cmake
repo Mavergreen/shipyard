@@ -10,7 +10,6 @@
 #
 #   find_package(MavergreenShipyard REQUIRED)   # sets up CMAKE_MODULE_PATH
 #   include(Mavergreen)                 # mode detect + AppleClang check + helpers
-#   # (Sparkle-updater projects also: include(MavericksSparkle))
 #
 #   add_executable(foo ...)
 #   mavergreen_assert_binary_compatible(foo)        # assert the binary stays 10.9-safe

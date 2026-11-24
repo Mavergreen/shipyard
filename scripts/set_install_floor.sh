@@ -122,7 +122,6 @@ if [ -f "$BASEDIR/comp-x/Payload" ]; then
     _full="$AF_LOC$_rel"
     _kind="$(af_macho_kind "$AF_ROOT/$_rel")"
     [ -n "$_kind" ] || continue
-    ! arch_is_exempt "$_full" || continue
     case "$_full" in "$TREE"*) ! arch_is_target "${_full#"$TREE"}" "$TARGETS" || continue;; esac
     _rc=0; sh "$SELF/macho-slices.sh" "$AF_ROOT/$_rel" > "$BASEDIR/one" 2> "$BASEDIR/one.err" || _rc=$?
     case "$_rc" in

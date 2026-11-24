@@ -82,7 +82,6 @@ install(FILES
   MavergreenFetch.cmake
   MavergreenToolchain.cmake
   MavergreenCompatGuard.cmake
-  MavericksSparkle.cmake
   MavergreenVersion.cmake
   MavergreenPrefix.cmake
   MavergreenDecisions.cmake
@@ -127,7 +126,6 @@ string(CONFIGURE "${_msc_presets_code}" _msc_presets_code @ONLY)
 install(CODE "${_msc_presets_code}")
 
 # Scripts keep their executable bit (they are run via `sh` but stay +x for direct use).
-# scripts/ carries the Sparkle fetch scripts + native signer/keygen sources too.
 install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
 install(DIRECTORY explain DESTINATION "${_dest}")
 install(DIRECTORY keys DESTINATION "${_dest}")
@@ -161,8 +159,6 @@ set(_msc_objc_refs_code [[
 ]])
 string(CONFIGURE "${_msc_objc_refs_code}" _msc_objc_refs_code @ONLY)
 install(CODE "${_msc_objc_refs_code}")
-# Sparkle updater templates (configure_file'd per product by MavericksSparkle.cmake).
-install(DIRECTORY updater DESTINATION "${_dest}")
 # spec: MavergreenHostTools.cmake -- it builds tools/ against the exporter pin installed beside it.
 install(DIRECTORY tools DESTINATION "${_dest}")
 
@@ -186,8 +182,6 @@ if(BATS_EXECUTABLE)
     COMMAND ${BATS_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/compat_guard.bats)
   add_test(NAME gen-appcast
     COMMAND ${BATS_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/gen_appcast.bats)
-  add_test(NAME relaunch-decision
-    COMMAND ${BATS_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/relaunch_decision.bats)
 else()
   message(STATUS "bats not found -- shell helper tests won't run via ctest (install bats to enable)")
 endif()
@@ -202,10 +196,6 @@ add_test(NAME umbrella-langs
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/umbrella-langs.sh)
 
 set_tests_properties(standalone-include umbrella-langs PROPERTIES SKIP_RETURN_CODE 77)
-
-# Prove stage_updater.sh stages an updater .app + LaunchAgent and renders the templates.
-add_test(NAME stage-updater
-  COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/stage_updater.sh ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Prove sign_and_appcast.sh signs a pkg and emits an appcast with the EdDSA enclosure attrs.
 add_test(NAME sign-and-appcast

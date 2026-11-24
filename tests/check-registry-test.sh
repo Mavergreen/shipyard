@@ -32,7 +32,7 @@ for s in "$here"/scripts/check-*.sh "$here"/scripts/assert*.sh; do
   rel="scripts/$(basename "$s")"
   cut -f3 "$reg" | grep -qx "$rel" || fail "$rel is the script of at least one id"
 done
-infeasible="update-trusted|tests/assert_update_trusted.bats|it verifies a signed pkg against the updater's embedded key, so its failing case is a built, signed pkg that a fixture tree cannot hold
+infeasible="update-trusted|tests/assert_update_trusted.bats|it verifies a signature against the family key with ed25519-verify, so its failing case is a signature, which a fixture tree cannot hold
 installed-shipyard|tests/assert-installed-shipyard-test.sh|it inspects an installed prefix, which its test assembles in a scratch root
 arch-union|tests/lipo-merge-tree-test.sh|it judges two build trees at merge time, which a dist fixture cannot hold
 standalone|tests/artifact-conformance-standalone-test.sh|its subject is a product's signed pkg beside an archive cut from the same staged tree, which the test builds with stevedore and stage_standalone.sh rather than checking in
@@ -40,6 +40,9 @@ no-standalone|tests/artifact-conformance-standalone-test.sh|it fires only for a 
 kext-sig-exception|tests/artifact-conformance-kext-test.sh|its subject is a pkg's kexts and the ids its generated postinstall lists, which the test states as facts and kext-facts-test.sh reads from a pkg built with stevedore
 kext-exclude-list|tests/artifact-conformance-kext-test.sh|its subject is a pkg's install scripts, which the test states as facts and kext-facts-test.sh reads from hand-written scripts"
 fx="$here/tests/fixtures/checks"
+for id in updater sparkle-pristine; do
+  awk -F'\t' -v i="$id" '$1 == i && $2 == "retired" { f = 1 } END { exit !f }' "$reg" || fail "$id is retired: no product ships an updater"
+done
 while IFS="$(printf '\t')" read -r id mode script old fate; do
   if [ "$mode" = retired ]; then
     [ ! -d "$fx/$id" ] || fail "$id is retired, so nothing runs it and it has no fixtures"

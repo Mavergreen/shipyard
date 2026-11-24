@@ -73,7 +73,7 @@ err="$(sh "$S" --shipyard-prefix "$w/p" --version 1.0.0 --dist "$w/o" --out "$w/
 printf '%s\n' "$err" | grep -qF 'the filename is derived, <short>-<version>.pkg; pass --dist' \
   || { echo "FAIL: the refusal of --out names its fix; got '$err'"; exit 1; }
 rc=0
-err="$(sh "$S" --shipyard-prefix "$w/p" --app "$w/shipyard-updater.app" --version 1.0.0 --dist "$w/o" 2>&1 >/dev/null)" || rc=$?
+err="$(sh "$S" --shipyard-prefix "$w/p" --app "$w/shipyard.app" --version 1.0.0 --dist "$w/o" 2>&1 >/dev/null)" || rc=$?
 [ "$rc" -eq 2 ] || { echo "FAIL: --app is refused as a usage error (exit 2), since the pkg ships no updater; got $rc"; exit 1; }
 printf '%s\n' "$err" | grep -q -- '--app' || { echo "FAIL: the refusal of --app names it; got '$err'"; exit 1; }
 

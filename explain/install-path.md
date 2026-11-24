@@ -7,10 +7,9 @@ carrying is gone rather than left behind; and uninstall is complete. Allowed bes
 Applications/Mavergreen/, opt/mavergreen/.base/ in an archive that carries dev.mavergreen.base, a
 dev.mavergreen.* launchd plist, and the places the OS dictates: Library/Extensions/*.kext,
 System/Library/Extensions/*.kext, System/Library/Filesystems/*.fs, Library/PreferencePanes/*.prefPane,
-Library/Application Support/Apple/BezelServices/*.plugin, Library/Application Support/SIMBL/Plugins/*.bundle,
-and Library/Application Support/Mavergreen/*-updater.app until the updaters retire. A bare /Applications is
-no longer the family's. Nothing installs under usr/local/: the family left it (vision principle 6), and no
-deviation excuses it. Anything else collides with someone else's files.
+Library/Application Support/Apple/BezelServices/*.plugin and Library/Application Support/SIMBL/Plugins/*.bundle.
+A bare /Applications is no longer the family's. Nothing installs under usr/local/: the family left it (vision
+principle 6), and no deviation excuses it. Anything else collides with someone else's files.
 
 ## Incident
 Undated in the conventions skill: swift-runtime kept /usr/lib/swift under a deviation until

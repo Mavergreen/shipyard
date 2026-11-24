@@ -77,10 +77,8 @@ macho p.pkg opt/mavergreen/w/bin/w x86_64 EXECUTE 10.9 10.9 aa"
 ok "the same slice with no manifest is judged at 10.9.5" "$GOOD
 floor w 10.6.8
 macho p.pkg opt/mavergreen/w/bin/w x86_64 EXECUTE 10.9 10.9 aa"
-ok "pinned Sparkle passes on its content" "$GOOD
-macho p.pkg Library/X.app/Contents/Frameworks/Sparkle.framework/Versions/A/Sparkle x86_64 DYLIB 10.9 12.0 95ad6ce1558b1ffef550455bf9aa05ad6686d434279631d170ab92fb3747c93f"
-no "a different Sparkle does not" "sdk-pin" "$GOOD
-macho p.pkg Library/X.app/Contents/Frameworks/Sparkle.framework/Versions/A/Sparkle x86_64 DYLIB 10.9 12.0 bb"
+no "no framework is exempt by its content" "sdk-pin" "$GOOD
+macho p.pkg Library/X.app/Contents/Frameworks/Inner.framework/Versions/A/Inner x86_64 DYLIB 10.9 12.0 95ad6ce1558b1ffef550455bf9aa05ad6686d434279631d170ab92fb3747c93f"
 ok "a declared sdk-pin deviation excuses the files its glob names" "$GOOD
 deviation sdk-pin:usr/local/go/src/* Go's own race-detector and testdata objects, shipped verbatim in src/
 macho p.pkg usr/local/go/src/runtime/race/race_darwin.syso x86_64 OBJECT 10.12 14.4 aa"
@@ -89,11 +87,9 @@ deviation sdk-pin:usr/local/go/src/* Go's own race-detector and testdata objects
 macho p.pkg usr/local/go/bin/go x86_64 EXECUTE 10.9 26.5 aa"
 
 # spec: explain/arch-host.md -- a host binary's arm64 slice is declared by an arch-host deviation whose
-#       scope is a glob of its install path; target files and Library/Application Support/Mavergreen/ are
-#       not host binaries, and a repo grandfathered as modern-smoke is warned rather than failed.
+#       scope is a glob of its install path; a target file is not a host binary, and a repo grandfathered
+#       as modern-smoke is warned rather than failed.
 T='macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go'
-U='sparkle golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
-macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app/Contents/MacOS/go126-updater arm64 EXECUTE 11.0 11.3 aa'
 no "an undeclared arm64 tool slice" "arch-host|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go" "$GOOD
 $T x86_64 EXECUTE 10.9 10.9 aa
 $T arm64 EXECUTE 11.0 11.3 aa"
@@ -107,13 +103,10 @@ $T arm64 EXECUTE 11.0 11.3 aa"
 no "a declaration of another check does not cover it" "arch-host|with an arm64 slice" "$GOOD
 deviation sdk-pin:opt/mavergreen/go126/bin/* not an arm64 declaration
 $T arm64 EXECUTE 11.0 11.3 aa"
-ok "an arm64 slice under Library/Application Support/Mavergreen/ needs no declaration" "$GOOD
-$(printf '%s\n' "$U" | sed -n 2p)"
-ok "the exemption is the path, not the bundle: a tool beside the updater is exempt too" "$GOOD
-macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-updater.app-helper/tool arm64 EXECUTE 11.0 11.3 aa"
-W='macho golang-1.26.5-native-mavergreen.5.pkg Applications/Mavergreen/W.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle'
-no "an app's Sparkle framework is a host binary like any other" "arch-host|Applications/Mavergreen/W.app/Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle with an arm64 slice" "$GOOD
-sparkle golang-1.26.5-native-mavergreen.5.pkg Applications/Mavergreen/W.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml
+no "an arm64 slice under Library/Application Support/Mavergreen/ is a host binary like any other" "arch-host|Library/Application Support/Mavergreen/go126-helper.app/Contents/MacOS/go126-helper with an arm64 slice" "$GOOD
+macho golang-1.26.5-native-mavergreen.5.pkg Library/Application%20Support/Mavergreen/go126-helper.app/Contents/MacOS/go126-helper arm64 EXECUTE 11.0 11.3 aa"
+W='macho golang-1.26.5-native-mavergreen.5.pkg Applications/Mavergreen/W.app/Contents/Frameworks/Inner.framework/Versions/B/Inner'
+no "an app's framework is a host binary like any other" "arch-host|Applications/Mavergreen/W.app/Contents/Frameworks/Inner.framework/Versions/B/Inner with an arm64 slice" "$GOOD
 $W x86_64 DYLIB 10.9 10.9 aa
 $W arm64 DYLIB 11.0 11.3 aa"
 ok "a deviation declares it" "$GOOD
@@ -122,9 +115,8 @@ $W x86_64 DYLIB 10.9 10.9 aa
 $W arm64 DYLIB 11.0 11.3 aa"
 R='manifest golang-1.26.5-native-mavergreen.5.pkg go126 dev.mavergreen.go126 go126
 product go126
-derived go126 dev.mavergreen.go126.updater dev.mavergreen.go126-updatecheck Library/Application%20Support/Mavergreen/go126-updater.app https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml'
-_ro="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "$R" "$U" | sh "$S" 2>&1)" || :
-printf '%s\n' "$_ro" | grep -q 'with an arm64 slice' && { echo "FAIL: the updater is exempt: $_ro"; exit 1; }
+derived go126 https://github.com/Mavergreen/golang-126/releases/latest/download/go126.xml'
+_ro="$(printf '%s\n%s\nend-of-facts\n' "$GOOD" "$R" | sh "$S" 2>&1)" || :
 printf '%s\n' "$_ro" | grep -q 'arch-host: 0 declared, 0 undeclared' && { echo "FAIL: the arch-host summary prints only when there is something to count: $_ro"; exit 1; }
 TS="$GOOD
 $R
@@ -299,7 +291,7 @@ pkg cross.pkg 1.0.0-mavergreen.2 10.9.5 dev.mavergreen.x-cross
 asset native.pkg 10
 asset cross.pkg 10'
 
-ok "a tools product with no updater ships no appcast, and that is fine" 'expected 20221003-mavergreen.2
+ok "a pkg with no product manifest ships no appcast, and that is fine" 'expected 20221003-mavergreen.2
 upstream-kind port
 pkg ed25519-20221003-mavergreen.2.pkg 20221003-mavergreen.2 10.9.5 dev.mavergreen.ed25519
 asset ed25519-20221003-mavergreen.2.pkg 10'
@@ -348,10 +340,6 @@ arch_clean "a target glob reads decoded paths" "$ARCH
 target e lib/My%20*
 $X86
 macho e.pkg opt/mavergreen/e/lib/My%20Lib.dylib arm64 DYLIB 13.0 11.3 aa
-pkg-arch e.pkg x86_64,arm64 10.11 intel"
-arch_clean "the updater is not a host binary" "$ARCH
-$X86
-macho e.pkg Library/Application%20Support/Mavergreen/e-updater.app/Contents/MacOS/u arm64 EXECUTE 11.0 11.3 aa
 pkg-arch e.pkg x86_64,arm64 10.11 intel"
 arch_clean "a product's own floor" "$(printf '%s\n' "$ARCH" | sed 's/^floor e 10.9.5$/floor e 10.13/; s/^pkg e.pkg \(.*\) 10.9.5 /pkg e.pkg \1 10.13 /')
 pkg-arch e.pkg x86_64,arm64 10.11 none"
@@ -1052,7 +1040,9 @@ manifest p.pkg x dev.mavergreen.x x
 product x
 asset x-1.0.0-mavergreen.1-macos-x86_64.tar.gz 10
 standalone x-1.0.0-mavergreen.1-macos-x86_64.tar.gz ok
-derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml
+derived x https://github.com/Mavergreen/x/releases/latest/download/x.xml
+asset x.xml 700
+appcast x.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5
 installs p.pkg opt/mavergreen/.base/1.0.9/mavergreen
 installs p.pkg opt/mavergreen/x/mavergreen.plist'
 
@@ -1066,15 +1056,12 @@ alone() {  # facts must fail, and every failure reported must be check $2's -- n
 ok "identity: family bundle, job and paths pass" "$REL
 $LAYOUT
 manifest-outside p.pkg Applications/Mavergreen/Mavericks%20X.app
-manifest-outside p.pkg Library/Application%20Support/Mavergreen/y-updater.app
 manifest-outside p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
 manifest-outside p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
 installs p.pkg opt/mavergreen/x/bin/x
 installs p.pkg Applications/Mavergreen/Mavericks%20X.app/Contents/MacOS/X
-installs p.pkg Library/Application%20Support/Mavergreen/y-updater.app/Contents/Info.plist
 installs p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
 installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
-bundle p.pkg Library/Application%20Support/Mavergreen/y-updater.app dev.mavergreen.XUpdater
 launchd p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck"
 
 says "install-path: nothing installs under usr/local/" install-path "nothing installs under usr/local/; the family left it (vision principle 6)" "$REL
@@ -1102,7 +1089,6 @@ manifest-outside p.pkg System/Library/Filesystems/Z.fs
 manifest-outside p.pkg Library/PreferencePanes/P.prefPane
 manifest-outside p.pkg Library/Application%20Support/Apple/BezelServices/B.plugin
 manifest-outside p.pkg Library/Application%20Support/SIMBL/Plugins/S.bundle
-manifest-outside p.pkg Library/Application%20Support/Mavergreen/x-updater.app
 manifest-outside p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
 manifest-outside p.pkg Library/LaunchAgents/dev.mavergreen.xa.plist
 manifest-outside p.pkg Applications/Mavergreen/Go.app
@@ -1112,13 +1098,12 @@ installs p.pkg System/Library/Filesystems/Z.fs/Contents/Info.plist
 installs p.pkg Library/PreferencePanes/P.prefPane/Contents/Info.plist
 installs p.pkg Library/Application%20Support/Apple/BezelServices/B.plugin/Contents/Info.plist
 installs p.pkg Library/Application%20Support/SIMBL/Plugins/S.bundle/Contents/Info.plist
-installs p.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist
 installs p.pkg Library/LaunchDaemons/dev.mavergreen.xd.plist
 installs p.pkg Library/LaunchAgents/dev.mavergreen.xa.plist
 installs p.pkg Applications/Mavergreen/Go.app/Contents/Info.plist"
 
 for _bad in Applications/Mavergreen/readme.txt Library/Extensions/stray Library/Extensions/a/b.kext/c Library/PreferencePanes/P.kext/x Library/LaunchDaemons/com.example.x.plist \
-            Library/Application%20Support/Mavergreen/stuff Library/Application%20Support/Other/x-updater.app/x Library/Java/JavaVirtualMachines/x.jdk/Contents/Home; do
+            Library/Application%20Support/Mavergreen/stuff Library/Application%20Support/Mavergreen/w-updater.app/Contents/Info.plist Library/Application%20Support/Other/x-updater.app/x Library/Java/JavaVirtualMachines/x.jdk/Contents/Home; do
   has "install-path: $_bad is not an OS-dictated place" "install-path" "$REL
 $LAYOUT
 installs p.pkg $_bad"
@@ -1373,84 +1358,48 @@ alone "manifest: an outside entry with an empty segment fails manifest" "manifes
 $LAYOUT
 manifest-outside p.pkg Applications//X.app"
 
-# spec: scripts/updater-identity.sh -- an updater's identity and feed are derived from the product,
-#       carried by the derived record, and a line is its version and its repo.
-UPD="$LAYOUT
-manifest-line p.pkg none
-manifest-outside p.pkg Library/Application%20Support/Mavergreen/x-updater.app
-manifest-outside p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
-installs p.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist
-installs p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist
-bundle p.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.x.updater
-sparkle p.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml
-launchd p.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck
-manifest-feed p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
-FEED='asset x.xml 700
-appcast x.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5'
-
-ok "updater: the derived bundle id, app, label and feed pass" "$REL
-$FEED
-$UPD"
-alone "feed: every updater the dist installs has its <short>.xml in the dist" "feed" "$REL
-$UPD"
-alone "feed: a manifest whose pkg ships an updater names the derived feed" "feed" "$REL
-$FEED
-$(printf '%s\n' "$UPD" | sed 's|^manifest-feed p.pkg .*|manifest-feed p.pkg none|')"
-ok "feed: a product with no updater names the derived feed too" "$REL
+# spec: scripts/check-artifact-conformance.sh "feed" -- a product's feed is derived from the product and
+#       its repo, its manifest names it, and the dist carries <short>.xml unless it is built on install.
+NOFEED="$(printf '%s\n' "$LAYOUT" | sed '/^asset x\.xml /d; /^appcast x\.xml /d')"
+ok "feed: the derived feed, named by the manifest and carried by the dist, passes" "$REL
 $LAYOUT
 manifest-feed p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
+alone "feed: every product the dist ships has its <short>.xml in the dist" "feed" "$REL
+$NOFEED"
+says "feed: the missing feed is named" feed "the dist carries no x.xml" "$REL
+$NOFEED"
 alone "feed: a product that is not built-on-install must name its feed" "feed" "$REL
 $LAYOUT
 manifest-feed p.pkg none"
 alone "feed: a product names a feed that was not derived" "feed" "$REL
 $LAYOUT
 manifest-feed p.pkg https://example.com/x.xml"
-ok "feed: a built-on-install product names no feed" "$REL
-$LAYOUT
+ok "feed: a built-on-install product names no feed and ships none" "$REL
+$NOFEED
 built-on-install x
 manifest-feed p.pkg none"
-alone "feed: a built-on-install product that names a feed would be polled for nothing" "feed" "$REL
+alone "feed: a built-on-install product that names a feed would be fetched for nothing" "feed" "$REL
 $LAYOUT
 built-on-install x
 manifest-feed p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
-alone "updater: a bundle id that was not derived" "updater" "$REL
-$FEED
-$(printf '%s\n' "$UPD" | sed 's/ dev\.mavergreen\.x\.updater$/ dev.mavergreen.XUpdater/')"
-alone "updater: an app that was not derived" "updater" "$REL
-$FEED
-$(printf '%s\n' "$UPD" | sed '/^derived /!s|Mavergreen/x-updater\.app|Mavergreen/y-updater.app|')"
-alone "updater: an update-check label that was not derived" "updater" "$REL
-$FEED
-$(printf '%s\n' "$UPD" | sed '/^derived /!s/dev\.mavergreen\.x-updatecheck/dev.mavergreen.x.updatecheck/g')"
-alone "feed: an updater polling a feed that was not derived" "feed" "$REL
-$FEED
-$(printf '%s\n' "$UPD" | sed '/^sparkle /s|download/x\.xml$|download/appcast.xml|')"
-no "feed: an updater whose repo is unknown has no feed to poll" "feed|cannot be derived" "$REL
-$FEED
-$(printf '%s\n' "$UPD" | sed '/^derived /s| [^ ]*$| none|')"
-alone "feed: an updater whose repo is unknown fails only feed" "feed" "$REL
-$FEED
-$(printf '%s\n' "$UPD" | sed '/^derived /s| [^ ]*$| none|')"
-_none="$(printf '%s\n%s\n%s\nend-of-facts\n' "$REL" "$FEED" "$(printf '%s\n' "$UPD" | sed '/^derived /s| [^ ]*$| none|')" | sh "$S" 2>&1)" || :
+ok "feed: a product whose repo is unknown still needs its <short>.xml, and nothing more" "$REL
+$(printf '%s\n' "$LAYOUT" | sed '/^derived /s| [^ ]*$| none|')
+manifest-feed p.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml"
+_none="$(printf '%s\n%s\nend-of-facts\n' "$REL" "$(printf '%s\n' "$NOFEED" | sed '/^derived /s| [^ ]*$| none|')" | sh "$S" 2>&1)" || :
 printf '%s\n' "$_none" | grep -q "should name 'none'" \
   && { echo "FAIL: an underivable feed is one failure, not also a manifest that 'should name none': $_none"; exit 1; }
-alone "feed: a release with feeds but not this updater's" "feed" "$REL
+alone "feed: a release with feeds but not this product's" "feed" "$REL
+$NOFEED
 asset y.xml 700
-appcast y.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5
-$UPD"
-no "feed: appcast.xml is not a feed any updater polls" "feed|x.xml" "$REL
+appcast y.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5"
+no "feed: appcast.xml is not a feed the Engine reads" "feed|x.xml" "$REL
+$NOFEED
 asset appcast.xml 700
-appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5
-$UPD"
-ok "feed: a declared feed deviation excuses the URL and the name" "$REL
-deviation feed porthole's releases were also consumed as an ingredient under a moving @vMAJOR tag, so /latest/ could name a release that is not the newest product release
-asset appcast.xml 700
-appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5
-$(printf '%s\n' "$UPD" | sed '/^sparkle /s|/releases/latest/download/x\.xml$|/releases/download/feed-x/appcast.xml|')"
+appcast appcast.xml 1.0.0-mavergreen.1 p.pkg 10 10.9.5"
 
 # spec: scripts/check-artifact-conformance.sh -- a feed's enclosure names the pkg it describes;
 #       two products' feeds naming EACH OTHER's pkg must fail through the enclosure-name check
-#       alone: neither product carries a derived fact, so the per-updater checks never run.
+#       alone: neither product carries a derived fact, so the per-product feed checks never run.
 SWAP='expected 1.26.8-mavergreen.7
 upstream-kind port
 pkg go126.pkg 1.26.8-mavergreen.7 10.9.5 dev.mavergreen.go126
@@ -1477,7 +1426,7 @@ asset go126.xml 700
 appcast go126.xml 1.26.8-mavergreen.7 go127.pkg 10 10.9.5
 asset go127.xml 700
 appcast go127.xml 1.26.8-mavergreen.7 go126.pkg 10 10.9.5'
-alone "feed: two updaters' feeds swap enclosures -- each is named for the pkg it actually describes" "feed" "$SWAP"
+alone "feed: two products' feeds swap enclosures -- each is named for the pkg it actually describes" "feed" "$SWAP"
 
 GO='expected 1.26.8-mavergreen.7
 upstream-kind port
@@ -1640,9 +1589,7 @@ alone "app-name: a noun app under another identifier" "app-name" "$(printf '%s\n
 alone "app-name: a noun product that installs no <noun>.app" "app-name" "$(printf '%s\n' "$APP" | sed 's/Applications\/Go\.app/Applications\/Golang.app/')"
 UPA="$(printf '%s\n' "$NMC" | sed 's/^app go126 none$/app go126 upstream/')
 bundle go.pkg Applications/Foo%20Bar.app org.example.foo
-bundle-name go.pkg Applications/Foo%20Bar.app Foo%20Bar none
-bundle go.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.go126.updater
-bundle-name go.pkg Library/Application%20Support/Mavergreen/x-updater.app Updater none"
+bundle-name go.pkg Applications/Foo%20Bar.app Foo%20Bar none"
 ok "app-name: an upstream app keeps its name and identifier" "$UPA"
 ok "app-name: an upstream app's display name may equal its filename" "$(printf '%s\n' "$UPA" | sed 's/ Foo%20Bar none$/ Foo%20Bar Foo%20Bar/')"
 alone "app-name: an upstream app whose bundle name is not its filename" "app-name" "$(printf '%s\n' "$UPA" | sed 's/ Foo%20Bar none$/ Foo none/')"
@@ -1782,11 +1729,11 @@ SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedor
 export STEVEDORE="$SD"
 {
   _pk="$(mktemp -d "${TMPDIR:-/tmp}/conformance-pkg.XXXXXX")"   # template: 10.9 BSD mktemp requires one
-  _st="$_pk/stage"; _ap="$_st/Library/Application Support/Mavergreen/x-updater.app/Contents"
-  mkdir -p "$_ap/Frameworks/Sparkle.framework/Resources" "$_st/Library/LaunchAgents" "$_st/opt/mavergreen/x/bin" "$_pk/dist" "$_pk/comp" "$_pk/archive"
+  _st="$_pk/stage"; _ap="$_st/Applications/Mavergreen/X.app/Contents"
+  mkdir -p "$_ap/Frameworks/Inner.framework/Resources" "$_st/Library/LaunchAgents" "$_st/opt/mavergreen/x/bin" "$_pk/dist" "$_pk/comp" "$_pk/archive"
   _plist() { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>%s</key><string>%s</string></dict></plist>\n' "$1" "$2" > "$3"; }
-  printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>dev.mavergreen.x.updater</string><key>SUFeedURL</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string></dict></plist>\n' > "$_ap/Info.plist"
-  _plist CFBundleIdentifier org.sparkle-project.Sparkle "$_ap/Frameworks/Sparkle.framework/Resources/Info.plist"
+  _plist CFBundleIdentifier dev.mavergreen.x "$_ap/Info.plist"
+  _plist CFBundleIdentifier org.example.inner "$_ap/Frameworks/Inner.framework/Resources/Info.plist"
   _plist Label dev.mavergreen.x-updatecheck "$_st/Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist"
   echo x > "$_st/opt/mavergreen/x/bin/x"; ln -s bin/x "$_st/opt/mavergreen/x/link"
   _macho=""
@@ -1804,7 +1751,7 @@ export STEVEDORE="$SD"
 <key>identifier</key><string>dev.mavergreen.x</string>
 <key>name</key><string>X</string>
 <key>outside</key><array>
-<string>Library/Application Support/Mavergreen/x-updater.app</string>
+<string>Applications/Mavergreen/X.app</string>
 <string>Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist</string>
 </array>
 <key>generated</key><array><string>Applications/Linux X.app</string></array>
@@ -1836,7 +1783,7 @@ PLIST
   MAVERGREEN_REPO_ROOT="$_pk" GITHUB_REPOSITORY=Mavergreen/x sh "$here/../scripts/stand-in-feeds.sh" "$_pk/rehearsal" 1.0.0-mavergreen.1 2>/dev/null \
     || { echo "FAIL: stand-in-feeds.sh must stage a feed for a build that signs nothing"; exit 1; }
   [ -f "$_pk/rehearsal/x.xml" ] && [ -s "$_pk/rehearsal/RELEASE_NOTES.md" ] \
-    || { echo "FAIL: stand-in-feeds.sh writes x.xml for x's updater, and stand-in notes for its description"; exit 1; }
+    || { echo "FAIL: stand-in-feeds.sh writes x.xml for product x, and stand-in notes for its description"; exit 1; }
   grep -q "^    <title>X</title>$" "$_pk/rehearsal/x.xml" && grep -q "^      <title>X 1.0.0</title>$" "$_pk/rehearsal/x.xml" \
   || { echo "FAIL: stand-in-feeds.sh writes the derived channel and item titles (they used to be the bare short name): $(grep "<title>" "$_pk/rehearsal/x.xml")"; exit 1; }
   _sum="$(cksum < "$_pk/rehearsal/x.xml")"
@@ -1846,8 +1793,8 @@ PLIST
   printf '%s\n' "$_fr" | grep -qxF 'appcast-title x.xml X X%201.0.0' \
     || { echo "FAIL: a feed's channel and item titles are facts: $_fr"; exit 1; }
   _fq="$(sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"
-  printf '%s\n' "$_fq" | grep -qxF 'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app none' \
-    || { echo "FAIL: with no repo to name, the updater's identity is still derived and its feed is none: $_fq"; exit 1; }
+  printf '%s\n' "$_fq" | grep -qxF 'derived x none' \
+    || { echo "FAIL: with no repo to name, the product's feed is none: $_fq"; exit 1; }
   printf '%s\n' "$_fq" | grep -q '^abort' && { echo "FAIL: an unknown repo is not a reason to stop the stream: $_fq"; exit 1; }
   rm -f "$_pk/.mavergreen/products/w/noun"
   _nn=0; _fw="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk" 2>"$_pk/err")" || _nn=$?
@@ -1870,14 +1817,14 @@ PLIST
     && { echo "FAIL: the stream carries no registered record; identity is derived: $_f"; exit 1; }
   rm -rf "$_pk"
   for want in \
-    'installs x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app/Contents/Info.plist' \
+    'installs x-1.0.0-mavergreen.1.pkg Applications/Mavergreen/X.app/Contents/Info.plist' \
     'installs x-1.0.0-mavergreen.1.pkg opt/mavergreen/x/link' \
     'installs y-1.0.0-mavergreen.1.pkg usr/local/y/bin/x' \
-    'bundle x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app dev.mavergreen.x.updater' \
+    'bundle x-1.0.0-mavergreen.1.pkg Applications/Mavergreen/X.app dev.mavergreen.x' \
     'launchd x-1.0.0-mavergreen.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist dev.mavergreen.x-updatecheck' \
     'manifest x-1.0.0-mavergreen.1.pkg x dev.mavergreen.x x' \
     'component x-1.0.0-mavergreen.1.pkg dev.mavergreen.x none' \
-    'bundle-name x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app none none' \
+    'bundle-name x-1.0.0-mavergreen.1.pkg Applications/Mavergreen/X.app none none' \
     'manifest-name x-1.0.0-mavergreen.1.pkg X' \
     'app x none' \
     'name x pkg x-1.0.0-mavergreen.1.pkg' \
@@ -1890,11 +1837,10 @@ PLIST
     'product x' \
     'built-on-install w' \
     'edition w system' \
-    'manifest-outside x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app' \
+    'manifest-outside x-1.0.0-mavergreen.1.pkg Applications/Mavergreen/X.app' \
     'manifest-outside x-1.0.0-mavergreen.1.pkg Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist' \
     'manifest-generated x-1.0.0-mavergreen.1.pkg Applications/Linux%20X.app' \
-    'sparkle x-1.0.0-mavergreen.1.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
-    'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
+    'derived x https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
     'manifest-line x-1.0.0-mavergreen.1.pkg none' \
     'manifest-feed x-1.0.0-mavergreen.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml'
   do
@@ -1908,8 +1854,10 @@ PLIST
   fi
   printf '%s\n' "$_f" | grep -q '^macho .* opt/mavergreen/x/bin/x ' \
     && { echo "FAIL: a non-Mach-O file must not yield a macho fact: $_f"; exit 1; }
-  printf '%s\n' "$_f" | grep -q 'org.sparkle-project' \
-    && { echo "FAIL: a framework nested inside the updater is not a top-level bundle; its identifier is not the product's: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -q 'org.example.inner' \
+    && { echo "FAIL: a framework nested inside an app is not a top-level bundle; its identifier is not the product's: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -q '^sparkle ' \
+    && { echo "FAIL: no bundle carries a feed; the stream has no sparkle fact: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q '^installs y-1.0.0-mavergreen.1.pkg bin/' \
     && { echo "FAIL: payload paths must be read relative to the component's install-location, not to /: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -q '^manifest z-1.0.0-mavergreen.1.pkg ' \

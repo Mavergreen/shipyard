@@ -64,7 +64,7 @@ function(mavergreen_assert_binary_compatible tgt)
   endif()
   set(_cmd sh "${MAVERGREEN_SHARED_DIR}/scripts/assert_binary_compatible.sh" "$<TARGET_FILE:${tgt}>")
   set(_env "MAVERGREEN_DEVIATIONS_ROOT=${CMAKE_SOURCE_DIR}")
-  # The exact arch set this configure builds: an arm64-only updater slice is not an x86_64 binary.
+  # The exact arch set this configure builds: an arm64-only slice is not an x86_64 binary.
   if(CMAKE_OSX_ARCHITECTURES)
     string(REPLACE ";" " " _archs "${CMAKE_OSX_ARCHITECTURES}")
     list(APPEND _env "MAVERGREEN_ALLOW_ARCHS=${_archs}")

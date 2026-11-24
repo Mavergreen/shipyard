@@ -1,1 +1,1 @@
-it compiles and links shipyard's Sparkle updater on every host
+it compiles shipyard's build-input host tools, and MavergreenToolchain.cmake chooses it for every family build

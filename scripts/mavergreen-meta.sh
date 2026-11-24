@@ -128,7 +128,7 @@ mavergreen_name() {
       return 2 ;;
   esac
   case "$_mn_surface" in
-    name|installer-title|channel-title|manifest-name|link-suffix|component|feed|identifier) ;;
+    name|installer-title|channel-title|manifest-name|link-suffix|component|feed|feed-url|identifier) ;;
     title|pkg|release-title|item-title|notes-heading)
       if [ -z "$_mn_version" ]; then
         echo "mavergreen_name: $_mn_surface needs a version" >&2
@@ -157,6 +157,12 @@ mavergreen_name() {
     pkg) printf '%s-%s.pkg\n' "$_mn_short" "$_mn_bare" ;;
     component) printf '%s.pkg\n' "$_mn_short" ;;
     feed) printf '%s.xml\n' "$_mn_short" ;;
+    feed-url)
+      _mn_repo="$(mg_repo)" || {
+        echo "mavergreen_name: cannot tell which repo $_mn_short's feed is in; set GITHUB_REPOSITORY (OWNER/REPO)" >&2
+        return 2
+      }
+      printf 'https://github.com/Mavergreen/%s/releases/latest/download/%s.xml\n' "${_mn_repo#*/}" "$_mn_short" ;;
     identifier) printf 'dev.mavergreen.%s\n' "$_mn_short" ;;
     link-suffix)
       _mn_s=

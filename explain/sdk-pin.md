@@ -7,8 +7,7 @@ post-10.9 declaration compile and fail only on the target, and a Linux host has 
 pins live in one place, scripts/sdk-pins.sh. Builds comply by configuring through the shipyard presets or
 the toolchain file, or by passing -isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)". The same
 rule runs twice: here at package time on everything a release contains (the gate), and right after each
-build inside the compat guard (early feedback). Sparkle 1.27.3 is exempt by content: sdk-pins.sh lists the
-sha256 of its three Mach-O files.
+build inside the compat guard (early feedback).
 
 ## Incident
 2026-09-24: an audit of every family release found builds through mavericks-clang, the Go wrapper or an

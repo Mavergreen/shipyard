@@ -21,10 +21,6 @@ done
 cat > "$w/scripts/macho-slices.sh" <<'EOF'
 cat "$1"
 EOF
-cat > "$w/bin/shasum" <<'EOF'
-#!/bin/sh
-echo "0000000000000000000000000000000000000000000000000000000000000000  $3"
-EOF
 printf '#!/bin/sh\nexit 0\n' > "$w/bin/nm"
 printf '#!/bin/sh\nexit 0\n' > "$w/bin/strings"
 # spec: scripts/assert_binary_compatible.sh OBJC_COMPAT knob -- the strict analyzer's contract, a report at --report.
@@ -37,7 +33,7 @@ printf '{"schema": 1, "mode": "strict", "complete_within_boundary": true, "findi
 echo 'objc-compat: blocking: x86_64@0x1:+[NSColor labelColor] unsupported: introduced 10.10' >&2
 exit 1
 EOF
-chmod +x "$w/bin/shasum" "$w/bin/nm" "$w/bin/strings" "$w/bin/objc-compat"
+chmod +x "$w/bin/nm" "$w/bin/strings" "$w/bin/objc-compat"
 PATH="$w/bin:$PATH"; export PATH
 NM="$w/bin/nm"; STRINGS="$w/bin/strings"; export NM STRINGS
 unset MAVERGREEN_DEVIATIONS_ROOT MAVERGREEN_ALLOW_ARCHS MAVERGREEN_ALLOW_SELECTORS MAVERGREEN_POST_10_9_SELECTORS \

@@ -110,3 +110,15 @@ Mavergreen-State:	CONTENT-MANIFEST.txt	the content manifest a release carries re
 MAVERICKS_RELEASES	MAVERGREEN_RELEASES	the releases URL override took the family name
 updater_pubkey.sh	keys/feed-ed25519.pub	a signature is checked against the family key in shipyard, not a live updater's
 --allow-key-change	a commit to keys/feed-ed25519.pub	the trusted key is keys/feed-ed25519.pub; a rotation is a commit to it
+MavericksSparkle	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+mavericks_add_updater_app	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+MAVERICKS_UPDATER_	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+MAVERICKS_VERSION	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+stage_updater.sh	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+build_updater.sh	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+updater-identity.sh	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+fetch_sparkle_framework.sh	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+assert_sparkle_pristine.sh	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+SUFeedURL	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+-updater.app	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
+--clang22-pin	the Engine (mavergreen update)	build_updater.sh, which accepted it, is retired with the updaters

@@ -100,6 +100,10 @@ if chk_selected legacy-top-level; then
           "git rm $_m, and find shipyard's scripts with SHIPYARD_SCRIPTS=\"\${SHIPYARD_SCRIPTS:-\$(shipyard-scripts)}\""
       fi
     done
+    if _ltd updater; then
+      _legacy updater/ "it is retired" "no product ships an updater; the Engine (mavergreen update) updates every product" \
+        "git rm -r updater, and drop include(MavericksSparkle) and mavericks_add_updater_app() from CMakeLists.txt"
+    fi
     if _ltd release-notes; then
       _legacy release-notes/ "it belongs in .mavergreen/release-notes/" "$_moved" \
         "git mv release-notes .mavergreen/release-notes: each <tag>.md, <tag>/ and notice keeps its path below it (<short>/ included where products are tagged apart); delete release-notes/README.md"

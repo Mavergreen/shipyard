@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: lipo-merge-tree.sh --a DIR --b DIR --out DIR [--short S] [--allow-differ RELPATH]... [--require-archs "ARCH ..."]
 #          Merges two single-arch builds of the same thing into one universal tree -- shipyard's CMake
-#          (x86_64/10.9 + arm64/11.0) and its updater app. Identical files are copied; files Mach-O in
+#          (x86_64/10.9 + arm64/11.0). Identical files are copied; files Mach-O in
 #          both that differ are lipo -create'd; a non-Mach-O difference is refused unless declared
 #          with --allow-differ, in which case A's copy wins. Anything else differing means these are
 #          not two slices of one build. A file, symlink or empty directory in only one tree is refused

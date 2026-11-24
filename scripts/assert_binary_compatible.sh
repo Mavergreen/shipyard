@@ -7,8 +7,7 @@
 #          (compat-selectors), (3) the arches present are exactly MAVERGREEN_ALLOW_ARCHS (compat-archs),
 #          (4) every slice records its arch's pinned minos and SDK (sdk-pins.sh; sdk-pin), (5) the
 #          symbols a project's shims must define are defined (compat-required-defined). (1) and (2)
-#          read the x86_64 slice. A file whose bytes are a pinned third-party binary (Sparkle) is
-#          exempt by content. A declared "- <id>:<glob>: <reason>" deviation whose glob matches the
+#          read the x86_64 slice. A declared "- <id>:<glob>: <reason>" deviation whose glob matches the
 #          file's path AS GIVEN here excuses that id's failure for that file, and only that id's:
 #          compat-imports, compat-selectors, compat-archs, compat-required-defined or sdk-pin. Under
 #          --dist the path is the file's path inside its pkg or tarball, as conformance sees it, and a
@@ -39,7 +38,7 @@
 #                                               directory; mavergreen_assert_binary_compatible passes
 #                                               CMAKE_SOURCE_DIR).
 #            MAVERGREEN_ALLOW_ARCHS             the exact arch set each binary must contain (default
-#                                               "x86_64"; a universal updater passes "x86_64 arm64").
+#                                               "x86_64"; a universal tool passes "x86_64 arm64").
 #            MAVERGREEN_FLOOR                   the floor every binary's SDK pin is judged at (default: the one
 #                                               floor every product in the deviations root's repo shares; if
 #                                               they differ and this is unset, exit 2). Under --dist, a pkg
@@ -279,8 +278,6 @@ shipyard_undefs() {
     | awk '{ w = (/ weak /) ? "W" : "H"; print w, $NF }'
 }
 
-command -v shasum >/dev/null 2>&1 \
-  || cannot_measure sdk-pin "no shasum on PATH, so no binary can be matched to a pinned third-party one (on Linux, shasum is perl's)"
 checked=0; excused=0; measured=0
 guard_fail() {  # $1 = id, $2 = the path deviations match, $3 = why; a deviation for $1 covering $2 excuses it
   _gf="$(shipyard_deviated "$1" "$2" || true)"
@@ -376,9 +373,6 @@ check_one() {  # $1 = the file, $2 = the path to report and match deviations aga
     fl="$GUARD_FLOOR"
   fi
   checked=$((checked+1))
-  if shipyard_sdk_exempt_sha256 "$(shasum -a 256 "$1" | awk '{print $1}')"; then
-    echo "compat guard: $b is a pinned third-party binary (exempt by content)"; return 0
-  fi
   rc=0; slices="$(sh "$SELF/macho-slices.sh" "$1" 2>"$work/reader.err")" || rc=$?
   if [ "$rc" -eq 1 ] && [ "${3:-strict}" = loose ]; then checked=$((checked-1)); return 0; fi
   [ "$rc" -ne 4 ] || reader_die compat-archs "a Mach-O reader (LIPO or OTOOL) failed on $b"

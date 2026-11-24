@@ -16,7 +16,7 @@ ver_cmp() {
 }
 
 # spec: tests/version-lib-test.sh "comparison_key()" -- maps only monotonic suffixes (-mavericks.N,
-#       -mavergreen.N, pN), so -rc1 stays unorderable; MavericksSparkle.cmake mirrors it.
+#       -mavergreen.N, pN), so -rc1 stays unorderable.
 comparison_key() {
   printf '%s' "$1" | sed -e 's/-mavericks\./\./' -e 's/-mavergreen\./\./' -e 's/\([0-9]\)p\([0-9]\)/\1.\2/'
 }

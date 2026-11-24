@@ -54,10 +54,10 @@ meta steady 'unchanged'
 printf '2.0' > .mavergreen/ingredients/steady/VERSION
 meta child 'built from the upstream'
 ing child from self
-meta sparkle 'Sparkle 1.x'
-printf 'the version is a literal\n' > .mavergreen/ingredients/sparkle/untracked
-printf 'MavericksSparkle.cmake\n' > .mavergreen/ingredients/sparkle/watch
-printf 'set(SPARKLE 1.26.0)\n' > MavericksSparkle.cmake
+meta sqlite 'SQLite 3.x'
+printf 'the version is a literal\n' > .mavergreen/ingredients/sqlite/untracked
+printf 'Sqlite.cmake\n' > .mavergreen/ingredients/sqlite/watch
+printf 'set(SQLITE 1.26.0)\n' > Sqlite.cmake
 git add -A; git commit -qm base; git tag 1.0-mavergreen.1
 
 out="$(sh "$S" 1.0-mavergreen.1)"
@@ -83,7 +83,7 @@ printf 'linked\n' > .mavergreen/ingredients/steady/role
 ing child from cmake
 meta newone 'lazydocker'
 ing newone VERSION 0.24.1 "$REL depName=jesseduffield/lazydocker extractVersion=^v(?<version>.+)\$"
-printf 'set(SPARKLE 1.27.0)\n' > MavericksSparkle.cmake
+printf 'set(SQLITE 1.27.0)\n' > Sqlite.cmake
 
 out="$(sh "$S" 1.0-mavergreen.1)"
 cat > "$work/want" <<EOF
@@ -108,8 +108,8 @@ Changed since 1.0-mavergreen.1:
 - **pyyaml / SHA256**: removed
   PyYAML
 - **pyyaml / VERSION**: 6.0.2 -> 6.0.3
-- **sparkle / watch**: \`MavericksSparkle.cmake\` changed
-  Sparkle 1.x
+- **sqlite / watch**: \`Sqlite.cmake\` changed
+  SQLite 3.x
 - **swift / VERSION**: 6.3.3 -> 6.4.1 ([changes](https://github.com/swiftlang/swift/compare/swift-6.3.3-RELEASE...swift-6.4.1-RELEASE))
   Swift
 - **zlib / SHA256**: added (222222222222...)
@@ -120,7 +120,7 @@ want="$(cat "$work/want")"
 [ "$out" = "$want" ] || { echo "FAIL two trees: got:"; printf '%s\n' "$out"; echo "want:"; printf '%s\n' "$want"; exit 1; }
 printf '%s\n' "$out" | LC_ALL=C grep -q '[^ -~]' && fail "ASCII only, since the notes are embedded in appcast XML: $out"
 sh "$S" --watched "$work/watched" 1.0-mavergreen.1 >/dev/null
-[ "$(cat "$work/watched")" = MavericksSparkle.cmake ] || fail "--watched names exactly the watched paths bulleted: $(cat "$work/watched")"
+[ "$(cat "$work/watched")" = Sqlite.cmake ] || fail "--watched names exactly the watched paths bulleted: $(cat "$work/watched")"
 
 ing libgit REPO https://gitlab.com/libgit2/libgit2.git
 out="$(sh "$S" 1.0-mavergreen.1)"

@@ -5,8 +5,8 @@ Since the flag day every reader takes metadata from .mavergreen/, and none reads
 is not a second copy that might disagree: it is a file that nothing reads and that still looks authoritative.
 A deviation left in INGREDIENTS.md's "## Conformance deviations" no longer excuses anything, and a pin left
 in components/ is never bumped, noted or repackaged on. The old names are INGREDIENTS.md, UPSTREAM_VERSION,
-UPSTREAM_COMMIT, pins.env, MANIFEST, components/, .mavericks-intree, comment-reasons, msc.sh, build/msc.sh and
-release-notes/. Each failure names where that file goes now, or says that it is retired.
+UPSTREAM_COMMIT, pins.env, MANIFEST, components/, .mavericks-intree, comment-reasons, msc.sh, build/msc.sh,
+release-notes/ and updater/. Each failure names where that file goes now, or says that it is retired.
 
 ## Incident
 None recorded.
@@ -14,7 +14,6 @@ None recorded.
 ## Limits
 It reads the tracked-file list, so an untracked or ignored file of one of those names passes. Any tracked
 INGREDIENTS.md fails, one holding only its old declared-state section included: the release decision replaced it.
-updater/ is not refused yet: it holds template sources, not metadata, and is named once the updaters retire.
 It does not look below the top level, except for build/msc.sh.
 
 ## Deviating

@@ -85,7 +85,7 @@ if MAVERGREEN_REPO_ROOT="$t" MAVERGREEN_TAGS='' sh "$V" auto >/dev/null 2>&1; th
   echo "FAIL: an upstream with both VERSION and PIN is ambiguous and must fail"; exit 1
 fi
 
-# spec: SKILL.md "Release notes" -- comparison_key() is the ONE Sparkle-comparable-version
+# spec: SKILL.md "Release notes" -- comparison_key() is the ONE feed-comparable-version
 #       derivation; its absence from previous-release-tag.sh is why no openssh release ever
 #       found its baseline, when gen_appcast.sh's own copy learned the "pN" rule and
 #       previous-release-tag.sh's didn't.
@@ -97,11 +97,6 @@ fi
 [ "$(comparison_key 1.26.8)"              = 1.26.8 ]    || { echo "FAIL key: plain semver"; exit 1; }
 numeric "$(comparison_key 9.9p2-mavericks.3)" || { echo "FAIL key: pN result must be orderable"; exit 1; }
 
-grep -q 'string(REPLACE "-mavericks' "$here/../MavericksSparkle.cmake" \
-  || { echo "FAIL: MavericksSparkle.cmake is a deliberate mirror of comparison_key() (a .cmake file cannot source lib.sh) and must stay identical, so a change here must fail HERE rather than as \"the updater thinks it is current\" -- lost its -mavericks derivation"; exit 1; }
-grep -q '(\[0-9\])p(\[0-9\])' "$here/../MavericksSparkle.cmake" \
-  || { echo "FAIL MavericksSparkle.cmake lost its pN derivation"; exit 1; }
-
 grep -q 's/-mavericks\\./\\./' "$here/../scripts/gen_appcast.sh" 2>/dev/null \
   && { echo "FAIL: gen_appcast.sh must NOT carry its own derivation, only call comparison_key() -- this is a regression test for the family's ONE-derivation rule violated when the pN rule was added to gen_appcast but not to previous-release-tag"; exit 1; }
 
@@ -110,8 +105,6 @@ grep -q 's/-mavericks\\./\\./' "$here/../scripts/gen_appcast.sh" 2>/dev/null \
 [ "$(mavergreen_build_version 1.2.3-mavergreen.4)" = 1.2.3.4 ] || { echo "FAIL build version: -mavergreen.N"; exit 1; }
 [ "$(comparison_key 4.4.5-mavericks.2)" = 4.4.5.2 ] \
   || { echo "FAIL key: a pinned pre-flag-day release (ingredients/cmake/VERSION's 4.4.5-mavericks.2) must still order until L1 re-pins it"; exit 1; }
-grep -q 'string(REPLACE "-mavergreen\." ' "$here/../MavericksSparkle.cmake" \
-  || { echo "FAIL MavericksSparkle.cmake lost its -mavergreen derivation (mirror of comparison_key)"; exit 1; }
 
 # spec: scripts/lib.sh -- consumer repos source it with their OWN $SELF (a build/ dir) and SHIPYARD /
 #       SHIPYARD_SCRIPTS set from shipyard-scripts; it must find lib/vercmp.sh from those, and fail loudly otherwise.

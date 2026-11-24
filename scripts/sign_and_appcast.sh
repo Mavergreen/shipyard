@@ -5,7 +5,7 @@
 #            [--key FILE]
 #          (SPARKLE_PRIVATE_KEY must be in the environment)
 #          Signs a .pkg with the native EdDSA signer and writes its Sparkle feed to DIR/P.xml, in one
-#          call. P.xml is the file P's updater polls (scripts/updater-identity.sh feed P), so its name is
+#          call. P.xml is the file the Engine reads for P (mavergreen_name feed-url P), so its name is
 #          P's, never the caller's; nothing goes to stdout.
 #            --product   the short name, declared in .mavergreen/products/, of the product the pkg ships
 #            --feed-dir  where P.xml is written; nothing is written when the run refuses

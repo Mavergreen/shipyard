@@ -3,7 +3,6 @@
 #   usage: . arch-rules.sh     (after lib/vercmp.sh; definitions only, no exit, $0 or set)
 #          arch_is_target REL GLOBSFILE   0 when REL, relative to the product tree, matches a line of
 #                                         GLOBSFILE as a case pattern
-#          arch_is_exempt PATH            0 for a payload path under Library/Application Support/Mavergreen/
 #          arch_derive                    reads "<path> <arch> <minos>" host-slice lines (path %20-encoded)
 #                                         and prints "class <neutral|x86_64|universal>" then
 #                                         "arm64-floor <V|none>"; 1, a message on stderr, for an arm64 slice
@@ -23,13 +22,6 @@ arch_is_target() {
     [ -n "$arch_g" ] || continue
     case "$1" in $arch_g) return 0;; esac
   done < "$2"
-  return 1
-}
-
-arch_is_exempt() {
-  case "$1" in
-    "Library/Application Support/Mavergreen/"*) return 0;;
-  esac
   return 1
 }
 

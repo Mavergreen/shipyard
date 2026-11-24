@@ -250,20 +250,6 @@ mk_readers() {
   [[ "$output" == *"tool is excused from sdk-pin"* ]] || false
 }
 
-@test "a PATH with no shasum fails the guard closed, naming shasum" {
-  mkdir "$WORK/noshasum"
-  for d in /usr/bin /bin; do
-    for f in "$d"/*; do
-      case "${f##*/}" in shasum*) continue ;; esac
-      [ -e "$WORK/noshasum/${f##*/}" ] || [ -L "$WORK/noshasum/${f##*/}" ] || ln -s "$f" "$WORK/noshasum/${f##*/}"
-    done
-  done
-  run env PATH="$WORK/noshasum" sh "$GUARD" "$WORK/clean"
-  [ "$status" -eq 1 ]
-  first_is sdk-pin
-  [[ "$output" == *"CANNOT MEASURE"*"shasum"* ]] || false
-}
-
 @test "products with different floors and no MAVERGREEN_FLOOR: exit 2, naming MAVERGREEN_FLOOR" {
   mkdir -p "$WORK/repo/.mavergreen/products/old" "$WORK/repo/.mavergreen/products/new"
   printf '10.6.8\n' > "$WORK/repo/.mavergreen/products/old/floor"

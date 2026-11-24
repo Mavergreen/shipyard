@@ -27,7 +27,7 @@
 #            product       <product>                              one per directory in the repo's .mavergreen/products/
 #            floor         <product> <version>                    the product's floor (.mavergreen/products/<product>/floor, else 10.9.5)
 #            target        <product> <glob>                       one per line of .mavergreen/products/<product>/target (%20-encoded)
-#            derived       <product> <bundle-id> <label> <app> <feed|none>  the updater identity derived for it
+#            derived       <product> <feed|none>                  the feed derived for it (mavergreen_name feed-url)
 #            name          <product> <surface> <value>            mavergreen_name's value, at the expected version (%20-encoded)
 #            app           <product> <noun|upstream|none>         how the product's .app is named
 #            manifest-name <file> <name|none>                     that manifest's name (%20-encoded)
@@ -36,9 +36,8 @@
 #            manifest-requires <file> <dep> <kind>                one per requires entry of that manifest
 #            built-on-install <product>                           one per product whose .mavergreen/products/<product>/built-on-install exists
 #            edition       <product> <edition>                    one per product whose .mavergreen/products/<product>/edition exists (%20-encoded)
-#            sparkle       <file> <path> <SUFeedURL>              one per top-level bundle carrying a Sparkle feed
 #            repository    <owner/name>                           the repo the release is built in (mg_repo), when known
-#            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
+#            appcast       <file> <version> <enclosure> <length> <minos>  one per feed
 #            appcast-title <file> <channel|none> <item|none>      that feed's channel and first item titles (%20-encoded)
 #            appcast-requires <file> <dep> <kind>                 one per <mavergreen:requires> element of that feed
 #            asset         <file> <bytes>                         one per file that will be published
@@ -121,7 +120,7 @@ kind_ran() {  # $1 = the fact kind the ids read, $2 = what it is called, then th
 }
 chk_ran version-scheme
 if has pkg || has appcast; then chk_ran version; else chk_notrun version "no .pkg or appcast in this release"; fi
-kind_ran pkg .pkg identifier bundle-id launchd-label manifest base line install-path feed updater repository arch-host arch-target \
+kind_ran pkg .pkg identifier bundle-id launchd-label manifest base line install-path feed repository arch-host arch-target \
   pkg-name installer-title manifest-name app-name root-runs os-overwrite no-standalone standalone
 kind_ran pkg-arch .pkg arch-distribution arch-floors
 kind_ran appcast appcast enclosure length enclosure-url notes feed-title
@@ -146,8 +145,7 @@ rule_of() {
     base) echo "a pkg that installs a product has dev.mavergreen.base as its first component" ;;
     line) echo "a lined product's manifest, version and repo agree about the line" ;;
     install-path) echo "a pkg installs only into its product's tree under opt/mavergreen and the places the OS dictates" ;;
-    feed) echo "a product's updater, feed and manifest agree with the identity derived for it" ;;
-    updater) echo "a product's updater is the one derived for it" ;;
+    feed) echo "a product's manifest names its derived feed, and the dist carries <short>.xml unless it is built on install" ;;
     repository) echo "every product a release ships is one of this repo's .mavergreen/products/" ;;
     enclosure) echo "an appcast's enclosure names a published asset" ;;
     length) echo "an appcast's enclosure length is the asset's real size" ;;
@@ -184,8 +182,7 @@ fix_of() {
     base) echo "build the product archive with set_install_floor.sh, which lists dev.mavergreen.base first" ;;
     line) echo "write .mavergreen/products/<short>/line (dotted, like 1.27), render the manifest from it with render-manifest.sh, and release from the repo whose suffix is that line without dots, or fix the version" ;;
     install-path) echo "install under opt/mavergreen/<product>/ (an app under Applications/Mavergreen/; list the exceptions in the manifest's outside), or, where the OS dictates the place, declare .mavergreen/deviations/install-path/<label>/ (scope <glob>, a reason, a revisit)" ;;
-    feed) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>), name the feed <product>.xml, and point the manifest's feed at it" ;;
-    updater) echo "build the updater with mavericks_add_updater_app(PRODUCT <product>) and ship its LaunchAgent" ;;
+    feed) echo "sign each product with sign_and_appcast.sh --product <product>, which writes <product>.xml, and render the manifest with render-manifest.sh, which names the derived feed" ;;
     repository) echo "declare the product in .mavergreen/products/<product>/, or release it from the repo that declares it" ;;
     enclosure) echo "publish the pkg the appcast names, or regenerate the appcast with gen_appcast.sh" ;;
     length) echo "regenerate the appcast after the pkg is final, so its length is the pkg's" ;;
@@ -311,7 +308,6 @@ while read -r _ pa_file pa_host pa_before pa_rule; do
       d = $3; gsub(/%20/, " ", d); gsub(/%25/, "%", d); print $3, $4, $6, d }' "$facts" > "$tmp/pa-all"
   : > "$tmp/pa-slices"
   while read -r pa_p pa_a pa_m pa_d; do
-    ! arch_is_exempt "$pa_d" || continue
     if [ -n "$pa_tree" ] && [ -s "$tmp/pa-targets" ]; then
       case "$pa_d" in "$pa_tree"*) ! arch_is_target "${pa_d#"$pa_tree"}" "$tmp/pa-targets" || continue ;; esac
     fi
@@ -354,7 +350,7 @@ awk '$1 == "app" && $3 == "upstream" { up[$2] = 1 }
      $1 == "manifest" { m[$2] = $5 }
      $1 == "bundle" { b[++n] = $2 " " $3 }
      END { for (i = 1; i <= n; i++) { split(b[i], f, " ")
-             if ((f[1] in m) && (m[f[1]] in up) && f[2] ~ /\.app$/ && index(f[2], "Library/Application%20Support/Mavergreen/") != 1) print b[i] } }' \
+             if ((f[1] in m) && (m[f[1]] in up) && f[2] ~ /\.app$/) print b[i] } }' \
   "$facts" > "$tmp/upstream-apps"
 while read -r kind file path id; do
   [ "$kind" = bundle ] || continue
@@ -450,9 +446,9 @@ EOF
   done < "$tmp/generated-$pk"
 done
 
-# spec: tests/artifact-conformance-test.sh -- line identity: an updater's app, bundle id, label and
-#       feed are the derived record's, a lined product's line is its version and its repo's suffix,
-#       and every product a release ships is one this repo declares.
+# spec: tests/artifact-conformance-test.sh -- line identity: a product's feed is the derived record's,
+#       a lined product's line is its version and its repo's suffix, and every product a release
+#       ships is one this repo declares.
 repository="$(sed -n 's/^repository \([^ ][^ ]*\)$/\1/p' "$facts" | head -1)"
 up="${expected#v}"; up="${up%-mavergreen.*}"
 repo="${repository#*/}"
@@ -465,43 +461,23 @@ line_of() {
 while read -r pk P; do
   awk -v m="$P" '$1 == "product" && $2 == m { f = 1 } END { exit !f }' "$facts" \
     || fail repository "$pk ships $P, which this repo does not declare in .mavergreen/products/$P/" "$pk"
-  want_id=""; want_label=""; want_app=""; want_feed=""
-  read -r _ _ want_id want_label want_app want_feed <<EOF
+  want_feed=""
+  read -r _ _ want_feed <<EOF
 $(awk -v m="$P" '$1 == "derived" && $2 == m { print; exit }' "$facts")
 EOF
-  if [ -n "$want_label" ]; then
-    awk -v p="$pk" '$1 == "sparkle" && $2 == p { print $3, $4 }' "$facts" > "$tmp/sparkle-$pk"
-    while read -r spath sfeed; do
-      [ "$spath" = "$want_app" ] \
-        || fail updater "$pk installs a Sparkle updater at $(dec "$spath"); $P's is $(dec "$want_app")" "$pk"
-      sid="$(awk -v p="$pk" -v b="$spath" '$1 == "bundle" && $2 == p && $3 == b { print $4; exit }' "$facts")"
-      [ "$sid" = "$want_id" ] \
-        || fail updater "$pk's updater $(dec "$spath") is '${sid:-none}'; $P's is $want_id -- build it with mavericks_add_updater_app(PRODUCT $P)" "$pk"
-      if [ "$want_feed" = none ]; then
-        fail feed "$pk's updater polls $sfeed, but $P's feed cannot be derived: the repo it is released from is unknown (set GITHUB_REPOSITORY)" "$pk"
-      else
-        [ "$sfeed" = "$want_feed" ] \
-          || fail feed "$pk's updater polls $sfeed; $P's feed is $want_feed" "$pk"
-      fi
-    done < "$tmp/sparkle-$pk"
-    if [ -s "$tmp/sparkle-$pk" ]; then
-      awk -v p="$pk" -v l="$want_label" '$1 == "launchd" && $2 == p && $4 == l { f = 1 } END { exit !f }' "$facts" \
-        || fail updater "$pk ships $P's updater but no LaunchAgent labelled $want_label -- nothing would run its daily check" "$pk"
-      grep -q "^appcast $P\.xml " "$facts" \
-        || fail feed "$pk ships $P's updater, but the dist carries no $P.xml -- /latest/download/$P.xml would 404 for every installed $P" "$pk"
-    fi
+  if [ -n "$want_feed" ]; then
     ma="$(awk -v p="$pk" '$1 == "manifest-feed" && $2 == p { print $3; exit }' "$facts")"
     if awk -v m="$P" '$1 == "built-on-install" && $2 == m { f = 1 } END { exit !f }' "$facts"; then
       [ -z "$ma" ] || [ "$ma" = none ] \
         || fail feed "$pk's manifest names the feed '$ma'; $P is built on install and names none" "$pk"
-    elif [ "$want_feed" != none ]; then
-      [ -z "$ma" ] || [ "$ma" = "$want_feed" ] \
-        || fail feed "$pk's manifest names the feed '$ma'; $P's feed is $want_feed" "$pk"
+    else
+      if [ "$want_feed" != none ]; then
+        [ -z "$ma" ] || [ "$ma" = "$want_feed" ] \
+          || fail feed "$pk's manifest names the feed '$ma'; $P's feed is $want_feed" "$pk"
+      fi
+      grep -q "^appcast $P\.xml " "$facts" \
+        || fail feed "$pk ships $P, but the dist carries no $P.xml -- /latest/download/$P.xml would 404 for the Engine on every box that installed $P" "$pk"
     fi
-    awk -v p="$pk" '$1 == "launchd" && $2 == p && index($4, "updatecheck") { print $4 }' "$facts" > "$tmp/uc-$pk"
-    while read -r ul; do
-      [ "$ul" = "$want_label" ] || fail updater "$pk installs the update-check job $ul; $P's is $want_label" "$pk"
-    done < "$tmp/uc-$pk"
   fi
   ml="$(awk -v p="$pk" '$1 == "manifest-line" && $2 == p { print $3; exit }' "$facts")"
   case "$ml" in ''|none) lv="" ;; *) lv="$ml" ;; esac
@@ -572,7 +548,7 @@ while read -r pk P; do
       done < "$tmp/noun-app"
       ;;
     upstream)
-      awk -v p="$pk" '$1 == "bundle-name" && $2 == p && $3 ~ /\.app$/ && index($3, "Library/Application%20Support/Mavergreen/") != 1 { print $3, $4, $5 }' "$facts" > "$tmp/up-app"
+      awk -v p="$pk" '$1 == "bundle-name" && $2 == p && $3 ~ /\.app$/ { print $3, $4, $5 }' "$facts" > "$tmp/up-app"
       while read -r ap bn bdn; do
         stem="${ap##*/}"; stem="${stem%.app}"
         [ "$bn" = "$stem" ] && { [ "$bdn" = none ] || [ "$bdn" = "$stem" ]; } \
@@ -718,7 +694,6 @@ while read -r kind file path; do
   os_bundle "$path" Library/PreferencePanes/ .prefPane && continue
   os_bundle "$path" Library/Application%20Support/Apple/BezelServices/ .plugin && continue
   os_bundle "$path" Library/Application%20Support/SIMBL/Plugins/ .bundle && continue
-  os_bundle "$path" Library/Application%20Support/Mavergreen/ -updater.app && continue
   p="$(dec "$path")"
   r="$(deviation_reason install-path "$p")"
   if [ -n "$r" ]; then printf '%s\n' "$r" >> "$tmp/ip-dev"
@@ -862,7 +837,7 @@ while read -r kind af _ enc _; do
   ep="$(awk -v f="$enc" '$1 == f { print $2; exit }' "$tmp/prod-of")"
   [ -n "$ep" ] || continue
   [ "$af" = "$ep.xml" ] \
-    || fail feed "$af describes $enc, which ships $ep; its feed is $ep.xml, the file $ep's updater polls" "$af"
+    || fail feed "$af describes $enc, which ships $ep; its feed is $ep.xml, the file the Engine reads for $ep" "$af"
 done < "$facts"
 
 # spec: SKILL.md "Release notes", "Three enforcement layers" -- this is the conformance layer: does
@@ -922,15 +897,14 @@ for key in $(sed -n 's/^build-info [^ ][^ ]* \([^ ][^ ]*\) .*/\1/p' "$facts" | s
 done
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- every shipped
-#       Mach-O slice records its arch's pinned minos and SDK, unless its bytes are a pinned third-party
-#       binary or a declared sdk-pin:<glob> deviation names its path.
+#       Mach-O slice records its arch's pinned minos and SDK, unless a declared sdk-pin:<glob>
+#       deviation names its path.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a slice is
 #       judged at the floor of the product its artifact's manifest names; an artifact with no manifest, or
 #       a product with no floor fact, at 10.9.5.
 sdk_floor_file=""; sdk_floor=10.9.5
 while read -r kind file path arch ft mn sd sha; do
   [ "$kind" = macho ] || continue
-  shipyard_sdk_exempt_sha256 "$sha" && continue
   if [ "$file" != "$sdk_floor_file" ]; then
     sdk_floor_file="$file"
     sdk_floor="$(awk -v f="$file" '
@@ -943,7 +917,7 @@ while read -r kind file path arch ft mn sd sha; do
 done < "$facts"
 
 # spec: explain/arch-host.md -- a host binary ships x86_64 unless an arch-host deviation's scope matches
-#       its install path; a target file and an arch_is_exempt path are not host binaries. A repo
+#       its install path; a target file is not a host binary. A repo
 #       grandfathered as modern-smoke is warned.
 targets_of() {  # $1 = product; its target globs, decoded, one per line
   awk -v p="$1" '$1 == "target" && $2 == p { print $3 }' "$facts" | sed -e 's/%20/ /g' -e 's/%25/%/g'
@@ -958,7 +932,6 @@ awk '$1 == "pkg" { pkg[$2] = 1 }
 arm_declared=0; arm_undeclared=0; ah_file=; ah_tree=
 while read -r file path; do
   p="$(dec "$path")"
-  ! arch_is_exempt "$p" || continue
   if [ "$file" != "$ah_file" ]; then
     ah_file="$file"; ah_tree=; : > "$tmp/ah-targets"
     ah_prod="$(prod_of "$file")"
@@ -1049,7 +1022,6 @@ for at_prod in $(awk '$1 == "target" { print $2 }' "$facts" | LC_ALL=C sort -u);
     while IFS="$tab" read -r at_ld at_to at_raw; do
       grep -qxF -- "$at_to" "$tmp/at-targets" || continue
       ! grep -qxF -- "$at_ld" "$tmp/at-targets" || continue
-      ! arch_is_exempt "$at_ld" || continue
       arch_fail arch-target "$at_pkg: $at_ld loads $at_to ($at_raw), a target file"
     done < "$tmp/at-loads"
   done
