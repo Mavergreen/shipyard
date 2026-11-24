@@ -26,8 +26,8 @@
 // version under this app's own defaults domain, for a host UI (e.g. trackpad2's prefpane About tab) to
 // surface. Empty => no pane; instead post a user notification whose click re-launches this app foreground
 // to install (e.g. mavericks-swift, a headless runtime with no pane).
-#define MAVERICKS_PANE_HINT_KEY "@MAVERICKS_PANE_HINT_KEY@"
-static NSString *const kAvailableUpdateKey = @"@MAVERICKS_PANE_HINT_KEY@";
+#define MAVERICKS_PANE_HINT_KEY "@MAVERICKS_C_PANE_HINT_KEY@"
+static NSString *const kAvailableUpdateKey = @"@MAVERICKS_C_PANE_HINT_KEY@";
 
 // UI is OPT-IN. Only an EXPLICIT user summon shows anything: `--user` (a notification
 // "install" click) runs Sparkle's interactive check -- the ONLY path that shows a "You're up-to-date!"
@@ -48,7 +48,7 @@ static NSTimer *gWatchdog = nil;
 
 // Sparkle 1.x relaunches the host after a .pkg install and there is no config to suppress it. We drop
 // a marker just before relaunch so the relaunched instance exits quietly instead of re-checking.
-static NSString *const kRelaunchMarker = @"@MAVERICKS_RELAUNCH_MARKER@";
+static NSString *const kRelaunchMarker = @"@MAVERICKS_C_RELAUNCH_MARKER@";
 // The display version Sparkle last offered, remembered so a post-relaunch launch can tell whether the
 // install actually landed. Persisted to defaults (kPendingVersionKey) just before Sparkle relaunches us.
 static NSString *const kPendingVersionKey = @"MavPendingUpdateVersion";
@@ -67,11 +67,11 @@ static NSString *gFoundVersion = nil;
         [[NSUserDefaults standardUserDefaults] synchronize];
     }
 }
-- (void)terminateNow { NSLog(@"[@MAVERICKS_LOG_PREFIX@] terminating"); [NSApp terminate:nil]; }
+- (void)terminateNow { NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] terminating"); [NSApp terminate:nil]; }
 - (void)cancelWatchdog { [gWatchdog invalidate]; gWatchdog = nil; }
 - (void)watchdogFired:(NSTimer *)t {
     (void)t; gWatchdog = nil;
-    NSLog(@"[@MAVERICKS_LOG_PREFIX@] watchdog: background check didn't resolve in %.0fs, forcing exit", kBackgroundWatchdogSeconds);
+    NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] watchdog: background check didn't resolve in %.0fs, forcing exit", kBackgroundWatchdogSeconds);
     [NSApp terminate:nil];
 }
 - (void)updater:(SUUpdater *)updater didFindValidUpdate:(SUAppcastItem *)item {
@@ -87,11 +87,11 @@ static NSString *gFoundVersion = nil;
         if (!gUserInitiated) {
             // Silent probe -> no dialog; hint recorded; exit immediately (never leave a blocking dialog).
             [self cancelWatchdog];
-            NSLog(@"[@MAVERICKS_LOG_PREFIX@] update available: %@ — recorded pane hint; silent probe -> exit", v.length ? v : @"(unknown)");
+            NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] update available: %@ — recorded pane hint; silent probe -> exit", v.length ? v : @"(unknown)");
             [NSApp terminate:nil];
             return;
         }
-        NSLog(@"[@MAVERICKS_LOG_PREFIX@] update available: %@ — foreground: presenting update dialog", v.length ? v : @"(unknown)");
+        NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] update available: %@ — foreground: presenting update dialog", v.length ? v : @"(unknown)");
         return;
     }
     // No-pane mode (mavericks-swift): a non-interactive find must surface SOMETHING actionable.
@@ -100,17 +100,17 @@ static NSString *gFoundVersion = nil;
         // the notification flushes to the daemon before we terminate.
         [self cancelWatchdog];
         NSUserNotification *n = [[NSUserNotification alloc] init];
-        n.title = [NSString stringWithFormat:@"%@ update available", @"@MAVERICKS_PRODUCT_NAME@"];
+        n.title = [NSString stringWithFormat:@"%@ update available", @"@MAVERICKS_C_PRODUCT_NAME@"];
         n.informativeText = v.length ? [NSString stringWithFormat:@"Version %@ is ready. Click to install.", v]
                                      : @"An update is ready. Click to install.";
         n.hasActionButton = YES; n.actionButtonTitle = @"Install";
         [[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:n];
-        NSLog(@"[@MAVERICKS_LOG_PREFIX@] update available: %@ — posted notification; background -> exit", v.length ? v : @"(unknown)");
+        NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] update available: %@ — posted notification; background -> exit", v.length ? v : @"(unknown)");
         [self performSelector:@selector(terminateNow) withObject:nil afterDelay:3.0 inModes:@[NSDefaultRunLoopMode]];
         return;
     }
     // Foreground (manual): let Sparkle present its normal update dialog.
-    NSLog(@"[@MAVERICKS_LOG_PREFIX@] update available: %@ — foreground: presenting update dialog", v.length ? v : @"(unknown)");
+    NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] update available: %@ — foreground: presenting update dialog", v.length ? v : @"(unknown)");
 }
 - (void)updaterDidNotFindUpdate:(SUUpdater *)updater {
     (void)updater;
@@ -120,8 +120,8 @@ static NSString *gFoundVersion = nil;
     [[NSUserDefaults standardUserDefaults] synchronize];
     // Background (scheduled) mode shows no alert -> nothing to wait for; exit right away so the
     // LSUIElement process never lingers.
-    if (!gUserInitiated) { NSLog(@"[@MAVERICKS_LOG_PREFIX@] no update; not user-initiated -> terminating silently"); [NSApp terminate:nil]; return; }
-    NSLog(@"[@MAVERICKS_LOG_PREFIX@] no update; user-initiated -> terminate after the up-to-date alert is dismissed");
+    if (!gUserInitiated) { NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] no update; not user-initiated -> terminating silently"); [NSApp terminate:nil]; return; }
+    NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] no update; user-initiated -> terminate after the up-to-date alert is dismissed");
     // Sparkle 1.27 calls this delegate BEFORE it shows its modal "You're up-to-date!" alert
     // (SUUIBasedUpdateDriver -didNotFindUpdate: delegate first, then a blocking -runModal). Calling
     // [NSApp terminate:] here killed the app before that alert could appear -- so a manual check
@@ -138,7 +138,7 @@ static NSString *gFoundVersion = nil;
                afterDelay:0.0
                   inModes:@[NSDefaultRunLoopMode]];
 }
-- (void)userDidCancelDownload:(SUUpdater *)updater   { (void)updater; NSLog(@"[@MAVERICKS_LOG_PREFIX@] download cancelled -> terminating"); [NSApp terminate:nil]; }
+- (void)userDidCancelDownload:(SUUpdater *)updater   { (void)updater; NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] download cancelled -> terminating"); [NSApp terminate:nil]; }
 // The update cycle aborted with an error (appcast/network/proxy unreachable, bad signature, ...). Sparkle
 // has already shown -- or is about to show -- its modal error alert on a user-initiated check; on a silent
 // check it shows nothing. Without this the process had NO path to terminate on the error branch (the
@@ -149,14 +149,14 @@ static NSString *gFoundVersion = nil;
     [self cancelWatchdog];   // cycle aborted -> nothing left to wait on
     // Silent/background abort: no alert to wait for -> exit now so the process never lingers.
     if (!gUserInitiated) {
-        NSLog(@"[@MAVERICKS_LOG_PREFIX@] check aborted (%@); not user-initiated -> terminating", error.localizedDescription);
+        NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] check aborted (%@); not user-initiated -> terminating", error.localizedDescription);
         [NSApp terminate:nil];
         return;
     }
     // User-initiated: Sparkle shows a modal error alert. Terminate once it's dismissed, using the same
     // NSDefaultRunLoopMode zero-delay timer as -updaterDidNotFindUpdate: -- it can't fire inside the
     // alert's nested modal loop, so we quit exactly when the user closes the alert (never before it shows).
-    NSLog(@"[@MAVERICKS_LOG_PREFIX@] check aborted (%@); user-initiated -> terminate after the error alert is dismissed", error.localizedDescription);
+    NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] check aborted (%@); user-initiated -> terminate after the error alert is dismissed", error.localizedDescription);
     [self performSelector:@selector(terminateNow)
                withObject:nil
                afterDelay:0.0
@@ -187,7 +187,7 @@ int main(int argc, const char **argv) {
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];  /* normal foreground app (see Info.plist) */
 
         NSString *selfVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-        NSLog(@"[@MAVERICKS_LOG_PREFIX@] start: mode=%@ version=%@",
+        NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] start: mode=%@ version=%@",
               gUserInitiated ? @"user" : (gBackground ? @"background" : @"silent"),
               selfVersion.length ? selfVersion : @"(unknown)");
 
@@ -210,7 +210,7 @@ int main(int argc, const char **argv) {
                     // Fresh marker => an update JUST installed; the postinstall reloads the daily agent
                     // whose RunAtLoad fires this background instance mid-install. Don't re-check, and KEEP
                     // the marker so Sparkle's FOREGROUND relaunch shows the single confirmation.
-                    NSLog(@"[@MAVERICKS_LOG_PREFIX@] fresh post-install marker; background -> exit (no check, marker kept)");
+                    NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] fresh post-install marker; background -> exit (no check, marker kept)");
                     return 0;
                 case MAV_RELAUNCH_STALE_CHECK:
                     // Stale marker from an interrupted/killed flow -> clear it and fall through to a check.
@@ -223,22 +223,22 @@ int main(int argc, const char **argv) {
                     [fm removeItemAtPath:kRelaunchMarker error:NULL];
                     [[NSUserDefaults standardUserDefaults] removeObjectForKey:kPendingVersionKey];
                     [[NSUserDefaults standardUserDefaults] synchronize];
-                    NSLog(@"[@MAVERICKS_LOG_PREFIX@] post-install relaunch; showing 'updated to %@' confirmation",
+                    NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] post-install relaunch; showing 'updated to %@' confirmation",
                           selfVersion.length ? selfVersion : @"(unknown)");
                     [NSApp activateIgnoringOtherApps:YES];
                     NSAlert *done = [[NSAlert alloc] init];
-                    [done setMessageText:@"@MAVERICKS_CONFIRM_TITLE@"];
-                    [done setInformativeText:@"@MAVERICKS_CONFIRM_BODY@"];
+                    [done setMessageText:@"@MAVERICKS_C_CONFIRM_TITLE@"];
+                    [done setInformativeText:@"@MAVERICKS_C_CONFIRM_BODY@"];
                     [done addButtonWithTitle:@"OK"];
                     [done runModal];
                     // Product post-update hook: run an optional helper (as the user, in this GUI session)
                     // for product-specific follow-up after an install -- e.g. offer to roll a running VM
                     // onto the freshly-installed image. Empty path -> no-op. Fire-and-forget; it owns its UI.
-                    NSString *postHelper = @"@MAVERICKS_POST_UPDATE_HELPER@";
+                    NSString *postHelper = @"@MAVERICKS_C_POST_UPDATE_HELPER@";
                     if (postHelper.length && [[NSFileManager defaultManager] isExecutableFileAtPath:postHelper]) {
-                        NSLog(@"[@MAVERICKS_LOG_PREFIX@] running post-update helper: %@", postHelper);
+                        NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] running post-update helper: %@", postHelper);
                         @try { NSTask *t = [NSTask new]; t.launchPath = postHelper; [t launch]; }
-                        @catch (NSException *e) { NSLog(@"[@MAVERICKS_LOG_PREFIX@] post-update helper failed: %@", e); }
+                        @catch (NSException *e) { NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] post-update helper failed: %@", e); }
                     }
                     return 0;
                 }
@@ -246,11 +246,11 @@ int main(int argc, const char **argv) {
                     // Install silently failed (intermittent Sparkle -60008): our bundle is still the old
                     // version. Offer an honest retry instead of a bogus "updated" confirmation.
                     [fm removeItemAtPath:kRelaunchMarker error:NULL];
-                    NSLog(@"[@MAVERICKS_LOG_PREFIX@] install did not complete (still %@, wanted %@) -> offering retry",
+                    NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] install did not complete (still %@, wanted %@) -> offering retry",
                           selfVersion.length ? selfVersion : @"(unknown)", pending.length ? pending : @"(unknown)");
                     [NSApp activateIgnoringOtherApps:YES];
                     NSAlert *retry = [[NSAlert alloc] init];
-                    [retry setMessageText:@"@MAVERICKS_PRODUCT_NAME@ update didn't finish"];
+                    [retry setMessageText:@"@MAVERICKS_C_PRODUCT_NAME@ update didn't finish"];
                     [retry setInformativeText:pending.length
                         ? [NSString stringWithFormat:@"The update to %@ didn't complete — a known intermittent macOS issue. Retry now?", pending]
                         : @"The update didn't complete — a known intermittent macOS issue. Retry now?"];
@@ -261,7 +261,7 @@ int main(int argc, const char **argv) {
                         // Re-drive an interactive check in a fresh process (same mechanism as the
                         // notification "Install" path). It re-finds the already-downloaded update and
                         // re-offers Install; per Sparkle #1079 the second attempt almost always succeeds.
-                        NSLog(@"[@MAVERICKS_LOG_PREFIX@] retry accepted -> relaunching interactive check");
+                        NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] retry accepted -> relaunching interactive check");
                         // Clear the pending key symmetrically with the Later path; the relaunched --user
                         // process re-sets it in updaterWillRelaunchApplication: if another install completes.
                         [[NSUserDefaults standardUserDefaults] removeObjectForKey:kPendingVersionKey];
@@ -269,7 +269,7 @@ int main(int argc, const char **argv) {
                         NSString *me = [[NSBundle mainBundle] executablePath];
                         if (me) [NSTask launchedTaskWithLaunchPath:me arguments:@[@"--user"]];
                     } else {
-                        NSLog(@"[@MAVERICKS_LOG_PREFIX@] retry declined -> clearing pending, exiting");
+                        NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] retry declined -> clearing pending, exiting");
                         [[NSUserDefaults standardUserDefaults] removeObjectForKey:kPendingVersionKey];
                         [[NSUserDefaults standardUserDefaults] synchronize];
                     }
@@ -291,7 +291,7 @@ int main(int argc, const char **argv) {
         // setting, so gate it ourselves — auto-checks OFF means the daily agent does nothing.
         // (A user-initiated check is never gated.)
         if (gBackground && ![ud boolForKey:@"SUEnableAutomaticChecks"]) {
-            NSLog(@"[@MAVERICKS_LOG_PREFIX@] background: auto-check disabled -> exiting");
+            NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] background: auto-check disabled -> exiting");
             return 0;
         }
 
@@ -301,10 +301,10 @@ int main(int argc, const char **argv) {
         SUUpdater *updater = [SUUpdater sharedUpdater];         // host bundle = this app (SUFeedURL/SUPublicEDKey)
         [updater setDelegate:gDelegate];
         if (gUserInitiated) {
-            NSLog(@"[@MAVERICKS_LOG_PREFIX@] user-initiated: starting interactive check");
+            NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] user-initiated: starting interactive check");
             [updater checkForUpdates:nil];                     // shows UI (update dialog, or "up-to-date")
         } else {
-            NSLog(@"[@MAVERICKS_LOG_PREFIX@] silent probe (watchdog %.0fs)", kBackgroundWatchdogSeconds);
+            NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] silent probe (watchdog %.0fs)", kBackgroundWatchdogSeconds);
             // Watchdog backstop: force-exit if the probe hangs before any delegate fires. The probe
             // itself shows no UI, so the delegates (found/not-found) resolve quickly and we exit; the
             // watchdog only matters for a network/appcast stall.

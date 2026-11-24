@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>@MAVERICKS_BUNDLE_ID@</string>
+	<string>@MAVERICKS_XML_BUNDLE_ID@</string>
 	<!-- CFBundleName is the host name Sparkle shows in its dialogs ("A new version of X is
 	     available", "You're up to date"), so it's the PRODUCT name, not the helper's internal name.
 	     CFBundleExecutable/Identifier/IconFile keep the internal executable name. -->
 	<key>CFBundleName</key>
-	<string>@MAVERICKS_PRODUCT_NAME@</string>
+	<string>@MAVERICKS_XML_PRODUCT_NAME@</string>
 	<key>CFBundleExecutable</key>
-	<string>@MAVERICKS_EXECUTABLE@</string>
+	<string>@MAVERICKS_XML_EXECUTABLE@</string>
 	<!-- Product icon for Sparkle's update dialog (else it shows a generic app icon). -->
 	<key>CFBundleIconFile</key>
-	<string>@MAVERICKS_ICON_NAME@</string>
+	<string>@MAVERICKS_XML_ICON_NAME@</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -22,9 +22,9 @@
 	     what Sparkle actually COMPARES, and its comparator can't order "-mavericks.N", so this is the
 	     numeric-only form (X.Y.Z.N); see MavericksSparkle.cmake / gen_appcast.sh. -->
 	<key>CFBundleShortVersionString</key>
-	<string>@MAVERICKS_VERSION@</string>
+	<string>@MAVERICKS_XML_VERSION@</string>
 	<key>CFBundleVersion</key>
-	<string>@MAVERICKS_BUILD_VERSION@</string>
+	<string>@MAVERICKS_XML_BUILD_VERSION@</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<!-- A NORMAL foreground app (not LSUIElement). Sparkle's update flow assumes a standard
@@ -40,11 +40,11 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>10.9</string>
 	<key>SUFeedURL</key>
-	<string>@MAVERICKS_FEED_URL@</string>
+	<string>@MAVERICKS_XML_FEED_URL@</string>
 	<!-- EdDSA public key (from generate_keys; matching private key is CI secret SPARKLE_PRIVATE_KEY).
 	     Sparkle verifies every update against this. -->
 	<key>SUPublicEDKey</key>
-	<string>@MAVERICKS_ED_PUBKEY@</string>
+	<string>@MAVERICKS_XML_ED_PUBKEY@</string>
 	<key>SUEnableAutomaticChecks</key>
 	<@MAVERICKS_AUTO_CHECK@/>
 </dict>

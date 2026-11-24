@@ -6,7 +6,8 @@
 #          asked-for Mach-O arches (x86_64 at minos 10.9; also arm64 at minos 11.0 off 10.9, where
 #          the toolchain allows a cross build), an Info.plist carrying the display name, version,
 #          public key and the registry's bundle id and feed, and an executable holding the confirm
-#          strings. Fetches clang22, the SDKs and Sparkle over the network.
+#          strings. The strings carry ", \, %, &, < and >, which must reach both intact. Fetches
+#          clang22, the SDKs and Sparkle over the network.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 case "$(uname -s):$(uname -m)" in
@@ -21,9 +22,13 @@ SD="$(sh "$ROOT/scripts/fetch_stevedore.sh")"
 printf 'widget dev.mavergreen.widget widget-repo\n' > "$T/names"
 MAVERGREEN_PRODUCT_NAMES="$T/names"; export MAVERGREEN_PRODUCT_NAMES
 printf 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n' > "$T/key.pub"
+NAME='Mavericks Widget & <Co> "Q"'
+TITLE='Widget for "Mavericks" updated'
+BODY='New shells & <tabs> get the \new\ widget.'
+LOGP='widget "%s" log'
 build() {
-  sh "$ROOT/scripts/build_updater.sh" --product widget --display-name 'Mavericks Widget' \
-    --confirm-title 'Widget for Mavericks updated' --confirm-body 'New shells get the new widget.' \
+  sh "$ROOT/scripts/build_updater.sh" --product widget --display-name "$NAME" \
+    --confirm-title "$TITLE" --confirm-body "$BODY" --log-prefix "$LOGP" \
     --pubkey "$T/key.pub" --version 1.2.3-mavericks.4 --clang22-pin "$ROOT/components/clang22" "$@"
 }
 
@@ -52,7 +57,7 @@ slices="$(LIPO="$CL/bin/llvm-lipo" OTOOL="$CL/bin/llvm-otool" sh "$ROOT/scripts/
 "$CL/bin/llvm-objdump" --macho --private-headers "$exe" > "$T/lc"
 grep -q 'LC_LOAD_DYLIB' "$T/lc" && grep -q 'Sparkle.framework' "$T/lc" || fail "llvm-objdump finds no Sparkle load command in $exe"
 pl="$app/Contents/Info.plist"
-for kv in 'CFBundleIdentifier=dev.mavergreen.widget.updater' 'CFBundleName=Mavericks Widget' \
+for kv in 'CFBundleIdentifier=dev.mavergreen.widget.updater' "CFBundleName=$NAME" \
   'CFBundleExecutable=widget-updater' 'CFBundleShortVersionString=1.2.3-mavericks.4' 'CFBundleVersion=1.2.3.4' \
   'SUFeedURL=https://github.com/Mavergreen/widget-repo/releases/latest/download/widget.xml' \
   'SUPublicEDKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' 'CFBundleIconFile=' 'LSMinimumSystemVersion=10.9'; do
@@ -60,8 +65,11 @@ for kv in 'CFBundleIdentifier=dev.mavergreen.widget.updater' 'CFBundleName=Maver
   [ "$v" = "${kv#*=}" ] || fail "Info.plist ${kv%%=*} is '$v', want '${kv#*=}'"
 done
 "$CL/bin/llvm-strings" "$exe" > "$T/strings"
-grep -qF 'Widget for Mavericks updated' "$T/strings" || fail 'the executable lacks the confirm title'
-grep -qF 'New shells get the new widget.' "$T/strings" || fail 'the executable lacks the confirm body'
+grep -qF "$TITLE" "$T/strings" || fail 'the executable lacks the confirm title, with its quotes'
+grep -qF "$BODY" "$T/strings" || fail 'the executable lacks the confirm body, with its backslashes'
+grep -qF '[widget "%%s" log]' "$T/strings" || fail 'the executable lacks the log prefix, its quotes and percent sign escaped'
+python3 -c 'import plistlib, sys; plistlib.load(open(sys.argv[1], "rb"))' "$app/Contents/Info.plist" \
+  || fail 'Info.plist is not well-formed XML with &, < and > in the display name'
 out2="$(build "$@" --generic-icon --out-dir "$T/out" 2> "$T/build.log")" || { cat "$T/build.log"; fail 'a second build into the same directory failed'; }
 [ "$out2" = "$out" ] && [ -f "$exe" ] || fail 'a second build must replace the .app in place'
 echo "PASS: build_updater.sh builds widget-updater.app for $archs with its inputs in Info.plist and the executable"
