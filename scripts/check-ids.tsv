@@ -154,3 +154,5 @@ pkg-builder-library	key	scripts/check-family-conventions.sh	deviation key (check
 staged-by	key	scripts/check-family-conventions.sh	deviation key (check 23, from main)	P1
 debug-map	dist	scripts/check-artifact-conformance.sh	new (split debug: no debug map or builder path in a shipped image)	P6
 dsym-asset	dist	scripts/check-artifact-conformance.sh	new (split debug: every linked slice has its dSYM in the release)	P6
+link-rpath	dist	scripts/check-artifact-conformance.sh	new (link facts: family dylibs load through @rpath, the installed libcxx22 first)	P6
+weak-bind-sorted	dist	scripts/check-artifact-conformance.sh	new (link facts: weak-bind info in name order, for 10.9 dyld coalescing)	P6

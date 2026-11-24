@@ -67,6 +67,39 @@ def x86_64_dylib(path):
     lc = struct.pack('<IIIIII', 0xd, 24 + len(name), 24, 2, 0x10000, 0x10000) + name
     hdr = struct.pack('<IiiIIIII', 0xfeedfacf, 0x01000007, 3, 6, 1, len(lc), 0x100085, 0)
     open(path, 'wb').write(hdr + lc + b'\0' * 4064)
+def x86_64_links(path, dylibs, rpaths):
+    lc = b''
+    for n in dylibs:
+        b = padded(n, 24)
+        lc += struct.pack('<IIIIII', 0xc, 24 + len(b), 24, 2, 0x10000, 0x10000) + b
+    for r in rpaths:
+        b = padded(r, 12)
+        lc += struct.pack('<III', 0x8000001c, 12 + len(b), 12) + b
+    hdr = struct.pack('<IiiIIIII', 0xfeedfacf, 0x01000007, 3, 2, len(dylibs) + len(rpaths), len(lc), 0x200085, 0)
+    open(path, 'wb').write(hdr + lc + b'\0' * 4064)
+def uleb(n):
+    out = b''
+    while True:
+        b = n & 0x7f; n >>= 7
+        if not n:
+            return out + bytes([b])
+        out += bytes([b | 0x80])
+def seg(name, vmaddr, fileoff, sects=()):
+    body = b''.join(struct.pack('<16s16sQQIIIIIIII', sn, name, a, sz, off, 3, 0, 0, 0, 0, 0, 0) for (sn, a, sz, off) in sects)
+    return struct.pack('<II16sQQQQiiII', 0x19, 72 + len(body), name, vmaddr, 0x1000, fileoff, 0x1000, 7, 3, len(sects), 0) + body
+def x86_64_weakbind(path, names):
+    wb = b''
+    for i, n in enumerate(names):
+        wb += b'\x40' + n.encode() + b'\0' + b'\x51\x71' + uleb(8 * i) + b'\x90'
+    wb += b'\0' * (8 - len(wb) % 8)
+    lc = (seg(b'__TEXT', 0x100000000, 0, [(b'__text', 0x100000f00, 0x10, 0xf00)]) +
+          seg(b'__DATA', 0x100001000, 0x1000, [(b'__data', 0x100001000, 0x100, 0x1000)]) +
+          seg(b'__LINKEDIT', 0x100002000, 0x2000) +
+          struct.pack('<12I', 0x80000022, 48, 0, 0, 0, 0, 0x2000, len(wb), 0, 0, 0, 0))
+    hdr = struct.pack('<IiiIIIII', 0xfeedfacf, 0x01000007, 3, 2, 4, len(lc), 0x200085, 0)
+    b = hdr + lc
+    b += b'\0' * (0x2000 - len(b)) + wb
+    open(path, 'wb').write(b + b'\0' * (0x3000 - len(b)))
 def restamp_x86(src, dst, sdk):
     b = bytearray(open(src, 'rb').read())
     off = 32
@@ -83,6 +116,11 @@ arm64(d + '/a280', (28, 0), (11, 3))
 arm64_unversioned(d + '/a00')
 x86_64_loader(d + '/loader')
 x86_64_dylib(d + '/libw')
+x86_64_links(d + '/cxxloader', ['@rpath/libc++.1.dylib'], ['@loader_path/../../libcxx22/lib', '@loader_path/../lib'])
+x86_64_links(d + '/cxxbundled', ['@rpath/libc++.1.dylib'], ['@loader_path/../lib', '@loader_path/../../libcxx22/lib'])
+x86_64_links(d + '/cxxabs', ['/opt/mavergreen/libcxx22/lib/libc++.1.dylib'], [])
+x86_64_weakbind(d + '/wbsorted', ['__ZTI1A', '__ZTS1A', '__ZTV1A'])
+x86_64_weakbind(d + '/wbunsorted', ['__ZTV1A', '__ZTI1A', '__ZTS1A'])
 restamp_x86(d + '/clean', d + '/r265', (26, 5))
 restamp_x86(d + '/leak', d + '/leak265', (26, 5))
 PY

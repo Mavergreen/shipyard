@@ -177,6 +177,58 @@ $D x86_64 AAAA
 homepath golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go /Users/runner/my%20work/x"
 clean "no linked image, no dSYM needed" dsym-asset "$GOOD"
 
+# spec: explain/link-rpath.md, explain/weak-bind-sorted.md -- a family dylib is loaded by @rpath, the
+#       installed libcxx22 first, and an image's weak-bind info is name-sorted.
+P='golang-1.26.5-native-mavergreen.5.pkg'
+L="load $P opt/mavergreen/go126/bin/go x86_64"
+R="rpath $P opt/mavergreen/go126/bin/go x86_64"
+ok "libc++ by @rpath, the installed libcxx22 first" "$GOOD
+$L @rpath/libc++.1.dylib
+$R 1 @loader_path/../../libcxx22/lib
+$R 2 @loader_path/../lib"
+ok "@executable_path resolves from the image too" "$GOOD
+$L @rpath/libc++.1.dylib
+$R 1 @executable_path/../../../mavergreen/libcxx22/lib/"
+ok "an absolute installed rpath" "$GOOD
+$L @rpath/libc++.1.dylib
+$R 1 /opt/mavergreen/libcxx22/lib"
+ok "a load by @rpath of a dylib other than libc++ needs no particular rpath" "$GOOD
+$L @rpath/libt.dylib
+$R 1 @loader_path/../lib"
+no "the bundled copy before the installed libcxx22" "link-rpath|opt/mavergreen/go126/bin/go (x86_64), which loads @rpath/libc++.1.dylib, and its first LC_RPATH, @loader_path/../lib, resolves to opt/mavergreen/go126/lib" "$GOOD
+$L @rpath/libc++.1.dylib
+$R 1 @loader_path/../lib
+$R 2 @loader_path/../../libcxx22/lib"
+no "libc++ by @rpath with no LC_RPATH" "link-rpath|loads @rpath/libc++.1.dylib, and has no LC_RPATH" "$GOOD
+$L @rpath/libc++.1.dylib"
+no "libcxx22's libc++ by its absolute path" "link-rpath|opt/mavergreen/go126/bin/go (x86_64), which loads /opt/mavergreen/libcxx22/lib/libc++.1.dylib by its absolute path" "$GOOD
+$L /opt/mavergreen/libcxx22/lib/libc++.1.dylib"
+no "a pinned release's dylib by its absolute path" "link-rpath|loads /usr/local/mavergreen/zlib/lib/libz.1.dylib by its absolute path" "$GOOD
+$L /usr/local/mavergreen/zlib/lib/libz.1.dylib"
+no "libcxx22's libc++abi from outside libcxx22" "link-rpath|loads /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib by its absolute path" "$GOOD
+$L /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib"
+ok "libcxx22's libc++abi, absolute, from inside libcxx22" "$GOOD
+load libcxx22-22.1.8-mavergreen.1.pkg opt/mavergreen/libcxx22/lib/libc++.1.dylib x86_64 /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib"
+ok "a product's own dylib by its absolute path, from its own tree" "$GOOD
+$L /opt/mavergreen/go126/lib/libgo.dylib"
+ok "system dylibs are not family dylibs" "$GOOD
+$L /usr/lib/libSystem.B.dylib
+$L /usr/lib/libc++.1.dylib"
+A='go126-1.26.5-mavergreen.5-macos-x86_64.tar.gz'
+ok "a standalone archive's image resolves from where the pkg installs it" "$GOOD
+load $A go126-1.26.5-mavergreen.5/bin/go x86_64 @rpath/libc++.1.dylib
+rpath $A go126-1.26.5-mavergreen.5/bin/go x86_64 1 @loader_path/../../libcxx22/lib
+rpath $A go126-1.26.5-mavergreen.5/bin/go x86_64 2 @loader_path/../lib"
+no "a standalone archive's bundled copy first" "link-rpath|go126-1.26.5-mavergreen.5/bin/go (x86_64), which loads @rpath/libc++.1.dylib, and its first LC_RPATH, @loader_path/../lib, resolves to opt/mavergreen/go126/lib" "$GOOD
+load $A go126-1.26.5-mavergreen.5/bin/go x86_64 @rpath/libc++.1.dylib
+rpath $A go126-1.26.5-mavergreen.5/bin/go x86_64 1 @loader_path/../lib"
+ok "a load is judged per slice: the other slice's rpath does not count" "$GOOD
+$L @rpath/libc++.1.dylib
+$R 1 @loader_path/../../libcxx22/lib
+rpath $P opt/mavergreen/go126/bin/go arm64 1 @loader_path/../lib"
+no "weak-bind info out of name order" "weak-bind-sorted|opt/mavergreen/go126/bin/go (x86_64), whose weak-bind info is not sorted by name (first out of order: __ZTI1A)" "$GOOD
+weakbind-unsorted $P opt/mavergreen/go126/bin/go x86_64 __ZTI1A"
+
 X='macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
 C='golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go'
 no "a program defining ___cxa_throw fails" "cxxabi|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go (x86_64), which defines C++ runtime machinery beyond Recaulk's back-fills: ___cxa_throw" "$GOOD

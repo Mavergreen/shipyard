@@ -6,7 +6,8 @@
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
 #          payload and shipped tarball, and the `cxxabi-defines`, `cxxabi-loads` and `cxxabi-unjudgeable` facts of each, and of
-#          each linked slice its `uuid`, its `oso` when it keeps a debug map, and each `homepath` string
+#          each linked slice its `uuid`, its `load`s and `rpath`s, a `weakbind-unsorted` when its weak-bind
+#          info is out of name order, its `oso` when it keeps a debug map, and each `homepath` string
 #          its file holds; a `dsym` fact per DWARF slice in a *-dSYM.tar.gz, which is read for nothing
 #          else; in a
 #          payload holding a product with a target file, the `macho-load` facts of each too; a
@@ -164,6 +165,26 @@ debug_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded), $4 = 
   "$STRINGS" -a "$2" 2>/dev/null | grep -E '/Users/[^/]+/|/home/[^/]+/|/var/folders/' | sort -u | head -3 \
     | while IFS= read -r _dh; do printf 'homepath %s %s %s\n' "$1" "$3" "$(printf '%s' "$_dh" | tr '\t' ' ' | enc)"; done
 }
+# spec: explain/link-rpath.md, explain/weak-bind-sorted.md -- each linked slice's dylib loads and its
+#       LC_RPATHs in order, and the first symbol its weak-bind info lists out of name order.
+link_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded), $4 = its linked arches, $5 = macho-loads.sh's output. Non-zero, the reason in _mf_why, on abort.
+  printf '%s\n' "$5" | awk -v art="$1" -v p="$3" -v lk=" $4 " '
+    index(lk, " " $1 " ") && ($2 == "dylib" || $2 == "rpath") {
+      v = $0; sub(/^[^ ]+ [^ ]+ /, "", v); gsub(/%/, "%25", v); gsub(/ /, "%20", v)
+      if ($2 == "dylib") { print "load", art, p, $1, v; next }
+      print "rpath", art, p, $1, ++n[$1], v }'
+  need_objdump || return 1
+  _lf_def="$(macho_archs "$2" | head -1)"
+  _lf_wb="$("$OBJDUMP" --macho --weak-bind --arch=all "$2" 2>/dev/null)" \
+    || { _mf_why="cannot read the weak-bind info of $1:$3 ($OBJDUMP --macho --weak-bind exit $?)"; return 1; }
+  printf '%s\n' "$_lf_wb" | awk -v a="$_lf_def" -v art="$1" -v p="$3" -v lk=" $4 " '
+    /\(architecture [^)]*\):$/ { a = $NF; sub(/\):$/, "", a); on = 0; prev = ""; next }
+    $1 == "segment" && $NF == "symbol" { on = 1; prev = ""; next }
+    !on || NF == 0 { next }
+    { s = $NF
+      if (prev != "" && (s "") < (prev "") && !(a in seen) && index(lk, " " a " ")) { seen[a] = 1; print "weakbind-unsorted", art, p, a, s }
+      prev = s }'
+}
 dsym_facts() {  # $1 = tarball name, $2 = extracted root. Non-zero, the reason in _mf_why, on abort.
   need_objdump || return 1
   ( cd "$2" && find . -type f -path '*.dSYM/Contents/Resources/DWARF/*' ) | sed 's|^\./||' | sort > "$2.dwarf"
@@ -215,12 +236,14 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
     _lk="$(printf '%s\n' "$_sl" | awk '$2 == "EXECUTE" || $2 == "DYLIB" || $2 == "BUNDLE" { printf "%s ", $1 }')"
     if [ -n "$_lk" ]; then debug_facts "$1" "$2/$_mf" "$_p" "$_lk" || { rm -f "$_ml" "$_mferr"; return 1; }; fi
     cxxabi_facts "$1" "$2/$_mf" "$_p" || { rm -f "$_ml" "$_mferr"; return 1; }
-    [ "${_mf_loads:-0}" = 1 ] || continue
+    [ -n "$_lk" ] || [ "${_mf_loads:-0}" = 1 ] || continue
     _rc=0; _ld="$(sh "$SELF/macho-loads.sh" "$2/$_mf" 2>"$_mferr")" || _rc=$?
     if [ "$_rc" -ne 0 ]; then
       _mf_why="cannot read the loads of a Mach-O in $1: $_mf (macho-loads.sh exit $_rc) $(tr '\n' ' ' < "$_mferr")"
       echo "artifact-facts: cannot read the loads of $1:$_mf (macho-loads.sh exit $_rc)" >&2; rm -f "$_ml" "$_mferr"; return 1
     fi
+    if [ -n "$_lk" ]; then link_facts "$1" "$2/$_mf" "$_p" "$_lk" "$_ld" || { rm -f "$_ml" "$_mferr"; return 1; }; fi
+    [ "${_mf_loads:-0}" = 1 ] || continue
     printf '%s\n' "$_ld" | while read -r _a _k _v; do
       [ -n "$_v" ] || continue
       printf 'macho-load %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_k" "$(printf '%s' "$_v" | enc)"

@@ -50,6 +50,9 @@
 #            cxxabi-unjudgeable <artifact> <path> <arch>          one per linked slice with C++ exception tables that names no ___gxx_personality_v0
 #            macho-load    <artifact> <path> <arch> <dylib|rpath> <value>  one per dylib load or rpath of a slice, for a product with a target file (%20-encoded)
 #            uuid          <artifact> <path> <arch> <uuid>        one per linked (EXECUTE, DYLIB, BUNDLE) slice
+#            load          <artifact> <path> <arch> <dylib>       one per dylib a linked slice loads (%20-encoded)
+#            rpath         <artifact> <path> <arch> <n> <rpath>   one per LC_RPATH of a linked slice, n its order from 1 (%20-encoded)
+#            weakbind-unsorted <artifact> <path> <arch> <symbol>  a linked slice whose weak-bind info is out of name order, and the first such symbol
 #            oso           <artifact> <path> <arch>               one per linked slice that keeps a debug map
 #            homepath      <artifact> <path> <string>             a string in a linked file naming /Users/<u>/, /home/<u>/ or /var/folders/ (%20-encoded)
 #            dsym          <tarball> <path> <arch> <uuid>         one per DWARF slice in a *-dSYM.tar.gz
@@ -132,6 +135,8 @@ kind_ran appcast appcast enclosure length enclosure-url notes feed-title
 kind_ran build-info "build record" variant-build-info
 kind_ran macho Mach-O sdk-pin cxxabi
 kind_ran uuid "linked Mach-O" debug-map dsym-asset
+if grep -Eq '^macho [^ ]+ [^ ]+ [^ ]+ (EXECUTE|DYLIB|BUNDLE) ' "$facts"; then chk_ran link-rpath; chk_ran weak-bind-sorted
+else chk_notrun link-rpath "no linked Mach-O in this release"; chk_notrun weak-bind-sorted "no linked Mach-O in this release"; fi
 
 rule_of() {
   case "$1" in
@@ -164,6 +169,8 @@ rule_of() {
     cxxabi) echo "one process gets one C++ runtime: no shipped Mach-O defines libc++abi's machinery or loads another libc++abi" ;;
     debug-map) echo "no shipped linked Mach-O keeps a debug map or names a builder's home or temporary directory" ;;
     dsym-asset) echo "every shipped linked Mach-O slice has its dSYM, by LC_UUID, in a *-dSYM.tar.gz of the same release" ;;
+    link-rpath) echo "a family dylib is loaded by @rpath from outside its own product tree, and libc++ through an LC_RPATH that finds the installed libcxx22 first" ;;
+    weak-bind-sorted) echo "every shipped linked Mach-O slice lists its weak-bind info in name order" ;;
     root-runs) echo "root runs a launch daemon or an install script only from a root-only chain" ;;
     os-overwrite) echo "a regular product only adds files to Mac OS X 10.9.5, and never replaces one the OS ships" ;;
     standalone) echo "every standalone archive in a release passes check-standalone-archive.sh" ;;
@@ -202,6 +209,8 @@ fix_of() {
     arch-target) echo "correct .mavergreen/products/<short>/target, so it names only files built for the target, or link the host binary against a host copy; no deviation excuses this check" ;;
     cxxabi) echo "link the family's runtime (libcxx22), or declare .mavergreen/deviations/cxxabi/<label>/ (scope <glob>, a reason, a revisit)" ;;
     debug-map) echo "build through MavergreenToolchain.cmake, which maps the build paths away, and run split-debug.sh on the staged root, or declare .mavergreen/deviations/debug-map/<label>/ (scope <path glob>, a reason, a revisit)" ;;
+    link-rpath) echo "link the family dylib by its @rpath install name, with the installed tree's LC_RPATH first (for libcxx22, one resolving to opt/mavergreen/libcxx22/lib), or declare .mavergreen/deviations/link-rpath/<label>/ (scope <path glob>, a reason, a revisit)" ;;
+    weak-bind-sorted) echo "relink with clang22 22.1.8-mavericks.5 or later, whose lld writes weak-bind info in name order, or declare .mavergreen/deviations/weak-bind-sorted/<label>/ (scope <path glob>, a reason, a revisit)" ;;
     dsym-asset) echo "run split-debug.sh on the staged root and publish the S-V-dSYM.tar.gz it writes beside the pkg and archive, or declare .mavergreen/deviations/dsym-asset/<label>/ (scope <path glob>, a reason, a revisit)" ;;
     root-runs) echo "never name an admin-writable path in an install script; root runs only from a root-only chain" ;;
     os-overwrite) echo "install it under /opt/mavergreen/<short>/, or make this a system edition" ;;
@@ -1102,6 +1111,75 @@ while read -r file path oarch home; do
     fail debug-map "$file ships $p, which names $(dec "$home") -- a builder's directory in a shipped image" "$p"
   fi
 done < "$tmp/debug-map"
+
+# spec: explain/link-rpath.md -- a family dylib under /opt/mavergreen/ or /usr/local/mavergreen/ is loaded by
+#       its absolute path only from inside its own product tree, and an image loading @rpath/libc++.1.dylib
+#       resolves its first LC_RPATH, from where the pkg installs it, to opt/mavergreen/libcxx22/lib. A standalone
+#       archive's SHORT-VERSION/ is where its pkg installs SHORT; a deviation excuses a path.
+awk -v ver="${expected#v}" '
+  function inst(f, p,   top, s, r) {
+    if (f !~ /-macos-(universal|x86_64|arm64)\.tar\.gz$/) return p
+    top = f; sub(/-macos-(universal|x86_64|arm64)\.tar\.gz$/, "", top)
+    if (index(p, top "/") != 1) return p
+    r = substr(p, length(top) + 2); s = top
+    if (ver != "" && substr(s, length(s) - length(ver)) == "-" ver) s = substr(s, 1, length(s) - length(ver) - 1)
+    if (r ~ /^[^\/]+\.app(\/|$)/) return "Applications/Mavergreen/" r
+    return "opt/mavergreen/" s "/" r
+  }
+  function norm(p,   n, c, i, k, o, out) {
+    n = split(p, c, "/"); k = 0
+    for (i = 1; i <= n; i++) {
+      if (c[i] == "" || c[i] == ".") continue
+      if (c[i] == "..") { if (k > 0) k--; else return "(outside the root)"; continue }
+      o[++k] = c[i]
+    }
+    out = ""; for (i = 1; i <= k; i++) out = out (i > 1 ? "/" : "") o[i]
+    return out
+  }
+  function resolve(r, img,   d) {
+    if (r ~ /^@(loader|executable)_path(\/|$)/) {
+      d = img; sub(/\/[^\/]*$/, "", d); if (d == img) d = ""
+      sub(/^@[a-z_]*/, "", r); return norm(d "/" r)
+    }
+    if (r ~ /^\//) return norm(r)
+    return "(unresolvable)"
+  }
+  $1 == "rpath" { k = $2 " " $3 " " $4; if (!(k in first) || $5 + 0 < fn[k]) { first[k] = $6; fn[k] = $5 + 0 }; next }
+  $1 == "load" { nl++; la[nl] = $2; lp[nl] = $3; lh[nl] = $4; lv[nl] = $5 }
+  END {
+    for (i = 1; i <= nl; i++) {
+      img = inst(la[i], lp[i]); v = lv[i]; gsub(/%20/, " ", img); gsub(/%25/, "%", img)
+      if (v ~ /^\/(opt|usr\/local)\/mavergreen\/[^\/]+\//) {
+        t = v; sub(/^\//, "", t)
+        if (t ~ /^opt\//) { match(t, /^opt\/mavergreen\/[^\/]+\//) } else { match(t, /^usr\/local\/mavergreen\/[^\/]+\//) }
+        if (index(img, substr(t, 1, RLENGTH)) != 1) print "absolute", la[i], lp[i], lh[i], v, substr(t, 1, RLENGTH)
+        continue
+      }
+      if (v != "@rpath/libc++.1.dylib") continue
+      k = la[i] " " lp[i] " " lh[i]
+      if (!(k in first)) { print "norpath", la[i], lp[i], lh[i], v, "-"; continue }
+      r = first[k]; gsub(/%20/, " ", r); gsub(/%25/, "%", r)
+      to = resolve(r, img)
+      if (to != "opt/mavergreen/libcxx22/lib") { gsub(/ /, "%20", to); print "order", la[i], lp[i], lh[i], first[k], to }
+    }
+  }' "$facts" > "$tmp/link-rpath"
+while read -r how file path arch val to; do
+  p="$(dec "$path")"
+  case "$how" in
+    absolute) fail link-rpath "$file ships $p ($arch), which loads $(dec "$val") by its absolute path from outside $to -- a family dylib is loaded by @rpath, so the installed and the bundled copy are one" "$p" ;;
+    norpath) fail link-rpath "$file ships $p ($arch), which loads @rpath/libc++.1.dylib, and has no LC_RPATH -- dyld cannot find libcxx22" "$p" ;;
+    order) fail link-rpath "$file ships $p ($arch), which loads @rpath/libc++.1.dylib, and its first LC_RPATH, $(dec "$val"), resolves to $(dec "$to"), not opt/mavergreen/libcxx22/lib -- the installed libcxx22 comes first, so one libc++ serves the process" "$p" ;;
+  esac
+done < "$tmp/link-rpath"
+
+# spec: explain/weak-bind-sorted.md -- 10.9's dyld coalesces weak symbols across images only from
+#       name-sorted weak-bind info; a deviation excuses a path.
+awk '$1 == "weakbind-unsorted" { k = $2 " " $3; if (!(k in o)) { o[k] = ++n; r[n] = k; a[k] = $4; s[k] = $5 } else a[k] = a[k] "," $4 }
+     END { for (i = 1; i <= n; i++) print r[i], a[r[i]], s[r[i]] }' "$facts" > "$tmp/weak-bind"
+while read -r file path arch sym; do
+  p="$(dec "$path")"
+  fail weak-bind-sorted "$file ships $p ($arch), whose weak-bind info is not sorted by name (first out of order: $sym) -- 10.9's dyld then leaves weak symbols such as a class's type_info duplicated across images" "$p"
+done < "$tmp/weak-bind"
 
 # spec: explain/dsym-asset.md -- each linked slice's LC_UUID is among the DWARF of the release's
 #       *-dSYM.tar.gz; a deviation excuses a path.
