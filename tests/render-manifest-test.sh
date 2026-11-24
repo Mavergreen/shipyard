@@ -29,6 +29,9 @@ p() { "$SD" plist get "$M" "$1"; }
 [ "$(p feed)" = https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml ] \
   || fail "the feed is derived for every product: this repo's name under Mavergreen, openssh.xml: $(p feed)"
 [ "$(p restart-to-update)" = false ] || fail "restart-to-update is false without the switch file"
+[ "$(p build-version)" = 10.5.1.5 ] || fail "build-version is the comparable build version: $(p build-version 2>&1)"
+sh "$S" --stage "$st" --product openssh --version 1.2.3-mavergreen.4
+[ "$(p build-version)" = 1.2.3.4 ] || fail "build-version of 1.2.3-mavergreen.4 is 1.2.3.4: $(p build-version 2>&1)"
 touch "$w/repo/.mavergreen/products/openssh/restart-to-update"
 sh "$S" --stage "$st" --product openssh --version 1
 [ "$(p restart-to-update)" = true ] || fail "products/<P>/restart-to-update makes restart-to-update true"

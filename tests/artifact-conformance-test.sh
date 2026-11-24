@@ -1615,6 +1615,19 @@ appcast-title go126.xml Go Go%201.26.8"
 alone "feed-title: an item titled with the tag" "feed-title" "$NMC
 $FT
 appcast-title go126.xml Go%201.26 Version%201.26.8-mavergreen.7"
+FR="$NMC
+$FT
+appcast-title go126.xml Go%201.26 Go%201.26.8
+manifest-requires go.pkg libcxx22 library"
+ok "feed: the feed carries each requirement the manifest declares" "$FR
+appcast-requires go126.xml libcxx22 library"
+alone "feed: a feed missing a manifest requirement" "feed" "$FR"
+no "feed: names the missing requirement" "feed|libcxx22" "$FR"
+alone "feed: a feed requirement of another kind" "feed" "$FR
+appcast-requires go126.xml libcxx22 tool"
+alone "feed: a feed requirement the manifest does not declare" "feed" "$FR
+appcast-requires go126.xml libcxx22 library
+appcast-requires go126.xml zlib library"
 ok "feed-title: a feed named for no declared product is the feed check's" "$GOOD
 appcast-title appcast.xml Anything Anything"
 APP="$(printf '%s\n' "$NMC" | sed 's/^app go126 none$/app go126 noun/')

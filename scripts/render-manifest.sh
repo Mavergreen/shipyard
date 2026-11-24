@@ -4,6 +4,7 @@
 #            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
 #          Writes ROOT/opt/mavergreen/P/mavergreen.plist. Run it LAST: `outside` is read from
 #          whatever is staged at that moment.
+#          build-version is mavergreen_build_version V, what the feed's sparkle:version holds.
 #          Everything else is read from .mavergreen/products/P/: group, line, requires/, restart-to-update.
 #          Its feed is scripts/updater-identity.sh feed P, empty only when P is built-on-install.
 # spec: tests/render-manifest-test.sh
@@ -12,6 +13,7 @@ LC_ALL=C; export LC_ALL
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/name-rules.sh"
+. "$SELF/lib/vercmp.sh"
 ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; EXCL=""; REPL=""; GEN=""
 nl='
 '
@@ -83,6 +85,7 @@ PLIST_HEADER
   xstring group "$G"
   xstring line "$L"
   xstring version "$VER"
+  xstring build-version "$(mavergreen_build_version "$VER")"
   xstring feed "$AC"
   printf '  <key>requires</key>\n  <dict>\n'
   mg_list "products/$P/requires" | while IFS= read -r d; do
@@ -129,6 +132,7 @@ verify product "$P"
 verify group "$G"
 verify line "$L"
 verify version "$VER"
+verify build-version "$(mavergreen_build_version "$VER")"
 verify feed "$AC"
 verify restart-to-update "$RESTART"
 mg_list "products/$P/requires" | while IFS= read -r d; do

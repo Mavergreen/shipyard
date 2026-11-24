@@ -33,12 +33,14 @@
 #            manifest-name <file> <name|none>                     that manifest's name (%20-encoded)
 #            manifest-line <file> <line|none>                     that manifest's line
 #            manifest-feed <file> <url|none>                      that manifest's feed
+#            manifest-requires <file> <dep> <kind>                one per requires entry of that manifest
 #            built-on-install <product>                           one per product whose .mavergreen/products/<product>/built-on-install exists
 #            edition       <product> <edition>                    one per product whose .mavergreen/products/<product>/edition exists (%20-encoded)
 #            sparkle       <file> <path> <SUFeedURL>              one per top-level bundle carrying a Sparkle feed
 #            repository    <owner/name>                           the repo the release is built in (mg_repo), when known
 #            appcast       <file> <version> <enclosure> <length> <minos>  one per Sparkle feed
 #            appcast-title <file> <channel|none> <item|none>      that feed's channel and first item titles (%20-encoded)
+#            appcast-requires <file> <dep> <kind>                 one per <mavergreen:requires> element of that feed
 #            asset         <file> <bytes>                         one per file that will be published
 #            standalone    <file> ok|fail [<finding>]             one per <short>-<version>-macos-<arch>.tar.gz, judged by check-standalone-archive.sh (%20-encoded)
 #            standalone-text-unused <glob>                        a standalone-text deviation no archive used
@@ -609,6 +611,34 @@ while read -r kind af ch it; do
   [ "$ch" = "$want_ch" ] || fail feed-title "$af's channel is titled '$(dec "$ch")'; $P's is '$(dec "$want_ch")'" "$af"
   [ "$it" = "$want_it" ] || fail feed-title "$af's item is titled '$(dec "$it")'; $P's is '$(dec "$want_it")'" "$af"
 done < "$facts"
+
+# spec: tests/artifact-conformance-test.sh "feed:" -- a feed offers exactly the requirements its product's manifest declares.
+awk '
+  $1 == "manifest" { prod[$2] = $3 }
+  $1 == "manifest-requires" { mr[++n] = $2 SUBSEP $3 SUBSEP $4 }
+  $1 == "appcast" { feed[$2] = 1 }
+  $1 == "appcast-requires" { ar[++m] = $2 SUBSEP $3 SUBSEP $4; have[$2 SUBSEP $3] = $4 }
+  END {
+    for (i = 1; i <= n; i++) {
+      split(mr[i], r, SUBSEP); f = prod[r[1]] ".xml"
+      if (!(f in feed)) continue
+      declared[f SUBSEP r[2]] = r[3]; judged[f] = 1
+      if (have[f SUBSEP r[2]] != r[3]) print f, r[1], "missing", r[2], r[3]
+    }
+    for (p in prod) judged[prod[p] ".xml"] = 1
+    for (i = 1; i <= m; i++) {
+      split(ar[i], r, SUBSEP)
+      if (!(r[1] in judged)) continue
+      if (declared[r[1] SUBSEP r[2]] != r[3]) print r[1], "-", "undeclared", r[2], r[3]
+    }
+  }' "$facts" | LC_ALL=C sort -u > "$tmp/feed-requires"
+while read -r af pk what dep kind; do
+  if [ "$what" = missing ]; then
+    fail feed "$af has no <mavergreen:requires product=\"$dep\" kind=\"$kind\"/>, which $pk's manifest requires" "$af"
+  else
+    fail feed "$af requires $dep ($kind), which no manifest of its product declares" "$af"
+  fi
+done < "$tmp/feed-requires"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Standalone archive"
 while read -r kind file verdict why; do

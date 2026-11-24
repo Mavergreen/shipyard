@@ -121,8 +121,9 @@ ITEM_TITLE="$(mavergreen_name item-title "$SHORT" "$VER")" || exit 1
 #       comparison version must be dotted-numeric AND monotonic" -- SUStandardVersionComparator can't
 #       order the "-mavergreen.N" suffix (it reads 1.2.3-mavergreen.3 and .4 as EQUAL), so
 #       <sparkle:version> must be numeric-only; the human string stays in shortVersionString. The
-#       derivation itself is lib.sh's comparison_key(); MavericksSparkle.cmake mirrors it.
-BUILD_VER=$(comparison_key "$VER")
+#       derivation itself is lib/vercmp.sh's mavergreen_build_version(), which render-manifest.sh's
+#       build-version also uses; MavericksSparkle.cmake mirrors comparison_key().
+BUILD_VER=$(mavergreen_build_version "$VER")
 
 # spec: tests/gen_appcast.bats -- fail closed if the derived key is not purely dotted-numeric
 #       (X.Y.Z.N): SUStandardVersionComparator only totally orders that domain, and every "update
@@ -139,12 +140,24 @@ esac
 [ -f "$NOTES_FILE" ] || { echo "release notes not found: $NOTES_FILE" >&2; exit 1; }
 [ -s "$NOTES_FILE" ] || { echo "release notes empty: $NOTES_FILE" >&2; exit 1; }
 
+# spec: tests/gen_appcast.bats "each requires kind" -- each requires/<dep> is an item element in the mavergreen namespace,
+#       which Sparkle ignores and the Engine reads.
+REQUIRES="$(mg_list "products/$SHORT/requires" | while IFS= read -r d; do
+  k="$(mg_value "products/$SHORT/requires/$d/kind")" || { echo "gen_appcast: products/$SHORT/requires/$d has no kind" >&2; exit 1; }
+  if [ "$k" = external ]; then
+    wh="$(mg_value "products/$SHORT/requires/$d/where")" || { echo "gen_appcast: products/$SHORT/requires/$d is external and has no where" >&2; exit 1; }
+    printf '      <mavergreen:requires product="%s" kind="%s" where="%s"/>\n' "$d" "$k" "$(mg_xml_text "$wh" | sed 's/"/\&quot;/g')"
+  else
+    printf '      <mavergreen:requires product="%s" kind="%s"/>\n' "$d" "$k"
+  fi
+done)" || exit 1
+
 # platform: Sparkle sorts appcast items by pubDate, which it expects as RFC-822, in UTC.
 PUBDATE=$(date -u "+%a, %d %b %Y %H:%M:%S +0000")
 
 cat <<XML
 <?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:mavergreen="https://github.com/Mavergreen/mavergreen/ns/feed/1">
   <channel>
     <title>$(mg_xml_text "$CHANNEL_TITLE")</title>
     <item>
@@ -153,7 +166,8 @@ cat <<XML
       <sparkle:version>$BUILD_VER</sparkle:version>
       <sparkle:shortVersionString>$VER</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$MINOS</sparkle:minimumSystemVersion>
-      <description><![CDATA[
+${REQUIRES:+$REQUIRES
+}      <description><![CDATA[
 <style>body{font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:13px;}</style>
 $(md_to_html "$NOTES_FILE")
 ]]></description>

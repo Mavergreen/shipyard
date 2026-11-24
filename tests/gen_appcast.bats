@@ -118,3 +118,30 @@ setup() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"not purely dotted-numeric"* ]] || false
 }
+
+@test "a v-prefixed version's sparkle:version drops the v, as the manifest's build-version does" {
+  printf 'notes\n' > "$BATS_TMPDIR/n.md"
+  run sh "$SCRIPT" p "v1.0.871" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"<sparkle:version>1.0.871</sparkle:version>"* ]] || false
+  [[ "$output" == *"<sparkle:shortVersionString>v1.0.871</sparkle:shortVersionString>"* ]] || false
+}
+
+@test "each requires kind is a mavergreen:requires item element, sorted, an external one with its where" {
+  mkdir -p "$REPO/.mavergreen/products/p/requires/xquartz" "$REPO/.mavergreen/products/p/requires/libcxx22"
+  echo library > "$REPO/.mavergreen/products/p/requires/libcxx22/kind"
+  echo external > "$REPO/.mavergreen/products/p/requires/xquartz/kind"
+  echo 'X11 & XQuartz' > "$REPO/.mavergreen/products/p/requires/xquartz/where"
+  printf 'notes\n' > "$BATS_TMPDIR/n.md"
+  run sh "$SCRIPT" p "1.0-mavergreen.1" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'xmlns:mavergreen="https://github.com/Mavergreen/mavergreen/ns/feed/1"'* ]] || false
+  [[ "$output" == *'</sparkle:minimumSystemVersion>'*'<mavergreen:requires product="libcxx22" kind="library"/>'*'<mavergreen:requires product="xquartz" kind="external" where="X11 &amp; XQuartz"/>'*'<description>'* ]] || false
+}
+
+@test "a product with no requires has no mavergreen:requires element" {
+  printf 'notes\n' > "$BATS_TMPDIR/n.md"
+  run sh "$SCRIPT" p "1.0-mavergreen.1" "http://x/y.pkg" "10.9.5" "$BATS_TMPDIR/n.md" 'length="1"'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *'<mavergreen:requires'* ]] || false
+}

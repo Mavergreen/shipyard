@@ -262,6 +262,17 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       printf 'manifest %s %s %s %s\n' "$1" "$_mp" "$(printf '%s' "${_mi:-none}" | tr -s '[:space:]' '_')" "$_dir"
       printf 'manifest-line %s %s\n' "$1" "$(printf '%s' "${_ml:-none}" | tr -s '[:space:]' '_')"
       printf 'manifest-feed %s %s\n' "$1" "$(printf '%s' "${_ma:-none}" | tr -s '[:space:]' '_')"
+      "$STEVEDORE" plist xml1 "$_mf" 2>/dev/null | awk -v f="$1" '
+        { l = $0; gsub(/^[ \t]+|[ \t]+$/, "", l) }
+        d == 0 && l == "<key>requires</key>" { want = 1; next }
+        want && l == "<dict>" { d = 1; want = 0; next }
+        want { want = 0 }
+        d == 1 && l == "</dict>" { exit }
+        d == 1 && l ~ /^<key>/ { dep = l; gsub(/<\/?key>/, "", dep); next }
+        d == 1 && l == "<dict>" { d = 2; next }
+        d == 2 && l == "</dict>" { d = 1; next }
+        d == 2 && l == "<key>kind</key>" { k = 1; next }
+        d == 2 && k { k = 0; v = l; gsub(/<\/?string>/, "", v); print "manifest-requires", f, dep, v }'
       printf 'manifest-name %s %s\n' "$1" "$(field "$_mnm")"
       _k=0
       while _o="$("$STEVEDORE" plist get "$_mf" "outside:$_k" 2>/dev/null)"; do
@@ -414,6 +425,8 @@ for f in "$dist"/*; do
       ch="$(printf '%s\n' "$titles" | sed -n 's/^channel //p' | xml_dec)"
       it="$(printf '%s\n' "$titles" | sed -n 's/^item //p' | xml_dec)"
       printf 'appcast-title %s %s %s\n' "$b" "$(field "$ch")" "$(field "$it")"
+      sed -n 's/.*<mavergreen:requires product="\([^"]*\)" kind="\([^"]*\)".*/\1 \2/p' "$f" \
+        | while read -r _rd _rk; do printf 'appcast-requires %s %s %s\n' "$b" "$_rd" "$_rk"; done
       [ -z "$url" ] || printf 'enclosure-url %s %s\n' "$b" "$url"
       # platform: a CDATA body spans lines, and sed is line-oriented, so it cannot isolate one.
       # spec: tests/artifact-conformance-test.sh -- the <description> CDATA, digested. gen_appcast.sh
