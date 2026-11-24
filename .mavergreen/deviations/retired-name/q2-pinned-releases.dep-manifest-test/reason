@@ -1,0 +1,1 @@
+dep-manifest.sh tolerates a manifest-less pre-flag-day pin (exit 3), which installs there

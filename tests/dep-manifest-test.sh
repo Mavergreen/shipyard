@@ -46,6 +46,7 @@ serve old 22.1.8-mavericks.28
 run old
 [ "$rc" -eq 3 ] || fail "a -mavericks.N release with no manifest: exit $rc, want 3: $(cat "$w/err")"
 grep -q 'has no RELEASE-MANIFEST.txt' "$w/err" || fail "exit 3 says why: $(cat "$w/err")"
+grep -q 'until L1' "$w/err" || fail "exit 3 says the tolerance ends at L1: $(cat "$w/err")"
 pin new Mavergreen/new 22.1.8-mavergreen.1
 serve new 22.1.8-mavergreen.1
 run new
@@ -56,10 +57,17 @@ run own
 [ "$rc" -eq 3 ] || fail "an own-upstream release with no manifest: exit $rc, want 3"
 echo "ok: only a -mavergreen.N pin with no manifest fails closed"
 
-pin gone Mavergreen/gone 22.1.8-mavericks.3
-run gone
+pin bare Mavergreen/bare 22.1.8-mavericks.3
+mkdir -p "$w/rel/Mavergreen/bare/releases/tag"; printf 'release\n' > "$w/rel/Mavergreen/bare/releases/tag/22.1.8-mavericks.3"
+run bare
 [ "$rc" -eq 3 ] || fail "a -mavericks.N release with neither manifest nor SHA256SUMS: exit $rc, want 3"
 echo "ok: a -mavericks.N release that predates SHA256SUMS exits 3"
+pin gone Mavergreen/gone 22.1.8-mavericks.82
+run gone
+[ "$rc" -eq 1 ] || fail "a pin naming no release (deleted, or a typo) fails closed: exit $rc, want 1"
+grep -q 'has no release 22.1.8-mavericks.82' "$w/err" || fail "exit 1 names the missing release: $(cat "$w/err")"
+grep -q '/usr/local/mavergreen' "$w/err" && fail "a missing release is not taken as a pre-flag-day one: $(cat "$w/err")"
+echo "ok: a release that does not exist is no pre-flag-day release"
 
 pin child Mavergreen/unused 1.0
 printf 'libcxx22\n' > "$w/repo/.mavergreen/ingredients/child/from"
