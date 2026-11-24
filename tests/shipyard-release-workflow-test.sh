@@ -378,8 +378,8 @@ case "$merge" in
   *--allow-differ*) echo "FAIL: tests/lib/build-updater.sh merges with --allow-differ; nothing in updater/Info.plist.in is arch-dependent, so a difference there is a defect to fix, not one to declare"; exit 1 ;;
 esac
 ci="$here/../.github/workflows/ci.yml"
-grep -q -e '--prefix "$(mavergreen_prefix shipyard)"' "$ci" \
-  || { echo "FAIL: ci.yml's package rehearsal never installs the payload into \"\$(mavergreen_prefix shipyard)\""; exit 1; }
+grep -q -e '--shipyard-prefix "$RUNNER_TEMP/payload-stage$(mavergreen_prefix shipyard)"' "$ci" \
+  || { echo "FAIL: ci.yml's package rehearsal never packages the payload staged at \"\$(mavergreen_prefix shipyard)\""; exit 1; }
 grep -q -e '--shipyard-prefix "$RUNNER_TEMP/payload-stage$(mavergreen_prefix shipyard)"' "$ci" \
   || { echo "FAIL: ci.yml's package rehearsal never packages the staged \$(mavergreen_prefix shipyard)"; exit 1; }
 if grep -n 'usr/local/mavergreen' "$ci"; then

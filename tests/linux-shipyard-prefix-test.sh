@@ -4,8 +4,8 @@
 #          scripts/install-shipyard-prefix.sh, install@v1's Linux install, lays down exactly the pkg's
 #          opt/mavergreen/shipyard: the same files, links and bytes as the Payload of a pkg
 #          package-pkg.sh builds from the same checkout. The pkg's macOS-only parts are named here:
-#          the updater app and its LaunchAgent outside the prefix, and the manifest's appcast and
-#          outside, which name them. It links the exported names into opt/mavergreen/bin,
+#          the updater app and its LaunchAgent outside the prefix, and the manifest's outside, which
+#          names them; both manifests name shipyard's feed. It links the exported names into opt/mavergreen/bin,
 #          replaces an older install whole, and without root, sudo or a writable root installs per
 #          user, its presets naming that prefix. Exit 0 clean, 1 on failure, 77 with no cmake.
 set -eu
@@ -74,34 +74,34 @@ agent="Library/LaunchAgents/$(idf agent-label).plist"
 printf '%s\n%s\n' "$agent" "$app_rel/" | LC_ALL=C sort > "$w/outside.want"
 cmp -s "$w/outside" "$w/outside.want" || { fail "the pkg's macOS-only parts are its updater app and LaunchAgent, and nothing else outside the prefix; got:"; sed 's/^/    | /' "$w/outside"; }
 
-strip() {  # $1 = mavergreen.plist, less the appcast and outside the macOS updater fills
-  awk '/<key>appcast<\/key>/ { getline; next }
-       /<key>outside<\/key>/ { skip = 1; next }
+strip() {  # $1 = mavergreen.plist, less the outside the macOS updater fills
+  awk '/<key>outside<\/key>/ { skip = 1; next }
        skip && /<\/array>/ { skip = 0; next }
        !skip' "$1"
 }
 strip "$w/p/$rel/mavergreen.plist" > "$w/pkg.plist"
 strip "$w/r/$rel/mavergreen.plist" > "$w/linux.plist"
 cmp -s "$w/pkg.plist" "$w/linux.plist" \
-  || { fail "the manifests differ beyond appcast and outside:"; diff "$w/pkg.plist" "$w/linux.plist" | sed 's/^/    | /'; }
+  || { fail "the manifests differ beyond outside:"; diff "$w/pkg.plist" "$w/linux.plist" | sed 's/^/    | /'; }
 outside() {  # $1 = mavergreen.plist: its outside array, one entry a line
   awk '/<key>outside<\/key>/ { on = 1; next } on && /<\/array>/ { exit }
        on && /<string>/ { sub(/.*<string>/, ""); sub(/<\/string>.*/, ""); print }' "$1"
 }
-[ -z "$("$STEVEDORE" plist get "$w/r/$rel/mavergreen.plist" appcast 2>/dev/null || echo unreadable)" ] \
-  || fail "the Linux manifest installs no updater, so its appcast must be empty"
 [ -z "$(outside "$w/r/$rel/mavergreen.plist")" ] \
   || fail "the Linux manifest installs nothing outside the prefix, so its outside must be empty; got $(outside "$w/r/$rel/mavergreen.plist")"
-[ "$("$STEVEDORE" plist get "$w/p/$rel/mavergreen.plist" appcast 2>/dev/null || :)" = "$(idf feed)" ] \
-  || fail "the pkg's manifest must name shipyard's feed as its appcast"
+[ "$("$STEVEDORE" plist get "$w/p/$rel/mavergreen.plist" feed 2>/dev/null || :)" = "$(idf feed)" ] \
+  || fail "the pkg's manifest must name shipyard's feed"
 [ "$(outside "$w/p/$rel/mavergreen.plist" | sed 's|^\(.*\.app\)$|\1/|' | LC_ALL=C sort)" = "$(cat "$w/outside.want")" ] \
   || fail "the pkg's manifest must list the updater app and LaunchAgent as outside; got $(outside "$w/p/$rel/mavergreen.plist")"
 
 farm="$(cd "$w/r/opt/mavergreen/bin" && for f in *; do printf '%s -> %s\n' "$f" "$(readlink "$f")"; done)"
-want="shipyard-cmake -> ../shipyard/bin/shipyard-cmake
+want="shipyard-check -> ../shipyard/bin/shipyard-check
+shipyard-cmake -> ../shipyard/bin/shipyard-cmake
 shipyard-cpack -> ../shipyard/bin/shipyard-cpack
-shipyard-ctest -> ../shipyard/bin/shipyard-ctest"
-[ "$farm" = "$want" ] || fail "opt/mavergreen/bin must link exactly the three launchers, never bare cmake/ctest/cpack; got
+shipyard-ctest -> ../shipyard/bin/shipyard-ctest
+shipyard-provision -> ../shipyard/bin/shipyard-provision
+shipyard-scripts -> ../shipyard/bin/shipyard-scripts"
+[ "$farm" = "$want" ] || fail "opt/mavergreen/bin must link exactly the pkg's exported shipyard-* names, never bare cmake/ctest/cpack; got
 $farm"
 
 SUDO= sh "$S/install-shipyard-prefix.sh" --root "$w/r" --version 1.2.4 > /dev/null 2> "$w/err" \

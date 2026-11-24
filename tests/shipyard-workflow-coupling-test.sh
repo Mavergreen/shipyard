@@ -267,11 +267,12 @@ for name in ("ci.yml", "release.yml", "linux-host.yml"):
     if any("check-family-conventions.sh" in runs(st) for _, st in steps(name)):
         bad.append("%s runs the gate script directly; CI and developers run shipyard-check" % name)
 
-# install@v1 puts shipyard-check on PATH where it installs scripts without the pkg.
+# install@v1 puts shipyard-check on PATH on Linux, through the prefix install-shipyard-prefix.sh links.
 act = yaml.safe_load(open(install))
-if not any("runner.os != 'macOS'" in str(st.get("if", "")) and re.search(r"ln -sf \S*shipyard-check\S* ", str(st.get("run", "")))
+if not any("runner.os != 'macOS'" in str(st.get("if", "")) and "install-shipyard-prefix.sh" in str(st.get("run", ""))
+           and re.search(r'echo "\$\{p%/\*\}/bin" >> "\$GITHUB_PATH"', str(st.get("run", "")))
            for st in (act.get("runs") or {}).get("steps") or []):
-    bad.append("install@v1 no longer exports shipyard-check on Linux")
+    bad.append("install@v1 no longer puts the Linux prefix's bin, shipyard-check among its links, on PATH")
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md, the `bash32-parse` row -- the
 #       reusable macOS path every pkg-building product runs carries the check, so no repo wires it.

@@ -466,7 +466,7 @@ INSTALL_PRODUCTS_HOST=linux plan_stdout x@1
 
 fresh; release x 1 --no-appcast; linux
 "$SD" expand "$w/stage/x-1/comp.pkg" "$w/stage/x-1/cx"
-printf junk > "$w/stage/x-1/root/usr/local/mavergreen/x/._file"
+printf junk > "$w/stage/x-1/root/opt/mavergreen/x/._file"
 ( cd "$w/stage/x-1/root" && find . | LC_ALL=C sort | cpio -o -H odc 2>/dev/null | gzip -n ) > "$w/stage/x-1/cx/Payload"
 "$SD" xar --mtime 1700000000 --out "$w/rel/Mavergreen/xrepo/releases/download/1/x-1.pkg" none Bom "$w/stage/x-1/cx/Bom" \
   none Payload "$w/stage/x-1/cx/Payload" none PackageInfo "$w/stage/x-1/cx/PackageInfo"

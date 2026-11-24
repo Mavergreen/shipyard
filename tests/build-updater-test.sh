@@ -19,6 +19,7 @@ fail() { echo "FAIL: $*"; exit 1; }
 CL="$(sh "$ROOT/scripts/fetch_clang22.sh" "$ROOT")"
 SD="$(sh "$ROOT/scripts/fetch_stevedore.sh")"
 mkdir -p "$T/repo/.mavergreen/products/widget" "$T/repo/.mavergreen/ingredients"
+echo widget > "$T/repo/.mavergreen/products/widget/noun"
 cp -R "$ROOT/.mavergreen/ingredients/clang22" "$T/repo/.mavergreen/ingredients/"
 git -C "$T/repo" init -q && git -C "$T/repo" remote add origin https://github.com/Mavergreen/widget-repo.git
 unset GITHUB_REPOSITORY
