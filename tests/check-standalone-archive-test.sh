@@ -228,6 +228,11 @@ cc "$w/str.c" -o "$w/t/w-1.0/bin/str" || fail "cc could not build the tool holdi
 mk w-1.0-macos-x86_64.tar.gz
 passes "a Mach-O holding the string"
 grep -q 'warning: bin/str holds the string /usr/local/mavergreen/w/share' "$w/out" || fail "a Mach-O's string is a warning: $(cat "$w/out")"
+mkdir -p "$w/noclang"
+rc=0; (unset OTOOL LIPO; NM=nm; export NM; SHIPYARD_MG_PREFIX="$w/noclang" sh "$C" "$A") > "$w/out" 2>&1 || rc=$?
+[ "$rc" -eq 2 ] || fail "a bare NM and no pinned llvm-otool: exit $rc, want 2: $(cat "$w/out")"
+tail -1 "$w/out" | grep -q '^check-standalone-archive: cannot read the Mach-O bin/[a-z]*: mach-interface: no pinned llvm-otool' \
+  || fail "the last line says why the Mach-O cannot be read, for a caller that keeps only it: $(cat "$w/out")"
 echo "ok: Mach-O loads, rpaths and install names"
 
 anchored() {  # $1 = install name of lib/libx.dylib, alone in the tree

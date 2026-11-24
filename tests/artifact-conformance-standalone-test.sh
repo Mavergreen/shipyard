@@ -176,4 +176,30 @@ standalone-flow $SA archive-first"
 printf '%s\n' "$out" | grep -q 'pkg-first' && fail "an archive-first archive draws no note: $out"
 echo "ok: artifact-facts.sh tells an archive-first product from a pkg-first one, and conformance names the pkg-first"
 
+if CL="$(sh "$w/scripts/fetch_clang22.sh" "$here/../components/clang22" 2>/dev/null)"; then
+  U=w-1.0-macos-universal.tar.gz
+  mkdir -p "$w/fat/w-1.0/bin" "$w/dist5" "$w/noclang" "$w/components"
+  cp -R "$here/../components/clang22" "$w/components/clang22"
+  printf 'int main(void) { return 0; }\n' > "$w/m.c"
+  exe() { "$CL/bin/clang" --no-default-config -target "$1" -nostdlib -fuse-ld=lld -Wl,-e,_main -Wl,-platform_version,macos,"$2","$3" "$w/m.c" -o "$w/$4" 2>/dev/null; }
+  if exe x86_64-apple-macos10.9 10.9 10.9 m64 && exe arm64-apple-macos11.0 11.0 11.3 marm; then
+    "$CL/bin/llvm-lipo" -create "$w/m64" "$w/marm" -output "$w/fat/w-1.0/bin/w" || fail "llvm-lipo could not make a universal tool"
+  else
+    "$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -c "$w/m.c" -o "$w/m64.o" \
+      && "$CL/bin/clang" --no-default-config -target i386-apple-macos10.9 -c "$w/m.c" -o "$w/m32.o" \
+      && "$CL/bin/llvm-lipo" -create "$w/m32.o" "$w/m64.o" -output "$w/fat/w-1.0/bin/w" || fail "clang22 could not make a fat object"
+    printf '## Conformance deviations\n- sdk-pin:*/bin/w: i386 has no pinned SDK; this clang22 builds no arm64\n' > "$w/dist5/INGREDIENTS.md"
+  fi
+  (cd "$w/fat" && tar -czf "$w/dist5/$U" w-1.0)
+  rc=0; facts="$(unset NM OTOOL LIPO
+    # platform: off macOS artifact-facts.sh reads Mach-O only through the LIPO and OTOOL its caller sets
+    [ "$(uname -s)" = Darwin ] || { LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; export LIPO OTOOL; }
+    SHIPYARD_MG_PREFIX="$w/noclang" sh "$w/scripts/artifact-facts.sh" "$w/dist5" 1.0 "$w/dist5" 2>"$w/err")" || rc=$?
+  [ "$rc" -eq 0 ] || fail "artifact-facts.sh, as stand-in-feeds.sh calls it with no installed clang22, reads a universal archive's Mach-O: $(cat "$w/err")"
+  printf '%s\n' "$facts" | grep -qx "standalone $U ok" || fail "a universal archive's Mach-O is judged with the reader check-standalone-archive.sh fetches: $facts"
+  echo "ok: artifact-facts.sh judges a universal archive with no installed clang22, as check-standalone-archive.sh alone does"
+else
+  echo "skip: no clang22 to build a universal Mach-O"
+fi
+
 echo "PASS: artifact-conformance-standalone"

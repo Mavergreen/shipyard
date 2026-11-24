@@ -91,6 +91,12 @@ printf '%s\n' "$_devs" | awk '$1 == "standalone-install-name" { print ++n " " $2
 : > "$t/textused"
 : > "$t/used"
 finding() { printf '%s\n' "$*" >> "$t/findings"; }
+unreadable() {
+  sed 's/^/  /' "$t/err" >&2
+  _why="$(sed -n '/[^ ]/{s/^ *//;p;q;}' "$t/err")"
+  echo "check-standalone-archive: $1${_why:+: $_why}" >&2
+  exit 2
+}
 report() {
   sed "s|^|check-standalone-archive: $b: |" "$t/used" "$t/warnings"
   nf="$(wc -l < "$t/findings" | tr -d ' ')"
@@ -226,7 +232,7 @@ if [ -s "$t/pinned" ] && [ -z "${OTOOL:-}${LIPO:-}${NM:-}" ] \
   && [ ! -x "${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/clang22/bin/llvm-otool" ] \
   && [ ! -x "${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/clang22-cross/bin/llvm-otool" ]; then
   cl="$(sh "$SELF/fetch_clang22.sh" "$SELF/../components/clang22" 2> "$t/err")" \
-    || { sed 's/^/  /' "$t/err" >&2; echo "check-standalone-archive: no Mach-O reader: no OTOOL, no installed clang22, and fetch_clang22.sh could not fetch the pinned one" >&2; exit 2; }
+    || unreadable "no Mach-O reader: no OTOOL, no installed clang22, and fetch_clang22.sh could not fetch the pinned one"
   OTOOL="$cl/bin/llvm-otool"; LIPO="$cl/bin/llvm-lipo"; NM="$cl/bin/llvm-nm"; export OTOOL LIPO NM
 fi
 while IFS= read -r r; do
@@ -234,7 +240,7 @@ while IFS= read -r r; do
   case "$rc" in
     0) ;;
     1) continue ;;
-    *) sed 's/^/  /' "$t/err" >&2; echo "check-standalone-archive: cannot read the Mach-O $r" >&2; exit 2 ;;
+    *) unreadable "cannot read the Mach-O $r" ;;
   esac
   pr="$(shipyard_standalone_pkg_path "$short" "$r")"
   _nn=""; _ng=""
@@ -291,7 +297,7 @@ while IFS= read -r r; do
   case "$rc" in
     0) ;;
     1) continue ;;
-    *) sed 's/^/  /' "$t/err" >&2; echo "check-standalone-archive: cannot read the minos and SDK of the Mach-O $r" >&2; exit 2 ;;
+    *) unreadable "cannot read the minos and SDK of the Mach-O $r" ;;
   esac
   shipyard_sdk_exempt_sha256 "$(shasum -a 256 "$X/$r" | awk '{print $1}')" && continue
   ex="$(shipyard_deviation_reason "$t/devfacts" sdk-pin "$top/$r")"
