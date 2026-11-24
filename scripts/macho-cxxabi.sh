@@ -7,7 +7,9 @@
 #          loads or re-exports whose basename starts libc++abi. A static archive is read member by member;
 #          a member that is not Mach-O (an rlib's lib.rmeta) is skipped, a bitcode member exits 4, and an
 #          archive with no Mach-O member is not Mach-O. An old toolchain's
-#          "<symbol>.eh" frame label counts as <symbol>.
+#          "<symbol>.eh" frame label counts as <symbol>. A linked image slice (executable, dylib or bundle)
+#          with a __TEXT,__gcc_except_tab section that neither defines nor imports ___gxx_personality_v0
+#          prints "<arch> unjudgeable": its C++ runtime was stripped from sight.
 #          Exit 0; 1 if FILE is not Mach-O; 2 on a usage error; 4 if a reader is missing or failed,
 #          or a member with Mach-O magic could not be read.
 set -eu
@@ -46,6 +48,12 @@ is_bitcode() {
   case "$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')" in 4243c0de|dec0170b) return 0 ;; esac
   return 1
 }
+is_linked() {
+  case "$(od -An -tx1 -N16 "$1" 2>/dev/null | tr -d ' \n')" in
+    cffaedfe????????????????0[268]000000|cefaedfe????????????????0[268]000000) return 0 ;;
+  esac
+  return 1
+}
 is_macho() {
   case "$(od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n')" in
     cffaedfe|cefaedfe|feedfacf|feedface|cafebabe|bebafeca) return 0 ;;
@@ -68,6 +76,11 @@ read_slice() {
       if (index(b, "libc++abi") == 1) print a " loads " p
       load = 0
     }' "$t/l" | LC_ALL=C sort -u
+  if is_linked "$_s" && awk '$1 == "sectname" && $2 == "__gcc_except_tab" { f = 1 } END { exit !f }' "$t/l"; then
+    "$NM" $nm_flags -m "$_s" > "$t/nma" 2>"$t/err" || reader_died "$NM -m"
+    awk '{ n = $0; sub(/ \((from|for) [^)]*\)$/, "", n); sub(/.* /, "", n); sub(/\.eh$/, "", n)
+           if (n == "___gxx_personality_v0") f = 1 } END { exit !f }' "$t/nma" || echo "$_a unjudgeable"
+  fi
 }
 read_member() {
 if _ma="$(thin_arch "$1")"; then read_slice "$1" "$_ma"; return; fi

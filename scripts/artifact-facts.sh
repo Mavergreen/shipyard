@@ -5,7 +5,7 @@
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
-#          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each, and of
+#          payload and shipped tarball, and the `cxxabi-defines`, `cxxabi-loads` and `cxxabi-unjudgeable` facts of each, and of
 #          each linked slice its `uuid`, its `oso` when it keeps a debug map, and each `homepath` string
 #          its file holds; a `dsym` fact per DWARF slice in a *-dSYM.tar.gz, which is read for nothing
 #          else; in a
@@ -126,6 +126,7 @@ cxxabi_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded). Non-
         "$cxxabi_tmp/allow" - ;;
   esac
   printf '%s\n' "$_cx" | while read -r _ca _ck _cv; do
+    if [ "$_ck" = unjudgeable ]; then printf 'cxxabi-unjudgeable %s %s %s\n' "$1" "$3" "$_ca"; continue; fi
     [ "$_ck" = loads ] || continue
     case "$_cv" in
       /usr/lib/libc++abi.dylib|*/libcxx22/*/libc++abi.1.dylib|@*/libc++abi.1.dylib) : ;;

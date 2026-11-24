@@ -59,6 +59,21 @@ printf 'void vendor1(void);\nint main(void) { vendor1(); return 0; }\n' > second
 build second.c stubs/vendor1.dylib -o src/bin/second
 printf 'void reex(void) {}\n' > reex.c
 build -dynamiclib -install_name @rpath/libreex.dylib reex.c -Wl,-reexport_library,stubs/rpath2.dylib -o src/lib/reex.dylib
+stub other1 /opt/mavergreen/other/lib/libc++abi.1.dylib
+printf 'void other1(void);\nint main(void) { other1(); return 0; }\n' > other.c
+build other.c stubs/other1.dylib -o src/bin/other
+
+printf 'extern "C" int puts(const char *);\nint main(void) { try { throw 1; } catch (int) { puts("c"); } return 0; }\n' > ex.cc
+printf '#define H __attribute__((visibility("hidden")))\nH void *__cxa_allocate_exception(unsigned long n) { return 0; }\nH void __cxa_throw(void) {}\nH void *__cxa_begin_catch(void *p) { return p; }\nH void __cxa_end_catch(void) {}\nH int __gxx_personality_v0(void) { return 0; }\nH void *_ZTIi[2] = {0};\n' > rt.c
+build -x c++ -c ex.cc -o ex.o
+build -c rt.c -o rt.o
+build ex.o rt.o -o src/bin/stripx
+cp src/bin/stripx src/bin/stripS
+"$CL/bin/llvm-strip" -x src/bin/stripx
+"$CL/bin/llvm-strip" -S src/bin/stripS
+build ex.o -lc++abi -o src/bin/importsx
+"$CL/bin/llvm-strip" -x src/bin/importsx
+"$AR" rcs src/lib/libex.a ex.o rt.o
 
 printf '#ifndef __x86_64__\nvoid __cxa_throw(void) {}\n#endif\nint main(void) { return 0; }\n' > fat.c
 build fat.c -o fat-x86_64
@@ -91,9 +106,19 @@ has "cxxabi-loads $T lib/reex.dylib x86_64 @rpath/libc++abi.2.dylib" "a re-expor
 lacks "^cxxabi-loads $T lib/reex.dylib .*libreex" "a dylib's own install name is not a load"
 has "cxxabi-defines $T bin/fat i386 ___cxa_throw visible" "a definition in one slice of a fat binary fails"
 lacks "^cxxabi-defines $T bin/fat x86_64 " "each slice is judged on its own"
+has "cxxabi-unjudgeable $T bin/stripx x86_64" "a C++ image stripped -x of its hidden personality routine cannot be judged"
+lacks "^cxxabi-unjudgeable $T bin/stripS " "a C++ image stripped -S keeps its local symbols and is judged"
+has "cxxabi-defines $T bin/stripS x86_64 ___gxx_personality_v0 hidden" "stripping -S leaves the hidden runtime to be seen"
+lacks "^cxxabi-unjudgeable $T bin/importsx " "an image importing ___gxx_personality_v0 names it, stripped or not"
+lacks "^cxxabi-defines $T bin/importsx " "an image importing the runtime defines none of it"
+lacks "^cxxabi-unjudgeable $T lib/" "objects in archives are not linked images, so their exception tables are not judged"
+has "cxxabi-loads $T bin/other x86_64 /opt/mavergreen/other/lib/libc++abi.1.dylib" "a family libc++abi other than libcxx22's fails"
 has end-of-facts "a run that read every Mach-O ends its stream"
 out="$(printf '%s\n' "$facts" | sh "$S" 2>&1)" && fail "a release carrying these fails conformance: $out"
 printf '%s\n' "$out" | grep -q '^conformance: cxxabi: ' || fail "the failure is cxxabi's: $out"
+printf '%s\n' "$out" | grep -qF 'bin/stripx (x86_64) has C++ exception tables but names no personality routine, so its C++ runtime cannot be judged; strip it with -S, never -x' \
+  || fail "the unjudgeable image is named: $out"
+printf '%s\n' "$out" | grep -q 'bin/stripS (x86_64) has C++ exception' && fail "a -S image is judged, not unjudgeable: $out"
 
 printf 'void x(void) {}\n' > plain.c
 mkdir -p plain/bin plain-dist

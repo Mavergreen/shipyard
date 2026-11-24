@@ -47,6 +47,7 @@
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
 #            cxxabi-defines <artifact> <path> <arch> <symbol> <visible|hidden>  one per C++ runtime symbol a slice defines beyond Recaulk's back-fills
 #            cxxabi-loads  <artifact> <path> <arch> <load-path>   one per libc++abi a slice loads other than /usr/lib's or libcxx22's (%20-encoded)
+#            cxxabi-unjudgeable <artifact> <path> <arch>          one per linked slice with C++ exception tables that names no ___gxx_personality_v0
 #            macho-load    <artifact> <path> <arch> <dylib|rpath> <value>  one per dylib load or rpath of a slice, for a product with a target file (%20-encoded)
 #            uuid          <artifact> <path> <arch> <uuid>        one per linked (EXECUTE, DYLIB, BUNDLE) slice
 #            oso           <artifact> <path> <arch>               one per linked slice that keeps a debug map
@@ -1040,9 +1041,10 @@ done
 #       runtime per process; a cxxabi deviation whose scope is a glob excuses a path, and a path grandfathered as cxxabi
 #       for this repo is warned.
 awk 'function add(list, v) { return index(" " list " ", " " v " ") ? list : (list == "" ? v : list " " v) }
-     $1 == "cxxabi-defines" || $1 == "cxxabi-loads" {
-       k = $2 " " $3; if (!(k in seen)) { o[++m] = k; seen[k] = 1; da[k] = ""; la[k] = ""; n[k] = 0; s[k] = ""; l[k] = "" }
+     $1 == "cxxabi-defines" || $1 == "cxxabi-loads" || $1 == "cxxabi-unjudgeable" {
+       k = $2 " " $3; if (!(k in seen)) { o[++m] = k; seen[k] = 1; da[k] = ""; la[k] = ""; ua[k] = ""; n[k] = 0; s[k] = ""; l[k] = "" }
        if ($1 == "cxxabi-loads") { la[k] = add(la[k], $4); l[k] = add(l[k], $5); next }
+       if ($1 == "cxxabi-unjudgeable") { ua[k] = add(ua[k], $4); next }
        da[k] = add(da[k], $4)
        sym = $5 ($6 == "hidden" ? "(hidden)" : "")
        if ((k SUBSEP sym) in d) next
@@ -1050,14 +1052,15 @@ awk 'function add(list, v) { return index(" " list " ", " " v " ") ? list : (lis
      }
      END { for (i = 1; i <= m; i++) { k = o[i]
              f = (da[k] == "" ? "-" : da[k]); g = (la[k] == "" ? "-" : la[k]); h = (l[k] == "" ? "-" : l[k])
-             gsub(/ /, ",", f); gsub(/ /, ",", g); gsub(/ /, ",", h)
-             print k, f, g, n[k], h s[k] } }' "$facts" > "$tmp/cxxabi"
+             u = (ua[k] == "" ? "-" : ua[k])
+             gsub(/ /, ",", f); gsub(/ /, ",", g); gsub(/ /, ",", h); gsub(/ /, ",", u)
+             print k, f, g, u, n[k], h s[k] } }' "$facts" > "$tmp/cxxabi"
 cxx_report() {  # $1 = message; a grandfathered path ($gf) warns, anything else fails cxxabi
   if [ -n "$gf" ]; then echo "::warning::conformance: cxxabi: $1 (grandfathered: $gf)"
   else chk_fail cxxabi "$(rule_of cxxabi)" "$1" "$how"; fi
 }
 cxx_fail=0
-while read -r file path darches larches n loads syms; do
+while read -r file path darches larches uarches n loads syms; do
   p="$(dec "$path")"
   gf=""
   if [ -z "$(deviation_reason cxxabi "$p")" ]; then
@@ -1072,6 +1075,9 @@ while read -r file path darches larches n loads syms; do
   if [ "$n" -gt 0 ]; then
     more=""; [ "$n" -le 5 ] || more=" and $((n - 5)) more"
     cxx_report "$file installs $p ($darches), which defines C++ runtime machinery beyond Recaulk's back-fills: $syms$more -- one process gets one C++ runtime, hidden or not"
+  fi
+  if [ "$uarches" != - ]; then
+    cxx_report "$file: $p ($uarches) has C++ exception tables but names no personality routine, so its C++ runtime cannot be judged; strip it with -S, never -x"
   fi
   if [ "$loads" != - ]; then
     cxx_report "$file installs $p ($larches), which loads $(dec "$(printf '%s' "$loads" | sed 's/,/, /g')") -- a process may load only /usr/lib/libc++abi.dylib or libcxx22's libc++abi.1.dylib"

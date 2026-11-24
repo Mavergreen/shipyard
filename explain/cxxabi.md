@@ -6,13 +6,17 @@ crosses from one to the other is not caught, or terminates. artifact-facts.sh re
 Mach-O with macho-cxxabi.sh and reports each C++ runtime symbol a slice defines beyond the allow-list
 (what the pinned Recaulk's librecaulk.a defines), and each libc++abi it loads other than
 /usr/lib/libc++abi.dylib or libcxx22's libc++abi.1.dylib. Either fails, once per path. Hidden definitions
-count.
+count. A linked image with C++ exception tables (a __TEXT,__gcc_except_tab section) that neither defines nor
+imports ___gxx_personality_v0 fails too: its runtime was stripped out of sight, so it cannot be judged.
 
 ## Incident
 Undated: codex-cli's bin/codex-code-mode-host carried a whole libc++abi as private externals, a second
 runtime even though hidden.
 
 ## Limits
+Stripping local symbols (strip -x) used to hide a linked-in runtime from this check; such an image now fails
+as unjudgeable, and split-debug.sh strips only the debug map (-S), which keeps them. Objects and archive
+members are not judged for exception tables, only linked images.
 The allow-list moves with .mavergreen/ingredients/recaulk/VERSION. Failures are listed for the first twenty paths, then
 counted. A path in scripts/conventions-grandfathered for this repo, known from $GITHUB_REPOSITORY, is
 warned rather than failed.
