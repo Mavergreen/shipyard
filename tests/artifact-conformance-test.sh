@@ -1932,6 +1932,14 @@ PLIST
   SOURCE_DATE_EPOCH=1700000000 sh "$here/../scripts/stage_standalone.sh" "$_st" x 1.0.0-mavergreen.1 x86_64 "$_pk/archive/x-1.0.0-mavergreen.1-macos-x86_64.tar.gz" >/dev/null 2>&1 \
     || { echo "FAIL: stage_standalone.sh could not build the standalone archive this fixture reads"; exit 1; }
   _f="$(GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk")"
+  if [ -n "$_macho" ]; then
+    _realnm="$( NM=; . "$here/../scripts/mavergreen-meta.sh"; . "$here/../scripts/lib/name-rules.sh"; . "$here/../scripts/lib/macho-tools.sh"; mach_tool NM >/dev/null 2>&1; command -v "$NM")"
+    printf '#!/bin/sh\ncase " $* " in *" -a -arch all "*) exit 1 ;; esac\nexec "%s" "$@"\n' "$_realnm" > "$_pk.nm-fails"; chmod +x "$_pk.nm-fails"
+    if NM="$_pk.nm-fails" GITHUB_REPOSITORY=Mavergreen/x sh "$AF" "$_pk/dist" 1.0.0-mavergreen.1 "$_pk" > /dev/null 2>&1; then
+      echo "FAIL: an nm that cannot read an image's debug map aborts the facts, never a silent debug-map pass"; exit 1
+    fi
+    rm -f "$_pk.nm-fails"
+  fi
   printf '## Notes\n\n- x\n' > "$_pk/archive/RELEASE_NOTES.md"
   _alen="$(wc -c < "$_pk/archive/x-1.0.0-mavergreen.1.pkg" | tr -d ' ')"
   MAVERGREEN_REPO_ROOT="$_pk" sh "$GA" x 1.0.0-mavergreen.1 https://github.com/Mavergreen/x/releases/download/1.0.0-mavergreen.1/x-1.0.0-mavergreen.1.pkg \

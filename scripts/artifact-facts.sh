@@ -155,7 +155,8 @@ debug_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded), $4 = 
   printf '%s\n' "$_df_u" | while read -r _da _du; do
     case " $4 " in *" $_da "*) printf 'uuid %s %s %s %s\n' "$1" "$3" "$_da" "$_du" ;; esac
   done
-  "$NM" -a -arch all "$2" 2>/dev/null \
+  _df_nm="$("$NM" -a -arch all "$2" 2>/dev/null)" || { _mf_why="$NM -a could not read the debug map of $2"; return 1; }
+  printf '%s\n' "$_df_nm" \
     | awk -v a="$_df_def" '/\(for architecture [^)]*\):$/ { a = $NF; sub(/\):$/, "", a) } $5 == "OSO" { print a }' | sort -u \
     | while read -r _da; do
         case " $4 " in *" $_da "*) printf 'oso %s %s %s\n' "$1" "$3" "$_da" ;; esac
