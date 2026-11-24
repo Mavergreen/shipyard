@@ -22,6 +22,23 @@ inputs:
 runs:
   using: composite
   steps:
+    # spec: tests/install-action-reproducible-test.sh -- every build stamps the commit's time, not the
+    #       clock's, and ar archives carry no dates, so a rebuild of a tag can match its release.
+    - name: Reproducible defaults
+      shell: bash
+      run: |
+        set -eu
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        echo "ZERO_AR_DATE=1" >> "$GITHUB_ENV"
+        if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH was set by the caller; kept"
+        elif t="$(cd "$GITHUB_WORKSPACE" && MAVERGREEN_REPO_ROOT="$GITHUB_WORKSPACE" sh "$root/scripts/source-date-epoch.sh" 2>/dev/null)"; then
+          echo "SOURCE_DATE_EPOCH=$t" >> "$GITHUB_ENV"
+          echo "SOURCE_DATE_EPOCH=$t, the committer time of $GITHUB_WORKSPACE's HEAD"
+        else
+          echo "::notice::SOURCE_DATE_EPOCH: not set -- $GITHUB_WORKSPACE is not a git checkout yet; check the repo out before this action and it is exported here"
+        fi
+
     # spec: tests/linux-prerequisites-test.sh -- every family Linux build needs the same tools, so
     #       this checks them all up front and installs the missing ones, or fails once naming them all.
     - if: runner.os == 'Linux'

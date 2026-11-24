@@ -213,6 +213,61 @@ if bad:
 print("ok: built and signed on Linux, scanned and checked on Linux before publish, @v1 moved after publish")
 PY
 
+# spec: explain/release-dispatch.md, explain/reproduce-wired.md -- shipyard is wired like every repo:
+#       one dispatch shape, a weekly reproduce, and both manifests in what it publishes.
+python3 - "$w" <<'PY'
+import re, sys, yaml
+wf = yaml.safe_load(open(sys.argv[1]))
+on = wf.get("on") or wf.get(True)
+bad = []
+inputs = ((on.get("workflow_dispatch") or {}).get("inputs")) or {}
+if sorted(inputs) != ["force_publish", "reproduce_tag"]:
+    bad.append("workflow_dispatch takes exactly force_publish and reproduce_tag, got %r" % sorted(inputs))
+for k in ("force_publish", "reproduce_tag"):
+    if (inputs.get(k) or {}).get("type") != "string":
+        bad.append("%s is type: string" % k)
+crons = [c.get("cron") for c in (on.get("schedule") or [])]
+if len(crons) != 1 or len(str(crons[0]).split()) != 5 or str(crons[0]).split()[4] == "*":
+    bad.append("one weekly cron under schedule:, got %r" % crons)
+jobs = wf.get("jobs") or {}
+def cond(j):
+    return re.sub(r"\s+", " ", str((jobs.get(j) or {}).get("if") or "")).strip()
+rep = cond("reproduce")
+if rep != "github.event_name == 'schedule' || inputs.reproduce_tag != ''":
+    bad.append("the reproduce job runs only on the schedule or a reproduce_tag, got if: %r" % rep)
+pub = cond("publish")
+if "github.event_name != 'schedule'" not in pub or "inputs.reproduce_tag == ''" not in pub:
+    bad.append("the publish job never runs on the schedule or with a reproduce_tag, got if: %r" % pub)
+w = (jobs.get("publish") or {}).get("with") or {}
+if re.sub(r"\s+", "", str(w.get("force-reason"))) != "${{inputs.force_publish}}":
+    bad.append("publish passes force-reason: ${{ inputs.force_publish }}")
+if w.get("line") != "v*.*.*":
+    bad.append("publish passes line: 'v*.*.*', shipyard's tags, got %r" % w.get("line"))
+mt = cond("major-tag")
+if "needs.publish.outputs.published == 'true'" not in mt:
+    bad.append("major-tag runs only when publish reports published == 'true', got if: %r" % mt)
+steps = (jobs.get("build") or {}).get("steps") or []
+def idx(pred):
+    return [i for i, st in enumerate(steps) if pred(st)]
+up = idx(lambda st: str(st.get("uses", "")).startswith("actions/upload-artifact@"))
+for script, out in (("content-manifest.sh", "dist/CONTENT-MANIFEST.txt"), ("release-manifest.sh", "dist/RELEASE-MANIFEST.txt")):
+    mk = idx(lambda st: re.search(r"sh scripts/%s dist \S+ \. > %s" % (re.escape(script), re.escape(out)), st.get("run") or ""))
+    if not mk or not up or mk[0] > up[0]:
+        bad.append("the build writes %s with %s before the upload" % (out, script))
+caches = [st for st in steps if str(st.get("uses", "")).startswith("actions/cache@")]
+for st in caches:
+    c = re.sub(r"\s+", " ", str(st.get("if") or ""))
+    if "steps.target.outputs.tag == ''" not in c:
+        bad.append("a reproduce build is cold: actions/cache %r runs only when steps.target.outputs.tag == ''" % (st.get("with") or {}).get("path"))
+r = jobs.get("reproduce") or {}
+runs = " ".join((st.get("run") or "") for st in (r.get("steps") or []))
+if not re.search(r'sh scripts/reproduce\.sh --dist \S+ --repo "\$GITHUB_REPOSITORY" --tag "\$TAG" --repo-root ', runs):
+    bad.append("the reproduce job runs scripts/reproduce.sh on the build's dist against its tag")
+for b in bad: print("FAIL: " + b)
+if bad: sys.exit(1)
+print("ok: one dispatch shape, a weekly cold reproduce, and both manifests published")
+PY
+
 # spec: .github/actions/install/action.yml -- the other half of the same design: a consumer gets the
 #       PKG at the ref it pinned, and only shipyard itself builds from source.
 python3 - "$here/../.github/actions/install/action.yml" <<'PY'

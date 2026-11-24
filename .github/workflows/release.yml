@@ -3,6 +3,20 @@ name: release
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '23 5 * * 2'
+  workflow_dispatch:
+    inputs:
+      force_publish:
+        description: "Publish whatever changed, giving this reason in the notes. shipyard publishes every rebuild anyway (its publish-unchanged deviation)."
+        type: string
+        required: false
+        default: ""
+      reproduce_tag:
+        description: "Rebuild this release tag cold and compare it with what it published; publishes nothing."
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -19,19 +33,40 @@ jobs:
     timeout-minutes: 60
     outputs:
       version: ${{ steps.ver.outputs.version }}
+      reproduce-tag: ${{ steps.target.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0        # shipyard-version.sh counts commits
           persist-credentials: false
 
+      # spec: explain/reproduce-wired.md -- the schedule rebuilds the line's latest release and a
+      #       reproduce_tag dispatch that tag, from the tag's own tree.
+      - name: The release to reproduce, if any
+        id: target
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ inputs.reproduce_tag }}
+        run: |
+          set -eu
+          if [ -z "$TAG" ] && [ "$EVENT" = schedule ]; then
+            TAG="$(sh scripts/previous-release-tag.sh --tag-glob 'v*.*.*')"
+            [ -n "$TAG" ] || { echo "::error::no v*.*.* release to reproduce"; exit 1; }
+          fi
+          [ -n "$TAG" ] || exit 0
+          git checkout -q "refs/tags/$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "reproducing $TAG, cold"
+
       # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
-      - uses: actions/cache@v6
+      - if: steps.target.outputs.tag == ''
+        uses: actions/cache@v6
         with:
           path: ~/Library/Caches/mavergreen/sdk
           key: mavergreen-sdk-${{ hashFiles('scripts/sdk-pins.sh', 'scripts/fetch_sdk.sh') }}
 
-      - uses: actions/cache@v6
+      - if: steps.target.outputs.tag == ''
+        uses: actions/cache@v6
         with:
           path: ~/.cache/mavergreen-clang22
           key: mavergreen-clang22-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.mavergreen/ingredients/clang22/VERSION') }}
@@ -142,6 +177,15 @@ jobs:
           sh scripts/shipyard-check --dist dist
           ls -l dist
 
+      - name: Content and release manifests
+        env:
+          SHIPYARD_VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -eu
+          v='${{ steps.ver.outputs.version }}'
+          sh scripts/content-manifest.sh dist "$v" . > dist/CONTENT-MANIFEST.txt
+          sh scripts/release-manifest.sh dist "$v" . > dist/RELEASE-MANIFEST.txt
+
       - name: The build must not have written into the source tree
         run: sh scripts/assert-tree-clean.sh
 
@@ -170,8 +214,11 @@ jobs:
       contents: read
     uses: ./.github/workflows/linux-host.yml
 
+  # spec: explain/release-dispatch.md -- shipyard publishes on a push, by its publish-unchanged
+  #       deviation, and never in a reproduce run.
   publish:
     needs: [build, linux, scan]
+    if: github.event_name != 'schedule' && inputs.reproduce_tag == ''
     permissions:
       contents: write
     uses: ./.github/workflows/publish-release.yml
@@ -180,9 +227,36 @@ jobs:
       artifact: shipyard-dist
       short: shipyard
       shipyard-ref: ${{ github.sha }}
+      force-reason: ${{ inputs.force_publish }}
+      line: 'v*.*.*'
+
+  reproduce:
+    needs: [build]
+    if: github.event_name == 'schedule' || inputs.reproduce_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: shipyard-dist
+          path: ${{ runner.temp }}/rebuilt
+      - name: Compare the rebuild with the release
+        env:
+          TAG: ${{ needs.build.outputs.reproduce-tag }}
+        run: |
+          set -eu
+          SHIPYARD_VERSION="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"; export SHIPYARD_VERSION
+          git worktree add -q "$RUNNER_TEMP/tagtree" "refs/tags/$TAG"
+          sh scripts/reproduce.sh --dist "$RUNNER_TEMP/rebuilt" --repo "$GITHUB_REPOSITORY" --tag "$TAG" --repo-root "$RUNNER_TEMP/tagtree"
 
   major-tag:
     needs: [build, publish]
+    if: needs.publish.outputs.published == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

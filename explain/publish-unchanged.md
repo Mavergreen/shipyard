@@ -5,7 +5,8 @@ Reproducible releases D2: a rebuild whose CONTENT-MANIFEST.txt equals the previo
 nothing, so an ingredient bump that changes nothing a user installs costs no one an update.
 release-decision.sh reads this deviation and publishes anyway, with every product changed, for a repo
 whose users need every rebuild, such as shipyard, whose consumers take its workflows through a moving
-@v1. The summary says so whenever the content is unchanged.
+@v1. The summary says so whenever the content is unchanged. The same deviation lets release-dispatch
+pass a publish job that runs on a push, as shipyard's does; it still may not run in a reproduce run.
 
 ## Incident
 None recorded.
