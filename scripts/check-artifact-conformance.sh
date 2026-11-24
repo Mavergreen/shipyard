@@ -1183,11 +1183,30 @@ while read -r how file path arch val to; do
 done < "$tmp/link-rpath"
 
 # spec: explain/link-requires.md -- every family dylib a linked slice loads, other than the release's own, is a
-#       dylib row of a library dependency's manifest, or under a q2 dependency's install prefix, and an
-#       @rpath load nothing else resolves is a q2 library dependency's; every library requirement is
-#       loaded; an unreadable manifest fails closed. A deviation excuses a path or a dependency.
-awk '$1 == "dylib-id" { own[$5] = 1; next }
-     $1 == "repo-requires" { if ($4 == "library") { lib[$3] = 1; if (index(" " of[$3] " ", " " $2 " ") == 0) of[$3] = (of[$3] == "" ? $2 : of[$3] "," $2) }; next }
+#       dylib row of a library dependency its own product declares (the product whose opt/mavergreen/<short>/
+#       holds the image; every product's, for an image outside them), or under a q2 dependency's install
+#       prefix, and an @rpath load nothing else resolves is a q2 library dependency's; each product's
+#       library requirement is loaded by that product; an unreadable manifest fails closed. A deviation
+#       excuses a path or a dependency.
+awk -v ver="${expected#v}" '
+     function inst(f, p,   top, s, r) {
+       if (f !~ /-macos-(universal|x86_64|arm64)\.tar\.gz$/) return p
+       top = f; sub(/-macos-(universal|x86_64|arm64)\.tar\.gz$/, "", top)
+       if (index(p, top "/") != 1) return p
+       r = substr(p, length(top) + 2); s = top
+       if (ver != "" && substr(s, length(s) - length(ver)) == "-" ver) s = substr(s, 1, length(s) - length(ver) - 1)
+       return "opt/mavergreen/" s "/" r
+     }
+     function owner(f, p,   x) {
+       x = inst(f, p); gsub(/%20/, " ", x); gsub(/%25/, "%", x)
+       if (x !~ /^opt\/mavergreen\/[^\/]+\//) return ""
+       sub(/^opt\/mavergreen\//, "", x); sub(/\/.*/, "", x)
+       return x
+     }
+     function mine(o, d) { return o == "" ? (d in lib) : ((o SUBSEP d) in plib) }
+     function use(o, d,   s) { if (o != "") { pused[o SUBSEP d] = 1; return }; for (s in prod) if ((s SUBSEP d) in plib) pused[s SUBSEP d] = 1 }
+     $1 == "dylib-id" { own[$5] = 1; next }
+     $1 == "repo-requires" { prod[$2] = 1; if ($4 == "library") { lib[$3] = 1; plib[$2 SUBSEP $3] = 1 }; next }
      $1 == "dep-manifest" { st[$2] = $3; if ($3 == "fail") { w = $0; sub(/^dep-manifest [^ ]+ fail ?/, "", w); why[$2] = w }; next }
      $1 == "dep-dylib" { if (!($3 in by)) by[$3] = $2; next }
      $1 == "dep-prefix" { np++; pd[np] = $2; pp[np] = $3; next }
@@ -1198,14 +1217,18 @@ awk '$1 == "dylib-id" { own[$5] = 1; next }
          v = lv[i]
          if (v !~ /^@rpath\// && v !~ /^\/(opt|usr\/local)\/mavergreen\//) continue
          if (v in own) continue
-         if ((v in by) && (by[v] in lib)) { used[by[v]] = 1; continue }
+         o = owner(la[i], lp[i])
+         if ((v in by) && mine(o, by[v])) { use(o, by[v]); continue }
          hit = 0
-         for (j = 1; j <= np; j++) if (index(v, pp[j]) == 1 && (pd[j] in lib)) { used[pd[j]] = 1; hit = 1 }
-         if (!hit && v ~ /^@rpath\//) for (d in lib) if (st[d] == "q2") { used[d] = 1; hit = 1 }
+         for (j = 1; j <= np; j++) if (index(v, pp[j]) == 1 && mine(o, pd[j])) { use(o, pd[j]); hit = 1 }
+         if (!hit && v ~ /^@rpath\//) for (d in lib) if (st[d] == "q2" && mine(o, d)) { use(o, d); hit = 1 }
          if (hit || bad) continue
          print "undeclared", la[i], lp[i], lh[i], v
        }
-       for (d in lib) if (!(d in used) && st[d] != "fail" && (d in st)) print "stale", of[d], d
+       for (k in plib) {
+         split(k, sd, SUBSEP)
+         if (!(k in pused) && st[sd[2]] != "fail" && (sd[2] in st)) print "stale", sd[1], sd[2]
+       }
      }' "$facts" | LC_ALL=C sort > "$tmp/link-requires"
 while read -r how a b c d; do
   case "$how" in

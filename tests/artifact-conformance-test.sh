@@ -268,6 +268,22 @@ $R 1 @loader_path/../lib
 dylib-id $P opt/mavergreen/go126/lib/libgo.dylib x86_64 @rpath/libgo.dylib"
 clean "a tool requirement is not linked" link-requires "$GOOD
 repo-requires go126 cmake tool"
+no "a load is judged against its own product's requirements, not a sibling's" "link-requires|opt/mavergreen/go126/bin/go (x86_64), which loads @rpath/libc++.1.dylib, which no declared library dependency's release manifest lists" "$GOOD
+$LC
+repo-requires gofmt libcxx22 library
+dep-manifest libcxx22 ok
+dep-dylib libcxx22 @rpath/libc++.1.dylib"
+no "a requirement only a sibling's load uses is stale for its own product" "link-requires|gofmt requires libcxx22 as a library, and nothing this release ships loads it" "$GOOD
+$LC
+repo-requires go126 libcxx22 library
+repo-requires gofmt libcxx22 library
+dep-manifest libcxx22 ok
+dep-dylib libcxx22 @rpath/libc++.1.dylib"
+clean "an image outside any product's prefix is judged against every product's requirements" link-requires "$GOOD
+load $P usr/local/go/bin/go x86_64 @rpath/libc++.1.dylib
+repo-requires gofmt libcxx22 library
+dep-manifest libcxx22 ok
+dep-dylib libcxx22 @rpath/libc++.1.dylib"
 
 X='macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
 C='golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go'
