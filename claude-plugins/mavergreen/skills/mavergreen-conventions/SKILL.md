@@ -1075,7 +1075,13 @@ machine.
 - Publish the dSYM tarball beside the pkg and the archive. `debug-map` fails an image that keeps its
   debug map or names a builder's home; `dsym-asset` fails one whose LC_UUID no dSYM of the release holds.
   An upstream prebuilt, or a Go binary that keeps its DWARF in the image, declares a `dsym-asset`
-  deviation.
+  deviation; `split-debug.sh` leaves an image its scope matches whole and splits the rest.
+- **Universal images are split on Linux or modern macOS.** 10.9's native clang22 targets x86_64 only,
+  so its dsymutil has no AArch64, and no clang22 that runs on 10.9 has it. There `split-debug.sh`
+  leaves a fat image whole and says so (the documented exception), and conformance fails it in a
+  release: a universal product's release is packaged on Linux (where every release builds first) or
+  modern macOS, and 10.9 packages x86_64-only products. This is a parity gap, not parity. **Revisit
+  when** a clang22 built on 10.9 carries the AArch64 target.
 
 ## Version scaffolding (shared, wrapped)
 

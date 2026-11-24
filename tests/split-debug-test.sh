@@ -2,8 +2,9 @@
 # platform: host-agnostic
 #   usage: split-debug-test.sh
 #          split-debug.sh moves each linked Mach-O's DWARF into a deterministic dSYM tarball and strips the
-#          debug map, keeping local symbols and an arm64 slice's ad-hoc signature. Exits 77 without
-#          LLVM's Mach-O tools.
+#          debug map, keeping local symbols and an arm64 slice's ad-hoc signature; skips an image a
+#          dsym-asset deviation scopes, and one its dsymutil cannot target. Exits 77 without LLVM's
+#          Mach-O tools.
 set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
 . "$root/scripts/mavergreen-meta.sh"
@@ -60,9 +61,10 @@ mkdir -p "$t/r3/bin"
 cp "$mx/dbgfat" "$t/r3/bin/dbgfat"
 rc=0; run "$t/r3" "$t/o3" > "$t/o3.log" 2>&1 || rc=$?
 # platform: the native clang22 pkg on 10.9 builds for x86_64 alone, so its dsymutil has no AArch64 target
-if [ "$rc" = 4 ] && grep -q 'lacks a target' "$t/o3.log"; then
-  echo "skip ($DSYMUTIL has no AArch64 target): dbgfat"
-  cmp -s "$mx/dbgfat" "$t/r3/bin/dbgfat" || fail "a dsymutil without the target strips nothing"
+if grep -q 'universal images are split on Linux or modern macOS' "$t/o3.log"; then
+  echo "documented exception ($DSYMUTIL has no AArch64 target): dbgfat left whole"
+  [ "$rc" = 0 ] || fail "a dsymutil without a slice's target is the documented exception, exit 0, got $rc"
+  cmp -s "$mx/dbgfat" "$t/r3/bin/dbgfat" || fail "an image dsymutil cannot target is not stripped"
 else
   [ "$rc" = 0 ] || { fail "split-debug.sh on dbgfat:"; sed 's/^/    | /' "$t/o3.log"; }
   [ "$(oso "$t/r3/bin/dbgfat")" = 0 ] || fail "neither stripped slice has a debug map"
@@ -93,6 +95,36 @@ mkdir -p "$t/r6/bin"
 cp "$mx/dbg" "$t/r6/bin/dbg"
 rc=0; (cd "$mx" && DSYMUTIL="$t/none/dsymutil" sh "$S" --root "$t/r6" --short w --version 1.0 --out "$t/o6") >/dev/null 2>&1 || rc=$?
 [ "$rc" = 4 ] || fail "a missing dsymutil is exit 4, got $rc"
+
+mkdir -p "$t/stub" "$t/r7/bin"
+real_dsymutil="$(command -v "$DSYMUTIL")"
+cat > "$t/stub/dsymutil" <<STUB
+#!/bin/sh
+for a in "\$@"; do f="\$a"; done
+case "\$("$LIPO" -info "\$f" 2>/dev/null)" in
+  *"Architectures in the fat file"*) echo "error: unable to get target for 'arm64-apple-macosx10.13.0', see --version and --triple." >&2; exit 1 ;;
+esac
+exec "$real_dsymutil" "\$@"
+STUB
+chmod +x "$t/stub/dsymutil"
+cp "$mx/dbg" "$t/r7/bin/dbg"; cp "$mx/dbgfat" "$t/r7/bin/dbgfat"
+rc=0; (cd "$mx" && DSYMUTIL="$t/stub/dsymutil" sh "$S" --root "$t/r7" --short w --version 1.0 --out "$t/o7") > "$t/o7.log" 2>&1 || rc=$?
+[ "$rc" = 0 ] || { fail "a dsymutil lacking a slice's target is the documented exception, exit 0, got $rc"; sed 's/^/    | /' "$t/o7.log"; }
+grep -q 'split-debug: bin/dbgfat: .*universal images are split on Linux or modern macOS' "$t/o7.log" \
+  || { fail "the skip names the image and the exception"; sed 's/^/    | /' "$t/o7.log"; }
+cmp -s "$mx/dbgfat" "$t/r7/bin/dbgfat" || fail "the image dsymutil cannot target is left whole"
+[ "$(oso "$t/r7/bin/dbg")" = 0 ] || fail "the image beside it is still split"
+tar -tzf "$t/o7/w-1.0-dSYM.tar.gz" 2>/dev/null | grep -q 'dbgfat' && fail "the skipped image has no dSYM"
+
+mkdir -p "$t/repo/.mavergreen/deviations/dsym-asset/prebuilt" "$t/r8/bin"
+printf '*bin/clean\n' > "$t/repo/.mavergreen/deviations/dsym-asset/prebuilt/scope"
+printf 'an upstream prebuilt with no debug map\n' > "$t/repo/.mavergreen/deviations/dsym-asset/prebuilt/reason"
+printf 'upstream ships its objects\n' > "$t/repo/.mavergreen/deviations/dsym-asset/prebuilt/revisit"
+cp "$mx/dbg" "$t/r8/bin/dbg"; cp "$mx/clean" "$t/r8/bin/clean"
+rc=0; (cd "$mx" && MAVERGREEN_REPO_ROOT="$t/repo" sh "$S" --root "$t/r8" --short w --version 1.0 --out "$t/o8") > "$t/o8.log" 2>&1 || rc=$?
+[ "$rc" = 0 ] || { fail "an image a dsym-asset deviation scopes is skipped, got $rc"; sed 's/^/    | /' "$t/o8.log"; }
+cmp -s "$mx/clean" "$t/r8/bin/clean" || fail "a deviated image is left as declared"
+[ "$(oso "$t/r8/bin/dbg")" = 0 ] || fail "the -g image beside a deviated one is split"
 
 [ "$bad" -eq 0 ] || exit 1
 echo "PASS: split-debug"
