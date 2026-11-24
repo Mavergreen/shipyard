@@ -106,6 +106,11 @@ mkrel() {  # $1 = name, $2 = tool|throws|updater|none: where the pkg's arm64 Mac
     --mtime 1700000000 --out "$r/$1-1.pkg" >/dev/null || { echo "FAIL: stevedore could not build $1's fixture pkg"; exit 1; }
 }
 mksrc alpha yes; mksrc bravo no; mksrc charlie yes
+# spec: scripts/gen-conventions-grandfathered.sh -- linux-gate and smoke-gate come from the gate's own
+#       findings: every fixture's macOS build needs no Linux job, and charlie's modern-smoke has no if:.
+printf '  publish:\n    needs: [build, modern-smoke]\n    if: needs.build.outputs.publish == '"'yes'"'\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n  modern-smoke:\n    needs: [build]\n    runs-on: macos-26\n    steps:\n      - run: true\n' \
+  >> "$work/src/charlie/.github/workflows/release.yml"
+(cd "$work/src/charlie" && git add -A && git -c user.name=t -c user.email=t@t commit -q -m smoke)
 mksrc delta yes; mkrel delta tool
 mksrc echo yes decl; mkrel echo none
 mksrc foxtrot yes; mkrel foxtrot updater
@@ -133,8 +138,19 @@ printf '.github\nalpha\nbravo\ncharlie\ndelta\necho\nfoxtrot\ngolf\nhotel\nindia
 
 out="$(sh "$G" "$work/clones" 2>"$work/err")" || { echo "FAIL: generator failed: $(cat "$work/err")"; exit 1; }
 want='cxxabi golf usr/local/mavergreen/golf/bin/throws
+linux-gate alpha release.yml:build
+linux-gate charlie release.yml:build
+linux-gate charlie release.yml:modern-smoke
+linux-gate delta release.yml:build
+linux-gate echo release.yml:build
+linux-gate foxtrot release.yml:build
+linux-gate golf release.yml:build
+linux-gate hotel release.yml:build
+linux-gate india release.yml:build
+linux-gate juliet release.yml:build
 macos-runner alpha release.yml:build
 macos-runner charlie release.yml:build
+macos-runner charlie release.yml:modern-smoke
 macos-runner delta release.yml:build
 macos-runner echo release.yml:build
 macos-runner foxtrot release.yml:build
@@ -142,10 +158,12 @@ macos-runner golf release.yml:build
 macos-runner hotel release.yml:build
 macos-runner india release.yml:build
 macos-runner juliet release.yml:build
+modern-smoke charlie release.yml:modern-smoke
 modern-smoke delta release.yml:modern-smoke
 modern-smoke echo release.yml:modern-smoke
 modern-smoke golf release.yml:modern-smoke
 modern-smoke hotel release.yml:modern-smoke
+smoke-gate charlie release.yml:modern-smoke
 standalone india india'
 [ "$out" = "$want" ] || { echo "FAIL: a repo with no workflows must not swallow the repos after it; delta ships an undeclared arm64 tool, echo declares one with no job, foxtrot's arm64 is its updater's; the generator lists golf, whose latest release defines ___cxa_throw, and not hotel, which declares it; india ships its product with no standalone archive, juliet with one: got [$out]"; exit 1; }
 [ -f "$work/clones/.gen-conventions-grandfathered" ] || { echo "FAIL: the generator must mark the directory it owns"; exit 1; }

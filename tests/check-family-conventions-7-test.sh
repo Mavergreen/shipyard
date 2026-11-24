@@ -109,7 +109,7 @@ grandfather
 #       deviation or a conventions-grandfathered line.
 mac() {  # $1 = label, $2 = the job's body after "  mac:"
   d="$work/mac-$1"; mkrepo7 "$d"
-  printf 'name: ci\non: push\njobs:\n  mac:\n%s\n' "$2" > "$d/.github/workflows/ci.yml"; add "$d"
+  printf 'name: ci\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n  mac:\n    needs: [lint]\n%s\n' "$2" > "$d/.github/workflows/ci.yml"; add "$d"
 }
 mac scalar '    runs-on: macos-14
     steps:
@@ -164,7 +164,7 @@ fails "check 36: another check's grandfathered line" "$work/mac-scalar" 'macos-r
 grandfather
 
 mac2() {  # a second workflow with a job of the same id
-  printf 'name: other\non: push\njobs:\n  mac:\n    runs-on: macos-14\n    steps:\n      - run: true\n' > "$work/mac-scalar/.github/workflows/other.yml"; add "$work/mac-scalar"
+  printf 'name: other\non: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n  mac:\n    needs: [lint]\n    runs-on: macos-14\n    steps:\n      - run: true\n' > "$work/mac-scalar/.github/workflows/other.yml"; add "$work/mac-scalar"
 }
 mac2
 grandfather "macos-runner ed25519 ci.yml:mac"
@@ -202,6 +202,9 @@ grandfather
 # spec: SKILL.md "Family conventions" check 37 -- release.yml has a job named modern-smoke, on a
 #       macos-* runner, that publish needs, exactly when INGREDIENTS.md declares an arm64:<glob>
 #       deviation; a repo grandfathered as modern-smoke skips the check.
+# spec: SKILL.md "Family conventions" checks 38 and 39 -- each modern-smoke here needs the Linux vm-test
+#       job and runs only where publish does, so the cases below test check 37 alone.
+MSIF="needs.vm-test.outputs.publish == 'yes'"
 ms() {  # $1 = label, $2 = decl|nodecl, $3 = runs-on (empty: no job), $4 = needed|unneeded
   d="$work/ms-$1"; mkrepo7 "$d"
   { printf '\n## Conformance deviations\n\n'
@@ -209,12 +212,12 @@ ms() {  # $1 = label, $2 = decl|nodecl, $3 = runs-on (empty: no job), $4 = neede
     case "$2" in pure|both) printf -- '- arm64-pure-go:usr/local/mavergreen/w/libexec/*: maintainers run w-helper on Apple Silicon\n' ;; esac
     printf -- '- macos-runner:release.yml:modern-smoke: the arm64 slice runs only on Apple Silicon, exit when a Linux host can run it\n'
   } >> "$d/INGREDIENTS.md"
+  pn='    needs: [vm-test]'; [ "$4" != needed ] || pn='    needs: [vm-test, modern-smoke]'
+  awk -v pn="$pn" -v pif="    if: $MSIF" '$0 == "    needs: [vm-test]" && !done { print pn; print pif; done = 1; next } { print }' \
+    "$d/.github/workflows/release.yml" > "$d/r.yml"
+  mv "$d/r.yml" "$d/.github/workflows/release.yml"
   if [ -n "$3" ]; then
-    printf '  modern-smoke:\n    runs-on: %s\n    steps:\n      - run: true\n' "$3" >> "$d/.github/workflows/release.yml"
-    if [ "$4" = needed ]; then
-      sed 's/^    needs: \[vm-test\]$/    needs: [vm-test, modern-smoke]/' "$d/.github/workflows/release.yml" > "$d/r.yml"
-      mv "$d/r.yml" "$d/.github/workflows/release.yml"
-    fi
+    printf '  modern-smoke:\n    needs: [vm-test]\n    if: %s\n    runs-on: %s\n    steps:\n      - run: true\n' "$MSIF" "$3" >> "$d/.github/workflows/release.yml"
   fi
   add "$d"
 }
@@ -268,22 +271,24 @@ MAX_ARTIFACT_CONFORMANCE=0
 MAX_MODERN_SMOKE=7
 MAX_CXXABI=2
 MAX_STANDALONE=41
+MAX_LINUX_GATE=25
+MAX_SMOKE_GATE=10
 [ -f "$GF" ] || { echo "FAIL: scripts/conventions-grandfathered is missing"; exit 1; }
 LC_ALL=C sort -c "$GF" 2>/dev/null || { echo "FAIL: scripts/conventions-grandfathered is not sorted"; exit 1; }
 [ -z "$(LC_ALL=C sort "$GF" | uniq -d)" ] || { echo "FAIL: scripts/conventions-grandfathered has duplicate lines"; exit 1; }
 grep -qx 'standalone drydock drydock' "$GF" && { echo "FAIL: drydock ships its standalone archive, so it has no standalone line"; exit 1; }
 while read -r c r k extra; do
   [ -n "$k" ] && [ -z "$extra" ] || { echo "FAIL: conventions-grandfathered line is not '<check> <repo> <job|path>': $c $r $k $extra"; exit 1; }
-  case "$c" in macos-runner|packager|artifact-conformance|modern-smoke|cxxabi|standalone) ;; *) echo "FAIL: conventions-grandfathered names an unknown check: $c"; exit 1 ;; esac
+  case "$c" in macos-runner|packager|artifact-conformance|modern-smoke|cxxabi|standalone|linux-gate|smoke-gate) ;; *) echo "FAIL: conventions-grandfathered names an unknown check: $c"; exit 1 ;; esac
   case "$c:$k" in
-    macos-runner:*.yml:*|macos-runner:*.yaml:*|packager:*|artifact-conformance:*|modern-smoke:release.yml:modern-smoke|cxxabi:usr/local/mavergreen/*|cxxabi:Applications/*|cxxabi:Library/*) ;;
+    macos-runner:*.yml:*|macos-runner:*.yaml:*|linux-gate:*.yml:*|linux-gate:*.yaml:*|packager:*|artifact-conformance:*|modern-smoke:release.yml:modern-smoke|smoke-gate:release.yml:modern-smoke|cxxabi:usr/local/mavergreen/*|cxxabi:Applications/*|cxxabi:Library/*) ;;
     standalone:*) [ "$(sh "$here/../scripts/product-name.sh" repo "$k" 2>/dev/null)" = "$r" ] \
                     || { echo "FAIL: conventions-grandfathered standalone line names $k, which scripts/product-names does not register to $r: $c $r $k"; exit 1; } ;;
-    *) echo "FAIL: conventions-grandfathered key is not <workflow file>:<job> (macos-runner), release.yml:modern-smoke (modern-smoke), an installed path (cxxabi), a short name of the repo (standalone) or a path: $c $r $k"; exit 1 ;;
+    *) echo "FAIL: conventions-grandfathered key is not <workflow file>:<job> (macos-runner, linux-gate), release.yml:modern-smoke (modern-smoke, smoke-gate), an installed path (cxxabi), a short name of the repo (standalone) or a path: $c $r $k"; exit 1 ;;
   esac
 done < "$GF"
 count() { awk -v c="$1" '$1 == c { n++ } END { print n + 0 }' "$GF"; }
-for pair in "macos-runner:$MAX_MACOS_RUNNER" "packager:$MAX_PACKAGER" "artifact-conformance:$MAX_ARTIFACT_CONFORMANCE" "modern-smoke:$MAX_MODERN_SMOKE" "cxxabi:$MAX_CXXABI" "standalone:$MAX_STANDALONE"; do
+for pair in "macos-runner:$MAX_MACOS_RUNNER" "packager:$MAX_PACKAGER" "artifact-conformance:$MAX_ARTIFACT_CONFORMANCE" "modern-smoke:$MAX_MODERN_SMOKE" "cxxabi:$MAX_CXXABI" "standalone:$MAX_STANDALONE" "linux-gate:$MAX_LINUX_GATE" "smoke-gate:$MAX_SMOKE_GATE"; do
   c="${pair%%:*}"; max="${pair#*:}"; n="$(count "$c")"
   [ "$n" -le "$max" ] || { echo "FAIL: conventions-grandfathered has $n $c lines; the ceiling is $max and may only go down"; exit 1; }
 done
