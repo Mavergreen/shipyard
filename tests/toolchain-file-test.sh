@@ -103,4 +103,21 @@ got5="$(sh "$root/scripts/macho-slices.sh" "$w/b5/p")"
 [ "$got5" = "x86_64 EXECUTE 10.9 10.9" ] \
   || { echo "FAIL: toolchain file must override a pre-set CMAKE_OSX_SYSROOT (FORCE), got: $got5"; exit 1; }
 
+# spec: scripts/split-debug.sh -- every family build carries DWARF and a debug map naming its objects
+#       relative to the build root, so dsymutil run there finds them and no shipped byte names the
+#       builder's home; flags a caller sets itself replace these, as CMake's _INIT flags always are.
+"$real" -S "$w/p" -B "$w/b7" $sysname -DCMAKE_C_COMPILER="$CL/bin/clang" -DCMAKE_C_COMPILER_TARGET=x86_64-apple-macos10.9 \
+  -DCMAKE_C_FLAGS_INIT=--no-default-config -DCMAKE_EXE_LINKER_FLAGS_INIT="-fuse-ld=lld --ld-path=$CL/bin/ld64.lld" \
+  -DCMAKE_TOOLCHAIN_FILE="$root/MavergreenToolchain.cmake" > "$w/c7.log" 2>&1 \
+  || { echo "FAIL: configure for the debug flags failed:"; sed 's/^/    | /' "$w/c7.log"; exit 1; }
+cf="$(sed -n 's/^CMAKE_C_FLAGS:STRING=//p' "$w/b7/CMakeCache.txt")"
+lf="$(sed -n 's/^CMAKE_EXE_LINKER_FLAGS:STRING=//p' "$w/b7/CMakeCache.txt")"
+for want in ' -g ' '-ffile-prefix-map=[^ ]*/b7=\. ' '-ffile-prefix-map=[^ ]*/p=\.'; do
+  printf ' %s\n' "$cf" | grep -q -e "$want" || { echo "FAIL: CMAKE_C_FLAGS lacks $want: $cf"; exit 1; }
+done
+printf '%s\n' "$lf" | grep -q -e '-Wl,-oso_prefix,[^ ]*/b7/$' || { echo "FAIL: CMAKE_EXE_LINKER_FLAGS lacks -oso_prefix: $lf"; exit 1; }
+"$real" --build "$w/b7" > "$w/b7.log" 2>&1 || { echo "FAIL: build (debug flags) failed:"; sed 's/^/    | /' "$w/b7.log"; exit 1; }
+oso="$("$CL/bin/llvm-nm" -a "$w/b7/p" | awk '$5 == "OSO" { print $6 }')"
+[ "$oso" = CMakeFiles/p.dir/p.c.o ] || { echo "FAIL: the debug map must name its object relative to the build root, got: $oso"; exit 1; }
+
 echo "PASS: toolchain-file"

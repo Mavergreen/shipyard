@@ -45,3 +45,5 @@ golden-gate tests/set-install-floor-arch-test.sh
 10.9 tests/macho-loads-test.sh
 10.9 tests/content-manifest-test.sh
 golden-gate tests/content-manifest-test.sh
+10.9 tests/split-debug-test.sh
+golden-gate tests/split-debug-test.sh

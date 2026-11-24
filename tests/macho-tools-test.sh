@@ -68,6 +68,38 @@ rc=0; env -u NM -u OTOOL -u LIPO PATH="$w/empty" SHIPYARD_MACHO_DIRS= MAVERGREEN
 got="$(env OTOOL=/my/otool PATH="$w/clangbin" /bin/sh -c "$PRE; mach_tool OTOOL && printf '%s\n' \"\$OTOOL\"")"
 [ "$got" = /my/otool ] || { echo "FAIL a reader the caller named is kept: got $got"; exit 1; }
 
+# spec: scripts/lib/macho-tools.sh -- DSYMUTIL, STRIP and OBJDUMP write what split-debug.sh ships, so
+#       they are LLVM's like the readers; LLVM installs its dsymutil unprefixed, so DSYMUTIL also takes a
+#       dsymutil beside clang-22, in a family directory or beside an llvm-objdump, never Apple's alone.
+wr() {  # $1 = PATH, $2 = SHIPYARD_MACHO_DIRS, $3 = variable, then env assignments
+  _p="$1" _d="$2" _v="$3"; shift 3
+  env -u OTOOL -u LIPO -u NM -u STRINGS -u DSYMUTIL -u STRIP -u OBJDUMP PATH="$_p" SHIPYARD_MACHO_DIRS="$_d" "$@" /bin/sh -c "$PRE; mach_tool $_v && eval \"printf '%s\\n' \\\"\\\$$_v\\\"\""
+}
+mk "$w/llvm22/bin" clang-22 dsymutil llvm-strip llvm-objdump
+for v in DSYMUTIL:dsymutil STRIP:llvm-strip OBJDUMP:llvm-objdump; do
+  got="$(wr "$w/llvm22/bin" "" "${v%%:*}")"
+  [ "$got" = "$w/llvm22/bin/${v#*:}" ] || { echo "FAIL ${v%%:*}: ${v#*:} next to clang-22: got $got"; exit 1; }
+done
+mk "$w/fam2" dsymutil
+got="$(wr "$w/apple" "$w/fam2" DSYMUTIL)"
+[ "$got" = "$w/fam2/dsymutil" ] || { echo "FAIL DSYMUTIL: a family directory's dsymutil: got $got"; exit 1; }
+mk "$w/deb" dsymutil-18 llvm-strip-18
+got="$(wr "$w/deb" "" DSYMUTIL)"
+[ "$got" = "$w/deb/dsymutil-18" ] || { echo "FAIL DSYMUTIL: a version-suffixed dsymutil-N: got $got"; exit 1; }
+got="$(wr "$w/deb" "" STRIP)"
+[ "$got" = "$w/deb/llvm-strip-18" ] || { echo "FAIL STRIP: a version-suffixed llvm-strip-N: got $got"; exit 1; }
+mk "$w/ubu" dsymutil llvm-objdump
+got="$(wr "$w/ubu" "" DSYMUTIL)"
+[ "$got" = "$w/ubu/dsymutil" ] || { echo "FAIL DSYMUTIL: a bare dsymutil beside llvm-objdump: got $got"; exit 1; }
+mk "$w/lone2" dsymutil llvm-strip
+got="$(wr "$w/apple" "" DSYMUTIL OTOOL="$w/lone2/llvm-otool")"
+[ "$got" = "$w/lone2/dsymutil" ] || { echo "FAIL DSYMUTIL: the dsymutil beside the OTOOL the caller chose: got $got"; exit 1; }
+mk "$w/appledsym" dsymutil strip objdump
+for v in DSYMUTIL STRIP OBJDUMP; do
+  rc=0; wr "$w/appledsym" "" $v >/dev/null 2>&1 || rc=$?
+  [ "$rc" -eq 1 ] || { echo "FAIL $v: Apple's tools are never a fallback, got $rc"; exit 1; }
+done
+
 rc=0; env PATH="" /bin/sh -c "$PRE; mach_tool FILE" >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] || { echo "FAIL an unknown reader is a usage error (2), got $rc"; exit 1; }
 

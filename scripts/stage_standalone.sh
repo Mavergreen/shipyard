@@ -19,6 +19,7 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/name-rules.sh"
+. "$SELF/lib/det-tar.sh"
 usage='usage: stage_standalone.sh STAGED_PKG_ROOT SHORT VERSION ARCH OUT.tar.gz'
 [ $# -eq 5 ] || { echo "$usage" >&2; exit 2; }
 ROOT="${1%/}" P="$2" V="$3" ARCH="$4" OUT="$5"
@@ -32,7 +33,6 @@ REL="${REL#/}" APPS=Applications/Mavergreen
 TREE="$ROOT/$REL"
 [ -d "$TREE" ] || { echo "stage_standalone: $ROOT has no $REL to archive" >&2; exit 1; }
 EPOCH="$(sh "$SELF/source-date-epoch.sh")"
-stamp="$(date -u -d "@$EPOCH" +%Y%m%d%H%M.%S 2>/dev/null || date -u -r "$EPOCH" +%Y%m%d%H%M.%S)"
 
 ad="$(cd "$ROOT" && find "$REL" "$APPS" -name '._*' 2>/dev/null | LC_ALL=C sort | head -1)"
 [ -z "$ad" ] || { echo "stage_standalone: an AppleDouble file, $ROOT/$ad: a staged root holds none" >&2; exit 1; }
@@ -88,20 +88,5 @@ if [ -s "$work/left" ]; then
   sed 's/^/  /' "$work/left" >&2
 fi
 [ ! -f "$TREE/mavergreen.plist" ] || echo "stage_standalone: left out of $want, as the pkg's alone: $REL/mavergreen.plist" >&2
-(cd "$work" && find "$top" -exec env TZ=UTC0 touch -h -t "$stamp" {} +)
-(cd "$work" && find "$top" | LC_ALL=C sort) > "$work/list"
-
-mkdir -p "$(dirname "$OUT")"
-if tar --version 2>/dev/null | head -1 | grep -q 'GNU tar'; then
-  set -- --format=gnu --owner=root:0 --group=wheel:0 --mtime="@$EPOCH"
-else
-  set -- --uid 0 --gid 0 --uname root --gname wheel --no-mac-metadata
-  if ! (cd "$work" && COPYFILE_DISABLE=1 tar -c -f /dev/null --no-recursion "$@" "$top") 2>/dev/null; then
-    echo "stage_standalone: this tar ($(tar --version 2>&1 | head -1)) cannot record root:wheel or omit Mac metadata; the archive keeps this machine's owner" >&2
-    set --
-  fi
-fi
-(cd "$work" && COPYFILE_DISABLE=1 tar -c -f out.tar --no-recursion "$@" -T list)
-gzip -n -9 "$work/out.tar"
-mv "$work/out.tar.gz" "$OUT"
+det_tar_gz "$work" "$top" "$OUT" "$EPOCH" stage_standalone
 echo "stage_standalone: built $OUT"

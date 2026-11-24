@@ -1,8 +1,9 @@
 #!/bin/sh
 # platform: macOS-only -- compiles with clang-22 against the pinned Apple SDK (scripts/fetch_sdk.sh)
-#   usage: build.sh
+#   usage: build.sh [dbg]
 #          Rebuilds the checked-in Mach-O fixtures beside this script. The tests read the results and
-#          never run this, so they need no compiler and no SDK on any host.
+#          never run this, so they need no compiler and no SDK on any host. With dbg, rebuilds only dbg,
+#          dbgfat and their objects in dbg-objs/, which a cross clang-22 on any host can.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$here/../../.."
@@ -10,6 +11,19 @@ sdk="$(sh "$root/scripts/fetch_sdk.sh")"
 cc="clang-22 -target x86_64-apple-macos10.9 -isysroot $sdk"
 w="$(mktemp -d "${TMPDIR:-/tmp}/macho-fixtures.XXXXXX")"
 trap 'rm -rf "$w"' EXIT
+build_dbg() {
+  sdk113="$(sh "$root/scripts/fetch_sdk.sh" --arch arm64)"
+  mkdir -p "$here/dbg-objs"
+  printf 'static int dbg_helper(int x){return x+1;}\nint main(int c,char**v){(void)v;return dbg_helper(c)-2;}\n' > "$w/dbg.c"
+  for a in x86_64 arm64; do
+    case "$a" in x86_64) t="-target x86_64-apple-macos10.9 -isysroot $sdk" ;; *) t="-target arm64-apple-macos11.0 -isysroot $sdk113" ;; esac
+    (cd "$w" && clang-22 --no-default-config $t -g -O0 -ffile-prefix-map="$w"=. -c dbg.c -o "$here/dbg-objs/dbg-$a.o")
+    ZERO_AR_DATE=1 clang-22 --no-default-config $t -fuse-ld=lld "$here/dbg-objs/dbg-$a.o" -Wl,-oso_prefix,"$here/" -o "$w/dbg-$a"
+  done
+  cp "$w/dbg-x86_64" "$here/dbg"
+  llvm-lipo -create "$w/dbg-x86_64" "$w/dbg-arm64" -output "$here/dbgfat"
+}
+if [ "${1:-}" = dbg ]; then build_dbg; exit 0; fi
 printf 'int main(void){return 0;}\n' > "$w/clean.c"
 printf 'int mav_test_shim(void){return 0;}\nint main(void){return mav_test_shim();}\n' > "$w/shim.c"
 printf 'extern int mav_test_post109(void);\nint main(void){return mav_test_post109();}\n' > "$w/leak.c"
@@ -75,3 +89,4 @@ llvm-lipo -create "$here/leak" "$here/a113" -output "$here/fatleak"
 llvm-lipo -create "$here/clean" "$here/a130" -output "$here/fat130"
 llvm-lipo -create "$here/clean" "$here/a280" -output "$here/fat280"
 rm -f "$here/leak265"
+build_dbg
