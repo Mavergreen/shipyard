@@ -83,7 +83,6 @@ standalone cctools cctools
 standalone claude-code claude-code
 standalone cmake cmake
 standalone codex-cli codex-cli
-standalone container-tools container-tools
 standalone ed25519 ed25519
 standalone fd fd
 standalone icu icu
