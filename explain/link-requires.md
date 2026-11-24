@@ -19,8 +19,12 @@ A load is judged against the requirements of the product whose opt/mavergreen/<s
 standalone archive's SHORT-VERSION/ read as that tree), and each product's requirement must be loaded by
 that product. An image outside every product's tree, such as an app under Applications/Mavergreen/, is
 judged against every product's requirements, pooled. A dependency pinned to a -mavericks.N release, which predates manifests, resolves its dylibs by its
-install prefix under /usr/local/mavergreen/, and an @rpath load nothing else resolves is taken as its
-(the Q2 tolerance, until every pin is a -mavergreen.N release).
+install prefix under /usr/local/mavergreen/ (the Q2 tolerance, until every pin is a -mavergreen.N release).
+An @rpath load is a family load only when one of the image's LC_RPATHs, resolved from where it installs,
+reaches another product's tree under opt/mavergreen/ or usr/local/mavergreen/; an @rpath load of a system
+or SDK library, such as libswiftCore through /usr/lib/swift, is not judged. When no manifest lists it, it is
+credited to the q2 library dependencies only if every family tree those LC_RPATHs reach is one of theirs.
+Which tree actually holds the dylib is not read.
 
 ## Deviating
 Write .mavergreen/deviations/link-requires/<label>/ with a scope (a <path glob> for a load, or the

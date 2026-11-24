@@ -268,6 +268,16 @@ $R 1 @loader_path/../lib
 dylib-id $P opt/mavergreen/go126/lib/libgo.dylib x86_64 @rpath/libgo.dylib"
 clean "a tool requirement is not linked" link-requires "$GOOD
 repo-requires go126 cmake tool"
+clean "an @rpath load whose LC_RPATHs reach no family tree is not a family load" link-requires "$GOOD
+$L @rpath/libswiftCore.dylib
+$R 1 /usr/lib/swift"
+no "a q2 dependency is credited only with @rpath loads its own tree serves" "link-requires|opt/mavergreen/go126/bin/go (x86_64), which loads @rpath/libfoo.dylib, which no declared library dependency's release manifest lists" "$GOOD
+$LC
+$L @rpath/libfoo.dylib
+rpath $P opt/mavergreen/go126/bin/go x86_64 2 @loader_path/../../foo/lib
+repo-requires go126 libcxx22 library
+dep-manifest libcxx22 q2
+dep-prefix libcxx22 /usr/local/mavergreen/libcxx22/"
 no "a load is judged against its own product's requirements, not a sibling's" "link-requires|opt/mavergreen/go126/bin/go (x86_64), which loads @rpath/libc++.1.dylib, which no declared library dependency's release manifest lists" "$GOOD
 $LC
 repo-requires gofmt libcxx22 library

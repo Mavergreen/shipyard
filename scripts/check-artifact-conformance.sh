@@ -1185,7 +1185,9 @@ done < "$tmp/link-rpath"
 # spec: explain/link-requires.md -- every family dylib a linked slice loads, other than the release's own, is a
 #       dylib row of a library dependency its own product declares (the product whose opt/mavergreen/<short>/
 #       holds the image; every product's, for an image outside them), or under a q2 dependency's install
-#       prefix, and an @rpath load nothing else resolves is a q2 library dependency's; each product's
+#       prefix; an @rpath load is a family load only when one of the image's LC_RPATHs reaches another
+#       family tree, and nothing else resolving it, it is credited to q2 library dependencies only when
+#       every such tree is one of theirs; each product's
 #       library requirement is loaded by that product; an unreadable manifest fails closed. A deviation
 #       excuses a path or a dependency.
 awk -v ver="${expected#v}" '
@@ -1203,13 +1205,33 @@ awk -v ver="${expected#v}" '
        sub(/^opt\/mavergreen\//, "", x); sub(/\/.*/, "", x)
        return x
      }
+     function norm(p,   n, c, i, k, o, out) {
+       n = split(p, c, "/"); k = 0
+       for (i = 1; i <= n; i++) {
+         if (c[i] == "" || c[i] == ".") continue
+         if (c[i] == "..") { if (k > 0) k--; else return "(outside the root)"; continue }
+         o[++k] = c[i]
+       }
+       out = ""; for (i = 1; i <= k; i++) out = out (i > 1 ? "/" : "") o[i]
+       return out
+     }
+     function tree(r, img,   d) {
+       gsub(/%20/, " ", r); gsub(/%25/, "%", r)
+       if (r ~ /^@(loader|executable)_path(\/|$)/) { d = img; sub(/\/[^\/]*$/, "", d); if (d == img) d = ""; sub(/^@[a-z_]*/, "", r); r = norm(d "/" r) }
+       else if (r ~ /^\//) r = norm(r)
+       else return ""
+       if (r !~ /^(opt|usr\/local)\/mavergreen\/[^\/]+(\/|$)/) return ""
+       sub(/^(opt|usr\/local)\/mavergreen\//, "", r); sub(/\/.*/, "", r)
+       return r
+     }
      function mine(o, d) { return o == "" ? (d in lib) : ((o SUBSEP d) in plib) }
      function use(o, d,   s) { if (o != "") { pused[o SUBSEP d] = 1; return }; for (s in prod) if ((s SUBSEP d) in plib) pused[s SUBSEP d] = 1 }
      $1 == "dylib-id" { own[$5] = 1; next }
      $1 == "repo-requires" { prod[$2] = 1; if ($4 == "library") { lib[$3] = 1; plib[$2 SUBSEP $3] = 1 }; next }
      $1 == "dep-manifest" { st[$2] = $3; if ($3 == "fail") { w = $0; sub(/^dep-manifest [^ ]+ fail ?/, "", w); why[$2] = w }; next }
      $1 == "dep-dylib" { if (!($3 in by)) by[$3] = $2; next }
-     $1 == "dep-prefix" { np++; pd[np] = $2; pp[np] = $3; next }
+     $1 == "dep-prefix" { np++; pd[np] = $2; pp[np] = $3; pn[np] = $3; sub(/\/$/, "", pn[np]); sub(/.*\//, "", pn[np]); next }
+     $1 == "rpath" { k = $2 " " $3 " " $4; rp[k] = rp[k] " " $6; next }
      $1 == "load" { nl++; la[nl] = $2; lp[nl] = $3; lh[nl] = $4; lv[nl] = $5; next }
      END {
        for (d in lib) if (st[d] == "fail" || !(d in st)) { bad = 1; print "unreadable", d, (why[d] == "" ? "-" : why[d]) }
@@ -1221,7 +1243,16 @@ awk -v ver="${expected#v}" '
          if ((v in by) && mine(o, by[v])) { use(o, by[v]); continue }
          hit = 0
          for (j = 1; j <= np; j++) if (index(v, pp[j]) == 1 && mine(o, pd[j])) { use(o, pd[j]); hit = 1 }
-         if (!hit && v ~ /^@rpath\//) for (d in lib) if (st[d] == "q2" && mine(o, d)) { use(o, d); hit = 1 }
+         if (!hit && v ~ /^@rpath\//) {
+           img = inst(la[i], lp[i]); gsub(/%20/, " ", img); gsub(/%25/, "%", img)
+           nr = split(rp[la[i] " " lp[i] " " lh[i]], rr, " "); split("", fam); nf = 0
+           for (j = 1; j <= nr; j++) { t = tree(rr[j], img); if (t != "" && t != o) { fam[t] = 1; nf++ } }
+           if (nf == 0) continue
+           split("", cov)
+           for (j = 1; j <= np; j++) if (st[pd[j]] == "q2" && (pn[j] in fam) && mine(o, pd[j])) cov[pn[j]] = j
+           hit = 1; for (t in fam) if (!(t in cov)) hit = 0
+           if (hit) for (t in cov) use(o, pd[cov[t]])
+         }
          if (hit || bad) continue
          print "undeclared", la[i], lp[i], lh[i], v
        }
