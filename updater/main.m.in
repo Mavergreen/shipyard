@@ -9,6 +9,7 @@
 // modern clang (CI). Delegate = informal protocol (respondsToSelector:).
 #import <Cocoa/Cocoa.h>
 #include "relaunch_decision.h"   // pure post-relaunch decision (unit-tested; see tests/relaunch_decision.bats)
+#include "check_outcome.h"
 
 @interface SUUpdater : NSObject
 + (SUUpdater *)sharedUpdater;
@@ -28,6 +29,8 @@
 // to install (e.g. mavericks-swift, a headless runtime with no pane).
 #define MAVERICKS_PANE_HINT_KEY "@MAVERICKS_C_PANE_HINT_KEY@"
 static NSString *const kAvailableUpdateKey = @"@MAVERICKS_C_PANE_HINT_KEY@";
+static NSString *const kCheckedAtKey = @"@MAVERICKS_C_PANE_HINT_KEY@CheckedAt";
+static int gExitStatus = 0;
 
 // UI is OPT-IN. Only an EXPLICIT user summon shows anything: `--user` (a notification
 // "install" click) runs Sparkle's interactive check -- the ONLY path that shows a "You're up-to-date!"
@@ -69,8 +72,15 @@ static NSString *gFoundVersion = nil;
 }
 - (void)terminateNow { NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] terminating"); [NSApp terminate:nil]; }
 - (void)cancelWatchdog { [gWatchdog invalidate]; gWatchdog = nil; }
+- (void)resolveCheck:(mav_check_outcome_t)outcome {
+    int paneHint = strlen(MAVERICKS_PANE_HINT_KEY) > 0;
+    if (mav_check_records_completion(paneHint, outcome))
+        [[NSUserDefaults standardUserDefaults] setObject:[NSDate date] forKey:kCheckedAtKey];
+    gExitStatus = mav_check_exit_status(paneHint, outcome);
+}
 - (void)watchdogFired:(NSTimer *)t {
     (void)t; gWatchdog = nil;
+    [self resolveCheck:MAV_CHECK_TIMED_OUT];
     NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] watchdog: background check didn't resolve in %.0fs, forcing exit", kBackgroundWatchdogSeconds);
     [NSApp terminate:nil];
 }
@@ -80,10 +90,9 @@ static NSString *gFoundVersion = nil;
     gFoundVersion = v;   // remember the target so a post-relaunch check can tell if the install landed
     if (strlen(MAVERICKS_PANE_HINT_KEY) > 0) {
         // Pane-hint mode (trackpad2): record the available version for a host UI (About tab) to surface.
-        if (v.length) {
-            [[NSUserDefaults standardUserDefaults] setObject:v forKey:kAvailableUpdateKey];
-            [[NSUserDefaults standardUserDefaults] synchronize];
-        }
+        [self resolveCheck:MAV_CHECK_FOUND];
+        if (v.length) [[NSUserDefaults standardUserDefaults] setObject:v forKey:kAvailableUpdateKey];
+        [[NSUserDefaults standardUserDefaults] synchronize];
         if (!gUserInitiated) {
             // Silent probe -> no dialog; hint recorded; exit immediately (never leave a blocking dialog).
             [self cancelWatchdog];
@@ -117,6 +126,7 @@ static NSString *gFoundVersion = nil;
     [self cancelWatchdog];   // check resolved (no update) -> we exit on our own below
     // Up to date -> clear any stale "update available" hint the pane might be showing.
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:kAvailableUpdateKey];
+    [self resolveCheck:MAV_CHECK_NOT_FOUND];
     [[NSUserDefaults standardUserDefaults] synchronize];
     // Background (scheduled) mode shows no alert -> nothing to wait for; exit right away so the
     // LSUIElement process never lingers.
@@ -147,6 +157,7 @@ static NSString *gFoundVersion = nil;
 - (void)updater:(SUUpdater *)updater didAbortWithError:(NSError *)error {
     (void)updater;
     [self cancelWatchdog];   // cycle aborted -> nothing left to wait on
+    [self resolveCheck:MAV_CHECK_ABORTED];
     // Silent/background abort: no alert to wait for -> exit now so the process never lingers.
     if (!gUserInitiated) {
         NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] check aborted (%@); not user-initiated -> terminating", error.localizedDescription);
@@ -185,6 +196,15 @@ int main(int argc, const char **argv) {
     @autoreleasepool {
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];  /* normal foreground app (see Info.plist) */
+        if (strlen(MAVERICKS_PANE_HINT_KEY) > 0)
+            [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationWillTerminateNotification
+                                                              object:nil queue:nil
+                                                          usingBlock:^(NSNotification *note) {
+                (void)note;
+                if (!gExitStatus) return;
+                [[NSUserDefaults standardUserDefaults] synchronize];
+                exit(gExitStatus);
+            }];
 
         NSString *selfVersion = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
         NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] start: mode=%@ version=%@",

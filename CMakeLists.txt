@@ -215,6 +215,8 @@ if(BATS_EXECUTABLE)
     COMMAND ${BATS_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/gen_appcast.bats)
   add_test(NAME relaunch-decision
     COMMAND ${BATS_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/relaunch_decision.bats)
+  add_test(NAME check-outcome
+    COMMAND ${BATS_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_outcome.bats)
 else()
   message(STATUS "bats not found -- shell helper tests won't run via ctest (install bats to enable)")
 endif()

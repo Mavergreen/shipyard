@@ -1793,6 +1793,13 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   host. The function refuses any other LLVM clang, and a compiler target that disagrees with the
   configure's arch and floor. An updater still configured with AppleClang builds as before, with a
   warning naming this rule, until its product moves to clang22.
+- **Pane-hint mode tells a pane "no update" from "couldn't check".** With `PANE_HINT_KEY <key>`,
+  a found update writes the version to `<key>` and no update removes it; either also writes
+  `<key>CheckedAt`, an `NSDate`, in the same defaults domain (the updater's bundle id). An abort, an
+  error or the watchdog writes neither and exits 1, so a pane reads a stale or missing `<key>CheckedAt`
+  as "couldn't check". `SULastCheckTime` proves nothing: Sparkle 1.27.3 writes it when a check starts.
+  Without `PANE_HINT_KEY` nothing changes: no marker, and every check exits 0. The flag-day Engine's
+  `outdated --plist` supersedes the marker. Revisit: the flag day retires the Sparkle updaters.
 - `mavericks_add_updater_app()` self-fetches the Sparkle framework at configure time; signing/appcast use
   the shared `sign_and_appcast.sh`. **The signer is per-host, and signing may run on Linux.** With no
   `--signer` it takes `ed25519-sign` and `ed25519-verify` from the ed25519 release `ed25519.pin` names,

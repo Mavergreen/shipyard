@@ -61,6 +61,7 @@ endfunction()
 # MAVERICKS_UPDATER_BUNDLE_ID (also the updater's defaults domain) in the caller's scope, for product
 # code that launches the updater or reads its defaults.
 # PANE_HINT_KEY omitted/empty => background-found updates post an NSUserNotification (no-pane products).
+# PANE_HINT_KEY set => a completed check also writes <PANE_HINT_KEY>CheckedAt (NSDate); a failed one exits 1.
 # POST_UPDATE_HELPER: absolute path to an executable the updater runs (as the user) after a successful
 # install + the confirmation -- for product-specific follow-up (e.g. offer to roll a VM onto a new image).
 function(_mavericks_registry_fact out_var fact short)
