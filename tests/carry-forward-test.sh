@@ -27,7 +27,7 @@ printf '%s  w.xml\n' "$(sha "$P/w.xml")" > "$P/SHA256SUMS"
 
 dist() {
   rm -rf "$w/dist"; mkdir -p "$w/dist"
-  for f in w.xml w-1.0-mavergreen.2.pkg w-1.0-mavergreen.2-macos-x86_64.tar.gz w-1.0-mavergreen.2-dSYM.tar.gz \
+  for f in w.xml w-1.0-mavergreen.2.pkg w-1.0-mavergreen.2-macos-x86_64.tar.gz w-1.0-mavergreen.2-linux-x86_64.tar.gz w-1.0-mavergreen.2-dSYM.tar.gz \
            x.xml x-1.0-mavergreen.2.pkg x-1.0-mavergreen.2-dSYM.tar.gz w-x.xml w-x-1.0-mavergreen.2.pkg; do
     printf 'new %s\n' "$f" > "$w/dist/$f"
   done
@@ -39,8 +39,8 @@ dist
 rc=0; sh "$CF" "$w/dist" Mavergreen/w "$w/decision" > "$w/out" 2> "$w/err" || rc=$?
 [ "$rc" -eq 0 ] || fail "carrying w exits 0: rc $rc: $(cat "$w/err")"
 cmp -s "$w/dist/w.xml" "$P/w.xml" || fail "w.xml is the previous release's, byte for byte"
-for f in w-1.0-mavergreen.2.pkg w-1.0-mavergreen.2-macos-x86_64.tar.gz w-1.0-mavergreen.2-dSYM.tar.gz; do
-  [ ! -e "$w/dist/$f" ] || fail "a carried product's rebuilt $f is not uploaded"
+for f in w-1.0-mavergreen.2.pkg w-1.0-mavergreen.2-macos-x86_64.tar.gz w-1.0-mavergreen.2-linux-x86_64.tar.gz w-1.0-mavergreen.2-dSYM.tar.gz; do
+  [ "$(cat "$w/dist/$f")" = "new $f" ] || fail "a carried product's rebuilt $f stays in the release, so every product is under one tag"
 done
 for f in x.xml x-1.0-mavergreen.2.pkg x-1.0-mavergreen.2-dSYM.tar.gz w-x.xml w-x-1.0-mavergreen.2.pkg; do
   [ -e "$w/dist/$f" ] || fail "a changed product's $f stays, w-x's included"
@@ -48,7 +48,7 @@ done
 [ "$(tail -n 1 "$w/dist/RELEASE_NOTES.md")" = "- Widget 2: unchanged, still 1.0-mavergreen.1" ] \
   || fail "the notes end with the unchanged line: $(cat "$w/dist/RELEASE_NOTES.md")"
 grep -qx '### Unchanged' "$w/dist/RELEASE_NOTES.md" || fail "the unchanged lines sit under ### Unchanged"
-echo "ok: a carried product's feed is the previous release's, and its rebuilt assets go"
+echo "ok: a carried product's feed is the previous release's, and its rebuilt assets stay"
 
 dist
 printf '0000000000000000000000000000000000000000000000000000000000000000  w.xml\n' > "$P/SHA256SUMS"

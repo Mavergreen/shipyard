@@ -1032,10 +1032,15 @@ is its durable form.
   ingredient pins, `requires`, install names), which are published and never compared.
 - **The release decision.** `publish-release.yml` runs `release-decision.sh` on the candidate manifest
   against the line's latest release: `publish` when any product changed, else `skip`, a green run that
-  publishes nothing (no tag, no release, no feed item, no `-mavergreen.N` consumed). An unchanged
-  product in a release that publishes is carried: its feed keeps offering the release it last changed
-  in (`carry-forward.sh`). `force_publish` with a reason, or a `publish-unchanged` deviation scoped
-  `*`, publishes anyway; the reason goes into the notes.
+  publishes nothing (no tag, no release, no feed item, no `-mavergreen.N` consumed). Every row counts:
+  a product's Linux tarball, and an artifact no product owns, as much as its pkg. An unchanged
+  product in a release that publishes is carried (`carry-forward.sh`): only its `<short>.xml` is the
+  previous release's, byte for byte, so its feed offers no no-op update, and the notes say
+  "unchanged, still <version>". Its rebuilt pkg, tarballs and dSYM stay in the release, so a consumer
+  pinned to the new tag finds every product under it, on every host. `force_publish` with a reason,
+  or a `publish-unchanged` deviation scoped `*`, publishes anyway; the reason goes into the notes.
+  **Revisit when** release storage becomes a constraint (an SDK repo re-uploading unchanged SDKs on
+  every release): then the SDKs move to a repo of their own.
 - **The reproduce check.** Weekly, and on a `reproduce_tag` dispatch, `release.yml` rebuilds a release
   tag cold and `reproduce.sh` compares the rebuild's manifest with the release's, naming each
   differing row with `build-equivalence.sh`'s detail. A path that can't be made stable is a
