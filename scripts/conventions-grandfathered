@@ -91,7 +91,6 @@ standalone codex-cli codex-cli
 standalone container-tools container-tools
 standalone ed25519 ed25519
 standalone fd fd
-standalone fleet fleet
 standalone icu icu
 standalone iterm2 iterm2
 standalone jdk-25 jdk25
