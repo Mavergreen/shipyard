@@ -129,7 +129,8 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   (`stage-shipyard-prefix.sh`, `package-pkg.sh --tree-only`; a test holds the trees equal, less the
   updater), links the launchers into `/opt/mavergreen/bin` on `PATH`, and points
   `SHIPYARD_SCRIPTS` and `MavergreenShipyard_DIR` into it. There the launchers run the host's
-  `cmake`, and the toolchain file gives every compiler not named the pinned clang22 with its
+  `cmake` (a consumer's stand-in `cmake` must not exec `shipyard-cmake`: the launcher refuses the
+  loop), and the toolchain file gives every compiler not named the pinned clang22 with its
   `ld64.lld`. Never hand-roll `-DCMAKE_TOOLCHAIN_FILE`/`-DCMAKE_C_COMPILER` on Linux. Revisit when
   the cmake product ships a Linux build, or a family Linux build needs a tool the list lacks (add it
   there, not to the product).
@@ -385,7 +386,9 @@ verification round), and the test suites compile fixtures and dylibs on every
 run. This is the single cheapest speedup available to this family.
 
 - **shipyard's shared hidden presets (`mavergreen-native` / `mavergreen-cross`) declare
-  `MAVERGREEN_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mavergreen-build`,
+  `MAVERGREEN_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mavergreen-build`
+  (GitHub's Linux runners leave `TMPDIR` unset, so `install@v1` exports `$RUNNER_TEMP` or `/tmp`
+  there, and the `shipyard-cmake`/`-ctest`/`-cpack` launchers give an unset or empty one `/tmp`),
   and derive their OWN `binaryDir` from it, keyed by `${sourceDirName}`:**
   ```json
   "binaryDir": "$env{MAVERGREEN_BUILD_ROOT}/${sourceDirName}-native"
@@ -991,7 +994,30 @@ before you push to its `main` — in the left column, that push is a release.
   gate that only asks "does the group distinguish events?" waves it straight through.
 - Sign/appcast and publish steps gate on `steps.ver.outputs.release == 'yes'`. Fork PRs never touch
   `SPARKLE_PRIVATE_KEY` (they resolve `release=no`).
-- Runner `macos-26` (fallback `macos-15`); `actions/*@v7` on new repos.
+- Build jobs run on Linux (`ubuntu-latest`); a macOS job (below) uses `macos-26` (fallback
+  `macos-15`); `actions/*@v7` on new repos.
+
+### A release builds on Linux; macOS keeps only the late modern-smoke
+
+**Preparing any release includes moving its build to Linux-hosted runners.** The pkg, its payload
+and every slice are built on Linux through shipyard (clang22, stevedore, `pkg_read.sh`), whatever the
+release is for. Only a late `modern-smoke` job, the arm64 and Apple Silicon proof (check 37), stays
+on macOS.
+
+**A macOS job in a release needs a named blocker:** a grandfathered `macos-runner` line in
+`scripts/conventions-grandfathered` with its QUEUE item, or an INGREDIENTS.md
+`- macos-runner:<workflow file>:<job>: <reason, exit>` deviation whose exit says what lets it leave
+(check 36). A job with neither fails the gate; a blocker with no exit is a permanent one.
+
+**A test that needs a Darwin kernel or userland, but not modern macOS, runs in a mavericks-vm 10.9
+guest on Linux** (see "Acceptance on real 10.9"), not on a macOS runner: `flock`, process groups,
+`sun_path`, bash 3.2 and BSD tools are all 10.9's too.
+
+**Why:** macOS runners are the family's scarcest resource and its release bottleneck, and Linux, a
+modern Mac and 10.9 are equally first-class build hosts, so a build that needs macOS is a defect in
+the build, not a property of the product. **Revisit when** a product's build cannot run on Linux even
+in principle: it declares that as its `macos-runner` deviation, with the reason, and this rule names
+the exception.
 
 ### A release is a declared state, not an event
 
@@ -2580,6 +2606,45 @@ failure: the hook starts `_rc=0`, the step ends `|| _rc=1`, and the hook ends `[
 guard is written as `if [ -z "$ROOT" ]; then …; fi`, never as `[ -z "$ROOT" ] && …` on the last line
 (that line is false on another volume). A hook contains no `exit` and no `set -e`: the subshell sits
 left of `||`, so `set -e` inside it is silently ignored, not enforced.
+
+### Kexts that load at boot
+
+**A family kext is unsigned, so stock 10.9 loads it only by exception.** Without
+`kext-dev-mode=1`, kextd refuses an unsigned kext in `/Library/Extensions` ("invalid signature for
+<id>, will not load") unless its bundle id is a key of `OSKextSigExceptionList` in
+`/System/Library/Extensions/AppleKextExcludeList.kext/Contents/Info.plist` (Wowfunhappy's mechanism,
+proven in Recaulk). kextd reads that list once, so it is restarted after the list changes.
+
+The doctrine: **add exactly the declared bundle ids and nothing else, each at the installed kext's
+own `CFBundleVersion`; remove them at uninstall; never touch any other key of Apple's file.** The
+facility does all three; no product edits the file itself.
+
+`stage_product.sh --boot-kext <bundle id>` (repeatable) names a kext staged anywhere under the stage;
+staging refuses an id no staged kext carries, an id two kexts carry, and a kext whose `Info.plist`
+is not XML or whose first `CFBundleVersion` is not its top-level one. Then:
+
+- the product's tree gets `libexec/mavergreen/kext-sig-exception` (shipyard's
+  `scripts/kext_sig_exception.sh`, `add PLIST ID VERSION` / `remove PLIST ID`, which changes only that
+  `<key>`/`<string>` pair and refuses a binary plist or one with no list) and a generated
+  `libexec/mavergreen/pre-uninstall` that removes each id from the target volume's list, so
+  uninstall needs no shipyard. A `pre-uninstall` the product staged itself is kept as
+  `pre-uninstall.product` and runs first; its failure stops the uninstall, as before.
+- the generated postinstall, right after `mavergreen link` and before the updater's agent and the
+  `--postinstall-hook`, lists each id at the installed kext's `CFBundleVersion` in the target
+  volume's list and, on the boot volume only, runs `launchctl stop com.apple.kextd` (launchd starts
+  it again). So a hook that loads the kext's LaunchDaemon runs after kextd has reread the list. A
+  failure is reported, naming `kext-dev-mode=1` as the fallback, and never fails the install; a
+  volume with no exclude list (not 10.9) is skipped quietly.
+
+Conformance enforces it from the pkg: a kext directly in `Library/Extensions` that loads other than
+as a dependency (a library kext declares `OSBundleCompatibleVersion` and no `IOKitPersonalities`)
+is listed through `--boot-kext` or declared `- kext-sig-exception:<id>: <reason>`; an id listed for a
+kext the pkg does not ship fails; and a pre- or postinstall that names `AppleKextExcludeList` or
+`OSKextSigExceptionList` outside the generated block fails, with no deviation.
+
+Revisit if an Apple update on 10.9 replaces or reshapes the exclude list (the tool then refuses and
+installs fall back to `kext-dev-mode=1`), or a product needs a broader change to that file than its
+own ids.
 
 ### Where a product may install
 

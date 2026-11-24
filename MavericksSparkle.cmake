@@ -12,6 +12,23 @@ set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyard r
 include("${MAVERGREEN_SHARED_DIR}/MavergreenDecisions.cmake")   # mavergreen_reject_placeholder_icon()
 include("${MAVERGREEN_SHARED_DIR}/MavergreenCompatGuard.cmake")   # mavergreen_assert_binary_compatible()
 
+function(_mavericks_c_string out_var value)
+  string(REPLACE "\\" "\\\\" value "${value}")
+  string(REPLACE "\"" "\\\"" value "${value}")
+  string(REPLACE "\n" "\\n" value "${value}")
+  string(REPLACE "\r" "\\r" value "${value}")
+  string(REPLACE "\t" "\\t" value "${value}")
+  set(${out_var} "${value}" PARENT_SCOPE)
+endfunction()
+
+function(_mavericks_xml_text out_var value)
+  string(REPLACE "&" "&amp;" value "${value}")
+  string(REPLACE "<" "&lt;" value "${value}")
+  string(REPLACE ">" "&gt;" value "${value}")
+  string(REPLACE "\"" "&quot;" value "${value}")
+  set(${out_var} "${value}" PARENT_SCOPE)
+endfunction()
+
 function(mavericks_fetch_sparkle out_var)
   # The pinned framework, verbatim and fat: a fat framework links into an updater of either arch, and
   # thinning it would break the seal its code signature puts on every file (Autoupdate included).
@@ -160,6 +177,14 @@ function(mavericks_add_updater_app)
   else()
     set(MAVERICKS_AUTO_CHECK_OBJC "NO")
   endif()
+
+  foreach(v PRODUCT_NAME LOG_PREFIX CONFIRM_TITLE CONFIRM_BODY RELAUNCH_MARKER PANE_HINT_KEY POST_UPDATE_HELPER)
+    _mavericks_c_string(MAVERICKS_C_${v} "${MAVERICKS_${v}}")
+  endforeach()
+  string(REPLACE "%" "%%" MAVERICKS_C_LOG_PREFIX "${MAVERICKS_C_LOG_PREFIX}")
+  foreach(v BUNDLE_ID PRODUCT_NAME EXECUTABLE ICON_NAME VERSION BUILD_VERSION FEED_URL ED_PUBKEY)
+    _mavericks_xml_text(MAVERICKS_XML_${v} "${MAVERICKS_${v}}")
+  endforeach()
 
   set(_app "${CMAKE_BINARY_DIR}/${A_NAME}.app")
   configure_file("${MAVERGREEN_SHARED_DIR}/updater/Info.plist.in" "${CMAKE_BINARY_DIR}/${A_NAME}-Info.plist" @ONLY)

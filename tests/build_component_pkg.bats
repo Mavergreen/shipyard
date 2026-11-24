@@ -48,6 +48,21 @@ build() {
   grep -q 'forced install-in-place on 1 bundle component(s)' "$WORK/err"
 }
 
+@test "build_component_pkg: the logged bundle count is the bundles the pkg declares, through a linked root and a framework" {
+  F="$APP/Contents/Frameworks/Sparkle.framework"
+  mkdir -p "$F/Versions/A/Resources"
+  sed 's/dev.mavergreen.fake/org.sparkle-project.Sparkle/' "$APP/Contents/Info.plist" > "$F/Versions/A/Resources/Info.plist"
+  ln -s A "$F/Versions/Current"
+  ln -s Versions/Current/Resources "$F/Resources"
+  ln -s root "$WORK/linked"
+  out="$(sh "$BUILD" --root "$WORK/linked" --identifier dev.mavergreen.fake --version 1.2.3 \
+    --install-location / --out "$WORK/linked.pkg" 2>"$WORK/err")"
+  [ "$out" = "$WORK/linked.pkg" ]
+  "$STEVEDORE" expand "$WORK/linked.pkg" "$WORK/x"
+  [ "$(grep -c '<bundle path=' "$WORK/x/PackageInfo")" -eq 2 ]
+  grep -q 'forced install-in-place on 2 bundle component(s)' "$WORK/err"
+}
+
 @test "build_component_pkg: leaves no -components.plist" {
   run build "$WORK/clean.pkg"
   [ "$status" -eq 0 ]

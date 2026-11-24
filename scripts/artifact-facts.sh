@@ -12,7 +12,8 @@
 #          repo root, whose standalone-text deviations it honours; a `standalone-text-unused` fact names
 #          each entry that no archive in the dist used; and a `standalone-flow` fact per archive,
 #          archive-first when the repo root declares packaging/SHORT.standalone-bundled (the list
-#          derive_pkg_tree.sh derives SHORT's pkg with), else pkg-first.
+#          derive_pkg_tree.sh derives SHORT's pkg with), else pkg-first. kext-facts.sh adds each pkg's
+#          kext, kext-exception and excludelist-script facts.
 # platform: runs at PACKAGE TIME, on any host that has the artifacts: stevedore reads the pkgs and
 #           plists, and LLVM's readers (lib/macho-tools.sh) the Mach-O, on 10.9, modern macOS and Linux.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact
@@ -235,6 +236,14 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
         printf 'launchd-program %s %s/%s %s\n' "$1" "$_ld" "$(basename "$_lp" | enc)" "$(field "$_pg")"
       done
     done
+    _ks=""
+    if [ -d "$_dir/Scripts" ]; then _ks="$_dir/Scripts"
+    elif [ -f "$_dir/Scripts" ]; then
+      _ks="$_dir.scripts"; mkdir -p "$_ks"
+      ( cd "$_ks" && gzip -dc "$_dir/Scripts" | cpio -id 2>/dev/null ) || { _pf_why="cannot read the scripts of $1"; return 1; }
+    fi
+    _kr=""; [ -n "$_loc" ] || _kr="$_root"
+    sh "$SELF/kext-facts.sh" "$1" --root "$_kr" --scripts "$_ks" || { _pf_why="kext-facts.sh cannot read $1"; return 1; }
     # spec: tests/artifact-conformance-test.sh -- a product tree always installs at "/", so only
     #       such a payload can carry a manifest. Values are collapsed like the pkg record's so a
     #       space cannot shift fields; outside entries are encoded like installs paths so the

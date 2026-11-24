@@ -120,6 +120,35 @@ for t in readlink uname; do ln -s "$(command -v "$t")" "$w/tools/$t"; done
 rc=0; out="$(env SHIPYARD_LAUNCHER_HOST=linux PATH="$sy/bin:$w/rust/bin:$root/bin:$w/tools" "$root/bin/shipyard-cmake" 2>"$w/err")" || rc=$?
 [ "$rc" -eq 1 ] && [ -z "$out" ] && grep -q "no cmake on PATH" "$w/err" \
   || fail "on Linux with no cmake product and only launchers on PATH, shipyard-cmake must refuse, not run itself; got $rc: $out $(cat "$w/err")"
+mkdir -p "$w/copy/bin"
+cp "$L" "$w/copy/bin/cmake"; chmod +x "$w/copy/bin/cmake"
+expect "on Linux a copy of the launcher named cmake on PATH is passed over, not run" \
+  "host-tool=cmake${nl}CMAKE_PREFIX_PATH=$sy" \
+  env -u CMAKE_PREFIX_PATH SHIPYARD_LAUNCHER_HOST=linux PATH="$w/copy/bin:$w/host/bin:/usr/bin:/bin" "$root/bin/shipyard-cmake"
+mkdir -p "$w/standin/bin" "$w/forkin/bin" "$w/nest/bin"
+printf '#!/bin/sh\nexec "%s" "$@"\n' "$root/bin/shipyard-cmake" > "$w/standin/bin/cmake"
+printf '#!/bin/sh\n"%s" "$@"\n' "$root/bin/shipyard-cmake" > "$w/forkin/bin/cmake"
+chmod +x "$w/standin/bin/cmake" "$w/forkin/bin/cmake"
+for s in standin forkin; do
+  rc=0; out="$(env SHIPYARD_LAUNCHER_HOST=linux PATH="$w/$s/bin:$w/host/bin:/usr/bin:/bin" "$root/bin/shipyard-cmake" 2>"$w/err")" || rc=$?
+  [ "$rc" -eq 1 ] && [ -z "$out" ] && [ "$(wc -l < "$w/err" | tr -d ' ')" = 1 ] \
+    && command grep -q "loop" "$w/err" && command grep -qF "$w/$s/bin/cmake" "$w/err" \
+    || fail "a stand-in cmake ($s) that runs shipyard-cmake must be refused in one line naming the loop and $w/$s/bin/cmake; got $rc: $out $(cat "$w/err")"
+done
+printf '#!/bin/sh\necho "host-tool=cmake"\n"%s" "$@"\n' "$root/bin/shipyard-ctest" > "$w/nest/bin/cmake"
+chmod +x "$w/nest/bin/cmake"
+expect "a real cmake that runs shipyard-ctest as a child is not a loop" \
+  "host-tool=cmake${nl}host-tool=ctest${nl}CMAKE_PREFIX_PATH=$sy" \
+  env -u CMAKE_PREFIX_PATH SHIPYARD_LAUNCHER_HOST=linux PATH="$w/nest/bin:$w/host/bin:/usr/bin:/bin" "$root/bin/shipyard-cmake"
+mkdir -p "$w/tmpd/bin"
+printf '#!/bin/sh\necho "TMPDIR=${TMPDIR-<unset>}"\n' > "$w/tmpd/bin/cmake"; chmod +x "$w/tmpd/bin/cmake"
+tp="$w/tmpd/bin:/usr/bin:/bin"
+expect "with TMPDIR unset the launcher gives the tool /tmp" "TMPDIR=/tmp" \
+  env -u TMPDIR SHIPYARD_LAUNCHER_HOST=linux PATH="$tp" "$root/bin/shipyard-cmake"
+expect "with TMPDIR empty the launcher gives the tool /tmp" "TMPDIR=/tmp" \
+  env TMPDIR= SHIPYARD_LAUNCHER_HOST=linux PATH="$tp" "$root/bin/shipyard-cmake"
+expect "a caller's TMPDIR reaches the tool unchanged" "TMPDIR=$w/mine" \
+  env TMPDIR="$w/mine" SHIPYARD_LAUNCHER_HOST=linux PATH="$tp" "$root/bin/shipyard-cmake"
 mv "$w/cmake-aside" "$root/cmake"
 cp "$root/cmake/bin/ctest" "$w/ctest.sh"
 printf '\317\372\355\376' > "$root/cmake/bin/ctest"; chmod +x "$root/cmake/bin/ctest"

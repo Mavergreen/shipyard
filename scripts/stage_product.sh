@@ -2,7 +2,7 @@
 # platform: host-agnostic -- stevedore reads the updater's identity; the generated preinstall's PlistBuddy text runs on the target
 #   usage: stage_product.sh --stage ROOT --product P --version V --scripts-out DIR
 #            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
-#            [--updater-app P-updater.app] [--preinstall-hook FILE] [--postinstall-hook FILE]
+#            [--updater-app P-updater.app] [--preinstall-hook FILE] [--postinstall-hook FILE] [--boot-kext BUNDLE_ID]...
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
 #          staged its files under ROOT/opt/mavergreen/P/, its apps under ROOT/Applications/Mavergreen/,
 #          and anything else the OS dictates elsewhere; an app anywhere else in Applications/ is refused.
@@ -14,6 +14,11 @@
 #          on the target volume, or is older than requires/<dep>/min, or cannot be compared; the
 #          refusal names .mavergreen/ingredients/<dep>/REPO's releases. min must be orderable by
 #          scripts/lib/vercmp.sh.
+#          --boot-kext BUNDLE_ID (repeatable) names an unsigned kext staged anywhere under ROOT that
+#          10.9 must load: the postinstall lists BUNDLE_ID, at the installed kext's CFBundleVersion, in
+#          the target volume's OSKextSigExceptionList and, on the boot volume, restarts kextd, before
+#          the updater's agent and the postinstall hook; the tree's libexec/mavergreen/pre-uninstall
+#          removes it. A pre-uninstall the caller staged runs first, as pre-uninstall.product.
 # spec: tests/stage-product-test.sh
 set -eu
 umask 022
@@ -26,11 +31,11 @@ nl='
 '
 tab="$(printf '\t')"
 shq() { printf '%s' "$1" | sed "s/'/'\\\\''/g"; }
-ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; GEN=""
+ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; GEN=""; KX=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
-    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--version|--exclude|--replaces|--generated)
+    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--version|--exclude|--replaces|--generated|--boot-kext)
       [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
@@ -47,6 +52,10 @@ while [ "$1" != --end ]; do
     --generated) GEN="$GEN$2$nl"; set -- "$@" "$1" "$2"; shift 2 ;;
     --version|--exclude|--replaces) set -- "$@" "$1" "$2"; shift 2 ;;
     --appcast|--app-dir|--agent-label) echo "stage_product: $1 is derived from --product; stop passing it" >&2; exit 2 ;;
+    --boot-kext)
+      case "$2" in *[!A-Za-z0-9._-]*|.*|-*) echo "stage_product: --boot-kext: bad bundle id '$2'" >&2; exit 2 ;; esac
+      case "$nl$KX" in *"$nl$2 "*) echo "stage_product: --boot-kext $2 is named twice" >&2; exit 2 ;; esac
+      KX="$KX$2 $nl"; shift 2 ;;
     *) echo "stage_product: unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -91,6 +100,59 @@ for h in "$PREH" "$POSTH"; do
     sh -n "$h" || { echo "stage_product: hook $h is not valid sh; refusing to stage" >&2; exit 1; }
   fi
 done
+kvawk='f == 0 && (i = index($0, "<key>CFBundleVersion</key>")) { $0 = substr($0, i + 26); f = 1 } f && match($0, /<string>[^<]*<\/string>/) { print substr($0, RSTART + 8, RLENGTH - 17); exit }'
+if [ -n "$KX" ]; then
+  STEVEDORE="${STEVEDORE:-$(sh "$SELF/fetch_stevedore.sh")}"; export STEVEDORE
+  _kxs="$( cd "$ST" && find . -type d -name '*.kext' | sed 's|^\./||' )"
+  _kxn=""
+  _ifs="$IFS"; IFS="$nl"
+  for k in $KX; do
+    IFS="$_ifs"; k="${k% }"; _rel=""
+    IFS="$nl"
+    for b in $_kxs; do
+      IFS="$_ifs"
+      [ -f "$ST/$b/Contents/Info.plist" ] || continue
+      [ "$("$STEVEDORE" plist get "$ST/$b/Contents/Info.plist" CFBundleIdentifier 2>/dev/null || :)" = "$k" ] || continue
+      [ -z "$_rel" ] || { echo "stage_product: --boot-kext $k: both $_rel and $b are $k" >&2; exit 1; }
+      _rel="$b"
+    done
+    IFS="$_ifs"
+    [ -n "$_rel" ] || { echo "stage_product: --boot-kext $k: no kext staged under $ST has CFBundleIdentifier $k" >&2; exit 1; }
+    case "$_rel" in *"'"*|*'"'*|*'$'*|*'`'*|*'\'*) echo "stage_product: --boot-kext $k: its path $_rel has a quote, \$, \` or \\ the postinstall cannot carry" >&2; exit 1 ;; esac
+    _kip="$ST/$_rel/Contents/Info.plist"
+    head -c 5 "$_kip" | grep -q '^<?xml' \
+      || { echo "stage_product: --boot-kext $k: $_rel/Contents/Info.plist is not an XML plist, so the postinstall cannot read its CFBundleVersion" >&2; exit 1; }
+    _kv="$(awk "$kvawk" "$_kip")"
+    [ -n "$_kv" ] && [ "$_kv" = "$("$STEVEDORE" plist get "$_kip" CFBundleVersion 2>/dev/null || :)" ] \
+      || { echo "stage_product: --boot-kext $k: $_rel has no top-level CFBundleVersion the postinstall can read (read '${_kv:-none}')" >&2; exit 1; }
+    _kxn="$_kxn$k $_rel$nl"
+    IFS="$nl"
+  done
+  IFS="$_ifs"
+  _lx="$ST$PFX/libexec/mavergreen"
+  mkdir -p "$_lx"
+  _kxmark='# spec: shipyard scripts/stage_product.sh --boot-kext -- removes the ids it listed in OSKextSigExceptionList'
+  if [ -L "$_lx/pre-uninstall" ]; then
+    echo "stage_product: $_lx/pre-uninstall is a symlink; the helper refuses one" >&2; exit 1
+  elif [ -e "$_lx/pre-uninstall" ] && ! grep -qxF "$_kxmark" "$_lx/pre-uninstall"; then
+    [ ! -e "$_lx/pre-uninstall.product" ] && [ ! -L "$_lx/pre-uninstall.product" ] \
+      || { echo "stage_product: both $_lx/pre-uninstall and pre-uninstall.product are staged; --boot-kext runs the product's own hook as pre-uninstall.product" >&2; exit 1; }
+    mv "$_lx/pre-uninstall" "$_lx/pre-uninstall.product"
+  fi
+  cp "$SELF/kext_sig_exception.sh" "$_lx/kext-sig-exception"
+  {
+    printf '#!/bin/sh\n# platform: host-agnostic\n%s\n' "$_kxmark"
+    printf 'set -u\n_d="$(cd "$(dirname "$0")" && pwd)"\n'
+    printf 'if [ -e "$_d/pre-uninstall.product" ]; then\n  "$_d/pre-uninstall.product" || exit $?\nfi\n'
+    printf '_xl="${MAVERGREEN_ROOT:-/}"; _xl="${_xl%%/}/System/Library/Extensions/AppleKextExcludeList.kext/Contents/Info.plist"\n'
+    printf '[ -f "$_xl" ] || exit 0\n'
+    printf '%s' "$_kxn" | while read -r k _; do
+      printf 'sh "$_d/kext-sig-exception" remove "$_xl" %s || echo "%s: could not remove %s from $_xl" >&2\n' "$k" "$P" "$k"
+    done
+    printf 'exit 0\n'
+  } > "$_lx/pre-uninstall"
+  chmod 755 "$_lx/pre-uninstall" "$_lx/kext-sig-exception"
+fi
 mkdir -p "$ST$PFX"
 mkdir -p "$SCR"
 snippet=""
@@ -213,6 +275,19 @@ HELPERPICK
   printf '[ -n "$MG" ] && [ -x "$MG" ] || { echo "%s: no mavergreen helper on this volume" >&2; exit 1; }\n' "$P"
   printf 'mavergreen_chain_ok "$_mg_at" "$3" || exit 1\n'
   printf '"$MG" --root "$ROOT/" link %s || exit 1\n' "$P"
+  if [ -n "$KX" ]; then
+    printf '_kx="$ROOT/usr/local/mavergreen/%s/libexec/mavergreen/kext-sig-exception"\n' "$P"
+    printf '_kl="$ROOT/System/Library/Extensions/AppleKextExcludeList.kext/Contents/Info.plist"\n'
+    printf '_kx_added=0\n'
+    printf 'if [ -f "$_kl" ]; then\n'
+    printf '%s' "$_kxn" | while read -r k rel; do
+      printf "  _kv=\"\$(awk '%s' \"\$ROOT/%s/Contents/Info.plist\" 2>/dev/null || :)\"\n" "$kvawk" "$rel"
+      printf '  if [ -n "$_kv" ] && sh "$_kx" add "$_kl" %s "$_kv"; then _kx_added=1; else echo "%s: could not list %s in $_kl; 10.9 loads it only with kext-dev-mode=1" >&2; fi\n' "$k" "$P" "$k"
+    done
+    printf 'fi\n'
+    printf 'if [ "$_kx_added" = 1 ] && [ -z "$ROOT" ]; then /bin/launchctl stop com.apple.kextd 2>/dev/null || echo "%s: could not restart kextd; its kexts load from the next boot" >&2; fi\n' "$P"
+    printf 'unset _kx _kl _kv _kx_added\n'
+  fi
   if [ -n "$snippet" ]; then cat "$snippet"; printf '\n'; fi
   if [ -n "$POSTH" ]; then
     printf '(\n:\n'; cat "$POSTH"; printf '\n) || { echo "%s: postinstall hook failed" >&2; exit 1; }\n' "$P"

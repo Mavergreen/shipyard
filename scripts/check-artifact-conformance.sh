@@ -49,6 +49,9 @@
 #            macho-load    <artifact> <path> <arch> <dylib|rpath> <value>  one per dylib load or rpath of a slice, for a product with a target file (%20-encoded)
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
 #            appcast-notes <appcast-file> [<sha256>]               digest of the appcast's <description> CDATA
+#            kext          <file> <path> <id> boot|library        one per kext a "/" payload carries (%20-encoded)
+#            kext-exception <file> <id>                           one per id stage_product.sh --boot-kext lists
+#            excludelist-script <file> <script>                   a pre/postinstall touching AppleKextExcludeList itself
 #            deviation     <check> <reason...>                    a declared, reasoned departure
 #            abort         <reason...>                            the producer gave up here, and why
 #            end-of-facts                                         the producer ran to completion (LAST line)
@@ -1064,6 +1067,28 @@ done < "$tmp/cxxabi"
 [ "$cxx_fail" -le 20 ] || echo "conformance: cxxabi: and $((cxx_fail - 20)) more files with a second C++ runtime" >&2
 nmacho="$(grep -c '^macho ' "$facts" || :)"
 [ "$nmacho" -eq 0 ] || echo "conformance: cxxabi: checked $nmacho Mach-O slices"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Kexts that load at boot" -- a
+#       kext in Library/Extensions that loads other than as a dependency is listed through
+#       stage_product.sh --boot-kext or declared '- kext-sig-exception:<id>: <reason>'; the facility lists
+#       only kexts the pkg ships; and no script edits Apple's exclude list itself, which no deviation excuses.
+while read -r kind file path id how; do
+  [ "$kind" = kext ] && [ "$how" = boot ] || continue
+  case "$path" in Library/Extensions/*.kext) ;; *) continue ;; esac
+  case "${path#Library/Extensions/}" in */*) continue ;; esac
+  awk -v p="$file" -v i="$id" '$1 == "kext-exception" && $2 == p && $3 == i { f = 1 } END { exit !f }' "$facts" \
+    || fail kext-sig-exception "$file installs $(dec "$path") ($id), which 10.9's kextd refuses unsigned unless its id is in OSKextSigExceptionList -- stage it with stage_product.sh --boot-kext $id, or declare '- kext-sig-exception:$id: <reason>' under INGREDIENTS.md's ## Conformance deviations" "$id"
+done < "$facts"
+while read -r kind file id; do
+  [ "$kind" = kext-exception ] || continue
+  awk -v p="$file" -v i="$id" '$1 == "kext" && $2 == p && $4 == i { f = 1 } END { exit !f }' "$facts" \
+    || fail kext-sig-exception "$file lists $id in OSKextSigExceptionList but installs no kext with that CFBundleIdentifier -- the list carries exactly the kexts a product ships" "$id"
+done < "$facts"
+while read -r kind file script; do
+  [ "$kind" = excludelist-script ] || continue
+  echo "conformance: kext-exclude-list: $file's $script edits AppleKextExcludeList other than through stage_product.sh --boot-kext -- every other key of Apple's file is left alone, so declare the kext's id with --boot-kext and drop the hand-written edit" >&2
+  chk_status=1
+done < "$facts"
 
 [ "$chk_status" -ne 0 ] || echo "conformance: ok — $expected"
 exit "$chk_status"
