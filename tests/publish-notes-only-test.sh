@@ -43,11 +43,11 @@ files="$(sed -n '/^files<<EOF$/,/^EOF$/p' "$w/run/out" | sed '1d;$d')"
 
 if step none thing.tar.gz; then echo "FAIL: assets: none with an asset present must fail"; exit 1; fi
 
-step required thing.tar.gz || { echo "FAIL: assets: required with an asset must pass:"; cat "$w/run/log"; exit 1; }
+step required thing.tar.gz CONTENT-MANIFEST.txt RELEASE-MANIFEST.txt || { echo "FAIL: assets: required with an asset must pass:"; cat "$w/run/log"; exit 1; }
 grep -q 'dist/thing.tar.gz' "$w/run/out" && grep -q 'dist/SHA256SUMS' "$w/run/out" \
   || { echo "FAIL: assets: required must attach the asset and its SHA256SUMS"; cat "$w/run/out"; exit 1; }
 
-if step required; then echo "FAIL: assets: required with nothing to attach must still fail"; exit 1; fi
+if step required CONTENT-MANIFEST.txt RELEASE-MANIFEST.txt; then echo "FAIL: assets: required with nothing to attach must still fail"; exit 1; fi
 if step nothing thing.tar.gz; then echo "FAIL: an unknown assets value must fail"; exit 1; fi
 
 echo "PASS: publish-notes-only"

@@ -42,12 +42,28 @@ on:
         type: string
         required: false
         default: v1
+      force-reason:
+        description: "The caller's force_publish: when it is not blank, the release publishes with every product changed, and the reason goes into its notes."
+        type: string
+        required: false
+        default: ""
+      line:
+        description: "The tag glob of the release line the content is compared on; empty means *-mavergreen.*."
+        type: string
+        required: false
+        default: ""
+    outputs:
+      published:
+        description: "true when a release was published, false when its content was identical to the line's latest."
+        value: ${{ jobs.publish.outputs.published }}
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      published: ${{ steps.skip.outputs.published || steps.done.outputs.published }}
     steps:
       - name: Check out shipyard (for release-assets.sh)
         uses: actions/checkout@v7
@@ -76,11 +92,57 @@ jobs:
           name: ${{ inputs.artifact }}
           path: dist
 
+      - name: Decide whether what a user installs changed
+        id: decide
+        env:
+          REPO: ${{ github.repository }}
+          REASON: ${{ inputs.force-reason }}
+          LINE: ${{ inputs.line }}
+          ASSETS: ${{ inputs.assets }}
+          ROOT: ${{ steps.names.outputs.root }}
+        run: |
+          set -eu
+          d="$RUNNER_TEMP/decision"
+          if [ "$ASSETS" = none ] && [ ! -f dist/CONTENT-MANIFEST.txt ]; then
+            printf 'publish\n\nA notes-only release has no installed content to compare.\n' > "$d"
+          else
+            [ -f dist/CONTENT-MANIFEST.txt ] \
+              || { echo "::error::the artifact has no CONTENT-MANIFEST.txt -- run content-manifest.sh into dist/ after conformance"; exit 1; }
+            sh .shipyard/scripts/release-decision.sh --manifest dist/CONTENT-MANIFEST.txt --repo "$REPO" \
+              --line "${LINE:-*-mavergreen.*}" --repo-root "$ROOT" --force-reason "$REASON" > "$d"
+          fi
+          cat "$d"
+          sed '1,/^$/d' "$d" >> "$GITHUB_STEP_SUMMARY"
+          echo "decision=$(head -n 1 "$d")" >> "$GITHUB_OUTPUT"
+
+      - name: Nothing to publish -- the content is unchanged
+        id: skip
+        if: steps.decide.outputs.decision == 'skip'
+        run: echo "published=false" >> "$GITHUB_OUTPUT"
+
+      - name: Carry unchanged products forward
+        if: steps.decide.outputs.decision == 'publish'
+        env:
+          REPO: ${{ github.repository }}
+          NOTES: ${{ inputs.notes-file }}
+        run: sh .shipyard/scripts/carry-forward.sh dist "$REPO" "$RUNNER_TEMP/decision" "$NOTES"
+
+      - name: Add the decision's sections to the notes
+        id: decision-notes
+        if: steps.decide.outputs.decision == 'publish'
+        env:
+          NOTES: ${{ inputs.notes-file }}
+        run: |
+          set -eu
+          sed '1,/^$/d' "$RUNNER_TEMP/decision" | awk '/^### / { on = 1 } on' > "$RUNNER_TEMP/sections"
+          [ ! -s "$RUNNER_TEMP/sections" ] || { printf '\n'; cat "$RUNNER_TEMP/sections"; } >> "dist/$NOTES"
+
       # platform: download-artifact matched by pattern, not name -- a name that matches nothing fails
       #           the step (a red annotation on what may be a legitimately unsigned release); a
       #           pattern that matches nothing downloads nothing, and require_key_scan.sh below
       #           decides whether that absence is acceptable.
       - name: Look for the signing-key scan
+        if: steps.decide.outputs.decision == 'publish'
         uses: actions/download-artifact@v8
         with:
           pattern: sparkle-key-scan
@@ -88,10 +150,12 @@ jobs:
           path: .keyscan
 
       - name: A signed release must have been scanned for the signing key
+        if: steps.decide.outputs.decision == 'publish'
         run: sh .shipyard/scripts/require_key_scan.sh dist .keyscan
 
       - name: Select assets, verify the notes, checksum
         id: assets
+        if: steps.decide.outputs.decision == 'publish'
         env:
           NOTES: ${{ inputs.notes-file }}
           CHECKSUMS: ${{ inputs.checksums }}
@@ -124,6 +188,7 @@ jobs:
           { echo 'files<<EOF'; printf '%s\n' "$files"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
 
       - name: Refuse an already-taken tag
+        if: steps.decide.outputs.decision == 'publish'
         env:
           VER: ${{ inputs.version }}
           REPO: ${{ github.repository }}
@@ -135,6 +200,7 @@ jobs:
             "$VER" "https://github.com/$REPO" "$REF_TYPE" "$REF_NAME" "$SHA"
 
       - name: A first release needs a README a human has read
+        if: steps.decide.outputs.decision == 'publish'
         env:
           REPO: ${{ github.repository }}
           SHA: ${{ inputs.target-commitish || github.sha }}
@@ -165,6 +231,7 @@ jobs:
 
       - name: Publish
         id: publish1
+        if: steps.decide.outputs.decision == 'publish'
         continue-on-error: true
         uses: softprops/action-gh-release@v3
         with:
@@ -175,7 +242,7 @@ jobs:
           files: ${{ steps.assets.outputs.files }}
 
       - name: Publish failed -- clear its draft before retrying
-        if: steps.publish1.outcome == 'failure'
+        if: steps.decide.outputs.decision == 'publish' && steps.publish1.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -187,7 +254,7 @@ jobs:
 
       - name: Publish (attempt 2)
         id: publish2
-        if: steps.publish1.outcome == 'failure'
+        if: steps.decide.outputs.decision == 'publish' && steps.publish1.outcome == 'failure'
         continue-on-error: true
         uses: softprops/action-gh-release@v3
         with:
@@ -198,7 +265,7 @@ jobs:
           files: ${{ steps.assets.outputs.files }}
 
       - name: Publish failed again -- clear its draft before the last attempt
-        if: steps.publish2.outcome == 'failure'
+        if: steps.decide.outputs.decision == 'publish' && steps.publish2.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -210,7 +277,7 @@ jobs:
 
       - name: Publish (attempt 3)
         id: publish3
-        if: steps.publish2.outcome == 'failure'
+        if: steps.decide.outputs.decision == 'publish' && steps.publish2.outcome == 'failure'
         uses: softprops/action-gh-release@v3
         with:
           name: ${{ steps.names.outputs.title }}
@@ -223,7 +290,7 @@ jobs:
         # spec: mavergreen-conventions SKILL.md, "A failed upload must not strand a draft" --
         #       keyed on the FIRST attempt's outcome, not the last, or an intermediate failure
         #       leaves this condition silently false and a draft stranded.
-        if: failure() && steps.publish1.outcome == 'failure'
+        if: failure() && steps.decide.outputs.decision == 'publish' && steps.publish1.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -233,3 +300,8 @@ jobs:
           echo "::error::publishing $VER failed after retrying; its draft is deleted and no tag was minted, so nothing was published."
           echo "::error::Re-run this run's failed jobs to publish the same build. If the caller's main has moved since this run started (a workflow change makes the tag 403), re-dispatch instead."
           exit 1
+
+      - name: Report the release published
+        id: done
+        if: steps.decide.outputs.decision == 'publish'
+        run: echo "published=true" >> "$GITHUB_OUTPUT"

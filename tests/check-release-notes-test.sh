@@ -253,6 +253,14 @@ Release 9.9p2-mavergreen.6
 EOF
 rc=0; MAVERGREEN_REPO_ROOT="$work" sh "$S" "$work/n.md" 9.9p2-mavergreen.6 --short openssh >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] || { echo "FAIL a missing --tag is a usage error (exit 2), got $rc"; exit 1; }
+SHORT=openssh
+fence="$(printf '\140\140\140')"
+printf '%s\n' '## OpenSSH 9.9p2' 'Release 9.9p2-mavergreen.6' '' '### What changed' '- Repackage.' '' \
+  '### Forced: notes typo' '' 'Published by a dispatch with this reason, so every product is offered again.' '' \
+  '### Installed files changed' '' "${fence}diff" '-file openssh.pkg opt/mavergreen/openssh/bin/ssh 0755 aaaa' \
+  '+file openssh.pkg opt/mavergreen/openssh/bin/ssh 0755 abab' "$fence" '' 'and 3 more' '' \
+  '### Unchanged' '' '- OpenSSH Agent: unchanged, still 9.9p2-mavergreen.5' \
+  | ok 9.9p2-mavergreen.6 "the release decision's sections"
 SHORT=nonesuch
 no 9.9p2-mavergreen.6 "a product with no noun" "noun" <<'EOF'
 ## OpenSSH 9.9p2

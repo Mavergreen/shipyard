@@ -5,7 +5,8 @@
 #          except the notes file and any pre-existing SHA256SUMS (the publish workflow regenerates
 #          that). Refuses, exit 1, a missing directory, a missing or empty notes file, notes carrying
 #          stand-in-feeds.sh's stand-in heading, an asset named appcast*.xml (a retired feed name), an
-#          asset carrying stand-in-feeds.sh's unsigned signature, and a directory with no assets.
+#          asset carrying stand-in-feeds.sh's unsigned signature, a directory with no assets but the manifests, and one
+#          lacking CONTENT-MANIFEST.txt or RELEASE-MANIFEST.txt (content-manifest.sh, release-manifest.sh).
 #          --notes-only is a release of notes alone, for a product with nothing to attach (a GitHub
 #          Action, which its consumers fetch by tag): every notes check stands, it prints nothing,
 #          and any asset in the directory is refused rather than silently left behind.
@@ -39,7 +40,11 @@ for f in "$dir"/*; do
   grep -qF "edSignature=\"$STAND_IN_SIGNATURE\"" "$f" \
     && { echo "release-assets: $b carries stand-in-feeds.sh's unsigned signature -- this dist was never really signed" >&2; exit 1; }
   printf '%s\n' "$f"
-  found=1
+  case "$b" in CONTENT-MANIFEST.txt|RELEASE-MANIFEST.txt) ;; *) found=1 ;; esac
 done
 [ "$notes_only" -eq 1 ] && exit 0
+for m in content release; do
+  M="$(printf '%s' "$m" | tr a-z A-Z)-MANIFEST.txt"
+  [ -f "$dir/$M" ] || { echo "release-assets: $dir has no $M -- write it with $m-manifest.sh after conformance; every release publishes both manifests" >&2; exit 1; }
+done
 [ "$found" -eq 1 ] || { echo "release-assets: no assets in $dir (only $notes) -- nothing to publish" >&2; exit 1; }

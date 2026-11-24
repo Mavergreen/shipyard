@@ -3,7 +3,9 @@
 #   usage: fetch-name-inputs.sh REPO SHA SHORT DEST
 #          Fetches .mavergreen/products/SHORT/noun and line of REPO at SHA into
 #          DEST/.mavergreen/products/SHORT/, through the GitHub API with $GH_TOKEN, never git. A
-#          missing noun is fatal; a missing line is not, since a product need not have one.
+#          missing noun is fatal; a missing line is not, since a product need not have one. Also fetches
+#          every .mavergreen/deviations/publish-unchanged/<label>/{scope,reason,revisit} into DEST, which
+#          release-decision.sh reads; a repo with none fetches none.
 # spec: tests/publish-notes-shape-test.sh
 set -eu
 [ $# -eq 4 ] || { echo "usage: fetch-name-inputs.sh REPO SHA SHORT DEST" >&2; exit 2; }
@@ -38,3 +40,17 @@ case "$status" in
   *) echo "fetch-name-inputs: could not fetch .mavergreen/products/$short/line of $repo at $sha: $(cat "$err")" >&2; rm -f "$err"; exit 1 ;;
 esac
 rm -f "$err"
+pu=.mavergreen/deviations/publish-unchanged
+if labels="$(gh api "repos/$repo/contents/$pu?ref=$sha" --jq '.[] | select(.type == "dir") | .name' 2> "$dest/.err")"; then
+  for l in $labels; do
+    case "$l" in ''|.*|*/*) echo "fetch-name-inputs: '$l' is not a deviation label" >&2; exit 1 ;; esac
+    mkdir -p "$dest/$pu/$l"
+    for f in scope reason revisit; do
+      gh api -H 'Accept: application/vnd.github.raw' "repos/$repo/contents/$pu/$l/$f?ref=$sha" > "$dest/$pu/$l/$f" 2> "$dest/.err" \
+        || { echo "fetch-name-inputs: could not fetch $pu/$l/$f of $repo at $sha: $(cat "$dest/.err")" >&2; rm -f "$dest/.err"; exit 1; }
+    done
+  done
+elif ! grep -q 'HTTP 404' "$dest/.err"; then
+  echo "fetch-name-inputs: could not list $pu of $repo at $sha: $(cat "$dest/.err")" >&2; rm -f "$dest/.err"; exit 1
+fi
+rm -f "$dest/.err"

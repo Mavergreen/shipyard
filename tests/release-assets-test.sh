@@ -6,7 +6,8 @@ S="$here/../scripts/release-assets.sh"
 . "$here/../scripts/stand-in-marker.sh"
 w="$(mktemp -d "${TMPDIR:-/tmp}/release-assets-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 
-mkd() { d="$w/$1"; mkdir -p "$d"; printf 'notes\n' > "$d/RELEASE_NOTES.md"; printf 'pkg\n' > "$d/x.pkg"; printf 'xml\n' > "$d/x.xml"; }
+manifests() { printf 'meta x feed-min-os 10.9.5\n' > "$1/CONTENT-MANIFEST.txt"; printf 'shipyard 1.0.900\n' > "$1/RELEASE-MANIFEST.txt"; }
+mkd() { d="$w/$1"; mkdir -p "$d"; printf 'notes\n' > "$d/RELEASE_NOTES.md"; printf 'pkg\n' > "$d/x.pkg"; printf 'xml\n' > "$d/x.xml"; manifests "$d"; }
 
 mkd ok
 out="$(sh "$S" "$w/ok")"
@@ -25,9 +26,17 @@ mkd emptynotes; : > "$w/emptynotes/RELEASE_NOTES.md"
 if sh "$S" "$w/emptynotes" >/dev/null 2>&1; then echo "FAIL: an empty notes body is the defect this exists to prevent, so empty notes must fail"; exit 1; fi
 
 mkdir -p "$w/bare"; printf 'notes\n' > "$w/bare/RELEASE_NOTES.md"
+for m in CONTENT-MANIFEST.txt RELEASE-MANIFEST.txt; do
+  mkd "no-$m"; rm "$w/no-$m/$m"
+  if err="$(sh "$S" "$w/no-$m" 2>&1)"; then echo "FAIL: a dist without $m must not publish"; exit 1; fi
+  printf '%s\n' "$err" | grep -qF "$m" || { echo "FAIL: the refusal names $m: $err"; exit 1; }
+done
+out="$(sh "$S" "$w/ok")"
+printf '%s\n' "$out" | grep -q 'CONTENT-MANIFEST.txt' && printf '%s\n' "$out" | grep -q 'RELEASE-MANIFEST.txt' \
+  || { echo "FAIL: both manifests are assets: $out"; exit 1; }
 if sh "$S" "$w/bare" >/dev/null 2>&1; then echo "FAIL: publishing nothing is a mistake, not a release -- no assets at all must fail"; exit 1; fi
 
-mkdir -p "$w/custom"; printf 'n\n' > "$w/custom/NOTES.md"; printf 'p\n' > "$w/custom/y.pkg"
+mkdir -p "$w/custom"; printf 'n\n' > "$w/custom/NOTES.md"; printf 'p\n' > "$w/custom/y.pkg"; manifests "$w/custom"
 out="$(sh "$S" "$w/custom" NOTES.md)"
 printf '%s\n' "$out" | grep -q 'y.pkg' || { echo "FAIL: a custom notes name must be honoured: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'NOTES.md' && { echo "FAIL custom notes attached: $out"; exit 1; }
@@ -57,7 +66,7 @@ out="$(sh "$S" --notes-only "$w/notesonly")" || { echo "FAIL: --notes-only with 
 mkdir -p "$w/notesonlysums"; printf 'notes\n' > "$w/notesonlysums/RELEASE_NOTES.md"; printf 'old\n' > "$w/notesonlysums/SHA256SUMS"
 out="$(sh "$S" --notes-only "$w/notesonlysums")" || { echo "FAIL: a stale SHA256SUMS is not an asset under --notes-only either"; exit 1; }
 [ -z "$out" ] || { echo "FAIL: --notes-only must not attach a stale SHA256SUMS: $out"; exit 1; }
-mkd notesonlyassets
+mkd notesonlyassets; rm "$w/notesonlyassets/CONTENT-MANIFEST.txt" "$w/notesonlyassets/RELEASE-MANIFEST.txt"
 if err="$(sh "$S" --notes-only "$w/notesonlyassets" 2>&1)"; then echo "FAIL: --notes-only with assets present must fail, not drop them silently"; exit 1; fi
 printf '%s\n' "$err" | grep -q 'x.pkg\|x.xml' || { echo "FAIL: the refusal should name an asset: $err"; exit 1; }
 mkdir -p "$w/notesonlyempty"; : > "$w/notesonlyempty/RELEASE_NOTES.md"

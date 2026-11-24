@@ -137,7 +137,7 @@ if [ "$decision" = skip ]; then
   fi
   exit 0
 fi
-[ -z "$reason" ] || printf '### Forced: %s\n\n' "$reason"
+[ -z "$reason" ] || printf '### Forced: %s\n\nPublished by a dispatch with this reason, so every product is offered again.\n\n' "$reason"
 if [ -n "$unchanged_why" ]; then
   if [ -z "$warn" ] && [ -n "$prev" ] && [ ! -s "$w/d" ]; then
     printf 'Published although the content is identical to %s, by the publish-unchanged deviation: %s\n\n' "$prev" "$unchanged_why"

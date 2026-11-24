@@ -124,6 +124,61 @@ print("ok: check-release-notes.sh runs on dist/$NOTES against $VERSION, after re
       "before the checksum block, and before the first publish attempt")
 PY
 
+python3 - "$w" <<'PY'
+import sys, yaml
+wf = yaml.safe_load(open(sys.argv[1]))
+on = wf.get(True) or wf.get("on")
+call = on["workflow_call"]
+def fail(msg):
+    print("FAIL: " + msg); sys.exit(1)
+inp = call["inputs"]
+for name in ("force-reason", "line"):
+    i = inp.get(name) or {}
+    if i.get("type") != "string" or i.get("required", False) is not False or i.get("default") != "":
+        fail("publish-release.yml takes %s, an optional string defaulting to ''" % name)
+outs = call.get("outputs") or {}
+if "jobs.publish.outputs.published" not in str((outs.get("published") or {}).get("value", "")):
+    fail("publish-release.yml's output published is the publish job's")
+job = wf["jobs"]["publish"]
+if "published" not in (job.get("outputs") or {}):
+    fail("the publish job has an output published")
+steps = job["steps"]
+ids = [s.get("id", "") for s in steps]
+def at(pred, what):
+    hits = [i for i, s in enumerate(steps) if pred(s)]
+    if not hits:
+        fail("publish-release.yml has no step that " + what)
+    return hits[0]
+names = at(lambda s: s.get("id") == "names", "fetches the names (id names)")
+dl = at(lambda s: "download-artifact" in (s.get("uses") or "") and "inputs.artifact" in str((s.get("with") or {}).get("name", "")), "downloads the artifact")
+decide = at(lambda s: s.get("id") == "decide", "decides (id decide)")
+skip = at(lambda s: s.get("id") == "skip", "ends a skip (id skip)")
+carry = at(lambda s: "carry-forward.sh" in (s.get("run") or ""), "runs carry-forward.sh")
+notes = at(lambda s: s.get("id") == "decision-notes", "appends the decision's sections to the notes (id decision-notes)")
+assets = at(lambda s: s.get("id") == "assets", "selects the assets (id assets)")
+pub = at(lambda s: "action-gh-release" in (s.get("uses") or ""), "publishes")
+done = at(lambda s: s.get("id") == "done", "reports published=true (id done)")
+order = [names, dl, decide, skip, carry, notes, assets, pub, done]
+if order != sorted(order):
+    fail("the steps run names, download, decide, skip, carry-forward, the decision's notes, assets, publish, done: got %r" % order)
+run = steps[decide].get("run") or ""
+for flag in ("release-decision.sh", "--force-reason", "--line", "--repo-root", "--manifest"):
+    if flag not in run:
+        fail("the decide step calls release-decision.sh with %s" % flag)
+if "inputs.force-reason" not in str(steps[decide].get("env")):
+    fail("the decide step reads inputs.force-reason")
+if "decision == 'skip'" not in str(steps[skip].get("if", "")) or "published=false" not in (steps[skip].get("run") or ""):
+    fail("the skip step runs on skip and sets published=false")
+for i in range(decide + 1, len(steps)):
+    if i == skip:
+        continue
+    if "steps.decide.outputs.decision == 'publish'" not in str(steps[i].get("if", "")):
+        fail("step %r after the decision runs only on publish" % (steps[i].get("name") or steps[i].get("id")))
+if "published=true" not in (steps[done].get("run") or ""):
+    fail("the done step sets published=true")
+print("ok: publish-release.yml decides, then skips or carries forward and publishes, reporting published")
+PY
+
 S="$here/../scripts/check-release-notes.sh"
 T="$(mktemp -d "${TMPDIR:-/tmp}/pns.XXXXXX")"
 trap 'rm -rf "$T"' EXIT
@@ -155,9 +210,14 @@ PY
 mkdir -p "$T/run/.shipyard" "$T/bin"; cp -R "$here/../scripts" "$T/run/.shipyard/scripts"
 cat > "$T/bin/gh" <<'STUB'
 #!/bin/sh
+f=""
 case "$*" in
   */noun?ref=*) f="$STUB_NOUN" ;;
   */line?ref=*) f="$STUB_LINE" ;;
+  */deviations/publish-unchanged?ref=*) [ -z "${STUB_DEV:-}" ] || f="developer-tool" ;;
+  */deviations/publish-unchanged/developer-tool/scope?ref=*) [ -z "${STUB_DEV:-}" ] || f="*" ;;
+  */deviations/publish-unchanged/developer-tool/reason?ref=*) [ -z "${STUB_DEV:-}" ] || f="always" ;;
+  */deviations/publish-unchanged/developer-tool/revisit?ref=*) [ -z "${STUB_DEV:-}" ] || f="never" ;;
 esac
 if [ -n "$f" ]; then printf '%s\n' "$f"; else echo "gh: Not Found (HTTP 404)" >&2; exit 1; fi
 STUB
@@ -175,5 +235,14 @@ if names_step '' '' v1.0.300; then echo "FAIL: a missing noun must fail the name
 grep -q 'noun' "$T/run/log" || { echo "FAIL: the missing noun is named"; cat "$T/run/log"; exit 1; }
 [ ! -s "$T/run/out" ] || { echo "FAIL: nothing is set for later steps after a missing noun"; cat "$T/run/out"; exit 1; }
 echo "ok: the names step derives the release title and a missing noun fails it"
+names_step Shipyard '' v1.0.300 || { echo "FAIL: no publish-unchanged deviation is fine:"; cat "$T/run/log"; exit 1; }
+[ ! -e "$T/run/rt/names/.mavergreen/deviations" ] || { echo "FAIL: no deviation is fetched when the repo has none"; exit 1; }
+STUB_DEV=1; export STUB_DEV
+names_step Shipyard '' v1.0.300 || { echo "FAIL: the names step with a publish-unchanged deviation:"; cat "$T/run/log"; exit 1; }
+unset STUB_DEV
+d="$T/run/rt/names/.mavergreen/deviations/publish-unchanged/developer-tool"
+[ "$(cat "$d/scope" 2>/dev/null)" = '*' ] && [ "$(cat "$d/reason")" = always ] && [ "$(cat "$d/revisit")" = never ] \
+  || { echo "FAIL: the names step fetches the publish-unchanged deviation at the release commit"; cat "$T/run/log"; exit 1; }
+echo "ok: the names step fetches the publish-unchanged deviation, when there is one"
 
 echo "PASS: publish-notes-shape"
