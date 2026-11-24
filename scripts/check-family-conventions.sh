@@ -890,7 +890,7 @@ for path in sys.argv[1:]:
         runs = json.dumps(job.get("runs-on", ""))
         if "matrix" in runs:
             runs += json.dumps((job.get("strategy") or {}).get("matrix", ""))
-        if re.search(r"macos-", runs, re.I):
+        if re.search(r"(macos|xcode)-", runs, re.I):
             seen.add(key)
             print(key)
 PY
@@ -924,7 +924,7 @@ print("job")
 runs = json.dumps(job.get("runs-on", ""))
 if "matrix" in runs:
     runs += json.dumps((job.get("strategy") or {}).get("matrix", ""))
-if not re.search(r"macos-", runs, re.I):
+if not re.search(r"(macos|xcode)-", runs, re.I):
     print("offmac")
 pubs = [j for j, b in jobs.items() if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]]
 if not pubs and "publish" in jobs:

@@ -119,6 +119,10 @@ mac latest '    runs-on: macos-latest
     steps:
       - run: true'
 fails "check 36: macos-latest" "$work/mac-latest" 'macos-runner ci.yml:mac'
+mac xcode '    runs-on: xcode-27
+    steps:
+      - run: true'
+fails "check 36: GitHub's xcode-* macOS images" "$work/mac-xcode" 'macos-runner ci.yml:mac'
 mac list '    runs-on: [self-hosted, macos-15]
     steps:
       - run: true'
