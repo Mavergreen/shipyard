@@ -1,4 +1,4 @@
-relocatable: not a check but a deviation key: a product's own relocatable deviation (scope: its short name, or *) says it cannot run from a cache, and its release manifest tells every consumer.
+relocatable: not a check but a deviation key: a product's own relocatable deviation (scope: its short name, or a glob other than *) says it cannot run from a cache, and its release manifest tells every consumer.
 
 ## Why
 shipyard-provision extracts a pinned family product from a pkg into a cache and prints that path. A
@@ -19,8 +19,10 @@ every ingredient. An unreadable manifest of any other pin stops the run. It does
 relocatable.
 
 ## Deviating
-Write .mavergreen/deviations/relocatable/<label>/ in the product's own repo with a scope (<short> or *), a
-reason and a revisit. A good reason names what the product embeds (a prefix, an absolute rpath); a good
+Write .mavergreen/deviations/relocatable/<label>/ in the product's own repo with a scope (<short>, or a glob
+naming several), a reason and a revisit. A scope of * is read only as a consumer's, for every ingredient,
+until L1; release-manifest.sh never publishes it, so a repo that is both consumer and producer does not
+mark every one of its products relocatable by an old consumer deviation. A good reason names what the product embeds (a prefix, an absolute rpath); a good
 revisit is the release that no longer does.
 
 New in the flag day (P2, with shipyard-provision; read from the dependency's manifest in P6)

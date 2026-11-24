@@ -6,7 +6,8 @@
 #            ingredient <name> <pin>            line 1 of .mavergreen/ingredients/<name>/VERSION, else PIN
 #            ingredient <name> from <parent>    for an ingredient with a from file
 #            requires <short> <dep> <kind> <min|->
-#            relocatable <short>                each product a relocatable deviation's scope names (* is all)
+#            relocatable <short>                each product a relocatable deviation's scope names; a
+#                                               scope of * is a consumer's, for every ingredient, and names none
 #            dylib <short> <install-name>       each LC_ID_DYLIB of each Mach-O in DIST/<short>-<VERSION>.pkg
 #          An ingredient with neither file is left out. Never normalized and never compared. Exit 0; 1 on
 #          an unreadable artifact or a Mach-O reader that is missing or fails; 2 on usage.
@@ -48,7 +49,12 @@ for s in $products; do
     m="$(mg_value "products/$s/requires/$d/min")" || m=-
     printf 'requires %s %s %s %s\n' "$s" "$d" "$k" "$m" >> "$rows"
   done
-  ! shipyard_deviated relocatable "$s" > /dev/null || printf 'relocatable %s\n' "$s" >> "$rows"
+  while IFS= read -r g; do
+    [ -n "$g" ] && [ "$g" != '*' ] || continue
+    case "$s" in $g) printf 'relocatable %s\n' "$s" >> "$rows"; break ;; esac
+  done <<EOF
+$(shipyard_deviation_scopes relocatable)
+EOF
 done
 
 for s in $products; do
