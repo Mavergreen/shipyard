@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: release-notes.sh --tag T --version V --product P --out FILE [--line L] [--min-os M]
-#                           [--short S]
+#                           [--short S] [--standalone ARCHIVE]
 #     --tag/--version   the release tag and full version (equal for most repos; golang's differ)
 #     --product         the BARE product noun ("OpenSSH", "Go", "Signal Desktop"). This composes the
 #                       family's prose register: "OpenSSH 9.9p2 for Mavericks (9.9p2-mavericks.6)".
@@ -9,10 +9,14 @@
 #                       "1.26.*" also accepted -- both are normalized to a glob before use)
 #     --min-os          emits the install floor line; omit for a product that is not a 10.9 .pkg
 #     --short           this product's short name, in a repo whose release-notes/<short>/ nests its tree
+#     --standalone      the standalone archive this release publishes, SHORT-VERSION-macos-ARCH.tar.gz;
+#                       its own name, top directory and bin/ and .app entries write the Standalone archive
+#                       section, and without it the notes have none
 #     Generates ONE product's release notes: the Sparkle appcast <description> and the GitHub
 #     Release body, which are the same bytes by construction. Sections, in order: title, committed
 #     prose (verbatim, never rewritten), Before you update (only with requires/ or rebuild), What
-#     changed, Our patches (only when one changed), Build ingredients (only when a pin moved), footer.
+#     changed, Our patches (only when one changed), Build ingredients (only when a pin moved),
+#     Standalone archive (only with --standalone), footer.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes" --
 #       NOTES ARE PART OF THE RELEASE CONTRACT: every gap here is fatal and names its cause. The old
 #       doctrine -- prose must never fail a release -- meant every section was appended with
@@ -24,7 +28,7 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # MAVERICKS_ROOT
 
-TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""; SHORT=""; SHORT_SET=no
+TAG=""; VER=""; PRODUCT=""; OUT=""; LINE=""; MINOS=""; SHORT=""; SHORT_SET=no; STANDALONE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --tag) TAG="$2"; shift 2;;
@@ -34,6 +38,7 @@ while [ $# -gt 0 ]; do
     --line) LINE="$2"; shift 2;;
     --min-os) MINOS="$2"; shift 2;;
     --short) SHORT="$2"; SHORT_SET=yes; shift 2;;
+    --standalone) STANDALONE="$2"; shift 2;;
     *) echo "release-notes: unknown argument: $1" >&2; exit 2;;
   esac
 done
@@ -42,6 +47,51 @@ die() { echo "release-notes: $1" >&2; exit 1; }
 [ -n "$VER" ] || die "--version is required"
 [ -n "$PRODUCT" ] || die "--product is required (the bare product noun, e.g. OpenSSH)"
 [ -n "$OUT" ] || die "--out is required"
+
+# spec: SKILL.md "Standalone archive" -- the section is read from the archive itself, so a product
+#       never writes it by hand and a release without an archive never claims one.
+STANDALONE_TEXT=""
+if [ -n "$STANDALONE" ]; then
+  sa_name="${STANDALONE##*/}"
+  sa_short="${sa_name%-"$VER"-macos-*.tar.gz}"
+  case "$sa_name" in
+    "$sa_short-$VER-macos-universal.tar.gz"|"$sa_short-$VER-macos-x86_64.tar.gz"|"$sa_short-$VER-macos-arm64.tar.gz") ;;
+    *) die "--standalone $STANDALONE is not named SHORT-$VER-macos-ARCH.tar.gz (ARCH universal, x86_64 or arm64), so it is not this release's standalone archive" ;;
+  esac
+  case "$sa_short" in
+    ''|-*|*[!a-z0-9-]*) die "--standalone $STANDALONE does not begin with a short name" ;;
+  esac
+  if [ "$SHORT_SET" = yes ] && [ "$sa_short" != "$SHORT" ]; then die "--standalone $STANDALONE is $sa_short's archive, not --short $SHORT's"; fi
+  [ -f "$STANDALONE" ] && [ -r "$STANDALONE" ] || die "--standalone $STANDALONE cannot be read"
+  sa_top="$sa_short-$VER"
+  sa_list="$(tar -tzf "$STANDALONE" 2>/dev/null)" || die "--standalone $STANDALONE cannot be listed as a gzipped tar"
+  sa_bin="$(printf '%s\n' "$sa_list" | LC_ALL=C awk -v p="$sa_top/bin/" '
+    { sub(/^\.\//, "") }
+    index($0, p) == 1 { r = substr($0, length(p) + 1); if (r != "" && r !~ /\//) print r }' | LC_ALL=C sort -u)"
+  sa_apps="$(printf '%s\n' "$sa_list" | LC_ALL=C awk -v p="$sa_top/" '
+    { sub(/^\.\//, "") }
+    index($0, p) == 1 { r = substr($0, length(p) + 1); sub(/\/.*/, "", r); if (r ~ /\.app$/) print r }' | LC_ALL=C sort -u)"
+  printf '%s\n' "$sa_list" | LC_ALL=C awk -v t="$sa_top" '{ sub(/^\.\//, ""); sub(/\/$/, "") } $0 == t || index($0, t "/") == 1 { f = 1 } END { exit !f }' \
+    || die "--standalone $STANDALONE has no top directory $sa_top/"
+  STANDALONE_TEXT="$(printf '### Standalone archive\n- `%s` unpacks anywhere and runs from there, with no installer and no root.\n' "$sa_name")"
+  sa_run="$(printf '%s\n' "$sa_bin" | awk -v t="$sa_top" '
+    NF { c[++n] = "`" $0 "`" }
+    END {
+      if (n == 1) { printf "- Run `%s/bin/%s`.\n", t, substr(c[1], 2, length(c[1]) - 2); exit }
+      if (n == 0) exit
+      m = (n > 5) ? 5 : n; s = c[1]
+      for (i = 2; i <= m; i++) s = s ((i == m && n <= 5) ? " and " : ", ") c[i]
+      if (n > 5) s = s " and " (n - 5) " more"
+      printf "- Its commands are in `%s/bin/`: %s.\n", t, s
+    }')"
+  sa_open="$(printf '%s\n' "$sa_apps" | awk -v t="$sa_top" 'NF { printf "- Open `%s/%s`.\n", t, $0 }')"
+  [ -z "$sa_run" ] || STANDALONE_TEXT="$STANDALONE_TEXT
+$sa_run"
+  [ -z "$sa_open" ] || STANDALONE_TEXT="$STANDALONE_TEXT
+$sa_open"
+  STANDALONE_TEXT="$STANDALONE_TEXT
+- It has no updater: install the pkg, or download a newer archive, to update."
+fi
 
 if [ -n "$LINE" ]; then
   case "$LINE" in
@@ -410,6 +460,7 @@ fi
 
 [ -z "$PATCHES" ] || printf '\n%s\n' "$PATCHES" >> "$tmp"
 [ -z "$INGREDIENTS" ] || printf '\n%s\n' "$INGREDIENTS" >> "$tmp"
+[ -z "$STANDALONE_TEXT" ] || printf '\n%s\n' "$STANDALONE_TEXT" >> "$tmp"
 
 # spec: tests/release-notes-test.sh "nofooter"/"withfooter" -- the footer's '---' rule is buffered
 #       separately and emitted only when at least one footer line follows it; swift-toolchain has
