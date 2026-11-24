@@ -162,6 +162,7 @@ install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
 install(FILES components/drydock/version DESTINATION "${_dest}/components/drydock")
 install(FILES components/objc-receipt-clang/version DESTINATION "${_dest}/components/objc-receipt-clang")
 install(FILES components/clang22/version DESTINATION "${_dest}/components/clang22")
+install(FILES components/cmake/version DESTINATION "${_dest}/components/cmake")
 set(_msc_objc_refs_code [[
   if(IS_ABSOLUTE "@_dest@")
     set(_msc_to "@_dest@")
