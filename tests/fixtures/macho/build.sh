@@ -45,6 +45,11 @@ def x86_64_loader(path):
           struct.pack('<III', 0x8000001c, 12 + len(rpath), 12) + rpath)
     hdr = struct.pack('<IiiIIIII', 0xfeedfacf, 0x01000007, 3, 2, 2, len(lc), 0x200085, 0)
     open(path, 'wb').write(hdr + lc + b'\0' * 4064)
+def x86_64_dylib(path):
+    name = padded('@rpath/libw.dylib', 24)
+    lc = struct.pack('<IIIIII', 0xd, 24 + len(name), 24, 2, 0x10000, 0x10000) + name
+    hdr = struct.pack('<IiiIIIII', 0xfeedfacf, 0x01000007, 3, 6, 1, len(lc), 0x100085, 0)
+    open(path, 'wb').write(hdr + lc + b'\0' * 4064)
 def restamp_x86(src, dst, sdk):
     b = bytearray(open(src, 'rb').read())
     off = 32
@@ -60,6 +65,7 @@ arm64(d + '/a130', (13, 0), (11, 3))
 arm64(d + '/a280', (28, 0), (11, 3))
 arm64_unversioned(d + '/a00')
 x86_64_loader(d + '/loader')
+x86_64_dylib(d + '/libw')
 restamp_x86(d + '/clean', d + '/r265', (26, 5))
 restamp_x86(d + '/leak', d + '/leak265', (26, 5))
 PY

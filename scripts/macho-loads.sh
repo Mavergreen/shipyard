@@ -2,7 +2,8 @@
 # platform: host-agnostic
 #   usage: [LIPO=<llvm-lipo>] [OTOOL=<llvm-otool>] macho-loads.sh FILE
 #          Prints "<arch> dylib <path>" for each LC_LOAD_DYLIB, LC_LOAD_WEAK_DYLIB, LC_REEXPORT_DYLIB and
-#          LC_LOAD_UPWARD_DYLIB in FILE, and "<arch> rpath <path>" for each LC_RPATH, per slice of a fat
+#          LC_LOAD_UPWARD_DYLIB in FILE, "<arch> rpath <path>" for each LC_RPATH, and "<arch> id <path>"
+#          for an LC_ID_DYLIB, per slice of a fat
 #          file. A static archive prints nothing. Exit 0; 1 if FILE is not Mach-O; 2 on a usage error; 4 if
 #          a reader (LIPO or OTOOL) is missing or failed, as macho-slices.sh does.
 set -eu
@@ -34,8 +35,9 @@ for a in $archs; do
     $1 == "cmd" { k = ""
       if ($2 == "LC_LOAD_DYLIB" || $2 == "LC_LOAD_WEAK_DYLIB" || $2 == "LC_REEXPORT_DYLIB" || $2 == "LC_LOAD_UPWARD_DYLIB") k = "dylib"
       else if ($2 == "LC_RPATH") k = "rpath"
+      else if ($2 == "LC_ID_DYLIB") k = "id"
       next }
-    k == "dylib" && $1 == "name" || k == "rpath" && $1 == "path" {
+    (k == "dylib" || k == "id") && $1 == "name" || k == "rpath" && $1 == "path" {
       v = $0; sub(/^[ \t]*(name|path) /, "", v); sub(/ \(offset [0-9]+\)$/, "", v)
       print a, k, v; k = "" }'
 done

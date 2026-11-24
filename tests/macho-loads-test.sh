@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: macho-loads-test.sh
-#          macho-loads.sh prints each slice's dylib loads and rpaths, reading a thin file directly and a
+#          macho-loads.sh prints each slice's install name, dylib loads and rpaths, reading a thin file directly and a
 #          fat file per thinned slice. Exits 77 without LLVM's Mach-O readers.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,6 +25,9 @@ fi
 out="$(sh "$S" "$mx/loader")" || fail "a thin file is read directly, which llvm-lipo -thin refuses"
 [ "$out" = "x86_64 dylib @rpath/libt.dylib
 x86_64 rpath @loader_path/../lib" ] || fail "loader prints its one load and its one rpath, got: $out"
+
+out="$(sh "$S" "$mx/libw")" || fail "a dylib is read"
+[ "$out" = "x86_64 id @rpath/libw.dylib" ] || fail "libw prints its install name as an id row, got: $out"
 
 out="$(sh "$S" "$mx/fat130")" || fail "a fat file is read per slice"
 [ "$out" = "x86_64 dylib /usr/lib/libSystem.B.dylib" ] \
