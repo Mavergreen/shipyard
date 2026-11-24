@@ -56,7 +56,7 @@ case "$1" in
 esac
 SH
 chmod +x "$work/bin/lipo" "$work/bin/otool" "$work/bin/nm" "$work/bin/ar"
-LIPO="$work/bin/lipo"; OTOOL="$work/bin/otool"; NM="$work/bin/nm"; export LIPO OTOOL NM
+LIPO="$work/bin/lipo"; OTOOL="$work/bin/otool"; NM="$work/bin/nm"; AR="$work/bin/ar"; export LIPO OTOOL NM AR
 STEVEDORE="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed -- the generator reads each repo's released pkgs with it"; exit 1; }
 export STEVEDORE
 chmod +x "$work/bin/gh"

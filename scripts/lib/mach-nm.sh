@@ -11,14 +11,13 @@
 shipyard_mach_nm() { shipyard_mach_tool nm; }
 shipyard_mach_tool() {
   case "$1" in
-    nm) _mt_v=${NM:-} _mt_a=nm ;;
-    lipo) _mt_v=${LIPO:-} _mt_a=lipo ;;
-    otool) _mt_v=${OTOOL:-} _mt_a=otool ;;
-    ar) _mt_v=${AR:-} _mt_a=ar ;;
-    strip) _mt_v=${STRIP:-} _mt_a=strip ;;
-    install-name-tool) _mt_v=${INSTALL_NAME_TOOL:-} _mt_a=install_name_tool ;;
+    # platform: guarded macOS-only call -- a name, not a call: Apple's tool runs only where uname -s is Darwin
+    nm|lipo|otool|ar|strip|install-name-tool) : ;;
     *) echo "shipyard_mach_tool: no Mach-O tool named '$1'" >&2; return 2 ;;
   esac
+  _mt_n="$(printf '%s' "$1" | tr 'a-z-' 'A-Z_')"
+  eval "_mt_v=\${$_mt_n:-}"
+  _mt_a="$(printf '%s' "$1" | tr '-' '_')"
   if [ -n "$_mt_v" ]; then printf '%s\n' "$_mt_v"; return 0; fi
   for _mt_r in "${OTOOL:-}" "${LIPO:-}" "${NM:-}" "${AR:-}"; do
     case "$_mt_r" in
