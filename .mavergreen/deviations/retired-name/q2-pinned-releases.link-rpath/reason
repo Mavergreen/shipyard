@@ -1,1 +1,1 @@
-pinned pre-flag-day releases still install there, and link-rpath refuses an absolute load of one from outside its tree
+pinned pre-flag-day releases still install there; link-rpath lets a load under a q2 dependency's prefix pass until L1

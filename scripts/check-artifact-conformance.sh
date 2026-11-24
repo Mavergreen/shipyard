@@ -1125,7 +1125,8 @@ done < "$tmp/debug-map"
 # spec: explain/link-rpath.md -- a family dylib under /opt/mavergreen/ or /usr/local/mavergreen/ is loaded by
 #       its absolute path only from inside its own product tree, and an image loading @rpath/libc++.1.dylib
 #       resolves its first LC_RPATH, from where the pkg installs it, to opt/mavergreen/libcxx22/lib. A standalone
-#       archive's SHORT-VERSION/ is where its pkg installs SHORT; a deviation excuses a path.
+#       archive's SHORT-VERSION/ is where its pkg installs SHORT; a load under a q2 library dependency's
+#       install prefix passes until L1 (Q9's tolerance); a deviation excuses a path.
 awk -v ver="${expected#v}" '
   function inst(f, p,   top, s, r) {
     if (f !~ /-macos-(universal|x86_64|arm64)\.tar\.gz$/) return p
@@ -1155,10 +1156,14 @@ awk -v ver="${expected#v}" '
     return "(unresolvable)"
   }
   $1 == "rpath" { k = $2 " " $3 " " $4; if (!(k in first) || $5 + 0 < fn[k]) { first[k] = $6; fn[k] = $5 + 0 }; next }
+  $1 == "dep-manifest" { st[$2] = $3; next }
+  $1 == "dep-prefix" { nq++; qd[nq] = $2; qp[nq] = $3; next }
   $1 == "load" { nl++; la[nl] = $2; lp[nl] = $3; lh[nl] = $4; lv[nl] = $5 }
   END {
     for (i = 1; i <= nl; i++) {
       img = inst(la[i], lp[i]); v = lv[i]; gsub(/%20/, " ", img); gsub(/%25/, "%", img)
+      q = 0; for (j = 1; j <= nq; j++) if (st[qd[j]] == "q2" && index(v, qp[j]) == 1) q = 1
+      if (q) continue
       if (v ~ /^\/(opt|usr\/local)\/mavergreen\/[^\/]+\//) {
         t = v; sub(/^\//, "", t)
         if (t ~ /^opt\//) { match(t, /^opt\/mavergreen\/[^\/]+\//) } else { match(t, /^usr\/local\/mavergreen\/[^\/]+\//) }

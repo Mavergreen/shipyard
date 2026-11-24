@@ -205,6 +205,16 @@ no "libcxx22's libc++ by its absolute path" "link-rpath|opt/mavergreen/go126/bin
 $L /opt/mavergreen/libcxx22/lib/libc++.1.dylib"
 no "a pinned release's dylib by its absolute path" "link-rpath|loads /usr/local/mavergreen/zlib/lib/libz.1.dylib by its absolute path" "$GOOD
 $L /usr/local/mavergreen/zlib/lib/libz.1.dylib"
+clean "a q2 library dependency's dylib by its absolute path, under its install prefix, until L1" link-rpath "$GOOD
+$L /usr/local/mavergreen/zlib/lib/libz.1.dylib
+repo-requires go126 zlib library
+dep-manifest zlib q2
+dep-prefix zlib /usr/local/mavergreen/zlib/"
+no "a dependency with a manifest gets no absolute-path tolerance" "link-rpath|loads /usr/local/mavergreen/zlib/lib/libz.1.dylib by its absolute path" "$GOOD
+$L /usr/local/mavergreen/zlib/lib/libz.1.dylib
+repo-requires go126 zlib library
+dep-manifest zlib ok
+dep-dylib zlib @rpath/libz.1.dylib"
 no "libcxx22's libc++abi from outside libcxx22" "link-rpath|loads /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib by its absolute path" "$GOOD
 $L /opt/mavergreen/libcxx22/lib/libc++abi.1.dylib"
 clean "libcxx22's libc++abi, absolute, from inside libcxx22" link-rpath "$GOOD

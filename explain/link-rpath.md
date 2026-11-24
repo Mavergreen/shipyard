@@ -25,6 +25,7 @@ image itself, which is right for an executable and only a guess for a dylib.
 ## Deviating
 Write .mavergreen/deviations/link-rpath/<label>/ with a scope (<path glob>, as the payload or archive
 installs the image), a reason and a revisit. A consumer of a release pinned at /usr/local/mavergreen/
-declares q2-pinned-releases until every pin is a -mavergreen.N release.
+needs no deviation: a load under the install prefix of a library dependency whose pinned release has no
+manifest (dep-manifest.sh exit 3) passes, until every pin is a -mavergreen.N release (the Q2 tolerance, Q9).
 
 New in the flag day (P6, link facts)
