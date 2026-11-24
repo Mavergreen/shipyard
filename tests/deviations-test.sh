@@ -139,6 +139,15 @@ for line in '- standalone-text: every script' '- standalone-text:*: every script
 done
 printf '## Conformance deviations\n- standalone-text:src/crypto/x509/root_keychainunion_darwin*.go: CA paths the built programs read\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'standalone-text src/crypto/x509/root_keychainunion_darwin\*.go CA paths the built programs read' || { echo "FAIL: an archive-path glob is a standalone-text scope; got: $(sh "$S" "$w" 2>&1)"; exit 1; }
+# spec: SKILL.md "Standalone archive" -- standalone-install-name names the dylibs whose absolute
+#       install name it lets stand; a bare form or a glob of nothing but wildcards would excuse every dylib.
+for line in '- standalone-install-name: every dylib' '- standalone-install-name:*: every dylib' '- standalone-install-name:*/*: every dylib'; do
+  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
+  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: [$line] must be refused"; exit 1; fi
+  printf '%s\n' "$out" | grep -q -- '- standalone-install-name:<archive-path glob>: <reason>' || { echo "FAIL: refusing [$line] names the form: $out"; exit 1; }
+done
+printf '## Conformance deviations\n- standalone-install-name:*/libcxx22/lib/libc++abi.1.dylib: one libc++abi per process\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qxF 'standalone-install-name */libcxx22/lib/libc++abi.1.dylib one libc++abi per process' || { echo "FAIL: an archive-path glob is a standalone-install-name scope; got: $(sh "$S" "$w" 2>&1)"; exit 1; }
 # spec: SKILL.md "Family conventions" check 23 -- staged-by names the pinned library whose release
 #       stages the pkg; the gate reads components/<library>/version, so the scope is one repo name.
 for line in '- staged-by: the library stages it' '- staged-by:*: every library' '- staged-by:golang-*: a glob' '- staged-by:components/golang-port: a path'; do

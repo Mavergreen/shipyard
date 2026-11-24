@@ -23,7 +23,11 @@
 #          at (scripts/lib/standalone-tree.sh), become warnings; no other finding is
 #          excused, and an entry excusing nothing is a finding; with --defer-unused it is not, and each
 #          entry used is named on stdout instead, "standalone-text used: <glob>", for a caller judging
-#          several archives (artifact-facts.sh). "- sdk-pin:<glob>: <reason>" turns the SDK finding of a
+#          several archives (artifact-facts.sh). "- standalone-install-name:<glob>: <reason>", matched
+#          the same ways, turns a dylib's install-name finding into a warning when the name is the path
+#          the pkg installs that file at, /usr/local/mavergreen/SHORT/<path>; any other name stays a
+#          finding, and its unused entries are judged as standalone-text's, "standalone-install-name
+#          used: <glob>" with --defer-unused. "- sdk-pin:<glob>: <reason>" turns the SDK finding of a
 #          Mach-O into a warning when <glob> matches SHORT-VERSION/<path>, as conformance spells it, or
 #          the path the pkg installs it at. Mach-O is read by scripts/lib/mach-interface.sh and
 #          macho-slices.sh; with no OTOOL, LIPO or NM set and no installed clang22, the
@@ -82,6 +86,8 @@ fi
 [ -d "$repo" ] || { echo "check-standalone-archive: --repo $repo is not a directory" >&2; exit 2; }
 _devs="$(sh "$SELF/deviations.sh" "$repo")" || { echo "check-standalone-archive: $repo/INGREDIENTS.md declares an entry deviations.sh refuses" >&2; exit 2; }
 printf '%s\n' "$_devs" | awk '$1 == "standalone-text" { print ++n " " $2 }' > "$t/textdevs"
+printf '%s\n' "$_devs" | awk '$1 == "standalone-install-name" { print ++n " " $2 }' > "$t/namedevs"
+: > "$t/nameused"
 : > "$t/textused"
 : > "$t/used"
 finding() { printf '%s\n' "$*" >> "$t/findings"; }
@@ -230,17 +236,46 @@ while IFS= read -r r; do
     1) continue ;;
     *) sed 's/^/  /' "$t/err" >&2; echo "check-standalone-archive: cannot read the Mach-O $r" >&2; exit 2 ;;
   esac
-  awk -v r="$r" '
+  pr="$(shipyard_standalone_pkg_path "$short" "$r")"
+  _nn=""; _ng=""
+  set -f
+  while read -r _en _eg; do
+    case "$r" in $_eg) ;; *) case "$top/$r" in $_eg) ;; *) case "$pr" in $_eg) ;; *) continue ;; esac ;; esac ;; esac
+    _nn="$_en"; _ng="$_eg"; break
+  done < "$t/namedevs"
+  set +f
+  awk -v r="$r" -v dg="$_ng" -v own="/$pr" '
     function ok(p) { return p ~ /^(\/usr\/lib\/|\/System\/|@rpath\/|@loader_path(\/|$)|@executable_path(\/|$))/ }
     function rest(k,   s, i) { s = ""; for (i = k; i <= NF; i++) s = s (s == "" ? "" : " ") $i; return s }
     $2 == "dylib" { p = rest(5); w = "loads " p }
     $2 == "id" { p = rest(3); w = "has the install name " p }
     $2 == "rpath" { p = rest(4); w = "has the rpath " p }
     ($2 == "dylib" || $2 == "id" || $2 == "rpath") && !ok(p) {
-      if (!(w in a)) { o[++m] = w; a[w] = $1 } else if (index(" " a[w] " ", " " $1 " ") == 0) a[w] = a[w] "," $1
+      if (!(w in a)) {
+        o[++m] = w; a[w] = $1; c[w] = "F"
+        if ($2 == "id" && dg != "") { used = 1; c[w] = (p == own) ? "W" : "A" }
+      } else if (index(" " a[w] " ", " " $1 " ") == 0) a[w] = a[w] "," $1
     }
-    END { for (i = 1; i <= m; i++) print r " (" a[o[i]] ") " o[i] ", outside /usr/lib, /System, @rpath, @loader_path and @executable_path" }' "$t/mi" >> "$t/findings"
+    END {
+      if (used) print "U"
+      for (i = 1; i <= m; i++) {
+        x = r " (" a[o[i]] ") " o[i]
+        if (c[o[i]] == "W") print "W warning: " x ", excused by standalone-install-name:" dg
+        else if (c[o[i]] == "A") print "F " x ": standalone-install-name:" dg " excuses only the file'"'"'s own install path; the name must be the file'"'"'s own install path " own
+        else print "F " x ", outside /usr/lib, /System, @rpath, @loader_path and @executable_path"
+      }
+    }' "$t/mi" > "$t/mj"
+  [ -z "$_nn" ] || ! grep -qx U "$t/mj" || echo "$_nn" >> "$t/nameused"
+  sed -n 's/^F //p' "$t/mj" >> "$t/findings"
+  sed -n 's/^W //p' "$t/mj" >> "$t/warnings"
 done < "$t/machos"
+while read -r _en _eg; do
+  if [ "$defer" = yes ]; then
+    grep -qx "$_en" "$t/nameused" && printf 'standalone-install-name used: %s\n' "$_eg" >> "$t/used"
+    continue
+  fi
+  grep -qx "$_en" "$t/nameused" || finding "INGREDIENTS.md's standalone-install-name:$_eg excuses nothing in this archive; drop it"
+done < "$t/namedevs"
 for _d in clang22 clang22-cross; do
   _b="${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/$_d/bin"
   [ -n "${OTOOL:-}" ] || [ ! -x "$_b/llvm-otool" ] || OTOOL="$_b/llvm-otool"

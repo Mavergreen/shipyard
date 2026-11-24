@@ -6,9 +6,10 @@
 #          (a warning) or INGREDIENTS.md declares '- no-standalone[:<short glob>]: <reason>'; declaring
 #          it while publishing one fails. Then artifact-facts.sh judges the archives a dist carries, each
 #          against the requires in its product pkg's mavergreen.plist and the repo's deviations; a
-#          standalone-text entry is unused only when no archive of the release uses it. An archive is
-#          archive-first when its repo declares packaging/<short>.standalone-bundled, else pkg-first,
-#          which conformance names and does not yet fail.
+#          standalone-text or standalone-install-name entry is unused only when no archive of the
+#          release uses it. An archive is archive-first when its repo declares
+#          packaging/<short>.standalone-bundled, else pkg-first, which conformance names and does not
+#          yet fail.
 set -eu
 unset GITHUB_REPOSITORY
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -152,6 +153,12 @@ facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist4" 1.0-mavericks.1 "$w/repo3"
 printf '%s\n' "$facts" | grep -qx 'standalone-text-unused bin/w' || fail "an entry no archive uses is a standalone-text-unused fact: $facts"
 no "a standalone-text entry no archive uses" "standalone-text: INGREDIENTS.md's standalone-text:bin/w excuses nothing" "$WITH
 standalone-text-unused bin/w"
+printf '## Conformance deviations\n- standalone-install-name:*/w/lib/libw.dylib: one copy per process\n' > "$w/repo3/INGREDIENTS.md"
+facts="$(sh "$w/scripts/artifact-facts.sh" "$w/dist4" 1.0-mavericks.1 "$w/repo3" 2>"$w/err")" || fail "artifact-facts.sh failed on a declared standalone-install-name: $(cat "$w/err")"
+printf '%s\n' "$facts" | grep -qxF 'standalone-install-name-unused */w/lib/libw.dylib' || fail "a standalone-install-name entry no archive uses is a fact: $facts"
+no "a standalone-install-name entry no archive uses" "standalone-install-name: INGREDIENTS.md's standalone-install-name:\*/w/lib/libw.dylib excuses nothing" "$WITH
+standalone-install-name-unused */w/lib/libw.dylib"
+printf '## Conformance deviations\n- standalone-text:bin/w: the wrapper names zig\n' > "$w/repo3/INGREDIENTS.md"
 echo "ok: artifact-facts.sh passes the repo's deviations to check-standalone-archive.sh, judging unused entries across every archive"
 
 printf '%s\n' "$facts" | grep -qx 'standalone-flow w-1.0-macos-x86_64.tar.gz pkg-first' || fail "an archive whose repo declares no bundled list is pkg-first: $facts"

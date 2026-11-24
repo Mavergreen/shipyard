@@ -2308,6 +2308,14 @@ without building either:
   archive of the release fails as unused, and a bare form or an all-wildcard glob is refused. The
   checker reads `--repo DIR` (default `.`), which `artifact-facts.sh` sets to the repo root, passing
   `--defer-unused` so that unused entries are judged across the release.
+- **A dylib whose absolute install name is load-bearing is declared, path by path.**
+  `- standalone-install-name:<glob>: <reason>` lets a matching dylib keep an install name outside the
+  system and `@` prefixes only when that name is the file's own pkg install path, as libcxx22's
+  `libc++abi.1.dylib` keeps `/usr/local/mavergreen/libcxx22/lib/libc++abi.1.dylib` so a process loads one
+  libc++abi; any other name still fails. The glob is in pkg terms (`*/libcxx22/lib/libc++abi.1.dylib`)
+  or the archive's own; loads and rpaths stay findings, and unused entries, bare forms and all-wildcard
+  globs fail as `standalone-text`'s do. Revisit: Drydock's C++-runtime checker ships, and the archive
+  check calls it instead.
 - **A single static binary where the product allows it**, which a user can drop into `/usr/local/bin`
   or anywhere; otherwise the directory is the unit.
 - **The release notes say the archive has "no updater, no installer"**, in `release-notes/notice`, the

@@ -21,6 +21,7 @@
 #            asset         <file> <bytes>                         one per file that will be published
 #            standalone    <file> ok|fail [<finding>]             one per <short>-<version>-macos-<arch>.tar.gz, judged by check-standalone-archive.sh (%20-encoded)
 #            standalone-text-unused <glob>                        a standalone-text deviation no archive used
+#            standalone-install-name-unused <glob>                a standalone-install-name deviation no archive used
 #            standalone-flow <file> archive-first|pkg-first       one per standalone archive: whether its repo declares packaging/<short>.standalone-bundled
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
 #            cxxabi-defines <artifact> <path> <arch> <symbol> <visible|hidden>  one per C++ runtime symbol a slice defines beyond Recaulk's back-fills
@@ -299,6 +300,9 @@ done < "$tmp/prod-of"
 while read -r kind file verdict why; do
   if [ "$kind" = standalone-text-unused ]; then
     echo "conformance: standalone-text: INGREDIENTS.md's standalone-text:$file excuses nothing in any standalone archive of this release -- drop it" >&2; status=1; continue
+  fi
+  if [ "$kind" = standalone-install-name-unused ]; then
+    echo "conformance: standalone-install-name: INGREDIENTS.md's standalone-install-name:$file excuses nothing in any standalone archive of this release -- drop it" >&2; status=1; continue
   fi
   if [ "$kind" = standalone-flow ]; then
     [ "$verdict" != pkg-first ] || echo "conformance: standalone: $file: pkg-first, with no packaging/<short>.standalone-bundled; convert to archive-first (derive_pkg_tree.sh) at the next release"

@@ -8,8 +8,9 @@
 #          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each, and a
 #          `standalone` fact per <short>-<version>-macos-<arch>.tar.gz, from check-standalone-archive.sh
 #          given --plist with the mavergreen.plist that SHORT's pkg in the dist installs, and --repo the
-#          repo root, whose standalone-text deviations it honours; a `standalone-text-unused` fact names
-#          each entry that no archive in the dist used; and a `standalone-flow` fact per archive,
+#          repo root, whose standalone-text and standalone-install-name deviations it honours; a
+#          `standalone-text-unused` or `standalone-install-name-unused` fact names each entry that no
+#          archive in the dist used; and a `standalone-flow` fact per archive,
 #          archive-first when the repo root declares packaging/SHORT.standalone-bundled (the list
 #          derive_pkg_tree.sh derives SHORT's pkg with), else pkg-first. kext-facts.sh adds each pkg's
 #          kext, kext-exception and excludelist-script facts.
@@ -58,6 +59,7 @@ sa_tmp="$(mktemp -d "${TMPDIR:-/tmp}/standalone-facts.XXXXXX")"   # template: 10
 trap 'rm -rf "$sa_tmp" ${cxxabi_tmp:+"$cxxabi_tmp"}' EXIT
 : > "$sa_tmp/archives"
 : > "$sa_tmp/used"
+: > "$sa_tmp/nameused"
 cxxabi_allowlist() {  # the allow-list, fetched at most once per run, into $cxxabi_tmp/allow as "<name> <visible|hidden>". Non-zero, the reason in _mf_why, when unavailable.
   [ ! -f "$cxxabi_tmp/allow" ] || return 0
   _al="$(sh "$SELF/cxxabi-allowlist.sh" 2>"$cxxabi_tmp/err")" || {
@@ -354,6 +356,7 @@ while IFS= read -r f; do
   set -- "$@" --repo "$root" --defer-unused
   _sa_rc=0; _sa_out="$(sh "$SELF/check-standalone-archive.sh" "$@" "$f" 2>&1 < /dev/null)" || _sa_rc=$?
   printf '%s\n' "$_sa_out" | sed -n "s|^check-standalone-archive: $b: standalone-text used: ||p" >> "$sa_tmp/used"
+  printf '%s\n' "$_sa_out" | sed -n "s|^check-standalone-archive: $b: standalone-install-name used: ||p" >> "$sa_tmp/nameused"
   if [ -f "$root/packaging/$_sa_short.standalone-bundled" ]; then
     printf 'standalone-flow %s archive-first\n' "$b"
   else
@@ -361,13 +364,16 @@ while IFS= read -r f; do
   fi
   case "$_sa_rc" in
     0) printf 'standalone %s ok\n' "$b" ;;
-    1) printf 'standalone %s fail %s\n' "$b" "$(printf '%s\n' "$_sa_out" | sed -n "/^check-standalone-archive: $b: warning: /d; /^check-standalone-archive: $b: standalone-text used: /d; s|^check-standalone-archive: $b: ||p" | head -1 | enc)" ;;
+    1) printf 'standalone %s fail %s\n' "$b" "$(printf '%s\n' "$_sa_out" | sed -n "/^check-standalone-archive: $b: warning: /d; /^check-standalone-archive: $b: standalone-text used: /d; /^check-standalone-archive: $b: standalone-install-name used: /d; s|^check-standalone-archive: $b: ||p" | head -1 | enc)" ;;
     *) abort "check-standalone-archive.sh cannot judge $b: $(printf '%s\n' "$_sa_out" | tail -1)" ;;
   esac
 done < "$sa_tmp/archives"
 if [ -n "${_devs:-}" ]; then
   printf '%s\n' "$_devs" | awk '$1 == "standalone-text" { print $2 }' | while IFS= read -r _g; do
     grep -qxF "$_g" "$sa_tmp/used" || printf 'standalone-text-unused %s\n' "$_g"
+  done
+  printf '%s\n' "$_devs" | awk '$1 == "standalone-install-name" { print $2 }' | while IFS= read -r _g; do
+    grep -qxF "$_g" "$sa_tmp/nameused" || printf 'standalone-install-name-unused %s\n' "$_g"
   done
 fi
 

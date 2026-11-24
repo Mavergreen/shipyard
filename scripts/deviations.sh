@@ -88,6 +88,12 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       print "deviations.sh: \"standalone-text\" names the archive paths whose text it excuses: \"- standalone-text:<archive-path glob>: <reason>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
       bad = 1; next
     }
+    # spec: SKILL.md "Standalone archive" -- standalone-install-name names the dylibs whose absolute
+    #       install name it lets stand; a bare form or an all-wildcard glob would excuse every dylib.
+    if (check == "standalone-install-name" && (!scoped || glob ~ /^[*?\/]+$/)) {
+      print "deviations.sh: \"standalone-install-name\" names the archive paths whose install name it excuses: \"- standalone-install-name:<archive-path glob>: <reason>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
+      bad = 1; next
+    }
     # spec: SKILL.md "Family conventions" check 23 -- the gate verifies staged-by against
     #       components/<library>/version, so the scope is one repo name, never a path or a glob.
     if (check == "staged-by" && (!scoped || glob !~ /^[A-Za-z0-9._-]+$/)) {

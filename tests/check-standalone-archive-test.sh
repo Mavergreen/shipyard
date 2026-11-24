@@ -7,8 +7,9 @@
 #          excusing text findings alone and failing unused (or, with --defer-unused, naming each used),
 #          then Mach-O fixtures built at test
 #          time with the pinned clang22 and 10.9 SDK: system, @rpath and @loader_path loads pass, an
-#          absolute load, rpath or install name outside the system fails (a declared require's too), a
-#          string naming the prefix is a warning, and --run, where this host
+#          absolute load, rpath or install name outside the system fails (a declared require's too),
+#          --repo's standalone-install-name excuses an install name equal to the file's own pkg install
+#          path and no other, failing unused, a string naming the prefix is a warning, and --run, where this host
 #          runs x86_64 natively, starts each bin/ entry from a relocated copy. Without clang22: SKIP, exit 77.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -228,6 +229,36 @@ mk w-1.0-macos-x86_64.tar.gz
 passes "a Mach-O holding the string"
 grep -q 'warning: bin/str holds the string /usr/local/mavergreen/w/share' "$w/out" || fail "a Mach-O's string is a warning: $(cat "$w/out")"
 echo "ok: Mach-O loads, rpaths and install names"
+
+anchored() {  # $1 = install name of lib/libx.dylib, alone in the tree
+  fresh w-1.0; mkdir -p "$w/t/w-1.0/lib"
+  cc -dynamiclib -install_name "$1" "$w/lib.c" -o "$w/t/w-1.0/lib/libx.dylib" || fail "cc could not build libx.dylib"
+  mk w-1.0-macos-x86_64.tar.gz
+}
+anchored /usr/local/mavergreen/w/lib/libx.dylib
+fails "an undeclared install name anchored in the pkg's tree" "lib/libx.dylib .*install name /usr/local/mavergreen/w/lib/libx.dylib"
+repo "$w/r-in" "standalone-install-name:*/w/lib/libx.dylib: one copy of the library per process"
+withrepo 0 "standalone-install-name excuses the file's own pkg install path" "warning: lib/libx.dylib .*install name /usr/local/mavergreen/w/lib/libx.dylib.*excused by standalone-install-name:\*/w/lib/libx.dylib" "$w/r-in"
+repo "$w/r-in-raw" "standalone-install-name:w-1.0/lib/libx.dylib: the archive's own spelling"
+withrepo 0 "standalone-install-name in archive terms" - "$w/r-in-raw"
+repo "$w/r-in-rel" "standalone-install-name:lib/libx.dylib: relative to the top"
+withrepo 0 "standalone-install-name relative to the archive's top" - "$w/r-in-rel"
+rc=0; sh "$C" --repo "$w/r-in" --defer-unused "$A" > "$w/out" 2>&1 || rc=$?
+grep -qx 'check-standalone-archive: w-1.0-macos-x86_64.tar.gz: standalone-install-name used: \*/w/lib/libx.dylib' "$w/out" \
+  || fail "--defer-unused names a standalone-install-name entry it used: $(cat "$w/out")"
+anchored /usr/local/mavergreen/w/lib/libother.dylib
+withrepo 1 "standalone-install-name refuses an absolute name other than the file's own install path" "lib/libx.dylib .*install name /usr/local/mavergreen/w/lib/libother.dylib.*must be the file's own install path /usr/local/mavergreen/w/lib/libx.dylib" "$w/r-in"
+grep -q 'standalone-install-name:.*excuses nothing' "$w/out" && fail "an entry that judged a file is used: $(cat "$w/out")"
+anchored /opt/w/lib/libx.dylib
+withrepo 1 "standalone-install-name refuses a name outside the pkg's tree" "must be the file's own install path" "$w/r-in"
+anchored @rpath/libx.dylib
+withrepo 1 "a standalone-install-name entry excusing nothing" "standalone-install-name:\*/w/lib/libx.dylib excuses nothing" "$w/r-in"
+rc=0; sh "$C" --repo "$w/r-in" --defer-unused "$A" > "$w/out" 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "--defer-unused: an unused standalone-install-name is no finding here: exit $rc: $(cat "$w/out")"
+grep -q 'standalone-install-name used' "$w/out" && fail "--defer-unused: an unused entry is not reported used: $(cat "$w/out")"
+macho /usr/local/mavergreen/w/lib/libx.dylib -; mk w-1.0-macos-x86_64.tar.gz
+withrepo 1 "standalone-install-name never excuses a load" "bin/tool .*loads /usr/local/mavergreen/w/lib/libx.dylib" "$w/r-in"
+echo "ok: standalone-install-name excuses an install name equal to the file's own pkg install path, and nothing else"
 
 macho @rpath/libx.dylib @loader_path/../lib
 "$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.13 -isysroot "$SDK" "$w/main.c" "$w/t/w-1.0/lib/libx.dylib" -Wl,-rpath,@loader_path/../lib -o "$w/t/w-1.0/bin/new" \
