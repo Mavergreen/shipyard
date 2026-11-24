@@ -77,7 +77,6 @@ smoke-gate ed25519 release.yml:modern-smoke
 smoke-gate golang-126 release.yml:modern-smoke
 smoke-gate golang-127 release.yml:modern-smoke
 smoke-gate ninja release.yml:modern-smoke
-smoke-gate recaulk release.yml:modern-smoke
 smoke-gate rust release.yml:modern-smoke
 smoke-gate zig release.yml:modern-smoke
 standalone 1password 1password
