@@ -152,3 +152,5 @@ kext-sig-exception	dist	scripts/check-artifact-conformance.sh	new (from main: co
 kext-exclude-list	dist	scripts/check-artifact-conformance.sh	new (from main: conformance kext-exclude-list)	P1
 pkg-builder-library	key	scripts/check-family-conventions.sh	deviation key (checks 21 and 29, from main)	P1
 staged-by	key	scripts/check-family-conventions.sh	deviation key (check 23, from main)	P1
+debug-map	dist	scripts/check-artifact-conformance.sh	new (split debug: no debug map or builder path in a shipped image)	P6
+dsym-asset	dist	scripts/check-artifact-conformance.sh	new (split debug: every linked slice has its dSYM in the release)	P6

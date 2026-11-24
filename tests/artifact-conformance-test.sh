@@ -151,6 +151,32 @@ _gfo="$(printf '%s\n%s\n%s\nend-of-facts\n' "$GOOD" "repository Mavergreen/golan
   && { echo "FAIL: another check's grandfathered line excuses nothing here: $_gfo"; exit 1; }
 rm -rf "$_gfs"
 
+# spec: explain/debug-map.md, explain/dsym-asset.md -- a linked slice keeps no debug map and no builder's
+#       path, and its LC_UUID is among the release's dSYM tarball's DWARF.
+U='uuid golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go'
+D='dsym go126-1.26.5-mavergreen.5-dSYM.tar.gz go126-1.26.5-mavergreen.5-dSYM/opt/go.dSYM/Contents/Resources/DWARF/go'
+ok "both slices' dSYMs are published" "$GOOD
+$U x86_64 AAAA
+$U arm64 BBBB
+$D x86_64 AAAA
+$D arm64 BBBB"
+no "a fat image whose arm64 dSYM is missing" "dsym-asset|opt/mavergreen/go126/bin/go, whose LC_UUID (arm64:BBBB)" "$GOOD
+$U x86_64 AAAA
+$U arm64 BBBB
+$D x86_64 AAAA"
+no "a release with no dSYM tarball" "dsym-asset|ships no *-dSYM.tar.gz" "$GOOD
+$U x86_64 AAAA"
+no "a kept debug map" "debug-map|opt/mavergreen/go126/bin/go (x86_64,arm64) with its debug map" "$GOOD
+$U x86_64 AAAA
+$D x86_64 AAAA
+oso golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go x86_64
+oso golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go arm64"
+no "a builder's home in an image" "debug-map|which names /Users/runner/my work/x" "$GOOD
+$U x86_64 AAAA
+$D x86_64 AAAA
+homepath golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go /Users/runner/my%20work/x"
+clean "no linked image, no dSYM needed" dsym-asset "$GOOD"
+
 X='macho golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go x86_64 EXECUTE 10.9 10.9 aa'
 C='golang-1.26.5-native-mavergreen.5.pkg opt/mavergreen/go126/bin/go'
 no "a program defining ___cxa_throw fails" "cxxabi|golang-1.26.5-native-mavergreen.5.pkg installs opt/mavergreen/go126/bin/go (x86_64), which defines C++ runtime machinery beyond Recaulk's back-fills: ___cxa_throw" "$GOOD
@@ -1743,6 +1769,10 @@ export STEVEDORE="$SD"
     # platform: the runner's SDK would make this fixture fail the sdk-pin rule the archive assertion below now enforces; clang honours SDKROOT
     SDKROOT="$(sh "$here/../scripts/fetch_sdk.sh")" cc -arch x86_64 -mmacosx-version-min=10.9 "$_pk/h.c" -o "$_st/opt/mavergreen/x/bin/hello"
     ( cd "$_st/opt/mavergreen/x" && tar -czf "$_pk/dist/x-tools.tar.gz" bin/hello )
+    mkdir -p "$_pk/.mavergreen/deviations/dsym-asset/host-cc"
+    printf '*bin/hello\n' > "$_pk/.mavergreen/deviations/dsym-asset/host-cc/scope"
+    printf 'the host cc builds it without -g, and this test reads facts, not split debug\n' > "$_pk/.mavergreen/deviations/dsym-asset/host-cc/reason"
+    printf 'never, it is a test\n' > "$_pk/.mavergreen/deviations/dsym-asset/host-cc/revisit"
   fi
   cat > "$_st/opt/mavergreen/x/mavergreen.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1851,6 +1881,8 @@ PLIST
     || { echo "FAIL: a Mach-O in a pkg payload must yield a macho fact -- got: $_f"; exit 1; }
   printf '%s\n' "$_f" | grep -qE '^macho x-tools\.tar\.gz bin/hello x86_64 EXECUTE 10\.9 10\.9 [0-9a-f]{64}$' \
     || { echo "FAIL: a Mach-O in a shipped tarball must yield a macho fact -- got: $_f"; exit 1; }
+  printf '%s\n' "$_f" | grep -qE '^uuid x-tools\.tar\.gz bin/hello x86_64 [0-9A-F-]{36}$' \
+    || { echo "FAIL: a linked Mach-O in a shipped tarball must yield a uuid fact -- got: $_f"; exit 1; }
   fi
   printf '%s\n' "$_f" | grep -q '^macho .* opt/mavergreen/x/bin/x ' \
     && { echo "FAIL: a non-Mach-O file must not yield a macho fact: $_f"; exit 1; }

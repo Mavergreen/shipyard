@@ -3,7 +3,7 @@
 #   usage: build.sh [dbg]
 #          Rebuilds the checked-in Mach-O fixtures beside this script. The tests read the results and
 #          never run this, so they need no compiler and no SDK on any host. With dbg, rebuilds only dbg,
-#          dbgfat and their objects in dbg-objs/, which a cross clang-22 on any host can.
+#          dbgfat, dbghome and their objects in dbg-objs/, which a cross clang-22 on any host can.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$here/../../.."
@@ -21,6 +21,9 @@ build_dbg() {
     ZERO_AR_DATE=1 clang-22 --no-default-config $t -fuse-ld=lld "$here/dbg-objs/dbg-$a.o" -Wl,-oso_prefix,"$here/" -o "$w/dbg-$a"
   done
   cp "$w/dbg-x86_64" "$here/dbg"
+  printf 'static const char *dbg_where = "/Users/runner/work/x";\nint main(void){return dbg_where[0] == 0;}\n' > "$w/dbghome.c"
+  (cd "$w" && clang-22 --no-default-config -target x86_64-apple-macos10.9 -isysroot "$sdk" -g -O0 -ffile-prefix-map="$w"=. -c dbghome.c -o "$here/dbg-objs/dbghome.o")
+  ZERO_AR_DATE=1 clang-22 --no-default-config -target x86_64-apple-macos10.9 -isysroot "$sdk" -fuse-ld=lld "$here/dbg-objs/dbghome.o" -Wl,-oso_prefix,"$here/" -o "$here/dbghome"
   llvm-lipo -create "$w/dbg-x86_64" "$w/dbg-arm64" -output "$here/dbgfat"
 }
 if [ "${1:-}" = dbg ]; then build_dbg; exit 0; fi

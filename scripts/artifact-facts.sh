@@ -5,7 +5,10 @@
 #          directory and the repo it came from. Deliberately thin: all judgement lives in the
 #          checker, so this can be read in one sitting and the interesting logic stays testable
 #          without fabricating .pkg files. Also emits a `macho` fact per Mach-O slice in every pkg
-#          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each; in a
+#          payload and shipped tarball, and the `cxxabi-defines` and `cxxabi-loads` facts of each, and of
+#          each linked slice its `uuid`, its `oso` when it keeps a debug map, and each `homepath` string
+#          its file holds; a `dsym` fact per DWARF slice in a *-dSYM.tar.gz, which is read for nothing
+#          else; in a
 #          payload holding a product with a target file, the `macho-load` facts of each too; a
 #          `standalone` fact per <short>-<version>-macos-<arch>.tar.gz, from check-standalone-archive.sh
 #          given --plist with the mavergreen.plist that SHORT's pkg in the dist installs, and --repo the
@@ -27,6 +30,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"   # siblings live here (deviations.sh)
 . "$SELF/lib/macho-tools.sh"
 mach_tool LIPO 2>/dev/null || :; mach_tool OTOOL 2>/dev/null || :
 mach_tool NM 2>/dev/null || NM=nm; export NM
+mach_tool OBJDUMP 2>/dev/null || :; mach_tool STRINGS 2>/dev/null || :
 . "$SELF/deviation-reason.sh"
 . "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/pkg-tree.sh"
@@ -129,6 +133,49 @@ cxxabi_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded). Non-
     esac
   done
 }
+# spec: explain/debug-map.md, explain/dsym-asset.md -- each linked slice's LC_UUID, whether it keeps a
+#       debug map, and any builder's home path in its file; and each DWARF file a dSYM tarball holds.
+macho_archs() {  # $1 = file: its arches, one per line
+  "${LIPO:-llvm-lipo}" -info "$1" 2>/dev/null | sed -n 's/.*: //p' | tr ' ' '\n' | sed '/^$/d'
+}
+need_objdump() {
+  command -v "${OBJDUMP:-}" >/dev/null 2>&1 \
+    || { _mf_why="OBJDUMP: ${OBJDUMP:-llvm-objdump} not found; set OBJDUMP to clang22's llvm-objdump"; return 1; }
+}
+uuid_rows() {  # $1 = file, $2 = its default arch: "<arch> <uuid>" per slice
+  "$OBJDUMP" --macho --arch=all --private-headers "$1" 2>/dev/null \
+    | awk -v a="$2" '/\(architecture [^)]*\):$/ { a = $NF; sub(/\):$/, "", a) } $1 == "uuid" { print a, $2 }'
+}
+debug_facts() {  # $1 = artifact name, $2 = file, $3 = its path (encoded), $4 = its linked arches. Non-zero, the reason in _mf_why, on abort.
+  need_objdump || return 1
+  _df_def="$(macho_archs "$2" | head -1)"
+  _df_u="$(uuid_rows "$2" "$_df_def")"
+  printf '%s\n' "$_df_u" | while read -r _da _du; do
+    case " $4 " in *" $_da "*) printf 'uuid %s %s %s %s\n' "$1" "$3" "$_da" "$_du" ;; esac
+  done
+  "$NM" -a -arch all "$2" 2>/dev/null \
+    | awk -v a="$_df_def" '/\(for architecture [^)]*\):$/ { a = $NF; sub(/\):$/, "", a) } $5 == "OSO" { print a }' | sort -u \
+    | while read -r _da; do
+        case " $4 " in *" $_da "*) printf 'oso %s %s %s\n' "$1" "$3" "$_da" ;; esac
+      done
+  command -v "${STRINGS:-}" >/dev/null 2>&1 \
+    || { _mf_why="STRINGS: ${STRINGS:-llvm-strings} not found; set STRINGS to clang22's llvm-strings"; return 1; }
+  "$STRINGS" -a "$2" 2>/dev/null | grep -E '/Users/[^/]+/|/home/[^/]+/|/var/folders/' | sort -u | head -3 \
+    | while IFS= read -r _dh; do printf 'homepath %s %s %s\n' "$1" "$3" "$(printf '%s' "$_dh" | tr '\t' ' ' | enc)"; done
+}
+dsym_facts() {  # $1 = tarball name, $2 = extracted root. Non-zero, the reason in _mf_why, on abort.
+  need_objdump || return 1
+  ( cd "$2" && find . -type f -path '*.dSYM/Contents/Resources/DWARF/*' ) | sed 's|^\./||' | sort > "$2.dwarf"
+  while IFS= read -r _dw; do
+    _dd="$(macho_archs "$2/$_dw" | head -1)"
+    _du="$(uuid_rows "$2/$_dw" "$_dd")"
+    _dp="$(printf '%s' "$_dw" | enc)"
+    printf '%s\n' "$_du" | while read -r _da _dv; do
+      [ -z "$_dv" ] || printf 'dsym %s %s %s %s\n' "$1" "$_dp" "$_da" "$_dv"
+    done
+  done < "$2.dwarf"
+  rm -f "$2.dwarf"
+}
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- one fact per
 #       Mach-O slice of every shipped file, read by the ONE parser (macho-slices.sh). A file with an
 #       unambiguous Mach-O magic that cannot be read aborts the stream rather than vanishing from it;
@@ -164,6 +211,8 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
     printf '%s\n' "$_sl" | while read -r _a _ft _mn _sd; do
       printf 'macho %s %s %s %s %s %s %s\n' "$1" "$_p" "$_a" "$_ft" "$_mn" "$_sd" "$_sha"
     done
+    _lk="$(printf '%s\n' "$_sl" | awk '$2 == "EXECUTE" || $2 == "DYLIB" || $2 == "BUNDLE" { printf "%s ", $1 }')"
+    if [ -n "$_lk" ]; then debug_facts "$1" "$2/$_mf" "$_p" "$_lk" || { rm -f "$_ml" "$_mferr"; return 1; }; fi
     cxxabi_facts "$1" "$2/$_mf" "$_p" || { rm -f "$_ml" "$_mferr"; return 1; }
     [ "${_mf_loads:-0}" = 1 ] || continue
     _rc=0; _ld="$(sh "$SELF/macho-loads.sh" "$2/$_mf" 2>"$_mferr")" || _rc=$?
@@ -368,6 +417,12 @@ for f in "$dist"/*; do
       else
         printf 'pkg %s unreadable none none\n' "$b"
       fi
+      af_rm "$x"
+      ;;
+    *-dSYM.tar.gz)
+      x="$(mktemp -d "${TMPDIR:-/tmp}/artifact-facts.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+      tar -xf "$f" -C "$x" 2>/dev/null || { af_rm "$x"; abort "cannot extract $b"; }
+      dsym_facts "$b" "$x" || { af_rm "$x"; abort "${_mf_why:-cannot read a dSYM in $b}"; }
       af_rm "$x"
       ;;
     *.tar.gz|*.tgz|*.tar.xz|*.tar.bz2)

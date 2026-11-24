@@ -48,6 +48,10 @@
 #            cxxabi-defines <artifact> <path> <arch> <symbol> <visible|hidden>  one per C++ runtime symbol a slice defines beyond Recaulk's back-fills
 #            cxxabi-loads  <artifact> <path> <arch> <load-path>   one per libc++abi a slice loads other than /usr/lib's or libcxx22's (%20-encoded)
 #            macho-load    <artifact> <path> <arch> <dylib|rpath> <value>  one per dylib load or rpath of a slice, for a product with a target file (%20-encoded)
+#            uuid          <artifact> <path> <arch> <uuid>        one per linked (EXECUTE, DYLIB, BUNDLE) slice
+#            oso           <artifact> <path> <arch>               one per linked slice that keeps a debug map
+#            homepath      <artifact> <path> <string>             a string in a linked file naming /Users/<u>/, /home/<u>/ or /var/folders/ (%20-encoded)
+#            dsym          <tarball> <path> <arch> <uuid>         one per DWARF slice in a *-dSYM.tar.gz
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
 #            appcast-notes <appcast-file> [<sha256>]               digest of the appcast's <description> CDATA
 #            kext          <file> <path> <id> boot|library        one per kext a "/" payload carries (%20-encoded)
@@ -126,6 +130,7 @@ kind_ran pkg-arch .pkg arch-distribution arch-floors
 kind_ran appcast appcast enclosure length enclosure-url notes feed-title
 kind_ran build-info "build record" variant-build-info
 kind_ran macho Mach-O sdk-pin cxxabi
+kind_ran uuid "linked Mach-O" debug-map dsym-asset
 
 rule_of() {
   case "$1" in
@@ -156,6 +161,8 @@ rule_of() {
     arch-host) echo "a host binary ships an arm64 slice only where a deviation declares its install path" ;;
     arch-target) echo "every target glob matches a file its product installs, and no host binary of the pkg loads a target file" ;;
     cxxabi) echo "one process gets one C++ runtime: no shipped Mach-O defines libc++abi's machinery or loads another libc++abi" ;;
+    debug-map) echo "no shipped linked Mach-O keeps a debug map or names a builder's home or temporary directory" ;;
+    dsym-asset) echo "every shipped linked Mach-O slice has its dSYM, by LC_UUID, in a *-dSYM.tar.gz of the same release" ;;
     root-runs) echo "root runs a launch daemon or an install script only from a root-only chain" ;;
     os-overwrite) echo "a regular product only adds files to Mac OS X 10.9.5, and never replaces one the OS ships" ;;
     standalone) echo "every standalone archive in a release passes check-standalone-archive.sh" ;;
@@ -193,6 +200,8 @@ fix_of() {
     arch-host) echo "build that path x86_64 only, or declare .mavergreen/deviations/arch-host/<label>/ (scope <install-path glob>, a reason saying who runs it as arm64 on Apple Silicon and why, a revisit), with a modern-smoke job in release.yml that runs it" ;;
     arch-target) echo "correct .mavergreen/products/<short>/target, so it names only files built for the target, or link the host binary against a host copy; no deviation excuses this check" ;;
     cxxabi) echo "link the family's runtime (libcxx22), or declare .mavergreen/deviations/cxxabi/<label>/ (scope <glob>, a reason, a revisit)" ;;
+    debug-map) echo "build through MavergreenToolchain.cmake, which maps the build paths away, and run split-debug.sh on the staged root, or declare .mavergreen/deviations/debug-map/<label>/ (scope <path glob>, a reason, a revisit)" ;;
+    dsym-asset) echo "run split-debug.sh on the staged root and publish the S-V-dSYM.tar.gz it writes beside the pkg and archive, or declare .mavergreen/deviations/dsym-asset/<label>/ (scope <path glob>, a reason, a revisit)" ;;
     root-runs) echo "never name an admin-writable path in an install script; root runs only from a root-only chain" ;;
     os-overwrite) echo "install it under /opt/mavergreen/<short>/, or make this a system edition" ;;
     standalone) echo "build the archive with stage_standalone.sh from the staged product, and fix what check-standalone-archive.sh names; text that must name a Mavergreen prefix declares .mavergreen/deviations/standalone-text/<label>/ (scope <archive-path glob>, a reason, a revisit)" ;;
@@ -1071,6 +1080,38 @@ done < "$tmp/cxxabi"
 [ "$cxx_fail" -le 20 ] || echo "conformance: cxxabi: and $((cxx_fail - 20)) more files with a second C++ runtime" >&2
 nmacho="$(grep -c '^macho ' "$facts" || :)"
 [ "$nmacho" -eq 0 ] || echo "conformance: cxxabi: checked $nmacho Mach-O slices"
+
+# spec: explain/debug-map.md -- a shipped image is stripped of its debug map and names no builder's
+#       directory; a deviation excuses a path.
+awk '$1 == "oso" || $1 == "homepath" { k = $2 " " $3; if (!(k in o)) { o[k] = ++n; r[n] = k }
+       if ($1 == "oso") a[k] = a[k] (a[k] == "" ? "" : ",") $4; else if (!(k in h)) h[k] = $4 }
+     END { for (i = 1; i <= n; i++) { k = r[i]; print k, (a[k] == "" ? "-" : a[k]), (h[k] == "" ? "-" : h[k]) } }' \
+  "$facts" > "$tmp/debug-map"
+while read -r file path oarch home; do
+  p="$(dec "$path")"
+  if [ "$oarch" != - ]; then
+    fail debug-map "$file ships $p ($oarch) with its debug map, which names the objects it was linked from -- split-debug.sh moves the DWARF to a dSYM and strips it" "$p"
+  fi
+  if [ "$home" != - ]; then
+    fail debug-map "$file ships $p, which names $(dec "$home") -- a builder's directory in a shipped image" "$p"
+  fi
+done < "$tmp/debug-map"
+
+# spec: explain/dsym-asset.md -- each linked slice's LC_UUID is among the DWARF of the release's
+#       *-dSYM.tar.gz; a deviation excuses a path.
+awk '$1 == "dsym" { d[$5] = 1; nd++ }
+     $1 == "uuid" { k = $2 " " $3; if (!(k in o)) { o[k] = ++n; r[n] = k; m[k] = "" }
+       u[++nu] = k; ua[nu] = $4; uu[nu] = $5 }
+     END { for (j = 1; j <= nu; j++) if (!(uu[j] in d)) { k = u[j]; m[k] = m[k] (m[k] == "" ? "" : ",") ua[j] ":" uu[j] }
+           for (i = 1; i <= n; i++) if (m[r[i]] != "") print r[i], m[r[i]], nd + 0 }' "$facts" > "$tmp/dsym-asset"
+while read -r file path missing nd; do
+  p="$(dec "$path")"
+  if [ "$nd" -eq 0 ]; then
+    fail dsym-asset "$file ships $p, and this release ships no *-dSYM.tar.gz to hold its DWARF ($missing)" "$p"
+  else
+    fail dsym-asset "$file ships $p, whose LC_UUID ($missing) no *-dSYM.tar.gz of this release holds -- its dSYM is another build's, or missing" "$p"
+  fi
+done < "$tmp/dsym-asset"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Kexts that load at boot" -- a
 #       kext in Library/Extensions that loads other than as a dependency is listed through
