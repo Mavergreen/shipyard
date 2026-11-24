@@ -151,7 +151,7 @@ runs:
 
     # spec: tests/linux-shipyard-prefix-test.sh -- Linux gets the pkg's own prefix, staged from the
     #       action's checkout at the ref the consumer pinned by the staging the pkg uses, and its
-    #       launchers on PATH through /usr/local/mavergreen/bin as on macOS, so a build step is the same
+    #       launchers on PATH through /opt/mavergreen/bin as on macOS, so a build step is the same
     #       `shipyard-cmake --preset cross` on both hosts.
     - if: runner.os != 'macOS'
       shell: bash

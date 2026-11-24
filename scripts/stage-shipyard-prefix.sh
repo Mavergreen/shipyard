@@ -2,14 +2,16 @@
 # platform: host-agnostic
 #   usage: stage-shipyard-prefix.sh --stage DIR --build DIR [--prefix P] [--version V]
 #          Configures this checkout in --build and installs it under DESTDIR=--stage with --prefix P
-#          (default /usr/local/mavergreen/shipyard), so the presets name P's toolchain file. Prints
+#          (default $(mavergreen_prefix shipyard)), so the presets name P's toolchain file. Prints
 #          the staged prefix, DIR/P. --version sets SHIPYARD_FULL_VERSION; without it CMakeLists.txt
 #          derives one. CMAKE names the cmake to run (default cmake). The one staging of shipyard's
 #          prefix: the pkg (release.yml, ci.yml) and install@v1 on Linux both start from it.
 # spec: tests/linux-shipyard-prefix-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"; SRC="${SELF%/*}"
-ST=""; B=""; P=/usr/local/mavergreen/shipyard; V=""
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
+ST=""; B=""; P="$(mavergreen_prefix shipyard)"; V=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --stage|--build|--prefix|--version)

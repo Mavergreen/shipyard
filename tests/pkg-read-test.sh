@@ -19,16 +19,16 @@ SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
 STEVEDORE="$(sh "$ROOT/scripts/fetch_stevedore.sh")"; export STEVEDORE
 LC_ALL=C; export LC_ALL
 
-mkdir -p "$W/base/usr/local/mavergreen/.base" "$W/bs" "$W/prod/usr/local/mavergreen/widget/bin" \
-  "$W/prod/usr/local/mavergreen/widget/share/a dir" "$W/ps"
-echo base > "$W/base/usr/local/mavergreen/.base/x"
+mkdir -p "$W/base/opt/mavergreen/.base" "$W/bs" "$W/prod/opt/mavergreen/widget/bin" \
+  "$W/prod/opt/mavergreen/widget/share/a dir" "$W/ps"
+echo base > "$W/base/opt/mavergreen/.base/x"
 printf '#!/bin/sh\nexit 0\n' > "$W/bs/postinstall"
-printf '#!/bin/sh\necho tool\n' > "$W/prod/usr/local/mavergreen/widget/bin/tool"
-chmod 755 "$W/prod/usr/local/mavergreen/widget/bin/tool"
-echo doc > "$W/prod/usr/local/mavergreen/widget/share/a dir/read me"
-chmod 644 "$W/prod/usr/local/mavergreen/widget/share/a dir/read me"
-ln -s bin/tool "$W/prod/usr/local/mavergreen/widget/tool"
-cat > "$W/prod/usr/local/mavergreen/widget/mavergreen.plist" <<'PL'
+printf '#!/bin/sh\necho tool\n' > "$W/prod/opt/mavergreen/widget/bin/tool"
+chmod 755 "$W/prod/opt/mavergreen/widget/bin/tool"
+echo doc > "$W/prod/opt/mavergreen/widget/share/a dir/read me"
+chmod 644 "$W/prod/opt/mavergreen/widget/share/a dir/read me"
+ln -s bin/tool "$W/prod/opt/mavergreen/widget/tool"
+cat > "$W/prod/opt/mavergreen/widget/mavergreen.plist" <<'PL'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -44,7 +44,7 @@ cat > "$W/prod/usr/local/mavergreen/widget/mavergreen.plist" <<'PL'
 </dict>
 </plist>
 PL
-chmod 644 "$W/prod/usr/local/mavergreen/widget/mavergreen.plist"
+chmod 644 "$W/prod/opt/mavergreen/widget/mavergreen.plist"
 printf '#!/bin/sh\nexit 0\n' > "$W/ps/preinstall"; cp "$W/ps/preinstall" "$W/ps/postinstall"
 chmod 755 "$W/bs/postinstall" "$W/ps/preinstall" "$W/ps/postinstall"
 sh "$ROOT/scripts/build_component_pkg.sh" --root "$W/base" --identifier dev.mavergreen.base --version 1.0.9 \
@@ -79,25 +79,23 @@ rc=0; sh "$R" expand "$P" "$W/x" 2> "$W/err" || rc=$?
 [ "$rc" -eq 1 ] && grep -q 'already exists' "$W/err" || fail "expand into an existing DIR: exit $rc, $(cat "$W/err")"
 
 widget_list='.	40755	0	0
-./usr	40755	0	0
-./usr/local	40755	0	0
-./usr/local/mavergreen	40755	0	0
-./usr/local/mavergreen/widget	40755	0	0
-./usr/local/mavergreen/widget/bin	40755	0	0
-./usr/local/mavergreen/widget/bin/tool	100755	0	0
-./usr/local/mavergreen/widget/mavergreen.plist	100644	0	0
-./usr/local/mavergreen/widget/share	40755	0	0
-./usr/local/mavergreen/widget/share/a dir	40755	0	0
-./usr/local/mavergreen/widget/share/a dir/read me	100644	0	0
-./usr/local/mavergreen/widget/tool	120755	0	0'
+./opt	40755	0	0
+./opt/mavergreen	40755	0	0
+./opt/mavergreen/widget	40755	0	0
+./opt/mavergreen/widget/bin	40755	0	0
+./opt/mavergreen/widget/bin/tool	100755	0	0
+./opt/mavergreen/widget/mavergreen.plist	100644	0	0
+./opt/mavergreen/widget/share	40755	0	0
+./opt/mavergreen/widget/share/a dir	40755	0	0
+./opt/mavergreen/widget/share/a dir/read me	100644	0	0
+./opt/mavergreen/widget/tool	120755	0	0'
 same 'list dev.mavergreen.widget' "$widget_list" "$(sh "$R" list "$P" dev.mavergreen.widget)"
 same 'list reads an expanded directory as it reads the pkg' "$widget_list" "$(sh "$R" list "$W/x" dev.mavergreen.widget)"
 same 'list dev.mavergreen.base' '.	40755	0	0
-./usr	40755	0	0
-./usr/local	40755	0	0
-./usr/local/mavergreen	40755	0	0
-./usr/local/mavergreen/.base	40755	0	0
-./usr/local/mavergreen/.base/x	100644	0	0' "$(sh "$R" list "$P" dev.mavergreen.base)"
+./opt	40755	0	0
+./opt/mavergreen	40755	0	0
+./opt/mavergreen/.base	40755	0	0
+./opt/mavergreen/.base/x	100644	0	0' "$(sh "$R" list "$P" dev.mavergreen.base)"
 rc=0; sh "$R" list "$P" dev.mavergreen.nope > /dev/null 2> "$W/err" || rc=$?
 [ "$rc" -eq 1 ] && grep -q 'expected one component dev.mavergreen.nope' "$W/err" || fail "an absent component: exit $rc, $(cat "$W/err")"
 
@@ -126,11 +124,11 @@ rc=0; sh "$R" plist "$W/base.pkg" version > /dev/null 2> "$W/err" || rc=$?
 [ "$rc" -eq 1 ] && grep -q 'found 0' "$W/err" || fail "a pkg with no manifest: exit $rc, $(cat "$W/err")"
 
 sh "$R" payload "$P" dev.mavergreen.widget "$W/p" || fail 'payload failed'
-[ "$(cat "$W/p/usr/local/mavergreen/widget/share/a dir/read me")" = doc ] && [ -x "$W/p/usr/local/mavergreen/widget/bin/tool" ] \
-  && [ -L "$W/p/usr/local/mavergreen/widget/tool" ] && [ ! -e "$W/p/usr/local/mavergreen/.base" ] \
+[ "$(cat "$W/p/opt/mavergreen/widget/share/a dir/read me")" = doc ] && [ -x "$W/p/opt/mavergreen/widget/bin/tool" ] \
+  && [ -L "$W/p/opt/mavergreen/widget/tool" ] && [ ! -e "$W/p/opt/mavergreen/.base" ] \
   || fail "payload did not unpack the widget component, and only it: $(cd "$W/p" && find . | sort)"
-sh "$R" payload "$W/x" dev.mavergreen.widget "$W/q" '*usr/local/mavergreen/widget/mavergreen.plist' || fail 'payload with a pattern failed'
-same 'payload with a pattern unpacks only what it matches' './usr/local/mavergreen/widget/mavergreen.plist' \
+sh "$R" payload "$W/x" dev.mavergreen.widget "$W/q" '*opt/mavergreen/widget/mavergreen.plist' || fail 'payload with a pattern failed'
+same 'payload with a pattern unpacks only what it matches' './opt/mavergreen/widget/mavergreen.plist' \
   "$(cd "$W/q" && find . -type f | sort)"
 
 mkdir -p "$W/bad"

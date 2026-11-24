@@ -39,8 +39,8 @@ run() {  # $1 = github.action_ref  $2 = GITHUB_WORKSPACE
 run v1.2.3 "$w/consumer"
 grep -qx 'SHIPYARD_VERSION=1.2.3' "$w/env" || { echo "FAIL: an exact pin must export SHIPYARD_VERSION=1.2.3"; bad=1; }
 [ "$(cat "$w/stub-args")" = "--version 1.2.3" ] || { echo "FAIL: an exact pin must install shipyard --version 1.2.3; got '$(cat "$w/stub-args")'"; bad=1; }
-grep -qx "MavericksShipyard_DIR=$w/mg/shipyard/share/cmake/MavericksShipyard" "$w/env" || { echo "FAIL: MavericksShipyard_DIR must name the installed config's directory"; bad=1; }
-grep -qx "SHIPYARD_SCRIPTS=$w/mg/shipyard/share/cmake/MavericksShipyard/scripts" "$w/env" || { echo "FAIL: SHIPYARD_SCRIPTS must name the installed scripts"; bad=1; }
+grep -qx "MavergreenShipyard_DIR=$w/mg/shipyard/share/cmake/MavergreenShipyard" "$w/env" || { echo "FAIL: MavergreenShipyard_DIR must name the installed config's directory"; bad=1; }
+grep -qx "SHIPYARD_SCRIPTS=$w/mg/shipyard/share/cmake/MavergreenShipyard/scripts" "$w/env" || { echo "FAIL: SHIPYARD_SCRIPTS must name the installed scripts"; bad=1; }
 grep -qx "$w/mg/bin" "$w/path" || { echo "FAIL: the installed launchers' directory must go on GITHUB_PATH"; bad=1; }
 ! grep -q '::warning::' "$w/out" || { echo "FAIL: an exact pin must not warn:"; sed 's/^/    | /' "$w/out"; bad=1; }
 run main "$w/consumer"

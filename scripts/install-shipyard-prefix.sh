@@ -2,13 +2,13 @@
 # platform: host-agnostic
 #   usage: install-shipyard-prefix.sh [--root DIR] [--version V]
 #          Lays down shipyard's pkg payload from this checkout, without a pkg, where install@v1 on Linux
-#          wants it: DIR/usr/local/mavergreen/shipyard (DIR default /), staged by
+#          wants it: DIR$(mavergreen_prefix shipyard) (DIR default /), staged by
 #          stage-shipyard-prefix.sh and package-pkg.sh --tree-only, so it is the pkg's prefix and
 #          mavergreen.plist, less the updater. Its exported names (bin/ less the manifest's
-#          exports-exclude) are linked into DIR/usr/local/mavergreen/bin, as the mavergreen helper
+#          exports-exclude) are linked into the bin/ beside that prefix, as the mavergreen helper
 #          links them on a Mac. Prints the installed prefix on stdout.
 #          Writes as root, else under sudo (when `sudo -n true` succeeds; SUDO= overrides), else into
-#          a writable DIR/usr/local/mavergreen; with none of those it installs into
+#          a writable parent of that prefix; with none of those it installs into
 #          ${MAVERGREEN_USER_PREFIX:-$HOME/.local/mavergreen}/shipyard instead, saying so on stderr,
 #          and that prefix is the one its presets name. The tree is staged beside the prefix in
 #          .install-products/shipyard, owned by the caller, and renamed into place whole, an older
@@ -19,7 +19,9 @@
 # spec: tests/linux-shipyard-prefix-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/mavericks_fetch.sh"
+. "$SELF/mavergreen_fetch.sh"
+. "$SELF/mavergreen-meta.sh"
+. "$SELF/lib/name-rules.sh"
 die() { echo "install-shipyard-prefix: $*" >&2; exit 1; }
 ROOT=/; V=""
 while [ $# -gt 0 ]; do
@@ -39,17 +41,17 @@ if [ "$(id -u)" -eq 0 ]; then _sudo=""
 elif command -v sudo > /dev/null 2>&1 && sudo -n true > /dev/null 2>&1; then _sudo=sudo
 else _sudo=""; fi
 SUDO="${SUDO-$_sudo}"
-MG="$ROOT/usr/local/mavergreen"
+AS="$(mavergreen_prefix shipyard)"
+MG="$ROOT${AS%/*}"
 writable() {
   _a="$1"
   while [ ! -e "$_a" ]; do _a="${_a%/*}"; [ -n "$_a" ] || _a=/; done
   [ -d "$_a" ] && [ -w "$_a" ]
 }
-AS=/usr/local/mavergreen/shipyard
 if [ -z "$SUDO" ] && [ "$(id -u)" -ne 0 ] && ! writable "$MG"; then
   MG="${MAVERGREEN_USER_PREFIX:-$HOME/.local/mavergreen}"
   MG="${MG%/}"; AS="$MG/shipyard"
-  echo "install-shipyard-prefix: no root, sudo or writable $ROOT/usr/local/mavergreen, so shipyard goes to $AS" >&2
+  echo "install-shipyard-prefix: no root, sudo or writable $ROOT${AS%/*}, so shipyard goes to $AS" >&2
 fi
 P="$MG/shipyard"
 
@@ -62,8 +64,8 @@ set -- --stage "$T/s" --build "$T/b" --prefix "$AS"
 [ -z "$V" ] || set -- "$@" --version "$V"
 sp="$(sh "$SELF/stage-shipyard-prefix.sh" "$@")" || die "could not stage shipyard from ${SELF%/*}"
 if [ -z "$V" ]; then
-  V="$(sed -n 's/^set(PACKAGE_VERSION "\([^"]*\)")$/\1/p' "$sp/share/cmake/MavericksShipyard/MavericksShipyardConfigVersion.cmake")"
-  [ -n "$V" ] || die "the staged MavericksShipyardConfigVersion.cmake names no version"
+  V="$(sed -n 's/^set(PACKAGE_VERSION "\([^"]*\)")$/\1/p' "$sp/share/cmake/MavergreenShipyard/MavergreenShipyardConfigVersion.cmake")"
+  [ -n "$V" ] || die "the staged MavergreenShipyardConfigVersion.cmake names no version"
 fi
 sh "$SELF/package-pkg.sh" --shipyard-prefix "$sp" --version "$V" --tree-only "$T/tree" --installed-as "$AS" \
   || die "package-pkg.sh --tree-only refused the staged prefix"

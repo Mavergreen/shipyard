@@ -17,8 +17,9 @@
 #          PATH as the Payload names it (./usr/...), MODE the octal st_mode with no leading zero
 #          (40755, 100644, 120755), UID and GID numeric, as the cpio header carries them: the format of
 #          `lsbom -p fmug`. A symlink's PATH stops at its " -> ".
-#          plist: the product manifest, the one usr/local/mavergreen/SHORT/mavergreen.plist any
-#          component installs (install-location applied); prints each KEY's scalar value, one per line,
+#          plist: the product manifest, the one opt/mavergreen/SHORT/mavergreen.plist any component
+#          installs (install-location applied), or usr/local/mavergreen/SHORT/mavergreen.plist in a
+#          pinned pre-flag-day release; prints each KEY's scalar value, one per line,
 #          in order. A missing key fails.
 #          facts: sorted lines of `SUBJECT FACT VALUE...`:
 #            distribution host-architectures ARCHS
@@ -167,11 +168,11 @@ case "$cmd" in
       list_component "$id" | awk -F '\t' -v id="$id" -v loc="$loc" '{
         p = $1; sub(/^\.\//, "", p); sub(/^\.$/, "", p)
         f = loc "/" p; gsub(/\/+/, "/", f)
-        if (f ~ /^\/usr\/local\/mavergreen\/[^\/]+\/mavergreen\.plist$/) printf "%s\t%s\n", id, $1
+        if (f ~ /^\/(opt|usr\/local)\/mavergreen\/[^\/]+\/mavergreen\.plist$/) printf "%s\t%s\n", id, $1
       }' >> "$T/hits"
     done < "$T/comps"
     n="$(grep -c . "$T/hits" || :)"
-    [ "$n" = 1 ] || die "expected one usr/local/mavergreen/SHORT/mavergreen.plist in $PKG, found $n"
+    [ "$n" = 1 ] || die "expected one opt/mavergreen/SHORT/mavergreen.plist in $PKG, found $n"
     id="$(cut -f1 "$T/hits")"; member="$(cut -f2- "$T/hits")"
     C="$(awk -F '\t' -v id="$id" '$1 == id { print $4 }' "$T/comps")"
     case "$C" in /*) : ;; *) C="$(pwd)/$C" ;; esac

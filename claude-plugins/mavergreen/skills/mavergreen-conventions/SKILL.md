@@ -125,13 +125,13 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   (`linux-prerequisites.sh`: cmake, make, curl, git, tar, gzip, cpio, xz, python3 with PyYAML, CA
   certificates), installing the missing ones with apt as root or under `sudo -n`, else failing once
   naming them all. So no product keeps an apt list for shipyard. It then lays down the pkg's own
-  `/usr/local/mavergreen/shipyard` from the ref you pinned, staged as the pkg is
+  `/opt/mavergreen/shipyard` from the ref you pinned, staged as the pkg is
   (`stage-shipyard-prefix.sh`, `package-pkg.sh --tree-only`; a test holds the trees equal, less the
-  updater), links the launchers into `/usr/local/mavergreen/bin` on `PATH`, and points
+  updater), links the launchers into `/opt/mavergreen/bin` on `PATH`, and points
   `SHIPYARD_SCRIPTS` and `MavergreenShipyard_DIR` into it. There the launchers run the host's
   `cmake`, and the toolchain file gives every compiler not named the pinned clang22 with its
   `ld64.lld`. Never hand-roll `-DCMAKE_TOOLCHAIN_FILE`/`-DCMAKE_C_COMPILER` on Linux. Without root,
-  `sudo -n` or a writable `/usr/local/mavergreen`, the prefix is `~/.local/mavergreen/shipyard`, said
+  `sudo -n` or a writable `/opt/mavergreen`, the prefix is `~/.local/mavergreen/shipyard`, said
   on stderr. Revisit when the cmake product ships a Linux build, or a family Linux build needs a
   tool the list lacks (add it there, not to the product).
 
