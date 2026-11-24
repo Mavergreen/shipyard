@@ -1867,6 +1867,8 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   host. The function refuses any other LLVM clang, and a compiler target that disagrees with the
   configure's arch and floor. An updater still configured with AppleClang builds as before, with a
   warning naming this rule, until its product moves to clang22.
+- **The silent probe is invisible: an accessory app, with no Dock icon and no focus change;** only
+  `--user` and the post-install alerts become a normal app and come forward.
 - **Pane-hint mode tells a pane "no update" from "couldn't check".** With `PANE_HINT_KEY <key>`,
   a found update writes the version to `<key>` and no update removes it; either also writes
   `<key>CheckedAt`, an `NSDate`, in the same defaults domain (the updater's bundle id). An abort, an

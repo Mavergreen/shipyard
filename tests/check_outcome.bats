@@ -68,3 +68,36 @@ method_body() {
   method_body '- (void)resolveCheck:' | grep -q 'forKey:kCheckedAtKey'
   [ "$(grep -c 'resolveCheck:MAV_CHECK_' "$MAIN")" -eq 4 ]
 }
+
+main_body() {
+  awk '/^int main\(/ { on = 1 } on { print } on && /^}/ { exit }' "$MAIN"
+}
+
+@test "only mav_foreground activates, and it makes the app Regular first" {
+  [ "$(grep -c 'activateIgnoringOtherApps' "$MAIN")" -eq 1 ]
+  awk '/^static void mav_foreground\(void\) \{/ { on = 1 } on { print } on && /^}/ { exit }' "$MAIN" > "$WORK/fg"
+  [ "$(sed -n 2p "$WORK/fg")" = '    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];' ]
+  [ "$(sed -n 3p "$WORK/fg")" = '    [NSApp activateIgnoringOtherApps:YES];' ]
+}
+
+@test "the silent probe runs as an Accessory app and activates only under gUserInitiated" {
+  main_body > "$WORK/main"
+  [ "$(grep -c 'setActivationPolicy:' "$WORK/main")" -eq 1 ]
+  grep -A1 'setActivationPolicy:gUserInitiated ? NSApplicationActivationPolicyRegular$' "$WORK/main" \
+    | grep -q ': NSApplicationActivationPolicyAccessory\];$'
+  run awk '
+    /^        if \(gUserInitiated\) \{$/ { branch = "user"; next }
+    branch == "user" && /^        \} else \{$/ { branch = "probe"; next }
+    branch == "probe" && /^        \}$/ { branch = "done"; next }
+    /mav_foreground\(\)|activateIgnoringOtherApps/ { n[branch ? branch : "before"]++ }
+    /\[NSApp run\]/ { ran = 1 }
+    END { printf "%d %d %d %s %d\n", n["user"], n["probe"], n["done"], branch, ran }
+  ' <(awk '/\[updater setDelegate:gDelegate\];/ { on = 1 } on { print } /\[NSApp run\]/ { exit }' "$WORK/main")
+  [ "$output" = "1 0 0 done 1" ]
+}
+
+@test "every post-relaunch alert is brought forward by mav_foreground" {
+  main_body > "$WORK/main"
+  [ "$(grep -c 'runModal\]' "$WORK/main")" -eq 2 ]
+  [ "$(grep -B1 'NSAlert \*[a-z]* = \[\[NSAlert alloc\] init\];' "$WORK/main" | grep -c 'mav_foreground();')" -eq 2 ]
+}

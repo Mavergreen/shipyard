@@ -35,8 +35,9 @@ static int gExitStatus = 0;
 // UI is OPT-IN. Only an EXPLICIT user summon shows anything: `--user` (a notification
 // "install" click) runs Sparkle's interactive check -- the ONLY path that shows a "You're up-to-date!"
 // or update dialog. EVERY other launch (`--background` daily agent, or no flag at all) runs a SILENT
-// probe: no dialog, exit when done. That keeps un-summoned / scheduled checks completely quiet -- a
-// found update is surfaced via a notification (no-pane) or the pane hint, never a modal.
+// probe as an accessory app: no dialog, no Dock icon, no activation, exit when done. That keeps
+// un-summoned / scheduled checks completely quiet -- a found update is surfaced via a notification
+// (no-pane) or the pane hint, never a modal.
 static BOOL gBackground = NO;      // --background: the scheduled LaunchAgent (honors the auto-check pref)
 static BOOL gUserInitiated = NO;   // --user: an explicit summon (notification "install" click, or launching the .app)
 
@@ -48,6 +49,11 @@ static BOOL gUserInitiated = NO;   // --user: an explicit summon (notification "
 // install (those already called a delegate). Foreground (manual) checks are untouched.
 static const NSTimeInterval kBackgroundWatchdogSeconds = 120.0;
 static NSTimer *gWatchdog = nil;
+
+static void mav_foreground(void) {
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [NSApp activateIgnoringOtherApps:YES];
+}
 
 // Sparkle 1.x relaunches the host after a .pkg install and there is no config to suppress it. We drop
 // a marker just before relaunch so the relaunched instance exits quietly instead of re-checking.
@@ -195,7 +201,8 @@ int main(int argc, const char **argv) {
     }
     @autoreleasepool {
         [NSApplication sharedApplication];
-        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];  /* normal foreground app (see Info.plist) */
+        [NSApp setActivationPolicy:gUserInitiated ? NSApplicationActivationPolicyRegular
+                                                  : NSApplicationActivationPolicyAccessory];
         if (strlen(MAVERICKS_PANE_HINT_KEY) > 0)
             [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationWillTerminateNotification
                                                               object:nil queue:nil
@@ -245,7 +252,7 @@ int main(int argc, const char **argv) {
                     [[NSUserDefaults standardUserDefaults] synchronize];
                     NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] post-install relaunch; showing 'updated to %@' confirmation",
                           selfVersion.length ? selfVersion : @"(unknown)");
-                    [NSApp activateIgnoringOtherApps:YES];
+                    mav_foreground();
                     NSAlert *done = [[NSAlert alloc] init];
                     [done setMessageText:@"@MAVERICKS_C_CONFIRM_TITLE@"];
                     [done setInformativeText:@"@MAVERICKS_C_CONFIRM_BODY@"];
@@ -268,7 +275,7 @@ int main(int argc, const char **argv) {
                     [fm removeItemAtPath:kRelaunchMarker error:NULL];
                     NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] install did not complete (still %@, wanted %@) -> offering retry",
                           selfVersion.length ? selfVersion : @"(unknown)", pending.length ? pending : @"(unknown)");
-                    [NSApp activateIgnoringOtherApps:YES];
+                    mav_foreground();
                     NSAlert *retry = [[NSAlert alloc] init];
                     [retry setMessageText:@"@MAVERICKS_C_PRODUCT_NAME@ update didn't finish"];
                     [retry setInformativeText:pending.length
@@ -315,13 +322,13 @@ int main(int argc, const char **argv) {
             return 0;
         }
 
-        [NSApp activateIgnoringOtherApps:YES];                 // LSUIElement: bring Sparkle's dialog forward
         gDelegate = [[MavericksUpdaterDelegate alloc] init];
         [NSUserNotificationCenter defaultUserNotificationCenter].delegate = (id)gDelegate;  // no-pane notification path
         SUUpdater *updater = [SUUpdater sharedUpdater];         // host bundle = this app (SUFeedURL/SUPublicEDKey)
         [updater setDelegate:gDelegate];
         if (gUserInitiated) {
             NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] user-initiated: starting interactive check");
+            mav_foreground();                                  // bring Sparkle's dialog forward
             [updater checkForUpdates:nil];                     // shows UI (update dialog, or "up-to-date")
         } else {
             NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] silent probe (watchdog %.0fs)", kBackgroundWatchdogSeconds);
