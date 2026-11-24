@@ -1074,6 +1074,7 @@ nmacho="$(grep -c '^macho ' "$facts" || :)"
 #       kext in Library/Extensions that loads other than as a dependency is listed through
 #       stage_product.sh --boot-kext or declared as a kext-sig-exception deviation; the facility lists
 #       only kexts the pkg ships; and no script edits Apple's exclude list itself, which no deviation excuses.
+kind_ran pkg ".pkg" kext-sig-exception kext-exclude-list
 while read -r kind file path id how; do
   [ "$kind" = kext ] && [ "$how" = boot ] || continue
   case "$path" in Library/Extensions/*.kext) ;; *) continue ;; esac
