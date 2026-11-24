@@ -21,6 +21,12 @@ comparison_key() {
   printf '%s' "$1" | sed -e 's/-mavericks\./\./' -e 's/-mavergreen\./\./' -e 's/\([0-9]\)p\([0-9]\)/\1.\2/'
 }
 
+# spec: tests/version-lib-test.sh -- the build version (Engine E3.5): one leading v dropped, then
+#       comparison_key, so a manifest's build-version and a feed's sparkle:version agree.
+mavergreen_build_version() {
+  comparison_key "${1#v}"
+}
+
 # spec: tests/vercmp-test.sh -- status 2, printing nothing, when either key is
 #       unorderable; a subshell body, so it sets no caller variable.
 mavergreen_vercmp() (

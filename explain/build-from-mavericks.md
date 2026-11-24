@@ -1,1 +1,1 @@
-Retired by P6: a deviation kind of the reproducible-releases design; P6's reproduce checks read it.
+Not read yet: a product builds and reproduces on fewer hosts than the family's three, after the flag day (cross-host reproduce, reproducible-releases spec section 5).

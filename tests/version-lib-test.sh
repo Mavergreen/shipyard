@@ -108,6 +108,8 @@ grep -q 's/-mavericks\\./\\./' "$here/../scripts/gen_appcast.sh" 2>/dev/null \
   && { echo "FAIL: gen_appcast.sh must NOT carry its own derivation, only call comparison_key() -- this is a regression test for the family's ONE-derivation rule violated when the pN rule was added to gen_appcast but not to previous-release-tag"; exit 1; }
 
 [ "$(comparison_key 1.0-mavergreen.2)" = 1.0.2 ] || { echo "FAIL key: -mavergreen.N"; exit 1; }
+[ "$(mavergreen_build_version v1.0.871)" = 1.0.871 ] || { echo "FAIL build version: a leading v"; exit 1; }
+[ "$(mavergreen_build_version 1.2.3-mavergreen.4)" = 1.2.3.4 ] || { echo "FAIL build version: -mavergreen.N"; exit 1; }
 [ "$(comparison_key 4.4.5-mavericks.2)" = 4.4.5.2 ] \
   || { echo "FAIL key: a pinned pre-flag-day release (ingredients/cmake/VERSION's 4.4.5-mavericks.2) must still order until L1 re-pins it"; exit 1; }
 grep -q 'string(REPLACE "-mavergreen\." ' "$here/../MavericksSparkle.cmake" \
