@@ -23,6 +23,9 @@ with tarfile.open(sys.argv[1], 'w:gz') as t:
 PY
   SHA="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REL/$ASSET")"
   printf '%s  %s\n' "$SHA" "$ASSET" > "$REL/SHA256SUMS"
+  printf 'shipyard 1.0.0\n' > "$REL/RELEASE-MANIFEST.txt"
+  printf '%s  %s\n' "$(python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REL/RELEASE-MANIFEST.txt")" RELEASE-MANIFEST.txt >> "$REL/SHA256SUMS"
+  export XDG_CACHE_HOME="$WORK/cache"
 }
 teardown() { rm -rf "$WORK"; }
 
