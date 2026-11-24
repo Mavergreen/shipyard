@@ -32,9 +32,6 @@ macos-runner swift release.yml:build
 macos-runner swift release.yml:build-cross
 macos-runner swift release.yml:collect
 macos-runner swift release.yml:version
-macos-runner tailscale ci.yml:build
-macos-runner tailscale release.yml:build-macos
-macos-runner tailscale release.yml:package
 modern-smoke clang-22 release.yml:modern-smoke
 modern-smoke claude-code release.yml:modern-smoke
 modern-smoke drydock release.yml:modern-smoke
@@ -68,7 +65,6 @@ standalone jdk-25 jdk25
 standalone longboat longboat
 standalone longboat sdk109
 standalone longboat sdk113
-standalone macfuse macfuse
 standalone magic-trackpad2 trackpad2
 standalone make make
 standalone ninja ninja
@@ -87,7 +83,6 @@ standalone stevedore stevedore
 standalone swift swift-runtime
 standalone swift swift-toolchain
 standalone swift swift-toolchain-cross
-standalone tailscale tailscale
 standalone wezterm wezterm
 standalone zig zig
 standalone zig zig-cross
