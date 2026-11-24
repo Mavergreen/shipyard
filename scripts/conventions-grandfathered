@@ -30,8 +30,6 @@ macos-runner python-315 release.yml:installed-arm64
 macos-runner python-315 release.yml:package
 macos-runner python-315 release.yml:tests
 macos-runner rg release.yml:build
-macos-runner rust release.yml:build
-macos-runner rust release.yml:collect
 macos-runner swift release.yml:build
 macos-runner swift release.yml:build-cross
 macos-runner swift release.yml:collect
@@ -45,13 +43,11 @@ modern-smoke drydock release.yml:modern-smoke
 modern-smoke golang-126 release.yml:modern-smoke
 modern-smoke make release.yml:modern-smoke
 modern-smoke python-315 release.yml:modern-smoke
-modern-smoke rust release.yml:modern-smoke
 modern-smoke stevedore release.yml:modern-smoke
 modern-smoke swift release.yml:modern-smoke
 packager golang-126 build/package-cross-pkg.sh
 packager golang-126 build/package-pkg.sh
 packager openssh build/package-pkg.sh
-packager rust build/package-lib.sh
 packager stevedore .github/workflows/release.yml
 packager stevedore build/oracle-pkg.sh
 packager swift build.sh
@@ -73,8 +69,6 @@ standalone fd fd
 standalone fleet fleet
 standalone golang-126 go126
 standalone golang-126 go126-cross
-standalone golang-127 go127
-standalone golang-127 go127-cross
 standalone icu icu
 standalone iterm2 iterm2
 standalone jdk-25 jdk25
