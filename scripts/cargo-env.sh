@@ -84,7 +84,7 @@ if [ "$ARCH" = arm64 ]; then
   line AR_aarch64_apple_darwin "$CL/bin/llvm-ar"
   line RANLIB_aarch64_apple_darwin "$CL/bin/llvm-ranlib"
   line CFLAGS_aarch64_apple_darwin "--no-default-config --target=arm64-apple-macos11.0 -isysroot $SDK"
-  line CXXFLAGS_aarch64_apple_darwin "--no-default-config --target=arm64-apple-macos11.0 -isysroot $SDK -nostdinc++ -isystem \"$SDK/usr/include/c++/v1\""
+  line CXXFLAGS_aarch64_apple_darwin "--no-default-config --target=arm64-apple-macos11.0 -isysroot $SDK -nostdinc++ -isystem $SDK/usr/include/c++/v1"
   line MACOSX_DEPLOYMENT_TARGET 11.0
 else
   line CARGO_BUILD_TARGET x86_64-apple-darwin
