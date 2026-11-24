@@ -155,7 +155,7 @@ rc=0; ( unset NM LIPO; OTOOL="$CL/bin/llvm-otool"; SHIPYARD_MACHO_DIRS="$w/nopre
 echo "ok: readers are the pinned clang22's, never PATH's"
 
 mkdir -p "$w/sy/scripts/lib" "$w/sy/.mavergreen/ingredients/clang22"
-cp "$BE" "$here/../scripts/deviations.sh" "$here/../scripts/mavergreen-meta.sh" "$w/sy/scripts/"
+cp "$BE" "$here/../scripts/deviations.sh" "$here/../scripts/deviation-reason.sh" "$here/../scripts/mavergreen-meta.sh" "$w/sy/scripts/"
 cp "$here/../scripts/lib/name-rules.sh" "$here/../scripts/lib/macho-tools.sh" "$here/../scripts/lib/mach-interface.sh" "$w/sy/scripts/lib/"
 printf '#!/bin/sh\nprintf "%%s\\n" "$1" >> "%s/fetched"\nprintf "%%s\\n" "%s"\n' "$w" "$CL" > "$w/sy/scripts/fetch_clang22.sh"
 rm -rf "$w/A" "$w/B"; mkdir -p "$w/A/lib" "$w/B/lib"; cp "$w/base.dylib" "$w/A/lib/x.dylib"; cp "$w/import.dylib" "$w/B/lib/x.dylib"

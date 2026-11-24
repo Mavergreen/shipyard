@@ -89,7 +89,7 @@ shipyard_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET" || {
 sh "$SELF/pkg_read.sh" expand "$CACHE/$ASSET" "$tmp/expanded" || {
   echo "fetch_product_pkg: could not expand $CACHE/$ASSET" >&2; exit 1; }
 components() {
-  for _pi in "$tmp"/expanded/*/PackageInfo; do
+  for _pi in "$tmp"/expanded/PackageInfo "$tmp"/expanded/*/PackageInfo; do
     _id="$(sed -n 's/.*identifier="\([^"]*\)".*/\1/p' "$_pi" 2>/dev/null | head -n 1)"
     case "$_id" in
       dev.mavergreen."$SHORT"|*."$SHORT") printf '%s\n' "$_pi" ;;
