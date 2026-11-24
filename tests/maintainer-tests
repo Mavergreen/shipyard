@@ -47,3 +47,6 @@ golden-gate tests/set-install-floor-arch-test.sh
 golden-gate tests/content-manifest-test.sh
 10.9 tests/split-debug-test.sh
 golden-gate tests/split-debug-test.sh
+10.9 tests/artifact-facts-cxxabi-test.sh
+golden-gate tests/artifact-facts-cxxabi-test.sh
+golden-gate tests/check-fixtures-run.sh

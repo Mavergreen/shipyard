@@ -1044,6 +1044,33 @@ is its durable form.
   already set) and `ZERO_AR_DATE=1`, on every OS.
 - **shipyard publishes every rebuild.** Its `publish-unchanged` deviation says why: consumers take its
   workflows through a moving `@v1`. It still writes both manifests and reproduces weekly.
+- **The rule, in one line:** the same commit, built twice, installs the same bytes, and a rebuild
+  that installs the same bytes publishes nothing. The manifest is byte-identical whichever host
+  computes it (10.9, modern macOS, Linux), so any of them can judge a release.
+- **The checks:** `release-dispatch` (only `force_publish` and `reproduce_tag` dispatch, and the
+  publish job runs only on dispatch) and `reproduce-wired` (the weekly and dispatched reproduce run
+  exists and never publishes).
+- **The two deviations:** `reproducible` (scope: an install-path glob whose bytes can't be made stable,
+  left out of the manifest; `*` exempts the repo from the reproduce check) and `publish-unchanged`
+  (scope `*`: every rebuild publishes, as shipyard's does). Each needs a reason and a revisit.
+
+### Split debug info: dSYMs beside the release
+
+Every shipped linked Mach-O is built with `-g` and stripped of its debug map, and its DWARF is
+published as a dSYM in the same release, so a crash report symbolicates and no image names the build
+machine.
+
+- `MavergreenToolchain.cmake` builds with `-g` and maps the source and build directories away
+  (`-ffile-prefix-map`, `-oso_prefix`). A repo that sets its own `CMAKE_<LANG>_FLAGS` replaces those
+  and must add them back.
+- `split-debug.sh` runs on the staged root before `stage_standalone.sh`, so the archive and the pkg
+  derived from it carry the same stripped bytes. It writes `<short>-<version>-dSYM.tar.gz` and strips
+  with `strip -S` only: local symbols stay, so `cxxabi` can still see a linked-in runtime (an image
+  stripped with `-x` fails `cxxabi` as unjudgeable).
+- Publish the dSYM tarball beside the pkg and the archive. `debug-map` fails an image that keeps its
+  debug map or names a builder's home; `dsym-asset` fails one whose LC_UUID no dSYM of the release holds.
+  An upstream prebuilt, or a Go binary that keeps its DWARF in the image, declares a `dsym-asset`
+  deviation.
 
 ## Version scaffolding (shared, wrapped)
 
@@ -1947,7 +1974,7 @@ disagree is incoherent however it was built.
 |---|---|
 | Itself | `.pkg` / appcast / tag versions match; the enclosure names a published asset at its real length, and points into THIS release |
 | Neighbours | every `.pkg` of one release agrees on the version; **variants agree about their ingredients** |
-| Siblings | version scheme `<upstream>-mavergreen.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a pkg's Distribution declares its product's floor and the architecture rule its host slices derive; every shipped Mach-O slice records its arch's pinned SDK (see "SDK pinning"); no shipped Mach-O carries or loads a second C++ runtime (below) |
+| Siblings | version scheme `<upstream>-mavergreen.N`; pkg identifier, top-level bundle identifiers and launchd Labels under `dev.mavergreen.*`; installed files only where the family installs, with a manifest and the base component first (see "Install layout and identity", below); a pkg's Distribution declares its product's floor and the architecture rule its host slices derive; every shipped Mach-O slice records its arch's pinned SDK (see "SDK pinning"); no shipped Mach-O carries or loads a second C++ runtime (below); a family dylib is loaded by `@rpath`, libcxx22 through an LC_RPATH that finds the installed copy first (`link-rpath`), and is listed by the release manifest of a dependency declared as a library (`link-requires`); weak-bind info is name-sorted (`weak-bind-sorted`) |
 
 **This constrains outputs, not methods.** Products here build in genuinely different ways — a Go
 toolchain, a boot2docker iso, libswiftCore, an openssh — and making those look alike would buy
