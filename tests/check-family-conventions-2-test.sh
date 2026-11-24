@@ -301,7 +301,10 @@ grep -v 'notes-file' "$work/g8/.github/workflows/release.yml" > "$work/g8/releas
 mv "$work/g8/release.yml" "$work/g8/.github/workflows/release.yml"
 cat >> "$work/g8/.github/workflows/release.yml" <<'YML'
   publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.reproduce_tag == ''
     uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
+    with:
+      force-reason: ${{ inputs.force_publish }}
 YML
 (cd "$work/g8" && sh "$S" >/dev/null) || { echo "FAIL a repo that stages no appcast from the notes should pass"; exit 1; }
 

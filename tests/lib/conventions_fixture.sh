@@ -36,6 +36,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      force_publish: { type: string, required: false }
+      reproduce_tag: { type: string, required: false }
 permissions:
   contents: read
 concurrency:

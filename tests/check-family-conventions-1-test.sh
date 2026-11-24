@@ -131,8 +131,9 @@ import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace('      - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md\n',
             '  publish:\n'
+            "    if: github.event_name == 'workflow_dispatch' && inputs.reproduce_tag == ''\n"
             '    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1\n'
-            '    with: { version: "7.0.0", artifact: pkg }\n')
+            '    with: { version: "7.0.0", artifact: pkg, force-reason: "${{ inputs.force_publish }}" }\n')
 open(p,'w').write(s)
 PY
 (cd "$work/p" && sh "$S" >/dev/null) || { echo "FAIL publish-release caller should satisfy the notes check"; exit 1; }

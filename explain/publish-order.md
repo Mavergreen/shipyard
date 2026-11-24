@@ -1,10 +1,10 @@
-publish-order: in release.yml, notes come first, then the state record, then signing, then publishing.
+publish-order: in release.yml, notes come first, then signing, then publishing.
 
 ## Why
 The appcast and the Release must carry the same notes. The order is release-notes.sh, then
-release-state-record.sh (which writes the Mavergreen-State marker into the notes file), then
-sign_and_appcast.sh, then publish-release.yml: the marker is written before packaging so the appcast
-description and the Release body agree, and the notes exist before anything signs them. The check orders the
+sign_and_appcast.sh, then publish-release.yml: the notes exist before anything signs them, so the appcast
+description and the Release body agree. A release-state-record.sh step, which once came between the notes
+and signing, takes no part since P6 retired it. The check orders the
 first non-comment mention of each; a step a repo lacks takes no part (release-notes-generated and
 signing-scans-for-key say whether it must exist). Taking the first mention is what lets a workflow that
 signs a second product later (clang-22 with libcxx) pass.

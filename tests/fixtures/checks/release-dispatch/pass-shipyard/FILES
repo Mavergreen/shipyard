@@ -1,0 +1,8 @@
+.github/renovate.json
+.github/workflows/release.yml
+.gitignore
+.mavergreen/hooks/upstream-release-notes-url
+tests/a-test.sh
+.mavergreen/deviations/publish-unchanged/developer-tool/scope
+.mavergreen/deviations/publish-unchanged/developer-tool/reason
+.mavergreen/deviations/publish-unchanged/developer-tool/revisit

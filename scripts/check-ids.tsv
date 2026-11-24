@@ -84,6 +84,8 @@ installed-shipyard	only	scripts/assert-installed-shipyard.sh	assert-installed-sh
 linux	key	scripts/check-artifact-conformance.sh	deviation key (longboat)	later
 no-tags-trigger	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 no-pull-request-target	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
+release-dispatch	checkout	scripts/check-family-conventions.sh	new (reproducible releases: one dispatch shape)	P6
+reproduce-wired	checkout	scripts/check-family-conventions.sh	new (reproducible releases: the reproduce check)	P6
 checkout-drops-credentials	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 permissions-contents-read	checkout	scripts/check-family-conventions.sh	new (hand-rolled in product repos)	P1
 upstream-version-bare	retired	scripts/check-metadata.sh	new (hand-rolled in product repos)	P2

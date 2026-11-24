@@ -18,7 +18,6 @@ jobs:
           sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "$TAG" --version "$FULL" \
             --product Widget --min-os 10.9.5 --out dist/RELEASE_NOTES.md
       - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
-      - run: sh "$SHIPYARD_SCRIPTS/release-state-record.sh" --out dist/state
       - run: |
           sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" --product w --feed-dir dist --pkg dist/x.pkg
       - run: SHIPYARD_CHECK_VERSION="$FULL" shipyard-check --dist dist

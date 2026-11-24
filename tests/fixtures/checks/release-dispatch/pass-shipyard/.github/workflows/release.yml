@@ -1,0 +1,45 @@
+name: release
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      force_publish:
+        description: "Publish whatever changed, giving the reason for the notes."
+        type: string
+        required: false
+        default: ""
+      reproduce_tag:
+        description: "Rebuild this tag and compare it with what it published."
+        type: string
+        required: false
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  build:
+    steps:
+      - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh" --record
+      - run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh"
+      - run: |
+          sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "$TAG" --version "$FULL" \
+            --product Widget --min-os 10.9.5 --out dist/RELEASE_NOTES.md
+      - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
+  publish:
+    needs: [build]
+    if: github.event_name != 'schedule' && inputs.reproduce_tag == ''
+    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
+    with:
+      force-reason: ${{ inputs.force_publish }}
+  reproduce:
+    if: github.event_name == 'schedule' || inputs.reproduce_tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - run: sh "$SHIPYARD_SCRIPTS/reproduce.sh" --dist dist --repo "$GITHUB_REPOSITORY" --tag "$TAG" --repo-root .

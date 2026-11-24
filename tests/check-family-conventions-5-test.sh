@@ -21,7 +21,10 @@ vm_passes() {  # $1 = name
     || { echo "FAIL: check 29: $1 must pass: $(cd "$work/vm-$1" && sh "$S" 2>&1)"; exit 1; }
 }
 PUB='  publish:
-    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1'
+    if: github.event_name == '\''workflow_dispatch'\'' && inputs.reproduce_tag == '\'''\''
+    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
+    with:
+      force-reason: ${{ inputs.force_publish }}'
 VMJOB='  vm-test:
     needs: [build]
     runs-on: ubuntu-latest

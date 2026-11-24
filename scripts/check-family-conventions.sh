@@ -1058,20 +1058,20 @@ if rel_ran pr-trigger && ! grep -q '"ignoreTests"[[:space:]]*:[[:space:]]*true' 
     "add pull_request: with branches: [main] under on: in $REL or in a ci.yml, or set \"ignoreTests\": true in .github/renovate.json if the repo has no build to gate"
 fi
 
-# spec: SKILL.md "Release workflow" -- the notes are generated first, then the state is recorded, then the
+# spec: SKILL.md "Release workflow" -- the notes are generated first, then the
 #       appcast is signed, then the release is published: the appcast and the Release must carry the
 #       same notes. Order is by first non-comment mention in release.yml; a step a repo does not have
 #       takes no part (release-notes-generated and signing-scans-for-key say whether it must exist).
 if rel_ran publish-order && ! deviated publish-order "$REL"; then
   _prev=0; _prevname=""
-  for _step in 'release-notes\.sh' 'release-state-record\.sh' 'sign_and_appcast\.sh' 'publish-release\.yml'; do
+  for _step in 'release-notes\.sh' 'sign_and_appcast\.sh' 'publish-release\.yml'; do
     _ln="$(awk -v re="(^|[^A-Za-z0-9_-])$_step" '/^[[:space:]]*#/ { next } $0 ~ re { print NR; exit }' "$REL")"
     [ -n "$_ln" ] || continue
     _name="$(printf '%s' "$_step" | sed 's/\\//g')"
     if [ "$_ln" -lt "$_prev" ]; then
       chk_fail publish-order "$REL mentions $_name (line $_ln) before $_prevname (line $_prev)" \
-        "the appcast and the Release must carry the same notes, which only holds if notes come first, then the state, then signing, then publishing" \
-        "reorder the steps: release-notes.sh, release-state-record.sh, sign_and_appcast.sh, then publish-release.yml"
+        "the appcast and the Release must carry the same notes, which only holds if notes come first, then signing, then publishing" \
+        "reorder the steps: release-notes.sh, sign_and_appcast.sh, then publish-release.yml"
       break
     fi
     _prev="$_ln"; _prevname="$_name"
@@ -1175,6 +1175,88 @@ for f in $CI_FILES; do
     "it would hand a fork PR this repo's secrets" \
     "use pull_request, which gets no secrets from a fork"
 done
+
+# spec: explain/release-dispatch.md, explain/reproduce-wired.md -- one dispatch shape, force_publish and
+#       reproduce_tag, for every release.yml that calls publish-release.yml, and a weekly reproduce.
+_rd=0; rel_ran release-dispatch && _rd=1
+rel_ran reproduce-wired || _rd=0
+if [ "$_rd" -eq 1 ] && [ "$PY_OK" -eq 1 ]; then
+  _rd_push=no; _rd_repro=no
+  shipyard_deviation_scopes publish-unchanged | grep -qx '\*' && _rd_push=yes
+  shipyard_deviation_scopes reproducible | grep -qx '\*' && _rd_repro=yes
+  rc=0
+  chk_py /dev/stdin "$REL" "$_rd_push" "$_rd_repro" > "$tmp/dispatch" <<'PYEOF' || rc=$?
+import re, sys, yaml
+path, push_ok, repro_ok = sys.argv[1], sys.argv[2] == 'yes', sys.argv[3] == 'yes'
+try:
+    wf = yaml.safe_load(open(path)) or {}
+except Exception:
+    print('release-dispatch\t%s doesn\'t parse as YAML, so its dispatch inputs can\'t be read\tfix %s so it parses (workflow-yaml names the place)' % (path, path))
+    sys.exit(0)
+jobs = wf.get('jobs') if isinstance(wf, dict) else None
+jobs = jobs if isinstance(jobs, dict) else {}
+def calls_publish(j):
+    u = j.get('uses') if isinstance(j, dict) else None
+    return isinstance(u, str) and re.search(r'(^|/)publish-release\.yml(@|$)', u)
+pub = [(n, j) for n, j in jobs.items() if calls_publish(j)]
+if not pub:
+    sys.exit(0)
+on = wf.get('on', wf.get(True))
+on = on if isinstance(on, dict) else {}
+wd = on.get('workflow_dispatch')
+inputs = wd.get('inputs') if isinstance(wd, dict) else None
+inputs = inputs if isinstance(inputs, dict) else {}
+def out(cid, rule, fix):
+    print('%s\t%s\t%s' % (cid, rule, fix))
+for k in inputs:
+    if k not in ('force_publish', 'reproduce_tag'):
+        out('release-dispatch', '%s\'s workflow_dispatch takes %s' % (path, k), 'replace %s with force_publish (type: string), the reason a forced release gives' % k)
+fp = inputs.get('force_publish')
+if not isinstance(fp, dict):
+    out('release-dispatch', '%s\'s workflow_dispatch has no force_publish input' % path, 'add force_publish (type: string, required: false) under workflow_dispatch: inputs:')
+else:
+    if fp.get('type') != 'string':
+        out('release-dispatch', '%s\'s force_publish is type: %s' % (path, fp.get('type')), 'make force_publish type: string; its value is the reason')
+    if fp.get('required') is True:
+        out('release-dispatch', '%s\'s force_publish is required' % path, 'make force_publish required: false; a plain dispatch passes none')
+rt = inputs.get('reproduce_tag')
+if isinstance(rt, dict) and rt.get('type') != 'string':
+    out('release-dispatch', '%s\'s reproduce_tag is type: %s' % (path, rt.get('type')), 'make reproduce_tag type: string')
+def norm(s):
+    return re.sub(r'\s+', '', str(s or ''))
+for n, j in pub:
+    w = j.get('with') if isinstance(j.get('with'), dict) else {}
+    if norm(w.get('force-reason')) != '${{inputs.force_publish}}':
+        out('release-dispatch', '%s job %s calls publish-release.yml without force-reason: ${{ inputs.force_publish }}' % (path, n), 'add force-reason: ${{ inputs.force_publish }} under its with:')
+    cond = norm(j.get('if'))
+    dispatch = re.search(r"github\.event_name==(['\"])workflow_dispatch\1", cond)
+    noschedule = dispatch or re.search(r"github\.event_name!=(['\"])schedule\1", cond)
+    noreproduce = re.search(r"inputs\.reproduce_tag==(''|\"\")", cond) or re.search(r"!inputs\.reproduce_tag(?![A-Za-z0-9_.])", cond)
+    if not dispatch and not push_ok:
+        out('release-dispatch', '%s job %s can publish on a push' % (path, n), "add github.event_name == 'workflow_dispatch' to its if:; a push builds for feedback only")
+    if not noschedule or not noreproduce:
+        out('release-dispatch', '%s job %s can publish in a reproduce run' % (path, n), "add inputs.reproduce_tag == '' (and, publishing on a push, github.event_name != 'schedule') to its if:")
+if not repro_ok:
+    if not isinstance(rt, dict):
+        out('reproduce-wired', '%s has no reproduce_tag dispatch input' % path, 'add reproduce_tag (type: string, required: false) under workflow_dispatch: inputs:, and a reproduce job that runs reproduce.sh on it')
+    sch = on.get('schedule')
+    crons = [s.get('cron') for s in sch if isinstance(s, dict)] if isinstance(sch, list) else []
+    weekly = [c for c in crons if isinstance(c, str) and len(c.split()) == 5 and c.split()[4] != '*']
+    if len(crons) != 1 or len(weekly) != 1:
+        out('reproduce-wired', '%s has %d schedule: crons, %d of them weekly' % (path, len(crons), len(weekly)), "add one weekly cron under on: schedule:, such as - cron: '17 4 * * 1', for the reproduce job")
+PYEOF
+  if [ "$rc" -ne 0 ]; then
+    py_crashed release-dispatch
+  else
+    while IFS="$TAB" read -r _rd_id _rd_rule _rd_fix; do
+      case "$_rd_id" in
+        release-dispatch) _rd_why="one shape lets cut-release.sh and the bump caller dispatch any repo the same way, and only a dispatch publishes" ;;
+        *) _rd_why="a release that can't be rebuilt from its tag isn't reproducible" ;;
+      esac
+      chk_fail "$_rd_id" "$_rd_rule" "$_rd_why" "$_rd_fix"
+    done < "$tmp/dispatch"
+  fi
+fi
 
 # spec: SKILL.md "Release workflow" -- the build jobs run hours of third-party build code, so a
 #       checkout leaves no token on disk (persist-credentials: false) and the workflow's default
