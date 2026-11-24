@@ -137,6 +137,109 @@ macho tools.tar.gz bin/go arm64 EXECUTE 11.0 11.3 aa"
 no "arm64e is an arm64 slice" "with an arm64 slice" "$GOOD
 $T arm64e EXECUTE 11.0 11.3 aa"
 
+# spec: SKILL.md "Family conventions" check 37 -- an '- arm64-pure-go:<glob>: <reason>' slice is
+#       declared like an arm64 one and needs no modern-smoke job, because conformance proves it on Linux:
+#       a Go binary without cgo, linked by Go's own linker, loading only what Go's runtime loads, a macOS
+#       LC_BUILD_VERSION at the arm64 floor, an x86_64 slice beside it, and an ad-hoc signature whose every
+#       page hash matches. Any finding fails, and no deviation of the same name excuses it.
+GP='golang-1.26.5-native-mavericks.5.pkg usr/local/mavergreen/go126/bin/gofmt'
+GD='deviation arm64-pure-go:usr/local/mavergreen/go126/bin/gofmt gofmt runs on Apple Silicon development hosts'
+GL='/usr/lib/libSystem.B.dylib,/usr/lib/libresolv.9.dylib,/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation,/System/Library/Frameworks/Security.framework/Versions/A/Security'
+GM="macho $GP x86_64 EXECUTE 10.9 10.9 aa
+macho $GP arm64 EXECUTE 11.0 11.3 aa"
+pg() {  # $1 cgo, $2 linker, $3 loads, $4 platform, $5 minos, $6 codesig
+  printf 'pure-go %s arm64 %s %s %s %s %s %s' "$GP" "$1" "$2" "$3" "$4" "$5" "$6"
+}
+ok "a proven arm64-pure-go slice" "$GOOD
+$GD
+$GM
+$(pg 0 internal "$GL" 1 11.0 ok)"
+ok "a pure-go slice loading only libSystem" "$GOOD
+$GD
+$GM
+$(pg 0 internal /usr/lib/libSystem.B.dylib 1 11.0 ok)"
+_po="$(printf '%s\n%s\n%s\n%s\nend-of-facts\n' "$GOOD" "$GD" "$GM" "$(pg 0 internal "$GL" 1 11.0 ok)" | sh "$S" 2>&1)" || :
+printf '%s\n' "$_po" | grep -q 'arm64: 1 declared, 0 undeclared' || { echo "FAIL: an arm64-pure-go slice counts as declared: $_po"; exit 1; }
+printf '%s\n' "$_po" | grep -q 'arm64-pure-go: proved 1 arm64 slice' || { echo "FAIL: the pure-go proof is reported: $_po"; exit 1; }
+no "a covered slice artifact-facts did not read" "arm64-pure-go: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/gofmt (arm64): no pure-go facts" "$GOOD
+$GD
+$GM"
+no "a cgo slice" "arm64-pure-go: .*gofmt (arm64): built with cgo (CGO_ENABLED=1)" "$GOOD
+$GD
+$GM
+$(pg 1 internal "$GL" 1 11.0 ok)"
+no "a slice with no Go build info" "arm64-pure-go: .*gofmt (arm64): carries no Go build info" "$GOOD
+$GD
+$GM
+$(pg not-go internal "$GL" 1 11.0 ok)"
+no "a Go build info with no CGO_ENABLED" "arm64-pure-go: .*gofmt (arm64): built with cgo (CGO_ENABLED=none)" "$GOOD
+$GD
+$GM
+$(pg none internal "$GL" 1 11.0 ok)"
+no "an externally linked slice" "arm64-pure-go: .*gofmt (arm64): linked by an external linker" "$GOOD
+$GD
+$GM
+$(pg 0 external "$GL" 1 11.0 ok)"
+no "a slice loading another library" "arm64-pure-go: .*gofmt (arm64): loads /usr/local/lib/libfoo.dylib" "$GOOD
+$GD
+$GM
+$(pg 0 internal "/usr/lib/libSystem.B.dylib,/usr/local/lib/libfoo.dylib" 1 11.0 ok)"
+no "a slice with no LC_BUILD_VERSION" "arm64-pure-go: .*gofmt (arm64): records no LC_BUILD_VERSION" "$GOOD
+$GD
+$GM
+$(pg 0 internal "$GL" none - ok)"
+no "a slice built for another platform" "arm64-pure-go: .*gofmt (arm64): LC_BUILD_VERSION platform 2, not macOS (1)" "$GOOD
+$GD
+$GM
+$(pg 0 internal "$GL" 2 11.0 ok)"
+no "a slice above the arm64 floor" "arm64-pure-go: .*gofmt (arm64): minos 13.0, not the arm64 floor 11.0" "$GOOD
+$GD
+$GM
+$(pg 0 internal "$GL" 1 13.0 ok)"
+ok "an sdk-pin deviation lets minos stand above the floor, as for any slice" "$GOOD
+$GD
+deviation sdk-pin:usr/local/mavergreen/go126/bin/* Go's linker stamps its own minos; exit: the family's Go at 11.0
+$GM
+$(pg 0 internal "$GL" 1 13.0 ok)"
+no "no deviation lets minos fall below the floor" "arm64-pure-go: .*gofmt (arm64): minos 10.15, below the arm64 floor 11.0" "$GOOD
+$GD
+deviation sdk-pin:usr/local/mavergreen/go126/bin/* Go's linker stamps its own minos; exit: the family's Go at 11.0
+$GM
+$(pg 0 internal "$GL" 1 10.15 ok)"
+no "a slice with no x86_64 beside it" "arm64-pure-go: .*gofmt (arm64): has no x86_64 slice beside it" "$GOOD
+$GD
+macho $GP arm64 EXECUTE 11.0 11.3 aa
+$(pg 0 internal "$GL" 1 11.0 ok)"
+no "an unsigned slice" "arm64-pure-go: .*gofmt (arm64): ad-hoc code signature: unsigned" "$GOOD
+$GD
+$GM
+$(pg 0 internal "$GL" 1 11.0 unsigned)"
+no "a corrupted page" "arm64-pure-go: .*gofmt (arm64): ad-hoc code signature: page-3-hash-mismatch" "$GOOD
+$GD
+$GM
+$(pg 0 internal "$GL" 1 11.0 page-3-hash-mismatch)"
+no "the failure says the fix" "drop the arm64-pure-go declaration and run modern-smoke" "$GOOD
+$GD
+$GM
+$(pg 1 internal "$GL" 1 11.0 ok)"
+no "an arm64-pure-go declaration excuses only the paths it names" "arm64: golang-1.26.5-native-mavericks.5.pkg installs usr/local/mavergreen/go126/bin/go with an arm64 slice" "$GOOD
+$GD
+$T arm64 EXECUTE 11.0 11.3 aa"
+ok "a slice under both arm64 and arm64-pure-go is still proven" "$GOOD
+$GD
+deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain
+$GM
+$(pg 0 internal "$GL" 1 11.0 ok)"
+no "a slice under both arm64 and arm64-pure-go still fails its proof" "built with cgo" "$GOOD
+$GD
+deviation arm64:usr/local/mavergreen/go126/bin/* developers on Apple Silicon run this toolchain
+$GM
+$(pg 1 internal "$GL" 1 11.0 ok)"
+ok "a tarball's slice is not judged" "$GOOD
+deviation arm64-pure-go:bin/* a tarball's own path
+macho tools.tar.gz bin/go arm64 EXECUTE 11.0 11.3 aa
+pure-go tools.tar.gz bin/go arm64 1 external - none - unsigned"
+
 _gfs="$(mktemp -d "${TMPDIR:-/tmp}/conformance-gf.XXXXXX")"   # template: 10.9 BSD mktemp requires one
 cp -R "$here/../scripts" "$_gfs/scripts"
 printf 'modern-smoke golang-126 release.yml:modern-smoke\n' > "$_gfs/scripts/conventions-grandfathered"

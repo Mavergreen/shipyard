@@ -904,8 +904,9 @@ fi
 
 # spec: SKILL.md "Family conventions" check 37 -- an arm64 slice is a declared deviation, and what
 #       declares one runs it: release.yml has a modern-smoke job on a macos-* runner that publish
-#       needs exactly when INGREDIENTS.md declares '- arm64:<glob>: <reason>'. Conformance holds
-#       the pkg to the declaration. No PyYAML already failed check 8.
+#       needs exactly when INGREDIENTS.md declares '- arm64:<glob>: <reason>'. An
+#       '- arm64-pure-go:<glob>: <reason>' slice is proven statically at conformance instead, so it
+#       alone needs no job. Conformance holds the pkg to the declaration. No PyYAML already failed check 8.
 _ms="modern-smoke release.yml:modern-smoke"
 if ! grandfathered modern-smoke release.yml:modern-smoke && python3 -c 'import yaml' >/dev/null 2>&1; then
   _c37="$(python3 - "$REL" <<'PY'
@@ -936,8 +937,12 @@ for p in pubs or ["publish"]:
 PY
 )" || fail "check 37 could not read $REL's jobs (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
   _decl37="$(printf '%s\n' "$DEVS" | awk '$1 == "arm64" { print $2; exit }')"
+  _pure37="$(printf '%s\n' "$DEVS" | awk '$1 == "arm64-pure-go" { print $2; exit }')"
   _job37=no; printf '%s\n' "$_c37" | grep -qx job && _job37=yes
-  if [ -n "$_decl37" ] && [ "$_job37" = no ]; then
+  if [ -z "$_decl37" ] && [ -n "$_pure37" ] && [ "$_job37" = yes ]; then
+    fail "$_ms: release.yml has a modern-smoke job, but INGREDIENTS.md declares only arm64-pure-go slices, which conformance proves on Linux -- the job spends a macOS runner on nothing it must prove" \
+         "remove the job and its macos-runner declaration, or declare the slice '- arm64:<install-path glob>: <reason>' instead (see the conventions skill, check 37)"
+  elif [ -n "$_decl37" ] && [ "$_job37" = no ]; then
     fail "$_ms: INGREDIENTS.md declares an arm64 slice, but release.yml has no modern-smoke job -- nothing runs the arm64 slice before it ships" \
          "add a job named modern-smoke to $REL, on a macos-* runner, that installs the run's own pkg and runs its arm64 slice, and add it to publish's needs: (see the conventions skill, check 37)"
   elif [ -z "$_decl37" ] && [ "$_job37" = yes ]; then

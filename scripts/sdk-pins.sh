@@ -1,6 +1,7 @@
 # platform: host-agnostic
-#   usage: . sdk-pins.sh     (sourced; defines the four functions below)
+#   usage: . sdk-pins.sh     (sourced; defines the five functions below)
 #          shipyard_sdk_pin <arch>                            "<url> <sha256> <tarball> <sdk-dir>"; 1 if unknown
+#          shipyard_sdk_floor <arch>                          the minos an <arch> slice records; 1 if unknown
 #          shipyard_sdk_settings_json <arch>                  the SDKSettings.json fetch_sdk.sh puts in the SDK sibling; 1 if none
 #          shipyard_sdk_rule <arch> <filetype> <minos> <sdk>  0 if compliant, else prints why and returns 1
 #          shipyard_sdk_exempt_sha256 <sha256>                0 if the bytes are a pinned third-party file
@@ -31,16 +32,25 @@ shipyard_sdk_settings_json() {
   esac
 }
 
+shipyard_sdk_floor() {
+  case "$1" in
+    x86_64) echo 10.9 ;;
+    arm64)  echo 11.0 ;;
+    *) return 1 ;;
+  esac
+}
+
 shipyard_sdk_rule() {  # $1 arch, $2 filetype, $3 minos, $4 sdk
   if [ "$2" = KEXTBUNDLE ]; then
     [ "$1" = x86_64 ] && return 0
     echo "a kext must be x86_64, not $1"; return 1
   fi
   case "$1" in
-    x86_64) _want_min=10.9; _want_sdk=10.9 ;;
-    arm64)  _want_min=11.0; _want_sdk=11.3 ;;
+    x86_64) _want_sdk=10.9 ;;
+    arm64)  _want_sdk=11.3 ;;
     *) echo "arch $1 has no pinned SDK (only x86_64 and arm64 do)"; return 1 ;;
   esac
+  _want_min="$(shipyard_sdk_floor "$1")"
   # platform: an object file (a static archive's member, x86_64 only) may record sdk "n/a" when
   #           compiled against a 10.9 SDK with no SDKSettings.json to read a version from (Apple ships
   #           none; the sibling fetch_sdk.sh makes on request has one) -- so a member can prove its minos but not its SDK. The 11.3 arm64 SDK includes

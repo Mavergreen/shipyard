@@ -112,6 +112,14 @@ for line in '- arm64: every path' '- arm64:*: every path' '- arm64:*/*: every pa
 done
 printf '## Conformance deviations\n- arm64:usr/local/mavergreen/cmake/*: developers on Apple Silicon run it\n' > "$w/INGREDIENTS.md"
 sh "$S" "$w" | grep -qx 'arm64 usr/local/mavergreen/cmake/\* developers on Apple Silicon run it' || { echo "FAIL: an install-path glob is an arm64 scope"; exit 1; }
+# spec: SKILL.md "Family conventions" check 37 -- arm64-pure-go is an arm64 declaration that
+#       conformance proves statically, so it names install paths as narrowly as arm64 does.
+for line in '- arm64-pure-go: every path' '- arm64-pure-go:*: every path' '- arm64-pure-go:*/*: every path'; do
+  printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
+  if sh "$S" "$w" >/dev/null 2>&1; then echo "FAIL: [$line] must be refused"; exit 1; fi
+done
+printf '## Conformance deviations\n- arm64-pure-go:usr/local/mavergreen/fleet/bin/*: maintainers run fleet on Apple Silicon\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'arm64-pure-go usr/local/mavergreen/fleet/bin/\* maintainers run fleet on Apple Silicon' || { echo "FAIL: an install-path glob is an arm64-pure-go scope"; exit 1; }
 for line in '- cxxabi: a bare cxxabi deviation; exit: never' '- cxxabi:*: every path; exit: never' '- cxxabi:*/*: every path; exit: never' '- cxxabi:**: every path; exit: never'; do
   printf '## Conformance deviations\n%s\n' "$line" > "$w/INGREDIENTS.md"
   if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: a bare cxxabi deviation is refused: [$line] got: $out"; exit 1; fi

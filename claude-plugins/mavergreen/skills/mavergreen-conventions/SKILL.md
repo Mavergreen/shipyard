@@ -48,6 +48,8 @@ build script's path; a bare `- arm64: <reason>`, or a glob of nothing but wildca
 Conformance fails a pkg whose Mach-O carries an arm64 slice that no declaration covers; the Sparkle
 updater's slices are exempt (only the registry's updater bundle, where the registry derives one). A repo that declares one has a `modern-smoke` job in
 `release.yml`, on a `macos-*` runner, that runs the arm64 slice and that publish needs (check 37).
+A pure-Go arm64 slice is declared `- arm64-pure-go:<glob>: <reason>` instead, and conformance proves it
+on Linux in place of the job (see "Pure-Go arm64 slices are proven on Linux", below).
 
 **A repo has no secrets to set. Never list one as a setup or release step.** `SPARKLE_PRIVATE_KEY`,
 `MAVERICKS_VM_KEY` and `PINS_BOT_PRIVATE_KEY` are ORGANIZATION secrets, and every public Mavergreen
@@ -959,6 +961,26 @@ on macOS.
 `scripts/conventions-grandfathered` with its QUEUE item, or an INGREDIENTS.md
 `- macos-runner:<workflow file>:<job>: <reason, exit>` deviation whose exit says what lets it leave
 (check 36). A job with neither fails the gate; a blocker with no exit is a permanent one.
+
+**Pure-Go arm64 slices are proven on Linux; modern-smoke stays for everything else.** An arm64 slice
+whose install path `- arm64-pure-go:<install-path glob>: <who runs it on Apple Silicon, and why>`
+covers needs no `modern-smoke` job (check 37): `check-artifact-conformance.sh` proves it statically
+from the pkg instead, reading each covered slice with `scripts/macho-pure-go.py` (python3, never
+`codesign`). The slice must be a Go binary whose build info records `CGO_ENABLED=0`, linked by Go's own
+linker (no `-linkmode=external`, no tool in `LC_BUILD_VERSION`); load only what Go's runtime loads
+without cgo (`/usr/lib/libSystem.B.dylib`, `/usr/lib/libresolv.9.dylib`, and the CoreFoundation and
+Security frameworks `crypto/x509` loads); carry an `LC_BUILD_VERSION` for macOS at the arm64 floor
+(above it only where an `sdk-pin` deviation already excuses the path, never below it); sit beside an
+x86_64 slice in the same fat file; and carry an ad-hoc SHA-256 CodeDirectory whose every page hash,
+recomputed up to its `codeLimit`, matches. Any finding fails the release, naming what failed; the fix
+is to drop the declaration and run `modern-smoke`. A repo whose only arm64 declarations are
+`arm64-pure-go` and that still has a `modern-smoke` job fails check 37, since the job proves nothing
+conformance has not. Anything with cgo, C, Swift or other non-Go code keeps `- arm64:<glob>` and the
+job. **What is lost:** nothing shows that macOS actually launches the binary: a Go runtime bug on new
+macOS, a loader or Gatekeeper change, or a signature macOS rejects for a reason this reader does not
+model ships unseen. The maintainer chose static only, with no periodic real launch (2026-11-24).
+**Revisit when** any family release is found not launching on Apple Silicon: that product goes back to
+`- arm64:` and `modern-smoke`, and this rule needs a real launch beside the static proof.
 
 **A test that needs a Darwin kernel or userland, but not modern macOS, runs in a mavericks-vm 10.9
 guest on Linux** (see "Acceptance on real 10.9"), not on a macOS runner: `flock`, process groups,
@@ -2905,7 +2927,7 @@ pointing back into the row below — so this table, not the script, is where a c
 | **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@`, or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) whose steps do (comments do not count; an uncalled job in another workflow file and a remote reusable workflow do not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or `INGREDIENTS.md` declares a bare `- on-target: <reason>`. A scoped `- on-target:<part>: <reason>` declares a coverage gap and exempts nothing; a glob for `<part>` is refused | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
 | **35.** No tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt` outside `tests/` and `test/` calls the system `pkgbuild` or `productbuild` on a non-comment line, unless the path is grandfathered or INGREDIENTS.md declares `- packager:<path>: <reason, exit>` | The pkg is built by stevedore, which runs on any host; a direct call keeps the build on a scarce macOS runner. This steers repos off the system packager one path at a time, and `@v1` moving reddens none of them while their lines stand |
 | **36.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` runner (as a string, a list, or `${{ matrix.X }}` read through the job's matrix) is grandfathered or declares `- macos-runner:<workflow file>:<job>: <reason, exit>` (`ci.yml:build`; shipyard has none, since it runs no macOS job) | macOS runners are scarce, and a job lands on one by default. The deviation names the reason it needs macOS and what would let it leave; the key is `<workflow file>:<job>`, so a new `build` job in another workflow is caught. Needs PyYAML, which check 8 already requires |
-| **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or a glob of only `*`, `?` and `/` is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
+| **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. An `- arm64-pure-go:<glob>: <reason>` declaration needs no job, and a job beside only such declarations fails with a third; conformance proves each slice one covers instead ("Pure-Go arm64 slices are proven on Linux"). At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` or `arm64-pure-go:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or `- arm64-pure-go: <reason>`, or a glob of only `*`, `?` and `/`, is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
 
 **Grandfathered findings.** `scripts/conventions-grandfathered` holds one `<check> <repo> <job|path>` line per
 finding that predates checks 21 (widened), 35, 36 and 37 and conformance's `cxxabi` and `no-standalone`, under the check names `artifact-conformance`,

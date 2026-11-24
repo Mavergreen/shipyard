@@ -201,7 +201,8 @@ grandfather
 ms() {  # $1 = label, $2 = decl|nodecl, $3 = runs-on (empty: no job), $4 = needed|unneeded
   d="$work/ms-$1"; mkrepo7 "$d"
   { printf '\n## Conformance deviations\n\n'
-    [ "$2" = decl ] && printf -- '- arm64:usr/local/mavergreen/w/bin/*: developers on Apple Silicon run w to build Mavericks artifacts\n'
+    case "$2" in decl|both) printf -- '- arm64:usr/local/mavergreen/w/bin/*: developers on Apple Silicon run w to build Mavericks artifacts\n' ;; esac
+    case "$2" in pure|both) printf -- '- arm64-pure-go:usr/local/mavergreen/w/libexec/*: maintainers run w-helper on Apple Silicon\n' ;; esac
     printf -- '- macos-runner:release.yml:modern-smoke: the arm64 slice runs only on Apple Silicon, exit when a Linux host can run it\n'
   } >> "$d/INGREDIENTS.md"
   if [ -n "$3" ]; then
@@ -228,6 +229,17 @@ ms unneeded decl macos-26 unneeded
 fails "check 37: a modern-smoke job publish does not need" "$work/ms-unneeded" 'modern-smoke release.yml:modern-smoke: publish does not need the modern-smoke job'
 ms nodecl nodecl macos-26 needed
 fails "check 37: a modern-smoke job with no declaration" "$work/ms-nodecl" 'modern-smoke release.yml:modern-smoke: release.yml has a modern-smoke job, but INGREDIENTS.md declares no arm64 slice'
+# spec: SKILL.md "Family conventions" check 37 -- an arm64-pure-go slice is proven statically at
+#       conformance, so it needs no modern-smoke job, and a job that only such slices would explain fails;
+#       an arm64:<glob> beside it still needs the job.
+ms pure pure '' ''
+passes "check 37: an arm64-pure-go declaration needs no modern-smoke job" "$work/ms-pure"
+ms purejob pure macos-26 needed
+fails "check 37: a modern-smoke job with only arm64-pure-go declarations" "$work/ms-purejob" 'modern-smoke release.yml:modern-smoke: release.yml has a modern-smoke job, but INGREDIENTS.md declares only arm64-pure-go slices'
+ms both both '' ''
+fails "check 37: an arm64 declaration beside arm64-pure-go still needs the job" "$work/ms-both" 'modern-smoke release.yml:modern-smoke: INGREDIENTS.md declares an arm64 slice, but release.yml has no modern-smoke job'
+ms bothjob both macos-26 needed
+passes "check 37: an arm64 declaration beside arm64-pure-go, and the job" "$work/ms-bothjob"
 out="$(gate "$work/ms-nojob")" || :
 printf '%s\n' "$out" | grep -q 'declares no arm64 slice' && { echo "FAIL: check 37: each direction has its own message: $out"; exit 1; }
 out="$(gate "$work/ms-nodecl")" || :

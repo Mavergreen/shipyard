@@ -26,6 +26,8 @@
 #            macho         <artifact> <path> <arch> <filetype> <minos> <sdk> <sha256>  one per shipped Mach-O slice
 #            cxxabi-defines <artifact> <path> <arch> <symbol> <visible|hidden>  one per C++ runtime symbol a slice defines beyond Recaulk's back-fills
 #            cxxabi-loads  <artifact> <path> <arch> <load-path>   one per libc++abi a slice loads other than /usr/lib's or libcxx22's (%20-encoded)
+#            pure-go       <artifact> <path> <arch> <cgo> <linker> <loads> <platform> <minos> <codesig>
+#                                                                 one per arm64 slice an arm64-pure-go deviation covers (macho-pure-go.py)
 #            notes-render  <notes-file> <sha256>                  digest of gen_appcast.sh --render-notes
 #            appcast-notes <appcast-file> [<sha256>]               digest of the appcast's <description> CDATA
 #            kext          <file> <path> <id> boot|library        one per kext a "/" payload carries (%20-encoded)
@@ -44,6 +46,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/sdk-pins.sh"
 . "$SELF/deviation-reason.sh"
 . "$SELF/lib/standalone-tree.sh"
+. "$SELF/lib/vercmp.sh"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/conformance.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT  # template: 10.9 BSD mktemp requires one
 facts="$tmp/facts"; cat > "$facts"
@@ -505,7 +508,7 @@ awk '$1 == "pkg" { pkg[$2] = 1 }
        } }' "$facts" | sort -u > "$tmp/arm64"
 arm_declared=0; arm_undeclared=0
 while read -r file path; do
-  if [ -n "$(deviation_reason arm64 "$(dec "$path")")" ]; then arm_declared=$((arm_declared + 1)); continue; fi
+  if [ -n "$(deviation_reason arm64 "$(dec "$path")")$(deviation_reason arm64-pure-go "$(dec "$path")")" ]; then arm_declared=$((arm_declared + 1)); continue; fi
   arm_undeclared=$((arm_undeclared + 1))
   [ "$arm_undeclared" -le 20 ] || continue
   msg="arm64: $file installs $(dec "$path") with an arm64 slice, and no '- arm64:<glob>: <reason>' under INGREDIENTS.md's ## Conformance deviations matches that install path"
@@ -521,6 +524,64 @@ if [ "$arm_undeclared" -gt 20 ]; then
 fi
 [ "$arm_declared" -eq 0 ] && [ "$arm_undeclared" -eq 0 ] \
   || echo "conformance: arm64: $arm_declared declared, $arm_undeclared undeclared non-updater arm64 files in pkgs"
+
+# spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Family conventions" check 37 --
+#       a pkg's arm64 slice that '- arm64-pure-go:<glob>: <reason>' covers runs no modern-smoke, so it is
+#       proven here: Go without cgo, Go's own linker, only the libraries Go's runtime loads, a macOS
+#       LC_BUILD_VERSION at the arm64 floor, an x86_64 slice beside it, and every page of an ad-hoc
+#       signature. Reported directly, never through fail(): the declaration's own name would excuse it.
+pg_n=0
+pg_fail() {  # $1 = finding
+  echo "conformance: arm64-pure-go: $file installs $p ($arch): $1 -- drop the arm64-pure-go declaration and run modern-smoke (see the conventions skill, check 37)" >&2
+  status=1; pg_ok=no
+}
+pg_floor="$(shipyard_sdk_floor arm64)"
+awk '$1 == "pkg" { pkg[$2] = 1 }
+     $1 == "macho" && $4 ~ /^arm64e?$/ { arm[$2 " " $3 " " $4] = $2 }
+     END { for (k in arm) if (arm[k] in pkg) print k }' "$facts" | sort -u > "$tmp/pure-go"
+while read -r file path arch; do
+  p="$(dec "$path")"
+  [ -n "$(deviation_reason arm64-pure-go "$p")" ] || continue
+  pg_ok=yes
+  pf="$(awk -v f="$file" -v q="$path" -v a="$arch" '$1 == "pure-go" && $2 == f && $3 == q && $4 == a { print $5, $6, $7, $8, $9, $10; exit }' "$facts")"
+  if [ -z "$pf" ]; then pg_fail "no pure-go facts -- artifact-facts.sh did not read it"; continue; fi
+  set -f; set -- $pf; set +f
+  case "$1" in
+    0) ;;
+    not-go) pg_fail "carries no Go build info, so nothing shows it is Go" ;;
+    unreadable) pg_fail "its Go build info cannot be read" ;;
+    *) pg_fail "built with cgo (CGO_ENABLED=$1)" ;;
+  esac
+  [ "$2" = internal ] || pg_fail "linked by an external linker, not Go's own"
+  if [ "$3" != - ]; then
+    for l in $(printf '%s' "$3" | tr ',' ' '); do
+      case "$(dec "$l")" in
+        /usr/lib/libSystem.B.dylib|/usr/lib/libresolv.9.dylib) ;;
+        /System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation) ;;
+        /System/Library/Frameworks/Security.framework/Versions/A/Security) ;;
+        *) pg_fail "loads $(dec "$l"), beyond what Go's runtime loads (libSystem, libresolv, CoreFoundation, Security)" ;;
+      esac
+    done
+  fi
+  if [ "$4" = none ]; then
+    pg_fail "records no LC_BUILD_VERSION"
+  elif [ "$4" != 1 ]; then
+    pg_fail "LC_BUILD_VERSION platform $4, not macOS (1)"
+  else
+    pg_c="$(mavergreen_vercmp "$5" "$pg_floor")" || pg_c=x
+    case "$pg_c" in
+      0) ;;
+      1) [ -n "$(entry_deviation_reason sdk-pin "$file" "$p")" ] || pg_fail "minos $5, not the arm64 floor $pg_floor (an sdk-pin deviation lets it stand, as for any slice)" ;;
+      -1) pg_fail "minos $5, below the arm64 floor $pg_floor" ;;
+      *) pg_fail "minos $5 is not a version" ;;
+    esac
+  fi
+  awk -v f="$file" -v q="$path" '$1 == "macho" && $2 == f && $3 == q && $4 == "x86_64" { x = 1 } END { exit !x }' "$facts" \
+    || pg_fail "has no x86_64 slice beside it"
+  [ "$6" = ok ] || pg_fail "ad-hoc code signature: $6"
+  [ "$pg_ok" = no ] || pg_n=$((pg_n + 1))
+done < "$tmp/pure-go"
+[ "$pg_n" -eq 0 ] || echo "conformance: arm64-pure-go: proved $pg_n arm64 slices statically"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Artifact conformance" -- one C++
 #       runtime per process; '- cxxabi:<glob>: <reason>' excuses a path, and a path grandfathered as cxxabi
