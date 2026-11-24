@@ -22,7 +22,7 @@ EOF
   #       no pinned sysroot, so every configure here must go through the toolchain file to stay green.
   "$SC" -S "$d" -B "$d/b" -DCMAKE_C_COMPILER=$CC -DCMAKE_OBJC_COMPILER=$CC -DCMAKE_CXX_COMPILER=${CC}++ \
     -DCMAKE_TOOLCHAIN_FILE="$SRC/MavergreenToolchain.cmake" "$@" >/dev/null 2>&1 \
-    || { echo "FAIL: include(Mavergreen) must be universally includable with no MAVERICKS_REQUIRE_LANGS (the gate auto-scopes to the enabled languages) -- failed for LANGUAGES $langs"; exit 1; }
+    || { echo "FAIL: include(Mavergreen) must be universally includable -- failed for LANGUAGES $langs"; exit 1; }
 }
 
 cfg NONE

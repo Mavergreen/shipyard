@@ -16,8 +16,8 @@
 #
 # Deployment target + architecture must be set BEFORE project() to take effect, so
 # they come from your preset (inherit mavergreen-native / mavergreen-cross from
-# mavergreen-presets.json) -- NOT from this umbrella, which runs after project(). A
-# project on a non-Apple toolchain sets(MAVERICKS_REQUIRE_APPLECLANG OFF) first.
+# mavergreen-presets.json) -- NOT from this umbrella, which runs after project().
+# MavergreenToolchain.cmake chooses the compiler (clang22).
 # Install once with `cmake --install` (self-registers); see README.
 
 set(MAVERGREEN_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "shipyard root")
@@ -69,7 +69,6 @@ if(MAVERGREEN_MODE STREQUAL "cross")
   endif()
 endif()
 
-include(RequireAppleClang)      # reject gcc / Homebrew / pkgsrc clang
 include(MavergreenFetch)         # mavergreen_fetch_sdk()
 include(MavergreenCompatGuard)   # mavergreen_assert_binary_compatible()
 include(MavergreenVersion)       # mavergreen_resolve_version() -- VERSION is derived, never committed

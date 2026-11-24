@@ -18,7 +18,6 @@ cfg() {  # $1=langs
 cmake_minimum_required(VERSION 3.16)
 project(u LANGUAGES $1)
 list(APPEND CMAKE_MODULE_PATH "$SRC")
-set(MAVERICKS_REQUIRE_APPLECLANG OFF)
 include(Mavergreen)
 CM
   "$SC" -S "$d" -B "$d/b" $CCARGS -DCMAKE_C_COMPILER_TARGET=x86_64-apple-macos10.9 -DCMAKE_OBJC_COMPILER_TARGET=x86_64-apple-macos10.9 \
@@ -40,7 +39,6 @@ if "$CL/bin/clang" -print-targets | grep -q aarch64; then
 cmake_minimum_required(VERSION 3.16)
 project(u LANGUAGES C)
 list(APPEND CMAKE_MODULE_PATH "$SRC")
-set(MAVERICKS_REQUIRE_APPLECLANG OFF)
 include(Mavergreen)
 if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "12.0")
   message(FATAL_ERROR "umbrella changed arch/target to [\${CMAKE_OSX_ARCHITECTURES}]/[\${CMAKE_OSX_DEPLOYMENT_TARGET}]")

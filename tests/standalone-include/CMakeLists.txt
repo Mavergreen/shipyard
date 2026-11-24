@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-# LANGUAGES NONE: no C/CXX compiler enabled -> if including MavergreenCompatGuard
-# fired RequireAppleClang, configure would FATAL. It must not.
+# LANGUAGES NONE: no C/CXX compiler enabled; including the modules must not need one.
 project(standalone_include LANGUAGES NONE)
 find_package(MavergreenShipyard REQUIRED)
 include(MavergreenCompatGuard)

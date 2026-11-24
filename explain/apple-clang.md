@@ -1,4 +1,4 @@
-apple-clang: not a check but a deviation key: an apple-clang deviation whose scope is a path says that this file builds with Apple's clang (/usr/bin/clang, AppleClang, RequireAppleClang) because clang22 cannot do the job there.
+apple-clang: not a check but a deviation key: an apple-clang deviation whose scope is a path says that this file builds with Apple's clang (/usr/bin/clang, AppleClang) because clang22 cannot do the job there.
 
 ## Why
 Products build with clang22 on every host. Its clang.cfg links librecaulk.a before -lSystem, so a Recaulk fix

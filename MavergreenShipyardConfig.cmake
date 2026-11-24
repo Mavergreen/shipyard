@@ -2,7 +2,7 @@
 #
 # Installed alongside the modules + scripts under <prefix>/share/cmake/
 # MavergreenShipyard/. Adds that directory to CMAKE_MODULE_PATH so consumers
-# can `include(Mavergreen)` (which then finds MavergreenMode/RequireAppleClang and
+# can `include(Mavergreen)` (which then finds MavergreenMode and
 # resolves scripts/ from its own location). This is a find_package package meant
 # to be INSTALLED to a prefix -- installed by the shipyard pkg and found by
 # shipyard-cmake -- NOT vendored/submoduled into a consumer's source tree (the

@@ -46,6 +46,7 @@ listing() {  # $1 = tree: every entry, a link with its target, a file with its m
 key=share/cmake/MavergreenShipyard/keys/feed-ed25519.pub
 for t in "$w/p/$rel" "$w/r/$rel"; do
   [ -s "$t/$key" ] && cmp -s "$t/$key" "$root/keys/feed-ed25519.pub" || fail "$t must carry $key, the family key, beside the scripts"
+  [ ! -e "$t/share/cmake/MavergreenShipyard/RequireAppleClang.cmake" ] || fail "$t must not carry RequireAppleClang.cmake: MavergreenToolchain.cmake chooses the compiler"
 done
 listing "$w/p/$rel" > "$w/pkg.list"
 listing "$w/r/$rel" > "$w/linux.list"

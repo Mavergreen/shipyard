@@ -78,7 +78,6 @@ install(FILES
   "${CMAKE_CURRENT_BINARY_DIR}/MavergreenShipyardConfig.cmake"
   Mavergreen.cmake
   MavergreenMode.cmake
-  RequireAppleClang.cmake
   MavergreenFetch.cmake
   MavergreenToolchain.cmake
   MavergreenCompatGuard.cmake
@@ -190,8 +189,8 @@ endif()
 add_test(NAME standalone-include
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/standalone-include.sh)
 
-# Prove include(Mavergreen) is universally includable: auto-scoped gate (no
-# MAVERICKS_REQUIRE_LANGS), LANGUAGES NONE no-op, and multi-arch safe.
+# Prove include(Mavergreen) is universally includable: any enabled languages,
+# LANGUAGES NONE no-op, and multi-arch safe.
 add_test(NAME umbrella-langs
   COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/umbrella-langs.sh)
 

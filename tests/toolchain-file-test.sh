@@ -66,11 +66,11 @@ printf 'cmake_minimum_required(VERSION 3.16)\nproject(q C)\nfind_package(Mavergr
 if [ "$native" -eq 1 ]; then
   echo "skip (native 10.9 host): the backstop is cross-mode only"
 else
-  rc=0; configure "$w/q" "$w/b3" -DMavergreenShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF \
+  rc=0; configure "$w/q" "$w/b3" -DMavergreenShipyard_DIR="$root" \
     -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_SYSROOT="$other_sdk" > "$w/c3.log" 2>&1 || rc=$?
   [ "$rc" -ne 0 ] && says "$w/c3.log" 'not the pinned SDK' || { echo "FAIL: include(Mavergreen) must refuse the runner's SDK:"; sed 's/^/    | /' "$w/c3.log"; exit 1; }
 fi
-configure "$w/q" "$w/b4" -DMavergreenShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF \
+configure "$w/q" "$w/b4" -DMavergreenShipyard_DIR="$root" \
   -DCMAKE_TOOLCHAIN_FILE="$root/MavergreenToolchain.cmake" > "$w/c4.log" 2>&1 \
   || { echo "FAIL: include(Mavergreen) must accept the toolchain file's pin:"; sed 's/^/    | /' "$w/c4.log"; exit 1; }
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a plain
@@ -85,7 +85,7 @@ if [ "$native" -eq 1 ]; then
   echo "skip (native 10.9 host): the backstop is cross-mode only"
 else
   rc=0; ( unset CMAKE_OSX_ARCHITECTURES
-          configure "$w/q" "$w/b6" -DMavergreenShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF -DCMAKE_OSX_SYSROOT="$other_sdk" ) \
+          configure "$w/q" "$w/b6" -DMavergreenShipyard_DIR="$root" -DCMAKE_OSX_SYSROOT="$other_sdk" ) \
     > "$w/c6.log" 2>&1 || rc=$?
   [ "$rc" -ne 0 ] && says "$w/c6.log" 'CMAKE_OSX_ARCHITECTURES is empty' && says "$w/c6.log" 'MavergreenToolchain.cmake' \
     || { echo "FAIL: a configure with no arch must be refused with the preset/toolchain-file guidance:"; sed 's/^/    | /' "$w/c6.log"; exit 1; }

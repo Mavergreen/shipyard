@@ -263,7 +263,6 @@ signing, or compat checks:**
 |---|---|---|
 | `mavergreen_build_mode` · `MavergreenMode` · `mavergreen_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
 | `mavergreen_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
-| `RequireAppleClang` | enforces Apple `/usr/bin/clang` for a configure that still declares it; every caller is a leftover, not an exception (see "The compiler: clang22 on every host") | assuming the toolchain |
 | `mavergreen_assert_binary_compatible` · `MavergreenCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set; with `OBJC_STRICT`, every Objective-C send) | a bespoke compat check |
 | `apply_patches.sh SRC PATCHDIR` | applies `PATCHDIR/*.patch` to an unpacked source once, in name order with no fuzz; records their SHA-256s in `SRC/.mavergreen-patches`, no-ops on the same set, refuses a tree patched with another | a hand-rolled `patch` loop |
 | `build_component_pkg.sh` · `set_install_floor.sh` | builds a component `.pkg`; writes a product `.pkg`'s Distribution, its floors and its architecture rule derived from the payload (see "Seam hosts", below) | `pkgbuild`, `productbuild`, editing the pkg Distribution |
@@ -324,8 +323,8 @@ from the llvm-project release it is built from (`.mavergreen/ingredients/clang22
 <sha256 of llvm-project-<version>.src.tar.xz>`; it refuses a clang22 of another LLVM version), cached. It
 exits when clang22's Linux archive ships a libc++ for Linux targets.
 
-**Apple's clang is a declared deviation, never a default.** `/usr/bin/clang`, AppleClang, or a configure
-that keeps `RequireAppleClang`, is allowed only where clang22 cannot do the job. Its comment names that
+**Apple's clang is a declared deviation, never a default.** `/usr/bin/clang` or AppleClang
+is allowed only where clang22 cannot do the job. Its comment names that
 reason and the shared fix that would retire it, and an `apple-clang` deviation scoped to that file declares
 it. The products that use it today are leftovers from before this rule, queued to move, not exceptions to copy.
 

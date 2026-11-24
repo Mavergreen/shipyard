@@ -122,3 +122,7 @@ assert_sparkle_pristine.sh	the Engine (mavergreen update)	no product ships an up
 SUFeedURL	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
 -updater.app	the Engine (mavergreen update)	no product ships an updater; the Engine updates every product from its feed
 --clang22-pin	the Engine (mavergreen update)	build_updater.sh, which accepted it, is retired with the updaters
+RequireAppleClang	MavergreenToolchain.cmake (clang22)	MavergreenToolchain.cmake chooses the compiler; no configure checks for Apple clang
+MAVERICKS_REQUIRE_APPLECLANG	MavergreenToolchain.cmake (clang22)	MavergreenToolchain.cmake chooses the compiler; no configure checks for Apple clang
+MAVERICKS_REQUIRE_LANGS	MavergreenToolchain.cmake (clang22)	MavergreenToolchain.cmake chooses the compiler; no configure checks for Apple clang
+MAVERICKS_REQUIRE_BLOCKS	MavergreenToolchain.cmake (clang22)	MavergreenToolchain.cmake chooses the compiler; no configure checks for Apple clang
