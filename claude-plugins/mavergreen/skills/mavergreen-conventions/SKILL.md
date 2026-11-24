@@ -406,7 +406,8 @@ shipyard's facilities rather than trusting the runner:
     `mavericks_assert_binary_compatible(<target> OBJC_STRICT)`, or `MAVERGREEN_OBJC_STRICT=1` for
     `assert_binary_compatible.sh`: the guard then runs the strict analyzer (`scripts/objc-compat.sh`, the pinned
     Drydock's `drydock-objc`) on each binary's x86_64 slice against that release's reference set
-    (`scripts/objc-reference-dir.sh`), and any send it finds
+    (`scripts/objc-reference-dir.sh`), on a Mac and on x86_64 Linux alike (Drydock 0.7.0 on; the same binary
+    gets a byte-identical report on either), and any send it finds
     unsupported or unresolved fails, and one it cannot examine fails as cannot-measure. A binary whose
     receivers need build evidence (a Rust objc2 binding, an Objective-C provider such as Recaulk's) passes it
     through `MAVERGREEN_OBJC_BUILD_EVIDENCE`, `MAVERGREEN_OBJC_PROVIDER_PREFIX` and

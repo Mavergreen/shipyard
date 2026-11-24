@@ -77,4 +77,31 @@ fetch MAVERGREEN_DRYDOCK_PREFIX="$T/a"
 [ "$rc" = 1 ] && [ -z "$out" ] && pass 'a MAVERGREEN_DRYDOCK_PREFIX with no bin/drydock-objc fails' ||
   fail "bad prefix: exit $rc, printed '$out', want 1"
 
+
+# spec: scripts/fetch_drydock.sh header -- on a host uname calls x86_64 Linux, with no MAVERGREEN_DRYDOCK_HOST, the pinned
+#       release's drydock-X.Y.Z-linux-x86_64.tar.gz is fetched; scripts/objc-compat.sh runs its drydock-objc analyze there.
+unset MAVERGREEN_DRYDOCK_HOST
+PV="$(tr -d ' \t\n' < "$ROOT/components/drydock/version")"; PN="${PV#v}"
+PR="$T/rel/Mavergreen/drydock/releases/download/$PV"
+mkdir -p "$T/p/drydock-$PN/bin" "$PR" "$T/linux-bin"
+cat >"$T/p/drydock-$PN/bin/drydock-objc" <<SH
+#!/bin/sh
+for a in "\$@"; do printf '%s\n' "\$a"; done >"$T/argv"
+exit 0
+SH
+chmod +x "$T/p/drydock-$PN/bin/drydock-objc"
+(cd "$T/p" && tar -czf "$PR/drydock-$PN-linux-x86_64.tar.gz" "drydock-$PN")
+printf '%s  %s\n' "$(sha "$PR/drydock-$PN-linux-x86_64.tar.gz")" "drydock-$PN-linux-x86_64.tar.gz" >"$PR/SHA256SUMS"
+printf '#!/bin/sh\ncase "$1" in -m) echo x86_64 ;; *) echo Linux ;; esac\n' >"$T/linux-bin/uname"
+chmod +x "$T/linux-bin/uname"
+rm -rf "$T/cache" "$T/tars"
+rc=0; out=$(PATH="$T/linux-bin:$PATH" sh "$ROOT/scripts/fetch_drydock.sh" "$ROOT/components/drydock" 2>"$T/err") || rc=$?
+[ "$rc" = 0 ] && [ "$out" = "$T/cache/$PV/linux" ] && [ -f "$T/cache/$PV/drydock-$PN-linux-x86_64.tar.gz" ] &&
+  pass "on Linux the pin $PV fetches drydock-$PN-linux-x86_64.tar.gz" || fail "Linux by uname: exit $rc, printed '$out'"
+rc=0; PATH="$T/linux-bin:$PATH" sh "$ROOT/scripts/objc-compat.sh" --artifact /a --root /r --references /refs --report /rep \
+  2>"$T/err" || rc=$?
+printf '%s\n' analyze --artifact /a --root /r --references /refs --report /rep >"$T/want"
+[ "$rc" = 0 ] && cmp -s "$T/want" "$T/argv" && pass "on Linux objc-compat.sh runs the fetched drydock-objc analyze" ||
+  fail "objc-compat.sh on Linux: exit $rc"
+
 [ "$fails" = 0 ] && echo 'fetch-drydock-test: all passed' || { echo "fetch-drydock-test: $fails failed"; exit 1; }

@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: host-agnostic -- the wrapper; the pinned Drydock's drydock-objc analyzes on macOS only (on Linux it exits 2)
+# platform: host-agnostic
 #   usage: objc-compat.sh --artifact FILE --root SHIPPED_ROOT --references REF_DIR --report NEW_FILE
 #                         [--build-evidence FILE [--source-root DIR] [--crate-sources DIR] [--sdk-root DIR]
 #                         [--link-map FILE [--object-dir DIR]...]]
@@ -23,7 +23,7 @@
 #          (default tree). The report's analyzer id names the Drydock release and its analyzer source.
 #          Nothing is executed: the artifact is read, never run or loaded.
 #          Exit 0 measured (strict: and no blocking finding), 1 strict with a blocking finding,
-#          2 usage, 4 cannot measure (including a Drydock that could not be fetched, or a host other than macOS).
+#          2 usage, 4 cannot measure (including a Drydock that could not be fetched).
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
@@ -43,11 +43,5 @@ for a in "$@"; do
   fi
 done
 [ $((n % 2)) = 0 ] || usage
-# platform: drydock-objc's analyze is built for macOS only; on Linux it exits 2, which the guard would read as misuse, so
-#   another host is cannot-measure here, before any fetch. MAVERGREEN_DRYDOCK_HOST (linux or mac) replaces the host's answer.
-case "${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" in
-  mac|Darwin) ;;
-  *) echo "objc-compat: drydock-objc analyze runs on macOS only, not on ${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" >&2; exit 4 ;;
-esac
 D=$(sh "$HERE/fetch_drydock.sh" "$HERE/../components/drydock") || { echo "objc-compat: the pinned Drydock could not be had" >&2; exit 4; }
 exec "$D/bin/drydock-objc" analyze "$@"

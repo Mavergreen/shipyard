@@ -1,5 +1,5 @@
 #!/bin/sh
-# platform: host-agnostic -- the wrapper; the pinned Drydock's drydock-objc writes evidence on macOS only (on Linux it exits 2)
+# platform: host-agnostic
 #   usage: objc-build-evidence.sh --artifact FILE --prestrip FILE --source-root DIR [--link-map FILE
 #                                 [--provider-prefix DIR]] --references REF_DIR --output NEW_FILE
 #          objc-build-evidence.sh --tree-digest-only --source-root DIR
@@ -16,7 +16,7 @@
 #          schema-2 evidence names; --sdk-digest-only prints the header digest of the SDK DIR, which an sdk: cite
 #          holds against only when it is the reference set's pinned floor SDK's. Each writes nothing else.
 #          Exit 0 written (or printed), 2 usage or an existing destination, 4 a mismatch, an unreadable or invalid input,
-#          a Drydock that could not be fetched, or a host other than macOS.
+#          or a Drydock that could not be fetched.
 set -eu
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 usage() {
@@ -38,11 +38,5 @@ else
     fi
   done
 fi
-# platform: drydock-objc's evidence is built for macOS only; on Linux it exits 2, which the guard would read as misuse, so
-#   another host is cannot-measure here, before any fetch. MAVERGREEN_DRYDOCK_HOST (linux or mac) replaces the host's answer.
-case "${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" in
-  mac|Darwin) ;;
-  *) echo "objc-build-evidence: drydock-objc evidence runs on macOS only, not on ${MAVERGREEN_DRYDOCK_HOST:-$(uname -s)}" >&2; exit 4 ;;
-esac
 D=$(sh "$HERE/fetch_drydock.sh" "$HERE/../components/drydock") || { echo "objc-build-evidence: the pinned Drydock could not be had" >&2; exit 4; }
 exec "$D/bin/drydock-objc" evidence "$@"

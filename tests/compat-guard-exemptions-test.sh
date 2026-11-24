@@ -155,10 +155,22 @@ run "$w/build/bin/tool"
 [ "$rc" -eq 4 ] || { echo "FAIL ($label): exit $rc, want 4:"; echo "$out"; exit 1; }; says 'sdk 26.5'; says 'no Objective-C reference set'
 unset MAVERGREEN_DRYDOCK_PREFIX
 mkdir "$w/reference/objc"
-# spec: scripts/objc-compat.sh header -- with the real wrapper on a host other than macOS, strict is cannot-measure (4).
-label="strict, with the real analyzer wrapper, on a host other than macOS"
-run_linux() { (unset OBJC_COMPAT; MAVERGREEN_DRYDOCK_HOST=linux; export MAVERGREEN_DRYDOCK_HOST; run "$@"; echo "$rc"; printf '%s\n' "$out") > "$w/linux.out"; }
+# spec: scripts/objc-compat.sh header -- with the real wrapper on a host uname calls Linux, strict runs the pinned Drydock's
+#       drydock-objc analyze (here a stub prefix that writes a complete strict report) and passes on its verdict.
+label="strict, with the real analyzer wrapper, on Linux"
+mkdir -p "$w/linux-bin" "$w/drydock/bin"
+printf '#!/bin/sh\ncase "$1" in -m) echo x86_64 ;; *) echo Linux ;; esac\n' > "$w/linux-bin/uname"
+cat > "$w/drydock/bin/drydock-objc" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$@" > "$(dirname "$0")/argv"
+shift
+while [ $# -gt 0 ]; do [ "$1" = --report ] && rep=$2; shift 2; done
+printf '{"schema": 1, "mode": "strict", "complete_within_boundary": true, "findings": []}\n' > "$rep"
+EOF
+chmod +x "$w/linux-bin/uname" "$w/drydock/bin/drydock-objc"
+run_linux() { (unset OBJC_COMPAT; MAVERGREEN_DRYDOCK_PREFIX="$w/drydock"; PATH="$w/linux-bin:$PATH"; export MAVERGREEN_DRYDOCK_PREFIX PATH
+  run "$@"; echo "$rc"; printf '%s\n' "$out") > "$w/linux.out"; }
 run_linux "$w/build/bin/good"; rc="$(head -1 "$w/linux.out")"; out="$(tail -n +2 "$w/linux.out")"
-[ "$rc" -eq 4 ] || { echo "FAIL ($label): exit $rc, want 4:"; echo "$out"; exit 1; }
-says 'CANNOT MEASURE'; says 'drydock-objc analyze runs on macOS only'
+[ "$rc" -eq 0 ] || { echo "FAIL ($label): exit $rc, want 0:"; echo "$out"; exit 1; }
+[ "$(head -1 "$w/drydock/bin/argv")" = analyze ] || { echo "FAIL ($label): drydock-objc ran without analyze"; exit 1; }
 echo "PASS: compat-guard-exemptions"
