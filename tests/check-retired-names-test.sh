@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: check-retired-names-test.sh
 #          Runs scripts/check-retired-names.sh over inline trees: a retired form of the arm64 check id
-#          fails and names its replacement, and arm64 as an arch string passes.
+#          fails and names its replacement, every retired name on a line is named, and arm64 as an arch string passes.
 set -eu
 here="$(cd "$(dirname "$0")/.." && pwd)"
 S="$here/scripts/check-retired-names.sh"
@@ -29,6 +29,11 @@ tok=release-needed.sh
 run declared "sh \"\$SHIPYARD_SCRIPTS/$tok\"" && fail "$tok is retired: $(cat "$w/out")"
 grep -q "^retired-name: scripts/x.sh uses $tok, a retired family name" "$w/out" || fail "the failure names $tok: $(cat "$w/out")"
 grep -q '^  fix: write release-decision.sh' "$w/out" || fail "the fix names release-decision.sh: $(cat "$w/out")"
+
+run two "sh release-needed.sh; MIN=\$MAVERGREEN_MIN_OS" && fail "two retired names on one line fail: $(cat "$w/out")"
+for tok in MAVERGREEN_MIN_OS release-needed.sh; do
+  grep -q "^retired-name: scripts/x.sh uses $tok, a retired family name" "$w/out" || fail "each retired name on one line is named, $tok too: $(cat "$w/out")"
+done
 
 for text in 'clang -arch arm64 -c x.c' "sysctl -n hw.optional.arm64" 'tar xf go1.26.5.darwin_arm64.tar.gz'; do
   run arch "$text" || fail "arm64 as an arch string is no retired name, in '$text': $(cat "$w/out")"

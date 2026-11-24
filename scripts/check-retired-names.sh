@@ -15,7 +15,10 @@ while IFS= read -r p; do
     scripts/retired-names|.mavergreen/release-notes/*|.mavergreen/deviations/retired-name/*/scope|tests/fixtures/checks/*) continue ;;
   esac
   [ -f "$p" ] || continue
-  grep -I -o -F -f "$tmp/tokens" "$p" 2>/dev/null | sort -u > "$tmp/hits" || :
+  # platform: BSD grep -o -F -f reports one match per line; awk names every token on each matched line
+  grep -I -F -f "$tmp/tokens" "$p" 2>/dev/null \
+    | awk 'NR == FNR { t[NR] = $0; n = NR; next } { for (i = 1; i <= n; i++) if (index($0, t[i])) print t[i] }' "$tmp/tokens" - \
+    | sort -u > "$tmp/hits" || :
   [ -s "$tmp/hits" ] || continue
   while IFS= read -r tok; do
     chk_deviated retired-name "$p#$tok" >/dev/null && continue
