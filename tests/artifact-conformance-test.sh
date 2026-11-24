@@ -1228,7 +1228,11 @@ installs go126-cross.pkg usr/local/mavergreen/go126-cross/mavergreen.plist
 asset go126.xml 700
 appcast go126.xml 1.26.8-mavericks.7 go126-cross.pkg 10 10.9.5
 asset go126-cross.xml 700
-appcast go126-cross.xml 1.26.8-mavericks.7 go126.pkg 10 10.9.5'
+appcast go126-cross.xml 1.26.8-mavericks.7 go126.pkg 10 10.9.5
+asset go126-1.26.8-mavericks.7-macos-x86_64.tar.gz 10
+standalone go126-1.26.8-mavericks.7-macos-x86_64.tar.gz ok
+asset go126-cross-1.26.8-mavericks.7-macos-x86_64.tar.gz 10
+standalone go126-cross-1.26.8-mavericks.7-macos-x86_64.tar.gz ok'
 alone "feed: two updaters' feeds swap enclosures -- each is named for the pkg it actually describes" "feed" "$SWAP"
 
 GO='expected 1.26.8-mavericks.7
