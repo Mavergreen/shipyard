@@ -7,11 +7,11 @@
 #          shipyard-provision are executable on the default PATH, and shipyard-check runs from there;
 #          a probe under a stripped environment
 #          finds shipyard through shipyard-cmake; shipyard's own pins are installed beside its scripts;
-#          the installed updater is universal; an installed mavergreen helper passes its own check;
+#          an installed mavergreen helper passes its own check;
 #          and any other cmake is refused, by name. --root defaults to "/" (a real install); a fixture
 #          root makes this unit-testable.
 #          Exit 0 clean, 1 on a failed assertion, 2 on a usage error. --no-slices skips reading the
-#          two universal binaries' slices, for a host that has no lipo that reads Mach-O.
+#          cmake product's slices, for a host that has no lipo that reads Mach-O.
 # spec: R-P1-17 -- tests/installed-shipyard-test.sh (a real install) and
 #       tests/assert-installed-shipyard-test.sh (a fixture) share this one statement of what an
 #       installed shipyard looks like.
@@ -40,7 +40,6 @@ CM="$FARM/shipyard-cmake"
 PREFIX="$MG/shipyard"
 PRODUCT="$MG/cmake/bin/cmake"
 CFGDIR="$PREFIX/share/cmake/MavergreenShipyard"
-EXE="$R/Library/Application Support/Mavergreen/shipyard-updater.app/Contents/MacOS/shipyard-updater"
 
 bad=0
 fail() { echo "::error::installed shipyard: $*" >&2; bad=1; }
@@ -108,24 +107,6 @@ fi
 [ -f "$CFGDIR/.mavergreen/ingredients/stevedore/VERSION" ] \
   || fail "no $CFGDIR/.mavergreen/ingredients/stevedore/VERSION: the installed scripts read shipyard's own pins from $CFGDIR/.mavergreen/ingredients/"
 
-# platform: 10.9's lipo has no -archs, so read the slices with lipo -info;
-#           check-shell-portability.sh bans the idiom outright.
-if [ -f "$EXE" ]; then
-  if [ "$SLICES" -eq 1 ]; then
-    archs="$("${LIPO:-lipo}" -info "$EXE" 2>&1 || true)"
-    case "$archs" in
-      *x86_64*) ;;
-      *) fail "the installed updater has no x86_64 slice: $archs" ;;
-    esac
-    case "$archs" in
-      *arm64*) ;;
-      *) fail "the installed updater has no arm64 slice: $archs" ;;
-    esac
-  fi
-else
-  fail "no installed updater executable at $EXE"
-fi
-
 other="$(command -v cmake 2>/dev/null || true)"
 # platform: MavergreenShipyardConfig.cmake refuses a foreign cmake only when CMAKE_HOST_APPLE; a Linux
 #           host has no refusal to check, so the probe runs on Darwin alone.
@@ -155,5 +136,5 @@ else
 fi
 
 [ "$bad" -eq 0 ] || exit 1
-if [ "$SLICES" -eq 1 ]; then universal="updater universal"; else universal="slices: not checked (--no-slices)"; fi
+if [ "$SLICES" -eq 1 ]; then universal="cmake product universal"; else universal="slices: not checked (--no-slices)"; fi
 echo "installed shipyard: shipyard-cmake runs CMake $WANT and finds shipyard in $CFGDIR; $universal; $refusal"

@@ -9,8 +9,7 @@
 #          the pkg installs at Applications/Mavergreen/<Name>.app, as SHORT-VERSION/<Name>.app. A bin/ link
 #          is resolved within STAGED_PKG_ROOT, its target absolute or relative: one landing in
 #          Applications/Mavergreen/<Name>.app/... becomes ../<Name>.app/..., and one that does not resolve there,
-#          or a relative one that does not resolve in the root, fails. The updater, its LaunchAgent,
-#          the install scripts and anything else staged outside the tree stay out, and stderr names what was left out. Entries are sorted, stamped at source-date-epoch.sh's time, root:wheel with no
+#          or a relative one that does not resolve in the root, fails. A LaunchAgent, the install scripts and anything else staged outside the tree stay out, and stderr names what was left out. Entries are sorted, stamped at source-date-epoch.sh's time, root:wheel with no
 #          Mac metadata where this tar can say so, and gzipped without a name or time, so one tree gives
 #          the same bytes every run. Exit 1 when STAGED_PKG_ROOT holds no tree for SHORT, an app's name
 #          is taken in the tree, a bin/ link does not resolve, or the tree or an app holds an
@@ -46,7 +45,6 @@ rm -f "$work/$top/mavergreen.plist"
 for app in "$ROOT/$APPS"/*.app; do
   [ -d "$app" ] && [ ! -L "$app" ] || continue
   n="${app##*/}"
-  case "$n" in *-updater.app) continue ;; esac
   [ ! -e "$work/$top/$n" ] && [ ! -L "$work/$top/$n" ] \
     || { echo "stage_standalone: $APPS/$n cannot sit at the top of $want: $REL/$n is already there" >&2; exit 1; }
   cp -pRP "$app" "$work/$top/$n"

@@ -2,10 +2,10 @@
 # platform: host-agnostic
 #   usage: stage-standalone-test.sh
 #          scripts/stage_standalone.sh: from a staged pkg root carrying a product tree, its manifest, an
-#          updater and its LaunchAgent, the archive holds the product tree alone under <short>-<version>/,
+#          app outside Applications/ and a LaunchAgent, the archive holds the product tree alone under <short>-<version>/,
 #          with its modes and links, every entry at SOURCE_DATE_EPOCH, the same bytes from two runs, and
 #          passes check-standalone-archive.sh; an app the root stages in Applications/ sits at the
-#          archive's top, an updater there stays out, and a bin/ link, absolute or relative, landing in
+#          archive's top, an app named like the retired updaters included, and a bin/ link, absolute or relative, landing in
 #          Applications/<Name>.app becomes relative, refused when it does not resolve in the root; an
 #          AppleDouble file is refused.
 set -eu
@@ -23,8 +23,8 @@ chmod 755 "$T/bin/w" "$T/libexec/w/w-real"
 printf 'readme\n' > "$T/share/doc/w/README"; chmod 600 "$T/share/doc/w/README"
 ln -s ../libexec/w/w-real "$T/bin/w-real"
 printf '<plist/>\n' > "$T/mavergreen.plist"
-A="$R/Library/Application Support/Mavergreen/w-updater.app/Contents"; mkdir -p "$A/MacOS"
-printf 'x\n' > "$A/MacOS/w-updater"; printf '<plist/>\n' > "$A/Info.plist"
+A="$R/Library/Application Support/Mavergreen/w-extra.app/Contents"; mkdir -p "$A/MacOS"
+printf 'x\n' > "$A/MacOS/w-extra"; printf '<plist/>\n' > "$A/Info.plist"
 mkdir -p "$R/Library/LaunchAgents"; printf '<plist/>\n' > "$R/Library/LaunchAgents/dev.mavergreen.w-updatecheck.plist"
 
 usage() {  # $1 = label, then the arguments; must exit 2
@@ -47,7 +47,7 @@ mkdir "$w/one" "$w/two"
 sh "$S" "$R" w 1.0 universal "$w/one/w-1.0-macos-universal.tar.gz" > "$w/out1" 2> "$w/err1" \
   || fail "staging failed: $(cat "$w/err1")"
 grep -q 'Library/LaunchAgents' "$w/err1" || fail "what the pkg installs outside the tree is named as left out: $(cat "$w/err1")"
-grep -q 'w-updater.app' "$w/err1" || fail "the updater is named as left out: $(cat "$w/err1")"
+grep -q 'w-extra.app' "$w/err1" || fail "an app outside Applications/ is named as left out: $(cat "$w/err1")"
 touch "$T/share/doc/w/README" "$T/bin/w"
 sh "$S" "$R" w 1.0 universal "$w/two/w-1.0-macos-universal.tar.gz" > /dev/null 2> "$w/err2" \
   || fail "the second staging failed: $(cat "$w/err2")"
@@ -100,7 +100,7 @@ mkdir -p "$R/Applications/Mavergreen/x-updater.app/Contents"; printf '<plist/>\n
 printf '<plist/>\n' > "$T/mavergreen.plist"
 sh "$S" "$R" x 1.0 x86_64 "$w/one/x-1.0-macos-x86_64.tar.gz" > /dev/null 2> "$w/err" \
   || fail "staging a product with an app failed: $(cat "$w/err")"
-grep -q 'x-updater.app' "$w/err" || fail "an updater in Applications is left out: $(cat "$w/err")"
+grep -q 'x-updater.app' "$w/err" && fail "an app in Applications/Mavergreen named like the retired updaters is archived like any app: $(cat "$w/err")"
 grep -q 'Applications/Mavergreen/X.app' "$w/err" && fail "the archived app is not named as left out: $(cat "$w/err")"
 tar -tzf "$w/one/x-1.0-macos-x86_64.tar.gz" | sed 's|/$||' > "$w/list"
 want='x-1.0
@@ -111,7 +111,10 @@ x-1.0/X.app/Contents/MacOS
 x-1.0/X.app/Contents/MacOS/x
 x-1.0/X.app/Contents/Resources
 x-1.0/bin
-x-1.0/bin/x'
+x-1.0/bin/x
+x-1.0/x-updater.app
+x-1.0/x-updater.app/Contents
+x-1.0/x-updater.app/Contents/Info.plist'
 [ "$(cat "$w/list")" = "$want" ] || fail "the archive holds the tree and the app at its top: $(cat "$w/list")"
 rm -rf "$w/x"; mkdir "$w/x"; tar -xzf "$w/one/x-1.0-macos-x86_64.tar.gz" -C "$w/x"
 [ "$(ls -l "$w/x/x-1.0/bin/x" | sed 's/.* -> //')" = ../X.app/Contents/MacOS/x ] \

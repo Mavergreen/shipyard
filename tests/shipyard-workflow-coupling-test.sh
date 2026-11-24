@@ -87,14 +87,8 @@ ci, rel = cmds("ci.yml"), cmds("release.yml")
 def has(cs, pat): return any(re.search(pat, c) for c in cs)
 
 # Each of these is a step release.yml would otherwise run for the first time while publishing.
-for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 ", "build the universal updater with clang22 (tests/lib/build-updater.sh)"),
-                  (r"^sh scripts/package-pkg\.sh ", "build the pkg (scripts/package-pkg.sh)"),
+for pat, what in ((r"^sh scripts/package-pkg\.sh ", "build the pkg (scripts/package-pkg.sh)"),
                   (r"^sh scripts/assert_pkg_installs_in_place\.sh ", "gate the pkg (scripts/assert_pkg_installs_in_place.sh)"),
-                  # The merge's own result, asserted rather than assumed: lipo-merge-tree.sh's
-                  # --require-archs covers every Mach-O in the tree, and this says out loud that the
-                  # one binary the whole pkg exists to deliver came out with both slices.
-                  (r'^case " \$archs " in \*" arm64 "\*\) ;; \*\) echo "::error::the merged updater has no arm64 slice',
-                   "assert the merged updater carries an arm64 slice"),
                   # The Linux-specific half: clang22's Mach-O tools, and the payload staged with the runner's cmake.
                   (r'^echo "LIPO=\$CL/bin/llvm-lipo"$', "export clang22's llvm-lipo as LIPO"),
                   (r'^sh scripts/stage-shipyard-prefix\.sh --stage "\$RUNNER_TEMP/payload-stage" --build "\$RUNNER_TEMP/payload-build" ',
@@ -111,15 +105,12 @@ for pat, what in ((r"^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 
 if not has(ci, r'^sh scripts/audit-release-sdks\.sh --dist "?\$RUNNER_TEMP/dist"? '):
     bad.append("ci.yml no longer checks sdk-pin conformance on the rehearsed pkg "
                '(scripts/audit-release-sdks.sh --dist "$RUNNER_TEMP/dist")')
-if not has(ci, r"^grep -q 'Mach-O slices\)' "):
-    bad.append("ci.yml's SDK rehearsal no longer requires at least one checked Mach-O slice "
-               "(grep -q 'Mach-O slices)' on the audit's output), so an empty dist would pass it")
+if not has(ci, r"^grep -q 'COMPLIANT \(no Mach-O shipped\)' "):
+    bad.append("ci.yml's SDK rehearsal no longer requires the pkg to ship no Mach-O "
+               "(grep -q 'COMPLIANT (no Mach-O shipped)' on the audit's output); shipyard's pkg ships no updater")
 
-# R-P1-22: no `codesign --deep`, in either workflow. The updater app carries Sparkle as a VERSIONED
-# framework, and `--verify --deep` of such an app is ambiguous by design -- "bundle format is
-# ambiguous (could be app or framework)" -- so it fails on every runner. `--deep --sign -` is worse
-# than useless here: it replaces Sparkle's own signature with an ad-hoc one, to re-seal a bundle
-# nothing ever sealed. lipo already preserves each slice's signature verbatim.
+# R-P1-22: no `codesign --deep`, in either workflow: lipo preserves each slice's signature verbatim,
+# and there is no bundle seal here to re-create.
 for name, cs in (("ci.yml", ci), ("release.yml", rel)):
     for c in cs:
         if re.search(r'\bcodesign\b.*--deep', c):
@@ -130,11 +121,7 @@ for name, cs in (("ci.yml", ci), ("release.yml", rel)):
 # how the two drift apart, and the fixture test then covers neither.
 for name, cs in (("ci.yml", ci), ("release.yml", rel)):
     for pat, what in ((r"cmake version ", "the CMake version"),
-                      (r"\benv -i\b", "the stripped-environment find_package probe"),
-                      # The INSTALLED app specifically. `lipo -info` on the freshly merged bundle in
-                      # $RUNNER_TEMP is the merge step logging what it produced, not a claim about
-                      # what Installer put on the volume.
-                      (r"^lipo -info .*/Library/Application Support/Mavergreen/", "the installed updater's architectures")):
+                      (r"\benv -i\b", "the stripped-environment find_package probe")):
         if has(cs, pat):
             bad.append("%s asserts %s inline; that belongs in scripts/assert-installed-shipyard.sh, "
                        "which both workflows and tests/assert-installed-shipyard-test.sh share" % (name, what))
@@ -159,7 +146,7 @@ for name in ("ci.yml", "release.yml"):
         want = cache_dir[host[0]]
         steps = spec.get("steps") or []
         fetching = [i for i, st in enumerate(steps)
-                    if re.search(r"(^|\n|\$\()\s*sh (tests/lib/build-updater|scripts/run-repo-tests|scripts/fetch_clang22)\.sh\b", str(st.get("run", "")))]
+                    if re.search(r"(^|\n|\$\()\s*sh (scripts/run-repo-tests|scripts/fetch_clang22)\.sh\b", str(st.get("run", "")))]
         if not fetching:
             continue
         cached = [i for i, st in enumerate(steps) if str(st.get("uses", "")).startswith("actions/cache@")

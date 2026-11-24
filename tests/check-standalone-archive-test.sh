@@ -53,7 +53,7 @@ fresh w-1.0; printf '<plist/>\n' > "$w/t/w-1.0/mavergreen.plist"; mk w-1.0-macos
 fails "the package's manifest" "mavergreen.plist"
 fresh w-1.0; mkdir -p "$w/t/w-1.0/Library/Application Support/Mavergreen/w-updater.app/Contents"
 printf 'x\n' > "$w/t/w-1.0/Library/Application Support/Mavergreen/w-updater.app/Contents/Info.plist"; mk w-1.0-macos-x86_64.tar.gz
-fails "an updater" "updater"
+passes "an app named like the retired updaters, which is no special case"
 fresh w-1.0; mkdir -p "$w/t/w-1.0/Library/LaunchAgents"; printf 'x\n' > "$w/t/w-1.0/Library/LaunchAgents/dev.mavergreen.w-updatecheck.plist"
 mk w-1.0-macos-x86_64.tar.gz; fails "a LaunchAgent" "LaunchAgents"
 fresh w-1.0; printf '#!/bin/sh\n' > "$w/t/w-1.0/postinstall"; mk w-1.0-macos-x86_64.tar.gz

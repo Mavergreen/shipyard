@@ -4,7 +4,7 @@
 #          Judges a standalone archive, SHORT-VERSION-macos-ARCH.tar.gz (ARCH universal, x86_64 or
 #          arm64; SHORT runs to the first hyphen before a digit). Findings, each on its own line:
 #          an entry outside the one top directory SHORT-VERSION/; the pkg's manifest
-#          (mavergreen.plist), an updater (*-updater.app), a launchd job, or pkg install scripts or
+#          (mavergreen.plist), a launchd job, or pkg install scripts or
 #          metadata at the top; an AppleDouble entry; a symlink into a Mavergreen prefix (/opt/mavergreen,
 #          mavergreen_prefix's, or the old prefix pinned pre-flag-day releases still install at); a script
 #          (#!) or other text file naming one; a Mach-O whose loads, rpaths or
@@ -104,12 +104,6 @@ awk -v top="$top" '
   { r = substr(e, length(top) + 2); n = split(r, c, "/"); base = c[n] }
   base ~ /^\._/ { print "it holds an AppleDouble entry: " e }
   base == "mavergreen.plist" { print "it holds the pkg manifest " e ": the archive is the tree without it" }
-  {
-    for (i = 1; i <= n; i++) if (c[i] ~ /-updater\.app$/) {
-      u = top; for (j = 1; j <= i; j++) u = u "/" c[j]
-      if (!(u in seen)) { seen[u] = 1; print "it holds an updater, " u ": the standalone form has no updater" }
-    }
-  }
   r ~ /(^|\/)Library\/Launch(Agents|Daemons)\// { print "it holds a launchd job, " e ": LaunchAgents and LaunchDaemons are the pkg'"'"'s" }
   n == 1 && (base == "preinstall" || base == "postinstall" || base == "Scripts" || base == "PackageInfo" || base == "Bom" || base == "Payload" || base == "Distribution") {
     print "it holds a pkg install script or package metadata at its top: " e

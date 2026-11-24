@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: assert-installed-shipyard-test.sh
 #          Drives scripts/assert-installed-shipyard.sh against a FIXTURE root shaped like the pkg's
-#          layout, built from this box's own cmake. The two universal-binary assertions read lipo
+#          layout, built from this box's own cmake. The universal-binary assertion reads lipo
 #          stubbed per argument, which proves the script's READING of lipo -info and nothing more;
 #          --no-slices and LIPO are proved with no stub reaching the script, and with a real x86_64
 #          Mach-O built by the pinned clang22. Exit 0 clean, 1 on failure, 77 when there is no cmake
@@ -69,10 +69,6 @@ ln -s ../shipyard/bin/shipyard-provision "$farm/shipyard-provision"
 HOME="$w/home-install" "$real" --install "$w/sb" --prefix "$prefix" > "$w/install.log" 2>&1 \
   || { echo "FAIL: could not install shipyard into the fixture prefix:"; sed 's/^/    | /' "$w/install.log"; exit 1; }
 
-updir="$fx/Library/Application Support/Mavergreen/shipyard-updater.app/Contents/MacOS"
-mkdir -p "$updir"
-printf 'not a real Mach-O; lipo is stubbed below\n' > "$updir/shipyard-updater"
-
 # platform: a scratch HOME for every run -- this box may carry a stale ~/.cmake user-registry entry
 #           from an older shipyard, and an ambient entry would outrank the fixture in find_package.
 run_home="$w/home-run"; mkdir -p "$run_home"
@@ -80,11 +76,10 @@ run_home="$w/home-run"; mkdir -p "$run_home"
 stub="$w/stub"; mkdir -p "$stub"
 # spec: 2026-10-09 C4 -- the farm's shipyard-cmake is a launcher script with no slices, so only the
 #       cmake product's own binary can answer lipo; any other path gets lipo's own refusal.
-lipo_says() {  # $1 = the -info line for the cmake product  $2 = the -info line for the updater
+lipo_says() {  # $1 = the -info line for the cmake product
   cat > "$stub/lipo" <<EOF
 #!/bin/sh
 case "\$2" in
-  *shipyard-updater) printf '%s\n' "$2" ;;
   */opt/mavergreen/cmake/bin/cmake) printf '%s\n' "$1" ;;
   *) echo "fatal error: lipo: can't figure out the architecture type of: \$2" >&2; exit 1 ;;
 esac
@@ -95,13 +90,12 @@ nolipo="$w/nolipo"; mkdir -p "$nolipo"
 printf '#!/bin/sh\nexit 99\n' > "$nolipo/lipo"; chmod +x "$nolipo/lipo"
 unset LIPO
 UNIVERSAL_CMAKE="cmake: architecture x86_64 arm64"
-UNIVERSAL_APP="shipyard-updater: architecture x86_64 arm64"
 assert() {  # remaining args are appended to the script's own
   HOME="$run_home" PATH="$stub:$PATH" sh "$S" --root "$fx" "$@"
 }
 
-lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
-check "a correctly installed shipyard passes" 0 "finds shipyard in" \
+lipo_says "$UNIVERSAL_CMAKE"
+check "a correctly installed shipyard, with no updater, passes" 0 "finds shipyard in" \
   assert --cmake-version "$ver"
 
 check "a cmake product that is not the pinned CMake fails" 1 "is not CMake" \
@@ -121,13 +115,13 @@ check "a shipyard with no cmake product beside it fails, naming the product" 1 "
   assert --cmake-version "$ver"
 mv "$w/product-aside" "$product"
 
-lipo_says "cmake: is architecture: arm64" "$UNIVERSAL_APP"
+lipo_says "cmake: is architecture: arm64"
 check "a cmake product with no x86_64 slice fails (it could not run on 10.9)" 1 "cmake product has no x86_64 slice" \
   assert --cmake-version "$ver"
-lipo_says "cmake: is architecture: x86_64" "$UNIVERSAL_APP"
+lipo_says "cmake: is architecture: x86_64"
 check "a cmake product with no arm64 slice fails (it could not run on Apple Silicon)" 1 "cmake product has no arm64 slice" \
   assert --cmake-version "$ver"
-lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
+lipo_says "$UNIVERSAL_CMAKE"
 
 for c in shipyard-ctest shipyard-cpack shipyard-check shipyard-scripts shipyard-provision; do
   mv "$farm/$c" "$w/cmd-aside"
@@ -140,23 +134,10 @@ check "a farm shipyard-cpack whose launcher is not executable fails" 1 "no execu
   assert --cmake-version "$ver"
 chmod +x "$prefix/bin/shipyard-cpack"
 
-lipo_says "$UNIVERSAL_CMAKE" "shipyard-updater: is architecture: arm64"
-check "an updater with no x86_64 slice fails" 1 "no x86_64 slice" \
-  assert --cmake-version "$ver"
-lipo_says "$UNIVERSAL_CMAKE" "shipyard-updater: is architecture: x86_64"
-check "an updater with no arm64 slice fails" 1 "no arm64 slice" \
-  assert --cmake-version "$ver"
-lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
-
 mv "$prefix/share/cmake/MavergreenShipyard/.mavergreen" "$w/pins-aside"
 check "an install without shipyard's own pins beside its scripts fails" 1 "read shipyard's own pins" \
   assert --cmake-version "$ver"
 mv "$w/pins-aside" "$prefix/share/cmake/MavergreenShipyard/.mavergreen"
-
-mv "$updir/shipyard-updater" "$w/updater-aside"
-check "a missing updater fails" 1 "no installed updater executable" \
-  assert --cmake-version "$ver"
-mv "$w/updater-aside" "$updir/shipyard-updater"
 
 mv "$prefix/share/cmake/MavergreenShipyard" "$w/shipyard-aside"
 check "a prefix whose shipyard is missing fails the stripped-environment probe" 1 "under a stripped environment" \
@@ -235,11 +216,11 @@ printf 'int main(void){return 0;}\n' > "$w/thin.c"
 "$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.9 -isysroot "$(sh "$root/scripts/fetch_sdk.sh")" \
   -fuse-ld=lld --ld-path="$CL/bin/ld64.lld" -Wno-unused-command-line-argument "$w/thin.c" -o "$w/thin" \
   || { echo "FAIL: could not build an x86_64 Mach-O with clang22"; exit 1; }
-mv "$updir/shipyard-updater" "$w/updater-aside"
-cp "$w/thin" "$updir/shipyard-updater"
-check "LIPO is honoured: an x86_64-only updater fails through llvm-lipo, whatever lipo is on PATH" 1 "installed updater has no arm64 slice" \
+mv "$product/bin/cmake" "$w/cmake-aside"
+cp "$w/thin" "$product/bin/cmake"
+check "LIPO is honoured: an x86_64-only cmake product fails through llvm-lipo, whatever lipo is on PATH" 1 "cmake product has no arm64 slice" \
   env HOME="$run_home" PATH="$stub:$PATH" LIPO="$CL/bin/llvm-lipo" sh "$S" --root "$fx" --cmake-version "$ver"
-mv "$w/updater-aside" "$updir/shipyard-updater"
+rm "$product/bin/cmake"; mv "$w/cmake-aside" "$product/bin/cmake"
 
 check "--cmake-version is required" 2 "--cmake-version required" \
   assert

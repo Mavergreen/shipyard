@@ -3,9 +3,8 @@
 #   usage: linux-shipyard-prefix-test.sh
 #          scripts/install-shipyard-prefix.sh, install@v1's Linux install, lays down exactly the pkg's
 #          opt/mavergreen/shipyard: the same files, links and bytes as the Payload of a pkg
-#          package-pkg.sh builds from the same checkout. The pkg's macOS-only parts are named here:
-#          the updater app and its LaunchAgent outside the prefix, and the manifest's outside, which
-#          names them; both manifests name shipyard's feed. It links the exported names into opt/mavergreen/bin,
+#          package-pkg.sh builds from the same checkout, which installs nothing outside the prefix and
+#          ships the same manifest; both manifests name shipyard's feed. It links the exported names into opt/mavergreen/bin,
 #          replaces an older install whole, leaves a root-owned tree when run as root, and without root
 #          or sudo exits 1 having written nothing. SUDO=env and MAVERGREEN_CHAIN_UID stand in for root
 #          off root. Exit 0 clean, 1 on failure, 77 with no cmake.
@@ -22,7 +21,6 @@ fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
 rel=opt/mavergreen/shipyard
 MAVERGREEN_REPO_ROOT="$root"; GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-Mavergreen/shipyard}"
 export MAVERGREEN_REPO_ROOT GITHUB_REPOSITORY
-idf() { sh "$S/updater-identity.sh" "$1" shipyard; }
 SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
 
 mkdir "$w/r"
@@ -32,22 +30,7 @@ SUDO=env MAVERGREEN_CHAIN_UID="$(id -u)" sh "$S/install-shipyard-prefix.sh" --ro
 
 sh "$S/stage-shipyard-prefix.sh" --stage "$w/s" --build "$w/b" --version 1.2.3 > /dev/null 2> "$w/stage.log" \
   || { echo "FAIL: stage-shipyard-prefix.sh failed:"; sed 's/^/    | /' "$w/stage.log"; exit 1; }
-app="$w/app/$(idf app | sed 's|.*/||')"
-mkdir -p "$app/Contents/MacOS"
-printf '#!/bin/sh\n' > "$app/Contents/MacOS/shipyard-updater"; chmod +x "$app/Contents/MacOS/shipyard-updater"
-cat > "$app/Contents/Info.plist" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleIdentifier</key>
-  <string>$(idf bundle-id)</string>
-  <key>SUFeedURL</key>
-  <string>$(idf feed)</string>
-</dict>
-</plist>
-EOF
-sh "$S/package-pkg.sh" --shipyard-prefix "$w/s/$rel" --app "$app" --version 1.2.3 --dist "$w/o" > "$w/pkg.log" 2>&1 \
+sh "$S/package-pkg.sh" --shipyard-prefix "$w/s/$rel" --version 1.2.3 --dist "$w/o" > "$w/pkg.log" 2>&1 \
   || { echo "FAIL: package-pkg.sh failed:"; sed 's/^/    | /' "$w/pkg.log"; exit 1; }
 STEVEDORE="$(sh "$S/fetch_stevedore.sh")"
 sh "$S/pkg_read.sh" payload "$w/o/shipyard-1.2.3.pkg" dev.mavergreen.shipyard "$w/p" \
@@ -72,32 +55,13 @@ if ! cmp -s "$w/pkg.list" "$w/linux.list"; then
   diff "$w/pkg.list" "$w/linux.list" | sed 's/^/    | /' | head -40
 fi
 
-app_rel="$(idf app)"
-agent="Library/LaunchAgents/$(idf agent-label).plist"
-( cd "$w/p" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | grep -v "^$rel/" \
-  | awk -v a="$app_rel/" -v l="$agent" 'index($0, a) == 1 { print a; next } { print }' | LC_ALL=C sort -u > "$w/outside"
-printf '%s\n%s\n' "$agent" "$app_rel/" | LC_ALL=C sort > "$w/outside.want"
-cmp -s "$w/outside" "$w/outside.want" || { fail "the pkg's macOS-only parts are its updater app and LaunchAgent, and nothing else outside the prefix; got:"; sed 's/^/    | /' "$w/outside"; }
-
-strip() {  # $1 = mavergreen.plist, less the outside the macOS updater fills
-  awk '/<key>outside<\/key>/ { skip = 1; next }
-       skip && /<\/array>/ { skip = 0; next }
-       !skip' "$1"
-}
-strip "$w/p/$rel/mavergreen.plist" > "$w/pkg.plist"
-strip "$w/r/$rel/mavergreen.plist" > "$w/linux.plist"
-cmp -s "$w/pkg.plist" "$w/linux.plist" \
-  || { fail "the manifests differ beyond outside:"; diff "$w/pkg.plist" "$w/linux.plist" | sed 's/^/    | /'; }
-outside() {  # $1 = mavergreen.plist: its outside array, one entry a line
-  awk '/<key>outside<\/key>/ { on = 1; next } on && /<\/array>/ { exit }
-       on && /<string>/ { sub(/.*<string>/, ""); sub(/<\/string>.*/, ""); print }' "$1"
-}
-[ -z "$(outside "$w/r/$rel/mavergreen.plist")" ] \
-  || fail "the Linux manifest installs nothing outside the prefix, so its outside must be empty; got $(outside "$w/r/$rel/mavergreen.plist")"
-[ "$("$STEVEDORE" plist get "$w/p/$rel/mavergreen.plist" feed 2>/dev/null || :)" = "$(idf feed)" ] \
+( cd "$w/p" && find . \( -type f -o -type l \) ) | sed 's|^\./||' | grep -v "^$rel/" > "$w/outside" || :
+[ ! -s "$w/outside" ] || { fail "the pkg installs nothing outside the prefix (no updater, no LaunchAgent); got:"; sed 's/^/    | /' "$w/outside"; }
+( cd "$w/p" && find . -path './Library*' ) | grep -q . && fail "the pkg's payload has no path under Library/"
+cmp -s "$w/p/$rel/mavergreen.plist" "$w/r/$rel/mavergreen.plist" \
+  || { fail "the pkg's manifest and the Linux one differ:"; diff "$w/p/$rel/mavergreen.plist" "$w/r/$rel/mavergreen.plist" | sed 's/^/    | /'; }
+[ "$("$STEVEDORE" plist get "$w/p/$rel/mavergreen.plist" feed 2>/dev/null || :)" = https://github.com/Mavergreen/shipyard/releases/latest/download/shipyard.xml ] \
   || fail "the pkg's manifest must name shipyard's feed"
-[ "$(outside "$w/p/$rel/mavergreen.plist" | sed 's|^\(.*\.app\)$|\1/|' | LC_ALL=C sort)" = "$(cat "$w/outside.want")" ] \
-  || fail "the pkg's manifest must list the updater app and LaunchAgent as outside; got $(outside "$w/p/$rel/mavergreen.plist")"
 
 farm="$(cd "$w/r/opt/mavergreen/bin" && for f in *; do printf '%s -> %s\n' "$f" "$(readlink "$f")"; done)"
 want="shipyard-check -> ../shipyard/bin/shipyard-check

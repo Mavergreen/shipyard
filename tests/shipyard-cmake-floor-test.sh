@@ -31,8 +31,7 @@ printf '{\n  "toolchainFile": "/opt/mavergreen/shipyard/share/cmake/MavergreenSh
 for c in cmake ctest cpack; do
   printf '#!/bin/sh\n' > "$p/bin/shipyard-$c"; chmod +x "$p/bin/shipyard-$c"; ln -s "shipyard-$c" "$p/bin/$c"
 done
-mkdir "$w/shipyard-updater.app"
-rc=0; sh "$src/scripts/package-pkg.sh" --shipyard-prefix "$p" --app "$w/shipyard-updater.app" --version 1.0.1 --dist "$w/o" > "$w/p.log" 2>&1 || rc=$?
+rc=0; sh "$src/scripts/package-pkg.sh" --shipyard-prefix "$p" --version 1.0.1 --dist "$w/o" > "$w/p.log" 2>&1 || rc=$?
 [ "$rc" -eq 3 ] && [ -f "$w/stage-args" ] || { echo "FAIL: package-pkg.sh did not reach stage_product.sh (exit $rc):"; sed 's/^/    | /' "$w/p.log"; exit 1; }
 grep -q -- '--requires' "$w/stage-args" && fail "the pkg passes no --requires; stage_product.sh reads requires/cmake/min"
 [ "$(cat "$(cat "$w/stage-root")/.mavergreen/products/shipyard/requires/cmake/min")" = "$min-mavergreen.3" ] \

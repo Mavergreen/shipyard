@@ -22,8 +22,5 @@ for f in $(grep -lE '^# platform: macOS-only' tests/*.sh tests/*.bats 2>/dev/nul
   echo "FAIL: $f is macOS-only, and shipyard's CI runs no macOS job, so it must be listed in tests/maintainer-tests"
   bad=1
 done
-out="$(env -u SHIPYARD_ON_TARGET sh tests/installed-updater-launch-test.sh 2>&1)" && rc=0 || rc=$?
-[ "$rc" -eq 77 ] && printf '%s\n' "$out" | grep -q 'SHIPYARD_ON_TARGET=1' \
-  || { printf '%s\n' "$out"; echo "FAIL: installed-updater-launch-test.sh must exit 77 naming SHIPYARD_ON_TARGET=1 without it (got $rc), so a suite run never launches a developer's installed updater"; bad=1; }
 [ "$bad" -eq 0 ] || exit 1
 echo "PASS: macos-only-tests-have-a-home"

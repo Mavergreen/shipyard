@@ -1,13 +1,13 @@
 #!/bin/sh
-# platform: host-agnostic -- stevedore reads the updater's identity; the generated preinstall's PlistBuddy text runs on the target
+# platform: host-agnostic -- stevedore reads a --boot-kext's identity; the generated preinstall's PlistBuddy text runs on the target
 #   usage: stage_product.sh --stage ROOT --product P --version V --scripts-out DIR
 #            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
-#            [--updater-app P-updater.app] [--preinstall-hook FILE] [--postinstall-hook FILE] [--boot-kext BUNDLE_ID]...
+#            [--preinstall-hook FILE] [--postinstall-hook FILE] [--boot-kext BUNDLE_ID]...
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
 #          staged its files under ROOT/opt/mavergreen/P/, its apps under ROOT/Applications/Mavergreen/,
 #          and anything else the OS dictates elsewhere; an app anywhere else in Applications/ is refused.
-#          The updater's place, label and feed are P's, from scripts/updater-identity.sh: an updater
-#          built for anything else is refused, and so are --appcast, --app-dir and --agent-label.
+#          No product ships an updater (the Engine updates it), so --updater-app, --appcast, --app-dir
+#          and --agent-label are refused.
 #          Group and requirements are read from .mavergreen/products/P/ (group, requires/<dep>/), so
 #          --group and --requires are refused. Each requirement whose kind is not external makes the
 #          generated preinstall refuse to run, before anything is removed, when <dep> is not installed
@@ -17,7 +17,7 @@
 #          --boot-kext BUNDLE_ID (repeatable) names an unsigned kext staged anywhere under ROOT that
 #          10.9 must load: the postinstall lists BUNDLE_ID, at the installed kext's CFBundleVersion, in
 #          the target volume's OSKextSigExceptionList and, on the boot volume, restarts kextd, before
-#          the updater's agent and the postinstall hook; the tree's libexec/mavergreen/pre-uninstall
+#          the postinstall hook; the tree's libexec/mavergreen/pre-uninstall
 #          removes it. A pre-uninstall the caller staged runs first, as pre-uninstall.product.
 # spec: tests/stage-product-test.sh
 set -eu
@@ -31,18 +31,18 @@ nl='
 '
 tab="$(printf '\t')"
 shq() { printf '%s' "$1" | sed "s/'/'\\\\''/g"; }
-ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; GEN=""; KX=""
+ST=""; P=""; SCR=""; PREH=""; POSTH=""; GEN=""; KX=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
-    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--version|--exclude|--replaces|--generated|--boot-kext)
+    --stage|--product|--scripts-out|--preinstall-hook|--postinstall-hook|--version|--exclude|--replaces|--generated|--boot-kext)
       [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
     --stage) ST="${2%/}"; set -- "$@" "$1" "$2"; shift 2 ;;
     --product) P="$2"; set -- "$@" "$1" "$2"; shift 2 ;;
     --scripts-out) SCR="$2"; shift 2 ;;
-    --updater-app) APP="$2"; shift 2 ;;
+    --updater-app) echo "stage_product: --updater-app is refused; no product ships an updater, the Engine updates it" >&2; exit 2 ;;
     --preinstall-hook) PREH="$2"; shift 2 ;;
     --postinstall-hook) POSTH="$2"; shift 2 ;;
     --name) echo "stage_product: --name is derived from the product; write .mavergreen/products/<P>/noun" >&2; exit 2 ;;
@@ -155,18 +155,6 @@ if [ -n "$KX" ]; then
 fi
 mkdir -p "$ST$PFX"
 mkdir -p "$SCR"
-snippet=""
-if [ -n "$APP" ]; then
-  _want_id="$(sh "$SELF/updater-identity.sh" bundle-id "$P")" || exit $?
-  _want_feed="$(sh "$SELF/updater-identity.sh" feed "$P")" || exit $?
-  STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"; export STEVEDORE
-  _got_id="$("$STEVEDORE" plist get "$APP/Contents/Info.plist" CFBundleIdentifier 2>/dev/null)" || _got_id=""
-  _got_feed="$("$STEVEDORE" plist get "$APP/Contents/Info.plist" SUFeedURL 2>/dev/null)" || _got_feed=""
-  [ "$_got_id" = "$_want_id" ] && [ "$_got_feed" = "$_want_feed" ] \
-    || { echo "stage_product: $APP was not built for $P: it is '${_got_id:-none}' polling '${_got_feed:-none}', and $P's is $_want_id polling $_want_feed -- build it with mavericks_add_updater_app(PRODUCT $P)" >&2; exit 1; }
-  snippet="$SCR/.agent-load"
-  sh "$SELF/stage_updater.sh" --stage "$ST" --app "$APP" --product "$P" --snippet-out "$snippet"
-fi
 sh "$SELF/render-manifest.sh" "$@"
 ANC="$( (cd "$ST" && find "Library/Application Support" ! -path "Library/Application Support" 2>/dev/null) \
   | awk -F/ '{ n = NF; for (k = 3; k <= NF; k++) if ($k ~ /\.(app|kext|prefPane|plugin|bundle|framework|jdk|fs)$/) { n = k; break }
@@ -288,13 +276,11 @@ HELPERPICK
     printf 'if [ "$_kx_added" = 1 ] && [ -z "$ROOT" ]; then /bin/launchctl stop com.apple.kextd 2>/dev/null || echo "%s: could not restart kextd; its kexts load from the next boot" >&2; fi\n' "$P"
     printf 'unset _kx _kl _kv _kx_added\n'
   fi
-  if [ -n "$snippet" ]; then cat "$snippet"; printf '\n'; fi
   if [ -n "$POSTH" ]; then
     printf '(\n:\n'; cat "$POSTH"; printf '\n) || { echo "%s: postinstall hook failed" >&2; exit 1; }\n' "$P"
   fi
   printf 'exit 0\n'
 } > "$SCR/postinstall"
-rm -f "$SCR/.agent-load"
 for g in "$SCR/preinstall" "$SCR/postinstall"; do
   sh -n "$g" || { echo "stage_product: generated $g is not valid sh (hooks: ${PREH:-none} ${POSTH:-none}); refusing to stage" >&2; exit 1; }
 done

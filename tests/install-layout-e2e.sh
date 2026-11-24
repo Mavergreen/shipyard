@@ -117,7 +117,6 @@ done
 rm -f "$W/up/root/opt/mavergreen/shipyard/mavergreen.plist"
 UPGRADE="$W/up/dist/shipyard-$V1.pkg"
 sh "$S/package-pkg.sh" --shipyard-prefix "$W/up/root/opt/mavergreen/shipyard" \
-  --app "$W/up/root/Library/Application Support/Mavergreen/shipyard-updater.app" \
   --version "$V1" --dist "$W/up/dist" >> "$BL" 2>&1 \
   || die "could not repackage $PKG's payload as shipyard $V1"
 [ -f "$UPGRADE" ] || die "package-pkg.sh made no $UPGRADE"
@@ -207,8 +206,6 @@ scenario_uninstall() {
   _left="$(ls "$VOL/opt/mavergreen/bin" | grep '^shipyard-' || :)"
   [ -z "$_left" ] || bad "farm links left: $_left" || return 1
   [ ! -e "$VOL/opt/mavergreen/var/mavergreen/selections/shipyard" ] || bad "the shipyard selection is still there" || return 1
-  [ ! -e "$VOL/Library/Application Support/Mavergreen/shipyard-updater.app" ] || bad "the updater is still there" || return 1
-  [ ! -e "$VOL/Library/LaunchAgents/dev.mavergreen.shipyard-updatecheck.plist" ] || bad "the agent plist is still there" || return 1
   [ -x "$VOL/opt/mavergreen/mavergreen/bin/mavergreen" ] && [ -L "$VOL/opt/mavergreen/bin/mavergreen" ] \
     || bad "the helper went with shipyard" || return 1
 }

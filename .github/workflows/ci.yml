@@ -57,19 +57,6 @@ jobs:
       - name: Record the pre-build tree
         run: sh scripts/assert-tree-clean.sh --record
 
-      # spec: .github/workflows/release.yml -- the same two-arch build and merge it does, stated in
-      #       full on its copy of this step.
-      - name: Build the universal updater
-        run: |
-          set -eu
-          sh tests/lib/build-updater.sh --arch x86_64 --arch arm64 --out "$RUNNER_TEMP/shipyard-updater.app"
-          # spec: R-P1-22 -- NOT re-signed; release.yml's copy of this step states it in full.
-          exe="$RUNNER_TEMP/shipyard-updater.app/Contents/MacOS/shipyard-updater"
-          archs="$("${LIPO:-lipo}" -info "$exe" | sed -n 's/.*: //p')"
-          case " $archs " in *" x86_64 "*) ;; *) echo "::error::the merged updater has no x86_64 slice: $archs"; exit 1;; esac
-          case " $archs " in *" arm64 "*) ;; *) echo "::error::the merged updater has no arm64 slice: $archs"; exit 1;; esac
-          echo "merged updater: $archs"
-
       - name: Package
         run: |
           set -eu
@@ -84,23 +71,22 @@ jobs:
             --version "$v" > /dev/null
           sh scripts/package-pkg.sh \
             --shipyard-prefix "$RUNNER_TEMP/payload-stage$(mavergreen_prefix shipyard)" \
-            --app "$RUNNER_TEMP/shipyard-updater.app" \
             --version "$v" \
             --dist "$RUNNER_TEMP/dist"
           sh scripts/assert_pkg_installs_in_place.sh "$RUNNER_TEMP/dist/shipyard-$v.pkg"
 
       # spec: SKILL.md "SDK pinning" -- the release runs full conformance; the rehearsal has no appcast
       #       or notes, so it runs the family's SDK audit on the dist alone, before the release ever sees
-      #       it. The audit fails an unreadable pkg; the grep proves it checked at least one Mach-O slice
-      #       (an empty dist reports "no Mach-O shipped" and fails here). No pipe: the default run shell
-      #       has no pipefail, so a `| tee` would hide the audit's own exit status.
+      #       it. The audit fails an unreadable pkg; the grep proves the pkg ships no Mach-O, since it
+      #       ships no updater. No pipe: the default run shell has no pipefail, so a `| tee` would hide
+      #       the audit's own exit status.
       - name: SDK pinning (the rehearsed pkg)
         run: |
           set -eu
           sh scripts/audit-release-sdks.sh --dist "$RUNNER_TEMP/dist" . > "$RUNNER_TEMP/sdk-audit.txt" \
             || { cat "$RUNNER_TEMP/sdk-audit.txt"; exit 1; }
           cat "$RUNNER_TEMP/sdk-audit.txt"
-          grep -q 'Mach-O slices)' "$RUNNER_TEMP/sdk-audit.txt"
+          grep -q 'COMPLIANT (no Mach-O shipped)' "$RUNNER_TEMP/sdk-audit.txt"
 
       # spec: scripts/sign_and_appcast.sh -- the rehearsal holds no signing key, so it writes the feed
       #       the way that script does (gen_appcast.sh over the notes and the pkg's length) with a
@@ -124,14 +110,13 @@ jobs:
             "$(mavergreen_floor shipyard)" "$d/RELEASE_NOTES.md" "sparkle:edSignature=\"rehearsal\" length=\"$len\"" > "$d/shipyard.xml"
           sh scripts/shipyard-check --dist "$d"
 
-      # spec: scripts/package-pkg.sh -- its two inputs, as tars that keep modes and links, so the pkg
+      # spec: scripts/package-pkg.sh -- its input, as a tar that keeps modes and links, so the pkg
       #       can be rebuilt from the same bytes on another host and compared.
       - name: Tar the packaging inputs
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/inputs"
           tar -cf "$RUNNER_TEMP/inputs/payload-stage.tar" -C "$RUNNER_TEMP" payload-stage
-          tar -cf "$RUNNER_TEMP/inputs/shipyard-updater.app.tar" -C "$RUNNER_TEMP" shipyard-updater.app
           sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p' > "$RUNNER_TEMP/inputs/version"
 
       - name: Save the packaging inputs

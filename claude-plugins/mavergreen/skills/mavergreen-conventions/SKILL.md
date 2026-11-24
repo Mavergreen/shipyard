@@ -1630,8 +1630,8 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   and the bundle id is also the updater's defaults (prefs) domain: product code that launches the
   updater, names its app path or reads its defaults takes them from `MAVERICKS_UPDATER_TARGET` and
   `MAVERICKS_UPDATER_BUNDLE_ID`, which `mavericks_add_updater_app` sets in the caller's scope (or from
-  `updater-identity.sh`), and never hardcodes them. `stage_product.sh --updater-app` stages it, refuses one built with
-  another identity, and refuses `--appcast`, `--app-dir` and `--agent-label`.
+  `updater-identity.sh`), and never hardcodes them. `stage_product.sh` stages none: it refuses `--updater-app`,
+  `--appcast`, `--app-dir` and `--agent-label`.
   `sign_and_appcast.sh --product <short> --feed-dir dist` writes the feed as `dist/<short>.xml`, and
   `publish-release.yml` attaches it with the other assets, publishing only after every upload, so
   `/latest/` always has it. There is no `appcast.xml`: every release carries `<short>.xml` for every
@@ -1657,8 +1657,7 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   ```
   x86_64 is at 10.9 and arm64 at 11.0. CMake's own compiler checks need these flags on Linux. Merge the
   two apps with `lipo-merge-tree.sh` under `LIPO="$CL/bin/llvm-lipo"`, and give the compat guard
-  clang22's `OTOOL`, `LIPO`, `NM` and `STRINGS` off macOS. shipyard's own updater is built this way by
-  `tests/lib/build-updater.sh`, in `release.yml`, in `ci.yml` and on Linux.
+  clang22's `OTOOL`, `LIPO`, `NM` and `STRINGS` off macOS. shipyard's own pkg ships no updater.
   A product does none of this itself: it calls
   ```sh
   app="$(sh "$SHIPYARD_SCRIPTS/build_updater.sh" --product <short> --display-name "<name>" \
@@ -2494,8 +2493,7 @@ manifest and both scripts, each carrying `lib/root-chain.sh` inline:
   files the new version dropped may linger.
 - **postinstall**: checks the chain of the helper it is about to run (the installed one, else the
   newest staged under `.base/`), then `mavergreen link <product>`, failing the install if either fails;
-  then the updater's agent load (`--updater-app`, whose place and label are derived, above); then the
-  `--postinstall-hook`.
+  then the `--postinstall-hook`.
 
 `requires/` replaces a hand-written "is product X installed?" or "is it new enough?" check in a
 preinstall hook: 1password once checked for Porthole and Container Tools, signal-desktop only for

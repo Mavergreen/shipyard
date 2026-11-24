@@ -1,8 +1,8 @@
 #!/bin/sh
 # platform: host-agnostic
 # spec: 2026-10-09 C4 -- the pkg is ONE prefix holding shipyard, its three launchers into the cmake
-#       product it requires, exported through the mavergreen link farm, and one universal updater.
-#       No registration, no arch picking.
+#       product it requires, exported through the mavergreen link farm. No updater, no registration,
+#       no arch picking.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 S="$root/scripts/package-pkg.sh"
@@ -51,8 +51,7 @@ code | grep -q -- '--requires' \
 code | grep -q 'PREFIX_DIR="$(mavergreen_prefix shipyard)"' \
   || { echo "FAIL: shipyard installs into mavergreen_prefix shipyard, the one directory its short name owns"; exit 1; }
 code | grep -q 'usr/local' && { echo "FAIL: shipyard installs nothing under /usr/local"; exit 1; }
-code | grep -q 'updater-identity.sh" app shipyard' \
-  || { echo "FAIL: the updater app's name is derived by updater-identity.sh app shipyard, as stage_updater.sh derives where it goes"; exit 1; }
+code | grep -q 'updater-identity\|--updater-app' && { echo "FAIL: shipyard's pkg ships no updater; package-pkg.sh stages none"; exit 1; }
 code | grep -q 'registry' && { echo "FAIL: package-pkg.sh derives shipyard's identity; it reads no registry"; exit 1; }
 code | grep -q 'stage_product.sh' || { echo "FAIL: shipyard gets its install scripts from stage_product.sh like every product"; exit 1; }
 code | grep -q -- '--base-version "\$VER"' \
@@ -60,8 +59,8 @@ code | grep -q -- '--base-version "\$VER"' \
 
 code | grep -q 'set_install_floor.sh" --short shipyard ' \
   || { echo "FAIL: shipyard's archive is named, titled and identified by set_install_floor.sh --short shipyard, like every product's"; exit 1; }
-for missing in --shipyard-prefix --app --version --dist; do
-  args="--shipyard-prefix $w/p --app $w/shipyard-updater.app --version 1.0.0 --dist $w/o"
+for missing in --shipyard-prefix --version --dist; do
+  args="--shipyard-prefix $w/p --version 1.0.0 --dist $w/o"
   args="$(printf '%s' "$args" | sed "s|$missing [^ ]*||")"
   # shellcheck disable=SC2086
   if err="$(sh "$S" $args 2>&1 >/dev/null)"; then echo "FAIL: $missing must be required"; exit 1; fi
@@ -69,21 +68,21 @@ for missing in --shipyard-prefix --app --version --dist; do
     || { echo "FAIL: the refusal for a missing $missing must name it; got '$err'"; exit 1; }
 done
 rc=0
-err="$(sh "$S" --shipyard-prefix "$w/p" --app "$w/shipyard-updater.app" --version 1.0.0 --dist "$w/o" --out "$w/o.pkg" 2>&1 >/dev/null)" || rc=$?
+err="$(sh "$S" --shipyard-prefix "$w/p" --version 1.0.0 --dist "$w/o" --out "$w/o.pkg" 2>&1 >/dev/null)" || rc=$?
 [ "$rc" -eq 2 ] || { echo "FAIL: --out is refused as a usage error (exit 2); got $rc"; exit 1; }
 printf '%s\n' "$err" | grep -qF 'the filename is derived, <short>-<version>.pkg; pass --dist' \
   || { echo "FAIL: the refusal of --out names its fix; got '$err'"; exit 1; }
-mkdir -p "$w/Other.app"
-if sh "$S" --shipyard-prefix "$w/p" --app "$w/Other.app" --version 1.0.0 --dist "$w/o" >/dev/null 2>&1; then
-  echo "FAIL: an app not named shipyard-updater.app must be refused"; exit 1
-fi
+rc=0
+err="$(sh "$S" --shipyard-prefix "$w/p" --app "$w/shipyard-updater.app" --version 1.0.0 --dist "$w/o" 2>&1 >/dev/null)" || rc=$?
+[ "$rc" -eq 2 ] || { echo "FAIL: --app is refused as a usage error (exit 2), since the pkg ships no updater; got $rc"; exit 1; }
+printf '%s\n' "$err" | grep -q -- '--app' || { echo "FAIL: the refusal of --app names it; got '$err'"; exit 1; }
 
 # spec: 2026-09-11 decision 1 -- --shipyard-prefix BECOMES the product prefix verbatim, so a stray
 #       file in it (a tarball, a .DS_Store, a build dir) would otherwise install into
 #       /opt/mavergreen/shipyard.
-mkfixture() {  # $1 = dir: a shipyard prefix and an app that pass every other check
+mkfixture() {  # $1 = dir: a shipyard prefix that passes every other check
   rm -rf "$1"
-  mkdir -p "$1/sp/bin" "$1/sp/share/cmake/MavergreenShipyard" "$1/app/shipyard-updater.app"
+  mkdir -p "$1/sp/bin" "$1/sp/share/cmake/MavergreenShipyard"
   for c in cmake ctest cpack; do
     printf '#!/bin/sh\n' > "$1/sp/bin/shipyard-$c"; chmod +x "$1/sp/bin/shipyard-$c"
     ln -s "shipyard-$c" "$1/sp/bin/$c"
@@ -102,8 +101,7 @@ presets() {  # $1 = fixture dir  $2 = the prefix its installed presets name
 #           for valid input.
 run_pkg() {  # $1 = fixture dir; sets $rc and $err
   rc=0
-  err="$(sh "$S" --shipyard-prefix "$1/sp" \
-    --app "$1/app/shipyard-updater.app" --version 1.0.0 --dist "$1/notadir/o" 2>&1 >/dev/null)" || rc=$?
+  err="$(sh "$S" --shipyard-prefix "$1/sp" --version 1.0.0 --dist "$1/notadir/o" 2>&1 >/dev/null)" || rc=$?
 }
 mkfixture "$w/fa"; run_pkg "$w/fa"
 [ "$rc" -ne 0 ] || { echo "FAIL: the fixture was built to stop at --dist; it did not fail at all"; exit 1; }

@@ -23,41 +23,6 @@ else()
 endif()
 project(MavergreenShipyard VERSION ${_MSC_VERSION} LANGUAGES NONE)
 
-# The Sparkle updater that keeps an installed shipyard current. OPT-IN: shipyard is LANGUAGES NONE
-# and compiles nothing, so `cmake --install` works on a box with no ObjC compiler -- and the payload
-# stays buildable where there is no Objective-C at all. Only the pkg job turns this on.
-#
-# Built once per arch (x86_64/10.9 and arm64/11.0) rather than a single fat build:
-# CMAKE_OSX_ARCHITECTURES and the deployment target are directory-scoped, and a fat
-# CMAKE_OSX_ARCHITECTURES can't carry two floors -- arm64 has no 10.9. The two single-arch builds
-# share the same PRODUCT, so the same name and bundle id, and are merged into ONE universal .app by
-# scripts/lipo-merge-tree.sh in the release, not picked between.
-option(SHIPYARD_BUILD_UPDATER "Build the Sparkle updater app (needed only to package the pkg)" OFF)
-if(SHIPYARD_BUILD_UPDATER)
-  enable_language(OBJC)
-  # Every slice embeds Sparkle's FAT framework, so the two single-arch builds carry an identical
-  # framework and lipo-merge-tree.sh only has to merge the updater's own executable.
-  include("${CMAKE_CURRENT_SOURCE_DIR}/MavericksSparkle.cmake")
-  include("${CMAKE_CURRENT_SOURCE_DIR}/MavergreenPrefix.cmake")
-  mavergreen_prefix(_shipyard_installed shipyard)
-
-  # ONE universal app (spec 2026-09-11): built once per arch -- x86_64/10.9 and arm64/11.0, since a
-  # deployment floor is per-configure and arm64 has no 10.9 -- and merged by lipo-merge-tree.sh in the
-  # release. One PRODUCT for both builds, so the merge is of one app, not two.
-  mavericks_add_updater_app(
-    PRODUCT shipyard
-    PRODUCT_NAME "Shipyard"
-    VERSION "${PROJECT_VERSION}"
-    LOG_PREFIX "MavShipyardUpdater"
-    CONFIRM_TITLE "Shipyard updated"
-    CONFIRM_BODY "Shipyard in ${_shipyard_installed} was updated."
-    RELAUNCH_MARKER "/tmp/.shipyard-updater-relaunched"
-    ALLOW_GENERIC
-    ED_PUBKEY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/keys/feed-ed25519.pub"
-    # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification. shipyard has no UI.
-  )
-endif()
-
 # This project ships CMake modules + helper scripts (no compiled artifacts). It
 # installs itself as a find_package() config package so consumers can just:
 #   find_package(MavergreenShipyard REQUIRED)

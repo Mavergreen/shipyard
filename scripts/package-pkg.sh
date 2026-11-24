@@ -1,17 +1,16 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: package-pkg.sh --shipyard-prefix DIR --app APP --version V --dist DIR
+#   usage: package-pkg.sh --shipyard-prefix DIR --version V --dist DIR
 #          package-pkg.sh --shipyard-prefix DIR --version V --tree-only DEST [--installed-as P]
 #          Packages shipyard as ONE prefix -- /opt/mavergreen/shipyard holding shipyard itself
 #          (share/cmake/MavergreenShipyard), the launchers bin/shipyard-{cmake,ctest,cpack} into the
-#          cmake product, and bin/{cmake,ctest,cpack} linked to them -- plus one universal updater and
-#          the dev.mavergreen.base component. The mavergreen helper exports the shipyard-* names
+#          cmake product, and bin/{cmake,ctest,cpack} linked to them -- plus the dev.mavergreen.base
+#          component. It ships no updater, so --app is refused. The mavergreen helper exports the shipyard-* names
 #          into /opt/mavergreen/bin, never the bare cmake/ctest/cpack. The install scripts come from
 #          stage_product.sh, and its preinstall refuses a box without the cmake product at or above
-#          .mavergreen/products/shipyard/requires/cmake/min. The updater is a stopgap
-#          until Mavericks Lineup exists. The pkg is DIR/shipyard-V.pkg. --tree-only stops before the pkg: DEST gets the
-#          prefix as the pkg installs it, mavergreen.plist included, but no updater, so the manifest
-#          names no appcast and nothing outside the prefix. --installed-as is the prefix DIR was
+#          .mavergreen/products/shipyard/requires/cmake/min. The pkg is DIR/shipyard-V.pkg.
+#          --tree-only stops before the pkg: DEST gets the prefix as the pkg installs it,
+#          mavergreen.plist included. --installed-as is the prefix DIR was
 #          installed as (default $(mavergreen_prefix shipyard)), which its presets must name.
 # spec: 2026-10-09 C4 -- shipyard ships no CMake of its own: the launchers run the cmake product
 #       installed beside it, with shipyard on CMAKE_PREFIX_PATH.
@@ -25,11 +24,11 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/name-rules.sh"
 MAVERGREEN_REPO_ROOT="$SELF/.."; export MAVERGREEN_REPO_ROOT
-SPREFIX=""; APP=""; VER=""; DISTDIR=""; TREE=""; AS=""
+SPREFIX=""; VER=""; DISTDIR=""; TREE=""; AS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --shipyard-prefix) SPREFIX="${2%/}"; shift 2;;
-    --app) APP="${2%/}"; shift 2;;
+    --app) echo "package-pkg: --app is refused; shipyard's pkg ships no updater, the Engine updates it" >&2; exit 2;;
     --version) VER="$2"; shift 2;;
     --out) echo "package-pkg: --out is refused; the filename is derived, <short>-<version>.pkg; pass --dist" >&2; exit 2;;
     --dist) DISTDIR="$2"; shift 2;;
@@ -41,21 +40,15 @@ done
 
 ID="$(mavergreen_name identifier shipyard)" || exit $?
 PREFIX_DIR="$(mavergreen_prefix shipyard)"
-APP_REL="$(sh "$SELF/updater-identity.sh" app shipyard)" || exit $?
-APP_NAME="${APP_REL##*/}"
 
 : "${SPREFIX:?package-pkg: --shipyard-prefix required}"
 : "${VER:?package-pkg: --version required}"
 if [ -n "$TREE" ]; then
-  [ -z "$APP" ] && [ -z "$DISTDIR" ] || { echo "package-pkg: --tree-only builds no pkg, so it takes no --app or --dist" >&2; exit 2; }
+  [ -z "$DISTDIR" ] || { echo "package-pkg: --tree-only builds no pkg, so it takes no --dist" >&2; exit 2; }
   [ ! -e "$TREE" ] || { echo "package-pkg: --tree-only $TREE already exists" >&2; exit 1; }
 else
   [ -z "$AS" ] || { echo "package-pkg: --installed-as goes with --tree-only; the pkg installs at $PREFIX_DIR" >&2; exit 2; }
-  : "${APP:?package-pkg: --app required}"
   : "${DISTDIR:?package-pkg: --dist required}"
-  [ "$(basename "$APP")" = "$APP_NAME" ] \
-    || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
-  [ -d "$APP" ] || { echo "package-pkg: no such app: $APP" >&2; exit 1; }
 fi
 case "${AS:-/}" in /*) : ;; *) echo "package-pkg: --installed-as must be absolute: $AS" >&2; exit 2 ;; esac
 require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-separated
@@ -120,13 +113,12 @@ mkdir -p "$STAGE$PREFIX_DIR" "$SCR" "$WORK/component"
 COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
 
 # platform: an NFS or otherwise shared stage sprays AppleDouble "._*" sidecars, which would ship as
-#           payload -- and, left in place while the manifest is rendered, be listed in its `outside`.
+#           payload.
 strip_appledouble() { find "$STAGE" -name '._*' -delete 2>/dev/null || true; }
 strip_appledouble
 set -- --stage "$STAGE" --product shipyard \
   --version "$VER" --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack \
   --scripts-out "$SCR"
-[ -n "$TREE" ] || set -- "$@" --updater-app "$APP"
 sh "$SELF/stage_product.sh" "$@"
 strip_appledouble
 if [ -n "$TREE" ]; then
@@ -135,8 +127,6 @@ if [ -n "$TREE" ]; then
   exit 0
 fi
 
-# platform: pkgbuild makes a payload holding a .app relocatable and version-checked, so a locally
-#           built updater elsewhere on disk would capture it; build_component_pkg.sh does not.
 comp="$WORK/component/$(mavergreen_name component shipyard)"
 sh "$SELF/build_component_pkg.sh" --root "$STAGE" --identifier "$ID" --version "$VER" \
   --install-location / --scripts "$SCR" --out "$comp" >&2

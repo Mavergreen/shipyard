@@ -2,7 +2,7 @@
 # usage: . objc-cmake-args.sh; objc_cmake_args ROOT; objc_cmake ARG...  -- objc_cmake_args sets CMAKE
 #        and exports clang22's Mach-O readers as LIPO, OTOOL, NM and STRINGS for the compat guard a
 #        build runs; objc_cmake then runs $CMAKE with ARG... and the arguments that configure and
-#        build Objective-C exactly as tests/lib/build-updater.sh does, with the pinned clang22 and
+#        build Objective-C with the pinned clang22 and
 #        ROOT's MavergreenToolchain.cmake, x86_64 against the 10.9 SDK.
 objc_cmake_args() {
   CMAKE="${CMAKE:-$(command -v shipyard-cmake || echo cmake)}"

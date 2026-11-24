@@ -82,22 +82,14 @@ elif "cmake-tree" in (inst[0].get("with") or {}):
 if any(str(s.get("uses", "")) == "./.github/actions/shipyard-cmake" for s in build_steps):
     bad.append("the build job still runs ./.github/actions/shipyard-cmake; shipyard builds no CMake now")
 
-need(r'^sh tests/lib/build-updater\.sh --arch x86_64 --arch arm64 --out "?\$RUNNER_TEMP/shipyard-updater\.app"?$',
-     "the updater must be built for x86_64 and arm64 by tests/lib/build-updater.sh, with clang22")
-if find(r"CMAKE_OBJC_COMPILER=/usr/bin/clang"):
-    bad.append("release.yml still builds an updater with /usr/bin/clang; it builds with clang22 on every host")
-# ...and the result is asserted, not assumed. The merge is NOT followed by a re-sign: lipo copies each
-# slice byte for byte, so the ad-hoc signature ld gives the arm64 slice -- all Apple Silicon needs to
-# run it -- survives, and nothing in shipyard's build seals this bundle for a re-seal to restore.
-# `codesign --deep` in particular must not come back: the app carries Sparkle as a VERSIONED
-# framework, which `--verify --deep` calls ambiguous on every runner (R-P1-22).
-for arch in ("x86_64", "arm64"):
-    need(r'^case " \$archs " in \*" %s "\*\) ;; \*\) echo "::error::the merged updater has no %s slice' % (arch, arch),
-         "the merged updater's %s slice is never asserted after the merge" % arch)
+if find(r"build-updater|shipyard-updater|merged updater"):
+    bad.append("release.yml still builds an updater; shipyard's pkg ships none, the Engine updates it")
 
-# The pkg: shipyard's install prefix + the merged app. CMake is the cmake product's, never in the pkg.
-need(r"^sh scripts/package-pkg\.sh .*--shipyard-prefix \S+ .*--app \S*/shipyard-updater\.app\"?",
-     "release.yml never runs scripts/package-pkg.sh with --shipyard-prefix and the merged --app")
+# The pkg: shipyard's install prefix alone. CMake is the cmake product's, never in the pkg.
+need(r"^sh scripts/package-pkg\.sh .*--shipyard-prefix \S+",
+     "release.yml never runs scripts/package-pkg.sh with --shipyard-prefix")
+if find(r"^sh scripts/package-pkg\.sh .*--app "):
+    bad.append("release.yml still passes package-pkg.sh --app; the pkg ships no updater")
 need(r"^sh scripts/package-pkg\.sh .*--dist dist(\s|$)",
      "release.yml must build the pkg into dist with --dist dist; its name is derived, shipyard-<v>.pkg")
 if find(r"^sh scripts/package-pkg\.sh .*--out "):
@@ -137,17 +129,17 @@ tars = find(r"(^|[\s;|&(])tar\s") + find(r"\.tar\.gz\b")
 if tars:
     bad.append("the release tarball should be gone; the pkg is the asset now: %r" % tars[0])
 
-# GNU binutils cannot read Mach-O and Linux has no lipo, so the updater merge's slice check and
-# conformance's slice and SDK checks need clang22's tools, exported before the first of them.
+# GNU binutils cannot read Mach-O and Linux has no lipo, so conformance's slice and SDK checks need
+# clang22's tools, exported before them.
 def first(pat):
     return [i for i, s in enumerate(build_steps) if any(re.search(pat, c) for c in step_cmds(s))][:1]
-users = first(r"^sh tests/lib/build-updater\.sh ") + first(r"^sh scripts/shipyard-check --dist dist$")
+users = first(r"^sh scripts/shipyard-check --dist dist$")
 for tool in ("LIPO", "OTOOL", "NM", "STRINGS"):
     exp = [i for i, s in enumerate(build_steps)
            if any(re.search(r'^echo "%s=\$CL/bin/llvm-' % tool, c) for c in step_cmds(s))
            and '>> "$GITHUB_ENV"' in (s.get("run") or "")]
-    if len(users) != 2 or not exp or exp[0] > min(users):
-        bad.append("the build job never exports %s (clang22's llvm tool) to $GITHUB_ENV before the updater build and the artifact checks" % tool)
+    if len(users) != 1 or not exp or exp[0] > min(users):
+        bad.append("the build job never exports %s (clang22's llvm tool) to $GITHUB_ENV before the artifact checks" % tool)
 
 # The payload is shipyard built from this checkout, so the build job stages it with the runner's cmake
 # through stage-shipyard-prefix.sh, never through an installed shipyard's launchers.
@@ -423,15 +415,6 @@ for f in "$here/../.github/actions/install/action.yml" "$here/../.github/workflo
     echo "FAIL: ${f##*/} still names cmake-tree or the shipyard-cmake action"; exit 1
   fi
 done
-bu="$here/lib/build-updater.sh"
-merge="$(grep -v '^[[:space:]]*#' "$bu" | awk '/\\$/ { sub(/\\$/, ""); printf "%s", $0; next } { print }' | grep 'lipo-merge-tree\.sh' || :)"
-case "$merge" in
-  *'--require-archs "x86_64 arm64"'*) ;;
-  *) echo "FAIL: tests/lib/build-updater.sh never merges the two updaters with lipo-merge-tree.sh --require-archs \"x86_64 arm64\""; exit 1 ;;
-esac
-case "$merge" in
-  *--allow-differ*) echo "FAIL: tests/lib/build-updater.sh merges with --allow-differ; nothing in updater/Info.plist.in is arch-dependent, so a difference there is a defect to fix, not one to declare"; exit 1 ;;
-esac
 ci="$here/../.github/workflows/ci.yml"
 grep -q -e '--shipyard-prefix "$RUNNER_TEMP/payload-stage$(mavergreen_prefix shipyard)"' "$ci" \
   || { echo "FAIL: ci.yml's package rehearsal never packages the payload staged at \"\$(mavergreen_prefix shipyard)\""; exit 1; }

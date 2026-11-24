@@ -102,29 +102,6 @@ jobs:
           echo "version=$ver" >> "$GITHUB_OUTPUT"
           echo "shipyard $ver"
 
-      # spec: scripts/lipo-merge-tree.sh -- a deployment floor is per-configure and arm64 has no
-      #       10.9, so the updater is built once per arch and merged. Both builds embed Sparkle's fat
-      #       framework, so the only Mach-O that may differ is the updater's own executable, and the
-      #       merge runs with NO --allow-differ: updater/Info.plist.in fixes LSMinimumSystemVersion at
-      #       the family's floor rather than deriving it per build, precisely so the two plists come
-      #       out byte-identical and a divergence is refused rather than papered over.
-      - name: Build the universal updater
-        run: |
-          set -eu
-          sh tests/lib/build-updater.sh --arch x86_64 --arch arm64 --out "$RUNNER_TEMP/shipyard-updater.app"
-          # spec: R-P1-22 -- NOT re-signed. Nothing in shipyard's build signs this app, so the merge
-          #       breaks no bundle seal; `lipo -create` copies each slice byte for byte, so the ad-hoc
-          #       signature ld puts on the arm64 slice -- which Apple Silicon requires to run it at
-          #       all -- survives untouched, and Sparkle.framework is copied whole, keeping ITS
-          #       signature, which `--deep --sign -` would have replaced. `codesign --verify --deep`
-          #       of an app carrying a VERSIONED framework is ambiguous by design, which is how this
-          #       was found.
-          exe="$RUNNER_TEMP/shipyard-updater.app/Contents/MacOS/shipyard-updater"
-          archs="$("${LIPO:-lipo}" -info "$exe" | sed -n 's/.*: //p')"
-          case " $archs " in *" x86_64 "*) ;; *) echo "::error::the merged updater has no x86_64 slice: $archs"; exit 1;; esac
-          case " $archs " in *" arm64 "*) ;; *) echo "::error::the merged updater has no arm64 slice: $archs"; exit 1;; esac
-          echo "merged updater: $archs"
-
       - name: Package
         run: |
           set -eu
@@ -138,7 +115,6 @@ jobs:
             --version "$v" > /dev/null
           sh scripts/package-pkg.sh \
             --shipyard-prefix "$RUNNER_TEMP/payload-stage$(mavergreen_prefix shipyard)" \
-            --app "$RUNNER_TEMP/shipyard-updater.app" \
             --version "$v" \
             --dist dist
           sh scripts/assert_pkg_installs_in_place.sh "dist/shipyard-$v.pkg"

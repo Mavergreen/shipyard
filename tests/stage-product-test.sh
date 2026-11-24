@@ -158,96 +158,26 @@ grep -q 'SIMBL/Plugins: symlink' "$w/err" || fail "the refusal names the symlink
 [ -f "$Vq/opt/mavergreen/openssh/bin/ssh" ] || fail "a refused ancestor removes nothing"
 grep -q 'Application Support/SIMBL' "$w/scr/preinstall" && fail "a product with nothing under Library/Application Support checks nothing there"
 
-APP="$w/openssh-updater.app"
-mkdir -p "$APP/Contents/MacOS"
-printf '#!/bin/sh\n' > "$APP/Contents/MacOS/openssh-updater"
-chmod +x "$APP/Contents/MacOS/openssh-updater"
-xplist "$APP/Contents/Info.plist" CFBundleIdentifier dev.mavergreen.openssh.updater SUFeedURL https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml
-SCRU="$w/scr-updater"
-sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$SCRU" --updater-app "$APP" \
-  || fail "stage_product with --updater-app must succeed"
-[ -d "$st/Library/Application Support/Mavergreen/openssh-updater.app" ] \
-  || fail "the updater lands where the registry puts openssh's"
-[ -f "$st/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist" ] \
-  || fail "the update-check job carries the registry's label for openssh"
-[ "$("$SD" plist get "$st/opt/mavergreen/openssh/mavergreen.plist" feed)" = https://github.com/Mavergreen/openssh/releases/latest/download/openssh.xml ] \
-  || fail "a product that stages an updater names the registry's feed in its manifest"
-grep -l usr/local "$SCRU/preinstall" "$SCRU/postinstall" && fail "the generated scripts with an updater name nothing under usr/local"
+rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-updater" --updater-app "$w/openssh-updater.app" 2>"$w/err" || rc=$?
+[ "$rc" -eq 2 ] || fail "--updater-app is a usage error (exit 2): no product ships an updater; got $rc"
+grep -q 'the Engine' "$w/err" || fail "the --updater-app refusal says the Engine updates products: $(cat "$w/err")"
+[ ! -e "$st/Library/LaunchAgents" ] || fail "a refused --updater-app stages no update-check job"
 sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-hu" --has-updater 2>/dev/null \
   && fail "--has-updater is never a caller's to pass"
 for f in --appcast --app-dir --agent-label; do
-  rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-refused" \
-    --updater-app "$APP" "$f" x 2>/dev/null || rc=$?
-  [ "$rc" -eq 2 ] || fail "$f is derived from the registry, so passing it is a usage error (exit 2); got $rc"
+  rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-refused" "$f" x 2>/dev/null || rc=$?
+  [ "$rc" -eq 2 ] || fail "$f is derived, so passing it is a usage error (exit 2); got $rc"
 done
-WRONG="$w/wrong/openssh-updater.app"; mkdir -p "$WRONG/Contents/MacOS"
-printf '#!/bin/sh\n' > "$WRONG/Contents/MacOS/openssh-updater"
-xplist "$WRONG/Contents/Info.plist" CFBundleIdentifier dev.mavergreen.OpenSSHUpdater SUFeedURL https://github.com/Mavergreen/openssh/releases/latest/download/appcast.xml
-sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-wrong" \
-  --updater-app "$WRONG" 2>"$w/err" \
-  && fail "an updater built with another bundle id or feed than the registry's must be refused -- the app and its stage would disagree"
-grep -q 'dev.mavergreen.openssh.updater' "$w/err" || fail "the refusal names the identity the registry expects: $(cat "$w/err")"
 rm -rf "$w/undeclared"; mkdir -p "$w/undeclared/.mavergreen/products"
 rc=0; MAVERGREEN_REPO_ROOT="$w/undeclared" sh "$S" --stage "$st" --product openssh --version 1 \
-  --scripts-out "$w/scr-undeclared" --updater-app "$APP" 2>"$w/err" || rc=$?
+  --scripts-out "$w/scr-undeclared" 2>"$w/err" || rc=$?
 [ "$rc" -eq 1 ] || fail "a product the repo does not declare must be refused (1), got $rc"
 grep -q '.mavergreen/products/openssh/noun' "$w/err" || fail "the refusal says where to write the noun: $(cat "$w/err")"
-rc=0; MAVERGREEN_REPO_ROOT="$w/undeclared" sh "$here/../scripts/updater-identity.sh" bundle-id openssh 2>"$w/err" || rc=$?
-[ "$rc" -eq 1 ] || fail "an updater identity for a product the repo does not declare must be refused (1), got $rc"
-grep -q 'not a product of this repo' "$w/err" || fail "the updater-identity refusal says where to declare the product: $(cat "$w/err")"
-rc=0; ( cd "$w" && GITHUB_REPOSITORY= sh "$S" --stage "$st" --product openssh --version 1 \
-  --scripts-out "$w/scr-norepo" --updater-app "$APP" ) 2>"$w/err" || rc=$?
-[ "$rc" -eq 2 ] || fail "an updater whose feed's repo cannot be learned must be refused (2), got $rc"
-grep -q GITHUB_REPOSITORY "$w/err" || fail "the refusal says to set GITHUB_REPOSITORY: $(cat "$w/err")"
-ol() { _i=0; while _v="$("$SD" plist get "$1" "outside:$_i" 2>/dev/null)"; do echo "$_v"; _i=$((_i + 1)); done; }
-for s in go126 go127; do
-  a="$w/lines/$s-updater.app"; mkdir -p "$a/Contents/MacOS"; printf '#!/bin/sh\n' > "$a/Contents/MacOS/$s-updater"
-  xplist "$a/Contents/Info.plist" CFBundleIdentifier "$(sh "$here/../scripts/updater-identity.sh" bundle-id "$s")" SUFeedURL "$(sh "$here/../scripts/updater-identity.sh" feed "$s")"
-  sl="$w/stage-$s"; mkdir -p "$sl/opt/mavergreen/$s/bin"; echo go > "$sl/opt/mavergreen/$s/bin/go"
-  sh "$S" --stage "$sl" --product "$s" --version 1 \
-    --scripts-out "$w/scr-$s" --updater-app "$a" || fail "staging $s with its own updater must succeed"
-  ol "$sl/opt/mavergreen/$s/mavergreen.plist" > "$w/outside-$s"
-done
-grep -qx 'Library/Application Support/Mavergreen/go126-updater.app' "$w/outside-go126" \
-  || fail "go126's manifest lists its own updater in outside: $(cat "$w/outside-go126")"
-[ -z "$(grep -Fxf "$w/outside-go126" "$w/outside-go127")" ] \
-  || fail "two lines' manifests share an outside entry, so uninstalling one line would remove the other's updater"
-sh -n "$SCRU/preinstall" || fail "generated preinstall (with updater) must be valid sh"
-sh -n "$SCRU/postinstall" || fail "generated postinstall (with updater) must be valid sh"
-grep -q MAV_AGENT_PLIST "$SCRU/postinstall" \
-  || fail "stage_updater's agent-load fragment must land in the postinstall when --updater-app is given"
-[ ! -e "$SCRU/.agent-load" ] || fail "the intermediate agent-load snippet must not remain in scripts-out"
-
-sys="$w/sys"; stubs="$w/stubs"; alog="$w/agent.log"
-mkdir -p "$sys/Library/LaunchAgents" "$stubs"
-: > "$sys/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist"
-for c in launchctl sudo; do printf '#!/bin/sh\necho %s "$@" >> "%s"\n' "$c" "$alog" > "$stubs/$c"; done
-printf '#!/bin/sh\ncase "$*" in *%%Su*) echo tester ;; *) echo 501 ;; esac\n' > "$stubs/stat"
-printf '#!/bin/sh\nexit 0\n' > "$stubs/mavergreen"
-chmod +x "$stubs"/*
-sed -e "s#/Library/LaunchAgents/#$sys/Library/LaunchAgents/#g" \
-    -e "s#^MG=\"\$ROOT/opt/mavergreen/bin/mavergreen\"\$#MG=\"$stubs/mavergreen\"#" \
-    -e 's#^mavergreen_chain_ok "$_mg_at" "$3" || exit 1$#:#' \
-    "$SCRU/postinstall" > "$w/post-redirected"
-grep -q "^MAV_AGENT_PLIST=$sys/Library/LaunchAgents/" "$w/post-redirected" \
-  || fail "the test must redirect the agent-load's running-system plist path, or it proves nothing"
-grep -q "^MG=\"$stubs/mavergreen\"\$" "$w/post-redirected" \
-  || fail "the test must stub the helper, or a / install would link on the running system"
-grep -q '^mavergreen_chain_ok "$_mg_at"' "$w/post-redirected" \
-  && fail "the test must skip the helper's chain check, which / cannot pass for a non-root test"
-Vag="$w/volagent"; mkdir -p "$Vag/Library/LaunchAgents"
-: > "$Vag/Library/LaunchAgents/dev.mavergreen.openssh-updatecheck.plist"
-: > "$alog"
-PATH="$stubs:$PATH" sh "$w/post-redirected" /x.pkg "$Vag/" "$Vag/" || fail "postinstall to another volume must succeed"
-[ ! -s "$alog" ] || fail "an install to a volume other than / must never run launchctl or sudo on the running system: $(cat "$alog")"
-: > "$alog"
-PATH="$stubs:$PATH" sh "$w/post-redirected" /x.pkg / / || fail "postinstall to / must succeed"
-grep -q '^launchctl bootstrap gui/501 ' "$alog" \
-  || fail "an install to the boot volume loads the update-check agent into the console user's session: [$(cat "$alog")]"
+grep -q MAV_AGENT_PLIST "$w/scr/postinstall" && fail "no generated postinstall loads an update-check agent"
 
 fake="$w/fake/scripts"; mkdir -p "$fake" "$w/fake/.mavergreen/ingredients"
 cp "$S" "$fake/stage_product.sh"
-cp "$here/../scripts/updater-identity.sh" "$here/../scripts/fetch_stevedore.sh" "$here/../scripts/mavergreen-meta.sh" "$fake/"
+cp "$here/../scripts/fetch_stevedore.sh" "$here/../scripts/mavergreen-meta.sh" "$fake/"
 cp -R "$here/../.mavergreen/ingredients/stevedore" "$w/fake/.mavergreen/ingredients/"
 mkdir -p "$fake/lib"; cp "$here/../scripts/lib/vercmp.sh" "$here/../scripts/lib/name-rules.sh" "$here/../scripts/lib/root-chain.sh" "$fake/lib/"
 RM_LOG="$w/rm.log"; export RM_LOG
@@ -256,27 +186,14 @@ cat > "$fake/render-manifest.sh" <<'EOF'
 : > "$RM_LOG"
 for a in "$@"; do printf '%s\n' "$a" >> "$RM_LOG"; done
 EOF
-RMU_LOG="$w/rmu.log"; export RMU_LOG
-cat > "$fake/stage_updater.sh" <<'EOF'
-#!/bin/sh
-set -eu
-: > "$RMU_LOG"
-prev=""
-for a in "$@"; do
-  printf '%s\n' "$a" >> "$RMU_LOG"
-  if [ "$prev" = --snippet-out ]; then mkdir -p "$(dirname "$a")"; : > "$a"; fi
-  prev="$a"
-done
-EOF
 st2="$w/stage2"; mkdir -p "$st2/opt/mavergreen/openssh/bin"; echo ssh > "$st2/opt/mavergreen/openssh/bin/ssh"
 sh "$fake/stage_product.sh" --stage "$st2" --product openssh \
   --version 1.2.3 \
   --exclude "bin/extra one" --exclude "share/man/man1/extra.1" \
   --replaces "/usr/bin/ssh=bin/ssh" --replaces "/usr/bin/scp=bin/scp two" \
   --scripts-out "$w/scr3" \
-  --updater-app "$APP" \
   --preinstall-hook "$w/hook" --postinstall-hook "$w/hook" \
-  || fail "stage_product with a stubbed render-manifest/stage_updater must still succeed"
+  || fail "stage_product with a stubbed render-manifest must still succeed"
 expected="$(printf '%s\n' \
   --stage "$st2" \
   --product openssh \
@@ -288,12 +205,9 @@ expected="$(printf '%s\n' \
   --replaces "/usr/bin/scp=bin/scp two")"
 [ "$(cat "$w/rm.log")" = "$expected" ] \
   || fail "every render-manifest option, in order, with repeats and embedded spaces, must reach render-manifest intact: got [$(cat "$w/rm.log")]"
-grep -qE -- '--scripts-out|--updater-app|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook|--requires|--group|--has-updater' "$w/rm.log" \
+grep -qE -- '--scripts-out|--app-dir|--agent-label|--preinstall-hook|--postinstall-hook|--requires|--group|--has-updater' "$w/rm.log" \
   && fail "a stage_product-only option must never reach render-manifest"
 grep -qF "$w/scr3" "$w/rm.log" && fail "a stage_product-only option's VALUE must never reach render-manifest either"
-grep -qF "Application Support" "$w/rm.log" && fail "the updater's app-dir value must never reach render-manifest"
-[ "$(sed -n '/^--product$/{n;p;}' "$w/rmu.log")" = openssh ] \
-  || fail "stage_updater is told the product, and derives the rest: got [$(cat "$w/rmu.log")]"
 
 for o in name:noun line:line group:group; do
   rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-refuse" --${o%%:*} X 2>"$w/err" || rc=$?
@@ -305,6 +219,10 @@ rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-
 grep -qF ".mavergreen/products/<P>/requires/" "$w/err" || fail "the refusal of --requires names products/<P>/requires/: $(cat "$w/err")"
 rc=0; sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-refuse" --name 2>"$w/err" || rc=$?
 [ "$rc" -eq 2 ] && grep -qF ".mavergreen/products/<P>/noun" "$w/err" || fail "--name with no value must hit the refusal, not 'needs a value': $(cat "$w/err")"
+for s in go126 go127; do
+  sl="$w/stage-$s"; mkdir -p "$sl/opt/mavergreen/$s/bin"; echo go > "$sl/opt/mavergreen/$s/bin/go"
+  sh "$S" --stage "$sl" --product "$s" --version 1 --scripts-out "$w/scr-$s" || fail "staging $s must succeed"
+done
 [ "$("$SD" plist get "$w/stage-go127/opt/mavergreen/go127/mavergreen.plist" name)" = "Go 1.27" ] \
   || fail "staging go127 (noun Go, line 1.27) writes the name 'Go 1.27'"
 [ "$("$SD" plist get "$w/stage-go127/opt/mavergreen/go127/mavergreen.plist" line)" = 1.27 ] \
@@ -484,7 +402,7 @@ fi
 
 printf 'if [ -f "$ROOT/Library/Application Support/Mavergreen/openssh-updater.app/Contents/Stale" ]; then echo saw-old-bundle >> "$ROOT/bundlehook.log"; else echo bundle-gone >> "$ROOT/bundlehook.log"; fi\n' > "$w/bundlehook"
 sh "$S" --stage "$st" --product openssh --version 1 --scripts-out "$w/scr-bundle" \
-  --updater-app "$APP" --preinstall-hook "$w/bundlehook" || fail "staging with an updater and a preinstall hook must succeed"
+  --preinstall-hook "$w/bundlehook" || fail "staging with a preinstall hook must succeed"
 mkvol() {
   _v="$1"; rm -rf "$_v" "$_v.out"; mkdir -p "$_v.out/escape.app" "$_v.out/linked/x.app"
   _u="$_v/Library/Application Support/Mavergreen"
