@@ -78,7 +78,6 @@ smoke-gate golang-126 release.yml:modern-smoke
 smoke-gate golang-127 release.yml:modern-smoke
 smoke-gate ninja release.yml:modern-smoke
 smoke-gate zig release.yml:modern-smoke
-standalone 1password 1password
 standalone avxemu avxemu
 standalone ca-certs ca-certs
 standalone cctools cctools
@@ -103,14 +102,12 @@ standalone ninja ninja
 standalone nodejs-24 node24
 standalone openssh openssh
 standalone pi pi
-standalone porthole porthole
 standalone python-315 python315
 standalone recaulk recaulk
 standalone rg rg
 standalone rust rust
 standalone rust rust-cross
 standalone shipyard shipyard
-standalone signal-desktop signal-desktop
 standalone stevedore stevedore
 standalone swift swift-runtime
 standalone swift swift-toolchain
