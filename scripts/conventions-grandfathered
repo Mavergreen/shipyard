@@ -10,7 +10,6 @@ macos-runner clang-22 release.yml:collect
 macos-runner claude-code release.yml:build
 macos-runner codex-cli builds.yml:codex-build
 macos-runner codex-cli release.yml:build
-macos-runner container-tools release.yml:build-macos
 macos-runner drydock release.yml:build
 macos-runner fd release.yml:build
 macos-runner longboat release.yml:build
