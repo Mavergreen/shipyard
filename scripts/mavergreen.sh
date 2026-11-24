@@ -1,5 +1,6 @@
 #!/bin/sh
-# platform: macOS-only -- PlistBuddy reads each manifest, and uninstall runs launchctl and pkgutil
+# platform: host-agnostic -- PlistBuddy reads each manifest where there is one, else stevedore (STEVEDORE, on
+#   PATH, or fetch_stevedore.sh beside this script); launchctl runs only for the boot volume, pkgutil only where present
 #   usage: mavergreen [--root VOLUME] <command> [args]
 #            link <product>               export a product's commands and manpages
 #            unlink <product>             remove them (never changes a selection)
@@ -16,7 +17,8 @@ set -eu
 #       admit uppercase in case patterns and awk ranges, so names are matched in the C locale.
 LC_ALL=C; export LC_ALL
 MAVERGREEN_VERSION="@MAVERGREEN_VERSION@"
-PB=/usr/libexec/PlistBuddy
+PB="${MAVERGREEN_PLISTBUDDY:-/usr/libexec/PlistBuddy}"
+SD=""
 ROOT=/
 if [ "${1:-}" = --root ]; then ROOT="${2:?mavergreen: --root needs a volume}"; shift 2; fi
 R="${ROOT%/}"
@@ -26,10 +28,25 @@ SEL="$MG/var/mavergreen/selections"
 die() { echo "mavergreen: $1" >&2; exit "${2:-1}"; }
 valid() { case "$1" in ''|-*|*[!a-z0-9-]*|var|bin|sbin|share|mavergreen|system-replace|base) return 1 ;; esac; }
 manifest() { printf '%s/%s/mavergreen.plist' "$MG" "$1"; }
-mf() { "$PB" -c "Print :$2" "$(manifest "$1")" 2>/dev/null || true; }
+pl_get() {
+  if [ -z "$SD" ]; then "$PB" -c "Print :$2" "$1" 2>/dev/null; else "$SD" plist get "$1" "$2" 2>/dev/null; fi
+}
+pick_reader() {
+  [ ! -x "$PB" ] || return 0
+  if [ -n "${STEVEDORE:-}" ]; then
+    [ -x "$STEVEDORE" ] || die "STEVEDORE is $STEVEDORE, which is not executable"
+    SD="$STEVEDORE"; return 0
+  fi
+  SD="$(command -v stevedore 2>/dev/null || :)"
+  [ -z "$SD" ] || return 0
+  _fs="$(dirname "$0")/fetch_stevedore.sh"
+  if [ -f "$_fs" ]; then SD="$(sh "$_fs" 2>/dev/null || :)"; fi
+  [ -n "$SD" ] || die "no $PB to read manifests with, and no stevedore: set STEVEDORE, or put stevedore on PATH"
+}
+mf() { pl_get "$(manifest "$1")" "$2" || true; }
 mf_array() {
   _i=0
-  while _v="$("$PB" -c "Print :$2:$_i" "$(manifest "$1")" 2>/dev/null)"; do
+  while _v="$(pl_get "$(manifest "$1")" "$2:$_i")"; do
     printf '%s\n' "$_v"; _i=$((_i + 1))
   done
 }
@@ -162,10 +179,11 @@ do_check() {
     _missing="$(plan_links "$_p" "$_mode" | while IFS="	" read -r _link _rel; do
       [ -L "$MG/$_link" ] && [ "$(owner "$MG/$_link")" = "$_p" ] || echo "$_link"; done)"
     [ -z "$_missing" ] || { echo "mavergreen: $_p is missing links: $(printf '%s' "$_missing" | tr '\n' ' ')" >&2; _n=$((_n + 1)); }
-    if [ -f "$MG/var/system-replace/$_p/.replaced" ]; then _n=$((_n + $(replace_drift "$_p"))); fi
+    if [ -f "$MG/var/system-replace/$_p/.replaced" ]; then need_pb check; _n=$((_n + $(replace_drift "$_p"))); fi
   done
   [ "$_n" -eq 0 ]
 }
+need_pb() { [ -z "$SD" ] || die "$1 reads the manifest's :replaces dict, which needs $PB; stevedore reads only scalars"; }
 replaces() {
   "$PB" -c "Print :replaces" "$(manifest "$1")" 2>/dev/null \
     | sed -n 's/^[[:space:]]*\(\/[^ =]*\) = \(.*\)$/\1	\2/p'
@@ -191,7 +209,8 @@ is_real_dir() {
 }
 do_system_replace() {
   need_product "$1"
-  _pv="$("$PB" -c 'Print :ProductVersion' "$R/System/Library/CoreServices/SystemVersion.plist" 2>/dev/null || true)"
+  need_pb system-replace
+  _pv="$(pl_get "$R/System/Library/CoreServices/SystemVersion.plist" ProductVersion || true)"
   case "$_pv" in
     10.9|10.9.*) : ;;
     *) die "system-replace is 10.9-only; this volume is macOS ${_pv:-unknown}, where /usr/bin belongs to the sealed system volume" ;;
@@ -229,6 +248,7 @@ EOF
 }
 do_system_restore() {
   need_product "$1"
+  need_pb system-restore
   _b="$MG/var/system-replace/$1"
   _entries="$(replaces "$1")"
   _want_prefix="/usr/local/mavergreen/$1/"
@@ -280,10 +300,13 @@ replace_drift() {
 }
 unload() {
   [ -z "$R" ] || return 0
+  command -v launchctl >/dev/null 2>&1 || return 0
   case "$1" in
+    # platform: guarded macOS-only call -- unload returns first unless the root is / and launchctl exists
     Library/LaunchDaemons/*.plist) launchctl unload -w "/$1" 2>/dev/null || true ;;
     Library/LaunchAgents/*.plist)
       _u="$(stat -f %Su /dev/console 2>/dev/null || echo root)"
+      # platform: guarded macOS-only call -- unload returns first unless the root is / and launchctl exists
       [ "$_u" = root ] || sudo -u "$_u" launchctl unload -w "/$1" 2>/dev/null || true ;;
   esac
 }
@@ -405,6 +428,7 @@ refuse_if_depended_on() {
 }
 do_uninstall() {
   need_product "$1"
+  if [ -f "$MG/var/system-replace/$1/.replaced" ]; then need_pb "uninstalling a system-replaced product"; fi
   refuse_if_depended_on "$1"
   run_pre_uninstall_hook "$1"
   if [ -f "$MG/var/system-replace/$1/.replaced" ]; then
@@ -432,12 +456,16 @@ do_uninstall() {
       rm -f "$SEL/$_g"
     fi
   fi
-  [ -z "$_id" ] || pkgutil --volume "$ROOT" --forget "$_id" >/dev/null 2>&1 || true
+  if [ -n "$_id" ] && command -v pkgutil >/dev/null 2>&1; then
+    # platform: guarded macOS-only call -- only where command -v finds pkgutil
+    pkgutil --volume "$ROOT" --forget "$_id" >/dev/null 2>&1 || true
+  fi
   [ "$_failed" -eq 0 ]
 }
 do_version() { printf '%s\n' "$MAVERGREEN_VERSION"; }
 
 cmd="${1:-}"; [ $# -gt 0 ] && shift
+case "$cmd" in link|unlink|select|list|check|uninstall|system-replace|system-restore) pick_reader ;; esac
 case "$cmd" in
   link) [ $# -eq 1 ] || die "usage: mavergreen link <product>" 2; do_link "$1" ;;
   unlink) [ $# -eq 1 ] || die "usage: mavergreen unlink <product>" 2; do_unlink "$1" ;;

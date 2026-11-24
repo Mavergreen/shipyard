@@ -102,6 +102,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   The updater is no exception: `build_updater.sh` builds it on Linux, a modern Mac and 10.9 alike
   ("The updater builds with clang22"). Package tests read the pkg with `pkg_read.sh` (`list`, `facts`,
   `plist`, `payload`), never `pkgutil`, `lsbom` or PlistBuddy, so they run on Linux too.
+  The package test runs in full on Linux, uninstall included: export `STEVEDORE` (from `fetch_stevedore.sh`) and the pkg's postinstall and `$ROOT/usr/local/bin/mavergreen --root "$ROOT" uninstall SHORT` read the manifest with it.
 
   To install another family product, pass `with: { products: "SHORT@TAG ..." }`: its requires come
   with it, so never hand-roll a `gh release download` plus `installer`. On Linux each product lands at
