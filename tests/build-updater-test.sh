@@ -36,6 +36,15 @@ rc=0; build --arch x86_64 --icon "$T/key.pub" --generic-icon --out-dir "$T/u" > 
 [ "$rc" -eq 2 ] || fail "both --icon and --generic-icon: exit $rc, want 2"
 rc=0; build --arch x86_64 --arch x86_64 --generic-icon --out-dir "$T/u" > /dev/null 2> "$T/err" || rc=$?
 [ "$rc" -eq 2 ] || fail "--arch x86_64 twice: exit $rc, want 2"
+rc=0; build --clang22-pin "$T/pin" --arch x86_64 --generic-icon --out-dir "$T/u" > /dev/null 2> "$T/err" || rc=$?
+[ "$rc" -eq 2 ] || fail "both --repo and --clang22-pin: exit $rc, want 2"
+mkdir -p "$T/pin"; sed -n 1p "$ROOT/.mavergreen/ingredients/clang22/VERSION" > "$T/pin/version"
+rc=0
+( cd "$T/repo" && CMAKE=false sh "$ROOT/scripts/build_updater.sh" --product widget --display-name W --confirm-title T \
+    --confirm-body B --pubkey "$T/key.pub" --version 1.2.3-mavericks.4 --clang22-pin "$T/pin" --arch x86_64 \
+    --generic-icon --out-dir "$T/u" ) > /dev/null 2> "$T/err" || rc=$?
+[ "$rc" -eq 1 ] && grep -q -e '--clang22-pin is deprecated; pass --repo ROOT' "$T/err" && grep -q 'the x86_64 updater of widget did not configure' "$T/err" \
+  || { cat "$T/err"; fail "--clang22-pin DIR, the deprecated alias, still reads DIR/version and the product from the current repo (exit $rc)"; }
 
 archs="x86_64"; want='x86_64 10.9 '
 [ "$(sh "$ROOT/scripts/mavergreen_mode.sh")" = native ] || { archs="x86_64 arm64"; want='arm64 11.0 x86_64 10.9 '; }

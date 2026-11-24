@@ -11,6 +11,9 @@
 #          arm64 at minos 11.0. Two arches are merged by lipo-merge-tree.sh with llvm-lipo; which arches
 #          to build is the product's decision, never this script's. ROOT is the product's repo: SHORT
 #          must be declared in ROOT/.mavergreen/products/SHORT/, which derives the bundle id and feed.
+#          --clang22-pin DIR, v1.0.859's form, is a deprecated alias for --repo: DIR/VERSION (or
+#          DIR/version) names the clang22 release, and SHORT must be declared in the repo the current
+#          directory is in (mg_dir). It says so on stderr; it goes when the maintainer retires it.
 #          DIR/SHORT-updater.app is replaced, and its path is the only line on stdout; the build logs go
 #          to stderr. CMAKE names the cmake (default: shipyard-cmake, else cmake). Work goes under
 #          ${MAVERGREEN_BUILD_ROOT:-$TMPDIR/mavergreen-build} and is removed. Exit 1 on a failed build, 2 on a
@@ -18,13 +21,14 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 SY="$(dirname "$SELF")"
+. "$SELF/mavergreen-meta.sh"
 usage() {
   echo "usage: build_updater.sh --product SHORT --display-name NAME --confirm-title TITLE --confirm-body BODY --pubkey FILE --version VERSION --repo ROOT --arch x86_64|arm64 [--arch ...] (--icon ICNS | --generic-icon) --out-dir DIR [--log-prefix PREFIX] [--relaunch-marker PATH]" >&2
   exit 2
 }
 die() { echo "build_updater: $*" >&2; exit 1; }
 abs() { printf '%s/%s\n' "$(cd "$(dirname "$1")" && pwd)" "$(basename "$1")"; }
-product=""; name=""; title=""; body=""; pubkey=""; version=""; pin=""; archs=""; icon=""; generic=""; out=""
+cr=""; product=""; name=""; title=""; body=""; pubkey=""; version=""; pin=""; cpin=""; archs=""; icon=""; generic=""; out=""
 logp=""; marker=""; have_logp=""; have_marker=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -40,6 +44,7 @@ while [ "$#" -gt 0 ]; do
     --pubkey) pubkey=$2 ;;
     --version) version=$2 ;;
     --repo) pin=$2 ;;
+    --clang22-pin) cpin=$2 ;;
     --arch)
       case "$2" in x86_64|arm64) ;; *) echo "build_updater: --arch is x86_64 or arm64, not '$2'" >&2; usage ;; esac
       case " $archs " in *" $2 "*) echo "build_updater: --arch $2 given twice" >&2; usage ;; esac
@@ -52,20 +57,37 @@ while [ "$#" -gt 0 ]; do
   esac
   shift 2
 done
-for v in product name title body pubkey version pin archs out; do
+[ -z "$pin" ] || [ -z "$cpin" ] || { echo "build_updater: pass --repo or --clang22-pin, not both" >&2; usage; }
+[ -n "$pin$cpin" ] || { echo "build_updater: missing --repo" >&2; usage; }
+for v in product name title body pubkey version archs out; do
   eval "[ -n \"\$$v\" ]" || { echo "build_updater: missing $v" >&2; usage; }
 done
 [ -n "$icon$generic" ] && { [ -z "$icon" ] || [ -z "$generic" ]; } \
   || { echo "build_updater: pass exactly one of --icon ICNS and --generic-icon" >&2; usage; }
 case "$product" in *[!a-z0-9-]*|-*) echo "build_updater: '$product' is not a product short name" >&2; usage ;; esac
 [ -f "$pubkey" ] || die "no public key file $pubkey"
-[ -d "$pin/.mavergreen/products/$product" ] || die "$pin declares no product $product in .mavergreen/products/"
-pin="$(cd "$pin" && pwd)"; MAVERGREEN_REPO_ROOT="$pin"; export MAVERGREEN_REPO_ROOT
+if [ -n "$cpin" ]; then
+  echo "build_updater: --clang22-pin is deprecated; pass --repo ROOT, the repo whose .mavergreen/ingredients/clang22 pins clang22" >&2
+  cv="$(sed -n 1p "$cpin/VERSION" 2>/dev/null || sed -n 1p "$cpin/version" 2>/dev/null || :)"
+  [ -n "$cv" ] || die "$cpin holds no VERSION or version naming a clang22 release"
+  md="$(mg_dir)" || die "--clang22-pin needs the current directory in a repo with .mavergreen/; pass --repo ROOT"
+  MAVERGREEN_REPO_ROOT="${md%/.mavergreen}"; export MAVERGREEN_REPO_ROOT
+  [ -d "$md/products/$product" ] || die "$MAVERGREEN_REPO_ROOT declares no product $product in .mavergreen/products/"
+  cr="$(mktemp -d "${TMPDIR:-/tmp}/build-updater-pin.XXXXXX")" || die "cannot make a directory for the clang22 pin"
+  trap 'rm -rf "$cr"' EXIT
+  mkdir -p "$cr/.mavergreen/ingredients" && cp -R "$SY/.mavergreen/ingredients/clang22" "$cr/.mavergreen/ingredients/" \
+    && printf '%s\n' "$cv" > "$cr/.mavergreen/ingredients/clang22/VERSION" \
+    || die "cannot write the clang22 pin under $cr from $SY/.mavergreen/ingredients/clang22"
+  pin="$cr"
+else
+  [ -d "$pin/.mavergreen/products/$product" ] || die "$pin declares no product $product in .mavergreen/products/"
+  pin="$(cd "$pin" && pwd)"; MAVERGREEN_REPO_ROOT="$pin"; export MAVERGREEN_REPO_ROOT
+fi
 [ -z "$icon" ] || [ -f "$icon" ] || die "no icon $icon"
 pubkey="$(abs "$pubkey")"; [ -z "$icon" ] || icon="$(abs "$icon")"
 
 CMAKE="${CMAKE:-$(command -v shipyard-cmake || echo cmake)}"
-CL="$(sh "$SELF/fetch_clang22.sh" "$pin")" || die "could not fetch the clang22 that $pin/.mavergreen/ingredients/clang22 pins"
+CL="$(MAVERGREEN_REPO_ROOT="$pin" sh "$SELF/fetch_clang22.sh" "$pin")" || die "could not fetch the clang22 that $pin/.mavergreen/ingredients/clang22 pins"
 LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; NM="$CL/bin/llvm-nm"; STRINGS="$CL/bin/llvm-strings"
 export LIPO OTOOL NM STRINGS
 _tmp="${TMPDIR:-/tmp}"
@@ -73,7 +95,7 @@ root="${MAVERGREEN_BUILD_ROOT:-${_tmp%/}/mavergreen-build}"
 mkdir -p "$root" "$out" || die "cannot make $root or $out"
 out="$(cd "$out" && pwd)"
 work="$(mktemp -d "$root/$product-updater.XXXXXX")" || die "cannot make a work directory under $root"
-trap 'rm -rf "$work"' EXIT
+trap 'rm -rf "$work" ${cr:+"$cr"}' EXIT
 
 cm() {
   case "$2" in *']==]'*) die "$1 holds ']==]', which the updater's arguments file cannot quote" ;; esac
