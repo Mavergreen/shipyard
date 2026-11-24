@@ -17,6 +17,7 @@
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib/requires.sh"
+. "$SELF/lib/standalone-tree.sh"
 usage='usage: stage_pkg_from_archive.sh [--repo DIR] [--requires SHORT[>=FLOOR]]... [--pkg-only SRC=DEST]... ARCHIVE BUNDLED_LIST STAGED_ROOT'
 die() { echo "stage_pkg_from_archive: $1" >&2; exit "$2"; }
 nl='
@@ -49,8 +50,8 @@ esac
 P="$(printf '%s\n' "$top" | sed 's/-[0-9].*//')"
 case "$P" in ''|-*|*[!a-z0-9-]*) die "$b does not read as <short>-<version>" 2 ;; esac
 [ "$P" != "$top" ] || die "$b does not read as <short>-<version>" 2
-T="$ROOT/usr/local/mavergreen/$P"
-{ [ -e "$T" ] || [ -L "$T" ]; } && die "$ROOT already holds usr/local/mavergreen/$P" 1
+TP="$(shipyard_standalone_pkg_path "$P" "")"; T="$ROOT/$TP"
+{ [ -e "$T" ] || [ -L "$T" ]; } && die "$ROOT already holds $TP" 1
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/stage-pkg-from-archive.XXXXXX")"
 trap 'chmod -R u+w "$work" 2>/dev/null; rm -rf "$work"' EXIT
@@ -79,8 +80,8 @@ X="$work/x/$top"
 mkdir "$work/apps"
 for app in "$X"/*.app; do
   [ -d "$app" ] && [ ! -L "$app" ] || continue
-  n="${app##*/}"
-  { [ -e "$ROOT/Applications/$n" ] || [ -L "$ROOT/Applications/$n" ]; } && die "$ROOT already holds Applications/$n" 1
+  n="${app##*/}"; AP="$(shipyard_standalone_pkg_path "$P" "$n")"
+  { [ -e "$ROOT/$AP" ] || [ -L "$ROOT/$AP" ]; } && die "$ROOT already holds $AP" 1
   mv "$app" "$work/apps/$n"
 done
 
@@ -100,7 +101,7 @@ if [ -d "$work/tree/bin" ]; then
       ../*.app|../*.app/*)
         rest="${tg#../}"; n="${rest%%/*}"
         [ -d "$work/apps/$n" ] || continue
-        rm -f "$l"; ln -s "/Applications/$rest" "$l" ;;
+        rm -f "$l"; ln -s "/$(shipyard_standalone_pkg_path "$P" "$rest")" "$l" ;;
     esac
   done
 fi
@@ -109,7 +110,8 @@ mkdir -p "$(dirname "$T")"
 mv "$work/tree" "$T"
 for app in "$work/apps"/*.app; do
   [ -d "$app" ] || continue
-  mkdir -p "$ROOT/Applications"
-  mv "$app" "$ROOT/Applications/"
+  AP="$(shipyard_standalone_pkg_path "$P" "${app##*/}")"
+  mkdir -p "$(dirname "$ROOT/$AP")"
+  mv "$app" "$ROOT/$AP"
 done
 echo "stage_pkg_from_archive: staged $P from $b into $ROOT" >&2

@@ -42,6 +42,7 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/sdk-pins.sh"
 . "$SELF/deviation-reason.sh"
+. "$SELF/lib/standalone-tree.sh"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/conformance.XXXXXX")"; trap 'rm -rf "$tmp"' EXIT  # template: 10.9 BSD mktemp requires one
 facts="$tmp/facts"; cat > "$facts"
@@ -67,14 +68,22 @@ fi
 grep '^deviation ' "$facts" > "$tmp/devs" || true
 # spec: scripts/deviation-reason.sh -- the ONE matcher, shared with assert_binary_compatible.sh.
 deviation_reason() { shipyard_deviation_reason "$tmp/devs" "$@"; }  # $1 = check, $2 = subject (optional)
+# spec: SKILL.md "Standalone archive" -- a standalone archive is the pkg's tree, so an entry of one is
+#       also the path the pkg installs it at (scripts/lib/standalone-tree.sh), and a deviation declared in
+#       pkg terms excuses it.
+entry_deviation_reason() {  # $1 = check, $2 = the artifact, $3 = the path inside it
+  _edr="$(deviation_reason "$1" "$3")"
+  if [ -z "$_edr" ] && _edp="$(shipyard_standalone_entry_pkg_path "$2" "$3")"; then _edr="$(deviation_reason "$1" "$_edp")"; fi
+  printf '%s' "$_edr"
+}
 
 status=0
-fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (optional)
+fail() {  # $1 = check name, $2 = message, $3 = the artifact it concerns (optional), $4 = the archive or pkg holding $3 (optional)
   # spec: SKILL.md "Artifact conformance" -- a deviation excuses only its OWN check, only for the
   #       artifacts it names, and only with a reason (swift-toolchain's swift.org .pkg is the scoping
   #       example there).
   _c="$1"; _msg="$2"; _file="${3:-}"
-  reason="$(deviation_reason "$_c" "$_file")"
+  if [ -n "${4:-}" ]; then reason="$(entry_deviation_reason "$_c" "$4" "$_file")"; else reason="$(deviation_reason "$_c" "$_file")"; fi
   if [ -n "$reason" ]; then
     echo "conformance: ${_c}: DECLARED DEVIATION${_file:+ (${_file})} -- $reason"
     return 0
@@ -463,7 +472,7 @@ while read -r kind file path arch ft mn sd sha; do
   [ "$kind" = macho ] || continue
   shipyard_sdk_exempt_sha256 "$sha" && continue
   why="$(shipyard_sdk_rule "$arch" "$ft" "$mn" "$sd")" \
-    || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")"
+    || fail sdk-pin "$file installs $(dec "$path") ($arch): $why" "$(dec "$path")" "$file"
 done < "$facts"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Family conventions" check 37 --
@@ -526,13 +535,13 @@ awk 'function add(list, v) { return index(" " list " ", " " v " ") ? list : (lis
              gsub(/ /, ",", f); gsub(/ /, ",", g); gsub(/ /, ",", h)
              print k, f, g, n[k], h s[k] } }' "$facts" > "$tmp/cxxabi"
 cxx_report() {  # $1 = message; a grandfathered path ($gf) warns, anything else goes through fail()
-  if [ -n "$gf" ]; then echo "::warning::conformance: cxxabi: $1 (grandfathered: $gf)"; else fail cxxabi "$1" "$p"; fi
+  if [ -n "$gf" ]; then echo "::warning::conformance: cxxabi: $1 (grandfathered: $gf)"; else fail cxxabi "$1" "$p" "$file"; fi
 }
 cxx_fail=0
 while read -r file path darches larches n loads syms; do
   p="$(dec "$path")"
   gf=""
-  if [ -z "$(deviation_reason cxxabi "$p")" ]; then
+  if [ -z "$(entry_deviation_reason cxxabi "$file" "$p")" ]; then
     [ -n "$repository" ] && [ -f "$SELF/conventions-grandfathered" ] \
       && grep -qxF "cxxabi ${repository#*/} $path" "$SELF/conventions-grandfathered" && gf="cxxabi ${repository#*/} $path"
     if [ -z "$gf" ]; then cxx_fail=$((cxx_fail + 1)); [ "$cxx_fail" -le 20 ] || { status=1; continue; }; fi

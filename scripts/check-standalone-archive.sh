@@ -17,7 +17,8 @@
 #          CHANGELOG* at any depth), is a warning on stdout, never a finding. DIR's (default .)
 #          INGREDIENTS.md, read by deviations.sh, may declare "- standalone-text:<glob>: <reason>": a
 #          script's or text file's findings naming /usr/local/mavergreen, for an archive path (relative
-#          to SHORT-VERSION/) the shell case pattern <glob> matches, become warnings; no other finding is
+#          to SHORT-VERSION/) the shell case pattern <glob> matches, or for the path the pkg installs it
+#          at (scripts/lib/standalone-tree.sh), become warnings; no other finding is
 #          excused, and an entry excusing nothing is a finding; with --defer-unused it is not, and each
 #          entry used is named on stdout instead, "standalone-text used: <glob>", for a caller judging
 #          several archives (artifact-facts.sh). Mach-O is read by
@@ -31,6 +32,7 @@
 # spec: tests/check-standalone-archive-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
+. "$SELF/lib/standalone-tree.sh"
 usage='usage: check-standalone-archive.sh [--run] [--plist PLIST] [--repo DIR] [--defer-unused] ARCHIVE'
 run=no; plist=""; repo=.; defer=no
 while [ $# -gt 1 ]; do
@@ -186,9 +188,10 @@ while IFS= read -r f; do
       }' > "$t/hits"
   [ -s "$t/hits" ] || continue
   ex=""
+  pr="$(shipyard_standalone_pkg_path "$short" "$r")"
   set -f
   while read -r _en _eg; do
-    case "$r" in $_eg) ;; *) continue ;; esac
+    case "$r" in $_eg) ;; *) case "$pr" in $_eg) ;; *) continue ;; esac ;; esac
     echo "$_en" >> "$t/textused"
     [ -n "$ex" ] || ex="$_eg"
   done < "$t/textdevs"

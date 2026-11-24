@@ -56,6 +56,39 @@ no "and only those" "sdk-pin" "$GOOD
 deviation sdk-pin:usr/local/go/src/* Go's own race-detector and testdata objects, shipped verbatim in src/
 macho p.pkg usr/local/go/bin/go x86_64 EXECUTE 10.9 26.5 aa"
 
+# spec: SKILL.md "Standalone archive" -- a standalone archive is the pkg's tree, so a deviation declared
+#       in pkg terms matches an archive entry at the path the pkg installs it; golang-127's cross archive.
+SA=go127-cross-1.27.4-mavericks.14-macos-arm64.tar.gz
+ST=go127-cross-1.27.4-mavericks.14
+ok "a pkg-terms sdk-pin deviation excuses the archive entry the pkg installs there" "$GOOD
+deviation sdk-pin:*/go127-cross/bin/* Go 1.27's linker stamps 13.0
+deviation sdk-pin:*/go127-cross/pkg/tool/darwin_arm64/* Go 1.27's linker stamps 13.0
+macho $SA $ST/bin/go arm64 EXECUTE 13.0 26.2 aa
+macho $SA $ST/pkg/tool/darwin_arm64/link arm64 EXECUTE 13.0 26.2 aa"
+no "an undeclared archive entry still fails" "sdk-pin: $SA installs $ST/bin/go (arm64)" "$GOOD
+deviation sdk-pin:*/go127-cross/pkg/tool/darwin_arm64/* Go 1.27's linker stamps 13.0
+macho $SA $ST/bin/go arm64 EXECUTE 13.0 26.2 aa"
+ok "an archive-path glob still matches the raw entry" "$GOOD
+deviation sdk-pin:$ST/bin/* the archive's own spelling
+macho $SA $ST/bin/go arm64 EXECUTE 13.0 26.2 aa"
+ok "an app at the archive's top maps to Applications" "$GOOD
+deviation sdk-pin:Applications/Go.app/* the app the pkg installs in Applications
+macho $SA $ST/Go.app/Contents/MacOS/Go arm64 EXECUTE 13.0 26.2 aa"
+no "the mapping is the archive's own product's tree, not another's" "sdk-pin" "$GOOD
+deviation sdk-pin:usr/local/mavergreen/go127/bin/* the native product's tree
+macho $SA $ST/bin/go arm64 EXECUTE 13.0 26.2 aa"
+no "an entry outside the archive's top is not mapped" "sdk-pin" "$GOOD
+deviation sdk-pin:*/go127-cross/bin/* Go 1.27's linker stamps 13.0
+macho $SA other/bin/go arm64 EXECUTE 13.0 26.2 aa"
+no "a tarball that is not a standalone archive is not mapped" "sdk-pin" "$GOOD
+deviation sdk-pin:usr/local/mavergreen/go127-cross/bin/* Go 1.27's linker stamps 13.0
+macho go127-cross-1.27.4-mavericks.14-linux-x86_64.tar.gz $ST/bin/go arm64 EXECUTE 13.0 26.2 aa"
+ok "a pkg-terms cxxabi deviation excuses the archive entry the pkg installs there" "$GOOD
+deviation cxxabi:usr/local/mavergreen/go127-cross/bin/* vendored; exit: when it links libcxx22
+cxxabi-defines $SA $ST/bin/go arm64 ___cxa_throw visible"
+no "an undeclared archive entry still fails cxxabi" "cxxabi: $SA installs $ST/bin/go" "$GOOD
+cxxabi-defines $SA $ST/bin/go arm64 ___cxa_throw visible"
+
 # spec: SKILL.md "Family conventions" check 37 -- a pkg's arm64 slice is a declared deviation,
 #       '- arm64:<glob>: <reason>' matched against the install path; a Sparkle updater's slices are
 #       exempt, and a repo grandfathered as modern-smoke is warned rather than failed.

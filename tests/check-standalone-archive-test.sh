@@ -156,6 +156,13 @@ with 1 "Go's x509 source naming CA bundles, undeclared" "root_keychainunion_darw
 repo "$w/r-x509" "standalone-text:$X509/root_keychainunion_darwin*.go: CA bundles a built program reads at run time"
 withrepo 0 "standalone-text excuses the matching text files" "excused by standalone-text:$X509/root_keychainunion_darwin\*.go" "$w/r-x509"
 grep -q 'go126, the product' "$w/out" || fail "an excused self-reference is still reported: $(cat "$w/out")"
+repo "$w/r-pkgterms" "standalone-text:*/go126/$X509/root_keychainunion_darwin*.go: CA bundles, declared once in pkg terms"
+withrepo 0 "standalone-text in pkg terms excuses the archive path the pkg installs there" "excused by standalone-text:\*/go126/$X509" "$w/r-pkgterms"
+rc=0; sh "$C" --plist "$P" --repo "$w/r-pkgterms" --defer-unused "$A" > "$w/out" 2>&1 || rc=$?
+grep -qx "check-standalone-archive: go126-1.26.5-macos-x86_64.tar.gz: standalone-text used: \*/go126/$X509/root_keychainunion_darwin\*.go" "$w/out" \
+  || fail "--defer-unused names a pkg-terms entry it used: $(cat "$w/out")"
+repo "$w/r-other" "standalone-text:usr/local/mavergreen/go127/$X509/*.go: another product's tree"
+withrepo 1 "standalone-text in another product's terms excuses nothing here" "excuses nothing" "$w/r-other"
 repo "$w/r-one" "standalone-text:$X509/root_keychainunion_darwin.go: CA bundles"
 withrepo 1 "standalone-text excuses only the paths its glob matches" "root_keychainunion_darwin_test.go names /usr/local/mavergreen/ca-certs" "$w/r-one"
 grep -v 'warning: excused' "$w/out" | grep -q 'root_keychainunion_darwin.go names' && fail "the matching file is excused: $(cat "$w/out")"
