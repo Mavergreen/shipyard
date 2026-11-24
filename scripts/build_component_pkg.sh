@@ -8,7 +8,7 @@
 #          directory; a caller without git must export SOURCE_DATE_EPOCH. Every entry under the root
 #          but a symlink loses group and world write, setuid and setgid kept, and the root itself is
 #          made 0755, so a umask-002 stage installs as a umask-022 one would; stderr counts the
-#          entries changed. Exit 1 on a missing root, 2 on a usage error.
+#          entries changed and the bundles the built pkg declares. Exit 1 on a missing root, 2 on a usage error.
 # platform: builds a flat component .pkg with stevedore, whose bundles install EXACTLY where
 #           declared and ALWAYS overwrite. stevedore writes every component install-in-place, so
 #           PackageKit's two "defer to whatever is already on disk" defaults are OFF on every bundle:
@@ -53,14 +53,15 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 EPOCH="$(sh "$SELF/source-date-epoch.sh")"
 STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")"
 
-n="$(find "$ROOT" -type d \( -name '*.app' -o -name '*.bundle' \) \
-       \( -exec test -f '{}/Contents/Info.plist' \; -o -exec test -f '{}/Info.plist' \; \) -print | wc -l)"
-n=$((n + 0))
-echo "build_component_pkg: forced install-in-place on $n bundle component(s)" >&2
-
 set -- component --root "$ROOT" --identifier "$IDENT" --version "$VER" --install-location "$LOC" \
        --mtime "$EPOCH"
 [ -n "$SCRIPTS" ] && set -- "$@" --scripts "$SCRIPTS"
 "$STEVEDORE" "$@" --out "$OUT" >&2
+
+_tmp="${TMPDIR:-/tmp}"
+x="$(mktemp -d "${_tmp%/}/build_component_pkg.XXXXXX")"; trap 'rm -rf "$x"' EXIT
+"$STEVEDORE" expand "$OUT" "$x/pkg" >&2
+n="$(awk '/<bundle path=/ { n++ } END { print n + 0 }' "$x/pkg/PackageInfo")"
+echo "build_component_pkg: forced install-in-place on $n bundle component(s)" >&2
 
 echo "$OUT"
