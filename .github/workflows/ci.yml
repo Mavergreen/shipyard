@@ -111,13 +111,15 @@ jobs:
           sh scripts/shipyard-check --dist "$d"
 
       # spec: scripts/package-pkg.sh -- its input, as a tar that keeps modes and links, so the pkg
-      #       can be rebuilt from the same bytes on another host and compared.
+      #       can be rebuilt from the same bytes on another host and compared; and the pkg itself, so
+      #       content-manifest.sh can be run over one Linux-built pkg on every host.
       - name: Tar the packaging inputs
         run: |
           set -eu
-          mkdir -p "$RUNNER_TEMP/inputs"
+          mkdir -p "$RUNNER_TEMP/inputs/dist"
           tar -cf "$RUNNER_TEMP/inputs/payload-stage.tar" -C "$RUNNER_TEMP" payload-stage
           sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p' > "$RUNNER_TEMP/inputs/version"
+          cp "$RUNNER_TEMP/dist/shipyard-$(cat "$RUNNER_TEMP/inputs/version").pkg" "$RUNNER_TEMP/inputs/dist/"
 
       - name: Save the packaging inputs
         uses: actions/upload-artifact@v7
