@@ -70,8 +70,8 @@ if [ "${MAVERGREEN_SHIPYARD_LAUNCHER_PID:-}" = "$$" ] || [ "$depth" -ge 8 ]; the
   echo "shipyard-$tool: $exe runs a shipyard launcher again, a loop: a stand-in $tool must not exec shipyard-$tool, so put a real $tool first on PATH." >&2
   exit 1
 fi
-# spec: mavericks-presets.json -- MAVERICKS_BUILD_ROOT is $penv{TMPDIR}/mm-build, and GitHub's Linux
-#       runners leave TMPDIR unset, which made it /mm-build.
+# spec: mavergreen-presets.json -- MAVERGREEN_BUILD_ROOT is $penv{TMPDIR}/mavergreen-build, and GitHub's
+#       Linux runners leave TMPDIR unset, which made it /mavergreen-build.
 [ -n "${TMPDIR:-}" ] || TMPDIR=/tmp
 export TMPDIR
 MAVERGREEN_SHIPYARD_LAUNCHER_PID=$$

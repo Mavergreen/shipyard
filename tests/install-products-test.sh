@@ -217,7 +217,7 @@ FAKE
 cat > "$top/bin/lb" <<'FAKE'
 #!/bin/sh
 echo "lb $*" >> "$FAKE_LOG"
-d="$FAKE_ROOT/usr/local/mavergreen/sdk109"
+d="$FAKE_ROOT/opt/mavergreen/sdk109"
 mkdir -p "$d/SDKs/MacOSX10.9.sdk/usr/lib"
 [ -z "${FAKE_LB_JSON:-}" ] || echo '{}' > "$d/SDKs/MacOSX10.9.sdk/SDKSettings.json"
 printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>version</key>\n  <string>20261027.13</string>\n</dict>\n</plist>\n' \
@@ -477,11 +477,11 @@ stalesdk() {  # $1 = installed sdk109 version: an sdk109 whose SDK lacks SDKSett
   installed sdk109 "$1"
   mkdir -p "$(mg sdk109)/SDKs/MacOSX10.9.sdk/usr/lib"; : > "$(mg sdk109)/SDKs/MacOSX10.9.sdk/usr/lib/libSystem.tbd"
 }
-stalemsg() { printf '%s' "install-products: sdk109: $w/root/usr/local/mavergreen/sdk109/SDKs/MacOSX10.9.sdk has no SDKSettings.json, so it is stale: sudo longboat sdk install 10.9"; }
+stalemsg() { printf '%s' "install-products: sdk109: $w/root/opt/mavergreen/sdk109/SDKs/MacOSX10.9.sdk has no SDKSettings.json, so it is stale: run longboat sdk install 10.9 as root"; }
 for iv in 20261012.2 20261027.13; do
-  fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
+  fresh; for _i in sdk109 lb; do mkdir -p "$w/repo/.mavergreen/ingredients/$_i"; echo Mavergreen/lbrepo > "$w/repo/.mavergreen/ingredients/$_i/REPO"; done
   latest lb 20261027.13
-  export MAVERICKS_SDK_URL="file://$w/sdk.tar" MAVERICKS_SDK_SHA256="$(shasum -a 256 "$top/sdk.tar" | awk '{print $1}')" MAVERICKS_SDK_CACHE="$w/sdkcache"
+  export MAVERGREEN_SDK_URL="file://$w/sdk.tar" MAVERGREEN_SDK_SHA256="$(shasum -a 256 "$top/sdk.tar" | awk '{print $1}')" MAVERGREEN_SDK_CACHE="$w/sdkcache"
   cp "$top/sdk.tar" "$w/sdk.tar"
   release a 1 sdk109; linux; printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; stalesdk "$iv"
   run a@1
@@ -489,10 +489,10 @@ for iv in 20261012.2 20261027.13; do
   [ "$rc" -eq 0 ] && [ -f "$sdk/SDKSettings.json" ] && [ "$(pget sdk109 version)" = 20261027.13 ] \
     && [ "$(printf '%s\n' "$out" | grep -cF "$(stalemsg)")" = 1 ] \
     || fail "linux_stale_sdk ($iv): an installed sdk109 with no SDKSettings.json is not kept: the pinned SDK replaces it, saying once that it was stale"
-  unset MAVERICKS_SDK_URL MAVERICKS_SDK_SHA256 MAVERICKS_SDK_CACHE
+  unset MAVERGREEN_SDK_URL MAVERGREEN_SDK_SHA256 MAVERGREEN_SDK_CACHE
 done
 
-fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
+fresh; for _i in sdk109 lb; do mkdir -p "$w/repo/.mavergreen/ingredients/$_i"; echo Mavergreen/lbrepo > "$w/repo/.mavergreen/ingredients/$_i/REPO"; done
 release lb 20261027.13; latest lb 20261027.13; release a 1 sdk109; real; export INSTALL_PRODUCTS_HOST=mac
 printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; stalesdk 20261012.2
 plan_stdout a@1

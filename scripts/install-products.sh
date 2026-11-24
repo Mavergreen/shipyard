@@ -145,7 +145,8 @@ sdkarch() {
   done
 }
 sdkstale() {
-  [ -n "$_sdir" ] && [ ! -f "$ROOT/usr/local/mavergreen/$1/SDKs/$_sdir/SDKSettings.json" ]
+  here_of "$1"; _sdk_at="${_here%/mavergreen.plist}/SDKs/$_sdir"
+  [ -n "$_sdir" ] && [ ! -f "$_sdk_at/SDKSettings.json" ]
 }
 
 manifest() {
@@ -262,7 +263,7 @@ resolve() {
   # spec: tests/install-products-test.sh -- an SDK with no SDKSettings.json makes clang22 record sdk
   #       n/a in C objects, so it is provisioned again rather than kept.
   if [ -n "$inst" ] && sdkstale "$s"; then
-    [ -f "$T/stale.$s" ] || echo "install-products: $s: $ROOT/usr/local/mavergreen/$s/SDKs/$_sdir has no SDKSettings.json, so it is stale: sudo longboat sdk install $_sver" >&2
+    [ -f "$T/stale.$s" ] || echo "install-products: $s: $_sdk_at has no SDKSettings.json, so it is stale: run longboat sdk install $_sver as root" >&2
     : > "$T/stale.$s"; inst=""
   fi
   src=""
