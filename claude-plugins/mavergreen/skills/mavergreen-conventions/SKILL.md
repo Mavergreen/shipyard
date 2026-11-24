@@ -2569,6 +2569,45 @@ guard is written as `if [ -z "$ROOT" ]; then …; fi`, never as `[ -z "$ROOT" ] 
 (that line is false on another volume). A hook contains no `exit` and no `set -e`: the subshell sits
 left of `||`, so `set -e` inside it is silently ignored, not enforced.
 
+### Kexts that load at boot
+
+**A family kext is unsigned, so stock 10.9 loads it only by exception.** Without
+`kext-dev-mode=1`, kextd refuses an unsigned kext in `/Library/Extensions` ("invalid signature for
+<id>, will not load") unless its bundle id is a key of `OSKextSigExceptionList` in
+`/System/Library/Extensions/AppleKextExcludeList.kext/Contents/Info.plist` (Wowfunhappy's mechanism,
+proven in Recaulk). kextd reads that list once, so it is restarted after the list changes.
+
+The doctrine: **add exactly the declared bundle ids and nothing else, each at the installed kext's
+own `CFBundleVersion`; remove them at uninstall; never touch any other key of Apple's file.** The
+facility does all three; no product edits the file itself.
+
+`stage_product.sh --boot-kext <bundle id>` (repeatable) names a kext staged anywhere under the stage;
+staging refuses an id no staged kext carries, an id two kexts carry, and a kext whose `Info.plist`
+is not XML or whose first `CFBundleVersion` is not its top-level one. Then:
+
+- the product's tree gets `libexec/mavergreen/kext-sig-exception` (shipyard's
+  `scripts/kext_sig_exception.sh`, `add PLIST ID VERSION` / `remove PLIST ID`, which changes only that
+  `<key>`/`<string>` pair and refuses a binary plist or one with no list) and a generated
+  `libexec/mavergreen/pre-uninstall` that removes each id from the target volume's list, so
+  uninstall needs no shipyard. A `pre-uninstall` the product staged itself is kept as
+  `pre-uninstall.product` and runs first; its failure stops the uninstall, as before.
+- the generated postinstall, right after `mavergreen link` and before the updater's agent and the
+  `--postinstall-hook`, lists each id at the installed kext's `CFBundleVersion` in the target
+  volume's list and, on the boot volume only, runs `launchctl stop com.apple.kextd` (launchd starts
+  it again). So a hook that loads the kext's LaunchDaemon runs after kextd has reread the list. A
+  failure is reported, naming `kext-dev-mode=1` as the fallback, and never fails the install; a
+  volume with no exclude list (not 10.9) is skipped quietly.
+
+Conformance enforces it from the pkg: a kext directly in `Library/Extensions` that loads other than
+as a dependency (a library kext declares `OSBundleCompatibleVersion` and no `IOKitPersonalities`)
+is listed through `--boot-kext` or declared `- kext-sig-exception:<id>: <reason>`; an id listed for a
+kext the pkg does not ship fails; and a pre- or postinstall that names `AppleKextExcludeList` or
+`OSKextSigExceptionList` outside the generated block fails, with no deviation.
+
+Revisit if an Apple update on 10.9 replaces or reshapes the exclude list (the tool then refuses and
+installs fall back to `kext-dev-mode=1`), or a product needs a broader change to that file than its
+own ids.
+
 ### Where a product may install
 
 **Everything a pkg installs says it is ours, and lands where the family puts things.** Read from the
