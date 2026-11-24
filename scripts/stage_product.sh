@@ -276,7 +276,7 @@ HELPERPICK
   printf 'mavergreen_chain_ok "$_mg_at" "$3" || exit 1\n'
   printf '"$MG" --root "$ROOT/" link %s || exit 1\n' "$P"
   if [ -n "$KX" ]; then
-    printf '_kx="$ROOT/usr/local/mavergreen/%s/libexec/mavergreen/kext-sig-exception"\n' "$P"
+    printf '_kx="$ROOT%s/libexec/mavergreen/kext-sig-exception"\n' "$PFX"
     printf '_kl="$ROOT/System/Library/Extensions/AppleKextExcludeList.kext/Contents/Info.plist"\n'
     printf '_kx_added=0\n'
     printf 'if [ -f "$_kl" ]; then\n'

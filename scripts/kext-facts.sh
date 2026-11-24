@@ -50,7 +50,7 @@ for d in $scripts; do
   for s in preinstall postinstall; do
     [ -f "$d/$s" ] || continue
     awk -v pkg="$pkg" -v s="$s" '
-      s == "postinstall" && !done && !inb && /^_kx="\$ROOT\/usr\/local\/mavergreen\/[a-z0-9-]+\/libexec\/mavergreen\/kext-sig-exception"$/ { inb = 1; next }
+      s == "postinstall" && !done && !inb && /^_kx="\$ROOT\/opt\/mavergreen\/[a-z0-9-]+\/libexec\/mavergreen\/kext-sig-exception"$/ { inb = 1; next }
       inb && $0 == "unset _kx _kl _kv _kx_added" { inb = 0; done = 1; next }
       inb && $0 == "_kl=\"$ROOT/System/Library/Extensions/AppleKextExcludeList.kext/Contents/Info.plist\"" { next }
       inb && /^  if \[ -n "\$_kv" \] && sh "\$_kx" add "\$_kl" [A-Za-z0-9._-]+ "\$_kv"; then / { split($0, f, " "); print "kext-exception", pkg, f[11]; next }

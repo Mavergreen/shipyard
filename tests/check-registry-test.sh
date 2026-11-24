@@ -36,7 +36,9 @@ infeasible="update-trusted|tests/assert_update_trusted.bats|it verifies a signed
 installed-shipyard|tests/assert-installed-shipyard-test.sh|it inspects an installed prefix, which its test assembles in a scratch root
 arch-union|tests/lipo-merge-tree-test.sh|it judges two build trees at merge time, which a dist fixture cannot hold
 standalone|tests/artifact-conformance-standalone-test.sh|its subject is a product's signed pkg beside an archive cut from the same staged tree, which the test builds with stevedore and stage_standalone.sh rather than checking in
-no-standalone|tests/artifact-conformance-standalone-test.sh|it fires only for a product the repo declares whose signed pkg is in the dist, which the test states as facts rather than checking in a built pkg"
+no-standalone|tests/artifact-conformance-standalone-test.sh|it fires only for a product the repo declares whose signed pkg is in the dist, which the test states as facts rather than checking in a built pkg
+kext-sig-exception|tests/artifact-conformance-kext-test.sh|its subject is a pkg's kexts and the ids its generated postinstall lists, which the test states as facts and kext-facts-test.sh reads from a pkg built with stevedore
+kext-exclude-list|tests/artifact-conformance-kext-test.sh|its subject is a pkg's install scripts, which the test states as facts and kext-facts-test.sh reads from hand-written scripts"
 fx="$here/tests/fixtures/checks"
 while IFS="$(printf '\t')" read -r id mode script old fate; do
   if [ "$mode" = retired ]; then

@@ -236,11 +236,11 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
         printf 'launchd-program %s %s/%s %s\n' "$1" "$_ld" "$(basename "$_lp" | enc)" "$(field "$_pg")"
       done
     done
-    _ks=""
-    if [ -d "$_dir/Scripts" ]; then _ks="$_dir/Scripts"
-    elif [ -f "$_dir/Scripts" ]; then
-      _ks="$_dir.scripts"; mkdir -p "$_ks"
-      ( cd "$_ks" && gzip -dc "$_dir/Scripts" | cpio -id 2>/dev/null ) || { _pf_why="cannot read the scripts of $1"; return 1; }
+    _ks=""; _kd="${_pl%/Payload}"
+    if [ -d "$_kd/Scripts" ]; then _ks="$_kd/Scripts"
+    elif [ -f "$_kd/Scripts" ]; then
+      _ks="$_kd.scripts"; mkdir -p "$_ks"
+      ( cd "$_ks" && gzip -dc "$_kd/Scripts" | cpio -id 2>/dev/null ) || { _pf_why="cannot read the scripts of $1"; return 1; }
     fi
     _kr=""; [ -n "$_loc" ] || _kr="$_root"
     sh "$SELF/kext-facts.sh" "$1" --root "$_kr" --scripts "$_ks" || { _pf_why="kext-facts.sh cannot read $1"; return 1; }

@@ -21,14 +21,16 @@ P='	<key>IOKitPersonalities</key>
 C='	<key>OSBundleCompatibleVersion</key>
 	<string>1.0</string>
 '
+mkdir -p "$w/meta/.mavergreen/products/recaulk"; echo Recaulk > "$w/meta/.mavergreen/products/recaulk/noun"
+MAVERGREEN_REPO_ROOT="$w/meta"; GITHUB_REPOSITORY=Mavergreen/recaulk; export MAVERGREEN_REPO_ROOT GITHUB_REPOSITORY
 st="$w/stage"
-mkdir -p "$st/usr/local/mavergreen/recaulk/bin"; echo x > "$st/usr/local/mavergreen/recaulk/bin/x"
+mkdir -p "$st/opt/mavergreen/recaulk/bin"; echo x > "$st/opt/mavergreen/recaulk/bin/x"
 kext "$st/Library/Extensions/Boot.kext" dev.mavergreen.p.boot "$P"
 kext "$st/Library/Extensions/KPI.kext" dev.mavergreen.p.kpi "$C"
 kext "$st/Library/Extensions/Both.kext" dev.mavergreen.p.both "$C$P"
 kext "$st/Library/Extensions/Plain Name.kext" dev.mavergreen.p.plain
 kext "$st/Library/Extensions/Boot.kext/Contents/PlugIns/Inner.kext" dev.mavergreen.p.inner "$C"
-sh "$here/../scripts/stage_product.sh" --stage "$st" --product recaulk --name Recaulk --version 1 --scripts-out "$w/scr" \
+sh "$here/../scripts/stage_product.sh" --stage "$st" --product recaulk --version 1 --scripts-out "$w/scr" \
   --boot-kext dev.mavergreen.p.boot --boot-kext dev.mavergreen.p.plain >/dev/null || fail "staging must succeed"
 out="$(sh "$KF" p.pkg --root "$st" --scripts "$w/scr")" || fail "kext-facts.sh failed"
 want='kext p.pkg Library/Extensions/Boot.kext dev.mavergreen.p.boot boot
@@ -47,7 +49,7 @@ mkdir -p "$w/hand"
 cp "$w/scr/preinstall" "$w/hand/preinstall"
 { sed '$d' "$w/scr/postinstall"
   printf '%s\n' '_kl="$ROOT/System/Library/Extensions/AppleKextExcludeList.kext/Contents/Info.plist"' \
-    'sh "$ROOT/usr/local/mavergreen/recaulk/libexec/recaulk/kext-exception.sh" add "$_kl" dev.mavergreen.p.boot 1.0' 'exit 0'
+    'sh "$ROOT/opt/mavergreen/recaulk/libexec/recaulk/kext-exception.sh" add "$_kl" dev.mavergreen.p.boot 1.0' 'exit 0'
 } > "$w/hand/postinstall"
 out="$(sh "$KF" p.pkg --scripts "$w/hand")" || fail "kext-facts.sh failed on hand-written scripts"
 printf '%s\n' "$out" | grep -qx 'excludelist-script p.pkg postinstall' \

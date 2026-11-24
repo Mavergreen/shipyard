@@ -160,6 +160,8 @@ rule_of() {
     os-overwrite) echo "a regular product only adds files to Mac OS X 10.9.5, and never replaces one the OS ships" ;;
     standalone) echo "every standalone archive in a release passes check-standalone-archive.sh" ;;
     no-standalone) echo "a release that ships a product's pkg ships its standalone archive beside it" ;;
+    kext-sig-exception) echo "a boot kext a pkg installs in Library/Extensions is listed in 10.9's OSKextSigExceptionList through stage_product.sh --boot-kext, and the list names only kexts the pkg ships" ;;
+    kext-exclude-list) echo "no pkg script edits AppleKextExcludeList other than through stage_product.sh --boot-kext" ;;
   esac
 }
 fix_of() {
@@ -1070,14 +1072,14 @@ nmacho="$(grep -c '^macho ' "$facts" || :)"
 
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Kexts that load at boot" -- a
 #       kext in Library/Extensions that loads other than as a dependency is listed through
-#       stage_product.sh --boot-kext or declared '- kext-sig-exception:<id>: <reason>'; the facility lists
+#       stage_product.sh --boot-kext or declared as a kext-sig-exception deviation; the facility lists
 #       only kexts the pkg ships; and no script edits Apple's exclude list itself, which no deviation excuses.
 while read -r kind file path id how; do
   [ "$kind" = kext ] && [ "$how" = boot ] || continue
   case "$path" in Library/Extensions/*.kext) ;; *) continue ;; esac
   case "${path#Library/Extensions/}" in */*) continue ;; esac
   awk -v p="$file" -v i="$id" '$1 == "kext-exception" && $2 == p && $3 == i { f = 1 } END { exit !f }' "$facts" \
-    || fail kext-sig-exception "$file installs $(dec "$path") ($id), which 10.9's kextd refuses unsigned unless its id is in OSKextSigExceptionList -- stage it with stage_product.sh --boot-kext $id, or declare '- kext-sig-exception:$id: <reason>' under INGREDIENTS.md's ## Conformance deviations" "$id"
+    || fail kext-sig-exception "$file installs $(dec "$path") ($id), which 10.9's kextd refuses unsigned unless its id is in OSKextSigExceptionList -- stage it with stage_product.sh --boot-kext $id, or declare .mavergreen/deviations/kext-sig-exception/<label>/ scoped to $id" "$id"
 done < "$facts"
 while read -r kind file id; do
   [ "$kind" = kext-exception ] || continue
@@ -1086,8 +1088,9 @@ while read -r kind file id; do
 done < "$facts"
 while read -r kind file script; do
   [ "$kind" = excludelist-script ] || continue
-  echo "conformance: kext-exclude-list: $file's $script edits AppleKextExcludeList other than through stage_product.sh --boot-kext -- every other key of Apple's file is left alone, so declare the kext's id with --boot-kext and drop the hand-written edit" >&2
-  chk_status=1
+  chk_fail kext-exclude-list "$(rule_of kext-exclude-list)" \
+    "$file's $script edits AppleKextExcludeList other than through stage_product.sh --boot-kext" \
+    "every other key of Apple's file is left alone, so declare the kext's id with --boot-kext and drop the hand-written edit"
 done < "$facts"
 
 [ "$chk_status" -ne 0 ] || echo "conformance: ok — $expected"

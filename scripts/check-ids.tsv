@@ -146,5 +146,7 @@ build-equivalence-interface	key	scripts/build-equivalence.sh	deviation key (buil
 standalone-text	key	scripts/check-standalone-archive.sh	deviation key (standalone-text, from main)	P1
 standalone	dist	scripts/check-artifact-conformance.sh	conformance standalone	P1
 no-standalone	dist	scripts/check-artifact-conformance.sh	conformance no-standalone	P1
+kext-sig-exception	dist	scripts/check-artifact-conformance.sh	new (from main: conformance kext-sig-exception)	P1
+kext-exclude-list	dist	scripts/check-artifact-conformance.sh	new (from main: conformance kext-exclude-list)	P1
 pkg-builder-library	key	scripts/check-family-conventions.sh	deviation key (checks 21 and 29, from main)	P1
 staged-by	key	scripts/check-family-conventions.sh	deviation key (check 23, from main)	P1
