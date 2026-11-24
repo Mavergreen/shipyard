@@ -5,7 +5,10 @@
 #          <prefix>/cmake/bin/{cmake,ctest,cpack}. shipyard-cmake first appends <prefix>/shipyard to
 #          CMAKE_PREFIX_PATH, so find_package(MavericksShipyard) finds it after any caller's entry.
 #          Off Darwin, with no cmake product beside shipyard or a Mach-O one, it runs the first
-#          {cmake,ctest,cpack} on PATH that is not a link to a shipyard launcher. SHIPYARD_LAUNCHER_HOST (linux or mac) replaces uname -s.
+#          {cmake,ctest,cpack} on PATH that is not a shipyard launcher or a link to one. SHIPYARD_LAUNCHER_HOST (linux or mac) replaces uname -s.
+#          A tool that runs a launcher again before any other work (a stand-in cmake that execs
+#          shipyard-cmake) is refused as a loop; MAVERGREEN_SHIPYARD_LAUNCHER_PID and
+#          MAVERGREEN_SHIPYARD_LAUNCHER_DEPTH carry the guard.
 # spec: 2026-10-09 C4
 # platform: 10.9 has no realpath and no readlink -f, so links are followed one at a time.
 resolve() {
@@ -48,6 +51,7 @@ if [ "$host" = linux ] && { [ ! -x "$exe" ] || macho "$exe"; }; then
     [ -n "$d" ] && [ -x "$d/$tool" ] && [ ! -d "$d/$tool" ] || continue
     resolve "$d/$tool"
     case "${r##*/}" in shipyard-cmake|shipyard-ctest|shipyard-cpack) continue ;; esac
+    ! cmp -s "$r" "$self" || continue
     exe="$d/$tool"; break
   done
   IFS="$_ifs"; set +f
@@ -60,6 +64,15 @@ if [ ! -x "$exe" ]; then
   echo "shipyard-$tool: shipyard needs the Mavergreen cmake product, which isn't installed: https://github.com/Mavergreen/cmake/releases/latest -- install it, then run this again." >&2
   exit 1
 fi
+depth="${MAVERGREEN_SHIPYARD_LAUNCHER_DEPTH:-0}"
+case "$depth" in ''|*[!0-9]*) depth=0 ;; esac
+if [ "${MAVERGREEN_SHIPYARD_LAUNCHER_PID:-}" = "$$" ] || [ "$depth" -ge 8 ]; then
+  echo "shipyard-$tool: $exe runs a shipyard launcher again, a loop: a stand-in $tool must not exec shipyard-$tool, so put a real $tool first on PATH." >&2
+  exit 1
+fi
+MAVERGREEN_SHIPYARD_LAUNCHER_PID=$$
+MAVERGREEN_SHIPYARD_LAUNCHER_DEPTH=$((depth + 1))
+export MAVERGREEN_SHIPYARD_LAUNCHER_PID MAVERGREEN_SHIPYARD_LAUNCHER_DEPTH
 if [ "$tool" = cmake ]; then
   CMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH:+$CMAKE_PREFIX_PATH:}$shipyard"
   export CMAKE_PREFIX_PATH
