@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-# VERSION (a gitignored build product) wins when present -- release.yml writes it. Otherwise derive
+# -DSHIPYARD_FULL_VERSION wins (the install action's checkout has no .git); then VERSION (a gitignored
+# build product) when present -- release.yml writes it. Otherwise derive
 # from the commit count, so a developer's `cmake --install` from a checkout stamps the REAL version
 # rather than the bare line: an install is a snapshot with no staleness signal of its own, and the
 # number it carries is the only way to tell one apart from another. .mavergreen/upstream/VERSION is the last
 # resort, for a tarball with no .git (it yields the line, which is honest about being imprecise).
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
+if(DEFINED SHIPYARD_FULL_VERSION)
+  set(_MSC_VERSION "${SHIPYARD_FULL_VERSION}")
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
   file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" _MSC_VERSION LIMIT_COUNT 1)
 else()
   execute_process(

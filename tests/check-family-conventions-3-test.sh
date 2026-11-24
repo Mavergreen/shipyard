@@ -198,7 +198,7 @@ out="$(cd "$work/p18yaml" && sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -qi 'Traceback' && { echo "FAIL 18: a non-string run: must not crash the gate: $out"; exit 1; }
 (cd "$work/p18yaml" && sh "$S" >/dev/null) || { echo "FAIL 18: a non-string run: should simply be skipped: $out"; exit 1; }
 
-# platform: shipyard ships no Linux pkg and no Linux shipyard-cmake, so a job that demonstrably runs
+# platform: off macOS shipyard-cmake runs the host's own cmake, so a job that demonstrably runs
 #           off macOS must be allowed plain cmake -- requiring it there broke container-tools'
 #           ubuntu jobs twice, most recently during the 2026-09-16 cutover. The macOS case must
 #           still fail, or the skip would have switched check 18 off altogether.

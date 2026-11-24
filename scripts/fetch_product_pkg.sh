@@ -18,7 +18,7 @@
 #          lock file DEST.lock, waiting up to SHIPYARD_LOCK_WAIT seconds (default 900) for it.
 #          It needs cpio and gzip to unpack the Payload, which a bare Linux image may lack: without either
 #          it exits 2 before fetching, naming the package to install.
-#          A Payload holding an AppleDouble member (._*) is refused, naming the first.
+#          A Payload holding an AppleDouble member (._*) is refused, naming the first. pkg_read.sh reads the pkg.
 #          Prints DEST on stdout; progress goes to stderr. Exit 1 on a failed fetch, checksum or
 #          extraction, or an AppleDouble member; 2 on a usage error, or a missing cpio or gzip.
 #          MAVERGREEN_RELEASES replaces https://github.com (the tests serve a file:// tree).
@@ -86,8 +86,7 @@ rm -f "$DEST.stamp"
 shipyard_fetch_verified "$BASE/$ASSET" "$SHA" "$CACHE" "$ASSET" || {
   echo "fetch_product_pkg: could not fetch and verify $BASE/$ASSET" >&2; exit 1; }
 
-STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || { echo "fetch_product_pkg: no stevedore to expand the pkg with" >&2; exit 1; }
-"$STEVEDORE" expand "$CACHE/$ASSET" "$tmp/expanded" >&2 || {
+sh "$SELF/pkg_read.sh" expand "$CACHE/$ASSET" "$tmp/expanded" || {
   echo "fetch_product_pkg: could not expand $CACHE/$ASSET" >&2; exit 1; }
 components() {
   for _pi in "$tmp"/expanded/*/PackageInfo; do
@@ -102,13 +101,11 @@ n="$(printf '%s\n' "$matches" | grep -c . || true)"
 [ "$n" = 1 ] || {
   echo "fetch_product_pkg: expected one component dev.mavergreen.$SHORT in $ASSET, found $n" >&2; exit 1; }
 ID="$(sed -n 's/.*identifier="\([^"]*\)".*/\1/p' "$matches" | head -n 1)"
-comp="$(dirname "$matches")"
-gzip -dc "$comp/Payload" | cpio -it --quiet 2>/dev/null > "$tmp/members" || {
+sh "$SELF/pkg_read.sh" list "$tmp/expanded" "$ID" > "$tmp/members" || {
   echo "fetch_product_pkg: could not list the Payload of $ID" >&2; exit 1; }
-ad="$(sed 's|^\./||' "$tmp/members" | awk '{ n = split($0, c, "/") } c[n] ~ /^\._/ { print; exit }')"
+ad="$(cut -f1 "$tmp/members" | sed 's|^\./||' | awk '{ n = split($0, c, "/") } c[n] ~ /^\._/ { print; exit }')"
 [ -z "$ad" ] || { echo "fetch_product_pkg: $ID's Payload holds an AppleDouble member, $ad: a family pkg carries none" >&2; exit 1; }
-mkdir "$tmp/payload"
-( cd "$tmp/payload" && gzip -dc "$comp/Payload" | cpio -id --quiet 2>/dev/null ) || {
+sh "$SELF/pkg_read.sh" payload "$tmp/expanded" "$ID" "$tmp/payload" || {
   echo "fetch_product_pkg: could not unpack the Payload of $ID" >&2; exit 1; }
 tree="$tmp/payload/opt/mavergreen/$SHORT"
 [ -d "$tree" ] || tree="$tmp/payload/usr/local/mavergreen/$SHORT"

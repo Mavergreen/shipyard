@@ -465,11 +465,15 @@ INSTALL_PRODUCTS_HOST=linux plan_stdout x@1
 [ "$rc" -eq 0 ] && [ "$out" = 'keep x 1' ] || fail "linux_old_prefix: a rerun finds it there and keeps it"
 
 fresh; release x 1 --no-appcast; linux
-cp "$w/stage/x-1/comp.pkg" "$w/rel/Mavergreen/xrepo/releases/download/1/x-1.pkg"
+"$SD" expand "$w/stage/x-1/comp.pkg" "$w/stage/x-1/cx"
+printf junk > "$w/stage/x-1/root/usr/local/mavergreen/x/._file"
+( cd "$w/stage/x-1/root" && find . | LC_ALL=C sort | cpio -o -H odc 2>/dev/null | gzip -n ) > "$w/stage/x-1/cx/Payload"
+"$SD" xar --mtime 1700000000 --out "$w/rel/Mavergreen/xrepo/releases/download/1/x-1.pkg" none Bom "$w/stage/x-1/cx/Bom" \
+  none Payload "$w/stage/x-1/cx/Payload" none PackageInfo "$w/stage/x-1/cx/PackageInfo"
 ( cd "$w/rel/Mavergreen/xrepo/releases/download/1" && shasum -a 256 x-1.pkg > SHA256SUMS )
 run x@1
-[ "$rc" -eq 1 ] && has "x 1" && has "x-1-linux-x86_64.tar.gz" && [ ! -e "$(mg x)/mavergreen.plist" ] && [ ! -s "$w/installed" ] \
-  || fail "linux_unextractable: no linux archive and a pkg fetch_product_pkg.sh cannot extract exits 1, naming both"
+[ "$rc" -eq 1 ] && has "x 1" && has "x-1-linux-x86_64.tar.gz" && has AppleDouble && [ ! -e "$(mg x)/mavergreen.plist" ] && [ ! -s "$w/installed" ] \
+  || fail "linux_unextractable: no linux archive and a pkg fetch_product_pkg.sh refuses (an AppleDouble member) exits 1, naming both"
 noinstaller || fail "linux_unextractable: the installer never runs on Linux"
 
 fresh; release b 1; linux

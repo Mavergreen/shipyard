@@ -2,8 +2,10 @@ name: Install shipyard
 description: >
   Provide shipyard and shipyard-cmake to a job. A consumer references this action at the ref it pins
   (@v1 or @vX.Y.Z -- that ref IS the version) and gets exactly the pkgs a developer installs: the cmake
-  product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. Consumers
-  configure with shipyard-cmake; MavergreenShipyardConfig.cmake refuses any other cmake. The optional
+  product at the version that ref pins, then shipyard. CI and dev boxes run the same bytes. On Linux it
+  lays down the same /opt/mavergreen/shipyard from that ref, whose launchers run the host's cmake.
+  Consumers configure with shipyard-cmake; on macOS MavergreenShipyardConfig.cmake refuses any other
+  cmake. The optional
   `products` input also installs named family products (SHORT@TAG) and their requires, on macOS
   and Linux alike, each where its pkg installs it (/opt/mavergreen/SHORT, or /usr/local/mavergreen/SHORT
   for a pinned pre-flag-day release). Each SHORT's repo is .mavergreen/ingredients/SHORT/REPO in the
@@ -20,6 +22,12 @@ inputs:
 runs:
   using: composite
   steps:
+    # spec: tests/linux-prerequisites-test.sh -- every family Linux build needs the same tools, so
+    #       this checks them all up front and installs the missing ones, or fails once naming them all.
+    - if: runner.os == 'Linux'
+      shell: bash
+      run: sh "$GITHUB_ACTION_PATH/../../../scripts/linux-prerequisites.sh"
+
     - shell: bash
       run: |
         set -eu
@@ -30,7 +38,9 @@ runs:
         #           curl|sh.
         if command -v bats >/dev/null 2>&1; then echo "bats: $(command -v bats)"
         elif command -v brew >/dev/null 2>&1; then brew install bats-core && echo "bats: installed via brew"
-        elif command -v apt-get >/dev/null 2>&1; then sudo apt-get update -qq && sudo apt-get install -y -qq bats && echo "bats: installed via apt"
+        elif command -v apt-get >/dev/null 2>&1 && { [ "$(id -u)" -eq 0 ] || sudo -n true >/dev/null 2>&1; }; then
+          s=""; [ "$(id -u)" -eq 0 ] || s="sudo -n"
+          $s apt-get update -qq && $s env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bats && echo "bats: installed via apt"
         else echo "::warning::no bats and no package manager to install it; *.bats tests will be skipped"; fi
 
     # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Cannot-verify is a
@@ -139,6 +149,44 @@ runs:
         cd "$GITHUB_WORKSPACE"
         sh "$root/scripts/shipyard-check" --only bash32-parse
 
+    # spec: tests/linux-shipyard-prefix-test.sh -- Linux gets the pkg's own prefix, staged from the
+    #       action's checkout at the ref the consumer pinned by the staging the pkg uses, and its
+    #       launchers on PATH through /usr/local/mavergreen/bin as on macOS, so a build step is the same
+    #       `shipyard-cmake --preset cross` on both hosts.
+    - if: runner.os != 'macOS'
+      shell: bash
+      run: |
+        set -eu
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        [ -f "$root/scripts/run-repo-tests.sh" ] || {
+          echo "::error::$root/scripts does not look like shipyard's scripts dir (no run-repo-tests.sh) -- the action's own checkout is not where this expected it"; exit 1; }
+        [ -f "$root/MavergreenShipyardConfig.cmake" ] || {
+          echo "::error::$root holds no MavergreenShipyardConfig.cmake -- there is no shipyard here to install"; exit 1; }
+        ref='${{ github.action_ref }}'
+        local=no
+        if [ -z "$ref" ] && [ "$(cd -P "$root" && pwd)" = "$(cd -P "${GITHUB_WORKSPACE:-/nonexistent}" 2>/dev/null && pwd)" ]; then
+          local=yes
+        fi
+        ref="${ref:-$(basename "$root")}"
+        ver=""
+        if [ "$local" = yes ]; then
+          echo "shipyard's own checkout ($root) names no release, so SHIPYARD_VERSION is unset"
+        elif ver="$(sh "$root/scripts/resolve-action-version.sh" "$ref")"; then
+          echo "SHIPYARD_VERSION=$ver" >> "$GITHUB_ENV"
+        else
+          ver=""
+          echo "::warning::'$ref' names no shipyard release, so SHIPYARD_VERSION is unset and packaging a .pkg here will fail -- pin install@v1 or an exact @vX.Y.Z"
+        fi
+        p="$(sh "$root/scripts/install-shipyard-prefix.sh" ${ver:+--version "$ver"})"
+        sd="$p/share/cmake/MavergreenShipyard"
+        {
+          echo "SHIPYARD_SCRIPTS=$sd/scripts"
+          echo "MavergreenShipyard_DIR=$sd"
+        } >> "$GITHUB_ENV"
+        echo "${p%/*}/bin" >> "$GITHUB_PATH"
+        "${p%/*}/bin/shipyard-cmake" --version | head -1
+        echo "shipyard ${ver:-from $root} installed at $p; SHIPYARD_SCRIPTS=$sd/scripts, MavergreenShipyard_DIR=$sd, and ${p%/*}/bin is on PATH"
+
     # spec: tests/install-action-products-test.sh -- named products install after shipyard; products reach
     #       the script through env
     - if: inputs.products != ''
@@ -152,45 +200,3 @@ runs:
         echo "MAVERGREEN_INSTALLED=$RUNNER_TEMP/mavergreen-installed.txt" >> "$GITHUB_ENV"
         set -f
         MAVERGREEN_REPO_ROOT="$GITHUB_WORKSPACE" MAVERGREEN_INSTALLED="$RUNNER_TEMP/mavergreen-installed.txt" sh "$root/scripts/install-products.sh" $PRODUCTS
-
-    # spec: R-P1-18 -- there is no Linux pkg, and the jobs that land here do not want one: they run
-    #       shipyard's SHELL half on ubuntu-latest, where the point is that the job is cheap. Refusing
-    #       them would have broken every consumer of repackage-on-ingredient-bump.yml on the day this
-    #       action started installing a pkg. The scripts come from the action's OWN checkout, at the
-    #       ref the consumer pinned, so the shell half is still version-pinned, just not packaged.
-    - if: runner.os != 'macOS'
-      shell: bash
-      run: |
-        set -eu
-        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
-        scripts="$root/scripts"
-        [ -f "$scripts/run-repo-tests.sh" ] || {
-          echo "::error::$scripts does not look like shipyard's scripts dir (no run-repo-tests.sh) -- the action's own checkout is not where this expected it"; exit 1; }
-        # spec: R-P1-23 -- MavergreenShipyard_DIR, not CMAKE_PREFIX_PATH: package-scoped and EXACT, so
-        #       it can neither mis-resolve nor shadow another package the way a whole checkout on
-        #       CMAKE_PREFIX_PATH could. The config skips its shipyard-cmake refusal when the HOST is
-        #       not Apple, so find_package(MavergreenShipyard) resolves here rather than being
-        #       rejected -- container-tools' two ubuntu-latest jobs need exactly that.
-        [ -f "$root/MavergreenShipyardConfig.cmake" ] || {
-          echo "::error::$root holds no MavergreenShipyardConfig.cmake -- find_package(MavergreenShipyard) would not resolve on this runner"; exit 1; }
-        b="$RUNNER_TEMP/shipyard-bin"; mkdir -p "$b"
-        ln -sf "$scripts/shipyard-check" "$b/shipyard-check"
-        echo "$b" >> "$GITHUB_PATH"
-        ref='${{ github.action_ref }}'
-        local=no
-        if [ -z "$ref" ] && [ "$(cd -P "$root" && pwd)" = "$(cd -P "${GITHUB_WORKSPACE:-/nonexistent}" 2>/dev/null && pwd)" ]; then
-          local=yes
-        fi
-        ref="${ref:-$(basename "$root")}"
-        {
-          echo "SHIPYARD_SCRIPTS=$scripts"
-          echo "MavergreenShipyard_DIR=$root"
-        } >> "$GITHUB_ENV"
-        if [ "$local" = yes ]; then
-          echo "shipyard's own checkout ($root) names no release, so SHIPYARD_VERSION is unset"
-        elif ver="$(sh "$root/scripts/resolve-action-version.sh" "$ref")"; then
-          echo "SHIPYARD_VERSION=$ver" >> "$GITHUB_ENV"
-        else
-          echo "::warning::'$ref' names no shipyard release, so SHIPYARD_VERSION is unset and packaging a .pkg here will fail -- pin install@v1 or an exact @vX.Y.Z"
-        fi
-        echo "${RUNNER_OS:-this runner} is not macOS and shipyard has no Linux pkg yet, so nothing was installed. You get shipyard's shell half from the ref you pinned: SHIPYARD_SCRIPTS=$scripts, and find_package(MavergreenShipyard) resolves via MavergreenShipyard_DIR=$root. There is no shipyard-cmake here, so a configure that needs one must run on a macOS runner."

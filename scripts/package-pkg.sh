@@ -1,6 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: package-pkg.sh --shipyard-prefix DIR --app APP --version V --dist DIR
+#          package-pkg.sh --shipyard-prefix DIR --version V --tree-only DEST [--installed-as P]
 #          Packages shipyard as ONE prefix -- /opt/mavergreen/shipyard holding shipyard itself
 #          (share/cmake/MavergreenShipyard), the launchers bin/shipyard-{cmake,ctest,cpack} into the
 #          cmake product, and bin/{cmake,ctest,cpack} linked to them -- plus one universal updater and
@@ -8,7 +9,10 @@
 #          into /opt/mavergreen/bin, never the bare cmake/ctest/cpack. The install scripts come from
 #          stage_product.sh, and its preinstall refuses a box without the cmake product at or above
 #          .mavergreen/products/shipyard/requires/cmake/min. The updater is a stopgap
-#          until Mavericks Lineup exists. The pkg is DIR/shipyard-V.pkg.
+#          until Mavericks Lineup exists. The pkg is DIR/shipyard-V.pkg. --tree-only stops before the pkg: DEST gets the
+#          prefix as the pkg installs it, mavergreen.plist included, but no updater, so the manifest
+#          names no appcast and nothing outside the prefix. --installed-as is the prefix DIR was
+#          installed as (default $(mavergreen_prefix shipyard)), which its presets must name.
 # spec: 2026-10-09 C4 -- shipyard ships no CMake of its own: the launchers run the cmake product
 #       installed beside it, with shipyard on CMAKE_PREFIX_PATH.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "On-target/
@@ -21,7 +25,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/name-rules.sh"
 MAVERGREEN_REPO_ROOT="$SELF/.."; export MAVERGREEN_REPO_ROOT
-SPREFIX=""; APP=""; VER=""; DISTDIR=""
+SPREFIX=""; APP=""; VER=""; DISTDIR=""; TREE=""; AS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --shipyard-prefix) SPREFIX="${2%/}"; shift 2;;
@@ -29,6 +33,8 @@ while [ $# -gt 0 ]; do
     --version) VER="$2"; shift 2;;
     --out) echo "package-pkg: --out is refused; the filename is derived, <short>-<version>.pkg; pass --dist" >&2; exit 2;;
     --dist) DISTDIR="$2"; shift 2;;
+    --tree-only) TREE="${2%/}"; shift 2;;
+    --installed-as) AS="${2%/}"; shift 2;;
     *) echo "package-pkg: unknown option $1" >&2; exit 2;;
   esac
 done
@@ -39,13 +45,19 @@ APP_REL="$(sh "$SELF/updater-identity.sh" app shipyard)" || exit $?
 APP_NAME="${APP_REL##*/}"
 
 : "${SPREFIX:?package-pkg: --shipyard-prefix required}"
-: "${APP:?package-pkg: --app required}"
 : "${VER:?package-pkg: --version required}"
-: "${DISTDIR:?package-pkg: --dist required}"
-
-[ "$(basename "$APP")" = "$APP_NAME" ] \
-  || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
-[ -d "$APP" ] || { echo "package-pkg: no such app: $APP" >&2; exit 1; }
+if [ -n "$TREE" ]; then
+  [ -z "$APP" ] && [ -z "$DISTDIR" ] || { echo "package-pkg: --tree-only builds no pkg, so it takes no --app or --dist" >&2; exit 2; }
+  [ ! -e "$TREE" ] || { echo "package-pkg: --tree-only $TREE already exists" >&2; exit 1; }
+else
+  [ -z "$AS" ] || { echo "package-pkg: --installed-as goes with --tree-only; the pkg installs at $PREFIX_DIR" >&2; exit 2; }
+  : "${APP:?package-pkg: --app required}"
+  : "${DISTDIR:?package-pkg: --dist required}"
+  [ "$(basename "$APP")" = "$APP_NAME" ] \
+    || { echo "package-pkg: --app must be a $APP_NAME (its LaunchAgent runs that name); got $APP" >&2; exit 2; }
+  [ -d "$APP" ] || { echo "package-pkg: no such app: $APP" >&2; exit 1; }
+fi
+case "${AS:-/}" in /*) : ;; *) echo "package-pkg: --installed-as must be absolute: $AS" >&2; exit 2 ;; esac
 require_only() {  # $1 = flag  $2 = dir  $3 = allowed top-level names, space-separated
   _flag="$1"; _dir="$2"; _allowed="$3"
   for _e in "$_dir"/* "$_dir"/.*; do
@@ -87,15 +99,16 @@ done
 #       must have been installed AS $PREFIX_DIR (staged under DESTDIR), or every consumer's
 #       `cmake --preset` looks for the toolchain file in a directory that exists only on the runner.
 presets="$SPREFIX/share/cmake/MavergreenShipyard/mavergreen-presets.json"
-want="$PREFIX_DIR/share/cmake/MavergreenShipyard/MavergreenToolchain.cmake"
+want="${AS:-$PREFIX_DIR}/share/cmake/MavergreenShipyard/MavergreenToolchain.cmake"
 [ -f "$presets" ] || { echo "package-pkg: --shipyard-prefix has no mavergreen-presets.json: $presets" >&2; exit 1; }
 tcs="$(sed -n 's/^[[:space:]]*"toolchainFile":[[:space:]]*"\([^"]*\)".*/\1/p' "$presets")"
 wrong="$(printf '%s\n' "$tcs" | grep -vxF "$want" || true)"
 if [ -z "$tcs" ] || [ -n "$wrong" ]; then
   echo "package-pkg: $presets must name toolchainFile $want; it names: ${wrong:-nothing}" >&2
   echo "    install shipyard into the pkg's prefix, staged:" >&2
-  echo "    DESTDIR=<stage> shipyard-cmake --install <build> --prefix $PREFIX_DIR" >&2
-  echo "    and pass --shipyard-prefix <stage>$PREFIX_DIR" >&2
+  echo "    sh scripts/stage-shipyard-prefix.sh --stage <stage> --build <build> --prefix ${AS:-$PREFIX_DIR}" >&2
+  echo "    (it runs DESTDIR=<stage> cmake --install <build> --prefix ${AS:-$PREFIX_DIR})" >&2
+  echo "    and pass --shipyard-prefix <stage>${AS:-$PREFIX_DIR}" >&2
   exit 1
 fi
 
@@ -103,17 +116,24 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-pkg.XXXXXX")"; trap 'rm -rf "$WORK"'
 STAGE="$WORK/stage"; SCR="$WORK/scripts"
 mkdir -p "$STAGE$PREFIX_DIR" "$SCR" "$WORK/component"
 # platform: ubuntu-latest's mkdir says only "mkdir: Already exists", naming no path, so this names it.
-mkdir -p "$DISTDIR" || { echo "package-pkg: cannot make the --dist directory $DISTDIR" >&2; exit 1; }
+[ -n "$TREE" ] || mkdir -p "$DISTDIR" || { echo "package-pkg: cannot make the --dist directory $DISTDIR" >&2; exit 1; }
 COPYFILE_DISABLE=1 cp -R "$SPREFIX"/. "$STAGE$PREFIX_DIR/"
 
 # platform: an NFS or otherwise shared stage sprays AppleDouble "._*" sidecars, which would ship as
 #           payload -- and, left in place while the manifest is rendered, be listed in its `outside`.
 strip_appledouble() { find "$STAGE" -name '._*' -delete 2>/dev/null || true; }
 strip_appledouble
-sh "$SELF/stage_product.sh" --stage "$STAGE" --product shipyard \
+set -- --stage "$STAGE" --product shipyard \
   --version "$VER" --exclude bin/cmake --exclude bin/ctest --exclude bin/cpack \
-  --updater-app "$APP" --scripts-out "$SCR"
+  --scripts-out "$SCR"
+[ -n "$TREE" ] || set -- "$@" --updater-app "$APP"
+sh "$SELF/stage_product.sh" "$@"
 strip_appledouble
+if [ -n "$TREE" ]; then
+  mkdir -p "$TREE" && cp -R "$STAGE$PREFIX_DIR"/. "$TREE/" || { echo "package-pkg: cannot copy the staged prefix to $TREE" >&2; exit 1; }
+  echo "staged $TREE" >&2
+  exit 0
+fi
 
 # platform: pkgbuild makes a payload holding a .app relocatable and version-checked, so a locally
 #           built updater elsewhere on disk would capture it; build_component_pkg.sh does not.

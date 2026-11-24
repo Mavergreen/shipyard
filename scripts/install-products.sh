@@ -209,16 +209,11 @@ manifest() {
   done
   shipyard_fetch_verified "$_base/$_asset" "$_ls" "$_cache" "$_asset" \
     || die "$1 $3: could not fetch and verify $_base/$_asset"
-  "$STEVEDORE" expand "$_cache/$_asset" "$_w/x" > /dev/null || die "$1 $3: could not expand $_cache/$_asset"
-  _m="$(grep -lF "identifier=\"$4\"" "$_w"/x/PackageInfo "$_w"/x/*/PackageInfo 2>/dev/null || :)"
-  [ "$(printf '%s\n' "$_m" | grep -c .)" = 1 ] || die "$1 $3: expected one component $4 in $_asset"
+  sh "$SELF/pkg_read.sh" expand "$_cache/$_asset" "$_w/x" || die "$1 $3: could not expand $_cache/$_asset"
   printf '%s\n' "$_cache/$_asset" > "${_mf%.plist}.pkgpath"
   cp "$_w/SHA256SUMS" "${_mf%.plist}.sums" || die "$1 $3: cannot keep $_base/SHA256SUMS"
-  mkdir "$_w/p" || die "$1 $3: cannot make $_w/p"
-  ( cd "$_w/p" && { if gzip -dc "$(dirname "$_m")/Payload"; then echo 0 > "$_w/gzip.rc"; else echo $? > "$_w/gzip.rc"; fi; } \
-    | { if cpio -id --quiet "*opt/mavergreen/$1/mavergreen.plist" "*usr/local/mavergreen/$1/mavergreen.plist"; then echo 0 > "$_w/cpio.rc"; else echo $? > "$_w/cpio.rc"; fi; } ) 2>/dev/null || :
-  [ "$(cat "$_w/cpio.rc" 2>/dev/null || :)" = 0 ] || die "$1 $3: could not unpack the Payload of $4 in $_asset"
-  [ "$(cat "$_w/gzip.rc" 2>/dev/null || :)" = 0 ] || die "$1 $3: could not decompress the Payload of $4 in $_asset"
+  sh "$SELF/pkg_read.sh" payload "$_w/x" "$4" "$_w/p" "*opt/mavergreen/$1/mavergreen.plist" "*usr/local/mavergreen/$1/mavergreen.plist" \
+    || die "$1 $3: could not read the mavergreen.plist of $4 in $_asset"
   _pp="$(mavergreen_prefix "$1")"; _pp="${_pp#/}"
   [ -f "$_w/p/$_pp/mavergreen.plist" ] || [ ! -f "$_w/p/usr/local/mavergreen/$1/mavergreen.plist" ] || _pp="usr/local/mavergreen/$1"
   [ -f "$_w/p/$_pp/mavergreen.plist" ] \

@@ -10,6 +10,16 @@ cat > "$T/shipyard/scripts/fetch_sdk.sh" <<'SH'
 #!/bin/sh
 printf '%s\n' "$TEST_SDK"
 SH
+cat > "$T/shipyard/scripts/fetch_clang22.sh" <<'SH'
+#!/bin/sh
+[ "${1##*/}" = clang22 ] && [ -d "$1" ] || { echo "fetch_clang22 stub: not a components/clang22: $1" >&2; exit 2; }
+printf '%s\n' "$TEST_LLVM"
+SH
+mkdir -p "$T/shipyard/components/clang22" "$T/llvm/bin"
+for t in clang clang++ ld64.lld llvm-install-name-tool llvm-ar llvm-ranlib llvm-strip llvm-nm; do
+  printf '#!/bin/sh\n' > "$T/llvm/bin/$t"; chmod 755 "$T/llvm/bin/$t"
+done
+export TEST_LLVM="$T/llvm"
 cat > "$T/project/CMakeLists.txt" <<'CMAKE'
 cmake_minimum_required(VERSION 3.16)
 project(host_contract NONE)
@@ -22,6 +32,26 @@ endif()
 if(NOT CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "$ENV{TEST_FLOOR}")
   message(FATAL_ERROR "incorrect floor")
 endif()
+foreach(lang C OBJC CXX OBJCXX)
+  set(want "$ENV{TEST_LLVM}/bin/clang")
+  if(lang MATCHES "XX$")
+    set(want "${want}++")
+  endif()
+  if(lang STREQUAL "C" AND DEFINED ENV{TEST_C})
+    set(want "$ENV{TEST_C}")
+  elseif(NOT CMAKE_${lang}_COMPILER_TARGET STREQUAL "$ENV{TEST_ARCH}-apple-macos$ENV{TEST_FLOOR}")
+    message(FATAL_ERROR "${lang} targets '${CMAKE_${lang}_COMPILER_TARGET}', not the arch's floor")
+  endif()
+  if(NOT CMAKE_${lang}_COMPILER STREQUAL want)
+    message(FATAL_ERROR "${lang} compiler is '${CMAKE_${lang}_COMPILER}', not ${want}")
+  endif()
+endforeach()
+if(NOT MAVERICKS_CLANG22 STREQUAL "$ENV{TEST_LLVM}")
+  message(FATAL_ERROR "MAVERICKS_CLANG22 is '${MAVERICKS_CLANG22}', so include(Mavericks) would refuse the clang22 it chose")
+endif()
+if(NOT CMAKE_EXE_LINKER_FLAGS_INIT STREQUAL "-fuse-ld=lld --ld-path=$ENV{TEST_LLVM}/bin/ld64.lld")
+  message(FATAL_ERROR "links with '${CMAKE_EXE_LINKER_FLAGS_INIT}', not clang22's ld64.lld")
+endif()
 get_filename_component(actual_sdk "${CMAKE_OSX_SYSROOT}" REALPATH)
 get_filename_component(expected_sdk "$ENV{TEST_SDK}" REALPATH)
 if(NOT actual_sdk STREQUAL expected_sdk)
@@ -31,10 +61,8 @@ CMAKE
 export TEST_SDK="$T/SDK with spaces"
 TEST_ARCH=x86_64 TEST_FLOOR=10.9 cmake -S "$T/project" -B "$T/build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavergreenToolchain.cmake"
 TEST_ARCH=arm64 TEST_FLOOR=11.0 cmake -S "$T/project" -B "$T/arm" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavergreenToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=arm64
-mkdir -p "$T/llvm/bin" "$T/tools"
-for t in clang llvm-install-name-tool llvm-ar llvm-ranlib llvm-strip llvm-nm; do
-  printf '#!/bin/sh\n' > "$T/llvm/bin/$t"; chmod 755 "$T/llvm/bin/$t"
-done
+TEST_C=/bin/true TEST_ARCH=x86_64 TEST_FLOOR=10.9 cmake -S "$T/project" -B "$T/named" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavergreenToolchain.cmake" -DCMAKE_C_COMPILER=/bin/true
+mkdir -p "$T/tools"
 cat > "$T/tools/CMakeLists.txt" <<'CMAKE'
 cmake_minimum_required(VERSION 3.16)
 project(host_tools NONE)
@@ -52,4 +80,4 @@ endforeach()
 CMAKE
 TEST_LLVM="$T/llvm" cmake -S "$T/tools" -B "$T/tools-build" -DCMAKE_TOOLCHAIN_FILE="$T/shipyard/MavergreenToolchain.cmake" \
   -DCMAKE_OBJC_COMPILER="$T/llvm/bin/clang"
-echo "PASS: Linux cross configuration selects the arch, its floor, the pinned SDK path and the compiler's Mach-O tools"
+echo "PASS: Linux cross configuration selects the arch, its floor, the pinned SDK path, clang22 for every unnamed compiler and its Mach-O tools"
