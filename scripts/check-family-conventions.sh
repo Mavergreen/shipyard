@@ -1232,6 +1232,8 @@ for n, j in pub:
     dispatch = re.search(r"github\.event_name==(['\"])workflow_dispatch\1", cond)
     noschedule = dispatch or re.search(r"github\.event_name!=(['\"])schedule\1", cond)
     noreproduce = re.search(r"inputs\.reproduce_tag==(''|\"\")", cond) or re.search(r"!inputs\.reproduce_tag(?![A-Za-z0-9_.])", cond)
+    if '||' in cond:
+        out('release-dispatch', '%s job %s publishes when any one clause of its if: holds (||)' % (path, n), "join the if: clauses with && only, such as github.event_name == 'workflow_dispatch' && inputs.reproduce_tag == ''")
     if not dispatch and not push_ok:
         out('release-dispatch', '%s job %s can publish on a push' % (path, n), "add github.event_name == 'workflow_dispatch' to its if:; a push builds for feedback only")
     if not noschedule or not noreproduce:
