@@ -265,12 +265,12 @@ grandfather
 #       duplicates, naming a repo of the org; each runner conversion or packager move deletes its
 #       lines, so the per-check count may only go down.
 GF="$here/../scripts/conventions-grandfathered"
-MAX_MACOS_RUNNER=32
+MAX_MACOS_RUNNER=31
 MAX_PACKAGER=6
 MAX_ARTIFACT_CONFORMANCE=0
 MAX_MODERN_SMOKE=7
 MAX_CXXABI=2
-MAX_STANDALONE=37
+MAX_STANDALONE=34
 MAX_LINUX_GATE=25
 MAX_SMOKE_GATE=8
 MAX_UNCHECKED_SUBSHELL=153

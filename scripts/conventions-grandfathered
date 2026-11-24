@@ -31,7 +31,6 @@ macos-runner ca-certs release.yml:build
 macos-runner ca-certs release.yml:on-macos
 macos-runner clang-22 release.yml:build-cross
 macos-runner clang-22 release.yml:build-native
-macos-runner clang-22 release.yml:collect
 macos-runner claude-code release.yml:build
 macos-runner codex-cli builds.yml:codex-build
 macos-runner codex-cli release.yml:build
@@ -81,9 +80,6 @@ smoke-gate zig release.yml:modern-smoke
 standalone avxemu avxemu
 standalone ca-certs ca-certs
 standalone cctools cctools
-standalone clang-22 clang22
-standalone clang-22 clang22-cross
-standalone clang-22 libcxx22
 standalone claude-code claude-code
 standalone cmake cmake
 standalone codex-cli codex-cli
