@@ -130,10 +130,14 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   updater), links the launchers into `/opt/mavergreen/bin` on `PATH`, and points
   `SHIPYARD_SCRIPTS` and `MavergreenShipyard_DIR` into it. There the launchers run the host's
   `cmake`, and the toolchain file gives every compiler not named the pinned clang22 with its
-  `ld64.lld`. Never hand-roll `-DCMAKE_TOOLCHAIN_FILE`/`-DCMAKE_C_COMPILER` on Linux. Without root,
-  `sudo -n` or a writable `/opt/mavergreen`, the prefix is `~/.local/mavergreen/shipyard`, said
-  on stderr. Revisit when the cmake product ships a Linux build, or a family Linux build needs a
-  tool the list lacks (add it there, not to the product).
+  `ld64.lld`. Never hand-roll `-DCMAKE_TOOLCHAIN_FILE`/`-DCMAKE_C_COMPILER` on Linux. Revisit when
+  the cmake product ships a Linux build, or a family Linux build needs a tool the list lacks (add it
+  there, not to the product).
+
+  `/opt/mavergreen` is a root-only chain on Linux as on a Mac: install@v1 writes the shipyard prefix
+  and every product as root, or under `sudo -n`, and leaves them root-owned. With neither it fails in
+  one line naming root; there is no per-user prefix, since a consumer's presets could not find one.
+  Revisit when a Linux consumer cannot get root at all (rootless CI).
 
   The updater is no exception: `build_updater.sh` builds it on Linux, a modern Mac and 10.9 alike
   ("The updater builds with clang22"). Package tests read the pkg with `pkg_read.sh` (`list`, `facts`,
@@ -143,7 +147,7 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   with it, so never hand-roll a `gh release download` plus `installer`. Each SHORT's repo is
   `.mavergreen/ingredients/SHORT/REPO` in the consumer's checkout. On Linux each product lands where
   its pkg installs it (`$(mavergreen_prefix SHORT)`, or `/usr/local/mavergreen/SHORT` for a pinned
-  pre-flag-day release), owned by the runner user and marked by the pkg's
+  pre-flag-day release), owned by root and marked by the pkg's
   own `mavergreen.plist`: its release's `SHORT-TAG-linux-x86_64.tar.gz` when it has one, else its pkg's
   host-neutral payload, and `sdk109`/`sdk113` from `fetch_sdk.sh`; `fetch_clang22.sh` provisions clang22
   the same way. Path parity is the point (Go build IDs hash absolute toolchain paths). A prefix holds

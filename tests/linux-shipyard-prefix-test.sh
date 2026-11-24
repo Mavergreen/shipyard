@@ -6,8 +6,9 @@
 #          package-pkg.sh builds from the same checkout. The pkg's macOS-only parts are named here:
 #          the updater app and its LaunchAgent outside the prefix, and the manifest's outside, which
 #          names them; both manifests name shipyard's feed. It links the exported names into opt/mavergreen/bin,
-#          replaces an older install whole, and without root, sudo or a writable root installs per
-#          user, its presets naming that prefix. Exit 0 clean, 1 on failure, 77 with no cmake.
+#          replaces an older install whole, leaves a root-owned tree when run as root, and without root
+#          or sudo exits 1 having written nothing. SUDO=env and MAVERGREEN_CHAIN_UID stand in for root
+#          off root. Exit 0 clean, 1 on failure, 77 with no cmake.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 S="$root/scripts"
@@ -25,7 +26,7 @@ idf() { sh "$S/updater-identity.sh" "$1" shipyard; }
 SOURCE_DATE_EPOCH=1700000000; export SOURCE_DATE_EPOCH
 
 mkdir "$w/r"
-SUDO= sh "$S/install-shipyard-prefix.sh" --root "$w/r" --version 1.2.3 > "$w/out" 2> "$w/err" \
+SUDO=env MAVERGREEN_CHAIN_UID="$(id -u)" sh "$S/install-shipyard-prefix.sh" --root "$w/r" --version 1.2.3 > "$w/out" 2> "$w/err" \
   || { echo "FAIL: install-shipyard-prefix.sh failed:"; sed 's/^/    | /' "$w/err"; exit 1; }
 [ "$(cat "$w/out")" = "$w/r/$rel" ] || fail "it must print the prefix it installed, $w/r/$rel; got $(cat "$w/out")"
 
@@ -104,7 +105,7 @@ shipyard-scripts -> ../shipyard/bin/shipyard-scripts"
 [ "$farm" = "$want" ] || fail "opt/mavergreen/bin must link exactly the pkg's exported shipyard-* names, never bare cmake/ctest/cpack; got
 $farm"
 
-SUDO= sh "$S/install-shipyard-prefix.sh" --root "$w/r" --version 1.2.4 > /dev/null 2> "$w/err" \
+SUDO=env MAVERGREEN_CHAIN_UID="$(id -u)" sh "$S/install-shipyard-prefix.sh" --root "$w/r" --version 1.2.4 > /dev/null 2> "$w/err" \
   || { fail "a second install over the first failed:"; sed 's/^/    | /' "$w/err"; }
 [ "$("$STEVEDORE" plist get "$w/r/$rel/mavergreen.plist" version 2>/dev/null || :)" = 1.2.4 ] \
   || fail "a second install must replace the first; the manifest still says $("$STEVEDORE" plist get "$w/r/$rel/mavergreen.plist" version 2>/dev/null || :)"
@@ -112,18 +113,19 @@ left="$(ls -A "$w/r/opt/mavergreen/.install-products/shipyard")"
 [ -z "$left" ] || fail "an install must leave nothing staged beside the prefix; left: $left"
 
 if [ "$(id -u)" -ne 0 ]; then
-  mkdir -p "$w/ro" "$w/home"; chmod 555 "$w/ro"
+  mkdir "$w/nr"
   rc=0
-  env -u MAVERGREEN_USER_PREFIX SUDO= HOME="$w/home" sh "$S/install-shipyard-prefix.sh" --root "$w/ro" --version 1.2.3 \
-    > "$w/out" 2> "$w/err" || rc=$?
-  up="$w/home/.local/mavergreen/shipyard"
-  [ "$rc" -eq 0 ] || { fail "with no root, sudo or writable root it must install per user; exit $rc:"; sed 's/^/    | /' "$w/err"; }
-  [ "$(cat "$w/out")" = "$up" ] || fail "the per-user install must print its prefix, $up; got $(cat "$w/out")"
-  grep -qF "so shipyard goes to $up" "$w/err" || fail "the per-user install must say where it went on stderr"
-  grep -qF "\"toolchainFile\": \"$up/share/cmake/MavergreenShipyard/MavergreenToolchain.cmake\"" "$up/share/cmake/MavergreenShipyard/mavergreen-presets.json" 2>/dev/null \
-    || fail "the per-user install's presets must name its own toolchain file"
-  [ -h "$w/home/.local/mavergreen/bin/shipyard-cmake" ] || fail "the per-user install must link its launchers into $w/home/.local/mavergreen/bin"
-  [ -z "$(ls -A "$w/ro")" ] || fail "the per-user install wrote into the read-only root"
+  SUDO= sh "$S/install-shipyard-prefix.sh" --root "$w/nr" --version 1.2.3 > "$w/out" 2> "$w/err" || rc=$?
+  [ "$rc" -eq 1 ] && grep -q "installing into $w/nr/opt/mavergreen needs root" "$w/err" && [ "$(grep -c . "$w/err")" -eq 1 ] \
+    || { fail "with no root and no sudo it must exit 1 in one line naming root; exit $rc:"; sed 's/^/    | /' "$w/err"; }
+  [ -z "$(ls -A "$w/nr")" ] && [ ! -s "$w/out" ] || fail "with no root and no sudo it must write nothing"
+else
+  mkdir "$w/rr"
+  sh "$S/install-shipyard-prefix.sh" --root "$w/rr" --version 1.2.3 > /dev/null 2> "$w/err" \
+    || { fail "as root the install failed:"; sed 's/^/    | /' "$w/err"; }
+  [ "$(find "$w/rr/opt/mavergreen/shipyard" "$w/rr/opt/mavergreen/bin" ! -user 0 | head -1)" = "" ] \
+    && [ "$(find "$w/rr/opt/mavergreen/shipyard" ! -group 0 | head -1)" = "" ] \
+    || fail "as root the installed prefix and its links must be owned by root"
 fi
 
 [ "$fails" -eq 0 ] || { echo "FAIL: $fails case(s) in linux-shipyard-prefix"; exit 1; }

@@ -295,7 +295,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 linux() {
-  real; export INSTALL_PRODUCTS_HOST=linux MAVERGREEN_TAR_CACHE="$w/tars"
+  real; export INSTALL_PRODUCTS_HOST=linux MAVERGREEN_TAR_CACHE="$w/tars" SUDO=env MAVERGREEN_CHAIN_UID="$(id -u)"
   export INSTALLER="$top/bin/logger-installer" FAKE_SUDO_INSTALLER="$top/bin/logger-installer"
 }
 linuxtar() {
@@ -508,14 +508,14 @@ if [ "$(id -u)" -ne 0 ]; then
   fresh; release b 1; linux; unset SUDO; chmod 555 "$w/root"
   rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" b@1 2>&1)" || rc=$?
   chmod 755 "$w/root"
-  [ "$rc" -eq 1 ] && has "needs root, sudo, or a writable $w/root/opt/mavergreen" \
+  [ "$rc" -eq 1 ] && has "installing into $w/root/opt/mavergreen needs root" \
     && ! has "not found" && ! has "cannot find name" && [ ! -s "$w/installed" ] \
-    || fail "linux_no_sudo: with no sudo and no writable prefix, exit 1, saying what it needs"
+    || fail "linux_no_sudo: with no root and no sudo, exit 1, saying it needs root"
 
   fresh; release b 1; linux; unset SUDO; chmod 555 "$w/root"
   rc=0; out="$(PATH="$top/pw:$PATH" sh "$S" --root "$w/root" b@1 2>&1)" || rc=$?
   chmod 755 "$w/root"
-  [ "$rc" -eq 1 ] && has "needs root, sudo, or a writable" && [ "$(cat "$w/log")" = "sudo -n true" ] \
+  [ "$rc" -eq 1 ] && has "needs root" && [ "$(cat "$w/log")" = "sudo -n true" ] \
     || fail "linux_sudo_needs_password: a sudo that cannot run without a password is probed once and not used ($(cat "$w/log"))"
 
   fresh; mkdir -p "$w/repo/.mavergreen/ingredients/sdk109"; echo Mavergreen/lbrepo > "$w/repo/.mavergreen/ingredients/sdk109/REPO"
@@ -525,15 +525,22 @@ if [ "$(id -u)" -ne 0 ]; then
   chmod 555 "$w/root"
   rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" a@1 2>&1)" || rc=$?
   chmod 755 "$w/root"
-  [ "$rc" -eq 1 ] && has "sdk109: cannot make $w/root/opt/mavergreen/sdk109: install-products needs root, sudo, or a writable" \
+  [ "$rc" -eq 1 ] && has "sdk109: installing into $w/root/opt/mavergreen needs root" \
     && ! has "fetch_sdk.sh --arch x86_64 failed" && [ ! -e "$w/sdkcache" ] && ! has "not found" && [ ! -s "$w/installed" ] \
-    || fail "linux_sdk_no_sudo: sdk109 needs the same root, sudo or writable prefix, checked before the SDK is fetched"
+    || fail "linux_sdk_no_sudo: sdk109 needs root too, checked before the SDK is fetched"
   unset MAVERGREEN_SDK_URL MAVERGREEN_SDK_SHA256 MAVERGREEN_SDK_CACHE
 fi
 
-fresh; release b 1; linux; unset SUDO; mkdir -p "$w/root/opt/mavergreen"
-rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" b@1 2>&1)" || rc=$?
-[ "$rc" -eq 0 ] && [ "$(pget b version)" = 1 ] && [ "$(cat "$w/installed")" = "b 1" ] \
-  || fail "linux_writable_no_sudo: a writable opt/mavergreen needs no sudo"
+if [ "$(id -u)" -ne 0 ]; then
+  fresh; release b 1; linux; unset SUDO; mkdir -p "$w/root/opt/mavergreen"
+  rc=0; out="$(PATH="$nosudo" sh "$S" --root "$w/root" b@1 2>&1)" || rc=$?
+  [ "$rc" -eq 1 ] && has "needs root" && [ ! -e "$(mg b)" ] && [ ! -s "$w/installed" ] \
+    || fail "linux_writable_no_sudo: a writable opt/mavergreen without root is refused"
+else
+  fresh; release b 1; linux; unset SUDO MAVERGREEN_CHAIN_UID
+  run b@1
+  [ "$rc" -eq 0 ] && [ "$(stat -c %u:%g "$(mg b)" "$(mg b)/file" | sort -u)" = 0:0 ] \
+    || fail "linux_root_owned: as root the installed tree is owned by root"
+fi
 
 echo "PASS: install-products"

@@ -7,19 +7,17 @@
 #          mavergreen.plist, less the updater. Its exported names (bin/ less the manifest's
 #          exports-exclude) are linked into the bin/ beside that prefix, as the mavergreen helper
 #          links them on a Mac. Prints the installed prefix on stdout.
-#          Writes as root, else under sudo (when `sudo -n true` succeeds; SUDO= overrides), else into
-#          a writable parent of that prefix; with none of those it installs into
-#          ${MAVERGREEN_USER_PREFIX:-$HOME/.local/mavergreen}/shipyard instead, saying so on stderr,
-#          and that prefix is the one its presets name. The tree is staged beside the prefix in
-#          .install-products/shipyard, owned by the caller, and renamed into place whole, an older
-#          tree renamed aside first, under that directory's lock (shipyard_lock_take, waiting up to
-#          SHIPYARD_LOCK_WAIT seconds, default 900), the lock install-products.sh takes for shipyard.
+#          The prefix is root-owned, as the pkg leaves it: every write there runs as root, or under
+#          sudo when `sudo -n true` succeeds (SUDO= overrides); with neither it exits 1 before staging.
+#          The tree is staged privately, copied as root into .install-products/shipyard beside the
+#          prefix, chowned to root and renamed into place whole, an older tree renamed aside first,
+#          under that directory's lock, the one install-products.sh takes for shipyard (waiting up to
+#          SHIPYARD_LOCK_WAIT seconds, default 900).
 #          --version is the version the tree and its manifest carry; without it, CMakeLists.txt's.
 #          Exit 1 on a failed stage or install, 2 on a usage error.
 # spec: tests/linux-shipyard-prefix-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
-. "$SELF/mavergreen_fetch.sh"
 . "$SELF/mavergreen-meta.sh"
 . "$SELF/lib/name-rules.sh"
 die() { echo "install-shipyard-prefix: $*" >&2; exit 1; }
@@ -43,21 +41,13 @@ else _sudo=""; fi
 SUDO="${SUDO-$_sudo}"
 AS="$(mavergreen_prefix shipyard)"
 MG="$ROOT${AS%/*}"
-writable() {
-  _a="$1"
-  while [ ! -e "$_a" ]; do _a="${_a%/*}"; [ -n "$_a" ] || _a=/; done
-  [ -d "$_a" ] && [ -w "$_a" ]
-}
-if [ -z "$SUDO" ] && [ "$(id -u)" -ne 0 ] && ! writable "$MG"; then
-  MG="${MAVERGREEN_USER_PREFIX:-$HOME/.local/mavergreen}"
-  MG="${MG%/}"; AS="$MG/shipyard"
-  echo "install-shipyard-prefix: cannot write $ROOT${AS%/*} (not root, and no passwordless elevation), so shipyard goes to $AS" >&2
-fi
 P="$MG/shipyard"
+[ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ] || die "installing into $MG needs root: run it as root, or where sudo -n works"
+_cu="${MAVERGREEN_CHAIN_UID:-0}"; if [ "$_cu" = 0 ]; then _co=0:0; else _co=$_cu; fi
 
 T="$(mktemp -d "${TMPDIR:-/tmp}/install-shipyard.XXXXXX")"
 stg=""; lk=""
-trap 'rm -rf "$T" ${stg:+"$stg"}; [ -z "$lk" ] || shipyard_lock_release "$lk"' EXIT
+trap 'rm -rf "$T"; [ -z "$stg" ] || $SUDO rm -rf "$stg"; [ -z "$lk" ] || $SUDO rm -f "$lk"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 set -- --stage "$T/s" --build "$T/b" --prefix "$AS"
@@ -71,33 +61,33 @@ sh "$SELF/package-pkg.sh" --shipyard-prefix "$sp" --version "$V" --tree-only "$T
   || die "package-pkg.sh --tree-only refused the staged prefix"
 
 wd="$MG/.install-products/shipyard"
-if ! { mkdir -p "$wd" 2> /dev/null && [ -w "$wd" ]; }; then
-  [ -n "$SUDO" ] || die "cannot make $wd: it needs root, sudo, or a writable $MG"
-  $SUDO mkdir -p "$wd" && $SUDO chown "$(id -u):$(id -g)" "$wd" || die "cannot make $wd, owned by $(id -u):$(id -g)"
-fi
-ps=""
-if [ ! -w "$MG" ] || { [ -d "$P" ] && [ ! -w "$P" ]; }; then
-  [ -n "$SUDO" ] || die "cannot replace $P: it needs root, sudo, or a writable $MG"
-  ps=$SUDO
-fi
-shipyard_lock_take "$wd/lock" "${SHIPYARD_LOCK_WAIT:-900}" || die "$wd/lock is still held after ${shipyard_lock_waited}s"
+$SUDO mkdir -p "$wd" || die "cannot make $wd as root"
+lw=0
+until $SUDO sh -c 'set -C; echo "$1" > "$2"' sh $$ "$wd/lock" 2>/dev/null; do
+  hp="$(cat "$wd/lock" 2>/dev/null || :)"
+  case "$hp" in
+    ''|*[!0-9]*) : ;;
+    *) ps -p "$hp" > /dev/null 2>&1 || { [ "$(cat "$wd/lock" 2>/dev/null || :)" != "$hp" ] || $SUDO rm -f "$wd/lock"; continue; } ;;
+  esac
+  [ "$lw" -lt "${SHIPYARD_LOCK_WAIT:-900}" ] || die "$wd/lock is still held${hp:+ by process $hp} after ${lw}s"
+  sleep 1; lw=$((lw + 1))
+done
 lk="$wd/lock"
-stg="$(mktemp -d "$wd/stage.XXXXXX")" || die "cannot stage in $wd"
-cp -R "$T/tree" "$stg/tree" || die "cannot copy the staged tree into $stg"
-chmod 755 "$stg/tree" || die "cannot open the staged tree to every user"
-if [ -e "$P" ] || [ -h "$P" ]; then $ps mv "$P" "$stg/old" || die "cannot move the old $P aside"; fi
-if ! $ps mv "$stg/tree" "$P"; then
-  [ ! -e "$stg/old" ] || $ps mv "$stg/old" "$P" || :
+stg="$($SUDO mktemp -d "$wd/stage.XXXXXX")" || die "cannot stage in $wd as root"
+{ $SUDO cp -pRP "$T/tree" "$stg/tree" && $SUDO chown -R "$_co" "$stg/tree" && $SUDO chmod 755 "$stg/tree"; } \
+  || die "cannot stage the tree in $stg, owned by root"
+if [ -e "$P" ] || [ -h "$P" ]; then $SUDO mv "$P" "$stg/old" || die "cannot move the old $P aside"; fi
+if ! $SUDO mv "$stg/tree" "$P"; then
+  [ ! -e "$stg/old" ] || $SUDO mv "$stg/old" "$P" || :
   die "cannot move the new tree into $P"
 fi
-rm -rf "$stg" 2> /dev/null || [ -z "$ps" ] || $ps rm -rf "$stg" || :
+$SUDO rm -rf "$stg" || :
 stg=""
 
 ex="$(awk '/<key>exports-exclude<\/key>/ { on = 1; next }
   on && /<\/array>/ { exit }
   on && /<string>/ { sub(/.*<string>/, ""); sub(/<\/string>.*/, ""); print }' "$P/mavergreen.plist")"
-fs=""
-{ mkdir -p "$MG/bin" 2> /dev/null && [ -w "$MG/bin" ]; } || fs=$SUDO
+fs=$SUDO
 $fs mkdir -p "$MG/bin" || die "cannot make $MG/bin"
 for f in "$P"/bin/*; do
   [ -f "$f" ] || [ -h "$f" ] || continue
@@ -105,6 +95,6 @@ for f in "$P"/bin/*; do
   ! printf '%s\n' "$ex" | grep -qxF -- "bin/$n" || continue
   $fs rm -f "$MG/bin/$n" && $fs ln -s "../shipyard/bin/$n" "$MG/bin/$n" || die "cannot link $MG/bin/$n"
 done
-shipyard_lock_release "$lk"; lk=""
+$SUDO rm -f "$lk"; lk=""
 echo "install-shipyard-prefix: shipyard $V is at $P; its commands are linked in $MG/bin" >&2
 printf '%s\n' "$P"

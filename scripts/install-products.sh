@@ -22,18 +22,19 @@
 #          `install SHORT VERSION` or `provision SHORT via COMMAND...`. --dry-run prints it on stdout;
 #          otherwise each line is carried out and reported on stderr: install runs
 #          `$INSTALLER -pkg PKG -target DIR` on the verified cached pkg (default `installer`, under
-#          `sudo` unless root or no sudo is installed); provision runs COMMAND (under `sudo` likewise, and
-#          on Linux only when `sudo -n true` succeeds; SUDO= overrides) and then
+#          `sudo` unless root or no sudo is installed); provision runs COMMAND (under `sudo` likewise;
+#          on Linux as root, under `sudo` only when `sudo -n true` succeeds; SUDO= overrides) and then
 #          requires SHORT's mavergreen.plist under DIR to exist. After each product, kept
 #          ones included, `SHORT VERSION` is appended to $MAVERGREEN_INSTALLED when set; the first
 #          failing step stops the run, so the file lists only what completed.
 #          Exit 1 when a product cannot be resolved, fetched or verified, or a floor cannot be met;
 #          2 on a usage error. MAVERGREEN_RELEASES replaces https://github.com (the tests serve file://).
 #          On Linux no installer runs. Each product goes to the same place under DIR as its pkg installs
-#          it, staged whole in that prefix's .install-products/SHORT (made with $SUDO mkdir
-#          and chowned to the caller's numeric uid:gid, or, with no sudo, made directly, failing with exit 1
-#          unless root or the prefix is writable) and then renamed into place, an older tree
-#          renamed aside first and removed after, so the prefix never holds a partial tree: a release whose SHA256SUMS lists
+#          it, root-owned as the pkg leaves it: it is unpacked under a private work directory, copied as
+#          root into that prefix's .install-products/SHORT, chowned to root, and then renamed into
+#          place, an older tree renamed aside first and removed after, so the prefix never holds a
+#          partial tree. Every write there runs as root: run as root, or where `sudo -n true` succeeds,
+#          else it exits 1 before fetching anything. A release whose SHA256SUMS lists
 #          SHORT-TAG-linux-x86_64.tar.gz installs that archive (fetch_product_tar.sh, on an x86_64 host),
 #          any other its pkg's payload for SHORT (fetch_product_pkg.sh), and either way
 #          the pkg's own mavergreen.plist marks it. An archive holding opt/mavergreen/SHORT/mavergreen.plist
@@ -88,7 +89,7 @@ case "$HOST" in linux|mac) : ;; *) echo "install-products: INSTALL_PRODUCTS_HOST
 STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || die "no stevedore to read the pkgs with"
 T="$(mktemp -d "${TMPDIR:-/tmp}/install-products.XXXXXX")"
 stg=""; lk=""
-trap 'rm -rf "$T" ${stg:+"$stg"} ${lk:+"$lk"}' EXIT
+trap 'rm -rf "$T"; [ -z "$lk" ] || ${SUDO:-} rm -f "$lk"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 mkdir "$T/pin" "$T/carry" "$T/m" "$T/w" "$T/pkg" "$T/tag" "$T/repo" "$T/prefix"
@@ -312,28 +313,18 @@ record() { [ -z "${MAVERGREEN_INSTALLED:-}" ] || printf '%s %s\n' "$1" "$2" >> "
 if [ "$(id -u)" -eq 0 ] || ! command -v sudo > /dev/null 2>&1; then _sudo=""; _inst=installer; else _sudo=sudo; _inst="sudo installer"; fi
 if [ "${SUDO+set}" != set ] && [ -n "$_sudo" ] && [ "$HOST" = linux ] && ! sudo -n true > /dev/null 2>&1; then _sudo=""; fi
 SUDO="${SUDO-$_sudo}"; INSTALLER="${INSTALLER:-$_inst}"
+_cu="${MAVERGREEN_CHAIN_UID:-0}"; if [ "$_cu" = 0 ]; then _co=0:0; else _co=$_cu; fi
 prefix() {
   if [ -f "$T/prefix/$1" ]; then _pfx="$(cat "$T/prefix/$1")"; else _pfx="$(mavergreen_prefix "$1")" || die "$1 is not a product short name"; fi
   P="$ROOT$_pfx"; _top="$ROOT${_pfx%/*}"; _wd="$_top/.install-products/$1"
-  if [ ! -d "$_wd" ] || [ ! -w "$_wd" ]; then
-    if [ -n "$SUDO" ]; then
-      $SUDO mkdir -p "$_wd" && $SUDO chown "$(id -u):$(id -g)" "$_wd" || die "$1: cannot make $_wd, owned by $(id -u):$(id -g)"
-    else
-      { mkdir -p "$_wd" 2> /dev/null && [ -w "$_wd" ]; } \
-        || die "$1: cannot make $P: install-products needs root, sudo, or a writable $_top"
-    fi
-  fi
-  _ps=""
-  if [ ! -w "${P%/*}" ] || { [ -d "$P" ] && [ ! -w "$P" ]; }; then
-    [ -n "$SUDO" ] || die "$1: cannot replace $P: install-products needs root, sudo, or a writable $_top"
-    _ps=$SUDO
-  fi
+  [ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ] || die "$1: installing into $_top needs root: run install-products as root, or where sudo -n works"
+  $SUDO mkdir -p "$_wd" || die "$1: cannot make $_wd as root"
   _lf="$_wd/lock"; _wt=0
-  until ( set -C; echo $$ > "$_lf" ) 2>/dev/null; do
+  until $SUDO sh -c 'set -C; echo "$1" > "$2"' sh $$ "$_lf" 2>/dev/null; do
     _hp="$(cat "$_lf" 2>/dev/null || :)"
     case "$_hp" in
       ''|*[!0-9]*) : ;;
-      *) ps -p "$_hp" > /dev/null 2>&1 || { [ "$(cat "$_lf" 2>/dev/null || :)" != "$_hp" ] || rm -f "$_lf"; continue; } ;;
+      *) ps -p "$_hp" > /dev/null 2>&1 || { [ "$(cat "$_lf" 2>/dev/null || :)" != "$_hp" ] || $SUDO rm -f "$_lf"; continue; } ;;
     esac
     [ "$_wt" -lt "${SHIPYARD_LOCK_WAIT:-900}" ] || die "$1: $_lf is still held${_hp:+ by process $_hp} after ${_wt}s"
     sleep 1; _wt=$((_wt + 1))
@@ -341,21 +332,23 @@ prefix() {
   lk=$_lf
   if [ "$("$STEVEDORE" plist get "$P/mavergreen.plist" version 2>/dev/null || :)" = "$2" ]; then
     echo "install-products: $1 $2 is already at $P" >&2
-    rm -f "$lk"; lk=""; return 1
+    $SUDO rm -f "$lk"; lk=""; return 1
   fi
-  stg="$(mktemp -d "$_wd/stage.XXXXXX")" || die "$1: cannot stage in $_wd"
+  stg="$(mktemp -d "$T/stage.XXXXXX")" || die "$1: cannot make a work directory under $T"
 }
 commit() {
   [ -f "$stg/tree/mavergreen.plist" ] || die "$1: the staged tree has no mavergreen.plist"
-  chmod 755 "$stg/tree" || die "$1: cannot open the staged tree to every user"
-  if [ -e "$P" ] || [ -h "$P" ]; then $_ps mv "$P" "$stg/old" || die "$1: cannot move the old $P aside"; fi
-  if ! $_ps mv "$stg/tree" "$P"; then
-    [ ! -e "$stg/old" ] || $_ps mv "$stg/old" "$P" || :
-    die "$1: cannot move the new tree into $P"
+  _rs="$($SUDO mktemp -d "$_wd/stage.XXXXXX")" || die "$1: cannot stage in $_wd as root"
+  { $SUDO cp -pRP "$stg/tree" "$_rs/tree" && $SUDO chown -R "$_co" "$_rs/tree" && $SUDO chmod 755 "$_rs/tree"; } \
+    || { $SUDO rm -rf "$_rs"; die "$1: cannot stage the tree in $_rs, owned by root"; }
+  if [ -e "$P" ] || [ -h "$P" ]; then $SUDO mv "$P" "$_rs/old" || { $SUDO rm -rf "$_rs"; die "$1: cannot move the old $P aside"; }; fi
+  if ! $SUDO mv "$_rs/tree" "$P"; then
+    [ ! -e "$_rs/old" ] || $SUDO mv "$_rs/old" "$P" || :
+    $SUDO rm -rf "$_rs"; die "$1: cannot move the new tree into $P"
   fi
-  rm -rf "$stg" 2> /dev/null || [ -z "$_ps" ] || $_ps rm -rf "$stg" || :
-  stg=""
-  rm -f "$lk"; lk=""
+  $SUDO rm -rf "$_rs" || :
+  rm -rf "$stg"; stg=""
+  $SUDO rm -f "$lk"; lk=""
 }
 linux_install() {
   _tag="$(cat "$T/tag/$1")"; _pkg="$(cat "$T/pkg/$1")"; _tar="$1-$_tag-linux-x86_64.tar.gz"; _repo="Mavergreen/$(cat "$T/repo/$1")"
