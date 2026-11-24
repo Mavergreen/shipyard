@@ -624,7 +624,9 @@ while read -r file path darches larches n loads syms; do
   gf=""
   if [ -z "$(entry_deviation_reason cxxabi "$file" "$p")" ]; then
     [ -n "$repository" ] && [ -f "$SELF/conventions-grandfathered" ] \
-      && grep -qxF "cxxabi ${repository#*/} $path" "$SELF/conventions-grandfathered" && gf="cxxabi ${repository#*/} $path"
+      && for _gp in "$path" $(shipyard_standalone_entry_pkg_path "$file" "$p" 2>/dev/null | sed 's/ /%20/g'); do
+           grep -qxF "cxxabi ${repository#*/} $_gp" "$SELF/conventions-grandfathered" && { gf="cxxabi ${repository#*/} $_gp"; break; }
+         done
     if [ -z "$gf" ]; then cxx_fail=$((cxx_fail + 1)); [ "$cxx_fail" -le 20 ] || { status=1; continue; }; fi
   fi
   how="link the family's runtime (libcxx22), or declare '- cxxabi:$p: <reason>; exit: <how it goes away>' under INGREDIENTS.md's ## Conformance deviations"

@@ -356,6 +356,10 @@ _gfo="$(printf 'cxxabi-defines %s x86_64 ___cxa_throw visible\n' "$C" | gfrun 'm
 _gfo="$(printf '%s\n%s\nrepository Mavergreen/golang-126\nmacho p.pkg usr/local/mavergreen/go126/bin/a%%20b x86_64 EXECUTE 10.9 10.9 aa\ncxxabi-defines p.pkg usr/local/mavergreen/go126/bin/a%%20b x86_64 ___cxa_throw visible\nend-of-facts\n' "$GOOD" "$X" \
   | { printf 'cxxabi golang-126 usr/local/mavergreen/go126/bin/a%%20b\n' > "$_gfs/scripts/conventions-grandfathered"; sh "$_gfs/scripts/check-artifact-conformance.sh" 2>&1; })" \
   || { echo "FAIL: a grandfathered path keeps its %20 encoding, one field per line: $_gfo"; exit 1; }
+_gfo="$(printf 'cxxabi-defines %s %s/bin/go arm64 ___cxa_throw visible\n' "$SA" "$ST" | gfrun 'cxxabi golang-127 usr/local/mavergreen/go127-cross/bin/go' golang-127)" \
+  || { echo "FAIL: a pkg-terms grandfathered cxxabi line covers the archive entry the pkg installs there: $_gfo"; exit 1; }
+printf '%s\n' "$_gfo" | grep -q "^::warning::conformance: cxxabi: $SA installs $ST/bin/go .*(grandfathered: cxxabi golang-127 usr/local/mavergreen/go127-cross/bin/go)$" \
+  || { echo "FAIL: an archive entry excused by a pkg-terms grandfathered line warns naming that line: $_gfo"; exit 1; }
 rm -rf "$_gfs"
 
 no "pkg version disagrees with the tag" "version" 'expected 1.26.5-mavericks.5
