@@ -50,7 +50,8 @@ PY
   printf '%s  %s\n' "$SHA" "$(basename "$ASSET")" > "$REL/SHA256SUMS"
   run sh "$HELPER" widget 1.0 "$DEST"; [ "$status" -eq 0 ]
   printf poison >> "$WORK/cache/widget-repo/1.0/widget-1.0-linux-x86_64.tar.gz"
-  run sh "$HELPER" widget 1.0 "$DEST"; [ "$status" -ne 0 ]
+  run sh "$HELPER" widget 1.0 "$DEST"; [ "$status" -eq 0 ]
+  run sh "$HELPER" widget 1.0 "$WORK/other"; [ "$status" -ne 0 ]
 }
 @test 'validates cached executable contents and retains an unchanged prefix' {
   fixture

@@ -11,6 +11,7 @@ import tarfile
 import tempfile
 
 STAMP = '.mavergreen-archive-sha256'
+TRUST = '.mavergreen-tree-verified'
 
 
 def sha(stream):
@@ -18,6 +19,37 @@ def sha(stream):
     for chunk in iter(lambda: stream.read(1024 * 1024), b''):
         h.update(chunk)
     return h.hexdigest()
+
+
+def identity(root):
+    h = hashlib.sha256()
+    for here, dirs, files in os.walk(root):
+        dirs.sort()
+        here = Path(here)
+        for name in sorted(dirs + files):
+            if name == TRUST and here == root:
+                continue
+            st = os.lstat(here / name)
+            target = os.readlink(here / name) if stat.S_ISLNK(st.st_mode) else ''
+            size, mtime = (st.st_size, st.st_mtime_ns) if stat.S_ISREG(st.st_mode) else (0, 0)
+            h.update(f'{(here / name).relative_to(root)}\0{st.st_mode}\0{size}\0{mtime}\0{target}\n'.encode('utf-8', 'surrogateescape'))
+    return h.hexdigest()
+
+
+def trusted(root, digest):
+    stamp = root / TRUST
+    if root.is_symlink() or not root.is_dir() or not stamp.is_file() or stamp.is_symlink():
+        return False
+    try:
+        return stamp.read_text() == f'{digest}\n{identity(root)}\n'
+    except OSError:
+        return False
+
+
+def trust(root, digest):
+    temporary = root / f'{TRUST}.{os.getpid()}'
+    temporary.write_text(f'{digest}\n{identity(root)}\n')
+    temporary.rename(root / TRUST)
 
 
 def members(archive, short):
@@ -97,6 +129,7 @@ def install(archive_path, short, digest, destination):
         stamp = destination / STAMP
         if stamp.is_file() and not stamp.is_symlink() and stamp.read_text() == digest + '\n':
             compare(archive, destination, entries)
+            trust(destination, digest)
             return
         with tempfile.TemporaryDirectory(prefix=destination.name+'.tmp.', dir=destination.parent) as scratch:
             root = Path(scratch)/'product'; root.mkdir()
@@ -123,10 +156,13 @@ def install(archive_path, short, digest, destination):
             except BaseException:
                 if old.exists(): old.rename(destination)
                 raise
+        trust(destination, digest)
 
 
 if __name__ == '__main__':
     try:
+        if sys.argv[1] == '--trusted':
+            sys.exit(0 if trusted(Path(sys.argv[3]), sys.argv[2]) else 1)
         install(Path(sys.argv[1]), sys.argv[2], sys.argv[3], Path(sys.argv[4]))
     except (OSError, ValueError, RuntimeError, tarfile.TarError) as error:
         sys.exit(f'product-tar: {error}')
