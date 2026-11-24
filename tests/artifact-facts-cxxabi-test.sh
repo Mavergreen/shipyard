@@ -63,17 +63,21 @@ stub other1 /opt/mavergreen/other/lib/libc++abi.1.dylib
 printf 'void other1(void);\nint main(void) { other1(); return 0; }\n' > other.c
 build other.c stubs/other1.dylib -o src/bin/other
 
-printf 'extern "C" int puts(const char *);\nint main(void) { try { throw 1; } catch (int) { puts("c"); } return 0; }\n' > ex.cc
+printf 'extern "C" int puts(const char *);\nint main(void) { int *p = new int(1); try { throw *p; } catch (int) { puts("c"); } delete p; return 0; }\n' > ex.cc
 printf '#define H __attribute__((visibility("hidden")))\nH void *__cxa_allocate_exception(unsigned long n) { return 0; }\nH void __cxa_throw(void) {}\nH void *__cxa_begin_catch(void *p) { return p; }\nH void __cxa_end_catch(void) {}\nH int __gxx_personality_v0(void) { return 0; }\nH void *_ZTIi[2] = {0};\n' > rt.c
 build -x c++ -c ex.cc -o ex.o
 build -c rt.c -o rt.o
-build ex.o rt.o -o src/bin/stripx
+build ex.o rt.o -lc++ -o src/bin/stripx
 cp src/bin/stripx src/bin/stripS
 "$CL/bin/llvm-strip" -x src/bin/stripx
 "$CL/bin/llvm-strip" -S src/bin/stripS
-build ex.o -lc++abi -o src/bin/importsx
+build ex.o -lc++abi -lc++ -o src/bin/importsx
 "$CL/bin/llvm-strip" -x src/bin/importsx
 "$AR" rcs src/lib/libex.a ex.o rt.o
+printf 'int main(void) { @try { @throw (id)0; } @catch (id e) { return 1; } return 0; }\n' > trycatch.m
+build -x objective-c -fobjc-exceptions trycatch.m -lobjc -o src/bin/objctry
+printf 'void done(int *p);\nvoid work(void);\nint main(void) { int x __attribute__((cleanup(done))) = 0; work(); return x; }\nvoid done(int *p) { (void)p; }\nvoid work(void) {}\n' > cleanup.c
+build -fexceptions cleanup.c -o src/bin/ccleanup
 
 printf '#ifndef __x86_64__\nvoid __cxa_throw(void) {}\n#endif\nint main(void) { return 0; }\n' > fat.c
 build fat.c -o fat-x86_64
@@ -111,6 +115,8 @@ lacks "^cxxabi-unjudgeable $T bin/stripS " "a C++ image stripped -S keeps its lo
 has "cxxabi-defines $T bin/stripS x86_64 ___gxx_personality_v0 hidden" "stripping -S leaves the hidden runtime to be seen"
 lacks "^cxxabi-unjudgeable $T bin/importsx " "an image importing ___gxx_personality_v0 names it, stripped or not"
 lacks "^cxxabi-defines $T bin/importsx " "an image importing the runtime defines none of it"
+lacks "^cxxabi-unjudgeable $T bin/objctry " "an ObjC @try image has exception tables but no C++ personality, so it is no C++ ABI consumer"
+lacks "^cxxabi-unjudgeable $T bin/ccleanup " "a C -fexceptions cleanup image is no C++ ABI consumer"
 lacks "^cxxabi-unjudgeable $T lib/" "objects in archives are not linked images, so their exception tables are not judged"
 has "cxxabi-loads $T bin/other x86_64 /opt/mavergreen/other/lib/libc++abi.1.dylib" "a family libc++abi other than libcxx22's fails"
 has end-of-facts "a run that read every Mach-O ends its stream"

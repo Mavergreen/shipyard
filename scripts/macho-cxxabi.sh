@@ -8,8 +8,11 @@
 #          a member that is not Mach-O (an rlib's lib.rmeta) is skipped, a bitcode member exits 4, and an
 #          archive with no Mach-O member is not Mach-O. An old toolchain's
 #          "<symbol>.eh" frame label counts as <symbol>. A linked image slice (executable, dylib or bundle)
-#          with a __TEXT,__gcc_except_tab section that neither defines nor imports ___gxx_personality_v0
-#          prints "<arch> unjudgeable": its C++ runtime was stripped from sight.
+#          with a __TEXT,__gcc_except_tab section that neither defines nor imports ___gxx_personality_v0,
+#          yet imports a libc++, libc++abi or libstdc++ symbol (by two-level namespace, or a ___cxa_,
+#          std:: or operator new/delete name) or loads one of those libraries, prints "<arch>
+#          unjudgeable": its C++ runtime was stripped from sight. Exception tables with no C++ in
+#          sight (ObjC @try, C -fexceptions cleanups, Rust, Go) are no C++ ABI consumer's.
 #          Exit 0; 1 if FILE is not Mach-O; 2 on a usage error; 4 if a reader is missing or failed,
 #          or a member with Mach-O magic could not be read.
 set -eu
@@ -78,8 +81,17 @@ read_slice() {
     }' "$t/l" | LC_ALL=C sort -u
   if is_linked "$_s" && awk '$1 == "sectname" && $2 == "__gcc_except_tab" { f = 1 } END { exit !f }' "$t/l"; then
     "$NM" $nm_flags -m "$_s" > "$t/nma" 2>"$t/err" || reader_died "$NM -m"
-    awk '{ n = $0; sub(/ \((from|for) [^)]*\)$/, "", n); sub(/.* /, "", n); sub(/\.eh$/, "", n)
-           if (n == "___gxx_personality_v0") f = 1 } END { exit !f }' "$t/nma" || echo "$_a unjudgeable"
+    if ! awk '{ n = $0; sub(/ \((from|for) [^)]*\)$/, "", n); sub(/.* /, "", n); sub(/\.eh$/, "", n)
+           if (n == "___gxx_personality_v0") f = 1 } END { exit !f }' "$t/nma" \
+      && { awk '/\(undefined\)/ && / \(from lib(c\+\+|c\+\+abi|stdc\+\+)[^)]*\)$/ { f = 1 }
+                /\(undefined\)/ { n = $0; sub(/ \(from [^)]*\)$/, "", n); sub(/.* /, "", n)
+                  if (n ~ /^(___cxa_|__ZSt|__ZNSt|__ZNKSt|__Znw|__Zna|__Zdl|__Zda)/) f = 1 }
+                END { exit !f }' "$t/nma" \
+        || awk '$1 == "cmd" { load = ($2 ~ /^LC_(LOAD|LOAD_WEAK|REEXPORT|LAZY_LOAD|LOAD_UPWARD)_DYLIB$/); next }
+                load && $1 == "name" { b = $2; sub(/.*\//, "", b); if (b ~ /^lib(c\+\+|stdc\+\+)/) f = 1; load = 0 }
+                END { exit !f }' "$t/l"; }; then
+      echo "$_a unjudgeable"
+    fi
   fi
 }
 read_member() {

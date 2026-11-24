@@ -6,8 +6,10 @@ crosses from one to the other is not caught, or terminates. artifact-facts.sh re
 Mach-O with macho-cxxabi.sh and reports each C++ runtime symbol a slice defines beyond the allow-list
 (what the pinned Recaulk's librecaulk.a defines), and each libc++abi it loads other than
 /usr/lib/libc++abi.dylib or libcxx22's libc++abi.1.dylib. Either fails, once per path. Hidden definitions
-count. A linked image with C++ exception tables (a __TEXT,__gcc_except_tab section) that neither defines nor
-imports ___gxx_personality_v0 fails too: its runtime was stripped out of sight, so it cannot be judged.
+count. A linked image with exception tables (a __TEXT,__gcc_except_tab section) that neither defines nor
+imports ___gxx_personality_v0, yet imports a libc++, libc++abi or libstdc++ symbol or loads one of those
+libraries, fails too: its runtime was stripped out of sight, so it cannot be judged. Exception tables with
+no C++ in sight (ObjC @try, C -fexceptions cleanups, Rust, Go) are not a C++ ABI consumer's and pass.
 
 ## Incident
 Undated: codex-cli's bin/codex-code-mode-host carried a whole libc++abi as private externals, a second
