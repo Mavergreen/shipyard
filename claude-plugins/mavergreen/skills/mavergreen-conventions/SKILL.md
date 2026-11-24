@@ -993,6 +993,80 @@ the build, not a property of the product. **Revisit when** a product's build can
 in principle: it declares that as its `macos-runner` deviation, with the reason, and this rule names
 the exception.
 
+### Linux gate first
+
+**Every macOS job has a Linux job in its `needs:`** (check 38), directly or through another job. That
+Linux gate runs everything host-agnostic that can fail cheaply, before any macOS runner starts: the
+run's version and publish decision, the release notes (`release-notes.sh`, which runs
+`check-release-sentence.sh` on each sentence and `check-release-notes.sh` on the body),
+`check-ingredient-pins.sh`, and the family conventions. A repo whose `ver` step and notes still run
+inside its macOS `build` moves them into a Linux `ver` job, the shape cmake, golang and most of the
+family already use, and hands their outputs on:
+
+```yaml
+  ver:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.full }}
+      publish: ${{ steps.ver.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0, persist-credentials: false }
+      - uses: Mavergreen/shipyard/.github/actions/install@v1
+      - id: ver
+        run: <the repo's version + publish decision, as before>
+      - run: |
+          sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "${{ steps.ver.outputs.full }}" \
+            --version "${{ steps.ver.outputs.full }}" --product <Product> --min-os 10.9.5 \
+            --out "$RUNNER_TEMP/RELEASE_NOTES.md"
+      - run: sh "$SHIPYARD_SCRIPTS/check-ingredient-pins.sh"
+  conventions:
+    uses: Mavergreen/shipyard/.github/workflows/family-conventions.yml@v1
+  build:
+    needs: [ver, conventions]
+    runs-on: macos-26
+```
+
+A call to a shipyard reusable workflow counts as a Linux job, so `needs: [conventions]` alone passes
+the check; it does not run the notes, which is the failure the rule was written for, so a release
+workflow needs both. The macOS build still writes the notes it ships; the `ver` job's copy only proves
+they generate. **Why:** macfuse's release dispatch spent 3 macOS minutes failing only on a release-note
+sentence's word count, and recaulk's runs failed in Linux-checkable steps, on the same day
+(2026-11-24). **What it costs:** one more Linux job, and a few seconds of latency before the macOS job
+queues. **Revisit when** GitHub changes macOS runner availability or pricing, or the family's last
+macOS job leaves.
+
+### Smoke only in a publishing run
+
+**`modern-smoke` runs only when the run will publish** (check 39): a release dispatch, a
+repackage-on-ingredient-bump dispatch, a reconcile run, or a push to `main` that `version.sh` says
+releases. Pushes that do not release, PRs and branch runs skip it. "Will publish" is decided once, in
+the `ver` step, and read as an output; modern-smoke's `if:` repeats the publish job's term, never a
+condition of its own:
+
+```yaml
+  modern-smoke:
+    needs: [ver, build]
+    if: needs.ver.outputs.publish == 'yes'
+    runs-on: macos-26
+  publish:
+    needs: [ver, build, modern-smoke, <10.9 acceptance>, scan]
+    if: needs.ver.outputs.publish == 'yes'
+    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
+```
+
+(`needs.build.outputs.publish == 'yes'` where `build` still decides; every extra term of publish's `if:`,
+such as recaulk's `&& github.ref == 'refs/heads/main'`, goes on modern-smoke's too.) A skipped modern-smoke passes the
+`required` gate, and publish is skipped by the same term, so nothing ships unsmoked. **Why:** an
+ingredient-PR merge spent two macOS builds, the push run and repackage's dispatch, though only the
+dispatch publishes. **What is lost:** a PR no longer shows its arm64 slice running; the first run that
+does is the release itself, which then fails before publish rather than after merge. **macOS build
+jobs are not gated the same way:** where `build` itself runs on macOS it is the run's only build, and
+a PR's build is the automerge gate's evidence, so skipping it would merge unbuilt changes. A build
+that has moved to Linux needs no gating; check 36 drives the rest there. **Revisit when** GitHub
+changes macOS runner availability or pricing, or a release fails modern-smoke on something a PR run
+would have caught a day earlier.
+
 ### A release is a declared state, not an event
 
 A release is the realisation of a declared state, not the side effect of an event. The design spec
@@ -2938,11 +3012,13 @@ pointing back into the row below — so this table, not the script, is where a c
 | **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@`, or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) whose steps do (comments do not count; an uncalled job in another workflow file and a remote reusable workflow do not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or `INGREDIENTS.md` declares a bare `- on-target: <reason>`. A scoped `- on-target:<part>: <reason>` declares a coverage gap and exempts nothing; a glob for `<part>` is refused | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
 | **35.** No tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt` outside `tests/` and `test/` calls the system `pkgbuild` or `productbuild` on a non-comment line, unless the path is grandfathered or INGREDIENTS.md declares `- packager:<path>: <reason, exit>` | The pkg is built by stevedore, which runs on any host; a direct call keeps the build on a scarce macOS runner. This steers repos off the system packager one path at a time, and `@v1` moving reddens none of them while their lines stand |
 | **36.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` runner (as a string, a list, or `${{ matrix.X }}` read through the job's matrix) is grandfathered or declares `- macos-runner:<workflow file>:<job>: <reason, exit>` (`ci.yml:build`; shipyard has none, since it runs no macOS job) | macOS runners are scarce, and a job lands on one by default. The deviation names the reason it needs macOS and what would let it leave; the key is `<workflow file>:<job>`, so a new `build` job in another workflow is caught. Needs PyYAML, which check 8 already requires |
-| **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. An `- arm64-pure-go:<glob>: <reason>` declaration needs no job, and a job beside only such declarations fails with a third; conformance proves each slice one covers instead ("Pure-Go arm64 slices are proven on Linux"). At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` or `arm64-pure-go:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or `- arm64-pure-go: <reason>`, or a glob of only `*`, `?` and `/`, is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36) |
+| **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. An `- arm64-pure-go:<glob>: <reason>` declaration needs no job, and a job beside only such declarations fails with a third; conformance proves each slice one covers instead ("Pure-Go arm64 slices are proven on Linux"). At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` or `arm64-pure-go:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or `- arm64-pure-go: <reason>`, or a glob of only `*`, `?` and `/`, is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36), a Linux job in its `needs:` (check 38) and the publish job's `if:` (check 39) |
+| **38.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` or `xcode-*` runner (read as check 36 reads it), or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) holding one, has in its `needs:`, directly or through other jobs' `needs:`, a job on an `ubuntu-*` runner (every matrix entry `ubuntu-*`), a call to a shipyard reusable workflow (`Mavergreen/shipyard/.github/workflows/…`), or a call to a local reusable workflow whose every job runs on `ubuntu-*`. A file whose only trigger is `workflow_call` is skipped: its caller is held to the rule. A self-hosted runner or a `runs-on` expression is not Linux. Grandfathered per job as `linux-gate <repo> <workflow file>:<job>`; no deviation excuses it | A macOS job is the family's scarcest minute, and one that starts before anything cheap has run spends it failing on what Linux would have caught: macfuse's release dispatch spent 3 macOS minutes failing only on a release-note sentence's word count, and recaulk's runs failed in checks that need no Mac. See "Linux gate first", above |
+| **39.** Where `release.yml` has a `modern-smoke` job, its `if:` carries, as top-level `&&` terms, every term of the publish job's `if:` (the job calling `publish-release.yml`, else `publish`), status functions (`always()`, `success()`, `failure()`, `cancelled()`) aside and `${{ }}` and outer parentheses ignored; a publish job with no `if:` fails with its own message. Grandfathered per repo as `smoke-gate <repo> release.yml:modern-smoke`, separately from check 37's `modern-smoke` line | modern-smoke proves the arm64 slice of what will SHIP; a push, a PR or a branch run ships nothing, so a smoke there is a macOS runner spent on evidence nobody uses. An ingredient-PR merge used to spend two: the push run and repackage's dispatch. Sharing the publish job's own term, an output of the job that decides, keeps one decision instead of two copies that drift. See "Smoke only in a publishing run", above |
 
 **Grandfathered findings.** `scripts/conventions-grandfathered` holds one `<check> <repo> <job|path>` line per
-finding that predates checks 21 (widened), 35, 36 and 37 and conformance's `cxxabi` and `no-standalone`, under the check names `artifact-conformance`,
-`packager`, `macos-runner`, `modern-smoke`, `cxxabi` and `standalone`; a line, like a declared deviation, excuses its finding. A
+finding that predates checks 21 (widened), 35, 36, 37, 38 and 39 and conformance's `cxxabi` and `no-standalone`, under the check names `artifact-conformance`,
+`packager`, `macos-runner`, `modern-smoke`, `linux-gate`, `smoke-gate`, `cxxabi` and `standalone`; a line, like a declared deviation, excuses its finding. A
 `cxxabi` line is keyed per installed path (`cxxabi <repo> <path>`, spaces as `%20`), so a new path with a
 second runtime in a grandfathered repo still fails. A `standalone` line is keyed per product
 (`standalone <repo> <short>`, the short registered to that repo; see "Standalone archive"), and

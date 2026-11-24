@@ -959,6 +959,156 @@ PY
   fi
 fi
 
+# spec: SKILL.md "Family conventions" check 38 -- a job on a macos-* or xcode-* runner needs, through
+#       needs:, a job on an ubuntu-* runner, so it never starts to fail on what Linux could have caught.
+#       A call to a shipyard reusable workflow (all on ubuntu-*, held by
+#       tests/shipyard-workflow-coupling-test.sh), or to a local one whose every job runs on ubuntu-*, is
+#       such a job; a workflow_call-only file is gated by its caller, and a call to a local workflow
+#       holding a macOS job is held to the rule itself. No PyYAML already failed check 8.
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  # shellcheck disable=SC2086  # CI_FILES is a deliberate word-split list of paths
+  _c38="$(python3 - $CI_FILES <<'PY'
+import json, os, re, sys, yaml
+MAC = re.compile(r"(macos|xcode)-", re.I)
+def load(path):
+    try:
+        wf = yaml.safe_load(open(path)) or {}
+    except Exception:
+        return {}
+    return wf if isinstance(wf, dict) else {}
+def jobs_of(wf):
+    jobs = wf.get("jobs")
+    return {str(k): v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
+def runs(job):
+    r = json.dumps(job.get("runs-on", ""))
+    if "matrix" in r:
+        r += json.dumps((job.get("strategy") or {}).get("matrix", ""))
+    return r
+def local(job):
+    u = job.get("uses")
+    if isinstance(u, str) and u.startswith("./.github/workflows/"):
+        return jobs_of(load(u[2:]))
+    return None
+def on_mac(job):
+    if MAC.search(runs(job)):
+        return True
+    called = local(job)
+    return bool(called) and any(MAC.search(runs(b)) for b in called.values())
+def on_linux(job):
+    u = job.get("uses")
+    if isinstance(u, str):
+        if u.startswith("Mavergreen/shipyard/.github/workflows/"):
+            return True
+        called = local(job)
+        return bool(called) and all(on_linux(b) for b in called.values())
+    r = runs(job)
+    return "ubuntu-" in r and not re.search(r"(macos|xcode|windows)-|self-hosted", r, re.I)
+def needs(job):
+    n = job.get("needs") or []
+    return [n] if isinstance(n, str) else [str(x) for x in n]
+def reusable_only(wf):
+    on = wf.get("on", wf.get(True))
+    keys = list(on) if isinstance(on, (dict, list)) else [on]
+    return keys == ["workflow_call"]
+for path in sys.argv[1:]:
+    wf = load(path)
+    if reusable_only(wf):
+        continue
+    jobs = jobs_of(wf)
+    for name, job in jobs.items():
+        if not on_mac(job):
+            continue
+        seen, todo, ok = set(), list(needs(job)), False
+        while todo and not ok:
+            n = todo.pop()
+            if n in seen or n not in jobs:
+                continue
+            seen.add(n)
+            ok = on_linux(jobs[n])
+            todo.extend(needs(jobs[n]))
+        if not ok:
+            print("%s:%s" % (os.path.basename(path), name))
+PY
+)" || fail "check 38 could not read the workflows (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  for _j in $_c38; do
+    grandfathered linux-gate "$_j" && continue
+    fail "linux-gate $_j: that job runs on a macOS runner, and nothing it needs runs on Linux first -- it can spend a scarce macOS runner failing on what a Linux job would have caught" \
+         "add needs: on a Linux gate job (runs-on: ubuntu-latest) that runs the host-agnostic checks first: the release notes (release-notes.sh), check-ingredient-pins.sh and the family conventions (see the conventions skill, check 38)"
+  done
+fi
+
+# spec: SKILL.md "Family conventions" check 39 -- modern-smoke runs only in a run that will publish:
+#       its if: carries, as top-level && terms, every term of the publish job's if: but the status
+#       functions, so the decision is the publish job's own (one shared output, never a second copy).
+#       No PyYAML already failed check 8.
+if ! grandfathered smoke-gate release.yml:modern-smoke && python3 -c 'import yaml' >/dev/null 2>&1; then
+  _c39="$(python3 - "$REL" <<'PY'
+import re, sys, yaml
+try:
+    wf = yaml.safe_load(open(sys.argv[1])) or {}
+except Exception:
+    sys.exit(0)
+jobs = wf.get("jobs") if isinstance(wf, dict) else None
+jobs = {str(k): v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
+smoke = jobs.get("modern-smoke")
+if smoke is None:
+    sys.exit(0)
+def split(e, sep):
+    out, depth, q, cur, i = [], 0, None, "", 0
+    while i < len(e):
+        c = e[i]
+        if q:
+            q = None if c == q else q
+        elif c in "'\"":
+            q = c
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+        elif depth == 0 and sep and e.startswith(sep, i):
+            out.append(cur); cur = ""; i += len(sep); continue
+        if depth < 0:
+            return None
+        cur += c; i += 1
+    out.append(cur)
+    return out if depth == 0 else None
+def strip(e):
+    e = re.sub(r"\s+", " ", str(e)).strip()
+    m = re.fullmatch(r"\$\{\{(.*)\}\}", e)
+    if m:
+        e = m.group(1).strip()
+    while e.startswith("(") and e.endswith(")") and split(e[1:-1], None) is not None:
+        e = e[1:-1].strip()
+    return e
+def terms(e):
+    parts = split(strip(e), "&&") or [strip(e)]
+    out = [strip(t) for t in parts]
+    return [t for t in out if t and not re.fullmatch(r"!? ?(always|success|failure|cancelled)\(\)", t)]
+pubs = [j for j, b in jobs.items() if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]]
+if not pubs and "publish" in jobs:
+    pubs = ["publish"]
+have = set(terms(smoke.get("if", "")))
+for p in pubs:
+    want = terms(jobs[p].get("if", ""))
+    if not want:
+        print("noif %s" % p)
+    elif not all(t in have for t in want):
+        print("ungated %s %s" % (p, " && ".join(want)))
+PY
+)" || fail "check 39 could not read $REL's jobs (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  _sg="smoke-gate release.yml:modern-smoke"
+  while read -r _k _p _cond; do
+    case "$_k" in
+      noif) fail "$_sg: the publish job ($_p) has no if:, so nothing in $REL says which runs publish, and modern-smoke has no condition to share" \
+                 "gate $_p on the run's publish decision, an output such as needs.<job>.outputs.publish == 'yes', and give modern-smoke the same if: (see the conventions skill, check 39)" ;;
+      ungated) fail "$_sg: modern-smoke can run where the publish job ($_p) does not -- its if: lacks $_p's condition ($_cond), so a push, a PR or a branch run spends a macOS runner on a smoke nothing will ship" \
+                    "give modern-smoke if: $_cond, the same condition $_p reads (see the conventions skill, check 39)" ;;
+    esac
+  done <<EOF
+$_c39
+EOF
+fi
+
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
 #       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
 #       ignored AND nothing may be tracked under them or under docs/superpowers/, nor a backlog file

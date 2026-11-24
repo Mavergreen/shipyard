@@ -7,7 +7,8 @@
 #          clone whose origin is not Mavergreen/<name>), keeps those whose workflows
 #          reference family-conventions.yml (the repos this gate runs in, registered or not), runs a
 #          copy of this gate WITHOUT the grandfathered file in each, and prints what the checks that
-#          consult it (packager, macos-runner, artifact-conformance, modern-smoke) find, as sorted
+#          consult it (packager, macos-runner, artifact-conformance, modern-smoke, linux-gate,
+#          smoke-gate) find, as sorted
 #          "<check> <repo> <job|path>" lines (standalone's key is the product's short name). shipyard itself is read from this working tree,
 #          and the org's .github profile repo is skipped.
 #          modern-smoke, cxxabi and standalone are also found in what each repo last shipped: the latest release's pkgs and standalone archives,
@@ -60,6 +61,8 @@ while read -r repo; do
         -e "s|^check-family-conventions: \(packager\) \([^ ]*\): .*|\1 $repo \2|p" \
         -e "s|^check-family-conventions: \(macos-runner\) \([^ ]*\): .*|\1 $repo \2|p" \
         -e "s|^check-family-conventions: \(modern-smoke\) \([^ ]*\): .*|\1 $repo \2|p" \
+        -e "s|^check-family-conventions: \(linux-gate\) \([^ ]*\): .*|\1 $repo \2|p" \
+        -e "s|^check-family-conventions: \(smoke-gate\) \([^ ]*\): .*|\1 $repo \2|p" \
         -e "s|.*builds a \.pkg (\([^ )]*\) via stevedore).*|artifact-conformance $repo \1|p"
   rc=0; view="$(gh release view --repo "Mavergreen/$repo" --json tagName,assets --jq '.tagName, (.assets[].name)' </dev/null 2>"$tmp/err")" || rc=$?
   if [ "$rc" -ne 0 ]; then
