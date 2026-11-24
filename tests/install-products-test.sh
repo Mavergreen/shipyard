@@ -323,6 +323,8 @@ run a@1
   || fail "linux_tarball: the linux-x86_64 archive, not the pkg payload, is unpacked at the prefix"
 [ "$(pget a version)" = 1 ] && [ "$(pget a product)" = a ] || fail "linux_tarball: the pkg's own mavergreen.plist marks the prefix"
 [ -z "$(find "$(mg a)" -name '.*')" ] || fail "linux_tarball: nothing but the product is left in the prefix"
+[ ! -e "$(mg a)/.mavergreen-archive-sha256" ] && [ ! -e "$(mg a)/.mavergreen-tree-verified" ] \
+  || fail "linux_tarball: neither the archive digest nor the tree-verified stamp is installed"
 noinstaller && [ "$(cat "$w/installed")" = "a 1" ] || fail "linux_tarball: no installer runs, and a 1 is recorded"
 [ -f "$w/cache/arepo/1/a-1.pkg" ] || fail "linux_tarball: an archive with no mavergreen.plist falls back to the pkg's"
 

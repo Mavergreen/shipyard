@@ -9,6 +9,7 @@ import stat
 import sys
 import tarfile
 import tempfile
+import time
 
 STAMP = '.mavergreen-archive-sha256'
 TRUST = '.mavergreen-tree-verified'
@@ -23,6 +24,7 @@ def sha(stream):
 
 def identity(root):
     h = hashlib.sha256()
+    newest = 0
     for here, dirs, files in os.walk(root):
         dirs.sort()
         here = Path(here)
@@ -30,10 +32,11 @@ def identity(root):
             if name == TRUST and here == root:
                 continue
             st = os.lstat(here / name)
+            newest = max(newest, st.st_ctime_ns)
             target = os.readlink(here / name) if stat.S_ISLNK(st.st_mode) else ''
             size, mtime = (st.st_size, st.st_mtime_ns) if stat.S_ISREG(st.st_mode) else (0, 0)
-            h.update(f'{(here / name).relative_to(root)}\0{st.st_mode}\0{size}\0{mtime}\0{target}\n'.encode('utf-8', 'surrogateescape'))
-    return h.hexdigest()
+            h.update(f'{(here / name).relative_to(root)}\0{st.st_mode}\0{size}\0{mtime}\0{st.st_ino}\0{st.st_ctime_ns}\0{target}\n'.encode('utf-8', 'surrogateescape'))
+    return h.hexdigest(), newest
 
 
 def trusted(root, digest):
@@ -41,7 +44,7 @@ def trusted(root, digest):
     if root.is_symlink() or not root.is_dir() or not stamp.is_file() or stamp.is_symlink():
         return False
     try:
-        return stamp.read_text() == f'{digest}\n{identity(root)}\n'
+        return stamp.read_text() == f'{digest}\n{identity(root)[0]}\n'
     except OSError:
         return False
 
@@ -49,7 +52,10 @@ def trusted(root, digest):
 def trust(root, digest):
     temporary = root / f'{TRUST}.{os.getpid()}'
     try:
-        temporary.write_text(f'{digest}\n{identity(root)}\n')
+        ident, newest = identity(root)
+        if newest // 1000000000 >= int(time.time()):
+            time.sleep(1 - time.time() % 1)
+        temporary.write_text(f'{digest}\n{ident}\n')
         temporary.rename(root / TRUST)
     except OSError:
         try:

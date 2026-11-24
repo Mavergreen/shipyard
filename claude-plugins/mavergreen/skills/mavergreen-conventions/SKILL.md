@@ -1099,7 +1099,7 @@ becomes the cheaper path), or a crate's build script needs a Mac at build time.
 ### arm64 is built on Linux
 
 **An arm64 slice is built on Linux, never on a macOS runner without a named blocker.** Three entries
-produce it, all with clang22 and `ld64.lld` against the pinned 11.3 SDK at deployment target 11.0:
+produce it; on Linux all use clang22 and `ld64.lld` against the pinned 11.3 SDK at deployment target 11.0 (on a modern Mac the `macos-arm64` preset uses Apple clang):
 the hidden `macos-arm64` preset (a product's preset inherits it as `arm64`, binary directory
 `$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-arm64`), `scripts/build_universal.sh --source DIR --out DIR
 [--x86_64-preset NAME] [--arm64-preset NAME]` (each arch built with its preset, merged by
@@ -1955,7 +1955,7 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
     --generic-icon --out-dir "$OUT")"
   ```
   which configures shipyard's `updater/product` project per arch, merges, and prints the `.app`. The
-  arches are the product's decision; arm64 needs a cross host (Linux or a modern Mac), not 10.9.
+  arches are the product's decision; arm64 is built on Linux or a modern Mac, not 10.9.
 
   `mavericks_add_updater_app` gives the updater `--no-default-config` (clang22's `clang.cfg` would add
   Recaulk and libc++ to it) and `-fuse-ld=lld`. Given one arch and a deployment target, it also gives it

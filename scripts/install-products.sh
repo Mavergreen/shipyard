@@ -354,7 +354,7 @@ linux_install() {
     [ "$(uname -m)" = x86_64 ] || die "$1 $2: the release's Linux archive is $_tar, and this host is $(uname -m)"
     echo "install-products: installing $1 $2 from $_tar into $P" >&2
     sh "$SELF/fetch_product_tar.sh" "$1" "$_tag" "$stg/tree" > /dev/null || die "$1 $2: could not fetch, verify and unpack $_tar"
-    rm -f "$stg/tree/.mavergreen-archive-sha256"
+    rm -f "$stg/tree/.mavergreen-archive-sha256" "$stg/tree/.mavergreen-tree-verified"
     cp "$T/m/$1@$_tag.plist" "$stg/tree/mavergreen.plist" || die "$1 $2: cannot copy its mavergreen.plist"
   else
     echo "install-products: installing $1 $2 from the payload of $_pkg into $P" >&2
