@@ -127,6 +127,13 @@ runs:
       run: |
         set -eu
         root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        # spec: tests/install-action-linux-version-test.sh -- GitHub's Linux runners leave TMPDIR
+        #       unset, so the presets' $penv{TMPDIR}/mm-build became /mm-build.
+        if [ -z "${TMPDIR:-}" ]; then
+          TMPDIR="${RUNNER_TEMP:-}"; [ -n "$TMPDIR" ] || TMPDIR=/tmp
+          export TMPDIR
+          echo "TMPDIR=$TMPDIR" >> "$GITHUB_ENV"
+        fi
         [ -f "$root/scripts/run-repo-tests.sh" ] || {
           echo "::error::$root/scripts does not look like shipyard's scripts dir (no run-repo-tests.sh) -- the action's own checkout is not where this expected it"; exit 1; }
         [ -f "$root/MavericksShipyardConfig.cmake" ] || {

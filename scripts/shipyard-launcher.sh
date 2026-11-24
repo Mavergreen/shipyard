@@ -8,7 +8,7 @@
 #          {cmake,ctest,cpack} on PATH that is not a shipyard launcher or a link to one. SHIPYARD_LAUNCHER_HOST (linux or mac) replaces uname -s.
 #          A tool that runs a launcher again before any other work (a stand-in cmake that execs
 #          shipyard-cmake) is refused as a loop; MAVERGREEN_SHIPYARD_LAUNCHER_PID and
-#          MAVERGREEN_SHIPYARD_LAUNCHER_DEPTH carry the guard.
+#          MAVERGREEN_SHIPYARD_LAUNCHER_DEPTH carry the guard. An unset or empty TMPDIR becomes /tmp.
 # spec: 2026-10-09 C4
 # platform: 10.9 has no realpath and no readlink -f, so links are followed one at a time.
 resolve() {
@@ -70,6 +70,10 @@ if [ "${MAVERGREEN_SHIPYARD_LAUNCHER_PID:-}" = "$$" ] || [ "$depth" -ge 8 ]; the
   echo "shipyard-$tool: $exe runs a shipyard launcher again, a loop: a stand-in $tool must not exec shipyard-$tool, so put a real $tool first on PATH." >&2
   exit 1
 fi
+# spec: mavericks-presets.json -- MAVERICKS_BUILD_ROOT is $penv{TMPDIR}/mm-build, and GitHub's Linux
+#       runners leave TMPDIR unset, which made it /mm-build.
+[ -n "${TMPDIR:-}" ] || TMPDIR=/tmp
+export TMPDIR
 MAVERGREEN_SHIPYARD_LAUNCHER_PID=$$
 MAVERGREEN_SHIPYARD_LAUNCHER_DEPTH=$((depth + 1))
 export MAVERGREEN_SHIPYARD_LAUNCHER_PID MAVERGREEN_SHIPYARD_LAUNCHER_DEPTH

@@ -339,7 +339,9 @@ verification round), and the test suites compile fixtures and dylibs on every
 run. This is the single cheapest speedup available to this family.
 
 - **shipyard's shared hidden presets (`mavericks-native` / `mavericks-cross`) declare
-  `MAVERICKS_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mm-build`,
+  `MAVERICKS_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mm-build`
+  (GitHub's Linux runners leave `TMPDIR` unset, so `install@v1` exports `$RUNNER_TEMP` or `/tmp`
+  there, and the `shipyard-cmake`/`-ctest`/`-cpack` launchers give an unset or empty one `/tmp`),
   and derive their OWN `binaryDir` from it, keyed by `${sourceDirName}`:**
   ```json
   "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-native"

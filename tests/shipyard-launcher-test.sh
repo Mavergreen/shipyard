@@ -140,6 +140,15 @@ chmod +x "$w/nest/bin/cmake"
 expect "a real cmake that runs shipyard-ctest as a child is not a loop" \
   "host-tool=cmake${nl}host-tool=ctest${nl}CMAKE_PREFIX_PATH=$sy" \
   env -u CMAKE_PREFIX_PATH SHIPYARD_LAUNCHER_HOST=linux PATH="$w/nest/bin:$w/host/bin:/usr/bin:/bin" "$root/bin/shipyard-cmake"
+mkdir -p "$w/tmpd/bin"
+printf '#!/bin/sh\necho "TMPDIR=${TMPDIR-<unset>}"\n' > "$w/tmpd/bin/cmake"; chmod +x "$w/tmpd/bin/cmake"
+tp="$w/tmpd/bin:/usr/bin:/bin"
+expect "with TMPDIR unset the launcher gives the tool /tmp" "TMPDIR=/tmp" \
+  env -u TMPDIR SHIPYARD_LAUNCHER_HOST=linux PATH="$tp" "$root/bin/shipyard-cmake"
+expect "with TMPDIR empty the launcher gives the tool /tmp" "TMPDIR=/tmp" \
+  env TMPDIR= SHIPYARD_LAUNCHER_HOST=linux PATH="$tp" "$root/bin/shipyard-cmake"
+expect "a caller's TMPDIR reaches the tool unchanged" "TMPDIR=$w/mine" \
+  env TMPDIR="$w/mine" SHIPYARD_LAUNCHER_HOST=linux PATH="$tp" "$root/bin/shipyard-cmake"
 mv "$w/cmake-aside" "$root/cmake"
 cp "$root/cmake/bin/ctest" "$w/ctest.sh"
 printf '\317\372\355\376' > "$root/cmake/bin/ctest"; chmod +x "$root/cmake/bin/ctest"

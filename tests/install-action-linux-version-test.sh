@@ -7,7 +7,8 @@
 #          no release is warned; shipyard's own ./.github/actions/install, whose checkout is the
 #          workspace and whose ref is empty, is not. Runs the step itself, with a git that cannot reach
 #          the network, and with install-shipyard-prefix.sh replaced by a stub that records its
-#          arguments, so nothing is installed. Exit 0 clean, 1 on failure.
+#          arguments, so nothing is installed. With TMPDIR unset or empty it exports RUNNER_TEMP, else
+#          /tmp, as TMPDIR. Exit 0 clean, 1 on failure.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/install-linux-version.XXXXXX")"; trap 'rm -rf "$w"' EXIT
@@ -51,5 +52,19 @@ run '' "$root"
   || { echo "FAIL: shipyard's own ./.github/actions/install must not warn about its empty ref:"; sed 's/^/    | /' "$w/out"; bad=1; }
 grep -q "^MavericksShipyard_DIR=" "$w/env" || { echo "FAIL: the local checkout must still export MavericksShipyard_DIR"; bad=1; }
 [ -z "$(cat "$w/stub-args")" ] || { echo "FAIL: shipyard's own checkout names no release, so it must install with no --version; got '$(cat "$w/stub-args")'"; bad=1; }
+tmprun() {  # $1 = what  $2 = the TMPDIR line wanted in GITHUB_ENV, or empty for none; the rest is env arguments
+  _what="$1"; _want="$2"; shift 2
+  : > "$w/env"
+  env "$@" PATH="$w/bin:$PATH" GITHUB_ACTION_PATH="$root/.github/actions/install" GITHUB_ENV="$w/env" GITHUB_PATH="$w/path" \
+    GITHUB_WORKSPACE="$w/consumer" bash "$w/step.sh" > "$w/out" 2>&1 \
+    || { echo "FAIL: $_what: the off-macOS step failed:"; sed 's/^/    | /' "$w/out"; bad=1; return 0; }
+  _got="$(grep '^TMPDIR=' "$w/env" || :)"
+  [ "$_got" = "$_want" ] || { echo "FAIL: $_what: GITHUB_ENV's TMPDIR line is '$_got', not '$_want'"; bad=1; }
+}
+tmprun "TMPDIR unset with RUNNER_TEMP set exports RUNNER_TEMP" "TMPDIR=$w/rt" -u TMPDIR RUNNER_TEMP="$w/rt"
+tmprun "TMPDIR empty with RUNNER_TEMP set exports RUNNER_TEMP" "TMPDIR=$w/rt" TMPDIR= RUNNER_TEMP="$w/rt"
+tmprun "TMPDIR and RUNNER_TEMP unset exports /tmp" "TMPDIR=/tmp" -u TMPDIR -u RUNNER_TEMP
+tmprun "TMPDIR unset with RUNNER_TEMP empty exports /tmp" "TMPDIR=/tmp" -u TMPDIR RUNNER_TEMP=
+tmprun "a set TMPDIR is left alone" "" TMPDIR="$w/mine" RUNNER_TEMP="$w/rt"
 [ "$bad" -eq 0 ] || exit 1
 echo "PASS: install-action-linux-version"
