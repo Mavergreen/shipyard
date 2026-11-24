@@ -90,7 +90,8 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   (`stage-shipyard-prefix.sh`, `package-pkg.sh --tree-only`; a test holds the trees equal, less the
   updater), links the launchers into `/usr/local/mavergreen/bin` on `PATH`, and points
   `SHIPYARD_SCRIPTS` and `MavericksShipyard_DIR` into it. There the launchers run the host's
-  `cmake`, and the toolchain file gives every compiler not named the pinned clang22 with its
+  `cmake` (a consumer's stand-in `cmake` must not exec `shipyard-cmake`: the launcher refuses the
+  loop), and the toolchain file gives every compiler not named the pinned clang22 with its
   `ld64.lld`. Never hand-roll `-DCMAKE_TOOLCHAIN_FILE`/`-DCMAKE_C_COMPILER` on Linux. Without root,
   `sudo -n` or a writable `/usr/local/mavergreen`, the prefix is `~/.local/mavergreen/shipyard`, said
   on stderr. Revisit when the cmake product ships a Linux build, or a family Linux build needs a
@@ -944,7 +945,30 @@ before you push to its `main` — in the left column, that push is a release.
   gate that only asks "does the group distinguish events?" waves it straight through.
 - Sign/appcast and publish steps gate on `steps.ver.outputs.release == 'yes'`. Fork PRs never touch
   `SPARKLE_PRIVATE_KEY` (they resolve `release=no`).
-- Runner `macos-26` (fallback `macos-15`); `actions/*@v7` on new repos.
+- Build jobs run on Linux (`ubuntu-latest`); a macOS job (below) uses `macos-26` (fallback
+  `macos-15`); `actions/*@v7` on new repos.
+
+### A release builds on Linux; macOS keeps only the late modern-smoke
+
+**Preparing any release includes moving its build to Linux-hosted runners.** The pkg, its payload
+and every slice are built on Linux through shipyard (clang22, stevedore, `pkg_read.sh`), whatever the
+release is for. Only a late `modern-smoke` job, the arm64 and Apple Silicon proof (check 37), stays
+on macOS.
+
+**A macOS job in a release needs a named blocker:** a grandfathered `macos-runner` line in
+`scripts/conventions-grandfathered` with its QUEUE item, or an INGREDIENTS.md
+`- macos-runner:<workflow file>:<job>: <reason, exit>` deviation whose exit says what lets it leave
+(check 36). A job with neither fails the gate; a blocker with no exit is a permanent one.
+
+**A test that needs a Darwin kernel or userland, but not modern macOS, runs in a mavericks-vm 10.9
+guest on Linux** (see "Acceptance on real 10.9"), not on a macOS runner: `flock`, process groups,
+`sun_path`, bash 3.2 and BSD tools are all 10.9's too.
+
+**Why:** macOS runners are the family's scarcest resource and its release bottleneck, and Linux, a
+modern Mac and 10.9 are equally first-class build hosts, so a build that needs macOS is a defect in
+the build, not a property of the product. **Revisit when** a product's build cannot run on Linux even
+in principle: it declares that as its `macos-runner` deviation, with the reason, and this rule names
+the exception.
 
 ### A release is a declared state, not an event
 
