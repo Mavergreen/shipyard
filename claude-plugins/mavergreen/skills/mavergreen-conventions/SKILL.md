@@ -2494,8 +2494,11 @@ without building either:
   check calls it instead.
 - **A single static binary where the product allows it**, which a user can drop into `/usr/local/bin`
   or anywhere; otherwise the directory is the unit.
-- **The release notes say the archive has "no updater, no installer"**, in `release-notes/notice`, the
-  standing footer line; `RELEASE_NOTES.md` is generated, and the gate refuses one written by hand.
+- **The release notes describe the archive, from the archive.** `release-notes.sh --standalone
+  dist/<archive>` writes a `### Standalone archive` section: the file name, that it unpacks anywhere with
+  no installer and no root, its `bin/` commands (up to five, then a count) and apps, and that it has no
+  updater. Pass it where the archive exists; without it the notes say nothing about one.
+  `RELEASE_NOTES.md` is generated, and the gate refuses one written by hand.
 - **Adoption is grandfathered.** A `standalone <repo> <short>` line in `scripts/conventions-grandfathered`
   turns the missing archive into a `::warning::`. Seeded 2026-11-22 with every registered product but
   Drydock's; `MAX_STANDALONE` in `tests/check-family-conventions-7-test.sh` is the ceiling. A repo

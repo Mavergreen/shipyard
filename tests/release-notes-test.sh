@@ -1118,4 +1118,61 @@ printf '#!/bin/sh\necho "gh: To use GitHub CLI in a GitHub Actions workflow, set
   || { echo "FAIL m4: a gh that cannot list must not refuse a first release: $(cat "$work/m4-gh.out")"; exit 1; }
 grep -q 'cannot list' "$work/m4-gh.out" || { echo "FAIL m4: say that the releases could not be checked: $(cat "$work/m4-gh.out")"; exit 1; }
 
+# spec: scripts/release-notes.sh -- given the release's standalone archive, the notes say what it is,
+#       that it unpacks anywhere with no installer and no root, how to run it from its own bin/, and
+#       that it has no updater; with none given, they say nothing about one.
+mkarchive() {  # $1 = archive path, $2 = top dir, rest = entries under it (a trailing / makes a dir)
+  a="$1"; t="$2"; shift 2
+  d="$(mktemp -d "${TMPDIR:-/tmp}/rn-archive.XXXXXX")"
+  mkdir -p "$d/$t"
+  for e in "$@"; do
+    case "$e" in */) mkdir -p "$d/$t/$e" ;; *) mkdir -p "$(dirname "$d/$t/$e")"; : > "$d/$t/$e" ;; esac
+  done
+  ( cd "$d" && tar -czf "$a" "$t" ) || return 1
+  rm -rf "$d"
+}
+r="$work/stand"; mkrepo "$r"
+( cd "$r" && git tag 9.9p2-mavericks.1 ) || exit 1
+A="$work/openssh-9.9p2-mavericks.1-macos-x86_64.tar.gz"
+mkarchive "$A" openssh-9.9p2-mavericks.1 bin/ssh bin/scp share/man/man1/ssh.1 || exit 1
+gen "$r" 9.9p2-mavericks.1 --standalone "$A" >/dev/null || { echo "FAIL stand: generate"; exit 1; }
+grep -qx '### Standalone archive' "$r/OUT.md" || { echo "FAIL stand: heading"; cat "$r/OUT.md"; exit 1; }
+grep -qF -- '- `openssh-9.9p2-mavericks.1-macos-x86_64.tar.gz` unpacks anywhere and runs from there, with no installer and no root.' "$r/OUT.md" \
+  || { echo "FAIL stand: name the archive, and say it needs no installer and no root"; cat "$r/OUT.md"; exit 1; }
+grep -qF -- '- Its commands are in `openssh-9.9p2-mavericks.1/bin/`: `scp` and `ssh`.' "$r/OUT.md" \
+  || { echo "FAIL stand: name the commands, read from the archive's bin/"; cat "$r/OUT.md"; exit 1; }
+grep -qF -- '- It has no updater: install the pkg, or download a newer archive, to update.' "$r/OUT.md" \
+  || { echo "FAIL stand: say it has no updater and how to update"; cat "$r/OUT.md"; exit 1; }
+awk '/^### Standalone archive$/ { s = NR } /^---$/ { f = NR } END { exit !(s && f && s < f) }' "$r/OUT.md" \
+  || { echo "FAIL stand: the section goes before the footer"; cat "$r/OUT.md"; exit 1; }
+sh "$here/../scripts/check-release-notes.sh" "$r/OUT.md" 9.9p2-mavericks.1 >/dev/null \
+  || { echo "FAIL stand: own output fails the shape check"; exit 1; }
+gen "$r" 9.9p2-mavericks.1 >/dev/null || exit 1
+if grep -qi 'standalone' "$r/OUT.md"; then echo "FAIL stand: no archive, no section"; cat "$r/OUT.md"; exit 1; fi
+
+A="$work/openssh-9.9p2-mavericks.1-macos-x86_64.tar.gz"
+mkarchive "$A" openssh-9.9p2-mavericks.1 bin/ssh || exit 1
+gen "$r" 9.9p2-mavericks.1 --standalone "$A" >/dev/null || exit 1
+grep -qF -- '- Run `openssh-9.9p2-mavericks.1/bin/ssh`.' "$r/OUT.md" || { echo "FAIL stand: one command"; cat "$r/OUT.md"; exit 1; }
+mkarchive "$A" openssh-9.9p2-mavericks.1 bin/a bin/b bin/c bin/d bin/e bin/f bin/g bin/sub/ || exit 1
+gen "$r" 9.9p2-mavericks.1 --standalone "$A" >/dev/null || exit 1
+grep -qF -- '- Its commands are in `openssh-9.9p2-mavericks.1/bin/`: `a`, `b`, `c`, `d`, `e` and 2 more.' "$r/OUT.md" \
+  || { echo "FAIL stand: a long bin/ is cut short"; cat "$r/OUT.md"; exit 1; }
+mkarchive "$A" openssh-9.9p2-mavericks.1 Porthole.app/Contents/MacOS/Porthole lib/x.dylib || exit 1
+gen "$r" 9.9p2-mavericks.1 --standalone "$A" >/dev/null || exit 1
+grep -qF -- '- Open `openssh-9.9p2-mavericks.1/Porthole.app`.' "$r/OUT.md" || { echo "FAIL stand: an app"; cat "$r/OUT.md"; exit 1; }
+if grep -q 'commands are in\|^- Run ' "$r/OUT.md"; then echo "FAIL stand: no bin/, no commands"; cat "$r/OUT.md"; exit 1; fi
+for bad in "$work/missing-9.9p2-mavericks.1-macos-x86_64.tar.gz" "$work/openssh-9.9p2-mavericks.2-macos-x86_64.tar.gz" \
+    "$work/openssh-9.9p2-mavericks.1-macos-ppc.tar.gz"; do
+  case "$bad" in *missing*) ;; *) mkarchive "$bad" "$(basename "$bad" | sed 's/-macos-.*//')" bin/ssh || exit 1 ;; esac
+  if out="$(gen "$r" 9.9p2-mavericks.1 --standalone "$bad" 2>&1)"; then
+    echo "FAIL stand: $bad is not this release's archive"; exit 1
+  fi
+  printf '%s\n' "$out" | grep -q 'standalone' || { echo "FAIL stand: name the archive problem: $out"; exit 1; }
+done
+if gen "$r" 9.9p2-mavericks.1 --short drydock --standalone "$work/openssh-9.9p2-mavericks.1-macos-x86_64.tar.gz" >/dev/null 2>&1; then echo "FAIL stand: another product's archive"; exit 1; fi
+B="$work/wrongtop/openssh-9.9p2-mavericks.1-macos-x86_64.tar.gz"; mkdir -p "$work/wrongtop"
+mkarchive "$B" openssh-9.9p2 bin/ssh || exit 1
+if gen "$r" 9.9p2-mavericks.1 --standalone "$B" >/dev/null 2>&1; then echo "FAIL stand: its top directory must be openssh-9.9p2-mavericks.1/"; exit 1; fi
+
 echo "PASS: release-notes"
