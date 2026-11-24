@@ -38,7 +38,9 @@
 #          fetched; the archive is cached in ${MAVERGREEN_TAR_CACHE:-$HOME/.cache/mavergreen-tars}/REPO/TAG. An SDK product, sdk<NNN> for a pin in sdk-pins.sh,
 #          is provisioned `via fetch_sdk.sh --arch ARCH` instead of by its provider: the pinned SDK,
 #          with the SDKSettings.json longboat adds, lands in SHORT/SDKs/, marked as longboat's pkg
-#          marks it at the latest release of SHORT's repo. Installs into one prefix take turns through
+#          marks it at the latest release of SHORT's repo. An installed SDK product whose SDK has no
+#          SDKSettings.json is stale and is never kept: one stderr line names it and the fix, then it is
+#          provisioned again, and a provisioner that leaves it stale fails the run. Installs into one prefix take turns through
 #          .install-products/SHORT/lock, created exclusively and holding the installer's pid (a lock
 #          whose process is gone is taken over; a live one is waited on up to SHIPYARD_LOCK_WAIT
 #          seconds, default 900), and one that finds the marker already at its version keeps the tree.
@@ -116,13 +118,17 @@ enclosures() {
 }
 
 sdkarch() {
-  _sa=""
-  [ "$HOST" = linux ] || return 0
+  _sa=""; _sdir=""; _sver=""
   for _a in x86_64 arm64; do
     _pin="$(shipyard_sdk_pin "$_a")" || continue
     _sd="${_pin##* }"; _sv="${_sd#MacOSX}"; _sv="${_sv%.sdk}"
-    if [ "sdk$(printf '%s' "$_sv" | tr -d .)" = "$1" ]; then _sa=$_a; _sdir=$_sd; _sver=$_sv; return 0; fi
+    if [ "sdk$(printf '%s' "$_sv" | tr -d .)" = "$1" ]; then
+      _sdir=$_sd; _sver=$_sv; [ "$HOST" != linux ] || _sa=$_a; return 0
+    fi
   done
+}
+sdkstale() {
+  [ -n "$_sdir" ] && [ ! -f "$ROOT/usr/local/mavergreen/$1/SDKs/$_sdir/SDKSettings.json" ]
 }
 
 manifest() {
@@ -233,6 +239,12 @@ resolve() {
   [ -z "$_sa" ] || prov="fetch_sdk.sh --arch $_sa"
   inst=""; ip="$ROOT/usr/local/mavergreen/$s/mavergreen.plist"
   if [ -f "$ip" ]; then mver "$ip" "$s"; inst=$_v; fi
+  # spec: tests/install-products-test.sh -- an SDK with no SDKSettings.json makes clang22 record sdk
+  #       n/a in C objects, so it is provisioned again rather than kept.
+  if [ -n "$inst" ] && sdkstale "$s"; then
+    [ -f "$T/stale.$s" ] || echo "install-products: $s: $ROOT/usr/local/mavergreen/$s/SDKs/$_sdir has no SDKSettings.json, so it is stale: sudo longboat sdk install $_sver" >&2
+    : > "$T/stale.$s"; inst=""
+  fi
   src=""
   if [ -f "$T/pin/$s" ]; then
     [ -z "$prov" ] || die "$s is set up by '$prov', not released: name its provider instead"
@@ -317,7 +329,7 @@ prefix() {
     sleep 1; _wt=$((_wt + 1))
   done
   lk=$_lf
-  if [ "$("$STEVEDORE" plist get "$P/mavergreen.plist" version 2>/dev/null || :)" = "$2" ]; then
+  if [ -z "${3:-}" ] && [ "$("$STEVEDORE" plist get "$P/mavergreen.plist" version 2>/dev/null || :)" = "$2" ]; then
     echo "install-products: $1 $2 is already at $P" >&2
     rm -f "$lk"; lk=""; return 1
   fi
@@ -355,7 +367,7 @@ linux_sdk() {
   sdkarch "$1"
   reg repo "$1"; _tag="$(shipyard_latest_tag "$_rv")" || die "$1: no latest release of Mavergreen/$_rv to version it by"
   case "$_sver" in 10.[0-9]|10.1[01]) _sn="Mac OS X $_sver SDK" ;; *) _sn="macOS $_sver SDK" ;; esac
-  prefix "$1" "$_tag" || return 0
+  prefix "$1" "$_tag" "$([ ! -f "$T/stale.$1" ] || echo replace)" || return 0
   _sdk="$(MAVERICKS_SDK_SETTINGS_JSON='' sh "$SELF/fetch_sdk.sh" --arch "$_sa")" || die "$1: fetch_sdk.sh --arch $_sa failed"
   _st="$stg/root/usr/local/mavergreen/$1"
   mkdir -p "$_st/SDKs" && cp -RP "$_sdk" "$_st/SDKs/$_sdir" || die "$1: cannot copy $_sdk"
@@ -389,7 +401,12 @@ while read -r act s rest; do
         # shellcheck disable=SC2086
         $SUDO $cmd < /dev/null >&2 || die "$s: '$cmd' failed"
         [ -f "$pm" ] || die "$s: '$cmd' left no $pm"
-        [ -z "$before" ] || [ "$before" != "$(cksum < "$pm")" ] || die "$s: '$cmd' left the existing $pm unchanged"
+        sdkarch "$s"
+        if [ -f "$T/stale.$s" ]; then
+          ! sdkstale "$s" || die "$s: '$cmd' left it stale, and nothing here can fetch a fresh $_sdir"
+        else
+          [ -z "$before" ] || [ "$before" != "$(cksum < "$pm")" ] || die "$s: '$cmd' left the existing $pm unchanged"
+        fi
       fi
       mver "$pm" "$s"; v=$_v
       if [ -f "$T/floor/$s" ]; then

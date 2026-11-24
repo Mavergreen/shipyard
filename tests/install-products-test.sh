@@ -207,7 +207,16 @@ mkdir -p "$FAKE_ROOT/usr/local/mavergreen/$2"
 printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>version</key>\n  <string>20261012.2</string>\n</dict>\n</plist>\n' \
   > "$FAKE_ROOT/usr/local/mavergreen/$2/mavergreen.plist"
 FAKE
-chmod +x "$top/bin/installer" "$top/bin/b"
+cat > "$top/bin/lb" <<'FAKE'
+#!/bin/sh
+echo "lb $*" >> "$FAKE_LOG"
+d="$FAKE_ROOT/usr/local/mavergreen/sdk109"
+mkdir -p "$d/SDKs/MacOSX10.9.sdk/usr/lib"
+[ -z "${FAKE_LB_JSON:-}" ] || echo '{}' > "$d/SDKs/MacOSX10.9.sdk/SDKSettings.json"
+printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>version</key>\n  <string>20261027.13</string>\n</dict>\n</plist>\n' \
+  > "$d/mavergreen.plist"
+FAKE
+chmod +x "$top/bin/installer" "$top/bin/b" "$top/bin/lb"
 real() {
   printf '%s\n' 'c b provision c' > "$w/provisioners"
   : > "$w/log"; : > "$w/installed"; rm -rf "$w/root"; mkdir -p "$w/root"
@@ -430,7 +439,7 @@ run a@1
 fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
 printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; latest lb 20261027.13
 mkdir -p "$w/sdksrc/MacOSX10.9.sdk/usr/lib"; : > "$w/sdksrc/MacOSX10.9.sdk/usr/lib/libSystem.tbd"
-( cd "$w/sdksrc" && tar -czf "$w/sdk.tar" MacOSX10.9.sdk )
+( cd "$w/sdksrc" && tar -czf "$w/sdk.tar" MacOSX10.9.sdk ); cp "$w/sdk.tar" "$top/sdk.tar"
 export MAVERICKS_SDK_URL="file://$w/sdk.tar" MAVERICKS_SDK_SHA256="$(shasum -a 256 "$w/sdk.tar" | awk '{print $1}')" MAVERICKS_SDK_CACHE="$w/sdkcache"
 release a 1 'sdk109>=20261027'
 INSTALL_PRODUCTS_HOST=linux plan_stdout a@1
@@ -448,6 +457,39 @@ sdk="$(mg sdk109)/SDKs/MacOSX10.9.sdk"
 [ "$(cat "$w/installed")" = "$(lines 'sdk109 20261027.13' 'a 1')" ] && [ ! -s "$w/log" ] \
   || fail "linux_sdk: neither longboat nor an installer runs ($(cat "$w/log"))"
 unset MAVERICKS_SDK_URL MAVERICKS_SDK_SHA256 MAVERICKS_SDK_CACHE
+
+stalesdk() {  # $1 = installed sdk109 version: an sdk109 whose SDK lacks SDKSettings.json, as Longboat 20261012.2 laid down
+  installed sdk109 "$1"
+  mkdir -p "$(mg sdk109)/SDKs/MacOSX10.9.sdk/usr/lib"; : > "$(mg sdk109)/SDKs/MacOSX10.9.sdk/usr/lib/libSystem.tbd"
+}
+stalemsg() { printf '%s' "install-products: sdk109: $w/root/usr/local/mavergreen/sdk109/SDKs/MacOSX10.9.sdk has no SDKSettings.json, so it is stale: sudo longboat sdk install 10.9"; }
+for iv in 20261012.2 20261027.13; do
+  fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
+  latest lb 20261027.13
+  export MAVERICKS_SDK_URL="file://$w/sdk.tar" MAVERICKS_SDK_SHA256="$(shasum -a 256 "$top/sdk.tar" | awk '{print $1}')" MAVERICKS_SDK_CACHE="$w/sdkcache"
+  cp "$top/sdk.tar" "$w/sdk.tar"
+  release a 1 sdk109; linux; printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; stalesdk "$iv"
+  run a@1
+  sdk="$(mg sdk109)/SDKs/MacOSX10.9.sdk"
+  [ "$rc" -eq 0 ] && [ -f "$sdk/SDKSettings.json" ] && [ "$(pget sdk109 version)" = 20261027.13 ] \
+    && [ "$(printf '%s\n' "$out" | grep -cF "$(stalemsg)")" = 1 ] \
+    || fail "linux_stale_sdk ($iv): an installed sdk109 with no SDKSettings.json is not kept: the pinned SDK replaces it, saying once that it was stale"
+  unset MAVERICKS_SDK_URL MAVERICKS_SDK_SHA256 MAVERICKS_SDK_CACHE
+done
+
+fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
+release lb 20261027.13; latest lb 20261027.13; release a 1 sdk109; real; export INSTALL_PRODUCTS_HOST=mac
+printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"; stalesdk 20261012.2
+plan_stdout a@1
+[ "$rc" -eq 0 ] && [ "$out" = "$(lines 'install lb 20261027.13' 'provision sdk109 via lb sdk install 10.9' 'install a 1')" ] \
+  || fail "mac_stale_sdk: an installed sdk109 with no SDKSettings.json is provisioned again, not kept"
+run a@1
+[ "$rc" -eq 1 ] && [ "$(printf '%s\n' "$out" | grep -c 'SDKSettings.json')" = 1 ] && has "$(stalemsg)" && ! has "install a 1" \
+  && [ "$(cat "$w/installed")" = "lb 20261027.13" ] \
+  || fail "mac_stale_sdk: a provisioner that leaves the SDK stale fails in one line naming it and the fix"
+FAKE_LB_JSON=1 run a@1
+[ "$rc" -eq 0 ] && [ -f "$(mg sdk109)/SDKs/MacOSX10.9.sdk/SDKSettings.json" ] \
+  || fail "mac_stale_sdk: a provisioner that writes SDKSettings.json fixes it"
 
 fresh; release x 1 --no-appcast; linux
 "$SD" expand "$w/stage/x-1/comp.pkg" "$w/stage/x-1/cx"
