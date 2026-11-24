@@ -8,7 +8,9 @@
 #          metadata at the top; an AppleDouble entry; a symlink into /usr/local/mavergreen; a script
 #          (#!) or other text file naming /usr/local/mavergreen; a Mach-O whose loads, rpaths or
 #          install name are not under /usr/lib, /System, @rpath, @loader_path or @executable_path,
-#          whatever --plist declares. --plist PLIST is the product's staged mavergreen.plist: a script
+#          whatever --plist declares; a Mach-O slice, a static archive's too, that does not record its
+#          arch's pinned minos and SDK (scripts/sdk-pins.sh, read by macho-slices.sh), unless its bytes
+#          are a pinned third-party file. --plist PLIST is the product's staged mavergreen.plist: a script
 #          or text file may then name /usr/local/mavergreen/S where S, a whole path component, is in
 #          its requires (SHORT or SHORT>=FLOOR, read by scripts/lib/requires.sh with fetch_stevedore.sh's
 #          stevedore); naming the archive's own SHORT is a self-reference, and any other S an
@@ -21,8 +23,10 @@
 #          at (scripts/lib/standalone-tree.sh), become warnings; no other finding is
 #          excused, and an entry excusing nothing is a finding; with --defer-unused it is not, and each
 #          entry used is named on stdout instead, "standalone-text used: <glob>", for a caller judging
-#          several archives (artifact-facts.sh). Mach-O is read by
-#          scripts/lib/mach-interface.sh; with no OTOOL, LIPO or NM set and no installed clang22, the
+#          several archives (artifact-facts.sh). "- sdk-pin:<glob>: <reason>" turns the SDK finding of a
+#          Mach-O into a warning when <glob> matches SHORT-VERSION/<path>, as conformance spells it, or
+#          the path the pkg installs it at. Mach-O is read by scripts/lib/mach-interface.sh and
+#          macho-slices.sh; with no OTOOL, LIPO or NM set and no installed clang22, the
 #          pinned one comes from fetch_clang22.sh. --run, on a Mac that runs ARCH natively, unpacks
 #          under a directory with a space and starts every bin/ entry with --version, finding any that
 #          dyld cannot start; elsewhere it says it did not run them.
@@ -136,11 +140,12 @@ mg_strings() {  # $1 = path within the archive
 . "$SELF/lib/mach-nm.sh"
 . "$SELF/lib/mach-interface.sh"
 : > "$t/machos"
+: > "$t/pinned"
 while IFS= read -r f; do
   r="${f#./}"
   case "$(shipyard_mach_kind "$X/$r")" in
-    thin|fat) printf '%s\n' "$r" >> "$t/machos"; mg_strings "$r"; continue ;;
-    archive) mg_strings "$r"; continue ;;
+    thin|fat) printf '%s\n' "$r" >> "$t/machos"; printf '%s\n' "$r" >> "$t/pinned"; mg_strings "$r"; continue ;;
+    archive) printf '%s\n' "$r" >> "$t/pinned"; mg_strings "$r"; continue ;;
   esac
   LC_ALL=C grep -q -F '/usr/local/mavergreen' "$X/$r" 2>/dev/null || continue
   if [ "$(dd if="$X/$r" bs=2 count=1 2>/dev/null)" = '#!' ]; then
@@ -211,7 +216,7 @@ while read -r _en _eg; do
 done < "$t/textdevs"
 
 nmacho="$(wc -l < "$t/machos" | tr -d ' ')"
-if [ "$nmacho" -gt 0 ] && [ -z "${OTOOL:-}${LIPO:-}${NM:-}" ] \
+if [ -s "$t/pinned" ] && [ -z "${OTOOL:-}${LIPO:-}${NM:-}" ] \
   && [ ! -x "${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/clang22/bin/llvm-otool" ] \
   && [ ! -x "${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/clang22-cross/bin/llvm-otool" ]; then
   cl="$(sh "$SELF/fetch_clang22.sh" "$SELF/../components/clang22" 2> "$t/err")" \
@@ -236,6 +241,32 @@ while IFS= read -r r; do
     }
     END { for (i = 1; i <= m; i++) print r " (" a[o[i]] ") " o[i] ", outside /usr/lib, /System, @rpath, @loader_path and @executable_path" }' "$t/mi" >> "$t/findings"
 done < "$t/machos"
+for _d in clang22 clang22-cross; do
+  _b="${SHIPYARD_MG_PREFIX:-/usr/local/mavergreen}/$_d/bin"
+  [ -n "${OTOOL:-}" ] || [ ! -x "$_b/llvm-otool" ] || OTOOL="$_b/llvm-otool"
+  [ -n "${LIPO:-}" ] || [ ! -x "$_b/llvm-lipo" ] || LIPO="$_b/llvm-lipo"
+done
+[ -z "${OTOOL:-}" ] || export OTOOL
+[ -z "${LIPO:-}" ] || export LIPO
+. "$SELF/sdk-pins.sh"
+. "$SELF/deviation-reason.sh"
+printf '%s\n' "$_devs" | shipyard_deviation_facts > "$t/devfacts"
+while IFS= read -r r; do
+  rc=0; sh "$SELF/macho-slices.sh" "$X/$r" > "$t/slices" 2> "$t/err" || rc=$?
+  case "$rc" in
+    0) ;;
+    1) continue ;;
+    *) sed 's/^/  /' "$t/err" >&2; echo "check-standalone-archive: cannot read the minos and SDK of the Mach-O $r" >&2; exit 2 ;;
+  esac
+  shipyard_sdk_exempt_sha256 "$(shasum -a 256 "$X/$r" | awk '{print $1}')" && continue
+  ex="$(shipyard_deviation_reason "$t/devfacts" sdk-pin "$top/$r")"
+  [ -n "$ex" ] || ex="$(shipyard_deviation_reason "$t/devfacts" sdk-pin "$(shipyard_standalone_pkg_path "$short" "$r")")"
+  while read -r _a _ft _mn _sd; do
+    why="$(shipyard_sdk_rule "$_a" "$_ft" "$_mn" "$_sd")" && continue
+    if [ -n "$ex" ]; then printf 'warning: %s: %s, excused by sdk-pin: %s\n' "$r" "$why" "$ex" >> "$t/warnings"
+    else finding "$r: $why (sdk-pin)"; fi
+  done < "$t/slices"
+done < "$t/pinned"
 
 ran=""
 if [ "$run" = yes ]; then

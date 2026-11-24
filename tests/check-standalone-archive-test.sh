@@ -229,6 +229,25 @@ passes "a Mach-O holding the string"
 grep -q 'warning: bin/str holds the string /usr/local/mavergreen/w/share' "$w/out" || fail "a Mach-O's string is a warning: $(cat "$w/out")"
 echo "ok: Mach-O loads, rpaths and install names"
 
+macho @rpath/libx.dylib @loader_path/../lib
+"$CL/bin/clang" --no-default-config -target x86_64-apple-macos10.13 -isysroot "$SDK" "$w/main.c" "$w/t/w-1.0/lib/libx.dylib" -Wl,-rpath,@loader_path/../lib -o "$w/t/w-1.0/bin/new" \
+  || fail "cc could not build a tool past the pinned minos"
+mk w-1.0-macos-x86_64.tar.gz
+fails "a Mach-O off the SDK pin" "bin/new: x86_64 records minos 10.13 sdk 10.13; the pin is minos 10.9 sdk 10.9 (sdk-pin)"
+grep -q 'bin/tool: x86_64 records' "$w/out" && fail "a pinned Mach-O is no sdk-pin finding: $(cat "$w/out")"
+repo "$w/r-pin-pkg" "sdk-pin:*/w/bin/new: a tool declared once, in pkg terms"
+rc=0; sh "$C" --repo "$w/r-pin-pkg" "$A" > "$w/out" 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "sdk-pin in pkg terms excuses the archive entry the pkg installs there: exit $rc: $(cat "$w/out")"
+grep -q 'warning: bin/new: x86_64 records minos 10.13 sdk 10.13.*excused by sdk-pin: a tool declared once, in pkg terms' "$w/out" \
+  || fail "an excused sdk-pin finding is a warning giving its reason: $(cat "$w/out")"
+repo "$w/r-pin-raw" "sdk-pin:w-1.0/bin/*: the archive's own spelling"
+rc=0; sh "$C" --repo "$w/r-pin-raw" "$A" > "$w/out" 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "sdk-pin in archive terms excuses the entry: exit $rc: $(cat "$w/out")"
+repo "$w/r-pin-other" "sdk-pin:*/w/lib/*: another path"
+rc=0; sh "$C" --repo "$w/r-pin-other" "$A" > "$w/out" 2>&1 || rc=$?
+[ "$rc" -eq 1 ] && grep -q 'bin/new: x86_64 records minos 10.13' "$w/out" || fail "sdk-pin excuses only the paths its glob names: exit $rc: $(cat "$w/out")"
+echo "ok: every Mach-O slice records its arch's pinned minos and SDK, unless sdk-pin declares it"
+
 can_run=no
 [ "$(uname -s):$(uname -m)" != Darwin:x86_64 ] || can_run=yes
 macho @rpath/libx.dylib @loader_path/../lib; mk w-1.0-macos-x86_64.tar.gz
