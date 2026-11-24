@@ -46,7 +46,8 @@ EPOCH="$(sh "$SELF/source-date-epoch.sh")"
 top="$P-$V-dSYM"
 work="$(mktemp -d "${TMPDIR:-/tmp}/split-debug.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
-mkdir "$work/$top"
+mkdir "$work/$top" "$work/bin"
+ln -s "$(command -v "$LIPO")" "$work/bin/lipo"
 
 (cd "$ROOT" && find . -type f | sed 's|^\./||' | sort) > "$work/files"
 : > "$work/linked"
@@ -63,7 +64,8 @@ while IFS= read -r rel; do
   "$NM" -a -arch all "$ROOT/$rel" 2>/dev/null | awk '$5 == "OSO" { f = 1 } END { exit !f }' \
     || { echo "split-debug: $rel has no debug map: build it with -g through MavergreenToolchain.cmake, or declare deviations/dsym-asset/<label>/" >&2; exit 1; }
   mkdir -p "$work/$top/$(dirname "$rel")"
-  rc=0; "$DSYMUTIL" -o "$work/$top/$rel.dSYM" "$ROOT/$rel" > "$work/dsym.log" 2>&1 || rc=$?
+  # platform: dsymutil joins a fat image's per-arch DWARF by running lipo from PATH, which Linux lacks
+  rc=0; PATH="$work/bin:$PATH" "$DSYMUTIL" -o "$work/$top/$rel.dSYM" "$ROOT/$rel" > "$work/dsym.log" 2>&1 || rc=$?
   if grep -q 'unable to get target for' "$work/dsym.log"; then
     echo "split-debug: $DSYMUTIL cannot write $rel's dSYM: it lacks a target its slices need" >&2
     sed 's/^/  /' "$work/dsym.log" >&2

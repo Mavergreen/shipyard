@@ -16,7 +16,7 @@ setup() {
     export LIPO OTOOL NM STRINGS
   fi
   WORK="$(mktemp -d "${TMPDIR:-/tmp}/compat_guard_test.XXXXXX")"
-  cp -p "$BATS_TEST_DIRNAME"/fixtures/macho/* "$WORK"/
+  find "$BATS_TEST_DIRNAME"/fixtures/macho -type f ! -path '*/dbg-objs/*' -exec cp -p {} "$WORK"/ \;
 }
 teardown() { [ -z "${WORK:-}" ] || rm -rf "$WORK"; }
 
