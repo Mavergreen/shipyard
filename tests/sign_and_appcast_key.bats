@@ -30,7 +30,7 @@ EOF
 sign_and_appcast() {  # [sh flags...] -- the rest of the args are sign_and_appcast.sh's
   sh "$@" "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds" \
     --version 1.2.3 --pkg-url "https://example.invalid/x.pkg" --notes-file "$T/notes.md" \
-    --pkg "$T/x.pkg" --pubkey stub < /dev/null
+    --pkg "$T/x.pkg" < /dev/null
 }
 
 # Fail if TEXT carries any 16-character window of KEY (12 bytes of it: already a brute force away

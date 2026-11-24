@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: sign_and_appcast.sh --product P --feed-dir DIR --version V --pkg-url URL \
 #            --notes-file FILE --pkg PKG [--signer BIN] [--verifier BIN] \
-#            [--pubkey B64] [--allow-key-change]
+#            [--key FILE]
 #          (SPARKLE_PRIVATE_KEY must be in the environment)
 #          Signs a .pkg with the native EdDSA signer and writes its Sparkle feed to DIR/P.xml, in one
 #          call. P.xml is the file P's updater polls (scripts/updater-identity.sh feed P), so its name is
@@ -16,12 +16,11 @@
 #            --verifier  the ed25519-verify binary; OPTIONAL -- defaults to the one beside the signer
 #            --pkg       the .pkg to sign
 #            --pkg-url   the URL the enclosure will point at (the release-asset download URL)
-#            --pubkey, --allow-key-change   passed to assert_update_trusted.sh
+#            --key       passed to assert_update_trusted.sh; defaults to keys/feed-ed25519.pub
 #            others      passed through to gen_appcast.sh
 #          sparkle:minimumSystemVersion is `mavergreen_floor P` (.mavergreen/products/P/floor); --min-os is refused.
-#          After signing, assert_update_trusted.sh proves the clients ALREADY INSTALLED will accept
-#          the signature -- against the key in the live release's updater, not the repo's .pub -- and
-#          no appcast is emitted if they would not.
+#          After signing, assert_update_trusted.sh proves the signature verifies against the family
+#          key, and no appcast is emitted if it does not.
 # platform: the signer's own self-check cannot answer that question -- it verifies against the
 #           public half of whatever key it was handed, so a signature made with a key no installed
 #           client trusts still passes it.
@@ -37,15 +36,16 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib/name-rules.sh"
 
 PRODUCT=""; FEEDDIR=""
-SIGNER=""; VERIFIER=""; PUBKEY=""; ALLOW_CHANGE=no; VER=""; URL=""; NOTES=""; PKG=""
+SIGNER=""; VERIFIER=""; KEYFILE=""; VER=""; URL=""; NOTES=""; PKG=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --product) PRODUCT="$2"; shift 2;;
     --feed-dir) FEEDDIR="${2%/}"; shift 2;;
     --signer) SIGNER="$2"; shift 2;;
     --verifier) VERIFIER="$2"; shift 2;;
-    --pubkey) PUBKEY="$2"; shift 2;;
-    --allow-key-change) ALLOW_CHANGE=yes; shift;;
+    --key) KEYFILE="$2"; shift 2;;
+    --pubkey|--allow-key-change)
+      echo "sign_and_appcast: $1 is refused: the trusted key is keys/feed-ed25519.pub; rotate it there" >&2; exit 2;;
     --channel-title) echo "sign_and_appcast: --channel-title is refused; the channel title is derived (fix: write .mavergreen/products/<short>/noun)" >&2; exit 2;;
     --version) VER="$2"; shift 2;;
     --pkg-url) URL="$2"; shift 2;;
@@ -77,10 +77,9 @@ fi
 SIG=$(printenv SPARKLE_PRIVATE_KEY | "$SIGNER" -f - "$PKG")
 [ -n "$SIG" ] || { echo "sign_and_appcast: signer produced no signature" >&2; exit 1; }
 set -- --pkg "$PKG" --signature "$SIG" --verifier "$VERIFIER"
-[ -z "$PUBKEY" ] || set -- "$@" --pubkey "$PUBKEY"
-[ "$ALLOW_CHANGE" = no ] || set -- "$@" --allow-key-change
+[ -z "$KEYFILE" ] || set -- "$@" --key "$KEYFILE"
 sh "$SELF/assert_update_trusted.sh" "$@" \
-  || { echo "sign_and_appcast: no appcast -- installed clients would not accept this signature" >&2; exit 1; }
+  || { echo "sign_and_appcast: no appcast -- the signature does not verify against the family key" >&2; exit 1; }
 LEN=$(wc -c < "$PKG" | tr -d '[:space:]')
 ENC="sparkle:edSignature=\"$SIG\" length=\"$LEN\""
 

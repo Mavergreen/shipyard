@@ -108,3 +108,5 @@ reconcile.yml	release-decision.sh, in every dispatched release	a dispatch publis
 Mavergreen-State:	CONTENT-MANIFEST.txt	the content manifest a release carries replaces the state marker
 ## Declared state	CONTENT-MANIFEST.txt	a release is decided by its content manifest, not a declared state
 MAVERICKS_RELEASES	MAVERGREEN_RELEASES	the releases URL override took the family name
+updater_pubkey.sh	keys/feed-ed25519.pub	a signature is checked against the family key in shipyard, not a live updater's
+--allow-key-change	a commit to keys/feed-ed25519.pub	the trusted key is keys/feed-ed25519.pub; a rotation is a commit to it

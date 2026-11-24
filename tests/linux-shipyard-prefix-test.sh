@@ -60,6 +60,10 @@ listing() {  # $1 = tree: every entry, a link with its target, a file with its m
       else printf '%s %s %s\n' "$e" "$(ls -l "$e" | cut -c1-10)" "$(cksum < "$e")"; fi
     done )
 }
+key=share/cmake/MavergreenShipyard/keys/feed-ed25519.pub
+for t in "$w/p/$rel" "$w/r/$rel"; do
+  [ -s "$t/$key" ] && cmp -s "$t/$key" "$root/keys/feed-ed25519.pub" || fail "$t must carry $key, the family key, beside the scripts"
+done
 listing "$w/p/$rel" > "$w/pkg.list"
 listing "$w/r/$rel" > "$w/linux.list"
 [ -s "$w/pkg.list" ] && [ "$(grep -c . "$w/pkg.list")" -gt 50 ] || fail "the pkg's prefix lists almost nothing: $(grep -c . "$w/pkg.list")"

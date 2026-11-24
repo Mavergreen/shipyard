@@ -53,6 +53,7 @@ if(SHIPYARD_BUILD_UPDATER)
     CONFIRM_BODY "Shipyard in ${_shipyard_installed} was updated."
     RELAUNCH_MARKER "/tmp/.shipyard-updater-relaunched"
     ALLOW_GENERIC
+    ED_PUBKEY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/keys/feed-ed25519.pub"
     # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification. shipyard has no UI.
   )
 endif()
@@ -164,6 +165,7 @@ install(CODE "${_msc_presets_code}")
 # scripts/ carries the Sparkle fetch scripts + native signer/keygen sources too.
 install(DIRECTORY scripts DESTINATION "${_dest}" USE_SOURCE_PERMISSIONS)
 install(DIRECTORY explain DESTINATION "${_dest}")
+install(DIRECTORY keys DESTINATION "${_dest}")
 install(DIRECTORY .mavergreen/ingredients DESTINATION "${_dest}/.mavergreen")
 # spec: scripts/objc-reference-dir.sh header -- the guard's strict Objective-C analyzer is the pinned Drydock's
 #       drydock-objc, which the objc-*.sh wrappers fetch on first use (scripts/fetch_drydock.sh, .mavergreen/ingredients/drydock),

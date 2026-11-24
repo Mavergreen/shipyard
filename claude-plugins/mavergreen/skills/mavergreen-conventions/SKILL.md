@@ -1711,20 +1711,13 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   publish. `publish-release.yml` instead looks for the scan's record on any signed release
   (`require_key_scan.sh`) and **refuses to publish** without it; `check-family-conventions.sh` fails a
   repo whose workflows sign without calling `scan-for-key.yml`, so the gap shows on a PR first.
-- **A signature must satisfy the clients ALREADY INSTALLED — checked before the appcast exists.** A
-  Sparkle client verifies against the `SUPublicEDKey` of the updater it has, which came from the pkg
-  the feed offered last time: not the repo's `.pub`, and not the key the new pkg ships.
-  `ed25519-sign`'s self-check can't see a mismatch (it checks against the public half of the key it
-  was handed), so `sign_and_appcast.sh` runs `assert_update_trusted.sh` after signing: it reads the
-  new pkg's `SUFeedURL`, fetches that live feed's enclosure pkg, and `ed25519-verify`s the new
-  signature against *that* pkg's updater key (`updater_pubkey.sh` reads a pkg's key and feed). No
-  appcast is emitted on a refusal. A first release (feed 404) is checked against the new pkg's own
-  key; a feed that can't be *read* fails closed rather than pretend to be a first release.
-  - **Changing a product's key** (e.g. moving to the org-wide key): ship the new `.pub` in a **bridge
-    release signed with the OLD key** — the check passes and says the next release needs the new
-    key — then switch `SPARKLE_PRIVATE_KEY` after it publishes. Swapping key and secret together
-    fails the check, because every installed updater would reject that release. Only a deliberate
-    decision to strand installed clients passes `--allow-key-change`, and the workflow must say why.
+- **A signature must verify against the family key — checked before the appcast exists.** Every
+  installed client trusts one public key, `keys/feed-ed25519.pub` in shipyard, installed beside its
+  scripts. `ed25519-sign`'s self-check can't see a mismatch (it checks against the public half of the
+  key it was handed), so `sign_and_appcast.sh` runs `assert_update_trusted.sh` after signing, which
+  `ed25519-verify`s the new signature against that file and nothing else, with no network. No appcast
+  is emitted on a refusal. A rotation is a commit to `keys/feed-ed25519.pub`; the Engine embeds the
+  same file, so it needs an Engine release first. A per-call key override is refused.
 - **A menu/systray "Check for Updates" MUST launch the updater via LaunchServices, not fork+exec.** Run
   `/usr/bin/open "/Library/Application Support/Mavergreen/<short>-updater.app" --args --user`, NOT
   `NSTask`/`exec.Command` on the executable inside `Contents/MacOS`. Sparkle's package install runs its

@@ -23,7 +23,7 @@ EOF
 chmod +x "$T/sign"
 # spec: ed25519-verify sits beside the signer, where sign_and_appcast.sh looks. This test is
 #       about the appcast, not about trust (tests/sign_and_appcast_trust.bats), so it always
-#       verifies, against --pubkey.
+#       verifies, against the family key.
 printf '#!/bin/sh\nexit 0\n' > "$T/ed25519-verify"
 chmod +x "$T/ed25519-verify"
 
@@ -33,7 +33,7 @@ LEN=$(wc -c < "$T/x.pkg" | tr -d '[:space:]')
 
 SPARKLE_PRIVATE_KEY="ignored-by-stub" sh "$ROOT/scripts/sign_and_appcast.sh" \
   --signer "$T/sign" --product openssh --feed-dir "$T/feeds" --version 1.2.3 \
-  --pkg-url "https://example.invalid/x.pkg" --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub > "$T/stdout"
+  --pkg-url "https://example.invalid/x.pkg" --notes-file "$T/notes.md" --pkg "$T/x.pkg" > "$T/stdout"
 OUT="$(cat "$T/feeds/openssh.xml")"
 
 fail() { echo "sign_and_appcast test: $1" >&2; exit 1; }
@@ -49,27 +49,27 @@ printf '%s\n' "$OUT" | grep -q '<li>thing one</li>' || fail "notes not rendered"
 [ "$(ls -A "$T/feeds")" = openssh.xml ] || fail "only the feed is left in --feed-dir: $(ls -A "$T/feeds")"
 rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product no-such-product \
   --feed-dir "$T/feeds2" --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
-  --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
+  --notes-file "$T/notes.md" --pkg "$T/x.pkg" 2>/dev/null || rc=$?
 [ "$rc" -eq 1 ] || fail "a --product the repo does not declare is a missing input, not a usage error; expected exit 1, got $rc"
 [ ! -e "$T/feeds2" ] || fail "a refused call writes no feed"
 rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds4" \
   --channel-title C --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
-  --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2> "$T/err4" || rc=$?
+  --notes-file "$T/notes.md" --pkg "$T/x.pkg" 2> "$T/err4" || rc=$?
 [ "$rc" -eq 2 ] || fail "--channel-title is derived, not passed; expected exit 2, got $rc"
 grep -q ".mavergreen/products/<short>/noun" "$T/err4" || fail "the refusal says where the title comes from: $(cat "$T/err4")"
 [ ! -e "$T/feeds4" ] || fail "a refused call writes no feed"
 rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh \
   --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
-  --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null || rc=$?
+  --notes-file "$T/notes.md" --pkg "$T/x.pkg" 2>/dev/null || rc=$?
 [ "$rc" -eq 2 ] || fail "--feed-dir is required; expected exit 2, got $rc"
 
 printf '%s\n' 10.9.4 > "$T/repo/.mavergreen/products/openssh/floor"
 SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds5" --version 1.2.3 \
-  --pkg-url https://example.invalid/x.pkg --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2>/dev/null
+  --pkg-url https://example.invalid/x.pkg --notes-file "$T/notes.md" --pkg "$T/x.pkg" 2>/dev/null
 grep -q '<sparkle:minimumSystemVersion>10.9.4</sparkle:minimumSystemVersion>' "$T/feeds5/openssh.xml" || fail "the minimum is the product's floor"
 rm -f "$T/repo/.mavergreen/products/openssh/floor"
 rc=0; SPARKLE_PRIVATE_KEY=x sh "$ROOT/scripts/sign_and_appcast.sh" --signer "$T/sign" --product openssh --feed-dir "$T/feeds6" --min-os 10.9.5 \
-  --version 1.2.3 --pkg-url https://example.invalid/x.pkg --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2> "$T/err6" || rc=$?
+  --version 1.2.3 --pkg-url https://example.invalid/x.pkg --notes-file "$T/notes.md" --pkg "$T/x.pkg" 2> "$T/err6" || rc=$?
 [ "$rc" -eq 2 ] || fail "--min-os is refused; expected exit 2, got $rc"
 grep -q ".mavergreen/products/<short>/floor" "$T/err6" || fail "the refusal names the floor file: $(cat "$T/err6")"
 [ ! -e "$T/feeds6" ] || fail "a refused call writes no feed"
@@ -83,7 +83,7 @@ printf 'not the pkg\n' > "$T/rel/Mavergreen/ed25519/releases/download/$pin/ed255
 : > "$T/rel/Mavergreen/ed25519/releases/download/$pin/SHA256SUMS"
 rc=0; SPARKLE_PRIVATE_KEY=x MAVERGREEN_RELEASES="file://$T/rel" SHIPYARD_FETCH_BACKOFF=0 sh "$ROOT/scripts/sign_and_appcast.sh" \
   --product openssh --feed-dir "$T/feeds3" --version 1.2.3 --pkg-url https://example.invalid/x.pkg \
-  --notes-file "$T/notes.md" --pkg "$T/x.pkg" --pubkey stub 2> "$T/err3" || rc=$?
+  --notes-file "$T/notes.md" --pkg "$T/x.pkg" 2> "$T/err3" || rc=$?
 [ "$rc" -ne 0 ] || fail "an ed25519 pkg its SHA256SUMS does not list must be refused"
 grep -q "ed25519 $pin" "$T/err3" || fail "the refusal names the pinned ed25519 release: $(cat "$T/err3")"
 [ ! -e "$T/feeds3" ] || fail "a refused signer writes no feed"
