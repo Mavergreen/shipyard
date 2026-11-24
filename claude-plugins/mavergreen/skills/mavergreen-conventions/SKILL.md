@@ -775,10 +775,14 @@ still publish via `publish-release.yml@v1`. **Everything below — the two bump 
 Releases before the flag day carry `-mavericks.N`. The counter restarts: the first release after it is
 `<upstream>-mavergreen.1`, and tag lookups match only `-mavergreen.*`.
 
-**Two independent bump axes.** The **upstream component** moves when upstream releases: Renovate edits
-`.mavergreen/upstream/VERSION`, and `version.sh auto` cuts `<new>-mavergreen.1` (N resets to 1). The **`-mavergreen.N`
-suffix** moves for a packaging-only re-release (recipe/patch/updater/CA change, upstream unchanged): via
-`workflow_dispatch local_release=true`, which cuts N+1. Never hand-edit `VERSION` for either — it's computed.
+**Two independent bump axes, one release path.** The **upstream component** moves when upstream
+releases: Renovate edits `.mavergreen/upstream/VERSION`, and the next release is `<new>-mavergreen.1` (N
+resets to 1). The **`-mavergreen.N` suffix** moves for a packaging-only re-release (recipe, patch or
+ingredient change, upstream unchanged), to N+1. Both arrive the same way: a `workflow_dispatch` of
+`release.yml`, which resolves `version.sh local` (the line's next N, 1 for an untagged upstream), and
+whose release decision publishes only when the content changed. A push builds for feedback and
+resolves `auto`, the line's current N; it never publishes. Never hand-edit `VERSION` for either — it's
+computed.
 
 - **`.mavergreen/upstream/VERSION`** — committed, bare on line 1 (`1.4.2`, no `v`), Renovate-edits it. Read by `build/lib.sh`'s
   `upstream_version()`.
@@ -790,11 +794,11 @@ suffix** moves for a packaging-only re-release (recipe/patch/updater/CA change, 
 - **`scripts/resolve-version.sh [auto|local]`** — the one way to learn the version at build time. It
   reuses an existing `VERSION` so **every job in one run agrees**, and derives+writes one otherwise.
   An empty `VERSION` fails loudly: artifacts named `-mavergreen.` with nothing in front look almost right.
-- **`scripts/release-mode.sh`** — answers "is this run a repackage?" once, from the event. Every job
-  that resolves a version must use it. container-tools built one `.pkg` from two jobs that disagreed —
-  `build-macos` resolved `-mavericks.15`, `build-iso` resolved `.14`, same run, same commit — because
-  a parallel job has no way to know a repackage is in progress. Making one job `needs:` the other fixes
-  it by serialising builds that have no reason to wait; a shared decision does not.
+  With no mode it answers from the event: a `workflow_dispatch` resolves `local`, anything else `auto`.
+  Every job that resolves a version calls it that way. container-tools built one `.pkg` from two jobs
+  that disagreed — `build-macos` resolved `-mavericks.15`, `build-iso` resolved `.14`, same run, same
+  commit — because a parallel job had no way to know a repackage was in progress. The event is the
+  same in every job of a run, so the answer is too.
 - **Any job that resolves a version needs `fetch-depth: 0`** — N comes from the tags. Without them CI
   labels every build `-mavergreen.1` and hides what it is really building.
 - **Where the upstream comes from a pin rather than a committed version**, the repo has
@@ -937,11 +941,10 @@ as clang's did):
 |---|---|
 | golang, openssh, 1password, signal-desktop, swift, ed25519, clang, ca-certs | macho-tools, container-tools, tailscale, porthole, magic-trackpad2, recaulk |
 
-tailscale's `release.yml` has no `push: branches:[main]` trigger at all — only tags and
-`workflow_dispatch` — but a push to its `main` that moves `.mavergreen/upstream/` is still a release:
-`release-on-bump.yml` dispatches it with
-`upstream_release=true` the moment `.mavergreen/upstream/VERSION` moves, so a new upstream still ships
-automatically there; `repackage-on-ingredient-bump.yml` does the same for an ingredient-only bump.
+After the flag day both columns become one: `release.yml` publishes only from a `workflow_dispatch`,
+and `repackage-on-ingredient-bump.yml` dispatches it plainly whenever `.mavergreen/upstream/` or an
+ingredient moves. The release decision (`release-decision.sh`) then publishes only when the content a
+user installs changed. tailscale's `release-on-bump.yml` and its dispatch input go.
 
 If you cannot say from memory which column a repo is in, read its `release.yml` `ver`/version step
 before you push to its `main` — in the left column, that push is a release.
@@ -949,7 +952,8 @@ before you push to its `main` — in the left column, that push is a release.
 **Shared shape (both models):**
 
 - Three entry points: `push: branches:[main]`, `pull_request: branches:[main]` (the automerge gate),
-  `workflow_dispatch` with a `local_release` boolean (repackage escape hatch). **A new repo adds no
+  `workflow_dispatch` with the inputs `force_publish` (a string: the reason to publish whatever
+  changed) and `reproduce_tag`, and nothing else; the `release-dispatch` check holds every repo to it. **A new repo adds no
   `tags:` trigger** — tags are retired as a release input; a `workflow_dispatch` covers every case a
   tag used to (`gh workflow run … --ref <any ref>`). Most existing product repos still carry a
   `push: tags: ['*-mavergreen.*']` trigger (checked 2026-09-26); it is legacy, to be removed, not a
@@ -1551,15 +1555,15 @@ repo-local manager. Two things to wire deliberately:
       permissions: { actions: write }   # dispatch release.yml — reusable perms can't be elevated by the callee
       uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1
   ```
-  The reusable workflow decides "ingredient changed and not the own upstream?" and, if so, **dispatches**
-  the consumer's `release.yml` via `gh workflow run … -f local_release=true`. It does NOT push a tag: a
-  `GITHUB_TOKEN`-pushed tag can't trigger `release.yml` (GitHub's recursion guard), whereas
-  `workflow_dispatch` IS `GITHUB_TOKEN`-triggerable. So the consumer's `release.yml` needs a
-  `workflow_dispatch` `local_release` input that computes `-mavergreen.(N+1)` and **publishes inline** in
-  that same run (golang/legacysupport have it via `version.sh local`; dispatch-cut repos must add it —
-  the same fix repairs any `release-on-bump.yml` that relies on a pushed tag). CI-only bumps (`.github/**` action
-  `uses:`) aren't under `.mavergreen/ingredients/`, so they never repackage. This automates the `-mavergreen.N` axis,
-  driven by a dependency instead of a hand-run `local_release`.
+  The reusable workflow decides "did an ingredient or the upstream move?" and, if so, **dispatches**
+  the consumer's `release.yml` plainly, with `gh workflow run … --ref main` and no field. It does NOT
+  push a tag: a `GITHUB_TOKEN`-pushed tag can't trigger `release.yml` (GitHub's recursion guard),
+  whereas `workflow_dispatch` IS `GITHUB_TOKEN`-triggerable. The dispatched run resolves
+  `-mavergreen.(N+1)` (or `.1` for a new upstream), builds, and its release decision publishes inline
+  only when the installed content changed; an ingredient that reaches nothing a user installs ends in a
+  green run that publishes nothing. CI-only bumps (`.github/**` action `uses:`) aren't under
+  `.mavergreen/ingredients/`, so they never dispatch. This automates both version axes, driven by what
+  moved instead of by hand.
 - **Name that caller `.github/workflows/repackage-on-ingredient-bump.yml`.** The notes generator checks
   the caller to learn this repo is wired for its ingredients, and the conventional path wins outright — a repo
   that names it something else falls through to *discovery*, and discovery that finds more than one
@@ -3214,19 +3218,18 @@ in the same commit.
 
 ## Cutting a release
 
-**`sh scripts/cut-release.sh REPO`** cuts a release of `Mavergreen/REPO`, by a human or an agent alike.
-It refuses while a run of the repo's `release.yml` is queued or running on the ref; dispatches
-`release.yml` on `main` (`--ref` for another), passing whichever publish-anyway input that workflow
-declares (`local_release`, `repackage` or `release`) as `true`, or dispatching plainly where it
-declares none; watches the run to its end; and prints the tag and URL it published. It fails when
-the run fails, naming the failed jobs, and when a requested publish published nothing. `--if-needed`
-dispatches plainly and lets the repo's own logic decide whether anything needs publishing.
+**`sh scripts/cut-release.sh REPO`** asks `Mavergreen/REPO` for a release, by a human or an agent
+alike. It refuses while a run of the repo's `release.yml` is queued or running on the ref; dispatches
+`release.yml` on `main` (`--ref` for another) plainly; watches the run to its end; and prints the tag
+and URL it published, or, when the release decision found the content identical to the latest
+release, `nothing published: content identical to <tag>`. Both end 0. It fails when the run fails,
+naming the failed jobs.
 
-Use it rather than `gh workflow run` by hand: the repos' dispatch inputs differ today (six shapes
-across eleven repos on 2026-10-18), so the right `-f` is per repo, and a re-run of a failed release
-loses the ref shipyard's install action reads, so fix and cut again instead. The flag day (P6)
-replaces those inputs with one, `force_publish` with a required reason, enforced by the gate;
-`cut-release.sh` then takes the reason.
+**`--force REASON`** publishes whatever changed, passing `-f force_publish=REASON`; the reason goes into
+the release notes under `### Forced: <reason>`, and a forced run that publishes nothing fails. A blank
+reason is a usage error: a forced release says why (a notes fix, a key rotation). Use it rather than
+`gh workflow run` by hand, and never re-run a failed release, which loses the ref shipyard's install
+action reads: fix and cut again instead.
 
 **Don't change workflow files on main while a publishing release run is in flight.** A run's token
 can't create a tag on the older commit it built once main's workflows have changed under it: rust's

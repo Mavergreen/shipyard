@@ -6,6 +6,7 @@
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/resolve-version.sh"
+unset GITHUB_EVENT_NAME
 work="$(mktemp -d "${TMPDIR:-/tmp}/resolve-version-test.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
 new_repo() {  # $1 = dir, $2 = upstream version
@@ -28,6 +29,13 @@ out="$(MAVERGREEN_REPO_ROOT="$work/a" MAVERGREEN_TAGS="" sh "$S")"
 new_repo b 20260727
 out="$(MAVERGREEN_REPO_ROOT="$work/b" MAVERGREEN_TAGS="20260727-mavergreen.14" sh "$S" local)"
 [ "$out" = "20260727-mavergreen.15" ] || { echo "FAIL: local mode is a repackage of the shipped upstream (N+1, same upstream): got '$out'"; exit 1; }
+
+new_repo dispatched 1.5.2
+out="$(MAVERGREEN_REPO_ROOT="$work/dispatched" MAVERGREEN_TAGS="1.5.2-mavergreen.3" GITHUB_EVENT_NAME=workflow_dispatch sh "$S")"
+[ "$out" = "1.5.2-mavergreen.4" ] || { echo "FAIL: a dispatched run resolves local, the line's next N: got '$out'"; exit 1; }
+new_repo pushed 1.5.2
+out="$(MAVERGREEN_REPO_ROOT="$work/pushed" MAVERGREEN_TAGS="1.5.2-mavergreen.3" GITHUB_EVENT_NAME=push sh "$S")"
+[ "$out" = "1.5.2-mavergreen.3" ] || { echo "FAIL: a push resolves auto, the line's current N: got '$out'"; exit 1; }
 
 new_repo c 2.0.0
 out="$(MAVERGREEN_REPO_ROOT="$work/c" MAVERGREEN_TAGS="1.9.0-mavergreen.7" sh "$S")"

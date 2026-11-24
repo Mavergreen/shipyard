@@ -24,4 +24,10 @@ case "$out" in
   *) echo "FAIL: should name the caller as having no ingredient: $out"; exit 1 ;;
 esac
 
+wf="$here/../.github/workflows/repackage-on-ingredient-bump.yml"
+grep -q 'dispatch-field' "$wf" && { echo "FAIL: repackage-on-ingredient-bump.yml takes no dispatch-field: every release.yml takes one dispatch shape"; exit 1; }
+line="$(grep 'gh workflow run' "$wf")" || { echo "FAIL: repackage-on-ingredient-bump.yml dispatches with gh workflow run"; exit 1; }
+case "$line" in *' -f '*|*' --field '*|*' -F '*) echo "FAIL: the bump dispatch passes no field, so the decision publishes only on changed content: $line"; exit 1 ;; esac
+case "$line" in *'--ref main'*) ;; *) echo "FAIL: the bump dispatches release.yml on main: $line"; exit 1 ;; esac
+
 echo "PASS: repackage-wiring"

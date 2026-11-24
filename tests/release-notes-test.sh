@@ -682,7 +682,7 @@ grep -q 'rebuilt because build ingredients moved' "$r/OUT.md" \
 #       decoy workflow that only MENTIONS the caller must not outrank the real caller.
 r="$work/decoytrap"; mkrepo "$r"
 cat > "$r/.github/workflows/release.yml" <<'YML'
-# Dispatched by repackage-on-ingredient-bump.yml with local_release=true.
+# Dispatched plainly by repackage-on-ingredient-bump.yml.
 on:
   push:
     tags:
@@ -744,7 +744,7 @@ grep -q '3.8.2 -> 3.9.2' "$r/OUT.md" \
 r="$work/commentonly"; mkrepo "$r"
 mv "$r/.github/workflows/repackage-on-ingredient-bump.yml" "$r/.github/workflows/renovate-repackage.yml"
 cat > "$r/.github/workflows/aaa-release.yml" <<'YML'
-# Dispatched by repackage-on-ingredient-bump.yml with local_release=true.
+# Dispatched plainly by repackage-on-ingredient-bump.yml.
 on:
   push:
     tags:

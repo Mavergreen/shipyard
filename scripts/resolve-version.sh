@@ -1,6 +1,8 @@
 #!/bin/sh
 # platform: host-agnostic
 #   usage: resolve-version.sh [auto|local]
+#          With no mode, a workflow_dispatch run ($GITHUB_EVENT_NAME) resolves local, the line's next N,
+#          and any other run auto, its current N.
 #          Prints this repo's full version (<upstream>-mavergreen.N), writing VERSION if it is not
 #          there yet. VERSION is a build PRODUCT -- written here, read by cmake and the updater,
 #          gitignored, never committed. An existing VERSION is reused as-is: within one CI run, an
@@ -13,7 +15,10 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # MAVERGREEN_REPO_ROOT, mg_dir
 
-mode="${1:-auto}"
+if [ $# -gt 0 ]; then mode="$1"
+elif [ "${GITHUB_EVENT_NAME:-}" = workflow_dispatch ]; then mode=local
+else mode=auto
+fi
 vfile="$MAVERGREEN_REPO_ROOT/VERSION"
 
 if [ -f "$vfile" ]; then

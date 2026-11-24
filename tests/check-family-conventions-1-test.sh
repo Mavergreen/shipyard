@@ -62,7 +62,7 @@ chk_py /dev/stdin "$work/cold/.github/workflows/release.yml" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace("  group: release-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}",
-            "  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && 'local_release' || github.ref }}")
+            "  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && 'force_publish' || github.ref }}")
 s=s.replace("  cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
             "  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}")
 open(p,'w').write(s)

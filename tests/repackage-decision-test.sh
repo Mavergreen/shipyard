@@ -14,7 +14,7 @@ printf 'patches/**\nsrc/a b/*.c\n' > "$M/ingredients/patches/watch"
 decide() { CHANGED="$1" MAVERGREEN_REPO_ROOT="$work" sh "$S"; }
 
 out="$(decide '.mavergreen/upstream/VERSION')"
-[ "$out" = "SKIP=own-upstream-changed" ] || { echo "FAIL own-upstream: $out"; exit 1; }
+[ "$out" = "DISPATCH" ] || { echo "FAIL own upstream: a new own upstream dispatches too, and the decision publishes on changed content: $out"; exit 1; }
 
 out="$(decide '.mavergreen/ingredients/golang/VERSION')"
 [ "$out" = "DISPATCH" ] || { echo "FAIL ingredient value file: $out"; exit 1; }
@@ -35,7 +35,7 @@ out="$(decide 'src/ab/x.c')"
 [ "$out" = "SKIP=no-ingredient-changed" ] || { echo "FAIL a space is literal: $out"; exit 1; }
 
 out="$(decide "$(printf '.mavergreen/ingredients/golang/VERSION\n.mavergreen/upstream/VERSION')")"
-[ "$out" = "SKIP=own-upstream-changed" ] || { echo "FAIL own upstream and ingredient in one push: the new upstream owns it: $out"; exit 1; }
+[ "$out" = "DISPATCH" ] || { echo "FAIL own upstream and ingredient in one push dispatch once: $out"; exit 1; }
 
 out="$(decide "$(printf 'README.md\npatches/x.patch')")"
 [ "$out" = "DISPATCH" ] || { echo "FAIL one watched path among others: $out"; exit 1; }

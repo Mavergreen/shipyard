@@ -1,31 +1,35 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: cut-release.sh REPO [--ref REF] [--if-needed]
-#          Cuts a release of Mavergreen/REPO by dispatching its release.yml on REF (default main), and
-#          watches the run to its end. By default it asks for a publish: it passes whichever
-#          publish-anyway input that release.yml declares (local_release, repackage or release) as
-#          true, or dispatches plainly where it declares none. --if-needed dispatches plainly, so the
-#          repo's own logic decides. Refuses while a run of release.yml on REF is queued or running.
-#          Prints the tag and URL it published. Exit 0 when it published (or, with --if-needed, when the
-#          run passed); 1 when the run failed, it refused, or a requested publish published nothing;
-#          2 on a usage error. Needs gh, authenticated.
+#   usage: cut-release.sh REPO [--ref REF] [--force REASON]
+#          Dispatches Mavergreen/REPO's release.yml on REF (default main) and watches the run to its end.
+#          Plainly by default, so the release decision publishes only changed content; --force passes
+#          -f force_publish=REASON, publishing whatever changed, REASON in the notes. Refuses while a run
+#          of release.yml on REF is queued or running. Exit 0 when a release appeared ("released <tag>:
+#          <url>"), or when a plain dispatch's run passed and its log says "Not published: content
+#          identical to <tag>."; 1 when the run failed, it refused, a forced run published nothing, or a
+#          plain one published nothing and said no reason; 2 on a usage error, a blank REASON, or
+#          --if-needed. Needs gh, authenticated.
 # spec: SKILL.md "Cutting a release"
 set -eu
 org=Mavergreen
 die() { echo "cut-release: $*" >&2; exit 1; }
-usage() { echo "usage: cut-release.sh REPO [--ref REF] [--if-needed]" >&2; exit 2; }
+usage() { echo "usage: cut-release.sh REPO [--ref REF] [--force REASON]" >&2; exit 2; }
 command -v gh >/dev/null 2>&1 || die "needs the gh CLI"
 [ $# -ge 1 ] || usage
 name=$1; shift
 case "$name" in ''|*/*|.*|-*) usage ;; esac
-ref=main; mode=publish
+ref=main; reason=""; forced=no
 while [ $# -gt 0 ]; do
   case "$1" in
     --ref) [ $# -ge 2 ] || usage; ref=$2; shift 2 ;;
-    --if-needed) mode=if-needed; shift ;;
+    --force) [ $# -ge 2 ] || usage; reason=$2; forced=yes; shift 2 ;;
+    --if-needed) echo "cut-release: --if-needed is the default now; drop it" >&2; exit 2 ;;
     *) usage ;;
   esac
 done
+if [ "$forced" = yes ] && [ -z "$(printf '%s' "$reason" | tr -d '[:space:]')" ]; then
+  echo "cut-release: --force needs a reason; it goes into the release notes" >&2; exit 2
+fi
 repo="$org/$name"; wf=release.yml
 poll="${CUT_RELEASE_POLL:-5}"
 
@@ -35,24 +39,11 @@ inflight="$(gh run list -R "$repo" --workflow "$wf" --branch "$ref" --limit 20 \
 [ -z "$inflight" ] || die "$repo's $wf already has a run on $ref that is not done; let it finish first:
 $inflight"
 
-yml="$(gh api "repos/$repo/contents/.github/workflows/$wf?ref=$ref" --jq .content | base64 --decode 2>/dev/null)" \
-  || die "could not read $repo's .github/workflows/$wf at $ref"
-inputs="$(printf '%s\n' "$yml" | awk '/^  workflow_dispatch:/ { on = 1; next } on && /^  [^ ]/ { exit }
-  on && /^      [A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*$/ { sub(/^ +/, ""); sub(/:.*/, ""); print }')"
-printf '%s\n' "$yml" | grep -q '^  workflow_dispatch:' || die "$repo's $wf has no workflow_dispatch trigger"
-
-field=""
-if [ "$mode" = publish ]; then
-  for i in local_release repackage release; do
-    if printf '%s\n' "$inputs" | grep -qx "$i"; then field="$i=true"; break; fi
-  done
-fi
-
 before="$(gh release view -R "$repo" --json tagName --jq .tagName 2>/dev/null || :)"
 since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-if [ -n "$field" ]; then
-  gh workflow run "$wf" -R "$repo" --ref "$ref" -f "$field" >/dev/null || die "could not dispatch $repo's $wf"
-  echo "cut-release: dispatched $repo's $wf on $ref with -f $field"
+if [ "$forced" = yes ]; then
+  gh workflow run "$wf" -R "$repo" --ref "$ref" -f "force_publish=$reason" >/dev/null || die "could not dispatch $repo's $wf"
+  echo "cut-release: dispatched $repo's $wf on $ref with force_publish=$reason"
 else
   gh workflow run "$wf" -R "$repo" --ref "$ref" >/dev/null || die "could not dispatch $repo's $wf"
   echo "cut-release: dispatched $repo's $wf on $ref"
@@ -83,5 +74,8 @@ if [ -n "$after" ] && [ "$after" != "$before" ]; then
   echo "cut-release: released $after: https://github.com/$repo/releases/tag/$after"
   exit 0
 fi
-[ "$mode" = if-needed ] && { echo "cut-release: run $run passed and published nothing: none was needed"; exit 0; }
+if [ "$forced" = no ]; then
+  same="$(gh run view "$run" -R "$repo" --log 2>/dev/null | tr -d '\r' | sed -n 's/.*Not published: content identical to \([^ ]*\)\.$/\1/p' | head -n 1)" || same=""
+  [ -z "$same" ] || { echo "cut-release: run $run passed; nothing published: content identical to $same"; exit 0; }
+fi
 die "run $run passed but published nothing (the latest release is still ${before:-none}); read the run's ver job for why"

@@ -139,7 +139,7 @@ for term in CI runner workflow conformance dogfood agent subagent plan QUEUE com
   "base recipe" "check 22" ".yml" "ci"; do
   printf 'The %s stays stopped.\n' "$term" | no "internal term: $term" "internal term"
 done
-for snake in "Run the release_workflow now." "The CI_runner stays." "Automatically cut via workflow_dispatch local_release."; do
+for snake in "Run the release_workflow now." "The CI_runner stays." "Automatically cut via workflow_dispatch force_publish."; do
   printf '%s\n' "$snake" | no "internal term inside an identifier: $snake" "internal term"
 done
 ok "CIA is not CI" <<'X'
@@ -227,7 +227,7 @@ corpus_no "packer .7 purpose" "internal term" "That comment is the release's who
 corpus_no "packer .8" "internal term" "This is the Mavergreen family's check 22, which now fails the build when a new script doesn't say where it runs."
 corpus_no "packer 0040" "formatting character '\`'" "This release exists to capture the next stall, and \`docs/decisions/0040\` describes what is read."
 corpus_no "packer .4" "internal term" "v0.20261005.3's build peaked at 80 GiB of a GitHub runner's 85 GiB free."
-corpus_no "container-tools dispatch" "internal term" "Automatically cut via workflow_dispatch local_release."
+corpus_no "container-tools dispatch" "internal term" "Automatically cut via workflow_dispatch force_publish."
 corpus_no "container-tools template" "internal term" "Automatically cut from a build-ingredient bump."
 corpus_no "container-tools bold" "end with" "**Migration hardening (found by dogfooding on a real 10.9 box):**"
 corpus_no "golang-126 bold" "end with" "**Pure-Go programs now run on Mavericks.**"

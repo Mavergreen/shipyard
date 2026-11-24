@@ -95,3 +95,8 @@ go126-cross	go126	the native and cross products are one universal product under 
 go127-cross	go127	the native and cross products are one universal product under the native short name
 rust-cross	rust	the native and cross products are one universal product under the native short name
 swift-toolchain-cross	swift-toolchain	the native and cross products are one universal product under the native short name
+local_release	a plain dispatch, or force_publish with a reason	every release.yml takes one dispatch shape, and the release decision publishes only changed content
+upstream_release	a plain dispatch	a new upstream dispatches plainly, like an ingredient bump
+reconcile=true	a plain dispatch	the release decision skips content already published, so no re-dispatch needs a mode
+dispatch-field	nothing: repackage-on-ingredient-bump.yml dispatches plainly	every release.yml takes one dispatch shape
+--if-needed	nothing: cut-release.sh dispatches plainly by default	a plain dispatch is already the if-needed one

@@ -28,10 +28,9 @@ jobs:
           VERSION: ${{ inputs.version }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           REF: ${{ github.ref }}
-          RECONCILE: ${{ github.event.inputs.reconcile }}
         run: |
           set -eu
-          answer="$(sh "$SHIPYARD_SCRIPTS/retry-decision.sh" "$VERSION" "$REPO_URL" "$REF" "$RECONCILE")"
+          answer="$(sh "$SHIPYARD_SCRIPTS/retry-decision.sh" "$VERSION" "$REPO_URL" "$REF")"
           echo "$answer"
           echo "answer=$answer" >> "$GITHUB_OUTPUT"
 
@@ -43,5 +42,5 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          echo "::notice::$VERSION was tagged by another run; re-dispatching $RELEASE_WORKFLOW with reconcile=true"
-          gh workflow run "$RELEASE_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref main -f reconcile=true
+          echo "::notice::$VERSION was tagged by another run; re-dispatching $RELEASE_WORKFLOW, whose decision skips content already published"
+          gh workflow run "$RELEASE_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref main

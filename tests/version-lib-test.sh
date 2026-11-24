@@ -16,17 +16,15 @@ got="$(. "$L"; upstream_version)"
 out="$(MAVERGREEN_TAGS='' sh "$V" auto)"
 printf '%s\n' "$out" | grep -qx 'FULL=1.26.5-mavergreen.1' || { echo "FAIL: a new upstream with no tags yet must be release number 1, and release: $out"; exit 1; }
 printf '%s\n' "$out" | grep -qx 'TAG=1.26.5-mavergreen.1'  || { echo "FAIL auto/new TAG: $out"; exit 1; }
-printf '%s\n' "$out" | grep -qx 'RELEASE=yes'             || { echo "FAIL auto/new REL: $out"; exit 1; }
+printf '%s\n' "$out" | grep -q '^RELEASE=' && { echo "FAIL: version.sh says nothing about releasing; the release decision does: $out"; exit 1; }
 
 out="$(MAVERGREEN_TAGS='1.26.5-mavergreen.1
 1.26.5-mavergreen.3
 1.26.5-mavergreen.2' sh "$V" auto)"
 printf '%s\n' "$out" | grep -qx 'FULL=1.26.5-mavergreen.3' || { echo "FAIL: auto for an already-released upstream must report the current N: $out"; exit 1; }
-printf '%s\n' "$out" | grep -qx 'RELEASE=no'              || { echo "FAIL: auto for an already-released upstream must NOT release again: $out"; exit 1; }
 
 out="$(MAVERGREEN_TAGS='1.26.5-mavergreen.3' sh "$V" local)"
 printf '%s\n' "$out" | grep -qx 'FULL=1.26.5-mavergreen.4' || { echo "FAIL: local must report the next N: $out"; exit 1; }
-printf '%s\n' "$out" | grep -qx 'RELEASE=yes'             || { echo "FAIL: local must release: $out"; exit 1; }
 
 out="$(MAVERGREEN_TAGS='1.26.4-mavergreen.7' sh "$V" auto)"
 printf '%s\n' "$out" | grep -qx 'FULL=1.26.5-mavergreen.1' || { echo "FAIL: tags for OTHER upstreams must be ignored -- N resets to 1 when upstream/VERSION moves: $out"; exit 1; }
@@ -45,7 +43,7 @@ r="$w/restart"; mkdir -p "$r/.mavergreen/upstream"; printf '1.2.3\n' > "$r/.mave
 ( cd "$r" && git init -q -b main . && git config user.email t@e.com && git config user.name t \
   && git add .mavergreen && git commit -qm base && git tag 1.2.3-mavericks.4 )
 out="$(MAVERGREEN_REPO_ROOT="$r" sh "$V" auto)"
-printf '%s\n' "$out" | grep -qx 'FULL=1.2.3-mavergreen.1' && printf '%s\n' "$out" | grep -qx 'RELEASE=yes' \
+printf '%s\n' "$out" | grep -qx 'FULL=1.2.3-mavergreen.1' \
   || { echo "FAIL: the counter restarts at the flag day -- an upstream tagged only 1.2.3-mavericks.4 cuts 1.2.3-mavergreen.1 and releases it, never a repackage of the old suffix: $out"; exit 1; }
 out="$(MAVERGREEN_REPO_ROOT="$r" sh "$V" local)"
 printf '%s\n' "$out" | grep -qx 'FULL=1.2.3-mavergreen.1' \

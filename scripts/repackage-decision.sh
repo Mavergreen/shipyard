@@ -4,10 +4,9 @@
 #          env in:  CHANGED (newline-separated paths changed this push)
 #                   MAVERGREEN_REPO_ROOT (the repo; default: the git top level)
 #          stdout:  DISPATCH  or  SKIP=<reason>
-#          SKIP=own-upstream-changed when any path is under .mavergreen/upstream/ (a new own upstream
-#          is the release's job, not a repackage's); else DISPATCH when any path is under
-#          .mavergreen/ingredients/ or matches a line of any ingredient's watch; else
-#          SKIP=no-ingredient-changed.
+#          DISPATCH when any path is under .mavergreen/upstream/ or .mavergreen/ingredients/, or matches
+#          a line of any ingredient's watch; else SKIP=no-ingredient-changed. The dispatched release
+#          publishes only when its content changed.
 # spec: tests/repackage-decision-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
@@ -18,10 +17,8 @@ work="$(mktemp -d "${_tmp%/}/repackage-decision.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 printf '%s\n' "${CHANGED:-}" > "$work/changed"
 
-if [ -n "$(mg_glob_hits '.mavergreen/upstream/*' "$work/changed")" ]; then
-  echo "SKIP=own-upstream-changed"; exit 0
-fi
-if [ -n "$(mg_glob_hits '.mavergreen/ingredients/*' "$work/changed")" ]; then
+if [ -n "$(mg_glob_hits '.mavergreen/upstream/*' "$work/changed")" ] \
+  || [ -n "$(mg_glob_hits '.mavergreen/ingredients/*' "$work/changed")" ]; then
   echo "DISPATCH"; exit 0
 fi
 for _n in $(mg_list ingredients); do
