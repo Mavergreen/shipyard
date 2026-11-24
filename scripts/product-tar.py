@@ -48,8 +48,14 @@ def trusted(root, digest):
 
 def trust(root, digest):
     temporary = root / f'{TRUST}.{os.getpid()}'
-    temporary.write_text(f'{digest}\n{identity(root)}\n')
-    temporary.rename(root / TRUST)
+    try:
+        temporary.write_text(f'{digest}\n{identity(root)}\n')
+        temporary.rename(root / TRUST)
+    except OSError:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
 
 
 def members(archive, short):

@@ -7,7 +7,7 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 H="$here/../scripts/fetch_product_tar.sh"
 _tmp="${TMPDIR:-/tmp}"
-w="$(mktemp -d "${_tmp%/}/fetch-verify-stamp-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
+w="$(mktemp -d "${_tmp%/}/fetch-verify-stamp-test.XXXXXX")"; trap 'chmod -R u+w "$w" 2>/dev/null; rm -rf "$w"' EXIT
 fail() { echo "FAIL: $*"; exit 1; }
 mkdir -p "$w/shim" "$w/rel/Mavergreen/widget-repo/releases/download/1.0" "$w/src/opt/mavergreen/widget/bin"
 for t in shasum sha256sum openssl; do
@@ -48,4 +48,11 @@ fetch || fail "a fetch without the stamp must succeed"
 [ "$(calls)" -ge 1 ] || fail "a fetch without the stamp must re-verify"
 fetch || fail "the fetch after re-stamping must succeed"
 [ "$(calls)" -eq 0 ] || fail "a re-stamped tree must verify zero times, saw $(calls)"
+rm -f "$w/out/widget/.mavergreen-tree-verified"
+chmod a-w "$w/out/widget"
+fetch || fail "a tree that cannot be stamped must still fetch"
+[ "$(calls)" -ge 1 ] || fail "an unstampable tree must be re-verified"
+fetch || fail "an unstampable tree must keep fetching"
+[ "$(calls)" -ge 1 ] || fail "an unstampable tree must keep re-verifying"
+chmod u+w "$w/out/widget"
 echo PASS
