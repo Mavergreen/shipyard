@@ -38,7 +38,7 @@ check_install() {  # $1 = label  $2 = the installed presets file  $3 = the prefi
   [ -f "$2" ] || { say "$1: no presets file at $2"; return 0; }
   want="$3/$rel/MavericksToolchain.cmake"
   n="$(toolchains "$2" | wc -l | tr -d ' ')"
-  [ "$n" -eq 2 ] || say "$1: expected both hidden presets to set toolchainFile; found $n"
+  [ "$n" -eq 3 ] || say "$1: expected all three hidden presets to set toolchainFile; found $n"
   toolchains "$2" | while IFS= read -r got; do
     [ "$got" = "$want" ] || echo "$1: toolchainFile is '$got', not the installed '$want'"
   done > "$w/mismatch"

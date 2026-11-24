@@ -6,7 +6,7 @@
 # On a 10.9 host (native mode, x86_64 only) the sysroot is the same fetched pin: the build never asks
 # xcrun, so it is identical with or without the Command Line Tools (vision area 18 A). Package-time
 # conformance verifies what each build records. Pins: scripts/sdk-pins.sh; rule: SKILL.md "SDK pinning".
-# Use it via the shipyard presets (mavericks-cross / mavericks-native) or -DCMAKE_TOOLCHAIN_FILE=<this>.
+# Use it via the shipyard presets (mavericks-native / mavericks-cross / macos-arm64) or -DCMAKE_TOOLCHAIN_FILE=<this>.
 if(NOT CMAKE_OSX_ARCHITECTURES)
   set(CMAKE_OSX_ARCHITECTURES x86_64 CACHE STRING "one arch per configure" FORCE)
 endif()

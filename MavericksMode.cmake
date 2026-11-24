@@ -23,9 +23,11 @@ function(mavericks_build_mode out_var)
 endfunction()
 
 # mavericks_require_expected_mode(<mode>): if MAVERICKS_EXPECTED_MODE is set (by the
-# preset) and differs from <mode>, fail fast -- wrong preset for this host.
+# preset) and differs from <mode>, fail fast -- wrong preset for this host. "modern" (the
+# macos-arm64 preset) expects any host that is not 10.9, which mavericks_build_mode calls "cross".
 function(mavericks_require_expected_mode mode)
-  if(DEFINED MAVERICKS_EXPECTED_MODE AND NOT MAVERICKS_EXPECTED_MODE STREQUAL mode)
+  if(DEFINED MAVERICKS_EXPECTED_MODE AND NOT MAVERICKS_EXPECTED_MODE STREQUAL mode
+     AND NOT (MAVERICKS_EXPECTED_MODE STREQUAL "modern" AND mode STREQUAL "cross"))
     message(FATAL_ERROR
       "This preset expects a '${MAVERICKS_EXPECTED_MODE}' build but this host does a "
       "'${mode}' build -- wrong preset for this machine.")
