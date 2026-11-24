@@ -14,7 +14,6 @@ macos-runner container-tools release.yml:build-macos
 macos-runner drydock release.yml:build
 macos-runner fd release.yml:build
 macos-runner golang-126 release.yml:build
-macos-runner golang-127 release.yml:build
 macos-runner longboat release.yml:build
 macos-runner longboat release.yml:collect
 macos-runner magic-trackpad2 release.yml:build-macos
@@ -44,7 +43,6 @@ modern-smoke clang-22 release.yml:modern-smoke
 modern-smoke claude-code release.yml:modern-smoke
 modern-smoke drydock release.yml:modern-smoke
 modern-smoke golang-126 release.yml:modern-smoke
-modern-smoke golang-127 release.yml:modern-smoke
 modern-smoke make release.yml:modern-smoke
 modern-smoke python-315 release.yml:modern-smoke
 modern-smoke rust release.yml:modern-smoke
@@ -52,8 +50,6 @@ modern-smoke stevedore release.yml:modern-smoke
 modern-smoke swift release.yml:modern-smoke
 packager golang-126 build/package-cross-pkg.sh
 packager golang-126 build/package-pkg.sh
-packager golang-127 build/package-cross-pkg.sh
-packager golang-127 build/package-pkg.sh
 packager openssh build/package-pkg.sh
 packager rust build/package-lib.sh
 packager stevedore .github/workflows/release.yml

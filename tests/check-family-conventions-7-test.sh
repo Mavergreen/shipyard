@@ -246,10 +246,10 @@ grandfather
 #       duplicates, naming a repo of the org; each runner conversion or packager move deletes its
 #       lines, so the per-check count may only go down.
 GF="$here/../scripts/conventions-grandfathered"
-MAX_MACOS_RUNNER=40
-MAX_PACKAGER=11
+MAX_MACOS_RUNNER=39
+MAX_PACKAGER=9
 MAX_ARTIFACT_CONFORMANCE=0
-MAX_MODERN_SMOKE=13
+MAX_MODERN_SMOKE=9
 MAX_CXXABI=2
 MAX_STANDALONE=47
 [ -f "$GF" ] || { echo "FAIL: scripts/conventions-grandfathered is missing"; exit 1; }
