@@ -67,6 +67,31 @@ has "two products" "product w carry $T"
 has "two products" "product x changed"
 echo "ok: per product, an unchanged one is carried and a changed one is not"
 
+L='file w-linux-x86_64.tar.gz bin/w 0755 dddd'
+U='file mavericks-w-native.pkg opt/mavergreen/w/bin/w 0755 eeee'
+serve "$T" "$W
+$L
+$U" w.xml
+cand "$W
+$(printf '%s\n' "$L" | sed 's/dddd/dede/')
+$U"; decide
+[ "$first" = publish ] || fail "a changed Linux tarball publishes: $out"
+has "linux tarball" "product w changed"
+says "linux tarball" '+file w-linux-x86_64.tar.gz bin/w 0755 dede'
+cand "$W
+$L
+$(printf '%s\n' "$U" | sed 's/eeee/efef/')"; decide
+[ "$first" = publish ] || fail "a changed row no product owns publishes: $out"
+says "unowned row" '+file mavericks-w-native.pkg opt/mavergreen/w/bin/w 0755 efef'
+cand "$W
+$L"; decide
+[ "$first" = publish ] || fail "a row no product owns, gone since the previous release, publishes: $out"
+cand "$W
+$L
+$U"; decide
+[ "$first" = skip ] || fail "every row identical, Linux and unowned included, skips: $out"
+echo "ok: every artifact row counts, a product's Linux tarball and rows no product owns included"
+
 serve "$T" "$W" ; cand "$W"; decide
 has "no w.xml in SHA256SUMS" "product w changed"
 [ "$first" = publish ] || fail "a product whose feed can't be carried publishes: $out"

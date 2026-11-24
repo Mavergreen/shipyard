@@ -6,11 +6,12 @@
 #          (previous-release-tag.sh --tag-glob GLOB over the repo's tags, from git ls-remote, or
 #          $RELEASE_DECISION_TAGS, newline-separated, in tests). Prints "publish" or "skip", then
 #          "product <short> new|changed|carry <tag>" for each product in FILE (each "meta <short>
-#          feed-min-os" row), then a blank line and a Markdown summary. A product is carried when its
-#          rows (artifacts <short>.pkg and <short>-macos-*.tar.gz, and meta <short>) equal the previous
+#          feed-min-os" row), then a blank line and a Markdown summary. A row belongs to the longest
+#          product short that is its artifact, <short>.pkg, or a prefix of it before a hyphen (so
+#          <short>-linux-*.tar.gz is its product's). A product is carried when its rows equal the previous
 #          manifest's and the previous release's SHA256SUMS lists <short>.xml; new when the previous
 #          manifest has none of its rows; otherwise changed. skip only when every product is carried
-#          and the previous release has no product FILE lacks. TEXT, trimmed and non-empty, or a
+#          and every row, a product's or none's, equals the previous manifest's. TEXT, trimmed and non-empty, or a
 #          publish-unchanged deviation in DIR, publishes with every product changed; with no previous
 #          release every product is new; a previous manifest that cannot be fetched or read publishes
 #          with every product changed and a ::warning:: first in the summary. Exit 0 either way.
@@ -76,9 +77,14 @@ unchanged_why="$(shipyard_deviated publish-unchanged)" || unchanged_why=""
 
 products="$(awk '$1 == "meta" && $3 == "feed-min-os" { print $2 }' "$w/cand" | sort -u)"
 rows_of() {
-  awk -v s="$1" '
-    $2 == s ".pkg" || ($1 == "meta" && $2 == s) { print; next }
-    index($2, s "-macos-") == 1 && substr($2, length($2) - 6) == ".tar.gz" { print }' "$2"
+  awk -v s="$1" -v ps="$(printf '%s ' $products)" '
+    BEGIN { n = split(ps, p, " ") }
+    {
+      o = ""
+      for (i = 1; i <= n; i++)
+        if (p[i] != "" && ($2 == p[i] || $2 == p[i] ".pkg" || index($2, p[i] "-") == 1) && length(p[i]) > length(o)) o = p[i]
+      if (o == s) print
+    }' "$2"
 }
 
 warn=""; prev=""
@@ -119,7 +125,7 @@ for s in $products; do
 done
 
 decision=publish
-if [ -z "$reason$unchanged_why$warn" ] && [ -n "$prev" ] && ! grep -qv ' carry ' "$w/status"; then
+if [ -z "$reason$unchanged_why$warn" ] && [ -n "$prev" ] && ! grep -qv ' carry ' "$w/status" && cmp -s "$w/prev" "$w/cand"; then
   printf '%s\n' "$products" > "$w/prods"
   dropped="$(awk '$1 == "meta" && $3 == "feed-min-os" { print $2 }' "$w/prev" | sort -u | comm -23 - "$w/prods")"
   [ -n "$dropped" ] || decision=skip
