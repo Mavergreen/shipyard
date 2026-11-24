@@ -98,4 +98,11 @@ out="$(sh "$S" 9.9p3-mavergreen.2)"
 #           carries on and reports PASS regardless. `|| exit 1` checks the status explicitly instead
 #           of relying on errexit to see it.
 
+printf 'v1.0.871\nv1.0.1000\nv1.0.99\nnot-a-tag\n' > "$work/tags"
+out="$(sh "$S" --tags-file "$work/tags" --tag-glob 'v*.*.*')"
+[ "$out" = v1.0.1000 ] || { echo "FAIL --tags-file: the tags come from the file, not git: got '$out'"; exit 1; }
+: > "$work/none"
+out="$(sh "$S" --tags-file "$work/none")"
+[ -z "$out" ] || { echo "FAIL --tags-file: an empty file has no previous tag: got '$out'"; exit 1; }
+
 echo "PASS: previous-release-tag"
