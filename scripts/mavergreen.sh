@@ -480,10 +480,19 @@ slim_setting() {
 slim_hex() {
   od -An -tx1 -j "$2" -N "$3" "$1" 2>/dev/null | tr -d ' \n'
 }
+slim_glob_match() {
+  _gp="$1/"; _pp="$2/"
+  while [ -n "$_gp" ] && [ -n "$_pp" ]; do
+    _gc="${_gp%%/*}"; _gp="${_gp#*/}"
+    _pc="${_pp%%/*}"; _pp="${_pp#*/}"
+    case "$_pc" in $_gc) ;; *) return 1 ;; esac
+  done
+  [ -z "$_gp" ] && [ -z "$_pp" ]
+}
 slim_is_host_payload() {
   [ -n "$_host" ] || return 1
   printf '%s\n' "$_host" | { while IFS= read -r _g; do
-    case "$1" in $_g) exit 0 ;; esac
+    if slim_glob_match "$_g" "$1"; then exit 0; fi
   done; exit 1; }
 }
 slim_in_signed_bundle() {
