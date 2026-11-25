@@ -86,9 +86,25 @@ case_dir pubno
 edit "$d" 's/needs: \[vm-test, version-check\]/needs: [vm-test]/'; add "$d"
 fails "check 40c: publish does not need version-check" "$d" 'version-check publish:'
 
+case_dir ghrelease
+printf '  extra:\n    runs-on: ubuntu-latest\n    needs: [version-check]\n    steps:\n      - uses: softprops/action-gh-release@v2\n' >> "$(rel "$d")"; add "$d"
+fails "check 40c: release.yml publishes through action-gh-release" "$d" 'version-check extra: .*publish-release.yml'
+
+case_dir ghcreate
+printf '  extra:\n    runs-on: ubuntu-latest\n    needs: [version-check]\n    steps:\n      - run: gh release create "v$V" dist/*\n' >> "$(rel "$d")"; add "$d"
+fails "check 40c: release.yml publishes with gh release create" "$d" 'version-check extra: .*publish-release.yml'
+
+case_dir ghview
+printf '  extra:\n    runs-on: ubuntu-latest\n    needs: [version-check]\n    steps:\n      - run: gh release view "v$V"\n' >> "$(rel "$d")"; add "$d"
+lacks "check 40c: gh release view publishes nothing" "$d" 'version-check extra'
+
 # spec: SKILL.md "Family conventions" check 40d -- no workflow triggers on a pushed tag.
 case_dir tagci
 printf "name: ci\non:\n  push:\n    tags: ['*']\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n" > "$d/.github/workflows/ci.yml"; add "$d"
 fails "check 40d: ci.yml triggers on a pushed tag" "$d" 'ci.yml triggers on a pushed tag'
+
+case_dir tagsignore
+printf "name: ci\non:\n  push:\n    tags-ignore: ['v*']\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n" > "$d/.github/workflows/ci.yml"; add "$d"
+fails "check 40d: ci.yml triggers on tags but those it ignores" "$d" 'ci.yml triggers on a pushed tag'
 
 echo "PASS: check-family-conventions-9 (checks 40-40d)"

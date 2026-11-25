@@ -301,7 +301,7 @@ mkrepo "$work/g17b"
 grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/g17b/.github/workflows/release.yml"
 cat >> "$work/g17b/.github/workflows/release.yml" <<'YML'
       - run: |
-          gh release create "$TAG" dist/* --notes-file \
+          sh "$SHIPYARD_SCRIPTS/gen_appcast.sh" --notes-file \
             dist/RELEASE_NOTES.md
 YML
 (cd "$work/g17b" && sh "$S" >/dev/null) || { echo "FAIL a line-wrapped --notes-file value should pass"; exit 1; }
@@ -313,7 +313,7 @@ mkrepo "$work/g17c"
 grep -v 'notes-file' "$work/ok/.github/workflows/release.yml" > "$work/g17c/.github/workflows/release.yml"
 cat >> "$work/g17c/.github/workflows/release.yml" <<'YML'
       - run: |
-          gh release create "$TAG" dist/* --notes-file \
+          sh "$SHIPYARD_SCRIPTS/gen_appcast.sh" --notes-file \
             release-notes/README.md
 YML
 if out="$(cd "$work/g17c" && sh "$S" 2>&1)"; then echo "FAIL a wrapped notes path the generator never wrote should fail"; exit 1; fi
@@ -336,11 +336,17 @@ YML
 #       That is a feed pointer, not a product release body, and failing it would redden a
 #       correct repo. golang does the same for each go-line feed.
 mkrepo "$work/g9"
-cat >> "$work/g9/.github/workflows/release.yml" <<'YML'
+cat > "$work/g9/.github/workflows/feed.yml" <<'YML'
+on: workflow_dispatch
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    steps:
       - run: |
           gh release create feed-porthole --title 'Porthole appcast' \
             --notes "Sparkle appcast for Porthole; asset replaced every release, tag never moves."
 YML
+(cd "$work/g9" && git add -A) || exit 1
 (cd "$work/g9" && sh "$S" >/dev/null) || { echo "FAIL a bare --notes on a moving-tag feed release must not fail"; exit 1; }
 
 # spec: scripts/check-family-conventions.sh -- golang renders TWO appcasts from one body. The comparison is between SETS, so the same

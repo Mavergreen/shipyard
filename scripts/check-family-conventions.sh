@@ -1111,11 +1111,12 @@ fi
 
 # spec: SKILL.md "Family conventions" check 40 -- INGREDIENTS.md's "## Versioning" declares each
 #       product's scheme, in versioning.sh's grammar.
-if _v40="$(sh "$SELF/versioning.sh" 2>&1)"; then
+if _v40="$(sh "$SELF/versioning.sh" 2>/dev/null)"; then
   [ -n "$_v40" ] \
     || fail "INGREDIENTS.md declares no versioning scheme — every release is held to one" \
             "add \"## Versioning\" with \"- <scheme>\" (port, self-upstream-date, semver, date-semver or counter), or \"- <short>: <scheme>\" per product (see the conventions skill, check 40)"
 else
+  _v40="$(sh "$SELF/versioning.sh" 2>&1 >/dev/null || :)"
   while IFS= read -r _m; do
     fail "versioning ${_m#versioning: }" \
          "fix the entry it names (grammar: \"- <scheme>\" or \"- <short>: <scheme>\") (see the conventions skill, check 40)"
@@ -1186,6 +1187,16 @@ else:
 pubs = [j for j, b in jobs.items() if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]]
 if not pubs and "publish" in jobs:
     pubs = ["publish"]
+GH = re.compile(r"(^|[\s;&|(])gh\s+release\s+(create|upload)\b")
+for name, job in jobs.items():
+    if name in pubs:
+        continue
+    for body in [job] + list((local(job) or {}).values()):
+        steps = body.get("steps") if isinstance(body.get("steps"), list) else []
+        if any(isinstance(s, dict) and ("action-gh-release" in str(s.get("uses", "")) or GH.search(live(s.get("run", ""))))
+               for s in steps):
+            print("publisher %s" % name)
+            break
 for name, job in jobs.items():
     if name == "version-check":
         continue
@@ -1217,6 +1228,8 @@ PY
                 "add version-check to $_j's needs:, or to the needs: of a job it needs (see the conventions skill, check 40c)" ;;
       publish) fail "version-check $_j: the publish job does not reach version-check through needs: — it can publish a version nothing checked" \
                     "add version-check to $_j's needs: (see the conventions skill, check 40c)" ;;
+      publisher) fail "version-check $_j: that job publishes a release itself (action-gh-release, gh release create or upload), not through publish-release.yml — nothing re-checks its version and notes before the upload" \
+                      "publish only through Mavergreen/shipyard/.github/workflows/publish-release.yml@v1 (see the conventions skill, check 40c)" ;;
     esac
   done <<EOF
 $_c40c
@@ -1236,7 +1249,7 @@ for path in sys.argv[1:]:
         continue
     on = wf.get("on", wf.get(True)) if isinstance(wf, dict) else None
     push = on.get("push") if isinstance(on, dict) else None
-    if isinstance(push, dict) and "tags" in push:
+    if isinstance(push, dict) and ("tags" in push or "tags-ignore" in push):
         print(path)
 PY
 )" || fail "check 40d could not read the workflows (python3 failed)" "run python3 -c 'import yaml' and make sure it works"

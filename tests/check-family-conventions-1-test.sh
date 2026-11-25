@@ -129,7 +129,7 @@ mkrepo "$work/p" novm
 python3 - "$work/p/.github/workflows/release.yml" <<'PY'
 import sys
 p=sys.argv[1]; s=open(p).read()
-s=s.replace('      - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md\n',
+s=s.replace('      - run: sh "$SHIPYARD_SCRIPTS/gen_appcast.sh" --notes-file dist/RELEASE_NOTES.md\n',
             '  publish:\n'
             '    needs: [version-check]\n'
             '    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1\n'

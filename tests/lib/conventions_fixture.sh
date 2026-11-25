@@ -56,7 +56,7 @@ YML
           sh "$SHIPYARD_SCRIPTS/release-notes.sh" --tag "$TAG" --version "$FULL" \
             --product Widget --min-os 10.9.5 --out dist/RELEASE_NOTES.md
       - run: sh "$SHIPYARD_SCRIPTS/assert-tree-clean.sh"
-      - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md
+      - run: sh "$SHIPYARD_SCRIPTS/gen_appcast.sh" --notes-file dist/RELEASE_NOTES.md
 YML
   # spec: SKILL.md "Family conventions" check 35 -- these fixtures build pkgs with the system packager on
   #       purpose, so the baseline declares build/package.sh; a case adds its own deviations beneath this
