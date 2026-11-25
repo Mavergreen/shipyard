@@ -11,6 +11,8 @@
 #            6. NR/D/changes/ commits a file named [a-z0-9-]+, or only pins moved since --previous
 #               (no own code, nothing in .github/ but action refs, a pin or an action ref, and FILE,
 #               when given, has "### Build ingredients", "### Pinned actions" or "- New upstream: ").
+#               The pins are own-code-pathspecs.sh --pins; a "path:KEY" pin file from
+#               ingredient-pins.sh is a pin only when its diff changes literal KEY=VALUE lines alone.
 #            7. Prints "check-release-version: ok — D" and why it passed.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning"
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes"
@@ -94,6 +96,29 @@ changed() {   # $1 = own or pins; prints the paths changed between B and SHA tha
   git -C "$ROOT" diff --no-renames --name-only "refs/tags/$B" "$sha" -- "$@"
 }
 
+literal_moves() {   # $1 = a path:KEY pin file; true when its diff between B and SHA changes only literal KEY=VALUE lines
+  git -C "$ROOT" diff --no-color --no-ext-diff -U0 "refs/tags/$B" "$sha" -- ":(literal)$1" | awk '
+    /^@@/ { h = 1; next }
+    !h || !/^[-+]/ { next }
+    {
+      l = substr($0, 2); sub(/\r$/, "", l)
+      if (l !~ /^[ \t]*(export[ \t]+)?[A-Z][A-Z0-9_]*=/ || l ~ /[$`]/) bad = 1
+      v = l; sub(/^[^=]*=/, "", v); if (v !~ /[^= \t]/) bad = 1
+    }
+    END { exit bad }'
+}
+
+owned() {   # writes $work/owned: the own code changed between B and SHA, less each path:KEY pin file whose literal assignments alone moved
+  pathspecs own
+  changed own > "$work/owned.all"
+  (cd "$ROOT" && sh "$SELF/ingredient-pins.sh") > "$work/ipins" || refuse "ingredient-pins.sh failed in $ROOT"
+  : > "$work/owned"
+  while IFS= read -r _f; do
+    if grep -q ":" "$work/ipins" && sed -n 's/:.*//p' "$work/ipins" | grep -qxF -- "$_f" && literal_moves "$_f"; then continue; fi
+    printf '%s\n' "$_f" >> "$work/owned"
+  done < "$work/owned.all"
+}
+
 dirs() {   # stdin = paths; prints their first components, "/" after a directory, sorted, five at most
   awk '{ i = index($0, "/"); print (i ? substr($0, 1, i) : $0) }' | LC_ALL=C sort -u | awk '
     NR <= 5 { out = out (NR > 1 ? ", " : "") $0 }
@@ -106,8 +131,7 @@ if [ "$V" != "$D" ]; then
   case "$scheme" in
     self-upstream-date|date-semver)
       if [ -n "$B" ]; then
-        pathspecs own
-        changed own > "$work/owned"
+        owned
         set --
         while IFS= read -r _s; do set -- "$@" "$_s"; done < "$work/own"
         day="$(TZ=UTC git -C "$ROOT" log -1 --first-parent --date=format-local:%Y-%m-%d --format=%cd "refs/tags/$B..$sha" -- "$@")"
@@ -147,8 +171,7 @@ fi
 
 missing="no release notes for $D — add $NR/$D/changes/<slug>"
 [ -n "$B" ] || refuse "$missing (a first release)"
-pathspecs own
-changed own > "$work/owned"
+owned
 [ ! -s "$work/owned" ] || refuse "$missing (own code changed since $B: $(dirs < "$work/owned"))"
 _rc=0; sh "$SELF/action-ref-moves.sh" --root "$ROOT" "refs/tags/$B" "$sha" > "$work/actions" 2>"$work/err" || _rc=$?
 case "$_rc" in

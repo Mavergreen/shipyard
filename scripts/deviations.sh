@@ -49,6 +49,12 @@ sed -n '/^## Conformance deviations/,/^## /p' "$root/INGREDIENTS.md" | awk '
       print "deviations.sh: \"self-upstream-exclude\" must name what it excludes: \"- self-upstream-exclude:<glob>: <reason>\"" > "/dev/stderr"
       bad = 1; next
     }
+    # spec: SKILL.md "Release notes" -- pin:<glob> declares ingredient pins the default list misses;
+    #       unscoped, or of only "*" and "/", it would make every change a pin.
+    if (check == "pin" && (!scoped || glob ~ /^[*\/]+$/)) {
+      print "deviations.sh: \"pin\" names the pin files it declares: \"- pin:<glob>: <reason>\", never a bare form or a glob of nothing but wildcards" > "/dev/stderr"
+      bad = 1; next
+    }
     # spec: SKILL.md "Acceptance on real 10.9" -- on-target:<part> names one gap in what the 10.9 guest
     #       covers; a glob there would read as the bare on-target, which exempts the repo from
     #       check 29.

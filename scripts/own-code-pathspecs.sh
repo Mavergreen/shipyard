@@ -4,11 +4,14 @@
 #          Prints, one per line, the git pathspecs that separate a repo's own code from its pins. By
 #          default the :(exclude,...) pathspecs removing everything that is not own code:
 #          UPSTREAM_VERSION, components/*/version, ingredients/**, .github/**, tests/**,
-#          release-notes/**, top-level *.md, each file declared-state.sh names, and each INGREDIENTS.md
-#          "## Conformance deviations" "- self-upstream-exclude:<glob>: <reason>". With --pins, the
+#          release-notes/**, top-level *.md, each file declared-state.sh names, each ingredient-pins.sh
+#          path (run from DIR) but a "path:KEY" one, and each INGREDIENTS.md "## Conformance deviations"
+#          "- pin:<glob>: <reason>" and "- self-upstream-exclude:<glob>: <reason>". With --pins, the
 #          positive pathspecs of the pins instead: UPSTREAM_VERSION, components/*/version,
-#          ingredients/**, each declared-state file, and each ingredient-pins.sh path (run from DIR).
-#          Exit 2 when declared-state.sh or deviations.sh refuses.
+#          ingredients/**, each declared-state file, each ingredient-pins.sh path, :KEY stripped, and
+#          each pin: glob. A "path:KEY" file is a pin only where its diff moves literal assignments,
+#          which a pathspec cannot say: check-release-version.sh reads that diff.
+#          Exit 2 when declared-state.sh, deviations.sh or ingredient-pins.sh refuses.
 # spec: scripts/self-upstream-version.sh -- the one list its version and the release-notes checks share.
 # spec: tests/own-code-pathspecs-test.sh
 set -eu
@@ -34,17 +37,28 @@ if ! sh "$SELF/declared-state.sh" "$ROOT" > "$work/decl" 2>"$work/err"; then
   exit 2
 fi
 
+_rc=0
+(cd "$ROOT" && sh "$SELF/ingredient-pins.sh") > "$work/ipins" 2>"$work/err" || _rc=$?
+if [ "$_rc" != 0 ]; then
+  cat "$work/err" >&2
+  echo "own-code-pathspecs: ingredient-pins.sh failed in $ROOT" >&2
+  exit 2
+fi
+
+if ! sh "$SELF/deviations.sh" "$ROOT" > "$work/devs" 2>"$work/err"; then
+  cat "$work/err" >&2
+  echo "own-code-pathspecs: $ROOT/INGREDIENTS.md declares a conformance deviation that deviations.sh refuses (it says why, above)" >&2
+  exit 2
+fi
+
 if [ "$PINS" = 1 ]; then
   printf '%s\n' ':(glob)UPSTREAM_VERSION' ':(glob)components/*/version' ':(glob)ingredients/**'
   cut -f2 "$work/decl" | sed 's/:.*//; s/^/:(literal)/'
-  _rc=0
-  (cd "$ROOT" && sh "$SELF/ingredient-pins.sh") > "$work/pins" 2>"$work/err" || _rc=$?
-  if [ "$_rc" != 0 ]; then
-    cat "$work/err" >&2
-    echo "own-code-pathspecs: ingredient-pins.sh failed in $ROOT" >&2
-    exit 2
-  fi
-  sed 's/:.*//; s/^/:(literal)/' "$work/pins"
+  sed 's/:.*//; s/^/:(literal)/' "$work/ipins"
+  while read -r check glob _; do
+    [ "$check" = pin ] || continue
+    printf ':(glob)%s\n' "$glob"
+  done < "$work/devs"
   exit 0
 fi
 
@@ -52,13 +66,8 @@ for p in UPSTREAM_VERSION 'components/*/version' 'ingredients/**' '.github/**' '
   printf ':(exclude,glob)%s\n' "$p"
 done
 cut -f2 "$work/decl" | sed 's/:.*//; s/^/:(exclude,literal)/'
+grep -v ':' "$work/ipins" | sed 's/^/:(exclude,literal)/' || :
 
-if ! sh "$SELF/deviations.sh" "$ROOT" > "$work/devs" 2>"$work/err"; then
-  cat "$work/err" >&2
-  echo "own-code-pathspecs: $ROOT/INGREDIENTS.md declares a conformance deviation that deviations.sh refuses (it says why, above)" >&2
-  exit 2
-fi
 while read -r check glob _; do
-  [ "$check" = self-upstream-exclude ] || continue
-  printf ':(exclude,glob)%s\n' "$glob"
+  case "$check" in pin|self-upstream-exclude) printf ':(exclude,glob)%s\n' "$glob" ;; esac
 done < "$work/devs"

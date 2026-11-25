@@ -78,6 +78,7 @@ one line):
 - scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.N by its declared counter scheme (scripts/release-version.sh), one past the largest N released on that line, cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
+- pin:scripts/*.pin: each is a KEY=VERSION pin a Renovate customManager bumps (ed25519, recaulk, renovate, stevedore), so a bump is a pins-only release whose generated notes say what moved. Reconsider if a .pin file ever holds anything but pins.
 - unpinned:scripts/cut-release.sh: it reads a repo's newest release tag before and after the run it dispatched, to report what that run published; it fetches nothing and builds nothing. Reconsider if it ever downloads an asset.
 - unpinned:scripts/audit-release-sdks.sh: the SDK-pinning acceptance audit exists to judge what each repo has shipped most recently, so it downloads each repo's newest release (verified against its SHA256SUMS). It builds and signs nothing. Reconsider if it is ever wired into a release path.
 - unpinned:scripts/gen-conventions-grandfathered.sh: it grandfathers the arm64 slices each repo ships today, so it reads each repo's newest release and downloads its pkgs to inspect them. It builds, signs and publishes nothing. Reconsider if it is ever wired into a release path.

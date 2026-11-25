@@ -76,6 +76,15 @@ for bad in '- self-upstream-exclude: no own code' '- self-upstream-exclude:*: x'
   if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: '$bad' must be refused; got: $out"; exit 1; fi
   printf '%s\n' "$out" | grep -q 'self-upstream-exclude' || { echo "FAIL: '$bad': the refusal names self-upstream-exclude: $out"; exit 1; }
 done
+# spec: SKILL.md "Release notes" -- pin:<glob> declares ingredient pins the default list misses; one
+#       that names nothing, or only "*" and "/", would make every change a pin.
+printf '## Conformance deviations\n- pin:scripts/*.pin: Renovate bumps them\n' > "$w/INGREDIENTS.md"
+sh "$S" "$w" | grep -qx 'pin scripts/\*.pin Renovate bumps them' || { echo "FAIL: pin:<glob> parses; got: $(sh "$S" "$w" 2>&1)"; exit 1; }
+for bad in '- pin: every pin' '- pin:*: x' '- pin:**: x'; do
+  printf '## Conformance deviations\n%s\n' "$bad" > "$w/INGREDIENTS.md"
+  if out="$(sh "$S" "$w" 2>&1)"; then echo "FAIL: '$bad' must be refused; got: $out"; exit 1; fi
+  printf '%s\n' "$out" | grep -q -- '- pin:<glob>: <reason>' || { echo "FAIL: '$bad': the refusal names the form: $out"; exit 1; }
+done
 # spec: scripts/assert_binary_compatible.sh header -- objc-api:<artifact glob> names one artifact scope and points at
 #       one reviewed evidence record, evidence=<repo-relative file>#<record id>, then gives the review reason; an
 #       unscoped, all-wildcard, evidence-less, record-less or reasonless one would excuse sends in silence.

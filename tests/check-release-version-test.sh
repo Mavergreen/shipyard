@@ -119,6 +119,58 @@ upstream rt/UPSTREAM_VERSION 1.3
 chk 0 "check-release-version: ok — 1.3-mavericks.1" "the declared upstream file is a pin, not own code" \
   --product rt --version 1.3-mavericks.1 --sha HEAD --publishing yes
 
+bump() {   # $1 = commit message; commits $R's working tree
+  git -C "$R" add -A
+  git -C "$R" commit -qm "$1"
+}
+
+pin_repo() {   # $1 = case, $2 = a "## Conformance deviations" entry or ""; a counter repo with pins outside the default list
+  empty "$1"
+  mkdir -p "$R/.github/workflows" "$R/scripts"
+  printf '%s\n' 'on:' '  push:' '    paths:' '      - tools.env' '      - pins.env' 'jobs:' '  r:' \
+    '    uses: Mavergreen/shipyard/.github/workflows/repackage-on-ingredient-bump.yml@v1' '    with:' \
+    '      own-upstream-paths: "pins.env:SWIFT_VERSION"' > "$R/.github/workflows/repackage-on-ingredient-bump.yml"
+  printf 'RECAULK_VERSION=1\n' > "$R/scripts/recaulk.pin"
+  printf 'T=1\n' > "$R/tools.env"
+  printf '# the pins\nSWIFT_VERSION=5.9\nLLVM_REF=abc\n' > "$R/pins.env"
+  printf '# Ingredients\n\n## Versioning\n\n- counter\n\n## Conformance deviations\n\n%s\n' "$2" > "$R/INGREDIENTS.md"
+  at 2026-10-12T12:00:00Z src/main.c
+  upstream UPSTREAM_VERSION 1.0
+  git -C "$R" tag v1.0.920
+}
+
+pin_repo pinundeclared ""
+at 2026-10-13T12:00:00Z scripts/recaulk.pin
+chk 1 "own code changed since v1.0.920: scripts/" "an undeclared .pin is own code" --product x --version v1.0.921 --sha HEAD --publishing yes
+
+pin_repo pindeclared "- pin:scripts/*.pin: Renovate bumps them"
+at 2026-10-13T12:00:00Z scripts/recaulk.pin
+chk 0 "check-release-version: ok — v1.0.921 (only pins moved since v1.0.920)" "a declared pin: glob is a pin" \
+  --product x --version v1.0.921 --sha HEAD --publishing yes
+
+pin_repo callerpin ""
+at 2026-10-13T12:00:00Z tools.env
+chk 0 "only pins moved since v1.0.920" "a path the repackage caller watches is a pin" \
+  --product x --version v1.0.921 --sha HEAD --publishing yes
+
+pin_repo keyedpin ""
+sed 's/LLVM_REF=abc/LLVM_REF=def/' "$R/pins.env" > "$R/pins.env.new" && mv "$R/pins.env.new" "$R/pins.env"
+bump "bump llvm"
+chk 0 "only pins moved since v1.0.920" "a path:KEY file whose assignments moved is a pin" \
+  --product x --version v1.0.921 --sha HEAD --publishing yes
+
+pin_repo keyedcode ""
+sed 's/# the pins/# the pins, read by build.sh/' "$R/pins.env" > "$R/pins.env.new" && mv "$R/pins.env.new" "$R/pins.env"
+bump "reword"
+chk 1 "own code changed since v1.0.920: pins.env" "a non-pin line of a path:KEY file is own code" \
+  --product x --version v1.0.921 --sha HEAD --publishing yes
+
+pin_repo keyedderived ""
+sed 's/LLVM_REF=abc/LLVM_REF="$(cat llvm.ref)"/' "$R/pins.env" > "$R/pins.env.new" && mv "$R/pins.env.new" "$R/pins.env"
+bump "derive llvm"
+chk 1 "own code changed since v1.0.920: pins.env" "a derived assignment in a path:KEY file is own code" \
+  --product x --version v1.0.921 --sha HEAD --publishing yes
+
 wf() {   # $1 = checkout line's ref and comment, $2 = run line, $3 = scan's ref, $4 = an extra line; written to $R
   mkdir -p "$R/.github/workflows"
   printf 'on: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: actions/checkout@%s\n      - run: %s\n%s  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan.yml@%s\n' \
@@ -132,11 +184,6 @@ action_repo() {   # $1 = case; a port repo whose tagged workflow pins two action
   decl "- port"
   upstream UPSTREAM_VERSION 1.2
   git -C "$R" tag 1.2-mavericks.1
-}
-
-bump() {   # $1 = commit message; commits $R's working tree
-  git -C "$R" add -A
-  git -C "$R" commit -qm "$1"
 }
 
 action_repo actionbump

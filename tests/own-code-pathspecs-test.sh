@@ -32,6 +32,19 @@ echo 1 > "$w/pw/tools.env"; git -C "$w/pw" add tools.env
 sh "$P" --root "$w/pw" --pins > "$w/out"
 grep -qxF ':(literal)tools.env' "$w/out" || { echo "FAIL: --pins must list each ingredient-pins.sh path, :KEY stripped"; cat "$w/out"; exit 1; }
 
+grep -qxF ':(exclude,literal)tools.env' "$w/out" && { echo "FAIL: a path:KEY pin file stays own code until its diff is read"; cat "$w/out"; exit 1; }
+printf '%s\n' 'jobs:' '  r:' '    with:' '      paths: ["tools.env", "vendor.env"]' '      own-upstream-paths: tools.env:X' \
+  > "$w/pw/.github/workflows/repackage-on-ingredient-bump.yml"
+printf '%s\n' '# Build ingredients' '' '## Declared state' '' '- upstream: UPSTREAM_VERSION' '' \
+  '## Conformance deviations' '' '- pin:scripts/*.pin: Renovate bumps them' > "$w/pw/INGREDIENTS.md"
+echo 1 > "$w/pw/vendor.env"; git -C "$w/pw" add vendor.env
+sh "$P" --root "$w/pw" > "$w/out"
+grep -qxF ':(exclude,literal)vendor.env' "$w/out" || { echo "FAIL: each ingredient-pins.sh path is not own code"; cat "$w/out"; exit 1; }
+grep -qxF ':(exclude,glob)scripts/*.pin' "$w/out" || { echo "FAIL: a declared pin: glob is not own code"; cat "$w/out"; exit 1; }
+grep -qF 'tools.env' "$w/out" && { echo "FAIL: a path:KEY pin file stays own code until its diff is read"; cat "$w/out"; exit 1; }
+sh "$P" --root "$w/pw" --pins > "$w/out"
+grep -qxF ':(glob)scripts/*.pin' "$w/out" || { echo "FAIL: --pins lists a declared pin: glob"; cat "$w/out"; exit 1; }
+
 mkdir -p "$w/bad"
 printf '%s\n' '# Build ingredients' '' '## Declared state' '' '- upstream:' > "$w/bad/INGREDIENTS.md"
 _rc=0; sh "$P" --root "$w/bad" >"$w/out" 2>"$w/err" || _rc=$?
