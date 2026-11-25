@@ -1513,10 +1513,14 @@ on one (check 40d). Revisit if a release path that needs a tag-triggered run ret
   publishes needs them; a feedback push does not. The one exception is a **pins-only release**: since
   the last release tag no own code changed (`own-code-pathspecs.sh`'s list, with the declared upstream
   file excluded), at least one pin did (`UPSTREAM_VERSION`, the declared upstream file, `components/*/version`,
-  `ingredients/**`, a declared-state file, an ingredient pin), and the generated notes say what moved
-  (`### Build ingredients` or `- New upstream: `). A Renovate upstream bump and an ingredient's `.N+1`
-  are this case, covered by the generated notes. Committed notes are required whenever own code or
-  packaging changed. Revisit if generated notes mislead about what changed.
+  `ingredients/**`, a declared-state file, an ingredient pin, an action's ref), and the generated notes
+  say what moved (`### Build ingredients`, `### Pinned actions` or `- New upstream: `). An action's ref
+  is a `uses: OWNER/REPO[/PATH]@REF` line under `.github/` whose only change is its `@REF` and trailing
+  `# VERSION` comment; any other change under `.github/` needs committed notes. Revisit if a ref bump
+  that changes behaviour users notice ships with no committed note. A Renovate upstream bump, an
+  ingredient's `.N+1` and an action's ref bump are this case, covered by the generated notes. Committed
+  notes are required whenever own code or packaging changed. Revisit if generated notes mislead about
+  what changed.
 
   **semver adds `release-notes/<TAG>/kind`**: one word, `major`, `minor` or `patch`, and the version is
   exactly that step from the newest semver tag. The agent writing the notes classifies from the diff

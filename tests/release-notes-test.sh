@@ -1190,4 +1190,42 @@ B="$work/wrongtop/openssh-9.9p2-mavericks.1-macos-x86_64.tar.gz"; mkdir -p "$wor
 mkarchive "$B" openssh-9.9p2 bin/ssh || exit 1
 if gen "$r" 9.9p2-mavericks.1 --standalone "$B" >/dev/null 2>&1; then echo "FAIL stand: its top directory must be openssh-9.9p2-mavericks.1/"; exit 1; fi
 
+# spec: SKILL.md "Release notes" -- an action whose ref moved is a pin, and the notes name it.
+ci() {  # $1 = repo, $2 = checkout's ref and comment, $3 = run line
+  printf 'on: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: actions/checkout@%s\n      - run: %s\n' \
+    "$2" "$3" > "$1/.github/workflows/ci.yml"
+}
+r="$work/actionbump"; mkrepo "$r"
+ci "$r" "0123abc # v4.1.1" make
+( cd "$r" && git add -A && git commit -qm ci && git tag v1.0.208 ) || exit 1
+ci "$r" "4567def # v4.2.0" make
+sed 's/repackage-on-ingredient-bump.yml@v1/repackage-on-ingredient-bump.yml@v2/' \
+  "$r/.github/workflows/repackage-on-ingredient-bump.yml" > "$r/caller" && mv "$r/caller" "$r/.github/workflows/repackage-on-ingredient-bump.yml"
+( cd "$r" && git commit -qam "bump actions" ) || exit 1
+gen "$r" v1.0.209 --product Shipyard >/dev/null
+grep -qx '### Pinned actions' "$r/OUT.md" || { echo "FAIL actionbump: section"; cat "$r/OUT.md"; exit 1; }
+grep -qx -- '- actions/checkout: v4.1.1 → v4.2.0' "$r/OUT.md" || { echo "FAIL actionbump: checkout"; cat "$r/OUT.md"; exit 1; }
+grep -qx -- '- Mavergreen/shipyard: v1 → v2' "$r/OUT.md" || { echo "FAIL actionbump: a reusable workflow's repo"; cat "$r/OUT.md"; exit 1; }
+
+r="$work/actionlogic"; mkrepo "$r"
+ci "$r" "0123abc # v4.1.1" make
+( cd "$r" && git add -A && git commit -qm ci && git tag v1.0.208 ) || exit 1
+ci "$r" "0123abc # v4.1.1" "make check"
+( cd "$r" && git commit -qam "test too" ) || exit 1
+gen "$r" v1.0.209 --product Shipyard >/dev/null
+grep -q 'Pinned actions' "$r/OUT.md" && { echo "FAIL actionlogic: no ref moved, no section"; cat "$r/OUT.md"; exit 1; }
+
+r="$work/actionmixed"; mkrepo "$r"
+ci "$r" "0123abc # v4.1.1" make
+( cd "$r" && git add -A && git commit -qm ci && git tag 9.9p2-mavericks.1 ) || exit 1
+ci "$r" "4567def" make
+printf '3.9.2\n' > "$r/components/libressl/version"
+( cd "$r" && git commit -qam "bump checkout and libressl" ) || exit 1
+gen "$r" 9.9p2-mavericks.2 >/dev/null
+grep -qx '### Build ingredients' "$r/OUT.md" || { echo "FAIL actionmixed: ingredients"; cat "$r/OUT.md"; exit 1; }
+grep -qx -- '- actions/checkout: v4.1.1 → 4567def' "$r/OUT.md" || { echo "FAIL actionmixed: checkout"; cat "$r/OUT.md"; exit 1; }
+i="$(grep -n '^### Build ingredients$' "$r/OUT.md" | cut -d: -f1)"
+j="$(grep -n '^### Pinned actions$' "$r/OUT.md" | cut -d: -f1)"
+[ "$i" -lt "$j" ] || { echo "FAIL actionmixed: ingredients come first"; cat "$r/OUT.md"; exit 1; }
+
 echo "PASS: release-notes"

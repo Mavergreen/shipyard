@@ -9,8 +9,8 @@
 #            4. NR/next is gone (NR is release-notes/, or release-notes/SHORT/ when that exists).
 #            5. semver: NR/D/kind exists.
 #            6. NR/D/changes/ commits a file named [a-z0-9-]+, or only pins moved since --previous
-#               (no own code, a pin, and FILE, when given, has "### Build ingredients" or
-#               "- New upstream: ").
+#               (no own code, nothing in .github/ but action refs, a pin or an action ref, and FILE,
+#               when given, has "### Build ingredients", "### Pinned actions" or "- New upstream: ").
 #            7. Prints "check-release-version: ok — D" and why it passed.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning"
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes"
@@ -150,11 +150,17 @@ missing="no release notes for $D — add $NR/$D/changes/<slug>"
 pathspecs own
 changed own > "$work/owned"
 [ ! -s "$work/owned" ] || refuse "$missing (own code changed since $B: $(dirs < "$work/owned"))"
+_rc=0; sh "$SELF/action-ref-moves.sh" --root "$ROOT" "refs/tags/$B" "$sha" > "$work/actions" 2>"$work/err" || _rc=$?
+case "$_rc" in
+  0) : ;;
+  1) refuse "$missing ($(sed -n "s/^action-ref-moves: \(.*\): /\1 since $B: /p" "$work/err"))" ;;
+  *) sed 's/^/check-release-version: /' "$work/err" >&2; exit 2 ;;
+esac
 pathspecs pins
 changed pins > "$work/pinned"
-[ -s "$work/pinned" ] || refuse "$missing (no pin moved since $B)"
+[ -s "$work/pinned" ] || [ -s "$work/actions" ] || refuse "$missing (no pin moved since $B)"
 if [ -n "$NOTES" ]; then
-  if ! grep -qE '^### Build ingredients[[:space:]]*$' "$NOTES" && ! grep -q '^- New upstream: ' "$NOTES"; then
+  if ! grep -qE '^### (Build ingredients|Pinned actions)[[:space:]]*$' "$NOTES" && ! grep -q '^- New upstream: ' "$NOTES"; then
     refuse "$missing (the generated notes do not say what moved)"
   fi
   echo "check-release-version: ok — $D (only pins moved since $B, and the generated notes say what moved)"

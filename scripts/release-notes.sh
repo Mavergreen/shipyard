@@ -16,7 +16,8 @@
 #     Release body, which are the same bytes by construction. Sections, in order: title, committed
 #     prose (verbatim, never rewritten), Before you update (only with requires/ or rebuild), What
 #     changed, Our patches (only when one changed), Build ingredients (only when a pin moved),
-#     Standalone archive (only with --standalone), footer.
+#     Pinned actions (only when an action's ref moved), Standalone archive (only with --standalone),
+#     footer.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes" --
 #       NOTES ARE PART OF THE RELEASE CONTRACT: every gap here is fatal and names its cause. The old
 #       doctrine -- prose must never fail a release -- meant every section was appended with
@@ -175,7 +176,7 @@ fi
 
 tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes.XXXXXX")"
 footer_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-footer.XXXXXX")"
-trap 'rm -f "$tmp" "$footer_tmp"' EXIT
+trap 'rm -f "$tmp" "$footer_tmp" "$tmp.err"' EXIT
 
 if [ "$SELF_UPSTREAM" = yes ]; then
   printf '## %s %s\n' "$PRODUCT" "$VER" > "$tmp"
@@ -362,6 +363,14 @@ if [ -n "$PREV" ] && [ -n "$PINS" ]; then
     || die "cannot read the ingredient pins that moved since $PREV; a repackage that cannot say what moved must not ship"
 fi
 
+# spec: SKILL.md "Release notes" -- an action's ref is a pin, so a release where only refs moved says which.
+ACTIONS=""
+if [ -n "$PREV" ]; then
+  ACTIONS="$(sh "$SELF/action-ref-moves.sh" --root "$MAVERICKS_ROOT" "$PREV" HEAD 2>"$tmp.err")" && arc=0 || arc=$?
+  [ "$arc" -le 1 ] || { cat "$tmp.err" >&2; die "cannot read which actions' refs moved since $PREV (see the complaint above)"; }
+  [ -z "$ACTIONS" ] || ACTIONS="$(printf '### Pinned actions\n%s\n' "$ACTIONS" | awk -F'\t' 'NR == 1 { print; next } { printf "- %s: %s → %s\n", $1, $2, $3 }')"
+fi
+
 # spec: tests/release-notes-test.sh "patchadd" -- tailscale 1.102.4-mavericks.7 added
 #       patches/darwin-exit-nodes.patch (exit nodes on macOS) and its notes still said "packaging
 #       changes only": a change to OUR modifications of the upstream source is a behaviour change a
@@ -464,6 +473,7 @@ fi
 
 [ -z "$PATCHES" ] || printf '\n%s\n' "$PATCHES" >> "$tmp"
 [ -z "$INGREDIENTS" ] || printf '\n%s\n' "$INGREDIENTS" >> "$tmp"
+[ -z "$ACTIONS" ] || printf '\n%s\n' "$ACTIONS" >> "$tmp"
 [ -z "$STANDALONE_TEXT" ] || printf '\n%s\n' "$STANDALONE_TEXT" >> "$tmp"
 
 # spec: tests/release-notes-test.sh "nofooter"/"withfooter" -- the footer's '---' rule is buffered

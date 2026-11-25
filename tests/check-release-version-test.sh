@@ -119,9 +119,58 @@ upstream rt/UPSTREAM_VERSION 1.3
 chk 0 "check-release-version: ok — 1.3-mavericks.1" "the declared upstream file is a pin, not own code" \
   --product rt --version 1.3-mavericks.1 --sha HEAD --publishing yes
 
+wf() {   # $1 = checkout line's ref and comment, $2 = run line, $3 = scan's ref, $4 = an extra line; written to $R
+  mkdir -p "$R/.github/workflows"
+  printf 'on: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: actions/checkout@%s\n      - run: %s\n%s  scan:\n    uses: Mavergreen/shipyard/.github/workflows/scan.yml@%s\n' \
+    "$1" "$2" "$4" "$3" > "$R/.github/workflows/ci.yml"
+}
+
+action_repo() {   # $1 = case; a port repo whose tagged workflow pins two actions
+  empty "$1"
+  wf "0123abc # v4.1.1" make v1 ""
+  at 2026-10-12T12:00:00Z src/main.c components/zlib/version
+  decl "- port"
+  upstream UPSTREAM_VERSION 1.2
+  git -C "$R" tag 1.2-mavericks.1
+}
+
+bump() {   # $1 = commit message; commits $R's working tree
+  git -C "$R" add -A
+  git -C "$R" commit -qm "$1"
+}
+
+action_repo actionbump
+wf "4567def # v4.2.0" make v2 ""
+bump "bump actions"
+chk 0 "check-release-version: ok — 1.2-mavericks.2 (only pins moved" "actionbump" \
+  --product x --version 1.2-mavericks.2 --sha HEAD --mode local --publishing yes
+printf '## What changed\n\n### Pinned actions\n\n- actions/checkout: v4.1.1 → v4.2.0\n' > "$w/act-notes"
+chk 0 "" "actionbump, generated notes with Pinned actions" \
+  --product x --version 1.2-mavericks.2 --sha HEAD --mode local --publishing yes --notes-file "$w/act-notes"
+chk 1 "do not say what moved" "actionbump, generated notes without markers" \
+  --product x --version 1.2-mavericks.2 --sha HEAD --mode local --publishing yes --notes-file "$w/bare-notes"
+
+action_repo actionlogic
+wf "4567def # v4.2.0" "make check" v1 ""
+bump "bump checkout, and test too"
+chk 1 "no release notes for 1.2-mavericks.2 — add release-notes/1.2-mavericks.2/changes/<slug> (.github/ changed other than an action's ref since 1.2-mavericks.1: .github/workflows/ci.yml)" \
+  "actionlogic" --product x --version 1.2-mavericks.2 --sha HEAD --mode local --publishing yes
+
+action_repo actionadd
+wf "0123abc # v4.1.1" make v1 "      - uses: actions/cache@v4
+"
+bump "cache"
+chk 1 "no release notes for 1.2-mavericks.2" "actionadd" \
+  --product x --version 1.2-mavericks.2 --sha HEAD --mode local --publishing yes
+
+action_repo actionmixed
+wf "4567def # v4.2.0" make v1 ""
+at 2026-10-13T12:00:00Z components/zlib/version
+chk 0 "only pins moved" "mixed" --product x --version 1.2-mavericks.2 --sha HEAD --mode local --publishing yes
+
 port_repo workflowonly "- port" UPSTREAM_VERSION
 at 2026-10-13T12:00:00Z .github/workflows/ci.yml
-chk 1 "no pin moved" "workflowonly" --product x --version 1.2-mavericks.2 --sha HEAD --mode local --publishing yes
+chk 1 ".github/ changed other than an action's ref" "workflowonly" --product x --version 1.2-mavericks.2 --sha HEAD --mode local --publishing yes
 
 port_repo rename "- port" UPSTREAM_VERSION
 mkdir -p "$R/ingredients"; git -C "$R" mv payload/a ingredients/a
