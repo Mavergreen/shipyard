@@ -81,22 +81,28 @@ wire_sdk() {
   case "$1" in
     "$W"/*) : ;;
     *)
-      if [ ! -e "$1/SDKs" ] && [ ! -L "$1/SDKs" ] && [ -d "$1/../$_wprod/SDKs/$2" ]; then
-        ln -s "../$_wprod/SDKs" "$1/SDKs" 2>/dev/null || :
+      [ -d "$1/../$_wprod/SDKs/$2" ] \
+        || die "$1 has no SDKs/$2, which its clang.cfg names, and no $_wprod product beside it holds one: install $_wprod (install-products.sh $_wprod@TAG)"
+      if [ ! -e "$1/SDKs" ] && [ ! -L "$1/SDKs" ]; then
+        ln -s "../$_wprod/SDKs" "$1/SDKs" 2>/dev/null \
+          || die "$1 has no SDKs/$2, which its clang.cfg names, and cannot be written to link SDKs to ../$_wprod/SDKs"
       fi
       [ -d "$1/SDKs/$2" ] \
-        || die "$1 has no SDKs/$2, which its clang.cfg names, and no $_wprod product beside it to link: install $_wprod (install-products.sh $_wprod@TAG)"
+        || die "$1 has an SDKs that is not ../$_wprod/SDKs and holds no $2, which its clang.cfg names: reinstall clang22"
       return 0 ;;
   esac
   _wsdk="$(MAVERICKS_SDK_SETTINGS_JSON='' sh "$S/fetch_sdk.sh" --arch "$_ws")" || die "fetch_sdk.sh --arch $_ws could not provide $2 for $1"
   if [ -L "$1/SDKs" ]; then
     _wt="$(readlink "$1/SDKs")"
     case "$_wt" in /*) : ;; *) _wt="$1/$_wt" ;; esac
-    { mkdir -p "$_wt" && ln -s "$_wsdk" "$_wt/$2"; } 2>/dev/null || :
-  elif [ "$2" = MacOSX10.9.sdk ] && [ -x "$1/bin/setup-sdk" ]; then
+  else
+    _wt="$1/SDKs"
+  fi
+  if [ -L "$_wt/$2" ] && [ ! -d "$_wt/$2" ]; then rm -f "$_wt/$2" || :; fi
+  if [ ! -L "$1/SDKs" ] && [ "$2" = MacOSX10.9.sdk ] && [ -x "$1/bin/setup-sdk" ]; then
     "$1/bin/setup-sdk" "$_wsdk" > /dev/null || :
   else
-    { mkdir -p "$1/SDKs" && ln -s "$_wsdk" "$1/SDKs/$2"; } 2>/dev/null || :
+    { mkdir -p "$_wt" && ln -s "$_wsdk" "$_wt/$2"; } 2>/dev/null || :
   fi
   [ -d "$1/SDKs/$2" ] || die "$1 has no SDKs/$2, which its clang.cfg names, and $_wsdk could not be wired there"
 }
