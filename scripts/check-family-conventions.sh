@@ -865,7 +865,7 @@ for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>
        "build it with stevedore's component and product commands, or declare '- packager:$f: <why it must, and its exit>' under INGREDIENTS.md's ## Conformance deviations (see the conventions skill, check 35)"
 done
 
-# spec: SKILL.md "Family conventions" check 40 -- what the unified toolchains removed or renamed is
+# spec: SKILL.md "Family conventions" check 41 -- what the unified toolchains removed or renamed is
 #       refused by name. tests/ and test/ are excluded, as in check 35: a test asserting a name is gone
 #       has to name it. Like check 16, no pattern below spells a name it matches, or this gate is its
 #       own first offender.
@@ -888,7 +888,7 @@ for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*
   [ -n "$_why" ] || continue
   excused toolchain-names "$f" && continue
   fail "toolchain-names $f: names what the unified toolchains removed or renamed${_why}" \
-       "make each change named above, or declare '- toolchain-names:$f: <reason, exit>' under INGREDIENTS.md's ## Conformance deviations (see the conventions skill, check 40)"
+       "make each change named above, or declare '- toolchain-names:$f: <reason, exit>' under INGREDIENTS.md's ## Conformance deviations (see the conventions skill, check 41)"
 done
 
 # spec: SKILL.md "Family conventions" check 36 -- a job on a macos-* runner needs a declared reason:
