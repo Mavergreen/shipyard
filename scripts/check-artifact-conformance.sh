@@ -12,6 +12,8 @@
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
 #            manifest-requires-on-host <file> <arch> <spec> <repo|none>  one per entry of that manifest's requires-on-host; repo is what scripts/product-names registers the spec's product to
+#            manifest-slim-host <file> <glob>                     one per entry of that manifest's slim-host (%20-encoded)
+#            manifest-fat-host <file> yes|no                      whether that product's bin/ or libexec/ holds a fat Mach-O
 #            registered    <product> <identifier|none> <repo|none>     what scripts/product-names registers the product to
 #            derived       <product> <bundle-id> <label> <app> <feed>  the updater identity product-name.sh derives for it
 #            manifest-line <file> <line|none>                     that manifest's line
@@ -250,6 +252,15 @@ while read -r _ rf ra rs rr; do
   [ "$(awk -v p="$rf" '$2 == p { print $3; exit }' "$tmp/manifests")" != "${rs%%>=*}" ] \
     || fail requires-on-host "$rf requires ${rs%%>=*} on $ra, which is its own product" "$rf"
 done < "$tmp/reqhost"
+
+# spec: tests/artifact-conformance-test.sh -- slimming touches only slim-host files, so a product whose
+#       bin/ or libexec/ holds fat Mach-O host executables declares where its host payload is.
+grep '^manifest-fat-host ' "$facts" > "$tmp/fathost" || true
+while read -r _ ff fh; do
+  [ "$fh" = yes ] || continue
+  awk -v f="$ff" '$1 == "manifest-slim-host" && $2 == f { k = 1 } END { exit !k }' "$facts" \
+    || fail slim-host "$ff has fat host executables under bin/ or libexec/ but declares no --slim-host; declare the paths that hold its host programs and the libraries they load" "$ff"
+done < "$tmp/fathost"
 
 # spec: tests/artifact-conformance-test.sh -- line identity: an updater's app, bundle id, label and
 #       feed are the derived record's, a lined product's line is its version and its repo's suffix,
