@@ -1,21 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
-# -DSHIPYARD_FULL_VERSION wins (the install action's checkout has no .git); then VERSION (a gitignored
-# build product) when present -- release.yml writes it. Otherwise derive
-# from the commit count, so a developer's `cmake --install` from a checkout stamps the REAL version
-# rather than the bare line: an install is a snapshot with no staleness signal of its own, and the
-# number it carries is the only way to tell one apart from another. UPSTREAM_VERSION is the last
-# resort, for a tarball with no .git (it yields the line, which is honest about being imprecise).
+# spec: the version is -DSHIPYARD_FULL_VERSION, else VERSION, else release-version.sh --product shipyard without its leading v, else UPSTREAM_VERSION.
 if(DEFINED SHIPYARD_FULL_VERSION)
   set(_MSC_VERSION "${SHIPYARD_FULL_VERSION}")
 elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
   file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" _MSC_VERSION LIMIT_COUNT 1)
 else()
   execute_process(
-    COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/scripts/shipyard-version.sh"
+    COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/scripts/release-version.sh" --product shipyard --root "${CMAKE_CURRENT_SOURCE_DIR}"
     OUTPUT_VARIABLE _MSC_VERSION_OUT ERROR_QUIET RESULT_VARIABLE _MSC_VERSION_RC
     OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(_MSC_VERSION_RC EQUAL 0)
-    string(REGEX MATCH "FULL=([^\n]*)" _MSC_VERSION_MATCH "${_MSC_VERSION_OUT}")
+  if(_MSC_VERSION_RC EQUAL 0 AND _MSC_VERSION_OUT MATCHES "^v?([0-9][0-9.]*)$")
     set(_MSC_VERSION "${CMAKE_MATCH_1}")
   else()
     file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/UPSTREAM_VERSION" _MSC_VERSION LIMIT_COUNT 1)

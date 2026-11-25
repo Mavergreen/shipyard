@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (shipyard-version.sh refuses a shallow clone)
+          fetch-depth: 0      # spec: tests/shipyard-workflow-coupling-test.sh (release-version.sh refuses a shallow clone)
 
       # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
       - uses: actions/cache@v6
@@ -73,7 +73,7 @@ jobs:
       - name: Package
         run: |
           set -eu
-          v="$(sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p')"
+          v="$(sh scripts/release-version.sh --product shipyard)"; v="${v#v}"
           echo "rehearsing the pkg for $v"
           mkdir -p "$RUNNER_TEMP/dist"
           # spec: scripts/stage-shipyard-prefix.sh -- the one staging of the prefix, which install@v1 lays down
@@ -109,7 +109,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/inputs"
           tar -cf "$RUNNER_TEMP/inputs/payload-stage.tar" -C "$RUNNER_TEMP" payload-stage
           tar -cf "$RUNNER_TEMP/inputs/shipyard-updater.app.tar" -C "$RUNNER_TEMP" shipyard-updater.app
-          sh scripts/shipyard-version.sh | sed -n 's/^FULL=//p' > "$RUNNER_TEMP/inputs/version"
+          t="$(sh scripts/release-version.sh --product shipyard)"
+          printf '%s\n' "${t#v}" > "$RUNNER_TEMP/inputs/version"
 
       - name: Save the packaging inputs
         uses: actions/upload-artifact@v7

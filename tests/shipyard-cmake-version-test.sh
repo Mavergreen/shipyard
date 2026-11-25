@@ -6,7 +6,7 @@ root="$(cd "$here/.." && pwd)"
 command -v cmake >/dev/null 2>&1 || { echo "SKIP: no cmake"; exit 77; }
 work="$(mktemp -d "${TMPDIR:-/tmp}/shipyard-cmakever.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
-want="$(sh "$root/scripts/shipyard-version.sh" | sed -n 's/^FULL=//p')"
+want="$(sh "$root/scripts/release-version.sh" --product shipyard --root "$root")"; want="${want#v}"
 cmake -S "$root" -B "$work/b" >/dev/null 2>&1 || { echo "FAIL: configure failed"; exit 1; }
 got="$(sed -n 's/^set(PACKAGE_VERSION "\(.*\)")$/\1/p' "$work/b/MavericksShipyardConfigVersion.cmake" | head -1)"
 [ "$got" = "$want" ] \

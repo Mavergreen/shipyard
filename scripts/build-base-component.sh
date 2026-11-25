@@ -2,7 +2,7 @@
 # platform: host-agnostic
 #   usage: build-base-component.sh [--version V] --out COMP.pkg
 #          With no --version: the installed shipyard's version, else $SHIPYARD_VERSION (install@v1 sets it
-#          off macOS), else shipyard-version.sh from the checkout's git history.
+#          off macOS), else release-version.sh --product shipyard from the checkout's git history.
 #          build-base-component.sh --emit-postinstall FILE --version V
 #          Builds dev.mavergreen.base: the mavergreen helper and the paths.d/manpaths.d entries,
 #          staged under /usr/local/mavergreen/.base/<V>/ and installed by its postinstall only over a
@@ -26,7 +26,7 @@ if [ -z "$VER" ]; then
   elif [ -n "${SHIPYARD_VERSION:-}" ]; then
     VER="$SHIPYARD_VERSION"
   else
-    VER="$(sh "$SELF/shipyard-version.sh" | sed -n 's/^FULL=//p')"
+    VER="$(sh "$SELF/release-version.sh" --product shipyard --root "$SELF/..")"; VER="${VER#v}"
   fi
 fi
 case "$VER" in ''|*[!0-9.]*|.*|*.|*..*) echo "build-base-component: version must be dotted numeric, got '$VER'" >&2; exit 2 ;; esac

@@ -20,7 +20,7 @@ done
 _tmp="${TMPDIR:-/tmp}"
 w="$(mktemp -d "${_tmp%/}/payload-cmake.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 cmake -S "$root" -B "$w/b" > "$w/configure.log" 2>&1 || { sed 's/^/    | /' "$w/configure.log"; fail "configure failed"; }
-want="$(sh "$root/scripts/shipyard-version.sh" | sed -n 's/^FULL=//p')"
+want="$(sh "$root/scripts/release-version.sh" --product shipyard --root "$root")"; want="${want#v}"
 cv="$w/b/MavericksShipyardConfigVersion.cmake"
 major="${want%%.*}"
 sed -e "s/@PROJECT_VERSION@/$want/g" -e "s/@PROJECT_VERSION_MAJOR@/$major/g" \

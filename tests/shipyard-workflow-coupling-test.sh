@@ -16,9 +16,9 @@ for name in ("ci.yml", "release.yml"):
             if "actions/checkout" in (step.get("uses") or ""):
                 depth = (step.get("with") or {}).get("fetch-depth")
                 if str(depth) != "0":
-                    bad.append("%s job %s checks out with fetch-depth=%r; shipyard-version.sh "
-                               "refuses a shallow clone (a --depth 1 clone would silently yield "
-                               "1.0.1, colliding with a real tag) -- ci.yml once lacked this and "
+                    bad.append("%s job %s checks out with fetch-depth=%r; release-version.sh "
+                               "refuses a shallow clone (a --depth 1 clone sees no tags, so it would "
+                               "silently yield v1.0.1, colliding with a real tag) -- ci.yml once lacked this and "
                                "went red the moment the shallow guard landed, the failure surfacing "
                                "as \"installed package says '1.0', derived version is ''\", nowhere "
                                "near the checkout step" % (name, job, depth))

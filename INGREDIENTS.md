@@ -12,8 +12,10 @@ reference set lives in this repository any more; they are Drydock's. Drydock's `
 the public domain, so shipping its reference set carries no notice obligation.
 
 This repo is consumed through a **moving** tag. Fifteen repos pin `@v1`, so anything merged here reaches
-all of them within minutes — which is why the version is derived from the commit count (see
-`scripts/shipyard-version.sh`) rather than bumped by hand.
+all of them within minutes — which is why every push to `main` is a release whose version the
+`counter` scheme derives (`scripts/release-version.sh --product shipyard`) rather than one bumped by
+hand: `v<line>.N`, where N is one more than the largest N among the `v<line>.N` tags merged into the
+commit.
 
 | Ingredient | Pinned in | Renovate | On a bump |
 |---|---|---|---|
@@ -27,7 +29,7 @@ all of them within minutes — which is why the version is derived from the comm
 | stevedore 20261027.1 (the Mavergreen packager that writes and reads family pkgs) | `scripts/stevedore.pin` | ✅ Renovate customManager (github-releases Mavergreen/stevedore) | `scripts/fetch_stevedore.sh` fetches that release (SHA256SUMS-verified, `--version` checked); a bump runs shipyard's full CI against it and the merge releases shipyard |
 | clang22 22.1.8-mavericks.16 / libclang for the Objective-C source receipt (`scripts/objc-source-inventory.sh` hands it to `drydock-objc receipt`, which loads its libclang; on a Mac and on x86_64 Linux, whose archive ships libclang from .16; libclang needs glibc 2.35) | `components/objc-receipt-clang/version` | ✅ Renovate customManager (github-releases Mavergreen/clang-22); fully automatic: the Linux archive is verified against the release's SHA256SUMS | `tests/objc-source-inventory-host-test.sh` on a Mac and in the Linux job |
 | Drydock v0.7.0 (`drydock-objc`, the guard's strict Objective-C analyzer and source-receipt tool, on a Mac and on x86_64 Linux, and its reference set; the reference set ships in the pkg as `reference/objc`, the tool is fetched on first use) | `components/drydock/version` (the release tag) | ✅ Renovate customManager (github-releases Mavergreen/drydock); the Linux archive is verified against the release's SHA256SUMS (the fixture digest in `tests/fixtures/objc-api/provider-body.tool` is still written by hand; the bump PR says how) | `scripts/fetch_drydock.sh` fetches that release (a Mac: the installed `/usr/local/mavergreen/drydock` at that version, else the pkg through `fetch_product_pkg.sh`, verified against the release's SHA256SUMS; x86_64 Linux: the archive, verified against the release's SHA256SUMS); the pkg build stages its reference set; a bump must pass `tests/objc-guard-test.sh` on 10.9 and `tests/objc-source-inventory-host-test.sh` on a Mac and in the Linux job, and the merge releases shipyard |
-| shipyard's own version | `UPSTREAM_VERSION` (the **line**) + `git rev-list --count` | n/a — first-party | every push to `main` cuts `<line>.<count>`; `@v1` moves to it |
+| shipyard's own version | `UPSTREAM_VERSION` (the **line**) + the `v<line>.N` tags merged into the commit (scheme `counter`) | n/a — first-party | every push to `main` cuts `v<line>.N`, one past the largest N released on that line; `@v1` moves to it |
 
 No upstream release notes: shipyard is its own upstream -- it ports nothing, so there are no
 someone-else's notes for a release to link.
@@ -40,9 +42,9 @@ Four more scripts (`scripts/declared-state.sh`, `scripts/release-state.sh`,
 they reach everything else here: through the moving `@v1` tag. What they do and how a product wires
 them in is documented in the conventions skill, "A release is a declared state, not an event".
 
-shipyard itself carries no `## Declared state` section. Its version is
-`<UPSTREAM_VERSION>.<commit count>` (see the last row of the table above), so its own state changes
-on every push, and every push already publishes by design. Adopting the digest path here would only
+shipyard itself carries no `## Declared state` section. Its version is `v<UPSTREAM_VERSION>.N` by
+its declared `counter` scheme (see `## Versioning` and the last row of the table above), so its own
+state changes on every push, and every push already publishes by design. Adopting the digest path here would only
 describe that status quo more slowly -- it is shipyard's declared exception, not a pattern to copy.
 
 ## Comment-reasons surface
@@ -62,6 +64,10 @@ deviations` section, so a `- comments: <reason>` line surfaces twice — once as
 stream. Harmless, since the conformance checker only consults records for checks it evaluates, but the
 two subsystems share one namespace under one header.
 
+## Versioning
+
+- counter
+
 ## Conformance deviations
 
 `check-artifact-conformance.sh` holds each release's artifacts to the family's schemes. One of them,
@@ -69,7 +75,7 @@ two subsystems share one namespace under one header.
 Machine-read by `artifact-facts.sh` as `- <check>[:<glob>]: <reason>` (the reason is the rest of that
 one line):
 
-- scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.<commit count> (scripts/shipyard-version.sh), cut on every push to main.
+- scheme: shipyard ports nothing, so there is no upstream to suffix -- its version is <line>.N by its declared counter scheme (scripts/release-version.sh), one past the largest N released on that line, cut on every push to main.
   Every artifact still carries that one version: the pkg, the appcast and the tag agree, and conformance
   checks that they do.
 - unpinned:scripts/cut-release.sh: it reads a repo's newest release tag before and after the run it dispatched, to report what that run published; it fetches nothing and builds nothing. Reconsider if it ever downloads an asset.

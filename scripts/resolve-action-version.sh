@@ -6,8 +6,8 @@
 #          dereferenced against the remote for the immutable v*.*.* tag pointing at the same commit.
 #          Anything else -- a raw SHA, a branch, an unreleased tag -- names no release and FAILS
 #          rather than invent a number; the caller falls back to the line and says why.
-# platform: a GitHub Action's own checkout is a TARBALL with no .git, so shipyard-version.sh's
-#           commit-count derivation cannot run there.
+# platform: a GitHub Action's own checkout is a TARBALL with no .git, so release-version.sh's
+#           tag-counting derivation cannot run there.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "shipyard: consume
 #       its facilities, never hand-roll them" -- resolving from the pinned ref is what ends the
 #       anonymous install: every consumer's installed shipyard used to report "1.0" regardless of

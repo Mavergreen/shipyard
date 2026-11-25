@@ -186,10 +186,34 @@ if "scan-for-key.yml" not in str((jobs.get("scan") or {}).get("uses", "")):
     bad.append("the scan job (./.github/workflows/scan-for-key.yml) is gone")
 if "canary" in jobs:
     bad.append("release.yml still has a canary job; shipyard runs no macOS job, and @v1 moves once publish succeeds")
-if sorted((jobs.get("major-tag") or {}).get("needs") or []) != ["build", "publish"]:
-    bad.append("major-tag must need exactly [build, publish], so @v1 never names a release that did not publish")
-if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan"]:
-    bad.append("publish must need exactly [build, linux, scan]")
+if sorted((jobs.get("major-tag") or {}).get("needs") or []) != ["publish", "version-check"]:
+    bad.append("major-tag must need exactly [version-check, publish], so @v1 never names a release that did not publish")
+if sorted((jobs.get("publish") or {}).get("needs") or []) != ["build", "linux", "scan", "version-check"]:
+    bad.append("publish must need exactly [version-check, build, linux, scan]")
+if "version-check" not in (build.get("needs") or []):
+    bad.append("build must need version-check, so nothing builds a version the gate has not checked")
+
+# The version is derived once, by release-version.sh, and checked before anything builds.
+vc = jobs.get("version-check")
+if not vc:
+    bad.append("release.yml has no version-check job")
+else:
+    if not str(vc.get("runs-on", "")).startswith("ubuntu-"):
+        bad.append("version-check must run on ubuntu-*, not %r" % vc.get("runs-on"))
+    vc_cmds = [c for st in (vc.get("steps") or []) for c in step_cmds(st)]
+    if not any(re.search(r'^t="\$\(sh scripts/release-version\.sh --product shipyard\)"$', c) for c in vc_cmds):
+        bad.append("version-check never derives the tag with scripts/release-version.sh --product shipyard")
+    if not any(re.search(r'^sh scripts/check-release-version\.sh --product shipyard .*--publishing yes', c) for c in vc_cmds):
+        bad.append("version-check never runs scripts/check-release-version.sh --product shipyard ... --publishing yes")
+    if "tag" not in (vc.get("outputs") or {}):
+        bad.append("version-check has no 'tag' output")
+pw = (jobs.get("publish") or {}).get("with") or {}
+if pw.get("product") != "shipyard":
+    bad.append("publish must pass product: shipyard to publish-release.yml, not %r" % pw.get("product"))
+if "needs.version-check.outputs.tag" not in str(pw.get("version", "")):
+    bad.append("publish's version must be needs.version-check.outputs.tag, not %r" % pw.get("version"))
+if find(r"shipyard-version\.sh"):
+    bad.append("release.yml still runs shipyard-version.sh; release-version.sh derives shipyard's version")
 if "build" not in ((jobs.get("scan") or {}).get("needs") or []):
     bad.append("the scan job must need build, to scan its artifact and logs")
 

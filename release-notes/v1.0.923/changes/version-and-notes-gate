@@ -1,0 +1,1 @@
+Every release now takes its version from release-version.sh and carries committed notes for that version.

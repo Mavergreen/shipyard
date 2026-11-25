@@ -1,7 +1,7 @@
 #!/bin/sh
 # platform: host-agnostic
 # spec: SKILL.md "shipyard: consume its facilities" -- a GitHub Action's own checkout has no
-#       .git, so shipyard-version.sh's commit-count derivation cannot run inside install@v1; this
+#       .git, so release-version.sh's tag-counting derivation cannot run inside install@v1; this
 #       script resolves the version from the ref the consumer pinned instead.
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"

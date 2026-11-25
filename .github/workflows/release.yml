@@ -14,7 +14,27 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Derive and check the version
+        id: tag
+        run: |
+          set -eu
+          t="$(sh scripts/release-version.sh --product shipyard)"
+          sh scripts/check-release-version.sh --product shipyard --version "$t" --sha "$GITHUB_SHA" --publishing yes
+          echo "tag=$t" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: version-check
     runs-on: ubuntu-latest   # spec: 2026-10-24 macOS runner exit -- building, packaging, signing and conformance are host-agnostic
     timeout-minutes: 60
     outputs:
@@ -22,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0        # shipyard-version.sh counts commits
+          fetch-depth: 0
 
       # spec: scripts/sdk-pins.sh -- keyed on the pins, so a pin change refetches; the arm64 SDK is ~600 MB.
       - uses: actions/cache@v6
@@ -58,11 +78,12 @@ jobs:
 
       - name: Resolve the version
         id: ver
+        env:
+          TAG: ${{ needs.version-check.outputs.tag }}
         run: |
           set -eu
-          out="$(sh scripts/shipyard-version.sh)"
-          ver="$(printf '%s\n' "$out" | sed -n 's/^FULL=//p')"
-          printf '%s\n' "$ver" > VERSION      # a build product; gitignored, read by CMakeLists
+          ver="${TAG#v}"
+          printf '%s\n' "$ver" > VERSION
           echo "version=$ver" >> "$GITHUB_OUTPUT"
           echo "shipyard $ver"
 
@@ -167,17 +188,18 @@ jobs:
     uses: ./.github/workflows/linux-host.yml
 
   publish:
-    needs: [build, linux, scan]
+    needs: [version-check, build, linux, scan]
     permissions:
       contents: write
     uses: ./.github/workflows/publish-release.yml
     with:
-      version: v${{ needs.build.outputs.version }}
+      version: ${{ needs.version-check.outputs.tag }}
+      product: shipyard
       artifact: shipyard-dist
       shipyard-ref: ${{ github.sha }}
 
   major-tag:
-    needs: [build, publish]
+    needs: [version-check, publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -188,7 +210,7 @@ jobs:
       - name: Move the major tag
         run: |
           set -eu
-          major="v${{ needs.build.outputs.version }}"; major="${major%%.*}"
+          tag='${{ needs.version-check.outputs.tag }}'; major="${tag%%.*}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # platform: this force-push used to be unconditional, so two overlapping releases raced and
@@ -201,6 +223,6 @@ jobs:
             echo "$major is already at or ahead of $(git rev-parse --short HEAD); leaving it alone"
             exit 0
           fi
-          git tag -f -a "$major" -m "$major -> v${{ needs.build.outputs.version }}"
+          git tag -f -a "$major" -m "$major -> $tag"
           git push -f origin "$major"
           echo "moved $major -> $(git rev-parse --short HEAD)"
