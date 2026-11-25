@@ -35,7 +35,7 @@ static int gExitStatus = 0;
 // UI is OPT-IN. Only an EXPLICIT user summon shows anything: `--user` (a notification
 // "install" click) runs Sparkle's interactive check -- the ONLY path that shows a "You're up-to-date!"
 // or update dialog. EVERY other launch (`--background` daily agent, or no flag at all) runs a SILENT
-// probe as an accessory app: no dialog, no Dock icon, no activation, exit when done. That keeps
+// probe as an LSUIElement app: no dialog, no Dock icon, no activation, exit when done. That keeps
 // un-summoned / scheduled checks completely quiet -- a found update is surfaced via a notification
 // (no-pane) or the pane hint, never a modal.
 static BOOL gBackground = NO;      // --background: the scheduled LaunchAgent (honors the auto-check pref)
@@ -50,9 +50,21 @@ static BOOL gUserInitiated = NO;   // --user: an explicit summon (notification "
 static const NSTimeInterval kBackgroundWatchdogSeconds = 120.0;
 static NSTimer *gWatchdog = nil;
 
+// The app is LSUIElement, so it never shows a Dock icon until this runs. Call it before ANY UI.
 static void mav_foreground(void) {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     [NSApp activateIgnoringOtherApps:YES];
+}
+
+// Re-launch this app for an interactive check through LaunchServices, never fork+exec: Sparkle's install
+// needs a LaunchServices-launched host. NewInstance, because this instance is still running.
+static void mav_relaunch_user(void) {
+    NSError *err = nil;
+    if (![[NSWorkspace sharedWorkspace] launchApplicationAtURL:[[NSBundle mainBundle] bundleURL]
+                                                       options:NSWorkspaceLaunchNewInstance
+                                                 configuration:@{NSWorkspaceLaunchConfigurationArguments: @[@"--user"]}
+                                                         error:&err])
+        NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] interactive relaunch failed: %@", err);
 }
 
 // Sparkle 1.x relaunches the host after a .pkg install and there is no config to suppress it. We drop
@@ -180,14 +192,13 @@ static NSString *gFoundVersion = nil;
                   inModes:@[NSDefaultRunLoopMode]];
 }
 // NSUserNotificationCenter delegate (no-pane mode). Force the banner to show even if we're frontmost,
-// and on click re-launch ourselves foreground (no --background) to run Sparkle's install UI.
+// and on click re-launch ourselves with --user to run Sparkle's install UI.
 - (BOOL)userNotificationCenter:(NSUserNotificationCenter *)c
      shouldPresentNotification:(NSUserNotification *)n { (void)c; (void)n; return YES; }
 - (void)userNotificationCenter:(NSUserNotificationCenter *)c
        didActivateNotification:(NSUserNotification *)n {
     (void)c; (void)n;
-    NSString *me = [[NSBundle mainBundle] executablePath];
-    if (me) [NSTask launchedTaskWithLaunchPath:me arguments:@[@"--user"]];   // clicked "Install" -> interactive
+    mav_relaunch_user();   // clicked "Install" -> interactive
     [NSApp terminate:nil];
 }
 @end
@@ -201,8 +212,6 @@ int main(int argc, const char **argv) {
     }
     @autoreleasepool {
         [NSApplication sharedApplication];
-        [NSApp setActivationPolicy:gUserInitiated ? NSApplicationActivationPolicyRegular
-                                                  : NSApplicationActivationPolicyAccessory];
         if (strlen(MAVERICKS_PANE_HINT_KEY) > 0)
             [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationWillTerminateNotification
                                                               object:nil queue:nil
@@ -293,8 +302,7 @@ int main(int argc, const char **argv) {
                         // process re-sets it in updaterWillRelaunchApplication: if another install completes.
                         [[NSUserDefaults standardUserDefaults] removeObjectForKey:kPendingVersionKey];
                         [[NSUserDefaults standardUserDefaults] synchronize];
-                        NSString *me = [[NSBundle mainBundle] executablePath];
-                        if (me) [NSTask launchedTaskWithLaunchPath:me arguments:@[@"--user"]];
+                        mav_relaunch_user();
                     } else {
                         NSLog(@"[@MAVERICKS_C_LOG_PREFIX@] retry declined -> clearing pending, exiting");
                         [[NSUserDefaults standardUserDefaults] removeObjectForKey:kPendingVersionKey];

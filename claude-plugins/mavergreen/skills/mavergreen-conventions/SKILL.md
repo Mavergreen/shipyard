@@ -1963,8 +1963,10 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   host. The function refuses any other LLVM clang, and a compiler target that disagrees with the
   configure's arch and floor. An updater still configured with AppleClang builds as before, with a
   warning naming this rule, until its product moves to clang22.
-- **The silent probe is invisible: an accessory app, with no Dock icon and no focus change;** only
-  `--user` and the post-install alerts become a normal app and come forward.
+- **The updater is `LSUIElement`, so the silent probe is invisible from launch: no Dock icon and no
+  focus change;** only `--user` and the post-install alerts become a normal app (`mav_foreground()`)
+  and come forward, before they show any UI. Revisit: a 10.9 Sparkle install from an `LSUIElement`
+  host that hangs, fails authorization, or opens its dialogs behind other windows.
 - **Pane-hint mode tells a pane "no update" from "couldn't check".** With `PANE_HINT_KEY <key>`,
   a found update writes the version to `<key>` and no update removes it; either also writes
   `<key>CheckedAt`, an `NSDate`, in the same defaults domain (the updater's bundle id). An abort, an
@@ -2028,7 +2030,7 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   privileged helper via `AuthorizationExecuteWithPrivileges`, which needs a LaunchServices session; a
   fork+exec'd host has none, so the install dies with `SUSparkleErrorDomain 4005` /
   `errAuthorizationInternal (-60008)` (or hangs).
-  The updater's `Info.plist` (a normal app, not `LSUIElement`) exists to satisfy this — the caller must too.
+  The updater itself relaunches with `--user` through `NSWorkspace`, never `NSTask` — the caller must too.
   `--user` = interactive check; the daily LaunchAgent uses `--background` and is unaffected (it never
   runs a privileged install).
 - **The Sparkle comparison version must be dotted-numeric AND monotonic — the shared derivation makes
