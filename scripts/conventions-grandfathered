@@ -10,8 +10,6 @@ linux-gate claude-code release.yml:build
 linux-gate codex-cli builds.yml:codex-build
 linux-gate codex-cli release.yml:build
 linux-gate drydock nib-fixtures.yml:compile
-linux-gate drydock release.yml:build
-linux-gate drydock release.yml:modern-smoke
 linux-gate jdk-25 release.yml:tests
 linux-gate macfuse release.yml:build
 linux-gate magic-trackpad2 release.yml:build-macos
@@ -33,7 +31,6 @@ macos-runner clang-22 release.yml:build-native
 macos-runner claude-code release.yml:build
 macos-runner codex-cli builds.yml:codex-build
 macos-runner codex-cli release.yml:build
-macos-runner drydock release.yml:build
 macos-runner longboat release.yml:build
 macos-runner longboat release.yml:collect
 macos-runner magic-trackpad2 release.yml:build-macos
@@ -55,7 +52,6 @@ macos-runner swift release.yml:collect
 macos-runner swift release.yml:version
 modern-smoke clang-22 release.yml:modern-smoke
 modern-smoke claude-code release.yml:modern-smoke
-modern-smoke drydock release.yml:modern-smoke
 modern-smoke make release.yml:modern-smoke
 modern-smoke python-315 release.yml:modern-smoke
 modern-smoke stevedore release.yml:modern-smoke
@@ -68,7 +64,6 @@ packager swift package-toolchain.sh
 packager swift package.sh
 smoke-gate cctools release.yml:modern-smoke
 smoke-gate cmake release.yml:modern-smoke
-smoke-gate drydock release.yml:modern-smoke
 smoke-gate ed25519 release.yml:modern-smoke
 smoke-gate golang-126 release.yml:modern-smoke
 smoke-gate golang-127 release.yml:modern-smoke
@@ -136,11 +131,9 @@ unchecked-subshell codex-cli tests/objc-provider.bats
 unchecked-subshell codex-cli tests/package-test.sh
 unchecked-subshell codex-cli tests/rusty-v8.bats
 unchecked-subshell container-tools tests/docker_common_test.sh
-unchecked-subshell drydock .github/workflows/release.yml
 unchecked-subshell drydock tests/check_runs_gate_test.sh
 unchecked-subshell drydock tests/objc/objc-provider-test.sh
 unchecked-subshell drydock tests/objc/objc-resolve-test.sh
-unchecked-subshell drydock tests/pkg_payload_test.sh
 unchecked-subshell drydock tests/raise_runs_test.sh
 unchecked-subshell drydock tests/standalone_archive_test.sh
 unchecked-subshell drydock tests/translate_test.sh
