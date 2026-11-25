@@ -68,7 +68,7 @@ shift
 [ -n "$ST" ] && [ -n "$P" ] && [ -n "$SCR" ] || { echo "stage_product: need --stage --product --scripts-out" >&2; exit 2; }
 case "$P" in ''|-*|*[!a-z0-9-]*) echo "stage_product: bad product name '$P'" >&2; exit 2 ;; esac
 [ -n "$(find "$ST" \( -type f -o -type l \) 2>/dev/null | head -n 1)" ] || { echo "stage_product: nothing staged under $ST" >&2; exit 1; }
-validate_require() {  # $1 = option, $2 = entry, $3 = its SPEC (SHORT[>=VERSION])
+validate_require() {
   _vr="$3"; _rs="${_vr%%>=*}"
   case "$_vr" in
     *'>='*)
@@ -190,7 +190,7 @@ sh "$SELF/render-manifest.sh" "$@"
     # platform: inline the comparator: a product's preinstall runs before the base component's postinstall.
     case "$REQ$REQH" in *'>='*) cat "$SELF/lib/vercmp.sh"; printf '\n' ;; esac
     if [ -n "$REQH" ]; then cat "$SELF/lib/host-arch.sh"; printf '\n'; fi
-    emit_require() {  # $1 = SHORT[>=VERSION]
+    emit_require() {
       _rs="${1%%>=*}"
       registry_need stage_product repo "$_rs"; _reqrepo="$REG_V"
       _requrl="https://github.com/Mavergreen/$_reqrepo/releases/latest"

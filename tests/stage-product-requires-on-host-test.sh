@@ -1,14 +1,14 @@
 #!/bin/sh
 # platform: host-agnostic
 # spec: scripts/stage_product.sh --requires-on-host -- a requirement the generated preinstall enforces on one host arch;
-#       the committed registry; sysctl is a stub first on PATH
+#       the committed registry; sysctl is a stub named by MAVERGREEN_SYSCTL
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/stage_product.sh"
 SD="$(sh "$here/../scripts/fetch_stevedore.sh")" || { echo "FAIL: fetch_stevedore.sh failed"; exit 1; }; export STEVEDORE="$SD"
 w="$(cd -P "$(mktemp -d "${TMPDIR:-/tmp}/stage-req-host.XXXXXX")" && pwd)"; trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL: $1"; exit 1; }
-mkdir -p "$w/bin"; PATH="$w/bin:$PATH"; export PATH
+mkdir -p "$w/bin"; MAVERGREEN_SYSCTL="$w/bin/sysctl"; export MAVERGREEN_SYSCTL
 stub() { printf '#!/bin/sh\n%s\n' "$1" > "$w/bin/sysctl"; chmod +x "$w/bin/sysctl"; }
 stage() {  # $1 = scripts dir, then stage_product options
   _d="$1"; shift

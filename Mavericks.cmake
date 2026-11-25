@@ -52,7 +52,7 @@ if(MAVERICKS_MODE STREQUAL "modern")
     if(NOT _mav_have STREQUAL _mav_want)
       message(FATAL_ERROR
         "CMAKE_OSX_SYSROOT '${CMAKE_OSX_SYSROOT}' is not the pinned SDK for ${CMAKE_OSX_ARCHITECTURES} ('${_mav_pin}').\n"
-        "Configure through a shipyard preset (mavericks-x86_64), or pass "
+        "Configure through a shipyard preset (mavericks-x86_64, or macos-arm64 for arm64), or pass "
         "-DCMAKE_TOOLCHAIN_FILE=${MAVERICKS_SHARED_DIR}/MavericksToolchain.cmake. See SKILL.md \"SDK pinning\".")
     endif()
   elseif(_mav_na EQUAL 0)
@@ -63,7 +63,7 @@ if(MAVERICKS_MODE STREQUAL "modern")
     # not the "one arch per configure" message meant for 2+ arches.
     message(FATAL_ERROR
       "CMAKE_OSX_ARCHITECTURES is empty -- no arch means no pinned SDK to check.\n"
-      "Configure through a shipyard preset (mavericks-x86_64), or pass "
+      "Configure through a shipyard preset (mavericks-x86_64, or macos-arm64 for arm64), or pass "
       "-DCMAKE_TOOLCHAIN_FILE=${MAVERICKS_SHARED_DIR}/MavericksToolchain.cmake. See SKILL.md \"SDK pinning\".")
   else()
     message(FATAL_ERROR "include(Mavericks): one arch per configure (got '${CMAKE_OSX_ARCHITECTURES}'); build each and merge")
