@@ -715,6 +715,16 @@ what this forbids.
 | `date-semver` | `v0.0.YYYYMMDD.N` (dimmit) | `self-upstream-version.sh --prefix v0.0.` | as `self-upstream-date` |
 | `counter` | `vMAJOR.MINOR.N` (shipyard's `v1.0.N`) | the last tag's N+1 | N counts releases; MAJOR.MINOR move only by editing the upstream file |
 
+- **A push that ships nothing does not publish.** When everything changed since the last release tag is
+  top-level `*.md`, `tests/**`, `release-notes/**` or a `- self-upstream-exclude:<glob>` path,
+  `check-release-version.sh --shipping` prints `no`: `version-check` passes `--publishing no` and skips
+  publish (shipyard: and the major tag), while build and tests still run as feedback. The next shipping
+  push releases it. `.github/` ships: a workflow is packaging, and shipyard's are consumed at `@v1`.
+  Revisit if a tests-only fix to shipped behaviour waits too long for its release.
+- **`counter`: two quick pushes can derive the same N.** Both runs see the same last tag; the later
+  one is refused at publish (the tag exists), and the next shipping push releases both changes under
+  the next N. Notes committed under the refused N must then be renamed to the N that push derives.
+  Revisit if a refused run ever leaves a change unreleased after the next shipping push.
 - A mislabeled published release is accepted as-is; the next version is whatever the deriver prints
   (container-tools continues at 20261025.20). No recovery rewrites history; no notes are back-filled.
   Revisit if a mislabel breaks a consumer's pin.
@@ -740,8 +750,10 @@ it **drops the `-mavericks` suffix** and versions itself directly:
   is never omitted. `$SHIPYARD_SCRIPTS/self-upstream-version.sh` derives it from git history
   (`fetch-depth: 0`). Own code is every path but `UPSTREAM_VERSION`, `components/*/version`,
   `ingredients/**`, `.github/**`, `tests/**`, `release-notes/**`, top-level `*.md`, each file
-  `## Declared state` names, and each `## Conformance deviations` entry `- self-upstream-exclude:<glob>: <reason>` (a git
-  pathspec glob: `*` stays in one directory, `**/` spans any). It sets the version only; publishing
+  `## Declared state` names, each ingredient pin (`ingredient-pins.sh`, below; a `path:KEY` pin file only
+  where its diff moves literal `KEY=VALUE` lines alone), and each `## Conformance deviations` entry
+  `- pin:<glob>: <reason>` or `- self-upstream-exclude:<glob>: <reason>` (a git pathspec glob: `*`
+  stays in one directory, `**/` spans any). It sets the version only; publishing
   is unchanged — declared state or a `workflow_dispatch`, which is how own code ships on purpose.
   `UPSTREAM_VERSION` stays the declared `upstream` entry but is no longer read for the date: editing
   it changes the digest, so it cuts a release by itself, the other lever besides a dispatch. Under
@@ -1512,15 +1524,20 @@ on one (check 40d). Revisit if a release path that needs a tag-triggered run ret
   `check-release-version.sh` in `version-check` and again in `publish-release.yml`. Only a run that
   publishes needs them; a feedback push does not. The one exception is a **pins-only release**: since
   the last release tag no own code changed (`own-code-pathspecs.sh`'s list, with the declared upstream
-  file excluded), at least one pin did (`UPSTREAM_VERSION`, the declared upstream file, `components/*/version`,
-  `ingredients/**`, a declared-state file, an ingredient pin, an action's ref), and the generated notes
-  say what moved (`### Build ingredients`, `### Pinned actions` or `- New upstream: `). An action's ref
-  is a `uses: OWNER/REPO[/PATH]@REF` line under `.github/` whose only change is its `@REF` and trailing
-  `# VERSION` comment; any other change under `.github/` needs committed notes. Revisit if a ref bump
-  that changes behaviour users notice ships with no committed note. A Renovate upstream bump, an
-  ingredient's `.N+1` and an action's ref bump are this case, covered by the generated notes. Committed
-  notes are required whenever own code or packaging changed. Revisit if generated notes mislead about
-  what changed.
+  file excluded), at least one pin did (for `port`, `UPSTREAM_VERSION` and the declared upstream file;
+  `components/*/version`, `ingredients/**`, a declared-state file, an ingredient pin, a
+  `- pin:<glob>: <reason>` file, an action's ref), and the generated notes say what moved
+  (`### Build ingredients`, `### Pinned actions` or `- New upstream: `). `release-notes.sh` writes
+  `### Build ingredients` for every such pin but an upstream, with or without a repackage caller, so
+  `version-check` and the publish gate agree. A repo declares pins outside that list under
+  `## Conformance deviations` as `- pin:<glob>: <reason>` (shipyard: `scripts/*.pin`). Outside `port`,
+  `UPSTREAM_VERSION` is no pin: a `counter`'s line moves by a committed edit with notes. An action's
+  ref is a step's or job's `uses: OWNER/REPO[/PATH]@REF` line under `.github/` whose `@REF` changed,
+  with at most its trailing `# VERSION` comment beside it; any other change under `.github/` needs
+  committed notes. A Renovate upstream bump, an ingredient's `.N+1` and an action's ref bump are this
+  case, covered by the generated notes. Committed notes are required whenever own code or packaging
+  changed. Revisit if generated notes mislead about what changed, or a ref bump that changes behaviour
+  users notice ships with no committed note.
 
   **semver adds `release-notes/<TAG>/kind`**: one word, `major`, `minor` or `patch`, and the version is
   exactly that step from the newest semver tag. The agent writing the notes classifies from the diff
@@ -3179,8 +3196,8 @@ pointing back into the row below — so this table, not the script, is where a c
 | **39.** Where `release.yml` has a `modern-smoke` job, its `if:` carries, as top-level `&&` terms, every term of the publish job's `if:` (the job calling `publish-release.yml`, else `publish`), status functions (`always()`, `success()`, `failure()`, `cancelled()`) aside and `${{ }}` and outer parentheses ignored; a publish job with no `if:` fails with its own message. Grandfathered per repo as `smoke-gate <repo> release.yml:modern-smoke`, separately from check 37's `modern-smoke` line | modern-smoke proves the arm64 slice of what will SHIP; a push, a PR or a branch run ships nothing, so a smoke there is a macOS runner spent on evidence nobody uses. An ingredient-PR merge used to spend two: the push run and repackage's dispatch. Sharing the publish job's own term, an output of the job that decides, keeps one decision instead of two copies that drift. See "Smoke only in a publishing run", above |
 | **40.** INGREDIENTS.md has a `## Versioning` section: one `- <scheme>` line (or `- <short>: <scheme>` per product) whose scheme is `port`, `self-upstream-date`, `semver`, `date-semver` or `counter`, read by `versioning.sh`; an unknown scheme, a malformed entry or no section fails. No deviation or grandfathered line excuses it | Which scheme a product follows was implied by the script its workflow happened to call, so nothing could say a release broke it: container-tools shipped own-code changes as `20261025.17` and `.19`. A declaration is what the gates compare a version against. See "Versioning", above |
 | **40b.** `release.yml` calls `release-version.sh` and none of `resolve-version.sh`, `self-upstream-version.sh`, `shipyard-version.sh` or `version.sh` on a non-comment line. No deviation or grandfathered line excuses it | A version computed any other way is a hand-chosen version, however automatic it looks; the gates re-derive it with `release-version.sh`, so a second deriver can only disagree |
-| **40c.** `release.yml` has a job named `version-check` on an `ubuntu-*` runner (every matrix entry) with a step running `check-release-version.sh` with `--publishing`; every job on a `macos-*` or `xcode-*` runner (or calling a local reusable workflow holding one) and the publish job reach it through `needs:`. No deviation or grandfathered line excuses it | The version and notes check needs no Mac, and a macOS job that starts before it spends the family's scarcest minute on a release `publish-release.yml` will refuse. See "Linux gate first" and "Release notes" |
-| **40d.** No workflow in `.github/workflows/` has `tags:` under `on: push`. A release is a push to `main` or a `workflow_dispatch`. No deviation or grandfathered line excuses it | A pushed tag is a hand-chosen version that no gate derived; tags are retired as a release trigger, and `assert_tag_publishable.sh` allows no run's own tag. See "An existing tag refuses the publish" |
+| **40c.** `release.yml` has a job named `version-check` on an `ubuntu-*` runner (every matrix entry) with a step running `check-release-version.sh` with `--publishing`; every job on a `macos-*` or `xcode-*` runner (or calling a local reusable workflow holding one) and the publish job reach it through `needs:`; and no job but the publish job (nor a local reusable workflow it calls) publishes a release itself, through an `action-gh-release` step or `gh release create` or `upload`. No deviation or grandfathered line excuses it | The version and notes check needs no Mac, and a macOS job that starts before it spends the family's scarcest minute on a release `publish-release.yml` will refuse. A release published any other way skips the publish gate's second check. See "Linux gate first" and "Release notes" |
+| **40d.** No workflow in `.github/workflows/` has `tags:` or `tags-ignore:` under `on: push`. A release is a push to `main` or a `workflow_dispatch`. No deviation or grandfathered line excuses it | A pushed tag is a hand-chosen version that no gate derived; tags are retired as a release trigger, and `assert_tag_publishable.sh` allows no run's own tag. See "An existing tag refuses the publish" |
 
 **Grandfathered findings.** `scripts/conventions-grandfathered` holds one `<check> <repo> <job|path>` line per
 finding that predates checks 21 (widened), 35, 36, 37, 38 and 39, conformance's `cxxabi` and `no-standalone`, and check 10's unchecked subshell, under the check names `artifact-conformance`,
