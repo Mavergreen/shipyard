@@ -130,6 +130,12 @@ plist "$P"; with 1 "a manifest with no requires" "bin/tool names /usr/local/mave
 printf 'not a plist\n' > "$P"; with 2 "a manifest stevedore cannot read" -
 rc=0; sh "$C" --plist "$w/none.plist" "$A" > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "a missing manifest: exit $rc, want 2"
 rc=0; sh "$C" --plist > /dev/null 2>&1 || rc=$?; [ "$rc" -eq 2 ] || fail "--plist with no path: exit $rc, want 2"
+go /usr/local/mavergreen/b/bin/b; mk go126-1.26.5-macos-x86_64.tar.gz
+plist "$P"; with 1 "a wrapper naming a product only a host arch requires, undeclared" "bin/tool names /usr/local/mavergreen/b.*undeclared dependency"
+{ printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0">\n<dict>\n  <key>product</key>\n  <string>go126</string>\n'
+  printf '  <key>requires</key>\n  <array>\n    <string>clang22</string>\n    <string>sdk109</string>\n  </array>\n'
+  printf '  <key>requires-on-host</key>\n  <array>\n    <string>x86_64:b</string>\n  </array>\n</dict>\n</plist>\n'; } > "$P"
+with 0 "a wrapper naming a requires-on-host product" "requires clang22 sdk109 b"
 plist "$P" clang22 'sdk109>=1.0'
 echo "ok: --plist: scripts and text files may name declared requires, never the product itself"
 
