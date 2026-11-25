@@ -38,7 +38,7 @@ check_install() {  # $1 = label  $2 = the installed presets file  $3 = the prefi
   [ -f "$2" ] || { say "$1: no presets file at $2"; return 0; }
   want="$3/$rel/MavericksToolchain.cmake"
   n="$(toolchains "$2" | wc -l | tr -d ' ')"
-  [ "$n" -eq 3 ] || say "$1: expected all three hidden presets to set toolchainFile; found $n"
+  [ "$n" -eq 2 ] || say "$1: expected both hidden presets to set toolchainFile; found $n"
   toolchains "$2" | while IFS= read -r got; do
     [ "$got" = "$want" ] || echo "$1: toolchainFile is '$got', not the installed '$want'"
   done > "$w/mismatch"
@@ -69,14 +69,14 @@ cat > "$w/consumer/CMakePresets.json" <<JSON
 { "version": 6,
   "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
   "include": ["$w/A/$rel/mavericks-presets.json"],
-  "configurePresets": [ { "name": "cross", "inherits": "mavericks-cross" } ] }
+  "configurePresets": [ { "name": "x86_64", "inherits": "mavericks-x86_64" } ] }
 JSON
-out="$(cd "$w/consumer" && TMPDIR="$w" MAVERICKS_SDK_CACHE="$w/sdk" "$cm" --preset cross 2>&1)" \
-  || say "a consumer inheriting mavericks-cross does not configure: $out"
+out="$(cd "$w/consumer" && TMPDIR="$w" MAVERICKS_BUILD_ROOT="$w/mm-build" MAVERICKS_SDK_CACHE="$w/sdk" "$cm" --preset x86_64 2>&1)" \
+  || say "a consumer inheriting mavericks-x86_64 does not configure: $out"
 case "$out" in
   *"Could not find toolchain file"*) say "the consumer's toolchain file did not resolve: $out" ;;
 esac
-cache="$w/mm-build/consumer-cross/CMakeCache.txt"
+cache="$w/mm-build/consumer-x86_64/CMakeCache.txt"
 grep -qxF "CMAKE_TOOLCHAIN_FILE:FILEPATH=$w/A/$rel/MavericksToolchain.cmake" "$cache" 2>/dev/null \
   || say "the consumer's CMAKE_TOOLCHAIN_FILE is not the installed toolchain file: $(grep '^CMAKE_TOOLCHAIN_FILE' "$cache" 2>/dev/null || echo "no $cache")"
 

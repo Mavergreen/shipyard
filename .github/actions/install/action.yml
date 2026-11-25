@@ -121,14 +121,14 @@ runs:
     # spec: tests/linux-shipyard-prefix-test.sh -- Linux gets the pkg's own prefix, staged from the
     #       action's checkout at the ref the consumer pinned by the staging the pkg uses, and its
     #       launchers on PATH through /usr/local/mavergreen/bin as on macOS, so a build step is the same
-    #       `shipyard-cmake --preset cross` on both hosts.
+    #       `shipyard-cmake --preset x86_64` on both hosts.
     - if: runner.os != 'macOS'
       shell: bash
       run: |
         set -eu
         root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
         # spec: tests/install-action-linux-version-test.sh -- GitHub's Linux runners leave TMPDIR
-        #       unset, so the presets' $penv{TMPDIR}/mm-build became /mm-build.
+        #       unset, and every shipyard tool and script defaults its build root under it.
         if [ -z "${TMPDIR:-}" ]; then
           TMPDIR="${RUNNER_TEMP:-}"; [ -n "$TMPDIR" ] || TMPDIR=/tmp
           export TMPDIR

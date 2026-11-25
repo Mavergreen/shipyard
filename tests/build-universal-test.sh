@@ -37,8 +37,7 @@ fixture() {  # $1 = source dir  $2 = "same" or "differ"
   "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
   "include": ["$presets"],
   "configurePresets": [
-    { "name": "native", "inherits": "mavericks-native" },
-    { "name": "cross", "inherits": "mavericks-cross" },
+    { "name": "x86_64", "inherits": "mavericks-x86_64" },
     { "name": "arm64", "inherits": "macos-arm64" } ] }
 JSON
 }
@@ -46,8 +45,11 @@ CMAKE=cmake; export CMAKE
 fixture "$T/fix-same" same
 fixture "$T/fix-differ" differ
 
-sh "$S" --source "$T/fix-same" --out "$T/out" > "$T/out.log" 2>&1 \
+env -u MAVERICKS_BUILD_ROOT TMPDIR="$T" sh "$S" --source "$T/fix-same" --out "$T/out" > "$T/out.log" 2>&1 \
   || { echo "FAIL: build_universal did not build the fixture"; sed 's/^/    | /' "$T/out.log"; exit 1; }
+for a in x86_64 arm64; do
+  [ -f "$T/mm-build/fix-same-$a/CMakeCache.txt" ] || say "with MAVERICKS_BUILD_ROOT unset the $a build is not under TMPDIR/mm-build"
+done
 archs="$("$LIPO" -info "$T/out/bin/hello" | sed "s/.*: //" | tr -s " " | sed "s/ $//")"
 for a in x86_64 arm64; do
   case " $archs " in *" $a "*) ;; *) say "bin/hello lacks $a: $archs" ;; esac
@@ -67,10 +69,11 @@ rc=0; sh "$S" --source "$T/fix-same" --out "$T/out" > /dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] || say "an existing --out must be refused with 2, got $rc"
 [ -f "$T/out/bin/hello" ] || say "refusing an existing --out damaged it"
 
-rc=0; sh "$S" --source "$T/fix-differ" --out "$T/out-differ" > "$T/differ.log" 2>&1 || rc=$?
+rc=0; MAVERICKS_BUILD_ROOT="$T/broot" sh "$S" --source "$T/fix-differ" --out "$T/out-differ" > "$T/differ.log" 2>&1 || rc=$?
 [ "$rc" -eq 1 ] || say "a data file differing between arches must exit 1, got $rc"
 command grep -q 'share/fix/arch.txt' "$T/differ.log" || say "the refusal does not name share/fix/arch.txt"
 [ ! -e "$T/out-differ" ] || say "a refused merge left --out behind"
+[ -f "$T/broot/fix-differ-x86_64/CMakeCache.txt" ] || say "a set MAVERICKS_BUILD_ROOT is not where the x86_64 build went"
 
 [ "$fails" -eq 0 ] || exit 1
 echo "PASS: build_universal builds, merges and refuses as specified"

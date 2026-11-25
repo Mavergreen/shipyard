@@ -2,12 +2,13 @@
 # platform: host-agnostic
 #   usage: toolchain-file-test.sh
 #          A project configured through MavericksToolchain.cmake records the pinned SDK in its binary, and
-#          include(Mavericks) refuses a cross configure whose sysroot is not the pin. On a native 10.9
-#          host, MavericksMode.cmake puts every include(Mavericks) configure in "native" mode, so
-#          Mavericks.cmake's cross-mode-only backstop (the runner's-SDK refusal, the empty-arch guidance)
-#          cannot fire there; those two cases print a "skip (native 10.9 host)" line instead of asserting.
-#          Every other case -- the toolchain file's own pin, the two-arch refusal, the toolchain file
-#          accepted, the FORCE override -- is native-valid and still runs and asserts on that host.
+#          include(Mavericks) refuses a modern-host configure whose sysroot is not the pin. On a 10.9
+#          host, MavericksMode.cmake puts every include(Mavericks) configure in "mavericks" mode, so
+#          Mavericks.cmake's modern-mode-only backstop (the runner's-SDK refusal, the empty-arch
+#          guidance) cannot fire there; those two cases print a "skip (10.9 host)" line instead of
+#          asserting. Every other case -- the toolchain file's own pin, the two-arch refusal, the 10.9
+#          host's arm64 refusal, the toolchain file accepted, the FORCE override -- runs and asserts on
+#          every host.
 #          The binaries are built and read with the pinned clang22 (scripts/fetch_clang22.sh), so no
 #          Apple clang is needed and a Linux host runs every case.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning"
@@ -19,13 +20,13 @@ here="$(cd "$(dirname "$0")" && pwd)"; root="$(cd "$here/.." && pwd)"
 real="${SHIPYARD_CMAKE:-$(command -v shipyard-cmake 2>/dev/null || true)}"
 [ -n "$real" ] || [ "$(uname -s)" != Linux ] || real="$(command -v cmake 2>/dev/null || true)"
 [ -n "$real" ] || { echo "SKIP: no shipyard-cmake (install the shipyard pkg, or set SHIPYARD_CMAKE)"; exit 77; }
-# platform: MavericksMode.cmake calls a host "native" when sw_vers reports 10.9.x (Darwin 13); the
-#           cross-mode-only backstop in Mavericks.cmake cannot fire there, so this test detects the
-#           same way and skips exactly the cases that assert on it.
-native=0
-# platform: guarded macOS-only call -- sw_vers is absent on Linux, whose empty answer leaves native=0
+# platform: MavericksMode.cmake calls a host "mavericks" when sw_vers reports 10.9.x (Darwin 13);
+#           the modern-mode-only backstop in Mavericks.cmake cannot fire there, so this test detects
+#           the same way and skips exactly the cases that assert on it.
+mav=0
+# platform: guarded macOS-only call -- sw_vers is absent on Linux, whose empty answer leaves mav=0
 case "$(sw_vers -productVersion 2>/dev/null)" in
-  10.9.*) native=1 ;;
+  10.9.*) mav=1 ;;
 esac
 CL="$(sh "$root/scripts/fetch_clang22.sh" "$root/components/clang22")"
 LIPO="$CL/bin/llvm-lipo"; OTOOL="$CL/bin/llvm-otool"; export LIPO OTOOL
@@ -53,18 +54,28 @@ got="$(sh "$root/scripts/macho-slices.sh" "$w/b/p")"
 rc=0; configure "$w/p" "$w/b2" -DCMAKE_TOOLCHAIN_FILE="$root/MavericksToolchain.cmake" -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" > "$w/c2.log" 2>&1 || rc=$?
 [ "$rc" -ne 0 ] && grep -q 'one arch per configure' "$w/c2.log" || { echo "FAIL: two arches in one configure must be refused"; exit 1; }
 
+# spec: MavericksToolchain.cmake -- a 10.9 host builds x86_64 only; sw_vers is stubbed so every host
+#       sees the refusal.
+mkdir -p "$w/mav109"
+printf '#!/bin/sh\necho 10.9.5\n' > "$w/mav109/sw_vers"; chmod +x "$w/mav109/sw_vers"
+rc=0; ( PATH="$w/mav109:$PATH"; configure "$w/p" "$w/b7" -DCMAKE_TOOLCHAIN_FILE="$root/MavericksToolchain.cmake" \
+          -DCMAKE_OSX_ARCHITECTURES=arm64 ) > "$w/c7.log" 2>&1 || rc=$?
+[ "$rc" -ne 0 ] && says "$w/c7.log" "a 10.9 host builds x86_64 only (got 'arm64'): build arm64 on a modern Mac or on Linux" \
+  || { echo "FAIL: a 10.9 host must refuse arm64 and say where to build it:"; sed 's/^/    | /' "$w/c7.log"; exit 1; }
+[ "$(command grep -c cross "$root/MavericksToolchain.cmake" || true)" -eq 0 ] \
+  || { echo "FAIL: MavericksToolchain.cmake still says cross:"; command grep -n cross "$root/MavericksToolchain.cmake"; exit 1; }
+
 mkdir -p "$w/q"
 printf 'cmake_minimum_required(VERSION 3.16)\nproject(q C)\nfind_package(MavericksShipyard REQUIRED)\ninclude(Mavericks)\n' > "$w/q/CMakeLists.txt"
 # platform: CMAKE_OSX_ARCHITECTURES comes only from the env var, a preset, the toolchain file or an
 #           explicit -D on Darwin (Modules/Platform/Darwin-Initialize.cmake) -- never from AppleClang
-#           detection -- so this configure needs one named, or it hits "one arch per cross configure"
+#           detection -- so this configure needs one named, or it hits "one arch per configure"
 #           (empty) before ever reaching the pinned-SDK comparison this case means to exercise.
 # platform: Mavericks.cmake only compares CMAKE_OSX_SYSROOT against the pin when MAVERICKS_MODE is
-#           "cross" (the check is deliberately cross-mode-only -- a native build takes the same pin
-#           from the toolchain file); on a native 10.9 host this configure just succeeds, so skip
-#           the assertion rather than fail it.
-if [ "$native" -eq 1 ]; then
-  echo "skip (native 10.9 host): the backstop is cross-mode only"
+#           "modern" (a 10.9 host takes the same pin from the toolchain file); on a 10.9 host this
+#           configure just succeeds, so skip the assertion rather than fail it.
+if [ "$mav" -eq 1 ]; then
+  echo "skip (10.9 host): the backstop is modern-mode only"
 else
   rc=0; configure "$w/q" "$w/b3" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF \
     -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_SYSROOT="$other_sdk" > "$w/c3.log" 2>&1 || rc=$?
@@ -75,14 +86,14 @@ configure "$w/q" "$w/b4" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APP
   || { echo "FAIL: include(Mavericks) must accept the toolchain file's pin:"; sed 's/^/    | /' "$w/c4.log"; exit 1; }
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "SDK pinning" -- a plain
 #       configure (no arch, no preset, no toolchain file) is the first thing a newly-red consumer runs,
-#       so it must get the preset/toolchain-file guidance, not "one arch per cross configure".
-# platform: this guidance is raised from inside Mavericks.cmake's cross-mode-only backstop too (the
-#           empty-arch branch), so on a native 10.9 host the configure just succeeds instead -- skip
-#           the assertion rather than fail it.
+#       so it must get the preset/toolchain-file guidance, not "one arch per configure".
+# platform: this guidance is raised from inside Mavericks.cmake's modern-mode-only backstop too (the
+#           empty-arch branch), so on a 10.9 host the configure just succeeds instead -- skip the
+#           assertion rather than fail it.
 #           Darwin-Initialize.cmake runs xcrun when no sysroot is set, and Linux has none; naming a sysroot keeps
 #           the configure off xcrun and the empty-arch refusal does not read it.
-if [ "$native" -eq 1 ]; then
-  echo "skip (native 10.9 host): the backstop is cross-mode only"
+if [ "$mav" -eq 1 ]; then
+  echo "skip (10.9 host): the backstop is modern-mode only"
 else
   rc=0; ( unset CMAKE_OSX_ARCHITECTURES
           configure "$w/q" "$w/b6" -DMavericksShipyard_DIR="$root" -DMAVERICKS_REQUIRE_APPLECLANG=OFF -DCMAKE_OSX_SYSROOT="$other_sdk" ) \
