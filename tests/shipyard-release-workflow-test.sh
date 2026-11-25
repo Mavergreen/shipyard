@@ -203,8 +203,15 @@ else:
     vc_cmds = [c for st in (vc.get("steps") or []) for c in step_cmds(st)]
     if not any(re.search(r'^t="\$\(sh scripts/release-version\.sh --product shipyard\)"$', c) for c in vc_cmds):
         bad.append("version-check never derives the tag with scripts/release-version.sh --product shipyard")
-    if not any(re.search(r'^sh scripts/check-release-version\.sh --product shipyard .*--publishing yes', c) for c in vc_cmds):
-        bad.append("version-check never runs scripts/check-release-version.sh --product shipyard ... --publishing yes")
+    if not any(re.search(r'^p="\$\(sh scripts/check-release-version\.sh --shipping --product shipyard ', c) for c in vc_cmds):
+        bad.append("version-check never asks scripts/check-release-version.sh --shipping whether this push publishes")
+    if not any(re.search(r'^sh scripts/check-release-version\.sh --product shipyard .*--publishing "\$p"', c) for c in vc_cmds):
+        bad.append("version-check never runs scripts/check-release-version.sh --product shipyard ... --publishing \"$p\"")
+    if "publishing" not in (vc.get("outputs") or {}):
+        bad.append("version-check has no 'publishing' output")
+    for jn in ("publish", "major-tag"):
+        if "needs.version-check.outputs.publishing == 'yes'" not in str((jobs.get(jn) or {}).get("if", "")):
+            bad.append("%s must run only when needs.version-check.outputs.publishing == 'yes'" % jn)
     if "tag" not in (vc.get("outputs") or {}):
         bad.append("version-check has no 'tag' output")
 pw = (jobs.get("publish") or {}).get("with") or {}
