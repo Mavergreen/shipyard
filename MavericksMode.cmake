@@ -19,7 +19,7 @@ function(mavericks_build_mode out_var)
 endfunction()
 
 if(DEFINED MAVERICKS_EXPECTED_MODE)
-  message(FATAL_ERROR "MAVERICKS_EXPECTED_MODE is gone: every shipyard preset configures on every host. Drop it from your preset and inherit mavericks-x86_64 or macos-arm64.")
+  message(FATAL_ERROR "MAVERICKS_EXPECTED_MODE is gone: every shipyard preset configures on every host. Drop it from your preset and inherit mavericks-x86_64 or macos-arm64 (a build directory from an older shipyard caches it: reconfigure with --fresh).")
 endif()
 
 mavericks_build_mode(MAVERICKS_MODE)

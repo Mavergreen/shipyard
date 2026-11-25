@@ -7,6 +7,11 @@
 # xcrun, so it is identical with or without the Command Line Tools (vision area 18 A). Package-time
 # conformance verifies what each build records. Pins: scripts/sdk-pins.sh; rule: SKILL.md "SDK pinning".
 # Use it via the shipyard presets (mavericks-x86_64 / macos-arm64) or -DCMAKE_TOOLCHAIN_FILE=<this>.
+# spec: tests/mavericks-presets-test.sh -- the presets' binaryDir is under MAVERICKS_BUILD_ROOT, and
+#       an empty one would put the build at /.
+if(DEFINED MAVERICKS_PRESET_BUILD_ROOT AND MAVERICKS_PRESET_BUILD_ROOT STREQUAL "")
+  message(FATAL_ERROR "MAVERICKS_BUILD_ROOT is unset: set it, or configure through shipyard-cmake")
+endif()
 if(NOT CMAKE_OSX_ARCHITECTURES)
   set(CMAKE_OSX_ARCHITECTURES x86_64 CACHE STRING "one arch per configure" FORCE)
 endif()

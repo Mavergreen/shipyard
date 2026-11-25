@@ -9,6 +9,7 @@
       "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-x86_64",
       "toolchainFile": "${fileDir}/MavericksToolchain.cmake",
       "cacheVariables": {
+        "MAVERICKS_PRESET_BUILD_ROOT": "$env{MAVERICKS_BUILD_ROOT}",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "10.9",
         "CMAKE_OSX_ARCHITECTURES": "x86_64"
       }
@@ -20,6 +21,7 @@
       "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-arm64",
       "toolchainFile": "${fileDir}/MavericksToolchain.cmake",
       "cacheVariables": {
+        "MAVERICKS_PRESET_BUILD_ROOT": "$env{MAVERICKS_BUILD_ROOT}",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0",
         "CMAKE_OSX_ARCHITECTURES": "arm64"
       }
