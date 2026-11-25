@@ -16,17 +16,30 @@ set -eu
 REPO="$1"; RUN="$2"; DIR="$3"
 mkdir -p "$DIR"
 
-ids="$(gh api "repos/$REPO/actions/runs/$RUN/jobs" --paginate \
-         --jq '.jobs[] | select(.status == "completed" and .conclusion != "skipped") | .id')" \
+rows="$(gh api "repos/$REPO/actions/runs/$RUN/jobs" --paginate \
+         --jq '.jobs[] | select(.status == "completed" and .conclusion != "skipped")
+               | [.id, (if .runner_id != null or ((.steps // []) | length) > 0 then "ran" else "never" end),
+                  (.conclusion // "none"), (.name // "")] | @tsv')" \
   || { echo "fetch_run_logs: cannot list the jobs of $REPO run $RUN" >&2; exit 1; }
-[ -n "$ids" ] || { echo "fetch_run_logs: run $RUN has no finished job -- nothing to scan is not a pass" >&2; exit 1; }
+[ -n "$rows" ] || { echo "fetch_run_logs: run $RUN has no finished job -- nothing to scan is not a pass" >&2; exit 1; }
 
 # platform: a build log is colored, and without --allow-escape-sequences gh refuses to print the
 #           response at all ("the response contains terminal escape sequences") -- which is how
 #           openssh's first scan died. On a failure, gh's own stderr says why; guessing a reason here
 #           once sent the diagnosis the wrong way.
-for id in $ids; do
+# platform: a job with no runner and no steps never started and has no log: report it and skip it.
+tab="$(printf '\t')"
+n=0
+while IFS="$tab" read -r id ran concl name; do
+  if [ "$ran" = never ]; then
+    echo "fetch_run_logs: job $id ($name) has no log ($concl): nothing to scan" >&2
+    continue
+  fi
   gh api "repos/$REPO/actions/jobs/$id/logs" --allow-escape-sequences > "$DIR/job-$id.log" \
     || { echo "fetch_run_logs: cannot fetch job $id's log (gh's reason is above)" >&2; exit 1; }
-done
-echo "fetch_run_logs: $(echo "$ids" | wc -l | tr -d ' ') finished job log(s) from $REPO run $RUN" >&2
+  n=$((n + 1))
+done <<EOF
+$rows
+EOF
+[ "$n" -gt 0 ] || { echo "fetch_run_logs: run $RUN has no job that started -- nothing to scan is not a pass" >&2; exit 1; }
+echo "fetch_run_logs: $n finished job log(s) from $REPO run $RUN" >&2

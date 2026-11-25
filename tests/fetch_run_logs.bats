@@ -3,7 +3,8 @@ bats_require_minimum_version 1.5.0
 
 # fetch_run_logs.sh REPO RUN_ID DIR: every FINISHED job's log in this run, one file each, for
 # scan-for-key.yml to scan. A stand-in `gh` on PATH plays the GitHub API: it answers the jobs listing
-# from $T/jobs.txt ("<id> <status> [<conclusion>]" per line; a completed job defaults to success) as
+# from $T/jobs.txt ("<id> <status> [<conclusion> [never]]" per line; a completed job defaults to success;
+# "never" means no runner and no steps, a job cancelled before any runner took it) as
 # the real JSON shape, run through the script's own --jq filter by real jq -- so the filter itself is
 # under test, not a copy of it -- and each log from $T/logs/<id>. Like the real gh, it refuses to
 # print a response carrying terminal escape sequences -- which every colored build log does -- unless
@@ -21,7 +22,8 @@ case "\$2" in
     q=; prev=; for a in "\$@"; do [ "\$prev" = --jq ] && q="\$a"; prev="\$a"; done
     awk 'BEGIN { printf "{\"jobs\":[" }
          { c = \$3 != "" ? "\"" \$3 "\"" : (\$2 == "completed" ? "\"success\"" : "null")
-           printf "%s{\"id\":%s,\"status\":\"%s\",\"conclusion\":%s}", (NR > 1 ? "," : ""), \$1, \$2, c }
+           r = \$4 == "never" ? "\"runner_id\":null,\"steps\":[]" : "\"runner_id\":7,\"steps\":[{\"name\":\"Run\"}]"
+           printf "%s{\"id\":%s,\"name\":\"job %s\",\"status\":\"%s\",\"conclusion\":%s,%s}", (NR > 1 ? "," : ""), \$1, \$1, \$2, c, r }
          END { print "]}" }' "$T/jobs.txt" | jq -r "\$q" ;;
   repos/acme/widget/actions/jobs/*/logs)
     id="\${2#repos/acme/widget/actions/jobs/}"; id="\${id%/logs}"
@@ -63,6 +65,31 @@ fetch() { sh "$ROOT/scripts/fetch_run_logs.sh" acme/widget 42 "$T/out"; }
   [ -e "$T/out/job-101.log" ]
   [ -e "$T/out/job-103.log" ]
   [ ! -e "$T/out/job-102.log" ]
+}
+
+@test "a job cancelled before any runner took it has no log: reported on stderr, skipped, scan succeeds" {
+  # drydock run 45632944677: a modern-smoke cancelled in the queue; its log 404s.
+  printf '101 completed success\n102 completed cancelled never\n' > "$T/jobs.txt"
+  echo 'build log' > "$T/logs/101"                                           # no $T/logs/102
+  run --separate-stderr fetch
+  [ "$status" -eq 0 ]
+  [ -e "$T/out/job-101.log" ]
+  [ ! -e "$T/out/job-102.log" ]
+  [[ "$stderr" == *"job 102 (job 102) has no log (cancelled): nothing to scan"* ]] || false
+}
+
+@test "a cancelled job that ran (it has steps) but 404s still fails" {
+  printf '101 completed cancelled\n' > "$T/jobs.txt"                        # ran, and no $T/logs/101
+  run --separate-stderr fetch
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"HTTP 404: Not Found"* ]] || false
+}
+
+@test "a run whose only finished job never started has nothing to scan: an error" {
+  printf '102 completed cancelled never\n' > "$T/jobs.txt"
+  run --separate-stderr fetch
+  [ "$status" -eq 1 ]
+  [[ "$stderr" == *"nothing to scan"* ]] || false
 }
 
 @test "a colored build log (terminal escape sequences) is fetched whole" {
