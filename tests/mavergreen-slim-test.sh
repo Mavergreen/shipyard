@@ -91,7 +91,7 @@ fresh
 [ "$(MAVERGREEN_HOST_ARCH=arm64 mg slim status)" = "slim: off, the default on an arm64 Mac" ] || fail "arm64 default status"
 MAVERGREEN_HOST_ARCH=bogus mg slim status 2>/dev/null && fail "a bad MAVERGREEN_HOST_ARCH must fail slim, not act as some arch"
 
-fresh; mkproduct p 'bin/*' 'libexec/*' 'pkg/tool/*'
+fresh; mkproduct p 'bin/*' 'libexec/*' 'pkg/tool/*/*'
 mkfat "$T/p/bin/tool" x86_64 arm64
 mkfat "$T/p/libexec/a b" i386 x86_64 arm64
 mkthin "$T/p/pkg/tool/darwin_arm64/x" arm64
@@ -102,7 +102,7 @@ logged "--arch x86_64 --arch i386 $T/p/libexec/a b" || fail "a name with a space
 [ "$(cat "$T/var/mavergreen/slimmed/p")" = x86_64 ] || fail "slimmed/p records the arch"
 case "$out" in *"slimmed 3 files in p to x86_64"*) ;; *) fail "stdout was: $out" ;; esac
 
-fresh; mkproduct p 'lib/*'
+fresh; mkproduct p 'lib/*' 'lib/*/*'
 mkfatar "$T/p/lib/libc++.a" x86_64 arm64
 mkthinar "$T/p/lib/darwin/libclang_rt.osx.a"
 mkthin "$T/p/lib/x86only" x86_64
@@ -126,6 +126,20 @@ logged "--arch x86_64 $T/p/bin/tool" || fail "a fat bin/tool under slim-host bin
 cmp -s "$T/p/lib/libc++.1.dylib" "$w/libcxx.orig" || fail "a fat target library outside slim-host is untouched"
 cmp -s "$T/p/lib/rustlib/aarch64/x.dylib" "$w/rustlib.orig" || fail "a thin arm64 target library outside slim-host is untouched"
 [ "$(wc -l < "$LOG" | tr -d ' ')" = 1 ] || fail "only bin/tool reaches ditto: $(cat "$LOG")"
+
+fresh; mkproduct p 'lib/*.dylib' 'bin/*' 'libexec/a b/*'
+mkfat "$T/p/lib/libfoo.dylib" x86_64 arm64
+mkthin "$T/p/lib/rustlib/aarch64-apple-darwin/lib/libstd-x.dylib" arm64
+mkfat "$T/p/lib/clang/22/lib/darwin/libclang_rt.osx.dylib" x86_64 arm64; cp "$T/p/lib/clang/22/lib/darwin/libclang_rt.osx.dylib" "$w/rt.orig"
+mkfat "$T/p/bin/sub/x" x86_64 arm64
+mkfat "$T/p/libexec/a b/c d" x86_64 arm64
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "apply must succeed"
+logged "--arch x86_64 $T/p/lib/libfoo.dylib" || fail "lib/*.dylib thins lib/libfoo.dylib"
+[ -f "$T/p/lib/rustlib/aarch64-apple-darwin/lib/libstd-x.dylib" ] || fail "lib/*.dylib never reaches a deeper rustlib file: * does not match /"
+cmp -s "$T/p/lib/clang/22/lib/darwin/libclang_rt.osx.dylib" "$w/rt.orig" || fail "lib/*.dylib never reaches compiler-rt"
+logged "--arch x86_64 $T/p/bin/sub/x" && fail "bin/* does not reach bin/sub/x"
+logged "--arch x86_64 $T/p/libexec/a b/c d" || fail "a glob and a path with spaces match component by component"
+[ "$(wc -l < "$LOG" | tr -d ' ')" = 2 ] || fail "only libfoo and c d reach ditto: $(cat "$LOG")"
 
 fresh; mkproduct p 'lib/*.dylib'
 mkfat "$T/p/lib/libssl.dylib" x86_64 arm64
@@ -210,7 +224,7 @@ MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "apply must succe
 [ ! -s "$LOG" ] || fail "a hard-linked file is left alone: $(cat "$LOG")"
 
 for harch in x86_64 arm64; do
-  fresh; mkproduct p 'X.app/*' 'bin/*'
+  fresh; mkproduct p 'X.app/Contents/*/*' 'bin/*'
   mkfat "$T/p/X.app/Contents/MacOS/x" x86_64 arm64
   mkthin "$T/p/X.app/Contents/Resources/armonly" arm64
   mkdir -p "$T/p/X.app/Contents/_CodeSignature"; : > "$T/p/X.app/Contents/_CodeSignature/CodeResources"
