@@ -10,6 +10,10 @@
 #          --slim-host GLOB (repeatable) is written verbatim as `slim-host`: the host programs and the libraries they load, the only
 #          files `mavergreen slim apply` thins. This is the one validator: a GLOB that starts with /, has a . or .. component, or is
 #          only *, ? and / is refused with exit 2. The key is absent when there are none, and such a product is never slimmed.
+#          A GLOB matches path by path component: it matches only a path with as many components, each matched by sh `case`,
+#          so * and ? never match / and there is no **; lib/*.dylib reaches lib/libfoo.dylib but not lib/rustlib/x/libstd.dylib.
+#          A library that output links against is target payload even when host programs load it too (openssl's lib/*.dylib),
+#          and is never slimmed: such a product declares only its programs.
 #          With --has-updater the manifest's appcast is the product's feed, from scripts/product-names; else empty.
 # spec: tests/render-manifest-test.sh
 set -eu
