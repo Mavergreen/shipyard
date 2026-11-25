@@ -3,27 +3,12 @@
   "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
   "configurePresets": [
     {
-      "name": "mavericks-native",
+      "name": "mavericks-x86_64",
       "hidden": true,
-      "displayName": "native -- build on OS X 10.9",
-      "environment": { "MAVERICKS_BUILD_ROOT": "$penv{TMPDIR}/mm-build" },
-      "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-native",
+      "displayName": "x86_64: Mac OS X 10.9, any host",
+      "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-x86_64",
       "toolchainFile": "${fileDir}/MavericksToolchain.cmake",
       "cacheVariables": {
-        "MAVERICKS_EXPECTED_MODE": "native",
-        "CMAKE_OSX_DEPLOYMENT_TARGET": "10.9",
-        "CMAKE_OSX_ARCHITECTURES": "x86_64"
-      }
-    },
-    {
-      "name": "mavericks-cross",
-      "hidden": true,
-      "displayName": "cross -- build for 10.9 on a modern host",
-      "environment": { "MAVERICKS_BUILD_ROOT": "$penv{TMPDIR}/mm-build" },
-      "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-cross",
-      "toolchainFile": "${fileDir}/MavericksToolchain.cmake",
-      "cacheVariables": {
-        "MAVERICKS_EXPECTED_MODE": "cross",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "10.9",
         "CMAKE_OSX_ARCHITECTURES": "x86_64"
       }
@@ -32,11 +17,9 @@
       "name": "macos-arm64",
       "hidden": true,
       "displayName": "arm64: macOS 11.0, any host",
-      "environment": { "MAVERICKS_BUILD_ROOT": "$penv{TMPDIR}/mm-build" },
       "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-arm64",
       "toolchainFile": "${fileDir}/MavericksToolchain.cmake",
       "cacheVariables": {
-        "MAVERICKS_EXPECTED_MODE": "modern",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "11.0",
         "CMAKE_OSX_ARCHITECTURES": "arm64"
       }

@@ -141,8 +141,8 @@ In your `CMakePresets.json`:
   "version": 6,
   "include": ["/usr/local/mavergreen/shipyard/share/cmake/MavericksShipyard/mavericks-presets.json"],
   "configurePresets": [
-    { "name": "native", "inherits": "mavericks-native" },
-    { "name": "cross",  "inherits": "mavericks-cross"  }
+    { "name": "x86_64", "inherits": "mavericks-x86_64" },
+    { "name": "arm64",  "inherits": "macos-arm64" }
   ]
 }
 ```
@@ -160,10 +160,9 @@ runners only; a non-empty `products` on any other runner fails.
 Then build, and test:
 
 ```sh
-shipyard-cmake --preset native    # on Mavericks
-shipyard-cmake --preset cross     # on Tahoe
-shipyard-ctest --preset native
-shipyard-cpack --preset native    # where the product packages with CPack
+shipyard-cmake --preset x86_64    # on any host
+shipyard-ctest --preset x86_64
+shipyard-cpack --preset x86_64    # where the product packages with CPack
 ```
 
 On macOS, a foreign or too-old CMake is refused by `find_package(MavericksShipyard)`, with a

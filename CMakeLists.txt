@@ -119,7 +119,7 @@ install(FILES
   DESTINATION "${_dest}")
 
 # platform: CMake expands a preset's ${fileDir} against the file of the preset being CONFIGURED, not
-#           the file that wrote the macro, so a consumer inheriting mavericks-cross from the installed
+#           the file that wrote the macro, so a consumer inheriting mavericks-x86_64 from the installed
 #           presets got "Could not find toolchain file: <consumer dir>/MavericksToolchain.cmake"
 #           (CMake 3.28, 4.4.3). The installed copy names the installed toolchain file absolutely.
 #           The source keeps ${fileDir}: it is the token replaced here, it keeps the source valid
