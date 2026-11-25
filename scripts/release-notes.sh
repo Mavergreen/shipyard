@@ -176,7 +176,7 @@ fi
 
 tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes.XXXXXX")"
 footer_tmp="$(mktemp "${TMPDIR:-/tmp}/release-notes-footer.XXXXXX")"
-trap 'rm -f "$tmp" "$footer_tmp" "$tmp.err"' EXIT
+trap 'rm -f "$tmp" "$footer_tmp" "$tmp.err" "$tmp.pins" "$tmp.notpins"' EXIT
 
 if [ "$SELF_UPSTREAM" = yes ]; then
   printf '## %s %s\n' "$PRODUCT" "$VER" > "$tmp"
@@ -348,6 +348,24 @@ if [ -n "$CALLER" ]; then
     || die "ingredient-pins.sh failed reading the pins $CALLER watches; a repackage caller whose pins cannot be read must not ship notes that call it packaging-only"
   [ -n "$PINS" ] || die "$CALLER calls repackage-on-ingredient-bump.yml but ingredient-pins.sh found no pins in it (check its 'paths:' list and own-upstream-paths)"
 fi
+# spec: tests/release-checks-agree-test.sh -- every pin version-check counts (own-code-pathspecs.sh
+#       --pins) reaches Build ingredients, with a repackage caller or without one; an upstream is not
+#       an ingredient: UPSTREAM_VERSION, each declared upstream file, Declared state's upstream and
+#       the caller's own-upstream-paths.
+sh "$SELF/own-code-pathspecs.sh" --root . --pins > "$tmp.pins" \
+  || die "own-code-pathspecs.sh cannot list this repo's pins (see the complaint above)"
+{
+  echo UPSTREAM_VERSION
+  sh "$SELF/versioning.sh" --root . | cut -f3
+  sh "$SELF/declared-state.sh" . | awk -F'\t' '$1 == "upstream" { sub(/:.*/, "", $2); print $2 }'
+  [ -z "$CALLER" ] || sh "$SELF/ingredient-pins.sh" --own-upstream "$CALLER" | sed 's/:.*//'
+  printf '%s\n' "$PINS" | sed 's/:.*//'
+} | sed '/^$/d' > "$tmp.notpins" || die "cannot read which pins are upstreams (see the complaint above)"
+set --
+while IFS= read -r _s; do set -- "$@" "$_s"; done < "$tmp.pins"
+EXTRA="$(git ls-files -- "$@" | LC_ALL=C sort -u | grep -vxF -f "$tmp.notpins" || :)"
+[ -z "$EXTRA" ] || PINS="$(printf '%s\n%s\n' "$PINS" "$EXTRA" | sed '/^$/d')"
+rm -f "$tmp.pins" "$tmp.notpins"
 # spec: tests/release-notes-test.sh "r3new"/"r1d" -- this repo's owner/repo names its own compare
 #       view; with neither source, a link is left out rather than guessed.
 SLUG="${GITHUB_REPOSITORY:-}"

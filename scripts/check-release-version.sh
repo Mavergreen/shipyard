@@ -11,8 +11,9 @@
 #            6. NR/D/changes/ commits a file named [a-z0-9-]+, or only pins moved since --previous
 #               (no own code, nothing in .github/ but action refs, a pin or an action ref, and FILE,
 #               when given, has "### Build ingredients", "### Pinned actions" or "- New upstream: ").
-#               The pins are own-code-pathspecs.sh --pins; a "path:KEY" pin file from
-#               ingredient-pins.sh is a pin only when its diff changes literal KEY=VALUE lines alone.
+#               The pins are own-code-pathspecs.sh --pins, less any upstream outside port (a
+#               counter's line is no upstream bump); a "path:KEY" pin file from ingredient-pins.sh
+#               is a pin only when its diff changes literal KEY=VALUE lines alone.
 #            7. Prints "check-release-version: ok — D" and why it passed.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning"
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes"
@@ -86,7 +87,13 @@ pathspecs() {   # $1 = own or pins; writes $work/$1, the own-code pathspecs or t
     [ -z "$upfile" ] || printf ':(exclude,literal)%s\n' "$upfile" >> "$work/own"
   else
     sh "$SELF/own-code-pathspecs.sh" --root "$ROOT" --pins > "$work/pins" || refuse "own-code-pathspecs.sh --pins refused $ROOT (it says why, above)"
-    [ -z "$upfile" ] || printf ':(literal)%s\n' "$upfile" >> "$work/pins"
+    if [ "$scheme" = port ]; then
+      [ -z "$upfile" ] || printf ':(literal)%s\n' "$upfile" >> "$work/pins"
+    else
+      { echo UPSTREAM_VERSION; [ -z "$upfile" ] || echo "$upfile"
+        sh "$SELF/declared-state.sh" "$ROOT" | awk -F'\t' '$1 == "upstream" { sub(/:.*/, "", $2); print $2 }'
+      } | sed 's/^/:(exclude,literal)/' >> "$work/pins"
+    fi
   fi
 }
 

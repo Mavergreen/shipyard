@@ -30,6 +30,8 @@ jobs:
 YML
 out="$(sh "$S")"
 [ "$out" = components/golang/version ] || { echo "FAIL: inline form (tailscale/container-tools shape) plus own-upstream exclusion: got '$out'"; exit 1; }
+out="$(sh "$S" --own-upstream)"
+[ "$out" = components/tailscale/version ] || { echo "FAIL: --own-upstream prints the caller's own-upstream-paths: got '$out'"; exit 1; }
 
 cat > .github/workflows/repackage-on-ingredient-bump.yml <<'YML'
 on:

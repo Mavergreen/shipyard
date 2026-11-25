@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: ingredient-pins.sh [caller-workflow-path]
+#   usage: ingredient-pins.sh [--own-upstream] [caller-workflow-path]
 #          Prints this repo's build-ingredient pin paths, one per line. Source of truth is the
 #          repo's OWN repackage caller: the paths it watches are the ingredient pins, minus
 #          own-upstream-paths (a new upstream is not an ingredient). Deriving the list here instead
@@ -12,7 +12,10 @@
 #          every pin lives in one pins.env/build.sh, and only SWIFT_VERSION is their own upstream)
 #          excludes just that KEY, printed here as "path:KEY" so ingredient-notes.sh can exclude the
 #          same one key while still reporting the file's other, genuinely-ingredient keys.
+#          --own-upstream prints those own-upstream-paths entries instead, one per line.
 set -eu
+OWN_ONLY=no
+if [ "${1:-}" = --own-upstream ]; then OWN_ONLY=yes; shift; fi
 caller="${1:-.github/workflows/repackage-on-ingredient-bump.yml}"
 [ -f "$caller" ] || exit 0
 
@@ -36,7 +39,6 @@ patterns="$(awk '
     inblock = 0
   }
 ' "$caller")"
-[ -n "$patterns" ] || exit 0
 
 # spec: tests/ingredient-pins-test.sh -- own-upstream-paths can be inline
 #       ("own-upstream-paths: pins.env:SWIFT_VERSION") OR a YAML block scalar
@@ -72,6 +74,11 @@ own="$(awk '
     }
   }
 ' "$caller" | tr -d '"'"'"'')"
+if [ "$OWN_ONLY" = yes ]; then
+  set -f; for o in $own; do printf '%s\n' "$o"; done
+  exit 0
+fi
+[ -n "$patterns" ] || exit 0
 
 # spec: tests/ingredient-pins-test.sh -- GitHub's '**' and sh's '*' both cross directory separators
 #       in a case pattern, so '**' collapses to '*'. set -f is load-bearing: unquoted $patterns is
