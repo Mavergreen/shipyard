@@ -22,8 +22,13 @@
 #          10.9) at that release is used instead, and CLANG22_INSTALLED replaces that path. A Mac fetch
 #          is unpacked once into ${MAVERGREEN_CLANG22_CACHE:-~/Library/Caches/mavergreen-clang22}/VERSION
 #          and kept, so a CI cache of that directory skips the download. CLANG22_HOST (linux, mac or
-#          mac109) replaces the host's own answer. Exit 1 on a failed fetch or install or an archive
-#          SHA256SUMS does not list, 2 on a usage error or a malformed pin.
+#          mac109) replaces the host's own answer. Whatever the path, the printed prefix holds each SDK
+#          its bin/clang.cfg and bin/clang++.cfg name as -isysroot <CFGDIR>/../SDKs/NAME: an installed
+#          prefix with no SDKs links it to ../sdkNNN/SDKs, the SDK product beside it, as its pkg does; a
+#          tree this script unpacked gets fetch_sdk.sh's pin for NAME, through its own bin/setup-sdk
+#          when it ships one, else through its SDKs link or a link in SDKs/. Exit 1 on a failed fetch or
+#          install, an archive SHA256SUMS does not list, or an SDK the prefix cannot be given, 2 on a
+#          usage error or a malformed pin.
 set -eu
 S="$(cd "$(dirname "$0")" && pwd)"
 die() { echo "fetch_clang22: $*" >&2; exit 1; }
@@ -64,10 +69,49 @@ can_make() {
   while [ ! -e "$_a" ]; do _a="$(dirname "$_a")"; done
   { [ -d "$_a" ] && [ -w "$_a" ]; } || sudo_works
 }
+. "$S/sdk-pins.sh"
+wire_sdk() {
+  _ws=""
+  for _wa in x86_64 arm64; do
+    _wp="$(shipyard_sdk_pin "$_wa")" || continue
+    [ "${_wp##* }" != "$2" ] || { _ws=$_wa; break; }
+  done
+  [ -n "$_ws" ] || die "$1/bin/clang.cfg names SDKs/$2, which no pin in sdk-pins.sh provides"
+  _wv="${2#MacOSX}"; _wv="${_wv%.sdk}"; _wprod="sdk$(printf '%s' "$_wv" | tr -d .)"
+  case "$1" in
+    "$W"/*) : ;;
+    *)
+      if [ ! -e "$1/SDKs" ] && [ ! -L "$1/SDKs" ] && [ -d "$1/../$_wprod/SDKs/$2" ]; then
+        ln -s "../$_wprod/SDKs" "$1/SDKs" 2>/dev/null || :
+      fi
+      [ -d "$1/SDKs/$2" ] \
+        || die "$1 has no SDKs/$2, which its clang.cfg names, and no $_wprod product beside it to link: install $_wprod (install-products.sh $_wprod@TAG)"
+      return 0 ;;
+  esac
+  _wsdk="$(MAVERICKS_SDK_SETTINGS_JSON='' sh "$S/fetch_sdk.sh" --arch "$_ws")" || die "fetch_sdk.sh --arch $_ws could not provide $2 for $1"
+  if [ -L "$1/SDKs" ]; then
+    _wt="$(readlink "$1/SDKs")"
+    case "$_wt" in /*) : ;; *) _wt="$1/$_wt" ;; esac
+    { mkdir -p "$_wt" && ln -s "$_wsdk" "$_wt/$2"; } 2>/dev/null || :
+  elif [ "$2" = MacOSX10.9.sdk ] && [ -x "$1/bin/setup-sdk" ]; then
+    "$1/bin/setup-sdk" "$_wsdk" > /dev/null || :
+  else
+    { mkdir -p "$1/SDKs" && ln -s "$_wsdk" "$1/SDKs/$2"; } 2>/dev/null || :
+  fi
+  [ -d "$1/SDKs/$2" ] || die "$1 has no SDKs/$2, which its clang.cfg names, and $_wsdk could not be wired there"
+}
+hand_back() {
+  for _n in $(cat "$1/bin/clang.cfg" "$1/bin/clang++.cfg" 2>/dev/null \
+    | awk '$1 == "-isysroot" && index($2, "<CFGDIR>/../SDKs/") == 1 { print substr($2, 18) }' | LC_ALL=C sort -u); do
+    case "$_n" in ''|.|..|*/*) die "$1/bin/clang.cfg names SDKs/$_n, not an SDK directory" ;; esac
+    [ -d "$1/SDKs/$_n" ] || wire_sdk "$1" "$_n"
+  done
+  printf '%s\n' "$1"; exit 0
+}
 from_pkg() {
   inst="${CLANG22_INSTALLED:-/usr/local/mavergreen/$1}"
   if has_tools "$inst" && [ "$(manifest_version "$inst")" = "$V" ]; then
-    printf '%s\n' "$inst"; exit 0
+    hand_back "$inst"
   fi
   d="$W/$1"
   sh "$S/fetch_product_pkg.sh" --asset "$2" "$1" "$V" "$d" >/dev/null || die "could not fetch and verify $2"
@@ -78,7 +122,7 @@ case "$host" in
     inst="${CLANG22_INSTALLED:-/usr/local/mavergreen/clang22}"
     have="$(manifest_version "$inst" || :)"
     if has_tools "$inst" && [ "$have" = "$V" ]; then
-      printf '%s\n' "$inst"; exit 0
+      hand_back "$inst"
     fi
     if [ -n "$have" ] && [ "$have" != "$V" ] && [ -z "${MAVERGREEN_CLANG22_CACHE:-}" ]; then
       echo "fetch_clang22: $inst holds clang22 $have, not $V, and is left alone, so clang22 $V goes beside it to $W/linux" >&2
@@ -118,4 +162,4 @@ case "$host" in
   mac) from_pkg clang22-cross "mavericks-clang-22-cross-$V.pkg" ;;
 esac
 has_tools "$d" || die "$d lacks clang, ld64.lld or one of llvm-{lipo,otool,nm,strings}"
-printf '%s\n' "$d"
+hand_back "$d"
