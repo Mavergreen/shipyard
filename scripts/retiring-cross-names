@@ -1,0 +1,7 @@
+# spec: tests/product-names-test.sh -- the registered *-cross pair halves awaiting their family's merge; the list only shrinks, and is empty when zig merges
+go126-cross
+go127-cross
+clang22-cross
+swift-toolchain-cross
+rust-cross
+zig-cross
