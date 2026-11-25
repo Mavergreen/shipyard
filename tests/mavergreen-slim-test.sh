@@ -15,17 +15,7 @@ fail() { echo "FAIL: $1"; exit 1; }
 if [ ! -x /usr/libexec/PlistBuddy ] && [ -z "${STEVEDORE:-}" ]; then STEVEDORE="$(sh "$here/../scripts/fetch_stevedore.sh")"; export STEVEDORE; fi
 V="$w/vol"; T="$V/usr/local/mavergreen"
 LOG="$w/ditto.log"
-cat > "$w/ditto" <<'STUB'
-#!/bin/sh
-args=""
-while [ $# -gt 2 ]; do args="$args $1"; shift; done
-printf '%s %s\n' "${args# }" "$1" >> "$DITTO_LOG"
-cp "$1" "$2"
-STUB
-chmod +x "$w/ditto"
-MAVERGREEN_DITTO="$w/ditto"; DITTO_LOG="$LOG"; export MAVERGREEN_DITTO DITTO_LOG
-
-mg() { sh "$MGS" --root "$V" "$@"; }
+cat > "$w/fx.sh" <<'FX'
 hexbytes() {
   _h="$1"
   while [ -n "$_h" ]; do
@@ -57,6 +47,30 @@ mkfat() { _f="$1"; shift; mkfat_with cffaedfe0000 "$_f" "$@"; }
 mkfatar() { _f="$1"; shift; mkfat_with 213c617263683e0a "$_f" "$@"; }
 mkthin() { mkdir -p "$(dirname "$1")"; { hexbytes cffaedfe; hexbytes "$(cpu_le "$2")"; hexbytes 0000000000000000; } > "$1"; }
 mkthinar() { mkdir -p "$(dirname "$1")"; printf '!<arch>\n' > "$1"; }
+FX
+. "$w/fx.sh"
+cat > "$w/ditto" <<'STUB'
+#!/bin/sh
+. "$DITTO_FX"
+args=""; cpus=""
+while [ $# -gt 2 ]; do
+  args="$args $1"
+  case "$1" in --arch) cpus="$cpus $2"; args="$args $2"; shift ;; esac
+  shift
+done
+printf '%s %s\n' "${args# }" "$1" >> "$DITTO_LOG"
+case "${DITTO_MODE:-ok}" in
+  empty) : > "$2" ;;
+  garbage) printf 'junk' > "$2" ;;
+  wrong) cp "$1" "$2" ;;
+  *) src="$1"; dst="$2"; set -- $cpus
+     if [ $# -eq 1 ]; then mkthin "$dst" "$1"; else mkfat "$dst" "$@"; fi ;;
+esac
+STUB
+chmod +x "$w/ditto"
+MAVERGREEN_DITTO="$w/ditto"; DITTO_LOG="$LOG"; DITTO_FX="$w/fx.sh"; export MAVERGREEN_DITTO DITTO_LOG DITTO_FX
+
+mg() { sh "$MGS" --root "$V" "$@"; }
 mkproduct() {  # $1 product  $2.. slim-keep globs
   _p="$1"; shift
   mkdir -p "$T/$_p"
@@ -140,4 +154,47 @@ fresh; mkproduct p
 mkdir -p "$w/fakebin"; printf '#!/bin/sh\necho Linux\n' > "$w/fakebin/uname"; chmod +x "$w/fakebin/uname"
 out="$(env -u MAVERGREEN_HOST_ARCH PATH="$w/fakebin:$PATH" sh "$MGS" --root "$V" slim status 2>&1)" && fail "slim off a Mac must fail"
 case "$out" in *"slimming is for a Mac"*) ;; *) fail "refusal was: $out" ;; esac
+
+fresh; mkproduct p
+mkdir -p "$T/p/lib"; { hexbytes cafebabe00000002; dd if=/dev/zero bs=200 count=1 2>/dev/null; } > "$T/p/lib/notmacho"
+cp "$T/p/lib/notmacho" "$w/notmacho.orig"
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "apply must succeed"
+cmp -s "$T/p/lib/notmacho" "$w/notmacho.orig" || fail "a cafebabe file whose slices are not Mach-O is left alone"
+[ ! -s "$LOG" ] || fail "no ditto call for it"
+
+fresh; mkproduct p
+mkfat_with cffaedfe0000 "$T/p/lib/unk" arm64 arm64
+mkfat_with cffaedfe0000 "$T/p/lib/mixed" arm64 i386
+mkfat "$T/p/lib/armonly" arm64 arm64
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "apply must succeed"
+[ ! -e "$T/p/lib/unk" ] && [ ! -e "$T/p/lib/armonly" ] || fail "a fat file of arm64 slices only is removed on x86_64"
+[ -f "$T/p/lib/mixed" ] || fail "a fat file with an i386 slice is thinned, not removed"
+
+fresh; mkproduct p
+for mode in empty garbage wrong; do
+  fresh; mkproduct p
+  mkfat "$T/p/bin/tool" x86_64 arm64; cp "$T/p/bin/tool" "$w/tool.orig"
+  env DITTO_MODE=$mode MAVERGREEN_HOST_ARCH=x86_64 sh "$MGS" --root "$V" slim apply p >/dev/null 2>&1 && fail "a bad ditto result ($mode) must fail the apply"
+  cmp -s "$T/p/bin/tool" "$w/tool.orig" || fail "a bad ditto result ($mode) must leave the original"
+  [ ! -e "$T/p/bin/tool.mavergreen-slim" ] || fail "a bad ditto result ($mode) leaves no temp file"
+  [ -f "$T/var/mavergreen/slimmed/p" ] || fail "the marker is written before the first change, so a failure still shows ($mode)"
+done
+
+fresh; mkproduct p
+mkfat "$T/p/bin/a" x86_64 arm64
+ln "$T/p/bin/a" "$T/p/bin/b"
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "apply must succeed"
+[ ! -s "$LOG" ] || fail "a hard-linked file is left alone: $(cat "$LOG")"
+
+for harch in x86_64 arm64; do
+  fresh; mkproduct p
+  mkfat "$T/p/X.app/Contents/MacOS/x" x86_64 arm64
+  mkthin "$T/p/X.app/Contents/Resources/armonly" arm64
+  mkdir -p "$T/p/X.app/Contents/_CodeSignature"; : > "$T/p/X.app/Contents/_CodeSignature/CodeResources"
+  mkfat "$T/p/bin/free" x86_64 arm64
+  MAVERGREEN_HOST_ARCH=$harch mg slim on >/dev/null || fail "slim on ($harch)"
+  [ -f "$T/p/X.app/Contents/Resources/armonly" ] || fail "a signed bundle's files are never removed ($harch)"
+  grep -Fq "X.app" "$LOG" && fail "a signed bundle's files are never thinned ($harch)"
+  grep -Fq "$T/p/bin/free" "$LOG" || fail "a file outside the bundle is thinned ($harch)"
+done
 echo "PASS: mavergreen-slim"
