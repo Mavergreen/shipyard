@@ -35,7 +35,7 @@ if [ -n "$EMIT" ]; then render_post "$EMIT"; exit 0; fi
 : "${OUT:?build-base-component: --out required}"
 W="$(mktemp -d "${TMPDIR:-/tmp}/mavergreen-base.XXXXXX")"; trap 'rm -rf "$W"' EXIT
 B="$W/root/usr/local/mavergreen/.base/$VER"; mkdir -p "$B" "$W/scripts" "$(dirname "$OUT")"
-sed "s/@MAVERGREEN_VERSION@/$VER/" "$SELF/mavergreen.sh" > "$B/mavergreen"; chmod 755 "$B/mavergreen"
+sed -e "s/@MAVERGREEN_VERSION@/$VER/" -e '/^\. "\$(dirname "\$0")\/lib\/host-arch\.sh"$/{' -e "r $SELF/lib/host-arch.sh" -e d -e '}' "$SELF/mavergreen.sh" > "$B/mavergreen"; chmod 755 "$B/mavergreen"
 printf '/usr/local/mavergreen/bin\n/usr/local/mavergreen/sbin\n' > "$B/paths"
 printf '/usr/local/mavergreen/share/man\n' > "$B/manpaths"
 render_post "$W/scripts/postinstall"
