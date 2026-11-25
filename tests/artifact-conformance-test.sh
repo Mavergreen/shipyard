@@ -1391,6 +1391,8 @@ manifest-line go.pkg 126"
 ok "line: one component can be the line (22.1.1 is clang 22)" 'expected 22.1.1-mavericks.5
 pkg c.pkg 22.1.1-mavericks.5 10.9.5 dev.mavergreen.clang.clang22
 asset c.pkg 10
+asset clang22-22.1.1-mavericks.5-macos-x86_64.tar.gz 10
+standalone clang22-22.1.1-mavericks.5-macos-x86_64.tar.gz ok
 component c.pkg dev.mavergreen.base
 component c.pkg dev.mavergreen.clang.clang22
 manifest c.pkg clang22 dev.mavergreen.clang.clang22 clang22
