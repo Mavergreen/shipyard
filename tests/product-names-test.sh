@@ -161,7 +161,8 @@ MAVERGREEN_RETIRING_CROSS_NAMES="$w/empty-retiring" MAVERGREEN_PRODUCT_NAMES="$w
 RET="$here/../scripts/retiring-cross-names"
 [ -f "$RET" ] || fail "scripts/retiring-cross-names must exist"
 stale=0
-for n in $(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$RET"); do
+retiring="$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$RET")" || fail "cannot read $RET"
+for n in $retiring; do
   sh "$S" identifier "$n" >/dev/null 2>&1 || { echo "FAIL: retiring-cross-names lists $n, which is no longer registered: drop it"; stale=1; }
 done
 [ "$stale" -eq 0 ] || exit 1

@@ -58,7 +58,7 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/sdk-pins.sh"
 # spec: tests/install-products-test.sh -- which requires-on-host entries a run takes: none on Linux,
 #       every one for a volume other than /, else the entries for the host's hardware arch.
-requires_arch() {  # $1 = root, $2 = host (linux or mac); prints mavergreen_requires's ARCH argument, or nothing
+requires_arch() {
   [ "$2" != linux ] || return 0
   case "$1" in ''|/) mavergreen_host_arch ;; *) echo all ;; esac
 }
