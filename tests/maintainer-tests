@@ -17,3 +17,5 @@ golden-gate tests/xcode-inputs-test.sh
 golden-gate tests/resource-inputs-test.sh
 10.9 tests/objc-guard-test.sh
 golden-gate tests/objc-guard-test.sh
+10.9 tests/mavergreen-slim-ditto-test.sh
+golden-gate tests/mavergreen-slim-ditto-test.sh

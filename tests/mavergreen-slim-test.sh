@@ -1,0 +1,143 @@
+#!/bin/sh
+# platform: host-agnostic
+#   usage: mavergreen-slim-test.sh
+#          `mavergreen slim` against a temporary --root, with a stub ditto that logs its arguments and
+#          Mach-O fixtures built from printf bytes: fat and thin binaries are thinned or removed for the
+#          host arch, while archives, files of the host's own arch, Java classes and slim-keep paths are
+#          left alone. Exit 0 clean, 1 on failure.
+# spec: scripts/mavergreen.sh
+set -eu
+here="$(cd "$(dirname "$0")" && pwd)"
+MGS="$here/../scripts/mavergreen.sh"
+w="$(mktemp -d "${TMPDIR:-/tmp}/mavergreen-slim.XXXXXX")"; trap 'rm -rf "$w"' EXIT
+w="$(cd -P "$w" && pwd)"
+fail() { echo "FAIL: $1"; exit 1; }
+if [ ! -x /usr/libexec/PlistBuddy ] && [ -z "${STEVEDORE:-}" ]; then STEVEDORE="$(sh "$here/../scripts/fetch_stevedore.sh")"; export STEVEDORE; fi
+V="$w/vol"; T="$V/usr/local/mavergreen"
+LOG="$w/ditto.log"
+cat > "$w/ditto" <<'STUB'
+#!/bin/sh
+args=""
+while [ $# -gt 2 ]; do args="$args $1"; shift; done
+printf '%s %s\n' "${args# }" "$1" >> "$DITTO_LOG"
+cp "$1" "$2"
+STUB
+chmod +x "$w/ditto"
+MAVERGREEN_DITTO="$w/ditto"; DITTO_LOG="$LOG"; export MAVERGREEN_DITTO DITTO_LOG
+
+mg() { sh "$MGS" --root "$V" "$@"; }
+hexbytes() {
+  _h="$1"
+  while [ -n "$_h" ]; do
+    _b="${_h%"${_h#??}"}"; _h="${_h#??}"
+    printf "\\$(printf %03o "$((0x$_b))")"
+  done
+}
+cpu_be() { case "$1" in x86_64) echo 01000007 ;; i386) echo 00000007 ;; arm64) echo 0100000c ;; esac; }
+cpu_le() { case "$1" in x86_64) echo 07000001 ;; i386) echo 07000000 ;; arm64) echo 0c000001 ;; esac; }
+mkfat_with() {  # $1 slice magic hex  $2 file  $3.. cpus
+  _m="$1"; _f="$2"; shift 2
+  mkdir -p "$(dirname "$_f")"
+  { hexbytes cafebabe; hexbytes "$(printf %08x $#)"
+    _i=0
+    for _c in "$@"; do
+      hexbytes "$(cpu_be "$_c")"; hexbytes 00000000
+      hexbytes "$(printf %08x $((4096 * (_i + 1))))"; hexbytes 00000008; hexbytes 0000000c
+      _i=$((_i + 1))
+    done; } > "$_f"
+  _i=0
+  for _c in "$@"; do
+    _pad=$((4096 * (_i + 1) - $(wc -c < "$_f")))
+    dd if=/dev/zero bs="$_pad" count=1 2>/dev/null >> "$_f"
+    hexbytes "$_m" >> "$_f"
+    _i=$((_i + 1))
+  done
+}
+mkfat() { _f="$1"; shift; mkfat_with cffaedfe0000 "$_f" "$@"; }
+mkfatar() { _f="$1"; shift; mkfat_with 213c617263683e0a "$_f" "$@"; }
+mkthin() { mkdir -p "$(dirname "$1")"; { hexbytes cffaedfe; hexbytes "$(cpu_le "$2")"; hexbytes 0000000000000000; } > "$1"; }
+mkthinar() { mkdir -p "$(dirname "$1")"; printf '!<arch>\n' > "$1"; }
+mkproduct() {  # $1 product  $2.. slim-keep globs
+  _p="$1"; shift
+  mkdir -p "$T/$_p"
+  { echo '<?xml version="1.0" encoding="UTF-8"?>'
+    echo '<plist version="1.0"><dict>'
+    echo "<key>product</key><string>$_p</string><key>group</key><string>$_p</string>"
+    echo "<key>identifier</key><string>dev.mavergreen.$_p</string><key>version</key><string>1.0</string>"
+    if [ $# -gt 0 ]; then echo '<key>slim-keep</key><array>'; for _g in "$@"; do echo "<string>$_g</string>"; done; echo '</array>'; fi
+    echo '</dict></plist>'; } > "$T/$_p/mavergreen.plist"
+}
+fresh() { rm -rf "$V"; : > "$LOG"; mkdir -p "$T/var"; }
+logged() { grep -Fxq -- "$1" "$LOG"; }
+
+fresh
+[ "$(MAVERGREEN_HOST_ARCH=x86_64 mg slim status)" = "slim: on, the default on an x86_64 Mac" ] || fail "x86_64 default status"
+[ "$(MAVERGREEN_HOST_ARCH=arm64 mg slim status)" = "slim: off, the default on an arm64 Mac" ] || fail "arm64 default status"
+MAVERGREEN_HOST_ARCH=bogus mg slim status 2>/dev/null && fail "a bad MAVERGREEN_HOST_ARCH must fail slim, not act as some arch"
+
+fresh; mkproduct p
+mkfat "$T/p/bin/tool" x86_64 arm64
+mkfat "$T/p/libexec/a b" i386 x86_64 arm64
+mkthin "$T/p/pkg/tool/darwin_arm64/x" arm64
+out="$(MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p)" || fail "apply must succeed"
+logged "--arch x86_64 $T/p/bin/tool" || fail "the fat binary is thinned to x86_64"
+logged "--arch x86_64 --arch i386 $T/p/libexec/a b" || fail "a name with a space is thinned to x86_64 and i386"
+[ ! -e "$T/p/pkg/tool/darwin_arm64/x" ] || fail "a thin arm64 file is removed on an x86_64 host"
+[ "$(cat "$T/var/mavergreen/slimmed/p")" = x86_64 ] || fail "slimmed/p records the arch"
+case "$out" in *"slimmed 3 files in p to x86_64"*) ;; *) fail "stdout was: $out" ;; esac
+
+fresh; mkproduct p
+mkfatar "$T/p/lib/libc++.a" x86_64 arm64
+mkthinar "$T/p/lib/darwin/libclang_rt.osx.a"
+mkthin "$T/p/lib/x86only" x86_64
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "apply must succeed"
+[ ! -s "$LOG" ] || fail "no ditto call for archives or x86_64-only files: $(cat "$LOG")"
+for f in lib/libc++.a lib/darwin/libclang_rt.osx.a lib/x86only; do [ -f "$T/p/$f" ] || fail "$f must still exist"; done
+[ ! -e "$T/var/mavergreen/slimmed/p" ] || fail "nothing changed, so no marker"
+
+fresh; mkproduct p
+mkdir -p "$T/p/share"; hexbytes cafebabe00000034 > "$T/p/share/A.class"
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "apply must succeed"
+[ ! -s "$LOG" ] || fail "a Java class is not a fat binary"
+[ -f "$T/p/share/A.class" ] || fail "the class file stays"
+
+fresh; mkproduct p 'lib/*.dylib'
+mkfat "$T/p/lib/libssl.dylib" x86_64 arm64
+mkfat "$T/p/lib/other" x86_64 arm64
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "apply must succeed"
+logged "--arch x86_64 $T/p/lib/libssl.dylib" && fail "a slim-keep path is not thinned"
+logged "--arch x86_64 $T/p/lib/other" || fail "a path outside slim-keep is thinned"
+
+fresh; mkproduct p
+mkfat "$T/p/bin/tool" x86_64 arm64
+mkthin "$T/p/lib/x86only" x86_64
+mkthin "$T/p/lib/armonly" arm64
+MAVERGREEN_HOST_ARCH=arm64 mg slim on >/dev/null || fail "slim on must succeed"
+logged "--arch arm64 $T/p/bin/tool" || fail "the fat file is thinned to arm64"
+[ -f "$T/p/lib/x86only" ] || fail "an arm64 host never removes a thin x86_64 file"
+[ -f "$T/p/lib/armonly" ] || fail "an arm64 host keeps its own"
+[ "$(cat "$T/var/mavergreen/slim")" = on ] || fail "slim on is recorded"
+[ "$(MAVERGREEN_HOST_ARCH=arm64 mg slim status)" = "slim: on, set with mavergreen slim on" ] || fail "status after on"
+
+fresh; mkproduct p; mkproduct q
+mkfat "$T/p/bin/tool" x86_64 arm64
+out="$(MAVERGREEN_HOST_ARCH=x86_64 mg slim off)" || fail "slim off"
+[ "$out" = "mavergreen: slimming is off; nothing installed was slimmed" ] || fail "off with none: $out"
+[ "$(MAVERGREEN_HOST_ARCH=x86_64 mg slim status)" = "slim: off, set with mavergreen slim off" ] || fail "status after off"
+MAVERGREEN_HOST_ARCH=x86_64 mg slim on >/dev/null || fail "slim on"
+[ -f "$T/var/mavergreen/slimmed/p" ] || fail "slim on slims every installed product"
+out="$(MAVERGREEN_HOST_ARCH=x86_64 mg slim off)" || fail "slim off"
+[ "$out" = "mavergreen: slimming is off; reinstall these to restore their other slices: p" ] || fail "off lists: $out"
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p || fail "apply while off"
+[ ! -e "$T/var/mavergreen/slimmed/p" ] || fail "apply while off clears the marker"
+
+fresh; mkproduct p
+mkdir -p "$T/var/mavergreen/slimmed"; echo x86_64 > "$T/var/mavergreen/slimmed/p"
+mg uninstall p >/dev/null 2>&1 || fail "uninstall p"
+[ ! -e "$T/var/mavergreen/slimmed/p" ] || fail "uninstall removes slimmed/p"
+
+fresh; mkproduct p
+mkdir -p "$w/fakebin"; printf '#!/bin/sh\necho Linux\n' > "$w/fakebin/uname"; chmod +x "$w/fakebin/uname"
+out="$(env -u MAVERGREEN_HOST_ARCH PATH="$w/fakebin:$PATH" sh "$MGS" --root "$V" slim status 2>&1)" && fail "slim off a Mac must fail"
+case "$out" in *"slimming is for a Mac"*) ;; *) fail "refusal was: $out" ;; esac
+echo "PASS: mavergreen-slim"
