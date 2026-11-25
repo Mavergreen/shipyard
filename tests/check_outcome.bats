@@ -80,11 +80,14 @@ main_body() {
   [ "$(sed -n 3p "$WORK/fg")" = '    [NSApp activateIgnoringOtherApps:YES];' ]
 }
 
-@test "the silent probe runs as an Accessory app and activates only under gUserInitiated" {
+@test "the app launches as LSUIElement and only mav_foreground changes its activation policy" {
+  awk '/<key>LSUIElement<\/key>/ { getline; print; exit }' "$HDR_DIR/Info.plist.in" > "$WORK/ui"
+  [ "$(tr -d '[:space:]' < "$WORK/ui")" = '<true/>' ]
+  [ "$(grep -c 'setActivationPolicy:' "$MAIN")" -eq 1 ]
+}
+
+@test "the silent probe activates only under gUserInitiated" {
   main_body > "$WORK/main"
-  [ "$(grep -c 'setActivationPolicy:' "$WORK/main")" -eq 1 ]
-  grep -A1 'setActivationPolicy:gUserInitiated ? NSApplicationActivationPolicyRegular$' "$WORK/main" \
-    | grep -q ': NSApplicationActivationPolicyAccessory\];$'
   run awk '
     /^        if \(gUserInitiated\) \{$/ { branch = "user"; next }
     branch == "user" && /^        \} else \{$/ { branch = "probe"; next }
@@ -100,4 +103,13 @@ main_body() {
   main_body > "$WORK/main"
   [ "$(grep -c 'runModal\]' "$WORK/main")" -eq 2 ]
   [ "$(grep -B1 'NSAlert \*[a-z]* = \[\[NSAlert alloc\] init\];' "$WORK/main" | grep -c 'mav_foreground();')" -eq 2 ]
+}
+
+@test "every --user relaunch goes through LaunchServices as a new instance" {
+  [ "$(grep -c 'NSTask launchedTaskWithLaunchPath' "$MAIN")" -eq 0 ]
+  [ "$(grep -c 'mav_relaunch_user();' "$MAIN")" -eq 2 ]
+  awk '/^static void mav_relaunch_user\(void\) \{/ { on = 1 } on { print } on && /^}/ { exit }' "$MAIN" > "$WORK/rl"
+  grep -q 'launchApplicationAtURL:\[\[NSBundle mainBundle\] bundleURL\]' "$WORK/rl"
+  grep -q 'options:NSWorkspaceLaunchNewInstance' "$WORK/rl"
+  grep -q 'NSWorkspaceLaunchConfigurationArguments: @\[@"--user"\]' "$WORK/rl"
 }
