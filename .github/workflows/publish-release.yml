@@ -9,6 +9,15 @@ on:
         description: "Release version; also the tag name."
         type: string
         required: true
+      product:
+        description: "The product's short name, as INGREDIENTS.md's ## Versioning declares it."
+        type: string
+        required: true
+      release-mode:
+        description: "auto or local, from release-mode.sh: the mode the run's version was derived with."
+        type: string
+        required: false
+        default: auto
       artifact:
         description: "Artifact holding the assets and the notes file."
         type: string
@@ -57,6 +66,15 @@ jobs:
           name: ${{ inputs.artifact }}
           path: dist
 
+      - name: Check out the caller (for check-release-version.sh)
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ inputs.target-commitish || github.sha }}
+          fetch-depth: 0
+          path: .caller
+          persist-credentials: false
+
       # platform: download-artifact matched by pattern, not name -- a name that matches nothing fails
       #           the step (a red annotation on what may be a legitimately unsigned release); a
       #           pattern that matches nothing downloads nothing, and require_key_scan.sh below
@@ -102,16 +120,24 @@ jobs:
           echo "=== body ==="; cat "dist/$NOTES"
           { echo 'files<<EOF'; printf '%s\n' "$files"; echo 'EOF'; } >> "$GITHUB_OUTPUT"
 
+      - name: The version follows the declared scheme, with its notes
+        env:
+          PRODUCT: ${{ inputs.product }}
+          VERSION: ${{ inputs.version }}
+          MODE: ${{ inputs.release-mode }}
+          NOTES: ${{ inputs.notes-file }}
+          TARGET: ${{ inputs.target-commitish || github.sha }}
+        run: |
+          sh .shipyard/scripts/check-release-version.sh --root .caller --product "$PRODUCT" \
+            --version "$VERSION" --sha "$TARGET" --mode "$MODE" --publishing yes \
+            --notes-file "dist/$NOTES"
+
       - name: Refuse an already-taken tag
         env:
           VER: ${{ inputs.version }}
           REPO: ${{ github.repository }}
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
-          SHA: ${{ github.sha }}
         run: |
-          sh .shipyard/scripts/assert_tag_publishable.sh \
-            "$VER" "https://github.com/$REPO" "$REF_TYPE" "$REF_NAME" "$SHA"
+          sh .shipyard/scripts/assert_tag_publishable.sh "$VER" "https://github.com/$REPO"
 
       - name: A first release needs a README a human has read
         env:
