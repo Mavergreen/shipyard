@@ -865,6 +865,32 @@ for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' 2>
        "build it with stevedore's component and product commands, or declare '- packager:$f: <why it must, and its exit>' under INGREDIENTS.md's ## Conformance deviations (see the conventions skill, check 35)"
 done
 
+# spec: SKILL.md "Family conventions" check 40 -- what the unified toolchains removed or renamed is
+#       refused by name. tests/ and test/ are excluded, as in check 35: a test asserting a name is gone
+#       has to name it. Like check 16, no pattern below spells a name it matches, or this gate is its
+#       own first offender.
+_tn_mode='(MAVERICKS_MOD[E]|mavericks_mod[e])[^A-Za-z0-9_]'
+_tn_fn="mavericks_require_expected_""mode"; _tn_var="MAVERICKS_EXPECTED_""MODE"
+_tn_pre="mavericks-""native and mavericks-""cross"
+for f in $(git ls-files -- '*.sh' '*.yml' '*.yaml' '*.cmake' 'CMakeLists.txt' '*.bats' '*CMakePresets.json' 2>/dev/null | grep -Ev '^tests?/'); do
+  _tn="$(grep -v '^[[:space:]]*#' "$f" 2>/dev/null | sed 's/[[:space:]]#.*$//' || :)"
+  [ -n "$_tn" ] || continue
+  _why=""
+  printf '%s\n' "$_tn" | grep -q 'mavericks_require_expected_mod[e]' \
+    && _why="$_why; ${_tn_fn}() is removed: delete the call"
+  printf '%s\n' "$_tn" | grep -q 'MAVERICKS_EXPECTED_MOD[E]' \
+    && _why="$_why; $_tn_var is gone: delete it and inherit mavericks-x86_64 or macos-arm64"
+  printf '%s\n' "$_tn" | grep -qE '(^|[^A-Za-z0-9_-])maverick[s]-(native|cross)([^A-Za-z0-9_-]|$)' \
+    && _why="$_why; the $_tn_pre presets are removed: name mavericks-x86_64 (or macos-arm64 for an arm64 build)"
+  printf '%s\n' "$_tn" | grep -E "$_tn_mode" \
+    | grep -qE "(=|STREQUAL|MATCHES)[[:space:]]*[\"']?(nativ[e]|cros[s])([\"'|)[:space:]]|\$)|[\"'(|^](nativ[e]|cros[s])[|)\$\"']" \
+    && _why="$_why; the build mode is compared with native or cross, which it never is now: native is mavericks, cross is modern"
+  [ -n "$_why" ] || continue
+  excused toolchain-names "$f" && continue
+  fail "toolchain-names $f: names what the unified toolchains removed or renamed${_why}" \
+       "make each change named above, or declare '- toolchain-names:$f: <reason, exit>' under INGREDIENTS.md's ## Conformance deviations (see the conventions skill, check 40)"
+done
+
 # spec: SKILL.md "Family conventions" check 36 -- a job on a macos-* runner needs a declared reason:
 #       those runners are scarce. A runs-on of ${{ matrix.X }} is read through the job's matrix. No
 #       PyYAML already failed check 8.
