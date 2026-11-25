@@ -72,4 +72,8 @@ p requires-on-host:2 >/dev/null 2>&1 && fail "requires-on-host has exactly the e
 p requires:0 >/dev/null 2>&1 && fail "requires-on-host does not write requires"
 sh "$S" --stage "$st" --product openssh --name x --version 1
 p requires-on-host:0 >/dev/null 2>&1 && fail "a product without the flag has no requires-on-host key"
+sh "$S" --stage "$st" --product openssh --name x --version 1 --slim-keep 'lib/*.dylib'
+[ "$(p slim-keep:0)" = 'lib/*.dylib' ] || fail "slim-keep is written verbatim"
+sh "$S" --stage "$st" --product openssh --name x --version 1
+p slim-keep:0 >/dev/null 2>&1 && fail "a product without the flag has no slim-keep key"
 echo "PASS: render-manifest"
