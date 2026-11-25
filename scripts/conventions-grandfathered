@@ -19,7 +19,6 @@ linux-gate make release.yml:tests
 linux-gate openssh release.yml:build
 linux-gate pi release.yml:build
 linux-gate python-315 release.yml:tests
-linux-gate rg release.yml:build
 linux-gate stevedore ci.yml:oracle
 linux-gate swift release.yml:build
 linux-gate swift release.yml:build-cross
@@ -35,7 +34,6 @@ macos-runner claude-code release.yml:build
 macos-runner codex-cli builds.yml:codex-build
 macos-runner codex-cli release.yml:build
 macos-runner drydock release.yml:build
-macos-runner fd release.yml:build
 macos-runner longboat release.yml:build
 macos-runner longboat release.yml:collect
 macos-runner magic-trackpad2 release.yml:build-macos
@@ -51,7 +49,6 @@ macos-runner python-315 release.yml:build-x86_64
 macos-runner python-315 release.yml:installed-arm64
 macos-runner python-315 release.yml:package
 macos-runner python-315 release.yml:tests
-macos-runner rg release.yml:build
 macos-runner swift release.yml:build
 macos-runner swift release.yml:build-cross
 macos-runner swift release.yml:collect
