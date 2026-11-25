@@ -1,7 +1,7 @@
 # Mavericks.cmake -- shared build conventions for the mavericks-* family.
 #
-# These projects all build native artifacts that run on OS X 10.9 "Mavericks"
-# and cross-build for it from a modern macOS on GitHub Actions. This module
+# These projects all build artifacts that run on OS X 10.9 "Mavericks", on 10.9
+# itself, on a modern Mac and on Linux. This module
 # centralizes what that takes; each project keeps its own targets/packaging.
 #
 # Usage (in a project CMakeLists.txt): every mavericks-* project can include this.
@@ -16,7 +16,7 @@
 #   mavericks_assert_binary_compatible(foo)        # assert the binary stays 10.9-safe
 #
 # Deployment target + architecture must be set BEFORE project() to take effect, so
-# they come from your preset (inherit mavericks-native / mavericks-cross from
+# they come from your preset (inherit mavericks-x86_64 / macos-arm64 from
 # mavericks-presets.json) -- NOT from this umbrella, which runs after project(). A
 # project on a non-Apple toolchain sets(MAVERICKS_REQUIRE_APPLECLANG OFF) first.
 # Install once with `cmake --install` (self-registers); see README.
@@ -28,14 +28,14 @@ set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-s
 # project() via the preset -- this umbrella runs too late to set them.)
 add_compile_options(-Wall -Wno-deprecated-declarations)
 
-include(MavericksMode)          # -> MAVERICKS_MODE, guard vs the preset's expected mode
+include(MavericksMode)          # -> MAVERICKS_MODE
 
-# SKILL.md "SDK pinning": a cross build links the PINNED SDK for its arch, never the runner's. The
+# SKILL.md "SDK pinning": a modern-host build links the PINNED SDK for its arch, never the runner's. The
 # toolchain file (via the shipyard presets) sets it before project(); anything else is refused here, the
-# earliest point shipyard runs, rather than discovered at package time. Native builds take the same
-# fetched pin from the toolchain file; this check stays cross-only, where a runner's own SDK is the risk,
+# earliest point shipyard runs, rather than discovered at package time. A 10.9 host takes the same
+# fetched pin from the toolchain file; this check stays modern-only, where a runner's own SDK is the risk,
 # and package-time conformance checks what every build records.
-if(MAVERICKS_MODE STREQUAL "cross")
+if(MAVERICKS_MODE STREQUAL "modern")
   list(LENGTH CMAKE_OSX_ARCHITECTURES _mav_na)
   if(_mav_na EQUAL 1)
     execute_process(COMMAND sh "${MAVERICKS_SHARED_DIR}/scripts/fetch_sdk.sh" --arch "${CMAKE_OSX_ARCHITECTURES}"
@@ -52,7 +52,7 @@ if(MAVERICKS_MODE STREQUAL "cross")
     if(NOT _mav_have STREQUAL _mav_want)
       message(FATAL_ERROR
         "CMAKE_OSX_SYSROOT '${CMAKE_OSX_SYSROOT}' is not the pinned SDK for ${CMAKE_OSX_ARCHITECTURES} ('${_mav_pin}').\n"
-        "Configure through a shipyard preset (mavericks-cross), or pass "
+        "Configure through a shipyard preset (mavericks-x86_64), or pass "
         "-DCMAKE_TOOLCHAIN_FILE=${MAVERICKS_SHARED_DIR}/MavericksToolchain.cmake. See SKILL.md \"SDK pinning\".")
     endif()
   elseif(_mav_na EQUAL 0)
@@ -60,13 +60,13 @@ if(MAVERICKS_MODE STREQUAL "cross")
     # `cmake -S . -B b` on a modern Mac sets no CMAKE_OSX_ARCHITECTURES at all (it comes only from the
     # preset / toolchain file / an explicit -D, never from AppleClang detection). That is the FIRST
     # thing every newly-red consumer hits, so it gets the same actionable guidance as a wrong sysroot,
-    # not the "one arch per cross configure" message meant for 2+ arches.
+    # not the "one arch per configure" message meant for 2+ arches.
     message(FATAL_ERROR
       "CMAKE_OSX_ARCHITECTURES is empty -- no arch means no pinned SDK to check.\n"
-      "Configure through a shipyard preset (mavericks-cross), or pass "
+      "Configure through a shipyard preset (mavericks-x86_64), or pass "
       "-DCMAKE_TOOLCHAIN_FILE=${MAVERICKS_SHARED_DIR}/MavericksToolchain.cmake. See SKILL.md \"SDK pinning\".")
   else()
-    message(FATAL_ERROR "include(Mavericks): one arch per cross configure (got '${CMAKE_OSX_ARCHITECTURES}'); build each and merge")
+    message(FATAL_ERROR "include(Mavericks): one arch per configure (got '${CMAKE_OSX_ARCHITECTURES}'); build each and merge")
   endif()
 endif()
 

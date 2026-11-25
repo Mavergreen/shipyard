@@ -3,10 +3,10 @@
 # misses both -- the SDK-pinning spike's porthole could not find Cocoa that way). One arch per configure:
 #   x86_64 (default) -> MacOSX10.9.sdk, deployment target 10.9
 #   arm64            -> MacOSX11.3.sdk, deployment target 11.0
-# On a 10.9 host (native mode, x86_64 only) the sysroot is the same fetched pin: the build never asks
+# On a 10.9 host (x86_64 only) the sysroot is the same fetched pin: the build never asks
 # xcrun, so it is identical with or without the Command Line Tools (vision area 18 A). Package-time
 # conformance verifies what each build records. Pins: scripts/sdk-pins.sh; rule: SKILL.md "SDK pinning".
-# Use it via the shipyard presets (mavericks-native / mavericks-cross / macos-arm64) or -DCMAKE_TOOLCHAIN_FILE=<this>.
+# Use it via the shipyard presets (mavericks-x86_64 / macos-arm64) or -DCMAKE_TOOLCHAIN_FILE=<this>.
 if(NOT CMAKE_OSX_ARCHITECTURES)
   set(CMAKE_OSX_ARCHITECTURES x86_64 CACHE STRING "one arch per configure" FORCE)
 endif()
@@ -26,8 +26,8 @@ execute_process(COMMAND sw_vers -productVersion OUTPUT_VARIABLE _mav_osv
                 OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 if(_mav_osv MATCHES "^10\\.9\\.")
   if(NOT CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64")
-    message(FATAL_ERROR "MavericksToolchain.cmake: a native build (on 10.9) is x86_64 only (got '${CMAKE_OSX_ARCHITECTURES}') -- "
-                        "build ${CMAKE_OSX_ARCHITECTURES} cross, on a modern host")
+    message(FATAL_ERROR "MavericksToolchain.cmake: a 10.9 host builds x86_64 only (got '${CMAKE_OSX_ARCHITECTURES}'): "
+                        "build arm64 on a modern Mac or on Linux")
   endif()
 endif()
 execute_process(
@@ -43,7 +43,7 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
   set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
   # spec: tests/linux-toolchain-test.sh -- a language with no compiler named (-D or its environment
   #       variable) gets the pinned clang22, targeting the arch's floor and linking with its ld64.lld,
-  #       so a Linux cross build needs nothing beyond the preset.
+  #       so a Linux build needs nothing beyond the preset.
   # spec: tests/linux-cxx-own-libcxx-test.sh -- x86_64 keeps clang22's own clang.cfg and clang++.cfg,
   #       so it links as clang22 on 10.9 does: Recaulk, the toolchain's libc++ and the cfg's linker.
   # spec: tests/linux-arm64-sdk-libcxx-test.sh -- arm64 C++ compiles against the SDK's libc++ headers.

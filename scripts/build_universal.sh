@@ -5,12 +5,12 @@
 #          minos 11.0), installs each into its own staging directory, and merges the two trees into
 #          --out with lipo-merge-tree.sh --require-archs "x86_64 arm64": identical files are copied,
 #          Mach-O files lipo'd, and any other difference refuses the merge. The presets default to
-#          the names products inherit: --x86_64-preset to native on a 10.9 host and cross elsewhere
-#          (scripts/mavericks_mode.sh), --arm64-preset to arm64. --out must not exist; it is left
-#          absent on failure. CMAKE names the cmake (default: shipyard-cmake, else cmake), which
-#          reads TMPDIR; an unset TMPDIR becomes /tmp. Build logs go to stderr; --out's path is the
-#          only line on stdout. Exit 0 on success, 1 on a failed build or merge, 2 on a usage error
-#          or an existing --out.
+#          the names products give them: --x86_64-preset to x86_64, --arm64-preset to arm64. --out
+#          must not exist; it is left absent on failure. CMAKE names the cmake (default:
+#          shipyard-cmake, else cmake). An unset TMPDIR becomes /tmp, and an unset
+#          MAVERICKS_BUILD_ROOT becomes $TMPDIR/mm-build, where the presets put each build directory.
+#          Build logs go to stderr; --out's path is the only line on stdout. Exit 0 on success, 1 on
+#          a failed build or merge, 2 on a usage error or an existing --out.
 # platform: a modern host builds both slices; a 10.9 host cannot build arm64, so there it fails at
 #           the arm64 configure.
 set -eu
@@ -21,7 +21,7 @@ usage() {
   exit 2
 }
 die() { echo "build_universal: $*" >&2; exit 1; }
-src=""; out=""; xp=""; ap=arm64
+src=""; out=""; xp=x86_64; ap=arm64
 while [ "$#" -gt 0 ]; do
   [ "$#" -ge 2 ] || usage
   case "$1" in
@@ -36,15 +36,13 @@ done
 [ -n "$src" ] && [ -n "$out" ] || usage
 [ -d "$src" ] || { echo "build_universal: no source directory $src" >&2; usage; }
 [ ! -e "$out" ] && [ ! -L "$out" ] || { echo "build_universal: $out already exists" >&2; exit 2; }
-if [ -z "$xp" ]; then
-  case "$(sh "$SELF/mavericks_mode.sh")" in native) xp=native ;; *) xp=cross ;; esac
-fi
 src="$(cd "$src" && pwd)"
 case "$out" in /*) ;; *) out="$(pwd)/$out" ;; esac
 
 CMAKE="${CMAKE:-$(command -v shipyard-cmake || echo cmake)}"
 [ -n "${TMPDIR:-}" ] || TMPDIR=/tmp
-export TMPDIR
+[ -n "${MAVERICKS_BUILD_ROOT:-}" ] || MAVERICKS_BUILD_ROOT="${TMPDIR%/}/mm-build"
+export TMPDIR MAVERICKS_BUILD_ROOT
 CL="$(sh "$SELF/fetch_clang22.sh" "$SY/components/clang22")" || die "could not fetch the pinned clang22"
 LIPO="$CL/bin/llvm-lipo"
 export LIPO
