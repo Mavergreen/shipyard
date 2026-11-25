@@ -11,6 +11,7 @@
 #            manifest      <file> <product> <identifier> <dir>    one per usr/local/mavergreen/<dir>/mavergreen.plist
 #            manifest-outside <file> <path>                       one per entry of that manifest's outside (%20-encoded)
 #            manifest-generated <file> <path>                     one per entry of that manifest's generated (%20-encoded)
+#            manifest-requires-on-host <file> <arch> <spec> <repo|none>  one per entry of that manifest's requires-on-host; repo is what scripts/product-names registers the spec's product to
 #            registered    <product> <identifier|none> <repo|none>     what scripts/product-names registers the product to
 #            derived       <product> <bundle-id> <label> <app> <feed>  the updater identity product-name.sh derives for it
 #            manifest-line <file> <line|none>                     that manifest's line
@@ -235,6 +236,20 @@ EOF
       || fail manifest "$pk's manifest lists generated entry '$(dec "$gp")' in a shape the helper refuses to uninstall -- empty, absolute, ending in /, an empty, . or .. segment, or under usr/local/mavergreen" "$pk"
   done < "$tmp/generated-$pk"
 done
+
+# spec: tests/artifact-conformance-test.sh -- a requires-on-host entry names x86_64 or arm64 and a product
+#       shipyard registers, and never the manifest's own product.
+grep '^manifest-requires-on-host ' "$facts" > "$tmp/reqhost" || true
+while read -r _ rf ra rs rr; do
+  case "$ra" in
+    x86_64|arm64) : ;;
+    *) fail requires-on-host "$rf requires ${rs%%>=*} on $ra, which is not x86_64 or arm64" "$rf"; continue ;;
+  esac
+  [ "$rr" != none ] \
+    || { fail requires-on-host "$rf requires ${rs%%>=*} on $ra, which is not in shipyard's scripts/product-names" "$rf"; continue; }
+  [ "$(awk -v p="$rf" '$2 == p { print $3; exit }' "$tmp/manifests")" != "${rs%%>=*}" ] \
+    || fail requires-on-host "$rf requires ${rs%%>=*} on $ra, which is its own product" "$rf"
+done < "$tmp/reqhost"
 
 # spec: tests/artifact-conformance-test.sh -- line identity: an updater's app, bundle id, label and
 #       feed are the derived record's, a lined product's line is its version and its repo's suffix,

@@ -234,6 +234,13 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
       while _g="$("$STEVEDORE" plist get "$_mf" "generated:$_k" 2>/dev/null)"; do
         printf 'manifest-generated %s %s\n' "$1" "$(printf '%s' "$_g" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
       done
+      _k=0
+      while _h="$("$STEVEDORE" plist get "$_mf" "requires-on-host:$_k" 2>/dev/null)"; do
+        _ha="${_h%%:*}"; _hs="${_h#*:}"; _hr=none
+        _rc=0; registry_lookup repo "${_hs%%>=*}" || _rc=$?
+        [ "$_rc" -ne 0 ] || _hr="$REG_V"
+        printf 'manifest-requires-on-host %s %s %s %s\n' "$1" "$(printf '%s' "$_ha" | enc)" "$(printf '%s' "$_hs" | enc)" "$_hr"; _k=$((_k + 1))
+      done
     done
   done
   return 0
