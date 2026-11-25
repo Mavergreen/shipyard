@@ -21,6 +21,9 @@
 #          fatally: a failure prints "P: could not slim; the universal tree stays" and the install succeeds.
 #          --slim-host GLOB (repeatable) is written to the manifest's `slim-host`: the host programs under the tree and the
 #          libraries they load, the only files slim thins. render-manifest.sh validates it; a product with none is never slimmed.
+#          A GLOB matches path by path component: as many components, each matched by sh `case`, so * and ? never match /
+#          and there is no **. A library that output links against is target payload even when host programs load it too
+#          (openssl's lib/*.dylib), and is never slimmed: such a product declares only its programs.
 #          --boot-kext BUNDLE_ID (repeatable) names an unsigned kext staged anywhere under ROOT that
 #          10.9 must load: the postinstall lists BUNDLE_ID, at the installed kext's CFBundleVersion, in
 #          the target volume's OSKextSigExceptionList and, on the boot volume, restarts kextd, before
