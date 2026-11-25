@@ -2990,8 +2990,8 @@ is the fact), twelve checks, each excusable only by a scoped, reasoned deviation
 | `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
 | `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus a `-cross` suffix (which goes when `scripts/retiring-cross-names` is empty, at the last pair family's merge), is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | with `$GITHUB_REPOSITORY` set, every product a release ships is registered to that repo (by name; the owner is not compared) | the pkg filename |
-| `requires-on-host` | every manifest `requires-on-host` entry names `x86_64` or `arm64`, and a product the registry names that is not the manifest's own (see "The toolchain: one product, default target 10.9 x86_64") | the manifest's path |
-| `slim-host` | a product with fat Mach-O under `bin/` or `libexec/` declares `slim-host` globs (see "The toolchain: one product, default target 10.9 x86_64") | the manifest's path |
+| `requires-on-host` | every manifest `requires-on-host` entry names `x86_64` or `arm64`, and a product the registry names that is not the manifest's own (see "The toolchain: one product, default target 10.9 x86_64") | the pkg filename |
+| `slim-host` | a product with fat Mach-O under `bin/` or `libexec/` declares `slim-host` globs (see "The toolchain: one product, default target 10.9 x86_64") | the pkg filename |
 
 Paths are relative to `/`, after each component's `install-location`; a manifest is read only from a
 component installed at `/`, since a product tree always is.
