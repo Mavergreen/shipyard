@@ -1,7 +1,7 @@
 # platform: host-agnostic
 #   usage: . scripts/lib/mach-nm.sh; NM="$(shipyard_mach_nm)"; LIPO="$(shipyard_mach_tool lipo)"
-#          The Mach-O tool for one of nm, lipo, otool, ar, strip or install-name-tool: its variable (NM,
-#          LIPO, OTOOL, AR, STRIP, INSTALL_NAME_TOOL) when set; else the llvm- tool beside an llvm- tool
+#          The Mach-O tool for one of nm, lipo, otool, ar, strip, strings or install-name-tool: its variable (NM,
+#          LIPO, OTOOL, AR, STRIP, STRINGS, INSTALL_NAME_TOOL) when set; else the llvm- tool beside an llvm- tool
 #          the caller chose as OTOOL, LIPO, NM or AR. Then on macOS, Apple's own name (for nm, an
 #          installed clang22's llvm-nm first: the 10.9 CLT nm cannot read arm64 slices). Off macOS, an
 #          installed clang22's (SHIPYARD_MG_PREFIX, default /usr/local/mavergreen), else the bare llvm-
@@ -12,7 +12,7 @@ shipyard_mach_nm() { shipyard_mach_tool nm; }
 shipyard_mach_tool() {
   case "$1" in
     # platform: guarded macOS-only call -- a name, not a call: Apple's tool runs only where uname -s is Darwin
-    nm|lipo|otool|ar|strip|install-name-tool) : ;;
+    nm|lipo|otool|ar|strip|strings|install-name-tool) : ;;
     *) echo "shipyard_mach_tool: no Mach-O tool named '$1'" >&2; return 2 ;;
   esac
   _mt_n="$(printf '%s' "$1" | tr 'a-z-' 'A-Z_')"

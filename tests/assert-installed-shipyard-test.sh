@@ -183,7 +183,7 @@ fakeuname="$w/fakeuname"; mkdir -p "$fakeuname"
 printf '#!/bin/sh\necho Linux\n' > "$fakeuname/uname"; chmod +x "$fakeuname/uname"
 printf '#!/bin/sh\nexit 0\n' > "$stub/cmake"; chmod +x "$stub/cmake"
 check "off Darwin a foreign cmake that is not refused is not probed" 0 "no refusal to check" \
-  env HOME="$run_home" PATH="$fakeuname:$stub:$PATH" sh "$S" --root "$fx" --cmake-version "$ver"
+  env HOME="$run_home" LIPO="$stub/lipo" PATH="$fakeuname:$stub:$PATH" sh "$S" --root "$fx" --cmake-version "$ver"
 rm -f "$stub/cmake"
 # spec: 2026-10-09 C5 -- the cmake product is the one cmake the config accepts, so a cmake on PATH
 #       that resolves under the root's /usr/local/mavergreen/ is not foreign, whatever it is called.

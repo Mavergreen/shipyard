@@ -73,9 +73,9 @@
 #                                               measure is fail-closed.
 #          Shared:
 #            MAVERICKS_REQUIRE_DEFINED_SYMBOLS symbols that MUST be DEFINED (a project's 10.9 shims).
-#            LIPO, NM, STRINGS, OTOOL          the Mach-O readers (default: lipo, nm, strings and
-#                                               otool from PATH; macho-slices.sh reads LIPO and
-#                                               OTOOL). A 10.9 build without Xcode's Command Line
+#            LIPO, NM, STRINGS, OTOOL          the Mach-O readers (default: lipo, nm, otool and strings as
+#                                               scripts/lib/mach-nm.sh resolves them, clang22's llvm-
+#                                               tools off macOS; macho-slices.sh reads LIPO and OTOOL). A 10.9 build without Xcode's Command Line
 #                                               Tools, whose lipo, nm, otool and strings are stubs,
 #                                               names mavericks-clang-22's llvm-lipo, llvm-nm,
 #                                               llvm-strings and llvm-otool, which give this guard
@@ -95,6 +95,10 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/sdk-pins.sh"
 . "$SELF/deviation-reason.sh"
+. "$SELF/lib/mach-nm.sh"
+# platform: the readers are resolved once, here, by shipyard_mach_tool: a set variable wins, else clang22's llvm- tool off macOS (a host nm
+#           and ar cannot read Mach-O) and Apple's on macOS, so a guard run with nothing exported still reads the binary.
+NM="$(shipyard_mach_tool nm)"; LIPO="$(shipyard_mach_tool lipo)"; OTOOL="$(shipyard_mach_tool otool)"; STRINGS="$(shipyard_mach_tool strings)"
 
 shipyard_die() { echo "compat guard CANNOT MEASURE (fail-closed): $*" >&2; exit 4; }
 # spec: a reader's stderr goes to $work/reader.err, quiet on success (nm warns about every empty archive
@@ -186,7 +190,7 @@ printf '%s\n' "$_devs" | shipyard_deviation_facts > "$work/devs"
 #           up)", left $NF = "up)" for a dynamic_lookup undefined, and the hard import slipped past
 #           the guard.
 shipyard_undefs() {
-  _nm_out="$("${NM:-nm}" -m "$1" 2>"$work/reader.err")" || return 1
+  _nm_out="$("$NM" -m "$1" 2>"$work/reader.err")" || return 1
   printf '%s\n' "$_nm_out" | grep -F '(undefined)' | sed -E 's/ \([^)]*\)$//' \
     | awk '{ w = (/ weak /) ? "W" : "H"; print w, $NF }'
 }
@@ -278,7 +282,7 @@ for b in "$@"; do
     echo "compat guard: $b is a pinned third-party binary (exempt by content)"; continue
   fi
   rc=0; slices="$(sh "$SELF/macho-slices.sh" "$b")" || rc=$?
-  [ "$rc" -ne 4 ] || shipyard_die "a Mach-O reader (${LIPO:-lipo} or ${OTOOL:-otool}) failed on $b (macho-slices.sh said which, above)"
+  [ "$rc" -ne 4 ] || shipyard_die "a Mach-O reader ($LIPO or $OTOOL) failed on $b (macho-slices.sh said which, above)"
   [ "$rc" -eq 0 ] || { echo "compat guard: $b is not a readable Mach-O" >&2; fail=1; continue; }
 
   archs="$(printf '%s\n' "$slices" | awk '{print $1}' | sort -u | xargs)"
@@ -305,11 +309,11 @@ EOF
   x="$b"
   if [ "$archs" != x86_64 ]; then
     x="$work/x86_64.$checked"
-    "${LIPO:-lipo}" -thin x86_64 "$b" -output "$x" 2>"$work/reader.err" \
-      || shipyard_reader_die "${LIPO:-lipo} -thin could not read the x86_64 slice of $b"
+    "$LIPO" -thin x86_64 "$b" -output "$x" 2>"$work/reader.err" \
+      || shipyard_reader_die "$LIPO -thin could not read the x86_64 slice of $b"
   fi
 
-  U=$(shipyard_undefs "$x") || shipyard_reader_die "${NM:-nm} -m could not read $b's symbols"
+  U=$(shipyard_undefs "$x") || shipyard_reader_die "$NM -m could not read $b's symbols"
   hard_leak=$(printf '%s\n' "$U" | awk '$1=="H"{print $2}' | grep -xE "($POST_10_9)" || true)
   weak_leak=$(printf '%s\n' "$U" | awk '$1=="W"{print $2}' | grep -xE "($POST_10_9)" || true)
   if [ -n "$ALLOW_WEAK" ]; then
@@ -344,7 +348,7 @@ EOF
          shipyard_die "the Objective-C analyzer (${OBJC_COMPAT:-objc-compat.sh}) could not measure $b (exit $objc_rc, said why above)" ;;
     esac
   else
-    _strings_out="$("${STRINGS:-strings}" -a "$x" 2>"$work/reader.err")" || shipyard_reader_die "${STRINGS:-strings} -a could not read $b"
+    _strings_out="$("$STRINGS" -a "$x" 2>"$work/reader.err")" || shipyard_reader_die "$STRINGS -a could not read $b"
     sel_leak=$(printf '%s\n' "$_strings_out" | grep -xE "($POST_10_9_SEL)" | sort -u || true)
     if [ -n "$ALLOW_SEL" ]; then
       sel_leak=$(printf '%s\n' "$sel_leak" | grep -vxE "($ALLOW_SEL)" || true)
@@ -356,7 +360,7 @@ EOF
   if [ -n "$REQUIRE_DEFINED" ]; then
     # platform: nm marks an undefined symbol's line with a leading 'U'/'u'; everything else counts
     #           as defined.
-    _nm_all="$("${NM:-nm}" "$x" 2>"$work/reader.err")" || shipyard_reader_die "${NM:-nm} could not read $b's symbols"
+    _nm_all="$("$NM" "$x" 2>"$work/reader.err")" || shipyard_reader_die "$NM could not read $b's symbols"
     defined=$(printf '%s\n' "$_nm_all" | grep -vE '^[[:space:]]*[Uu] ' | awk '{print $NF}')
     for _req in $(printf '%s\n' "$REQUIRE_DEFINED" | tr '|' ' '); do
       printf '%s\n' "$defined" | grep -xq "$_req" \

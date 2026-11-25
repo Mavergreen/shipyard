@@ -35,6 +35,12 @@ printf '%s\n' "$out" | grep -q ";MAVERICKS_DEVIATIONS_ROOT=$src;" \
   || { echo "FAIL: the guard is not given MAVERICKS_DEVIATIONS_ROOT=$src (CMAKE_SOURCE_DIR):"; echo "$out"; exit 1; }
 printf '%s\n' "$out" | grep -q ";-E;env;.*;sh;.*/assert_binary_compatible.sh;" \
   || { echo "FAIL: the variable must reach the guard's own environment:"; echo "$out"; exit 1; }
+# spec: MavericksCompatGuard.cmake header -- the guard reads with the toolchain's CMAKE_NM, and names no NM when none is chosen.
+printf '%s\n' "$out" | grep -q ';NM=' && { echo "FAIL: an NM reached the guard with no CMAKE_NM:"; echo "$out"; exit 1; }
+probe 'set(CMAKE_NM /opt/x/llvm-nm)'
+printf '%s\n' "$out" | grep -q ';NM=/opt/x/llvm-nm;' \
+  || { echo "FAIL: the guard is not given NM=CMAKE_NM:"; echo "$out"; exit 1; }
+probe ''
 # spec: MavericksCompatGuard.cmake header -- without OBJC_STRICT the guard runs as before: no analyzer knob reaches it,
 #       and one set in CMake stops the configure rather than be ignored.
 ! printf '%s\n' "$out" | grep -q 'MAVERGREEN_OBJC_' \

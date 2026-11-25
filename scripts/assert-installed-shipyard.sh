@@ -14,6 +14,8 @@
 #       tests/assert-installed-shipyard-test.sh (a fixture) share this one statement of what an
 #       installed shipyard looks like.
 set -eu
+. "$(cd "$(dirname "$0")" && pwd)/lib/mach-nm.sh"
+LIPO="$(shipyard_mach_tool lipo)"
 
 ROOT="/"; WANT=""; SLICES=1
 while [ $# -gt 0 ]; do
@@ -80,7 +82,7 @@ if [ -f "$R/usr/local/bin/mavergreen" ]; then
 fi
 # spec: 2026-10-09 C4 -- shipyard-cmake is a launcher script, so the slices are the cmake product's.
 if [ "$SLICES" -eq 1 ] && [ -x "$PRODUCT" ]; then
-  cmarchs="$("${LIPO:-lipo}" -info "$PRODUCT" 2>&1 || true)"
+  cmarchs="$("$LIPO" -info "$PRODUCT" 2>&1 || true)"
   case "$cmarchs" in
     *x86_64*) ;;
     *) fail "the cmake product has no x86_64 slice, so it cannot run on 10.9: $cmarchs" ;;
@@ -105,7 +107,7 @@ fi
 #           check-shell-portability.sh bans the idiom outright.
 if [ -f "$EXE" ]; then
   if [ "$SLICES" -eq 1 ]; then
-    archs="$("${LIPO:-lipo}" -info "$EXE" 2>&1 || true)"
+    archs="$("$LIPO" -info "$EXE" 2>&1 || true)"
     case "$archs" in
       *x86_64*) ;;
       *) fail "the installed updater has no x86_64 slice: $archs" ;;

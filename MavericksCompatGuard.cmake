@@ -16,6 +16,8 @@ set(MAVERICKS_SHARED_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "mavericks-s
 #                                     exemption (a POST_BUILD command runs in the build tree, where the
 #                                     guard's default -- the current directory -- has none)
 #   MAVERICKS_ALLOW_ARCHS             CMAKE_OSX_ARCHITECTURES, when set (the guard defaults to x86_64)
+#   NM                                CMAKE_NM, when set (MavericksToolchain.cmake sets clang22's llvm-nm); OTOOL and
+#                                     LIPO have no CMake variable, so the guard resolves them beside it
 #   MAVERICKS_POST_10_9_SYMBOLS       extra post-10.9 symbols that must not be undefined imports
 #   MAVERICKS_REQUIRE_DEFINED_SYMBOLS symbols that MUST be present as defined (e.g. shims)
 # and, with OBJC_STRICT only:
@@ -68,6 +70,11 @@ function(mavericks_assert_binary_compatible tgt)
   if(CMAKE_OSX_ARCHITECTURES)
     string(REPLACE ";" " " _archs "${CMAKE_OSX_ARCHITECTURES}")
     list(APPEND _env "MAVERICKS_ALLOW_ARCHS=${_archs}")
+  endif()
+  # spec: scripts/assert_binary_compatible.sh header -- the guard reads with the tools this build's toolchain chose
+  #       (MavericksToolchain.cmake sets CMAKE_NM, clang22's llvm-nm); with none chosen it resolves its own.
+  if(CMAKE_NM)
+    list(APPEND _env "NM=${CMAKE_NM}")
   endif()
   if(MAVERICKS_POST_10_9_SYMBOLS)
     list(APPEND _env "MAVERICKS_POST_10_9_SYMBOLS=${MAVERICKS_POST_10_9_SYMBOLS}")
