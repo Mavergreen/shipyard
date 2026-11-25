@@ -73,12 +73,16 @@ case "${1:-}" in
     [ -n "$_s" ] || exit 1
     printf '%s\n' "$_s" ;;
   check)
-    entries | awk '
+    RET="${MAVERGREEN_RETIRING_CROSS_NAMES:-$(cd "$(dirname "$0")" && pwd)/retiring-cross-names}"
+    [ -f "$RET" ] && [ -r "$RET" ] || { echo "product-name.sh: cannot read the retiring list $RET" >&2; exit 2; }
+    _ret="$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$RET" | tr '\n' ' ')"
+    entries | awk -v ret=" $_ret" '
       NF != 3 { print "product-names: not <name> <identifier> <repo>: " $0 > "/dev/stderr"; bad = 1; next }
       $1 !~ /^[a-z0-9][a-z0-9-]*$/ { print "product-names: bad short name: " $1 > "/dev/stderr"; bad = 1 }
       $2 !~ /^dev\.mavergreen\./ { print "product-names: identifier outside dev.mavergreen.*: " $2 > "/dev/stderr"; bad = 1 }
       $3 !~ /^[a-z0-9][a-z0-9-]*$/ { print "product-names: bad repo name: " $3 > "/dev/stderr"; bad = 1 }
       $1 ~ /^(var|bin|sbin|share|mavergreen|system-replace|base)$/ { print "product-names: short name reserved by the install layout: " $1 > "/dev/stderr"; bad = 1 }
+      $1 ~ /-cross$/ && index(ret, " " $1 " ") == 0 { print "product-names: " $1 ": a product is never named *-cross; one toolchain targets every arch (see the conventions skill, \"The toolchain\")" > "/dev/stderr"; bad = 1 }
       $2 == "dev.mavergreen.base" { print "product-names: dev.mavergreen.base is the helper component, not a product: " $1 > "/dev/stderr"; bad = 1 }
       $3 ~ /-[0-9]+$/ {
         p = $3; sub(/-[0-9]+$/, "", p)
