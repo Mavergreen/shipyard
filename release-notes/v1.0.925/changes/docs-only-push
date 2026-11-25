@@ -1,0 +1,1 @@
+A push that changes only top-level Markdown, tests or release notes now builds and tests but does not publish.
