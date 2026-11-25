@@ -2,22 +2,30 @@
 # platform: host-agnostic -- stevedore lints and reads back the manifest it writes
 #   usage: render-manifest.sh --stage ROOT --product P --name N --version V [--group G] [--line L]
 #            [--exclude REL]... [--replaces ABS=REL]... [--generated REL]... [--has-updater]
-#            [--requires SHORT[>=VERSION]]... [--requires-on-host ARCH:SHORT[>=VERSION]]...
+#            [--requires SHORT[>=VERSION]]... [--requires-on-host ARCH:SHORT[>=VERSION]]... [--slim-keep GLOB]...
 #          Writes ROOT/usr/local/mavergreen/P/mavergreen.plist. Run it LAST: `outside` is read from
 #          whatever is staged at that moment.
 #          --requires entries are written verbatim, in order, as the manifest's `requires` array; stage_product.sh validates them.
 #          --requires-on-host entries likewise, as `requires-on-host`; the key is absent when there are none.
+#          --slim-keep GLOB (repeatable) is written verbatim as `slim-keep`, the files `mavergreen slim apply` never thins; a GLOB that
+#          starts with /, has a . or .. component, or is only *, ? and / is refused with exit 2. The key is absent when there are none.
 #          With --has-updater the manifest's appcast is the product's feed, from scripts/product-names; else empty.
 # spec: tests/render-manifest-test.sh
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/registry-lookup.sh"
-ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; HASUPD=""; EXCL=""; REPL=""; GEN=""; REQS=""; REQHS=""
+ST=""; P=""; NAME=""; VER=""; G=""; L=""; AC=""; HASUPD=""; EXCL=""; REPL=""; GEN=""; REQS=""; REQHS=""; SKEEP=""
 nl='
 '
 dotty() { case "/$1/" in *"/./"*|*"/../"*) return 0 ;; esac; return 1; }
 xesc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 xstring() { printf '  <key>%s</key>\n  <string>%s</string>\n' "$(xesc "$1")" "$(xesc "$2")"; }
+slim_keep_ok() {
+  case "$1" in ''|/*|*"$nl"*) return 1 ;; esac
+  case "/$1/" in *"/./"*|*"/../"*) return 1 ;; esac
+  case "$1" in *[!*?/]*) return 0 ;; esac
+  return 1
+}
 while [ $# -gt 0 ]; do
   case "$1" in
     --stage) ST="${2%/}"; shift 2 ;;
@@ -50,6 +58,9 @@ while [ $# -gt 0 ]; do
       GEN="$GEN$2$nl"; shift 2 ;;
     --requires) REQS="$REQS$2$nl"; shift 2 ;;
     --requires-on-host) REQHS="$REQHS$2$nl"; shift 2 ;;
+    --slim-keep)
+      slim_keep_ok "$2" || { echo "render-manifest: --slim-keep wants a relative glob without . or .. components that is not only * ? /, got '$2'" >&2; exit 2; }
+      SKEEP="$SKEEP$2$nl"; shift 2 ;;
     *) echo "render-manifest: unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -96,6 +107,11 @@ PLIST_HEADER
   if [ -n "$REQHS" ]; then
     printf '  <key>requires-on-host</key>\n  <array>\n'
     printf '%s' "$REQHS" | while IFS= read -r q; do [ -n "$q" ] || continue; printf '    <string>%s</string>\n' "$(xesc "$q")"; done
+    printf '  </array>\n'
+  fi
+  if [ -n "$SKEEP" ]; then
+    printf '  <key>slim-keep</key>\n  <array>\n'
+    printf '%s' "$SKEEP" | while IFS= read -r q; do [ -n "$q" ] || continue; printf '    <string>%s</string>\n' "$(xesc "$q")"; done
     printf '  </array>\n'
   fi
   printf '  <key>outside</key>\n  <array>\n'
