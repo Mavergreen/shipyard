@@ -79,7 +79,7 @@ if [ -n "$plist" ]; then
   [ -f "$plist" ] || { echo "check-standalone-archive: no mavergreen.plist at $plist" >&2; exit 2; }
   . "$SELF/lib/requires.sh"
   STEVEDORE="$(sh "$SELF/fetch_stevedore.sh")" || { echo "check-standalone-archive: no stevedore to read $plist with" >&2; exit 2; }
-  mavergreen_requires "$STEVEDORE" "$plist" "$t/err" > "$t/requires" \
+  mavergreen_requires "$STEVEDORE" "$plist" "$t/err" all > "$t/requires" \
     || { echo "check-standalone-archive: $short$(cat "$t/err")" >&2; exit 2; }
   reqs="$(sed 's/>=.*//' "$t/requires" | tr '\n' ' ' | sed 's/ $//')"
 fi

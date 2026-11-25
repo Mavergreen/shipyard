@@ -33,7 +33,13 @@ release() {
   mkdir -p "$_rel" "$_st/usr/local/mavergreen/$_s"
   echo "$_s" > "$_st/usr/local/mavergreen/$_s/file"
   _k=$#
-  while [ "$_k" -gt 0 ]; do set -- "$@" --requires "$1"; shift; _k=$((_k - 1)); done
+  while [ "$_k" -gt 0 ]; do
+    case "$1" in
+      @*) set -- "$@" --requires-on-host "${1#@}" ;;
+      *) set -- "$@" --requires "$1" ;;
+    esac
+    shift; _k=$((_k - 1))
+  done
   sh "$here/../scripts/render-manifest.sh" --stage "$_st" --product "$_s" --name "$_s" --version "$_v" "$@"
   sh "$here/../scripts/build_component_pkg.sh" --root "$_st" --identifier "dev.mavergreen.$_s" --version 1.0 \
     --install-location / --out "$w/stage/$_s-$_t/comp.pkg" > /dev/null 2>&1
@@ -68,6 +74,22 @@ abc() {
   release a 1 'b>=2' c
   release b 1; release b 2; release b 3
 }
+
+# spec: scripts/install-products.sh requires_arch -- none on Linux, all for a volume other than /, else the host's own arch.
+ra() { MAVERGREEN_HOST_ARCH="$1" sh -c 'INSTALL_PRODUCTS_SOURCE_ONLY=1 . "$0"; requires_arch "$1" "$2"' "$S" "$2" "$3"; }
+[ "$(ra x86_64 / mac)" = x86_64 ] || fail "requires_arch: / on an x86_64 mac is x86_64"
+[ "$(ra arm64 / mac)" = arm64 ] || fail "requires_arch: / on an arm64 mac is arm64"
+[ "$(ra arm64 /v mac)" = all ] || fail "requires_arch: another volume takes every entry"
+[ -z "$(ra arm64 / linux)" ] || fail "requires_arch: Linux takes none"
+
+fresh; release a 1 @x86_64:b; release b 3; latest b 3
+rc=0; out="$(MAVERGREEN_HOST_ARCH=arm64 sh "$S" --root "$w/root" --dry-run a@1 2>/dev/null)" || rc=$?
+[ "$rc" -eq 0 ] && [ "$out" = "$(lines 'install b 3' 'install a 1')" ] \
+  || fail "mac_other_volume_takes_on_host: a non-/ root takes requires-on-host whatever the host arch: $out"
+
+fresh; release a 1 @x86_64:b; release b 3; latest b 3
+rc=0; out="$(INSTALL_PRODUCTS_HOST=linux sh "$S" --root "$w/root" --dry-run a@1 2>/dev/null)" || rc=$?
+[ "$rc" -eq 0 ] && [ "$out" = "install a 1" ] || fail "linux_skips_it: a Linux plan never takes requires-on-host: $out"
 
 fresh; abc; latest b 3
 plan_stdout a@1
