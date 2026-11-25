@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-# spec: stage_product.sh -- the generated postinstall slims on the boot volume only and never fatally; --slim-keep is validated
+# spec: stage_product.sh -- the generated postinstall slims on the boot volume only and never fatally; --slim-host is validated by render-manifest.sh
 set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 S="$here/../scripts/stage_product.sh"
@@ -40,16 +40,17 @@ test_slim_failure_is_not_fatal() {
   grep -q 'slim apply recaulk' "$log" || fail "slim ran on the boot volume"
   grep -q 'could not slim' "$w/err" || fail "stderr says could not slim"
 }
-test_slim_keep_refusals() {
+test_slim_host_refusals() {
   for g in /abs '../x' 'a/../x' './x' '*/*' '*' '?' ''; do
-    rc=0; stage --slim-keep "$g" 2>/dev/null || rc=$?
-    [ "$rc" = 2 ] || fail "--slim-keep '$g' exits 2, got $rc"
+    rc=0; stage --slim-host "$g" 2>"$w/err" || rc=$?
+    [ "$rc" = 2 ] || fail "--slim-host '$g' exits 2, got $rc"
+    grep -q '^render-manifest: --slim-host' "$w/err" || fail "render-manifest is the one validator of --slim-host '$g': $(cat "$w/err")"
   done
-  stage --slim-keep 'lib/*.dylib' --slim-keep 'bin/a b' || fail "valid globs are accepted"
-  grep -q 'lib/\*.dylib' "$w/st/usr/local/mavergreen/recaulk/mavergreen.plist" || fail "the manifest carries the glob"
+  stage --slim-host 'bin/*' --slim-host 'libexec/a b' || fail "valid globs are accepted"
+  grep -q 'bin/\*' "$w/st/usr/local/mavergreen/recaulk/mavergreen.plist" || fail "the manifest carries the glob"
 }
 test_postinstall_calls_slim_on_boot_volume_only
 test_non_root_volume_never_slims
 test_slim_failure_is_not_fatal
-test_slim_keep_refusals
+test_slim_host_refusals
 echo "PASS: stage-product-slim"

@@ -72,8 +72,13 @@ p requires-on-host:2 >/dev/null 2>&1 && fail "requires-on-host has exactly the e
 p requires:0 >/dev/null 2>&1 && fail "requires-on-host does not write requires"
 sh "$S" --stage "$st" --product openssh --name x --version 1
 p requires-on-host:0 >/dev/null 2>&1 && fail "a product without the flag has no requires-on-host key"
-sh "$S" --stage "$st" --product openssh --name x --version 1 --slim-keep 'lib/*.dylib'
-[ "$(p slim-keep:0)" = 'lib/*.dylib' ] || fail "slim-keep is written verbatim"
+sh "$S" --stage "$st" --product openssh --name x --version 1 --slim-host 'bin/*' --slim-host 'lib/a b.dylib'
+[ "$(p slim-host:0)" = 'bin/*' ] && [ "$(p slim-host:1)" = 'lib/a b.dylib' ] || fail "slim-host entries are written verbatim, in order"
+p slim-host:2 >/dev/null 2>&1 && fail "slim-host has exactly the entries given"
 sh "$S" --stage "$st" --product openssh --name x --version 1
-p slim-keep:0 >/dev/null 2>&1 && fail "a product without the flag has no slim-keep key"
+p slim-host:0 >/dev/null 2>&1 && fail "a product without the flag has no slim-host key"
+for g in /abs '../x' 'a/../x' './x' 'a/.' '*/*' '*' '?' ''; do
+  rc=0; sh "$S" --stage "$st" --product openssh --name x --version 1 --slim-host "$g" 2>/dev/null || rc=$?
+  [ "$rc" = 2 ] || fail "--slim-host '$g' exits 2, got $rc"
+done
 echo "PASS: render-manifest"
