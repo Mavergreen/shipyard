@@ -489,6 +489,7 @@ slim_kept_by_manifest() {
 slim_in_signed_bundle() {
   [ -n "$_signed" ] || return 1
   printf '%s\n' "$_signed" | { while IFS= read -r _d; do
+    case "$_d" in .) exit 0 ;; esac
     case "$1" in "$_d"/*) exit 0 ;; esac
   done; exit 1; }
 }
@@ -506,7 +507,7 @@ slim_arches() {
         case "$(slim_hex "$1" "$_ao" 4)" in cffaedfe|cefaedfe) ;; *) return 1 ;; esac
         _al="$_al $_ac"; _ai=$((_ai + 1))
       done
-      printf '%s\n' "$_al" | tr ' ' '\n' | sed '/^$/d' | sort ;;
+      printf '%s\n' "$_al" | tr ' ' '\n' | sed '/^$/d' | sort -u ;;
     cffaedfe|cefaedfe)
       _ac="$(slim_hex "$1" 4 4)"
       printf '%s%s%s%s\n' "$(printf %s "$_ac" | cut -c7-8)" "$(printf %s "$_ac" | cut -c5-6)" \
@@ -530,7 +531,7 @@ slim_file() {
   else
     case "$_have" in *01000007*) _want="01000007"; _keepargs="--arch x86_64" ;; esac
     case "$_have" in *00000007*) _want="$_want 00000007"; _keepargs="$_keepargs --arch i386" ;; esac
-    _want="$(printf '%s\n' $_want | sort)"
+    _want="$(printf '%s\n' $_want | sort -u)"
   fi
   if [ -z "$_want" ]; then
     [ "$2" = x86_64 ] && slim_all_arm64 "$_have" || return 0
@@ -551,7 +552,10 @@ slim_tree() {
   _keep="$(mf_array "$1" slim-keep)"
   _lst="$(mktemp "${TMPDIR:-/tmp}/mavergreen-slim.XXXXXX")"
   _signed="$(find "$MG/$1" -type f -name CodeResources -path '*/_CodeSignature/CodeResources' 2>/dev/null \
-    | sed -e "s|^$MG/$1/||" -e 's|/_CodeSignature/CodeResources$||')"
+    | while IFS= read -r _cr; do
+        _cr="${_cr#"$MG/$1/"}"
+        if [ "$_cr" = _CodeSignature/CodeResources ]; then printf '.\n'; else printf '%s\n' "${_cr%/_CodeSignature/CodeResources}"; fi
+      done)"
   find "$MG/$1" -type f -links 1 > "$_lst"
   _cnt=0
   while IFS= read -r _f; do
