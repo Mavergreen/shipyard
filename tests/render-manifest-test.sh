@@ -65,4 +65,11 @@ sh "$S" --stage "$st" --product openssh --name x --version 1 --requires 'longboa
 p requires:2 >/dev/null 2>&1 && fail "requires has exactly the entries given"
 sh "$S" --stage "$st" --product openssh --name x --version 1
 p requires:0 >/dev/null 2>&1 && fail "a product with no requires has no requires key"
+sh "$S" --stage "$st" --product openssh --name x --version 1 --requires-on-host x86_64:swift-runtime --requires-on-host 'arm64:sdk113>=1'
+[ "$(p requires-on-host:0)" = x86_64:swift-runtime ] && [ "$(p requires-on-host:1)" = 'arm64:sdk113>=1' ] \
+  || fail "requires-on-host entries are written verbatim, in the order given"
+p requires-on-host:2 >/dev/null 2>&1 && fail "requires-on-host has exactly the entries given"
+p requires:0 >/dev/null 2>&1 && fail "requires-on-host does not write requires"
+sh "$S" --stage "$st" --product openssh --name x --version 1
+p requires-on-host:0 >/dev/null 2>&1 && fail "a product without the flag has no requires-on-host key"
 echo "PASS: render-manifest"
