@@ -1,6 +1,6 @@
 #!/bin/sh
 # platform: host-agnostic
-#   usage: self-upstream-version.sh [--root DIR] [--ref REV]
+#   usage: self-upstream-version.sh [--root DIR] [--ref REV] [--prefix P]
 #          Prints a self-upstream repo's YYYYMMDD.N for REV (default HEAD) in the repo at DIR
 #          (default .), and on stderr one line saying why. Release tags are the YYYYMMDD.N tags
 #          reachable from REV. With none: the UTC committer day of the newest own-code commit (or of
@@ -10,8 +10,9 @@
 #          ingredients/**, .github/**, tests/**, release-notes/**, top-level *.md, each file
 #          declared-state.sh names, and each INGREDIENTS.md "## Conformance deviations" entry
 #          "- self-upstream-exclude:<glob>: <reason>", a git pathspec glob (`*` stays within one
-#          directory, `**/` spans any). Exit 2 on a usage error, a non-repo, an unknown REV, a
-#          shallow clone, or an INGREDIENTS.md the parsers refuse.
+#          directory, `**/` spans any). With --prefix P, release tags are P<YYYYMMDD>.<N>, matched
+#          literally, and the version printed is P<YYYYMMDD>.<N>. Exit 2 on a usage error, a
+#          non-repo, an unknown REV, a shallow clone, or an INGREDIENTS.md the parsers refuse.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning" -- the
 #       version only: whether to publish stays with release-state.sh and release-needed.sh.
 # spec: tests/self-upstream-version-test.sh
@@ -19,13 +20,14 @@ set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/lib.sh"          # ver_cmp()
 
-usage() { echo "usage: self-upstream-version.sh [--root DIR] [--ref REV]" >&2; exit 2; }
+usage() { echo "usage: self-upstream-version.sh [--root DIR] [--ref REV] [--prefix P]" >&2; exit 2; }
 
-ROOT="."; REF="HEAD"
+ROOT="."; REF="HEAD"; PREFIX=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --root) [ $# -ge 2 ] || usage; ROOT="${2%/}"; shift 2 ;;
     --ref) [ $# -ge 2 ] || usage; REF="$2"; shift 2 ;;
+    --prefix) [ $# -ge 2 ] || usage; PREFIX="$2"; shift 2 ;;
     *) echo "self-upstream-version: unknown option $1" >&2; usage ;;
   esac
 done
@@ -50,33 +52,19 @@ rev="$(git -C "$ROOT" rev-parse --verify -q "$REF^{commit}" 2>/dev/null)" || {
 _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/self-upstream-version.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
-for p in UPSTREAM_VERSION 'components/*/version' 'ingredients/**' '.github/**' 'tests/**' 'release-notes/**' '*.md'; do
-  printf ':(exclude,glob)%s\n' "$p"
-done > "$work/exclude"
-
-if ! sh "$SELF/declared-state.sh" "$ROOT" > "$work/decl" 2>"$work/err"; then
-  cat "$work/err" >&2
-  echo "self-upstream-version: $ROOT/INGREDIENTS.md has a malformed \"## Declared state\" declaration" >&2
-  exit 2
-fi
-cut -f2 "$work/decl" | sed 's/:.*//; s/^/:(exclude,literal)/' >> "$work/exclude"
-
-if ! sh "$SELF/deviations.sh" "$ROOT" > "$work/devs" 2>"$work/err"; then
-  cat "$work/err" >&2
-  echo "self-upstream-version: $ROOT/INGREDIENTS.md declares a conformance deviation that deviations.sh refuses (it says why, above)" >&2
-  exit 2
-fi
-while read -r check glob _; do
-  [ "$check" = self-upstream-exclude ] || continue
-  printf ':(exclude,glob)%s\n' "$glob" >> "$work/exclude"
-done < "$work/devs"
+sh "$SELF/own-code-pathspecs.sh" --root "$ROOT" > "$work/exclude" || exit 2
 
 set -- .
 while IFS= read -r spec; do set -- "$@" "$spec"; done < "$work/exclude"
 
 git -C "$ROOT" tag --merged "$rev" > "$work/tags"
 last=""
-for t in $(grep '^[0-9]\{8\}\.[1-9][0-9]*$' "$work/tags" || true); do
+for t in $(PREFIX="$PREFIX" awk '
+  BEGIN { p = ENVIRON["PREFIX"] }
+  { rest = $0 }
+  p != "" { if (index($0, p) != 1) next; rest = substr($0, length(p) + 1) }
+  rest ~ /^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]\.[1-9][0-9]*$/ { print rest }
+' "$work/tags"); do
   if [ -z "$last" ] || [ "$(ver_cmp "$t" "$last")" = 1 ]; then last="$t"; fi
 done
 
@@ -85,14 +73,14 @@ day="${own%% *}"; sha="${own#* }"
 
 if [ -z "$last" ]; then
   [ -n "$own" ] || day="$(TZ=UTC git -C "$ROOT" log -1 --date=format-local:%Y%m%d --format=%cd "$rev")"
-  ver="$day.1"; why="no release tag yet"
+  ver="$PREFIX$day.1"; why="no release tag yet"
 else
   lastdate="${last%%.*}"; lastn="${last#*.}"
-  if [ -n "$(git -C "$ROOT" log -1 --first-parent --format=%h "refs/tags/$last..$rev" -- "$@")" ]; then
-    if [ "$day" -gt "$lastdate" ]; then ver="$day.1"; else ver="$lastdate.$((lastn + 1))"; fi
+  if [ -n "$(git -C "$ROOT" log -1 --first-parent --format=%h "refs/tags/$PREFIX$last..$rev" -- "$@")" ]; then
+    if [ "$day" -gt "$lastdate" ]; then ver="$PREFIX$day.1"; else ver="$PREFIX$lastdate.$((lastn + 1))"; fi
     why="own code changed in $sha ($day)"
   else
-    ver="$lastdate.$((lastn + 1))"; why="no own-code change since $last; ingredient-only"
+    ver="$PREFIX$lastdate.$((lastn + 1))"; why="no own-code change since $PREFIX$last; ingredient-only"
   fi
 fi
 

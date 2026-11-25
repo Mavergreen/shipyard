@@ -211,4 +211,10 @@ printf '%s\n' '# Build ingredients' '' '## Conformance deviations' '' \
   '- self-upstream-exclude:**: everything' > "$R/INGREDIENTS.md"
 refuses "self-upstream-exclude" "an exclusion of only * and / is refused" --root "$R"
 
+fresh prefix
+git -C "$R" tag v0.0.20261012.1
+git -C "$R" tag 20261020.4
+at 2026-10-15T12:00:00Z src/p.c
+want v0.0.20261015.1 "--prefix reads only P-prefixed tags; the bare tag is ignored" --prefix v0.0.
+
 echo "PASS: self-upstream-version"
