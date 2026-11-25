@@ -94,7 +94,7 @@ unset LIPO
 UNIVERSAL_CMAKE="cmake: architecture x86_64 arm64"
 UNIVERSAL_APP="shipyard-updater: architecture x86_64 arm64"
 assert() {  # remaining args are appended to the script's own
-  HOME="$run_home" PATH="$stub:$PATH" sh "$S" --root "$fx" "$@"
+  HOME="$run_home" PATH="$stub:$PATH" LIPO="$stub/lipo" sh "$S" --root "$fx" "$@"
 }
 
 lipo_says "$UNIVERSAL_CMAKE" "$UNIVERSAL_APP"
