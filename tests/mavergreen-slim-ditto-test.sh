@@ -15,7 +15,12 @@ V="$w/vol"; T="$V/usr/local/mavergreen"
 mkdir -p "$T/p/bin" "$T/var"
 copy="$T/p/bin/fat"
 CC=/usr/local/mavergreen/clang22/bin/clang; LIPO=/usr/local/mavergreen/clang22/bin/llvm-lipo
-if [ -x "$CC" ] && [ -x "$LIPO" ]; then
+if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then
+  printf 'int main(void) { return 0; }\n' > "$w/t.c"
+  /usr/bin/clang -arch x86_64 -arch arm64 -o "$copy" "$w/t.c" || fail "could not build a real fat fixture"
+  codesign -s - -f "$copy" 2>/dev/null || fail "could not sign the fixture"
+  codesign -v "$copy" || fail "the fixture must verify before slimming"
+elif [ -x "$CC" ] && [ -x "$LIPO" ]; then
   printf 'int main(void) { return 0; }\n' > "$w/t.c"
   "$CC" --target=x86_64-apple-macosx10.9 -o "$w/x86" "$w/t.c" || fail "could not compile the fixture"
   cp "$w/x86" "$w/arm"
@@ -33,7 +38,7 @@ cat > "$T/p/mavergreen.plist" <<'PL'
 </dict></plist>
 PL
 unset MAVERGREEN_HOST_ARCH MAVERGREEN_DITTO || true
-if [ -x "$LIPO" ] && [ "$copy" = "$T/p/bin/fat" ]; then
+if [ -x "$LIPO" ] && [ "$copy" = "$T/p/bin/fat" ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" != 1 ]; then
   case "$("$LIPO" -archs "$copy")" in *arm64*) ;; *) fail "the fixture must start fat" ;; esac
 fi
 if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then
@@ -51,8 +56,7 @@ else
   fi
 fi
 if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then
-  codesign -s - -f "$copy" 2>/dev/null || fail "could not sign the thinned copy"
-  codesign -v "$copy" || fail "a thinned copy re-signed ad hoc verifies"
+  codesign -v "$copy" || fail "the thinned copy still verifies"
 fi
 "$copy" / >/dev/null || fail "the slimmed copy must still run"
 echo "PASS: mavergreen-slim-ditto"
