@@ -470,89 +470,109 @@ slim_host_arch() {
 mavergreen_host_arch
 }
 slim_dir() { printf '%s/var/mavergreen' "$MG"; }
-slim_setting() {  # $1 host arch: prints "on|off" then why, tab-separated
+slim_setting() {
   _s="$(cat "$(slim_dir)/slim" 2>/dev/null || true)"
   case "$_s" in
     on|off) printf '%s\tset with mavergreen slim %s\n' "$_s" "$_s" ;;
     *) if [ "$1" = arm64 ]; then printf 'off\tthe default on an arm64 Mac\n'; else printf 'on\tthe default on an x86_64 Mac\n'; fi ;;
   esac
 }
-slim_hex() {  # $1 file  $2 offset  $3 count: that many bytes as lowercase hex, no spaces
+slim_hex() {
   od -An -tx1 -j "$2" -N "$3" "$1" 2>/dev/null | tr -d ' \n'
 }
-slim_kept_by_manifest() {  # $1 relative path; $_keep holds the globs, one per line
+slim_kept_by_manifest() {
   [ -n "$_keep" ] || return 1
   printf '%s\n' "$_keep" | { while IFS= read -r _g; do
     case "$1" in $_g) exit 0 ;; esac
   done; exit 1; }
 }
-slim_file() {  # $1 file  $2 host arch: prints thin, rm or nothing; thins or removes it
-  _m="$(slim_hex "$1" 0 4)"
-  case "$_m" in
+slim_in_signed_bundle() {
+  [ -n "$_signed" ] || return 1
+  printf '%s\n' "$_signed" | { while IFS= read -r _d; do
+    case "$1" in "$_d"/*) exit 0 ;; esac
+  done; exit 1; }
+}
+slim_arches() {
+  _am="$(slim_hex "$1" 0 4)"
+  case "$_am" in
     cafebabe)
-      _n=$((0x$(slim_hex "$1" 4 4)))
-      [ "$_n" -ge 1 ] && [ "$_n" -le 30 ] || return 0
-      _hdr="$(slim_hex "$1" 8 $((20 * _n)))"
-      _i=0; _has_x86=""; _has_i386=""; _has_arm=""; _other=0
-      while [ "$_i" -lt "$_n" ]; do
-        _c="$(printf '%s' "$_hdr" | cut -c$((_i * 40 + 1))-$((_i * 40 + 8)))"
-        _o=$((0x$(printf '%s' "$_hdr" | cut -c$((_i * 40 + 17))-$((_i * 40 + 24)))))
-        [ "$(slim_hex "$1" "$_o" 4)" != 213c6172 ] || return 0
-        case "$_c" in
-          01000007) _has_x86=1 ;;
-          00000007) _has_i386=1 ;;
-          0100000c) _has_arm=1 ;;
-          *) _other=$((_other + 1)) ;;
-        esac
-        _i=$((_i + 1))
+      _an=$((0x$(slim_hex "$1" 4 4)))
+      [ "$_an" -ge 1 ] && [ "$_an" -le 30 ] || return 1
+      _ah="$(slim_hex "$1" 8 $((20 * _an)))"
+      _ai=0; _al=""
+      while [ "$_ai" -lt "$_an" ]; do
+        _ac="$(printf '%s' "$_ah" | cut -c$((_ai * 40 + 1))-$((_ai * 40 + 8)))"
+        _ao=$((0x$(printf '%s' "$_ah" | cut -c$((_ai * 40 + 17))-$((_ai * 40 + 24)))))
+        case "$(slim_hex "$1" "$_ao" 4)" in cffaedfe|cefaedfe) ;; *) return 1 ;; esac
+        _al="$_al $_ac"; _ai=$((_ai + 1))
       done
-      _keepargs=""; _nk=0
-      if [ "$2" = arm64 ]; then
-        if [ -n "$_has_arm" ]; then _keepargs="--arch arm64"; _nk=1; fi
-      else
-        if [ -n "$_has_x86" ]; then _keepargs="--arch x86_64"; _nk=$((_nk + 1)); fi
-        if [ -n "$_has_i386" ]; then _keepargs="$_keepargs --arch i386"; _nk=$((_nk + 1)); fi
-      fi
-      if [ "$_nk" -eq 0 ]; then
-        [ "$2" = x86_64 ] || return 0
-        rm -f "$1" || die "could not remove $1"
-        echo rm; return 0
-      fi
-      [ "$_nk" -lt "$_n" ] || return 0
-      # shellcheck disable=SC2086
-      "${MAVERGREEN_DITTO:-/usr/bin/ditto}" $_keepargs "$1" "$1.mavergreen-slim" \
-        && mv -f "$1.mavergreen-slim" "$1" \
-        || { rm -f "$1.mavergreen-slim"; die "could not thin $1"; }
-      echo thin ;;
+      printf '%s\n' "$_al" | tr ' ' '\n' | sed '/^$/d' | sort ;;
     cffaedfe|cefaedfe)
-      [ "$2" = x86_64 ] || return 0
-      [ "$(slim_hex "$1" 4 4)" = 0c000001 ] || return 0
-      rm -f "$1" || die "could not remove $1"
-      echo rm ;;
+      _ac="$(slim_hex "$1" 4 4)"
+      printf '%s%s%s%s\n' "$(printf %s "$_ac" | cut -c7-8)" "$(printf %s "$_ac" | cut -c5-6)" \
+        "$(printf %s "$_ac" | cut -c3-4)" "$(printf %s "$_ac" | cut -c1-2)" ;;
+    *) return 1 ;;
   esac
 }
-slim_tree() {  # $1 product  $2 host arch: thins $MG/$1, prints the count of files changed
+slim_all_arm64() {
+  for _c in $1; do [ "$_c" = 0100000c ] || return 1; done
+}
+slim_file() {
+  _have="$(slim_arches "$1")" || return 0
+  if [ "$(slim_hex "$1" 0 4)" != cafebabe ]; then
+    [ "$2" = x86_64 ] && [ "$_have" = 0100000c ] || return 0
+    rm -f "$1" || die "could not remove $1"
+    echo rm; return 0
+  fi
+  _want=""; _keepargs=""
+  if [ "$2" = arm64 ]; then
+    case "$_have" in *0100000c*) _want="0100000c"; _keepargs="--arch arm64" ;; esac
+  else
+    case "$_have" in *01000007*) _want="01000007"; _keepargs="--arch x86_64" ;; esac
+    case "$_have" in *00000007*) _want="$_want 00000007"; _keepargs="$_keepargs --arch i386" ;; esac
+    _want="$(printf '%s\n' $_want | sort)"
+  fi
+  if [ -z "$_want" ]; then
+    [ "$2" = x86_64 ] && slim_all_arm64 "$_have" || return 0
+    rm -f "$1" || die "could not remove $1"
+    echo rm; return 0
+  fi
+  [ "$_want" != "$_have" ] || return 0
+  _tmp="$1.mavergreen-slim"
+  if "${MAVERGREEN_DITTO:-/usr/bin/ditto}" $_keepargs "$1" "$_tmp" && [ -s "$_tmp" ] \
+     && [ "$(slim_arches "$_tmp" || :)" = "$_want" ]; then
+    mv -f "$_tmp" "$1" || { rm -f "$_tmp"; die "could not thin $1"; }
+  else
+    rm -f "$_tmp"; die "could not thin $1; it is unchanged"
+  fi
+  echo thin
+}
+slim_tree() {
   _keep="$(mf_array "$1" slim-keep)"
   _lst="$(mktemp "${TMPDIR:-/tmp}/mavergreen-slim.XXXXXX")"
-  find "$MG/$1" -type f > "$_lst"
+  _signed="$(find "$MG/$1" -type f -name CodeResources -path '*/_CodeSignature/CodeResources' 2>/dev/null \
+    | sed -e "s|^$MG/$1/||" -e 's|/_CodeSignature/CodeResources$||')"
+  find "$MG/$1" -type f -links 1 > "$_lst"
   _cnt=0
   while IFS= read -r _f; do
     _rel="${_f#"$MG/$1/"}"
     if slim_kept_by_manifest "$_rel"; then continue; fi
+    if slim_in_signed_bundle "$_rel"; then continue; fi
     _r="$(slim_file "$_f" "$2")" || { rm -f "$_lst"; exit 1; }
     if [ -n "$_r" ]; then _cnt=$((_cnt + 1)); fi
   done < "$_lst"
   rm -f "$_lst"
   printf '%s\n' "$_cnt"
 }
-slim_apply() {  # $1 product  $2 host arch
+slim_apply() {
   need_product "$1"
   _eff="$(slim_setting "$2")"; _eff="${_eff%%	*}"
   if [ "$_eff" = off ]; then rm -f "$(slim_dir)/slimmed/$1"; return 0; fi
+  _mk="$(slim_dir)/slimmed/$1"; _had=0
+  [ ! -f "$_mk" ] || _had=1
+  mkdir -p "$(slim_dir)/slimmed"; printf '%s\n' "$2" > "$_mk"
   _n="$(slim_tree "$1" "$2")" || exit $?
-  if [ "$_n" -gt 0 ]; then
-    mkdir -p "$(slim_dir)/slimmed"; printf '%s\n' "$2" > "$(slim_dir)/slimmed/$1"
-  fi
+  if [ "$_n" -eq 0 ] && [ "$_had" -eq 0 ]; then rm -f "$_mk"; fi
   echo "mavergreen: slimmed $_n files in $1 to $2"
 }
 do_slim() {
