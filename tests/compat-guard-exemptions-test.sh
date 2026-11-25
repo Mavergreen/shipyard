@@ -13,6 +13,7 @@ set -eu
 here="$(cd "$(dirname "$0")" && pwd)"
 w="$(mktemp -d "${TMPDIR:-/tmp}/guard-exempt-test.XXXXXX")"; trap 'rm -rf "$w"' EXIT
 # spec: scripts/objc-reference-dir.sh header -- laid out as an install, with a staged reference set, so nothing is fetched.
+mkdir -p "$w/scripts/lib"; cp "$here/../scripts/lib/mach-nm.sh" "$w/scripts/lib/"
 mkdir -p "$w/scripts" "$w/bin" "$w/repo" "$w/build/bin" "$w/reference/objc"
 for s in assert_binary_compatible.sh sdk-pins.sh deviations.sh deviation-reason.sh objc-reference-dir.sh fetch_drydock.sh objc-compat.sh; do
   cp "$here/../scripts/$s" "$w/scripts/"
@@ -36,7 +37,7 @@ echo 'objc-compat: blocking: x86_64@0x1:+[NSColor labelColor] unsupported: intro
 exit 1
 EOF
 chmod +x "$w/bin/shasum" "$w/bin/nm" "$w/bin/objc-compat"
-PATH="$w/bin:$PATH"; OBJC_COMPAT="$w/bin/objc-compat"; export PATH OBJC_COMPAT
+PATH="$w/bin:$PATH"; NM="$w/bin/nm"; OBJC_COMPAT="$w/bin/objc-compat"; export PATH NM OBJC_COMPAT
 unset MAVERICKS_DEVIATIONS_ROOT MAVERICKS_ALLOW_ARCHS MAVERICKS_ALLOW_SELECTORS MAVERICKS_POST_10_9_SELECTORS MAVERICKS_ALLOW_GUARDED_WEAK \
   MAVERGREEN_OBJC_ROOT MAVERGREEN_OBJC_BUILD_EVIDENCE MAVERGREEN_OBJC_PROVIDER_PREFIX MAVERGREEN_OBJC_SOURCE_RECEIPT MAVERGREEN_OBJC_REPORT_DIR \
   MAVERGREEN_OBJC_SOURCE_ROOT MAVERGREEN_OBJC_CRATE_SOURCES MAVERGREEN_OBJC_SDK_ROOT MAVERGREEN_OBJC_ROOT_KIND \

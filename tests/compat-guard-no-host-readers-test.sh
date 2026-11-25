@@ -31,6 +31,7 @@ for d in /usr/bin /bin; do
     chmod +x "$w/bin/$n"
   done
 done
+# platform: guarded macOS-only call -- uname is Darwin before lipo runs
 if [ "$(uname -s)" = Darwin ] && ! lipo -info "$w/clean" >/dev/null 2>&1; then
   for n in lipo otool; do printf '#!/bin/sh\nexec %s "$@"\n' "$CL/bin/llvm-$n" > "$w/bin/$n"; chmod +x "$w/bin/$n"; done
 fi
