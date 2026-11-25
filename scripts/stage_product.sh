@@ -2,7 +2,7 @@
 # platform: host-agnostic -- stevedore reads the updater's identity; the generated preinstall's PlistBuddy text runs on the target
 #   usage: stage_product.sh --stage ROOT --product P --name N --version V --scripts-out DIR
 #            [--group G] [--line L] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
-#            [--requires SHORT[>=VERSION]]... [--requires-on-host ARCH:SHORT[>=VERSION]]... [--slim-keep GLOB]... [--updater-app P-updater.app] [--preinstall-hook FILE]
+#            [--requires SHORT[>=VERSION]]... [--requires-on-host ARCH:SHORT[>=VERSION]]... [--slim-host GLOB]... [--updater-app P-updater.app] [--preinstall-hook FILE]
 #            [--postinstall-hook FILE] [--boot-kext BUNDLE_ID]...
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
 #          staged its files under ROOT/usr/local/mavergreen/P/ (and anything the OS dictates elsewhere).
@@ -19,8 +19,8 @@
 #          scripts/lib/host-arch.sh) is ARCH. SHORT may not also be a plain --requires.
 #          Every postinstall ends its link step with `mavergreen slim apply P`, on the boot volume only and never
 #          fatally: a failure prints "P: could not slim; the universal tree stays" and the install succeeds.
-#          --slim-keep GLOB (repeatable) is written to the manifest's `slim-keep`: files under the tree that slim never
-#          thins. A GLOB that starts with /, has a . or .. component, or is only *, ? and / is refused with exit 2.
+#          --slim-host GLOB (repeatable) is written to the manifest's `slim-host`: the host programs under the tree and the
+#          libraries they load, the only files slim thins. render-manifest.sh validates it; a product with none is never slimmed.
 #          --boot-kext BUNDLE_ID (repeatable) names an unsigned kext staged anywhere under ROOT that
 #          10.9 must load: the postinstall lists BUNDLE_ID, at the installed kext's CFBundleVersion, in
 #          the target volume's OSKextSigExceptionList and, on the boot volume, restarts kextd, before
@@ -39,7 +39,7 @@ ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; NAME=""; REQ=""; REQH=""; KX=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
-    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--exclude|--replaces|--generated|--requires|--requires-on-host|--slim-keep|--boot-kext)
+    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--exclude|--replaces|--generated|--requires|--requires-on-host|--slim-host|--boot-kext)
       [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
@@ -52,16 +52,11 @@ while [ "$1" != --end ]; do
     --name) NAME="$2"; set -- "$@" "$1" "$2"; shift 2 ;;
     --requires) REQ="$REQ$2$nl"; set -- "$@" "$1" "$2"; shift 2 ;;
     --requires-on-host) REQH="$REQH$2$nl"; set -- "$@" "$1" "$2"; shift 2 ;;
-    --slim-keep)
-      case "$2" in ''|/*|*"$nl"*) echo "stage_product: --slim-keep wants a relative glob, got '$2'" >&2; exit 2 ;; esac
-      case "/$2/" in *"/./"*|*"/../"*) echo "stage_product: --slim-keep $2 has a . or .. component" >&2; exit 2 ;; esac
-      case "$2" in *[!*?/]*) : ;; *) echo "stage_product: --slim-keep $2 matches everything; name what to keep" >&2; exit 2 ;; esac
-      set -- "$@" "$1" "$2"; shift 2 ;;
     --boot-kext)
       case "$2" in *[!A-Za-z0-9._-]*|.*|-*) echo "stage_product: --boot-kext: bad bundle id '$2'" >&2; exit 2 ;; esac
       case "$nl$KX" in *"$nl$2 "*) echo "stage_product: --boot-kext $2 is named twice" >&2; exit 2 ;; esac
       KX="$KX$2 $nl"; shift 2 ;;
-    --version|--group|--line|--exclude|--replaces|--generated) set -- "$@" "$1" "$2"; shift 2 ;;
+    --version|--group|--line|--exclude|--replaces|--generated|--slim-host) set -- "$@" "$1" "$2"; shift 2 ;;
     --appcast|--app-dir|--agent-label) echo "stage_product: $1 is derived from shipyard's scripts/product-names; stop passing it" >&2; exit 2 ;;
     *) echo "stage_product: unknown option $1" >&2; exit 2 ;;
   esac
