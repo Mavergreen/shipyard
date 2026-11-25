@@ -78,7 +78,7 @@ case "$scheme" in
     if ! git -C "$ROOT" ls-files --error-unmatch -- "$upfile" >/dev/null 2>&1; then
       for d in build/derive-upstream-version.sh scripts/derive-upstream-version.sh; do
         if git -C "$ROOT" ls-files --error-unmatch -- "$d" >/dev/null 2>&1; then
-          (cd "$ROOT_ABS" && MAVERICKS_ROOT="$ROOT_ABS" SHIPYARD_SCRIPTS="$SELF" sh "$d" >&2) || exit 1
+          (cd "$ROOT_ABS" && MAVERICKS_ROOT="$ROOT_ABS" SHIPYARD_SCRIPTS="$SELF" sh "$d" >"$work/derive" 2>&1) || { cat "$work/derive" >&2; exit 1; }
           break
         fi
       done
@@ -91,6 +91,7 @@ case "$scheme" in
     [ -n "$up" ] || { echo "release-version: $upfile is empty" >&2; exit 1; }
     ( unset MAVERICKS_TAGS; MAVERICKS_ROOT="$ROOT_ABS" MAVERICKS_UPSTREAM_FILE="$ROOT_ABS/$upfile" sh "$SELF/version.sh" "$MODE" ) > "$work/v" || exit 1
     tag="$(sed -n 's/^FULL=//p' "$work/v")"
+    [ -n "$tag" ] || { echo "release-version: $PRODUCT: version.sh printed no FULL= line" >&2; exit 1; }
     case "$MODE" in
       auto) if [ "${tag##*.}" = 1 ] && [ -z "$(git -C "$ROOT" tag --list "$tag")" ]; then why="upstream $up has no -mavericks tag yet"; else why="upstream $up, current $tag"; fi ;;
       local) why="upstream $up, one past the newest -mavericks tag" ;;

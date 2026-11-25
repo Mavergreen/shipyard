@@ -99,7 +99,16 @@ printf '#!/bin/sh\necho 9.9 > "$MAVERICKS_ROOT/UPSTREAM_VERSION"\n' > "$R/build/
 git -C "$R" add build
 git -C "$R" commit -qm "derive"
 want 9.9-mavericks.1 "port runs the tracked derive script when the upstream file is untracked" --product x --mode local
+oneline
 [ ! -e "$R/VERSION" ] || { echo "FAIL: port must not write VERSION"; exit 1; }
+
+mkdir -p "$w/stub"
+cp "$here/../scripts/"*.sh "$w/stub/"
+cp -R "$here/../scripts/lib" "$w/stub/lib"
+printf '#!/bin/sh\nexit 0\n' > "$w/stub/version.sh"
+_rc=0; sh "$w/stub/release-version.sh" --root "$w/port1" --product x >"$w/out" 2>&1 || _rc=$?
+[ "$_rc" = 1 ] || { echo "FAIL: an empty FULL= must exit 1, got $_rc"; exit 1; }
+grep -qF "x: version.sh printed no FULL=" "$w/out" || { echo "FAIL: empty FULL= message"; cat "$w/out"; exit 1; }
 
 empty selfdate
 at 2026-10-12T12:00:00Z src/main.c
@@ -155,10 +164,10 @@ for f in port1 counter selfdate; do
 done
 
 R="$w/counter"
-fails 2 "" "--ref not HEAD for a tree-reading scheme" --root "$R" --product x --ref HEAD~1
-fails 2 "" "unknown ref" --root "$R" --product x --ref nonesuch
-fails 2 "" "no --product" --root "$R"
-fails 2 "" "not a repo" --root "$w" --product x
+fails 2 "must be HEAD" "--ref not HEAD for a tree-reading scheme" --root "$R" --product x --ref HEAD~1
+fails 2 "not a revision" "unknown ref" --root "$R" --product x --ref nonesuch
+fails 2 "usage:" "no --product" --root "$R"
+fails 2 "not a git repository" "not a repo" --root "$w" --product x
 
 empty nodecl
 at 2026-10-12T12:00:00Z src/main.c
