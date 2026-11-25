@@ -173,4 +173,66 @@ empty nodecl
 at 2026-10-12T12:00:00Z src/main.c
 fails 1 "declares no versioning scheme" "no declaration" --root "$R" --product x
 
+kind() {   # $1 = path under release-notes/, $2 = file text (printf format), committed in $R
+  mkdir -p "$(dirname "$R/release-notes/$1")"
+  printf "$2" > "$R/release-notes/$1"
+  git -C "$R" add release-notes
+  git -C "$R" commit -qm "kind $1"
+}
+
+semver_repo() {   # $1 = case, $2 = tag or empty
+  empty "$1"
+  at 2026-10-12T12:00:00Z src/main.c
+  decl "- semver"
+  [ -z "$2" ] || git -C "$R" tag "$2"
+}
+
+semver_repo semverminor v1.2.5
+kind v1.3.0/kind 'minor\n'
+want v1.3.0 "semver takes the minor step from v1.2.5's committed kind" --product x
+oneline
+
+semver_repo semvernext v1.2.5
+kind next/kind 'major\n'
+want v2.0.0 "semver reads next/kind" --product x
+stderr_has "rename release-notes/next to release-notes/v2.0.0"
+want v1.2.5 "semver --previous is the newest semver tag" --product x --previous
+
+semver_repo semverwrongdir v1.2.5
+kind v1.3.0/kind 'patch\n'
+fails 1 "the patch step is v1.2.6" "a kind whose step is not its directory" --root "$R" --product x
+grep -qF "release-notes/v1.3.0/kind says patch, but v1.3.0 is the minor step from v1.2.5" "$w/out" || { echo "FAIL: wrong-dir message"; cat "$w/out"; exit 1; }
+
+semver_repo semverbare 1.2.5
+kind next/kind 'patch\n'
+want 1.2.6 "semver keeps a bare baseline bare" --product x
+
+semver_repo semverfirst ""
+kind next/kind 'minor\n'
+want v0.1.0 "semver with no tags starts from v0.0.0" --product x
+
+semver_repo semvernone v1.2.5
+want v1.2.6 "semver with no kind is the patch step" --product x
+stderr_has "no kind declared"
+stderr_has "a publishing run refuses it"
+
+semver_repo semvercrlf v1.2.5
+kind next/kind 'minor\r\n'
+want v1.3.0 "semver trims CR from the kind" --product x
+
+semver_repo semverbadkind v1.2.5
+kind next/kind 'Minor\n'
+fails 1 "major, minor or patch" "semver refuses a kind that is not one lowercase word" --root "$R" --product x
+
+semver_repo semvertwo v1.2.5
+kind next/kind 'patch\n'
+kind v1.3.0/kind 'minor\n'
+fails 1 "release-notes/next/kind" "semver names every kind it found" --root "$R" --product x
+grep -qF "release-notes/v1.3.0/kind" "$w/out" || { echo "FAIL: second kind not named"; cat "$w/out"; exit 1; }
+
+semver_repo semvernest v1.2.5
+kind w/v1.3.0/kind 'minor\n'
+want v1.3.0 "semver reads release-notes/<short>/ when it exists" --product w
+
+
 echo "release-version-test: ok"

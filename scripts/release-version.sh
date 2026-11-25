@@ -11,9 +11,11 @@
 #            date-semver       self-upstream-version.sh --prefix v0.0.: v0.0.YYYYMMDD.N.
 #            counter           v<L>.N for line L, line 1 of the upstream file (X.Y); N is one more than
 #                              the largest N among the v<L>.N tags merged into REV, else 1.
-#            semver            not yet derived.
+#            semver            the step (major, minor or patch) that the one-word kind file in
+#                              release-notes/[<short>/]next or <step tag> names, from the newest
+#                              semver tag merged into REV (none: v0.0.0); no kind is the patch step.
 #          --previous prints instead the newest tag of the scheme's shape merged into REV, excluding
-#          the derived tag, or nothing. Shapes: port *-mavericks.N; self-upstream-date YYYYMMDD.N;
+#          the derived tag (semver excludes none), or nothing. Shapes: port *-mavericks.N; self-upstream-date YYYYMMDD.N;
 #          date-semver v0.0.YYYYMMDD.N; counter vX.Y.Z; semver vX.Y.Z or X.Y.Z. Order is lib.sh's
 #          comparison_key/ver_cmp.
 #          Exit 2 on a usage error, a non-repo, a shallow clone, an unknown REV, or a REV other than
@@ -53,6 +55,17 @@ fi
 rev="$(git -C "$ROOT" rev-parse --verify -q "$REF^{commit}" 2>/dev/null)" || {
   echo "release-version: --ref '$REF' is not a revision of the repo at $ROOT" >&2
   exit 2
+}
+
+newest_tag() {   # $1 = file of tags, $2 = a tag to skip; prints the newest by lib.sh's order, or nothing
+  _best_tag=""; _best_key=""
+  while IFS= read -r _t; do
+    [ "$_t" = "$2" ] && continue
+    _k="$(comparison_key "${_t#v}")"
+    numeric "$_k" || continue
+    if [ -z "$_best_key" ] || [ "$(ver_cmp "$_k" "$_best_key")" = 1 ]; then _best_key="$_k"; _best_tag="$_t"; fi
+  done < "$1"
+  [ -z "$_best_tag" ] || printf '%s\n' "$_best_tag"
 }
 
 _tmp="${TMPDIR:-/tmp}"
@@ -127,20 +140,54 @@ case "$scheme" in
     shape='^v[0-9]+\.[0-9]+\.[0-9]+$'
     ;;
   semver)
-    echo "release-version: semver: not yet" >&2
-    exit 1 ;;
+    git -C "$ROOT" tag --merged "$rev" | grep -E -- '^v?[0-9]+\.[0-9]+\.[0-9]+$' > "$work/shape" || true
+    base="$(newest_tag "$work/shape" "")"
+    if [ "$PREVIOUS" = yes ]; then [ -z "$base" ] || printf '%s\n' "$base"; exit 0; fi
+    pfx=""; case "$base" in v*) pfx=v ;; esac
+    [ -n "$base" ] || { base=v0.0.0; pfx=v; }
+    IFS=. read -r bx by bz <<EOF
+${base#v}
+EOF
+    step_major="$pfx$((bx + 1)).0.0"; step_minor="$pfx$bx.$((by + 1)).0"; step_patch="$pfx$bx.$by.$((bz + 1))"
+    nr="$ROOT/release-notes"; [ ! -d "$nr/$PRODUCT" ] || nr="$nr/$PRODUCT"
+    rel="${nr#"$ROOT"/}"
+    found=""; nfound=0; tag=""; where=""; kindword=""
+    for dir in next "$step_major" "$step_minor" "$step_patch"; do
+      [ -f "$nr/$dir/kind" ] || continue
+      word="$(awk '
+        NR == 1 { l = $0; gsub(/\r/, "", l); sub(/^[[:space:]]+/, "", l); sub(/[[:space:]]+$/, "", l); w = l; next }
+        /[^[:space:]]/ { extra = 1 }
+        END { if (!extra && (w == "major" || w == "minor" || w == "patch")) print w }' "$nr/$dir/kind")"
+      [ -n "$word" ] || {
+        echo "release-version: $rel/$dir/kind must be one word, major, minor or patch" >&2
+        exit 1
+      }
+      case "$word" in major) want_tag="$step_major" ;; minor) want_tag="$step_minor" ;; *) want_tag="$step_patch" ;; esac
+      if [ "$dir" != next ] && [ "$dir" != "$want_tag" ]; then
+        if [ "$dir" = "$step_major" ]; then dirstep=major; elif [ "$dir" = "$step_minor" ]; then dirstep=minor; else dirstep=patch; fi
+        echo "release-version: $rel/$dir/kind says $word, but $dir is the $dirstep step from $base; the $word step is $want_tag" >&2
+        exit 1
+      fi
+      nfound=$((nfound + 1)); found="$found $rel/$dir/kind"; tag="$want_tag"; where="$dir"; kindword="$word"
+    done
+    if [ "$nfound" -gt 1 ]; then
+      echo "release-version: more than one kind is committed:$found; keep one" >&2
+      exit 1
+    fi
+    if [ "$nfound" = 0 ]; then
+      tag="$step_patch"
+      why="no kind declared, so the patch step from $base; a publishing run refuses it"
+    elif [ "$where" = next ]; then
+      why="the $kindword step from $base, per $rel/next/kind — rename $rel/next to $rel/$tag before you commit"
+    else
+      why="the $kindword step from $base, per $rel/$where/kind"
+    fi
+    ;;
 esac
 
 if [ "$PREVIOUS" = yes ]; then
   git -C "$ROOT" tag --merged "$rev" | grep -E -- "$shape" > "$work/shape" || true
-  best_tag=""; best_key=""
-  while IFS= read -r t; do
-    [ "$t" = "$tag" ] && continue
-    k="$(comparison_key "${t#v}")"
-    numeric "$k" || continue
-    if [ -z "$best_key" ] || [ "$(ver_cmp "$k" "$best_key")" = 1 ]; then best_key="$k"; best_tag="$t"; fi
-  done < "$work/shape"
-  [ -z "$best_tag" ] || printf '%s\n' "$best_tag"
+  newest_tag "$work/shape" "$tag"
   exit 0
 fi
 

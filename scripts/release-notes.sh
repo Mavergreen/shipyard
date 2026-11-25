@@ -253,7 +253,11 @@ if [ -d "$DIR" ]; then
     case "${e##*/}" in
       changes|requires) { [ -d "$e" ] && [ ! -L "$e" ]; } || die "$e must be a directory" ;;
       rebuild) sentence "$e" ;;
-      *) die "$e is not a release-notes entry (only changes/, rebuild and requires/ are); see SKILL.md \"Release notes\"" ;;
+      kind)
+        { [ -f "$e" ] && [ -r "$e" ]; } || die "cannot read $e"
+        [ "$(awk 'NR == 1 { l = $0; gsub(/\r/, "", l); sub(/^[[:space:]]+/, "", l); sub(/[[:space:]]+$/, "", l); if (l == "major" || l == "minor" || l == "patch") ok = 1; next } /[^[:space:]]/ { bad = 1 } END { print (ok && !bad) ? "ok" : "no" }' "$e")" = ok ] \
+          || die "$e: holds one word, major, minor or patch" ;;
+      *) die "$e is not a release-notes entry (only changes/, kind, rebuild and requires/ are); see SKILL.md \"Release notes\"" ;;
     esac
   done
   for sub in changes requires; do

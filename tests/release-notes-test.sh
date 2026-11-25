@@ -395,6 +395,21 @@ dgen new
 [ "$rc" -eq 0 ] || { echo "FAIL dir-rebuild-only: ships"; cat "$r/ERR"; exit 1; }
 [ "$(awk '/^### Before you update$/{f=1; next} f&&/^$/{exit} f{print}' "$r/OUT.md")" = '- Rebuild your Go programs to use the new SDK.' ] \
   || { echo "FAIL dir-rebuild-only: only the rebuild bullet"; cat "$r/OUT.md"; exit 1; }
+# spec: SKILL.md "Release notes" -- a kind file is read by release-version.sh and renders nothing; it
+#       is one word (major, minor or patch).
+dset kind-ignored; mkdir -p "$d/changes"
+printf 'Stop now stays stopped.\n' > "$d/changes/a-first"
+printf 'Keys load again.\n' > "$d/changes/b-second"
+printf 'minor\n' > "$d/kind"
+dgen new
+[ "$rc" -eq 0 ] || { echo "FAIL dir-kind: ships"; cat "$r/ERR"; exit 1; }
+cmp -s "$r/OUT.md" "$work/dir-changes/OUT.md" || { echo "FAIL dir-kind: renders nothing"; diff "$work/dir-changes/OUT.md" "$r/OUT.md"; exit 1; }
+dset kind-huge; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/a"; printf 'huge\n' > "$d/kind"
+dgen new
+refused "dir-kind-huge" "$d/kind"
+dset kind-two; mkdir -p "$d/changes"; printf 'Keys load again.\n' > "$d/changes/a"; printf 'minor\npatch\n' > "$d/kind"
+dgen new
+refused "dir-kind-two" "$d/kind"
 r="$work/dir-notice-first"; mkrepo "$r"; printf 'Never publish an image that contains macOS.\n' > "$r/release-notes/notice"
 ( cd "$r" && git add -A && git commit -qm notice && git tag 9.9p2-mavericks.1 ) || exit 1
 gen "$r" 9.9p2-mavericks.1 --min-os '' >/dev/null 2>"$r/ERR" || { echo "FAIL dir-notice-first: ships"; cat "$r/ERR"; exit 1; }
