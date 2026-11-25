@@ -148,8 +148,8 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   regenerating. A missing cmake product produces an installation hint, not a dangling farm link.
 
   **A GitHub Action's own checkout has no `.git`.** The runner unpacks an action as a tarball, not a
-  clone, so anything inside `install@v1` that tries to derive a version by counting commits
-  (`shipyard-version.sh`'s normal method) finds no repository and silently falls back to the bare
+  clone, so anything inside `install@v1` that tries to derive a version by reading tags
+  (`release-version.sh`'s normal method) finds no repository and silently falls back to the bare
   line — every consumer's installed shipyard once reported `"1.0"` this way, an unidentifiable
   install. `scripts/resolve-action-version.sh` is the fix: it resolves the version from the *ref the
   consumer pinned* (`@v1`, `@v1.2.3`) against the remote instead of trying to derive it from commits
@@ -176,8 +176,8 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
   launcher appends the installed prefix after yours. The dev copy needs no cmake beside it.
 - `@v1` is the **moving major tag**; Renovate's native github-actions manager tracks it — **no custom
   manager, no SHA pin, no marker comment** for it. It moves **automatically**: shipyard's `release.yml`
-  runs on every push to `main`, derives the version from the committed line in `UPSTREAM_VERSION` plus
-  the commit count (`scripts/shipyard-version.sh`), publishes a GitHub Release for the immutable
+  runs on every push to `main`, derives the version with `scripts/release-version.sh` (shipyard declares `counter`:
+  `v1.0.N`, the last tag's N+1), publishes a GitHub Release for the immutable
   `vX.Y.Z`, and fast-forwards `@v1` to that commit. So a shipyard change reaches consumers by **pushing
   `main`** — never move `@v1` by hand, and there's no separate "publish" step to run.
   **The fast-forward happens only AFTER publish succeeds**, and publish needs the build, the key scan
@@ -207,7 +207,7 @@ tag — it advances on every push to shipyard's `main` and reaches every consume
 is what makes a shared fix propagate for free. The cost is that a bad shipyard reaches everyone just as
 fast: on 2026-09-09 a defect in conventions check 7d reddened two repos within the hour.
 
-Since shipyard cuts `vLINE.COUNT` on every push (`scripts/shipyard-version.sh`), every one of those
+Since shipyard cuts `v1.0.N` on every push (`scripts/release-version.sh`, scheme `counter`), every one of those
 pushes is a real, downloadable, pinnable release. So when `@v1` breaks you and you cannot wait for a
 fix, pin the previous version — `uses: Mavergreen/shipyard/.github/workflows/family-conventions.yml@v1.0.<N>`,
 where `<N>` is a real patch number from `gh release list -R Mavergreen/shipyard` (pick the release
@@ -696,6 +696,34 @@ product's directory and is what people type to the `mavergreen` helper.
 
 ## Versioning
 
+**Each product declares exactly one scheme, and its version is derived, never chosen.** INGREDIENTS.md's
+`## Versioning` holds `- <scheme>`, or `- <short>: <scheme>` per product when products version
+separately (golang's lines); `port` and `counter` may name their upstream file (`- <short>: port <file>`).
+`sh "$SHIPYARD_SCRIPTS/release-version.sh" --product <short> --mode "$(sh "$SHIPYARD_SCRIPTS/release-mode.sh")"`
+is the only source of a release's version: `release.yml` calls it once and passes the result to every
+job. Two gates run `check-release-version.sh`: `version-check`, an ubuntu job that every macOS job and
+the publish job `needs:`, and `publish-release.yml` before any upload. Each refuses a version that
+differs from the derived one; a publishing run is also refused without committed notes (see "Release
+notes"). A version chosen by hand, a check that runs only on macOS, and a pushed tag as a trigger are
+what this forbids.
+
+| Scheme | Form | Deriver | What moves N or the date |
+|---|---|---|---|
+| `port` | `<upstream>-mavericks.N` | `resolve-version.sh`'s rule, via `release-version.sh` | N resets to 1 when the upstream moves; `auto` keeps the current N, `local` (a `local_release` dispatch) cuts max N+1 |
+| `self-upstream-date` | `YYYYMMDD.N` | `self-upstream-version.sh` | the date is the UTC day own code last changed, never before the last tag's, and N restarts at 1 with it; an ingredient-only release takes N+1 |
+| `semver` | `vX.Y.Z` or `X.Y.Z` | the newest semver tag, stepped | the step the version's notes declare in `kind` (see "Release notes") |
+| `date-semver` | `v0.0.YYYYMMDD.N` (dimmit) | `self-upstream-version.sh --prefix v0.0.` | as `self-upstream-date` |
+| `counter` | `vMAJOR.MINOR.N` (shipyard's `v1.0.N`) | the last tag's N+1 | N counts releases; MAJOR.MINOR move only by editing the upstream file |
+
+- A mislabeled published release is accepted as-is; the next version is whatever the deriver prints
+  (container-tools continues at 20261025.20). No recovery rewrites history; no notes are back-filled.
+  Revisit if a mislabel breaks a consumer's pin.
+- No grandfather list: adoption is a flag-day wave (2026-11-25), and a repo not yet adopted cannot
+  publish until it does. Revisit if a wave cannot finish the day it starts.
+- Revisit when a product's versioning fits no declared scheme (add the scheme, never an exception), or
+  when `kind` misclassifications mislead users about compatibility often enough to warrant a human gate
+  for `major`.
+
 **First decide: does this repo PORT an external upstream, or is it its OWN upstream?** The `-mavericks.N`
 suffix means "our Nth repackage of *someone else's* thing." Most repos port an upstream and use the
 `<upstream>-mavericks.N` machinery below (including date-versioned ports — `mavericks-ed25519`
@@ -719,12 +747,12 @@ it **drops the `-mavericks` suffix** and versions itself directly:
   it changes the digest, so it cuts a release by itself, the other lever besides a dispatch. Under
   this rule a version says whether our code moved (container-tools shipped 37 releases
   as `20260727-mavericks.N`, 21 of them its own code, two of them breaking, all under one date);
-- **semver `vX.Y.Z`**, or dimmit's `v0.0.YYYYMMDD.N`.
+- **semver `vX.Y.Z`** and dimmit's `v0.0.YYYYMMDD.N` (`date-semver`): see the table above.
 
 Mechanics for a self-upstream repo: `UPSTREAM_VERSION` (if used) is the repo's OWN version, with no
 Renovate datasource — nothing external to track. There is **no `resolve-version.sh`** (it hardcodes
-`-mavericks.`), so `release.yml` takes a date-based version from `self-upstream-version.sh` and computes a
-semver one itself (`fetch-depth: 0` either way). `VERSION` stays a gitignored build product; the family-conventions
+`-mavericks.`), so `release.yml` takes its version from `release-version.sh` (`fetch-depth: 0`); a semver
+release's step is the `kind` its notes declare (see "Release notes"). `VERSION` stays a gitignored build product; the family-conventions
 gate still applies unchanged (committed `UPSTREAM_VERSION` + uncommitted `VERSION` passes it), and you
 still publish via `publish-release.yml@v1`. **Everything below — the two bump axes, `resolve-version.sh`,
 `build/version.sh`, the `-mavericks.N` suffix — is for the PORT case.**
@@ -1266,7 +1294,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   so a format bump means recompute, never republish — recompute each affected release's digest with
   `--ref <tag>` and re-record it. Until then `release-needed.sh` refuses to publish rather than read
   an unreadable marker as an absent one.
-- **shipyard itself does not adopt this.** Its version is `<UPSTREAM_VERSION>.<commit count>`, so its
+- **shipyard itself does not adopt this.** Its version is `v<line>.N` (scheme `counter`), so its
   own state changes on every push, and every push already publishes by design (see "Release
   workflow" above and shipyard's own `INGREDIENTS.md`). That is shipyard's declared exception, not a
   pattern to copy — shipyard has no `## Declared state` section of its own.
@@ -1277,6 +1305,8 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   thin wrappers: `build/msc.sh` locates the installed scripts (`$SHIPYARD_SCRIPTS` → CMake user package
   registry → sibling checkout), and `build/version.sh` / `build/release-notes-file.sh` exec the shared
   implementation. Only the product name passed to the notes builder is genuinely per-repo.
+- **`resolve-version.sh` stays the build-time reader of `VERSION`**, and `release.yml` writes `VERSION`
+  from the tag `release-version.sh` derived, so every build job agrees with the gates.
 - Wrapping rather than deleting keeps every call site working: `sh build/version.sh auto` on a dev
   box, the repo's own tests, `versions.sh`, and the release workflow.
 - **`$MAVERICKS_ROOT` is the family-wide root variable** the shared logic reads. The wrapper sets it
@@ -1292,12 +1322,18 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 - **Publish with the shared workflow, never by hand.** A publish job is:
   ```yaml
   publish:
-    needs: [build]
+    needs: [version-check, build]
     if: needs.build.outputs.publish == 'true'
     permissions: { contents: write }
     uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
-    with: { version: "${{ needs.build.outputs.version }}", artifact: <artifact name> }
+    with:
+      version: "${{ needs.build.outputs.version }}"
+      product: <short>
+      release-mode: "${{ needs.build.outputs.release-mode }}"
+      artifact: <artifact name>
   ```
+  `publish-release.yml` re-derives the version at the commit it publishes and refuses a mismatch, or a
+  version with no committed notes, before any upload.
 - **A repo's FIRST EVER release needs a README a human has read.** `publish-release.yml` refuses it
   while the README still carries the generated marker line — plain visible prose under the heading,
   not an HTML comment, so it renders on the repo's front page:
@@ -1362,13 +1398,13 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   would ship a version using the *previous* version's tooling, which by construction cannot catch a
   defect in the tooling being shipped. The same reasoning applies to any repo whose release artifacts
   are what the release process runs on.
-- **An existing tag refuses the publish — except the tag that triggered the run.** Two runs can compute
-  the same `-mavericks.(N+1)` and both build it; the loser must not publish and must not relabel (the
-  version is already baked into the pkg and the appcast), so it re-dispatches. But a run started by a
-  pushed tag always finds its own tag, and blanket refusal made the documented "publish from a tag"
-  model impossible — clang had no working release path at all. `assert_tag_publishable.sh` allows
-  exactly that case: the run's ref IS this version's tag, and the tag names the commit being published.
-  The exception serves only the legacy `tags:` triggers still in existing repos; it goes with them.
+
+### An existing tag refuses the publish
+
+Any existing tag refuses the publish, with no exception for the run's own tag. Two runs can derive the
+same version and both build it; the loser publishes nothing and re-dispatches, since the version is
+already baked into its pkg and appcast. A pushed tag is a hand-chosen version, so no workflow triggers
+on one (check 40d).
 
 ## Release notes
 
@@ -1472,6 +1508,25 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   release-notes/notice  OPTIONAL, standing: line 1 opens every release's footer
   ```
 
+  **Every published version has `release-notes/<TAG>/changes/<slug>`**, at least one, checked by
+  `check-release-version.sh` in `version-check` and again in `publish-release.yml`. Only a run that
+  publishes needs them; a feedback push does not. The one exception is a **pins-only release**: since
+  the last release tag no own code changed (`own-code-pathspecs.sh`'s list, plus the declared upstream
+  file), at least one pin did (`UPSTREAM_VERSION`, the declared upstream file, `components/*/version`,
+  `ingredients/**`, a declared-state file, an ingredient pin), and the generated notes say what moved
+  (`### Build ingredients` or `- New upstream: `). A Renovate upstream bump and an ingredient's `.N+1`
+  are this case, covered by the generated notes. Committed notes are required whenever own code or
+  packaging changed. Revisit if generated notes mislead about what changed.
+
+  **semver adds `release-notes/<TAG>/kind`**: one word, `major`, `minor` or `patch`, and the version is
+  exactly that step from the newest semver tag. The agent writing the notes classifies from the diff
+  since that tag: removed or changed public behaviour is `major`; new behaviour is `minor`; fixes only is
+  `patch`. It may be wrong; it may not skip. A semver release with no `kind` is refused.
+
+  **The `next/` workflow** (the directory is named for a version that does not exist yet): write
+  `release-notes/next/kind` (semver only), run `release-version.sh --product <short>`, rename
+  `release-notes/next` to the tag it prints, then write `changes/`. A `next/` left in place is refused.
+
   A repo that tags products separately (swift) nests the same under `release-notes/<short>/`, `notice`
   included, and passes `--short <short>` to `release-notes.sh`; given it, and when that directory
   exists, only the nested tree is read. An unknown entry in `release-notes/<TAG>/` fails the release,
@@ -1497,18 +1552,9 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   --version <VERSION> --product <noun> --out "$TMPDIR/notes.md"` (plus the `--line`, `--min-os` and
   `--short` the repo's `release.yml` passes).
 
-  **Naming `<TAG>` before the release exists**, by version scheme:
-  - `vLINE.COUNT` (shipyard, `shipyard-version.sh`): the tag of the commit that will be released,
-    `v<line>.<commit count>`. It moves with every commit, the notes commit and anyone else's included,
-    so rename the directory to match the commit that is actually released.
-  - `YYYYMMDD.N` (porthole, longboat): what `self-upstream-version.sh` prints for the commit that will
-    be released: run `sh "$SHIPYARD_SCRIPTS/self-upstream-version.sh"` at that commit. `release-notes/`
-    is not own code, so committing the notes does not move the version.
-  - `vX.Y.Z` (magic-trackpad2): `v` plus the `MAVERICKS_VERSION` in `CMakeLists.txt` that the release will
-    publish, such as `v0.5.6`. `publish-release.yml` mints the tag; never push it by hand (the pre-push
-    hook refuses).
-  - `<upstream>-mavericks.N` (every port): N is 1 for a new upstream, else the highest
-    `<upstream>-mavericks.*` tag's N plus 1.
+  **Naming `<TAG>` before the release exists:** run `sh "$SHIPYARD_SCRIPTS/release-version.sh" --product
+  <short>` at the commit that will be released; for `counter`, rename the directory if another release
+  lands first. `release-notes/` is not own code, so committing the notes does not move a date version.
 
   **Legacy `.md` prose.** A tag is *minted* when it exists locally on a commit other than `HEAD`
   (checkouts are fetch-depth 0; publish-release.yml mints the tag after the notes are built). A
@@ -3127,6 +3173,10 @@ pointing back into the row below — so this table, not the script, is where a c
 | **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. An `- arm64-pure-go:<glob>: <reason>` declaration needs no job, and a job beside only such declarations fails with a third; conformance proves each slice one covers instead ("Pure-Go arm64 slices are proven on Linux"). At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` or `arm64-pure-go:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or `- arm64-pure-go: <reason>`, or a glob of only `*`, `?` and `/`, is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36), a Linux job in its `needs:` (check 38) and the publish job's `if:` (check 39) |
 | **38.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` or `xcode-*` runner (read as check 36 reads it), or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) holding one, has in its `needs:`, directly or through other jobs' `needs:`, a job on an `ubuntu-*` runner (every matrix entry `ubuntu-*`), a call to a shipyard reusable workflow (`Mavergreen/shipyard/.github/workflows/…`), or a call to a local reusable workflow whose every job runs on `ubuntu-*`. A file whose only trigger is `workflow_call` is skipped: its caller is held to the rule. A self-hosted runner or a `runs-on` expression is not Linux. Grandfathered per job as `linux-gate <repo> <workflow file>:<job>`; no deviation excuses it | A macOS job is the family's scarcest minute, and one that starts before anything cheap has run spends it failing on what Linux would have caught: macfuse's release dispatch spent 3 macOS minutes failing only on a release-note sentence's word count, and recaulk's runs failed in checks that need no Mac. See "Linux gate first", above |
 | **39.** Where `release.yml` has a `modern-smoke` job, its `if:` carries, as top-level `&&` terms, every term of the publish job's `if:` (the job calling `publish-release.yml`, else `publish`), status functions (`always()`, `success()`, `failure()`, `cancelled()`) aside and `${{ }}` and outer parentheses ignored; a publish job with no `if:` fails with its own message. Grandfathered per repo as `smoke-gate <repo> release.yml:modern-smoke`, separately from check 37's `modern-smoke` line | modern-smoke proves the arm64 slice of what will SHIP; a push, a PR or a branch run ships nothing, so a smoke there is a macOS runner spent on evidence nobody uses. An ingredient-PR merge used to spend two: the push run and repackage's dispatch. Sharing the publish job's own term, an output of the job that decides, keeps one decision instead of two copies that drift. See "Smoke only in a publishing run", above |
+| **40.** INGREDIENTS.md has a `## Versioning` section: one `- <scheme>` line (or `- <short>: <scheme>` per product) whose scheme is `port`, `self-upstream-date`, `semver`, `date-semver` or `counter`, read by `versioning.sh`; an unknown scheme, a malformed entry or no section fails. No deviation or grandfathered line excuses it | Which scheme a product follows was implied by the script its workflow happened to call, so nothing could say a release broke it: container-tools shipped own-code changes as `20261025.17` and `.19`. A declaration is what the gates compare a version against. See "Versioning", above |
+| **40b.** `release.yml` calls `release-version.sh` and none of `resolve-version.sh`, `self-upstream-version.sh`, `shipyard-version.sh` or `version.sh` on a non-comment line. No deviation or grandfathered line excuses it | A version computed any other way is a hand-chosen version, however automatic it looks; the gates re-derive it with `release-version.sh`, so a second deriver can only disagree |
+| **40c.** `release.yml` has a job named `version-check` on an `ubuntu-*` runner (every matrix entry) with a step running `check-release-version.sh` with `--publishing`; every job on a `macos-*` or `xcode-*` runner (or calling a local reusable workflow holding one) and the publish job reach it through `needs:`. No deviation or grandfathered line excuses it | The version and notes check needs no Mac, and a macOS job that starts before it spends the family's scarcest minute on a release `publish-release.yml` will refuse. See "Linux gate first" and "Release notes" |
+| **40d.** No workflow in `.github/workflows/` has `tags:` under `on: push`. A release is a push to `main` or a `workflow_dispatch`. No deviation or grandfathered line excuses it | A pushed tag is a hand-chosen version that no gate derived; tags are retired as a release trigger, and `assert_tag_publishable.sh` allows no run's own tag. See "An existing tag refuses the publish" |
 
 **Grandfathered findings.** `scripts/conventions-grandfathered` holds one `<check> <repo> <job|path>` line per
 finding that predates checks 21 (widened), 35, 36, 37, 38 and 39, conformance's `cxxabi` and `no-standalone`, and check 10's unchecked subshell, under the check names `artifact-conformance`,
@@ -3486,13 +3536,15 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    "Comments cite a reason", above. A new project has no comment debt to sweep, so it does not start by
    writing file headers explaining what the code does and sweeping them out later; it starts with the
    file in place and check 15 already green.
-3. `UPSTREAM_VERSION` (bare); `/VERSION` in `.gitignore`, and `.superpowers/` and `.idea/` there too (check 27;
+3. `INGREDIENTS.md` `## Versioning` declaring the product's scheme (check 40; see "Versioning");
+   `UPSTREAM_VERSION` (bare); `/VERSION` in `.gitignore`, and `.superpowers/` and `.idea/` there too (check 27;
    see "Where superpowers working files go").
 4. `build/lib.sh` (`upstream_version()`), `build/version.sh` — copy from golang; call
    `$SHIPYARD_SCRIPTS/release-notes.sh` directly from `release.yml` (see Release notes, above) — do not
    copy `build/release-notes-file.sh`, which is legacy with zero product callers.
-5. `release.yml`: pick a release model; three triggers; `ver` step with the non-main guard; `gh release
-   create`; the `concurrency:` block from "Release workflow" above — group keyed on `github.run_id`,
+5. `release.yml`: pick a release model; three triggers; a `ver` step that takes the version from
+   `release-version.sh` with the non-main guard; a `version-check` job on `ubuntu-latest`, in the
+   `needs:` of every macOS job and the publish job (checks 40b, 40c); `gh release create`; the `concurrency:` block from "Release workflow" above — group keyed on `github.run_id`,
    `cancel-in-progress` naming `pull_request`. (Not `cancel-in-progress: false`: it protects the
    RUNNING run, not the QUEUED one, and the gate rejects it.)
 6. `build/upstream-release-notes-url.sh` (a port: where upstream's notes for a version live — see
