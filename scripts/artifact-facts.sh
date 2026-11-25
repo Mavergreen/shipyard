@@ -145,6 +145,18 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
   done < "$_ml"
   rm -f "$_ml"
 }
+fat_host_macho() {  # $1 = file. Zero when it is cafebabe with 1..30 slices that are each Mach-O.
+  case "$(od -An -tx1 -N 8 "$1" 2>/dev/null | tr -d ' \n')" in cafebabe????????) ;; *) return 1 ;; esac
+  _fn="$(od -An -tx1 -j 4 -N 4 "$1" | tr -d ' \n')"; _fn=$((0x$_fn))
+  [ "$_fn" -ge 1 ] && [ "$_fn" -le 30 ] || return 1
+  _fi=0
+  while [ "$_fi" -lt "$_fn" ]; do
+    _fo="$(od -An -tx1 -j $((16 + 20 * _fi)) -N 4 "$1" 2>/dev/null | tr -d ' \n')"
+    case "$_fo" in [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;; *) return 1 ;; esac
+    case "$(od -An -tx1 -j $((0x$_fo)) -N 4 "$1" 2>/dev/null | tr -d ' \n')" in cffaedfe|cefaedfe) ;; *) return 1 ;; esac
+    _fi=$((_fi + 1))
+  done
+}
 payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a payload cannot be read, or the registry cannot answer (why in _pf_why).
   _pf_why=""
   for _pl in $(find "$2" -name Payload -type f | sed 's/ /%20/g'); do
@@ -241,6 +253,14 @@ payload_facts() {  # $1 = pkg basename, $2 = its expanded tree. Non-zero when a 
         [ "$_rc" -ne 0 ] || _hr="$REG_V"
         printf 'manifest-requires-on-host %s %s %s %s\n' "$1" "$(printf '%s' "$_ha" | enc)" "$(printf '%s' "$_hs" | enc)" "$_hr"; _k=$((_k + 1))
       done
+      _k=0
+      while _h="$("$STEVEDORE" plist get "$_mf" "slim-host:$_k" 2>/dev/null)"; do
+        printf 'manifest-slim-host %s %s\n' "$1" "$(printf '%s' "$_h" | tr '\n' ' ' | enc)"; _k=$((_k + 1))
+      done
+      _fh=no
+      if [ -n "$(find "$(dirname "$_mf")/bin" "$(dirname "$_mf")/libexec" -type f 2>/dev/null \
+          | while IFS= read -r _ff; do if fat_host_macho "$_ff"; then echo yes; break; fi; done)" ]; then _fh=yes; fi
+      printf 'manifest-fat-host %s %s\n' "$1" "$_fh"
     done
   done
   return 0
