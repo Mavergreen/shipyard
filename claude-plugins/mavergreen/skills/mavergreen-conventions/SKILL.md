@@ -300,8 +300,10 @@ default target and swift's default, on Linux, a modern Mac and 10.9 alike. The b
 the cfgs, so `--no-default-config` changes nothing about the target. **Revisit when** a family
 consumer's main product is a modern-Mac binary.
 
-**An explicit target works with no extra flags on every host.** `clang --target=arm64-apple-macos11`
-(and each family's equivalent) takes its floor and SDK from the arch it names. On Apple Silicon "the
+**A merged toolchain's explicit target works with no extra flags on every host.**
+`clang --target=arm64-apple-macos11` (and each family's equivalent) takes its floor and SDK from the
+arch it names. Until clang-22 merges, shipyard still passes arm64 its own flags (`--no-default-config`,
+`ld64.lld` and the 11.3 SDK's libc++ headers; see "SDK pinning"). On Apple Silicon "the
 host" means arm64 at 11.0 with the 11.3 SDK, the family's arm64, never the running macOS with Xcode's
 SDK. So a toolchain requires `sdk109` and `sdk113` on every host.
 
@@ -334,7 +336,8 @@ unregistered SHORT, or the product itself; a deviation can excuse it.
 postinstall on the boot volume and never fatally, strips the other host arch's slice from the programs
 that run on this Mac and the libraries they load. It is on by default on an x86_64 Mac and off on
 Apple Silicon; `mavergreen slim on|off|status` sets and shows it, and the setting survives updates.
-`slim off` restores nothing: reinstall a slimmed product to get its other slices back.
+`slim off` restores nothing: reinstall a slimmed product to get its other slices back. On an x86_64
+Mac a thin arm64-only Mach-O file in the host payload is deleted outright, not thinned.
 
 - **A product declares its host payload** with `stage_product.sh --slim-host GLOB` (repeatable;
   manifest array `slim-host`), and slim touches only files matching those globs. A product with none
@@ -425,7 +428,7 @@ run. This is the single cheapest speedup available to this family.
   — both put the build back inside the (possibly NFS) source tree.
 - **`shipyard-cmake`, `shipyard-ctest`, `shipyard-cpack` and `build_universal.sh` default an unset or
   empty `MAVERICKS_BUILD_ROOT` to `$TMPDIR/mm-build`** (`/tmp` when `TMPDIR` is unset; GitHub's
-  Linux runners leave it unset, so `install@v1` exports `$RUNNER_TEMP` or `/tmp` there). An exported
+  Linux runners leave it unset, so `install@v1` exports `TMPDIR` as `$RUNNER_TEMP` or `/tmp` there). An exported
   value wins. A bare `cmake --preset` with it empty is refused: `MAVERICKS_BUILD_ROOT is unset: set
   it, or configure through shipyard-cmake`. Presets cannot express a default, so the launchers are
   the entry point that works everywhere.
@@ -1149,22 +1152,22 @@ for this: the rust archive carries no manifest, so it fetches the 200 MB pkg onl
 | the updater from `/usr/bin/clang` and RequireAppleClang | `build_updater.sh ... --clang22-pin "$SHIPYARD_SCRIPTS/../components/clang22" --arch x86_64` |
 | `codesign` | nothing: a 10.9 x86_64 binary needs no signature |
 
-**A big Rust build on `ubuntu-latest` adds swap and builds on `/mnt`.** The runner's memory is not
-enough for one (codex lost its runner to memory exhaustion), so before the build the job frees disk
-space, adds 8 GB of swap on `/mnt`, and puts the build root there:
+**A Linux job that runs out of memory adds swap and builds on `/mnt`** (recommended, for a big Rust
+build on `ubuntu-latest` especially). After a step that removes what the runner preinstalls and the
+build does not use, it adds 8 GB of swap on `/mnt` at a path of its own (the image may already run a
+swapfile at `/mnt/swapfile`) and puts the build root there, in place of the "Build out of tree" step:
 
 ```yaml
-      - name: Room for a big Rust build
+      - name: Swap and build root on /mnt
         run: |
-          sudo fallocate -l 8G /mnt/swapfile && sudo chmod 600 /mnt/swapfile
-          sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile
+          sudo fallocate -l 8G /mnt/mavergreen-swap && sudo chmod 600 /mnt/mavergreen-swap
+          sudo mkswap /mnt/mavergreen-swap && sudo swapon /mnt/mavergreen-swap
           sudo mkdir -p /mnt/mm-build && sudo chown "$(id -u):$(id -g)" /mnt/mm-build
           echo "MAVERICKS_BUILD_ROOT=/mnt/mm-build" >> "$GITHUB_ENV"
 ```
 
-That replaces the "Build out of tree" step, after a step that removes what the runner preinstalls and
-the build does not use. **Revisit when** GitHub's Linux runners have enough memory for the family's
-largest Rust build, or a shared shipyard action replaces this recipe.
+**Revisit when** GitHub's Linux runners have enough memory for the family's largest Rust build, a
+shared shipyard action replaces this recipe, or a family workflow proves a different recipe.
 
 Off macOS, shipyard's own Mach-O readers default to clang22's `llvm-*` even with none of those
 variables set, and never to the host's GNU `ar` or `nm`, which cannot read Mach-O and mangle Darwin
@@ -2970,7 +2973,7 @@ is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
 | `base` | a pkg carrying a manifest lists `dev.mavergreen.base` as its first component | the pkg filename |
 | `updater` | a Sparkle updater (a top-level bundle with `SUFeedURL`) is `Library/Application Support/Mavergreen/<short>-updater.app` with bundle id `<pkg identifier>.updater`; a pkg with an updater installs the LaunchAgent `<pkg identifier>-updatecheck`; every launchd Label containing `updatecheck` is that one | the pkg filename |
 | `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
-| `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus a `-cross` suffix while `go126-cross` and its kin remain, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
+| `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus a `-cross` suffix (which goes when golang merges and `go126-cross` leaves the registry), is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | with `$GITHUB_REPOSITORY` set, every product a release ships is registered to that repo (by name; the owner is not compared) | the pkg filename |
 
 Paths are relative to `/`, after each component's `install-location`; a manifest is read only from a
