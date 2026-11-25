@@ -709,8 +709,8 @@ what this forbids.
 
 | Scheme | Form | Deriver | What moves N or the date |
 |---|---|---|---|
-| `port` | `<upstream>-mavericks.N` | `resolve-version.sh`'s rule, via `release-version.sh` | N resets to 1 when the upstream moves; `auto` keeps the current N, `local` (a `local_release` dispatch) cuts max N+1 |
-| `self-upstream-date` | `YYYYMMDD.N` | `self-upstream-version.sh` | the date is the UTC day own code last changed, never before the last tag's, and N restarts at 1 with it; an ingredient-only release takes N+1 |
+| `port` | `<upstream>-mavericks.N` | `version.sh` in the mode the release uses, via `release-version.sh` | N resets to 1 when the upstream moves; `auto` keeps the current N, `local` (a `local_release` dispatch) cuts max N+1 |
+| `self-upstream-date` | `YYYYMMDD.N` | `self-upstream-version.sh` | the date is the UTC day own code last changed, never before the last tag's, and N restarts at 1 with it; an ingredient-only release, or own code last changed on or before the last tag's date, keeps the tag's date with N+1 |
 | `semver` | `vX.Y.Z` or `X.Y.Z` | the newest semver tag, stepped | the step the version's notes declare in `kind` (see "Release notes") |
 | `date-semver` | `v0.0.YYYYMMDD.N` (dimmit) | `self-upstream-version.sh --prefix v0.0.` | as `self-upstream-date` |
 | `counter` | `vMAJOR.MINOR.N` (shipyard's `v1.0.N`) | the last tag's N+1 | N counts releases; MAJOR.MINOR move only by editing the upstream file |
@@ -909,7 +909,7 @@ Two release models — **pick by how you publish**:
   `<upstream>-mavericks.1` by itself. The publish decision lives in the build job
   (`steps.ver.outputs.release`). Use this when Renovate merging the bump should *itself* release.
 - **Deliberate publish** — build and gate on every push/PR, but publish only from an explicit
-  `workflow_dispatch` (or a legacy `tags:` trigger, where one remains). Use this when a human decides when to cut, or the build is too heavy or too risky
+  `workflow_dispatch`. Use this when a human decides when to cut, or the build is too heavy or too risky
   to release unattended.
 
 **Which repo is which** (checked 2026-09-22; a repo's `release.yml` **`ver`/version step is the
@@ -1404,7 +1404,7 @@ ordinary commit moves no declared input, so it renders the same digest and publi
 Any existing tag refuses the publish, with no exception for the run's own tag. Two runs can derive the
 same version and both build it; the loser publishes nothing and re-dispatches, since the version is
 already baked into its pkg and appcast. A pushed tag is a hand-chosen version, so no workflow triggers
-on one (check 40d).
+on one (check 40d). Revisit if a release path that needs a tag-triggered run returns.
 
 ## Release notes
 
@@ -1511,8 +1511,8 @@ on one (check 40d).
   **Every published version has `release-notes/<TAG>/changes/<slug>`**, at least one, checked by
   `check-release-version.sh` in `version-check` and again in `publish-release.yml`. Only a run that
   publishes needs them; a feedback push does not. The one exception is a **pins-only release**: since
-  the last release tag no own code changed (`own-code-pathspecs.sh`'s list, plus the declared upstream
-  file), at least one pin did (`UPSTREAM_VERSION`, the declared upstream file, `components/*/version`,
+  the last release tag no own code changed (`own-code-pathspecs.sh`'s list, with the declared upstream
+  file excluded), at least one pin did (`UPSTREAM_VERSION`, the declared upstream file, `components/*/version`,
   `ingredients/**`, a declared-state file, an ingredient pin), and the generated notes say what moved
   (`### Build ingredients` or `- New upstream: `). A Renovate upstream bump and an ingredient's `.N+1`
   are this case, covered by the generated notes. Committed notes are required whenever own code or
