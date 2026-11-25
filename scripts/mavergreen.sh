@@ -10,6 +10,8 @@
 #            uninstall <product>          remove it, its farm links, and what its manifest lists as outside or generated
 #            system-replace <product>     swap the manifest's :replaces system paths for links into the tree (10.9 only)
 #            system-restore <product>     put those system paths back
+#            slim status|on|off           show or set thinning of installed products to this Mac's arches
+#            slim apply <product>         thin one product now (every product's postinstall calls this)
 #            version                      print the mavergreen helper's stamped version
 # spec: tests/mavergreen-helper-test.sh
 set -eu
@@ -440,6 +442,7 @@ do_uninstall() {
   unlink_product "$1"
   remove_listed "$1" outside || _failed=1
   remove_listed "$1" generated || _failed=1
+  rm -f "$MG/var/mavergreen/slimmed/$1"
   for _d in "$MG/$1" "$MG/var/$1"; do
     _pi=0; parent_in_root "$_d" || _pi=$?
     case "$_pi" in
@@ -462,6 +465,121 @@ do_uninstall() {
   fi
   [ "$_failed" -eq 0 ]
 }
+slim_host_arch() {
+. "$(dirname "$0")/lib/host-arch.sh"
+mavergreen_host_arch
+}
+slim_dir() { printf '%s/var/mavergreen' "$MG"; }
+slim_setting() {  # $1 host arch: prints "on|off" then why, tab-separated
+  _s="$(cat "$(slim_dir)/slim" 2>/dev/null || true)"
+  case "$_s" in
+    on|off) printf '%s\tset with mavergreen slim %s\n' "$_s" "$_s" ;;
+    *) if [ "$1" = arm64 ]; then printf 'off\tthe default on an arm64 Mac\n'; else printf 'on\tthe default on an x86_64 Mac\n'; fi ;;
+  esac
+}
+slim_hex() {  # $1 file  $2 offset  $3 count: that many bytes as lowercase hex, no spaces
+  od -An -tx1 -j "$2" -N "$3" "$1" 2>/dev/null | tr -d ' \n'
+}
+slim_kept_by_manifest() {  # $1 relative path; $_keep holds the globs, one per line
+  [ -n "$_keep" ] || return 1
+  printf '%s\n' "$_keep" | { while IFS= read -r _g; do
+    case "$1" in $_g) exit 0 ;; esac
+  done; exit 1; }
+}
+slim_file() {  # $1 file  $2 host arch: prints thin, rm or nothing; thins or removes it
+  _m="$(slim_hex "$1" 0 4)"
+  case "$_m" in
+    cafebabe)
+      _n=$((0x$(slim_hex "$1" 4 4)))
+      [ "$_n" -ge 1 ] && [ "$_n" -le 30 ] || return 0
+      _hdr="$(slim_hex "$1" 8 $((20 * _n)))"
+      _i=0; _has_x86=""; _has_i386=""; _has_arm=""; _other=0
+      while [ "$_i" -lt "$_n" ]; do
+        _c="$(printf '%s' "$_hdr" | cut -c$((_i * 40 + 1))-$((_i * 40 + 8)))"
+        _o=$((0x$(printf '%s' "$_hdr" | cut -c$((_i * 40 + 17))-$((_i * 40 + 24)))))
+        [ "$(slim_hex "$1" "$_o" 4)" != 213c6172 ] || return 0
+        case "$_c" in
+          01000007) _has_x86=1 ;;
+          00000007) _has_i386=1 ;;
+          0100000c) _has_arm=1 ;;
+          *) _other=$((_other + 1)) ;;
+        esac
+        _i=$((_i + 1))
+      done
+      _keepargs=""; _nk=0
+      if [ "$2" = arm64 ]; then
+        if [ -n "$_has_arm" ]; then _keepargs="--arch arm64"; _nk=1; fi
+      else
+        if [ -n "$_has_x86" ]; then _keepargs="--arch x86_64"; _nk=$((_nk + 1)); fi
+        if [ -n "$_has_i386" ]; then _keepargs="$_keepargs --arch i386"; _nk=$((_nk + 1)); fi
+      fi
+      if [ "$_nk" -eq 0 ]; then
+        [ "$2" = x86_64 ] || return 0
+        rm -f "$1" || die "could not remove $1"
+        echo rm; return 0
+      fi
+      [ "$_nk" -lt "$_n" ] || return 0
+      # shellcheck disable=SC2086
+      "${MAVERGREEN_DITTO:-/usr/bin/ditto}" $_keepargs "$1" "$1.mavergreen-slim" \
+        && mv -f "$1.mavergreen-slim" "$1" \
+        || { rm -f "$1.mavergreen-slim"; die "could not thin $1"; }
+      echo thin ;;
+    cffaedfe|cefaedfe)
+      [ "$2" = x86_64 ] || return 0
+      [ "$(slim_hex "$1" 4 4)" = 0c000001 ] || return 0
+      rm -f "$1" || die "could not remove $1"
+      echo rm ;;
+  esac
+}
+slim_tree() {  # $1 product  $2 host arch: thins $MG/$1, prints the count of files changed
+  _keep="$(mf_array "$1" slim-keep)"
+  _lst="$(mktemp "${TMPDIR:-/tmp}/mavergreen-slim.XXXXXX")"
+  find "$MG/$1" -type f > "$_lst"
+  _cnt=0
+  while IFS= read -r _f; do
+    _rel="${_f#"$MG/$1/"}"
+    if slim_kept_by_manifest "$_rel"; then continue; fi
+    _r="$(slim_file "$_f" "$2")" || { rm -f "$_lst"; exit 1; }
+    if [ -n "$_r" ]; then _cnt=$((_cnt + 1)); fi
+  done < "$_lst"
+  rm -f "$_lst"
+  printf '%s\n' "$_cnt"
+}
+slim_apply() {  # $1 product  $2 host arch
+  need_product "$1"
+  _eff="$(slim_setting "$2")"; _eff="${_eff%%	*}"
+  if [ "$_eff" = off ]; then rm -f "$(slim_dir)/slimmed/$1"; return 0; fi
+  _n="$(slim_tree "$1" "$2")" || exit $?
+  if [ "$_n" -gt 0 ]; then
+    mkdir -p "$(slim_dir)/slimmed"; printf '%s\n' "$2" > "$(slim_dir)/slimmed/$1"
+  fi
+  echo "mavergreen: slimmed $_n files in $1 to $2"
+}
+do_slim() {
+  [ $# -ge 1 ] || die "usage: mavergreen slim status|on|off|apply <product>" 2
+  if [ -z "${MAVERGREEN_HOST_ARCH:-}" ] && [ "$(uname -s)" != Darwin ]; then die "slimming is for a Mac"; fi
+  _ha="$(slim_host_arch)" || exit 2
+  _sub="$1"; shift
+  case "$_sub" in
+    status)
+      _st="$(slim_setting "$_ha")"
+      printf 'slim: %s, %s\n' "${_st%%	*}" "${_st#*	}" ;;
+    on)
+      mkdir -p "$(slim_dir)"; printf 'on\n' > "$(slim_dir)/slim"
+      pick_reader
+      for _p in $(installed); do slim_apply "$_p" "$_ha"; done ;;
+    off)
+      mkdir -p "$(slim_dir)"; printf 'off\n' > "$(slim_dir)/slim"
+      _done="$(ls "$(slim_dir)/slimmed" 2>/dev/null | tr '\n' ' ')"; _done="${_done% }"
+      if [ -n "$_done" ]; then echo "mavergreen: slimming is off; reinstall these to restore their other slices: $_done"
+      else echo "mavergreen: slimming is off; nothing installed was slimmed"; fi ;;
+    apply)
+      [ $# -eq 1 ] || die "usage: mavergreen slim apply <product>" 2
+      pick_reader
+      slim_apply "$1" "$_ha" ;;
+    *) die "usage: mavergreen slim status|on|off|apply <product>" 2 ;;
+  esac
+}
 do_version() { printf '%s\n' "$MAVERGREEN_VERSION"; }
 
 cmd="${1:-}"; [ $# -gt 0 ] && shift
@@ -475,6 +593,7 @@ case "$cmd" in
   uninstall) [ $# -eq 1 ] || die "usage: mavergreen uninstall <product>" 2; do_uninstall "$1" ;;
   system-replace) [ $# -eq 1 ] || die "usage: mavergreen system-replace <product>" 2; do_system_replace "$1" ;;
   system-restore) [ $# -eq 1 ] || die "usage: mavergreen system-restore <product>" 2; do_system_restore "$1" ;;
+  slim) do_slim "$@" ;;
   version) do_version ;;
-  *) die "usage: mavergreen [--root VOLUME] link|unlink|select|list|check|uninstall|system-replace|system-restore|version ..." 2 ;;
+  *) die "usage: mavergreen [--root VOLUME] link|unlink|select|list|check|uninstall|system-replace|system-restore|slim|version ..." 2 ;;
 esac
