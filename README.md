@@ -2,7 +2,7 @@
 
 Build goop for Mac OS X 10.9 Mavericks.
 
-Features: yes. Whatever helps native builds to succeed and cross builds to match.
+Features: yes. Whatever helps a build on 10.9, modern macOS or Linux produce the same thing.
 
 ## Install (once)
 

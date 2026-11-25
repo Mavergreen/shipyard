@@ -346,8 +346,9 @@ Mac a thin arm64-only Mach-O file in the host payload is deleted outright, not t
 - **Target libraries are never slimmed**, including a library both host programs load and output
   links against (openssl's `lib/*.dylib`): such a product declares only its programs.
 - **Slim never touches** a file inside a signed bundle, a hard-linked file, an archive, or a non-Mach-O
-  file. It writes its marker, `var/mavergreen/slimmed/<product>`, before it changes anything. A volume
-  other than `/` never slims.
+  file. It writes its marker, `var/mavergreen/slimmed/<product>`, before it changes anything. The postinstall
+  never slims a volume other than `/`. An explicit `mavergreen --root VOL slim apply` does, using the
+  running Mac's arch.
 - **Conformance check `slim-host`** fails a product with fat Mach-O under `bin/` or `libexec/` that
   declares no `slim-host`; a deviation can excuse it.
 
@@ -429,13 +430,26 @@ run. This is the single cheapest speedup available to this family.
 - **`shipyard-cmake`, `shipyard-ctest`, `shipyard-cpack` and `build_universal.sh` default an unset or
   empty `MAVERICKS_BUILD_ROOT` to `$TMPDIR/mm-build`** (`/tmp` when `TMPDIR` is unset; GitHub's
   Linux runners leave it unset, so `install@v1` exports `TMPDIR` as `$RUNNER_TEMP` or `/tmp` there). An exported
-  value wins. A bare `cmake --preset` with it empty is refused: `MAVERICKS_BUILD_ROOT is unset: set
-  it, or configure through shipyard-cmake`. Presets cannot express a default, so the launchers are
-  the entry point that works everywhere.
+  value wins. A bare `cmake --preset` with it unset puts `binaryDir` at `/<checkout>-x86_64`, and CMake
+  creates that directory before the toolchain file runs. As a non-root user, CMake fails first ("Unable
+  to (re)create the private pkgRedirects directory: /<checkout>-x86_64/..."). As root, the directory is
+  created at `/` and the toolchain then refuses: `MAVERICKS_BUILD_ROOT is unset: set it, or configure
+  through shipyard-cmake`. Either way, export `MAVERICKS_BUILD_ROOT` or use `shipyard-cmake`. Presets
+  cannot express a default, so the launchers are the entry point that works everywhere.
 - **The old preset names are gone, with no stand-ins.** A consumer still inheriting
   a preset shipyard removed on 2026-11-25 (`mavericks-native`, `mavericks-cross`) gets CMake's own "Could not find inherited preset" error;
   inherit `mavericks-x86_64`. `MAVERICKS_EXPECTED_MODE` is gone: defining it anywhere stops the
   configure, and a build directory from an older shipyard that cached it reconfigures with `--fresh`.
+- **What else the unified toolchains removed or renamed (2026-11-25):**
+  - `mavericks_require_expected_mode()` is removed. CMake stops with "Unknown CMake command"; delete the call.
+  - `MAVERICKS_EXPECTED_MODE` is gone, as above; delete it.
+  - The build mode's values are renamed: `native` is now `mavericks`, and `cross` is now `modern`
+    (`mavericks_build_mode`, `MAVERICKS_MODE`, `mavericks_mode.sh`). A comparison against an old value
+    fails nothing by itself; it is simply false everywhere, so compare against the new values.
+  - The presets `mavericks-native` and `mavericks-cross` are now `mavericks-x86_64` and, for an arm64
+    build, `macos-arm64`.
+
+  Conventions check 40 refuses each of these by name.
 - **A script-driven repo (no CMake presets) reads `$MAVERICKS_BUILD_ROOT` from the
   environment directly**, with the same `${TMPDIR}/mm-build` fallback if it is unset.
 - **To move the build, export `MAVERICKS_BUILD_ROOT`, or repoint it in a gitignored
@@ -1194,7 +1208,8 @@ the arches and an existing `--out`), and `cargo-env.sh --arch arm64` (target-sco
 variables, the 11.3 SDK, `MACOSX_DEPLOYMENT_TARGET=11.0`, `CARGO_BUILD_TARGET`, never a global
 `SDKROOT`; it refuses a rust with no `lib/rustlib/aarch64-apple-darwin`). Rust arm64 waits on rust
 shipping the aarch64 standard library: the released pin has none, so that path is unproven end to end.
-A bare `cmake --preset` with `MAVERICKS_BUILD_ROOT` unset is refused; `shipyard-cmake` is the entry
+A bare `cmake --preset` with `MAVERICKS_BUILD_ROOT` unset fails: as non-root, CMake cannot create
+`/<checkout>-<arch>`; as root, the toolchain refuses after CMake creates it. `shipyard-cmake` is the entry
 point that works everywhere (see "Build OUT of the source tree").
 
 **arm64 must not link `/usr/lib/libc++.1.dylib` with mismatched headers.** Linux arm64 C and Objective-C
@@ -2961,7 +2976,7 @@ own ids.
 
 **Everything a pkg installs says it is ours, and lands where the family puts things.** Read from the
 payload itself (`artifact-facts.sh` expands each pkg; a filename or a recipe is a claim, the payload
-is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
+is the fact), twelve checks, each excusable only by a scoped, reasoned deviation:
 
 | Check | Default rule | Deviation scoped to |
 |---|---|---|
@@ -2975,6 +2990,8 @@ is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
 | `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
 | `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus a `-cross` suffix (which goes when `scripts/retiring-cross-names` is empty, at the last pair family's merge), is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | with `$GITHUB_REPOSITORY` set, every product a release ships is registered to that repo (by name; the owner is not compared) | the pkg filename |
+| `requires-on-host` | every manifest `requires-on-host` entry names `x86_64` or `arm64`, and a product the registry names that is not the manifest's own (see "The toolchain: one product, default target 10.9 x86_64") | the manifest's path |
+| `slim-host` | a product with fat Mach-O under `bin/` or `libexec/` declares `slim-host` globs (see "The toolchain: one product, default target 10.9 x86_64") | the manifest's path |
 
 Paths are relative to `/`, after each component's `install-location`; a manifest is read only from a
 component installed at `/`, since a product tree always is.
@@ -3223,10 +3240,11 @@ pointing back into the row below — so this table, not the script, is where a c
 | **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. An `- arm64-pure-go:<glob>: <reason>` declaration needs no job, and a job beside only such declarations fails with a third; conformance proves each slice one covers instead ("Pure-Go arm64 slices are proven on Linux"). At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` or `arm64-pure-go:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or `- arm64-pure-go: <reason>`, or a glob of only `*`, `?` and `/`, is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36), a Linux job in its `needs:` (check 38) and the publish job's `if:` (check 39) |
 | **38.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` or `xcode-*` runner (read as check 36 reads it), or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) holding one, has in its `needs:`, directly or through other jobs' `needs:`, a job on an `ubuntu-*` runner (every matrix entry `ubuntu-*`), a call to a shipyard reusable workflow (`Mavergreen/shipyard/.github/workflows/…`), or a call to a local reusable workflow whose every job runs on `ubuntu-*`. A file whose only trigger is `workflow_call` is skipped: its caller is held to the rule. A self-hosted runner or a `runs-on` expression is not Linux. Grandfathered per job as `linux-gate <repo> <workflow file>:<job>`; no deviation excuses it | A macOS job is the family's scarcest minute, and one that starts before anything cheap has run spends it failing on what Linux would have caught: macfuse's release dispatch spent 3 macOS minutes failing only on a release-note sentence's word count, and recaulk's runs failed in checks that need no Mac. See "Linux gate first", above |
 | **39.** Where `release.yml` has a `modern-smoke` job, its `if:` carries, as top-level `&&` terms, every term of the publish job's `if:` (the job calling `publish-release.yml`, else `publish`), status functions (`always()`, `success()`, `failure()`, `cancelled()`) aside and `${{ }}` and outer parentheses ignored; a publish job with no `if:` fails with its own message. Grandfathered per repo as `smoke-gate <repo> release.yml:modern-smoke`, separately from check 37's `modern-smoke` line | modern-smoke proves the arm64 slice of what will SHIP; a push, a PR or a branch run ships nothing, so a smoke there is a macOS runner spent on evidence nobody uses. An ingredient-PR merge used to spend two: the push run and repackage's dispatch. Sharing the publish job's own term, an output of the job that decides, keeps one decision instead of two copies that drift. See "Smoke only in a publishing run", above |
+| **40.** No tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt`, `*.bats` or `CMakePresets.json` outside `tests/` and `test/` names, outside a whole comment line or a trailing ` #…` remark, `mavericks_require_expected_mode`, `MAVERICKS_EXPECTED_MODE`, the preset `mavericks-native` or `mavericks-cross`, or compares `MAVERICKS_MODE` or `mavericks_mode` (the variable, the function or `mavericks_mode.sh`) with `native` or `cross` on the same line (`= cross`, `!= cross`, `STREQUAL "cross"`, a quoted `"native"`, a `native|cross` case list), unless the path is grandfathered or INGREDIENTS.md declares `- toolchain-names:<path>: <reason, exit>`. Each message names the replacement: delete the call or the variable; `mavericks-x86_64` or `macos-arm64`; the values `mavericks` and `modern`. **Known false negatives:** a mode copied into another variable first, and a `case` whose patterns sit on later lines. Revisit (and retire the check) when no family repo has needed it for one release cycle after the unified-toolchains wave | The unified toolchains (2026-11-25) removed these names, and `@v1` carries the removal to every consumer at once. A removed preset or function fails loudly, but a comparison against an old mode value is simply false everywhere, so a repo builds the wrong way and can ship it. This turns that silent break into a named one, with the fix. It refuses; it is not a shim |
 
 **Grandfathered findings.** `scripts/conventions-grandfathered` holds one `<check> <repo> <job|path>` line per
-finding that predates checks 21 (widened), 35, 36, 37, 38 and 39, conformance's `cxxabi` and `no-standalone`, and check 10's unchecked subshell, under the check names `artifact-conformance`,
-`packager`, `macos-runner`, `modern-smoke`, `linux-gate`, `smoke-gate`, `cxxabi`, `standalone` and `unchecked-subshell`; a line, like a declared deviation, excuses its finding. An
+finding that predates checks 21 (widened), 35, 36, 37, 38, 39 and 40, conformance's `cxxabi` and `no-standalone`, and check 10's unchecked subshell, under the check names `artifact-conformance`,
+`packager`, `macos-runner`, `modern-smoke`, `linux-gate`, `smoke-gate`, `toolchain-names`, `cxxabi`, `standalone` and `unchecked-subshell`; a line, like a declared deviation, excuses its finding. An
 `unchecked-subshell` line is keyed per tracked path (`unchecked-subshell <repo> <path>`): that path's findings warn, and a new path fails, but a path already listed may gain one unnoticed. A
 `cxxabi` line is keyed per installed path (`cxxabi <repo> <path>`, spaces as `%20`), so a new path with a
 second runtime in a grandfathered repo still fails. A `standalone` line is keyed per product
