@@ -25,7 +25,7 @@ lacks() {  # $1 = label, $2 = dir, $3 = phrase the output must not carry
   :
 }
 add() { (cd "$1" && git add -A) >/dev/null 2>&1; }
-mkrepo8() { mkrepo "$@"; printf '# Build ingredients\n' > "$1/INGREDIENTS.md"; }
+mkrepo8() { mkrepo "$@"; printf '# Build ingredients\n\n## Versioning\n\n- port\n' > "$1/INGREDIENTS.md"; }
 declare_mac() {  # $1 = dir, $2.. = <workflow file>:<job> keys
   d="$1"; shift
   { printf '\n## Conformance deviations\n\n'
@@ -194,15 +194,15 @@ sm() {  # $1 = label, $2 = modern-smoke's if: (empty: none), $3 = publish's if: 
   printf '\n## Conformance deviations\n\n- arm64:usr/local/mavergreen/w/bin/*: developers on Apple Silicon run w to build Mavericks artifacts\n- macos-runner:release.yml:modern-smoke: the arm64 slice runs only on Apple Silicon, exit when a Linux host can run it\n' >> "$d/INGREDIENTS.md"
   awk -v pif="$3" -v how="${4:-}" '
     $0 == "  publish:" { skip = 4
-      if (how == "reusable") { print "  ship:"; print "    needs: [vm-test, modern-smoke]"; if (pif != "") print "    if: " pif
+      if (how == "reusable") { print "  ship:"; print "    needs: [vm-test, version-check, modern-smoke]"; if (pif != "") print "    if: " pif
                                print "    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1" }
-      else { print; print "    needs: [vm-test, modern-smoke]"; if (pif != "") print "    if: " pif
+      else { print; print "    needs: [vm-test, version-check, modern-smoke]"; if (pif != "") print "    if: " pif
              print "    runs-on: ubuntu-latest"; print "    steps:"; print "      - run: echo published" }
       next }
     skip > 0 { skip--; next }
     { print }' "$d/.github/workflows/release.yml" > "$d/r.yml"
   mv "$d/r.yml" "$d/.github/workflows/release.yml"
-  { printf '  modern-smoke:\n    needs: [vm-test]\n'
+  { printf '  modern-smoke:\n    needs: [vm-test, version-check]\n'
     [ -z "$2" ] || printf '    if: %s\n' "$2"
     printf '    runs-on: macos-26\n    steps:\n      - run: true\n'
   } >> "$d/.github/workflows/release.yml"

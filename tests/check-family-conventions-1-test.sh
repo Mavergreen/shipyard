@@ -131,6 +131,7 @@ import sys
 p=sys.argv[1]; s=open(p).read()
 s=s.replace('      - run: gh release create "$TAG" dist/* --notes-file dist/RELEASE_NOTES.md\n',
             '  publish:\n'
+            '    needs: [version-check]\n'
             '    uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1\n'
             '    with: { version: "1.0.0", artifact: pkg }\n')
 open(p,'w').write(s)
@@ -367,7 +368,7 @@ printf '%s\n' "$out" | grep -q 'tool.sh:2' || { echo "FAIL should name file:line
 #       fetching and pasting two SHA256s. Wiring a Renovate customManager is the doctrine; a
 #       genuine exception (no datasource exists at all) must SAY so.
 mkrepo "$work/r1"
-printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| Go | `x` | ✅ github-releases | repackage |\n' \
+printf '# Build ingredients\n\n## Versioning\n\n- port\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| Go | `x` | ✅ github-releases | repackage |\n' \
   > "$work/r1/INGREDIENTS.md"
 (cd "$work/r1" && sh "$S" >/dev/null) || { echo "FAIL tracked ingredient should pass"; exit 1; }
 

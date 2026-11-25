@@ -10,6 +10,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 vm() {  # $1 = name, $2 = the jobs appended to release.yml
   d="$work/vm-$1"; pkrepo "$d"
   printf '%s\n' "$2" >> "$d/.github/workflows/release.yml"
+  awk '{ print } $0 == "  build:" { print "    needs: [version-check]" }' "$d/.github/workflows/release.yml" > "$d/r.yml"
+  mv "$d/r.yml" "$d/.github/workflows/release.yml"
   (cd "$d" && git add -A) >/dev/null 2>&1
 }
 vm_fails() {  # $1 = name, $2 = the phrase the failure must carry

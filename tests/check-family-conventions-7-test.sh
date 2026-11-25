@@ -20,7 +20,7 @@ passes() {  # $1 = label, $2 = dir
 }
 add() { (cd "$1" && git add -A) >/dev/null 2>&1; }
 
-mkrepo7() { mkrepo "$@"; printf '# Build ingredients\n' > "$1/INGREDIENTS.md"; }
+mkrepo7() { mkrepo "$@"; printf '# Build ingredients\n\n## Versioning\n\n- port\n' > "$1/INGREDIENTS.md"; }
 conf='      - run: sh "$SHIPYARD_SCRIPTS/artifact-facts.sh" dist "$FULL" | sh "$SHIPYARD_SCRIPTS/check-artifact-conformance.sh"'
 stage='sh "$SHIPYARD_SCRIPTS/stage_product.sh" --stage stage --product w --name W --version 1 --scripts-out scr'
 pkok() {  # $1 = dir, $2 = the build script's packaging line, $3 = its path (default build/package.sh)
@@ -180,11 +180,11 @@ refused() {  # $1 = dir, $2 = the deviation line, $3 = the phrase the refusal mu
   printf '%s\n' "$out" | grep -q -- "$3" || { echo "FAIL: [$2] should be refused with '$3': $out"; exit 1; }
 }
 for dev in '- macos-runner: every job' '- macos-runner:*: every job' '- macos-runner:ci.yml:*: every job' '- macos-runner:*:mac: every file'; do
-  rm -rf "$work/mac-wild"; cp -R "$work/mac-scalar" "$work/mac-wild"; printf '# Build ingredients\n' > "$work/mac-wild/INGREDIENTS.md"
+  rm -rf "$work/mac-wild"; cp -R "$work/mac-scalar" "$work/mac-wild"; printf '# Build ingredients\n\n## Versioning\n\n- port\n' > "$work/mac-wild/INGREDIENTS.md"
   refused "$work/mac-wild" "$dev" 'deviations.sh'
 done
 for dev in '- packager: every path' '- packager:*: every path' '- packager:build/*: every path'; do
-  rm -rf "$work/pk-wild"; cp -R "$work/pk-plain" "$work/pk-wild"; printf '# Build ingredients\n' > "$work/pk-wild/INGREDIENTS.md"
+  rm -rf "$work/pk-wild"; cp -R "$work/pk-plain" "$work/pk-wild"; printf '# Build ingredients\n\n## Versioning\n\n- port\n' > "$work/pk-wild/INGREDIENTS.md"
   refused "$work/pk-wild" "$dev" 'deviations.sh'
 done
 
@@ -212,12 +212,12 @@ ms() {  # $1 = label, $2 = decl|nodecl, $3 = runs-on (empty: no job), $4 = neede
     case "$2" in pure|both) printf -- '- arm64-pure-go:usr/local/mavergreen/w/libexec/*: maintainers run w-helper on Apple Silicon\n' ;; esac
     printf -- '- macos-runner:release.yml:modern-smoke: the arm64 slice runs only on Apple Silicon, exit when a Linux host can run it\n'
   } >> "$d/INGREDIENTS.md"
-  pn='    needs: [vm-test]'; [ "$4" != needed ] || pn='    needs: [vm-test, modern-smoke]'
-  awk -v pn="$pn" -v pif="    if: $MSIF" '$0 == "    needs: [vm-test]" && !done { print pn; print pif; done = 1; next } { print }' \
+  pn='    needs: [vm-test, version-check]'; [ "$4" != needed ] || pn='    needs: [vm-test, version-check, modern-smoke]'
+  awk -v pn="$pn" -v pif="    if: $MSIF" '$0 == "    needs: [vm-test, version-check]" && !done { print pn; print pif; done = 1; next } { print }' \
     "$d/.github/workflows/release.yml" > "$d/r.yml"
   mv "$d/r.yml" "$d/.github/workflows/release.yml"
   if [ -n "$3" ]; then
-    printf '  modern-smoke:\n    needs: [vm-test]\n    if: %s\n    runs-on: %s\n    steps:\n      - run: true\n' "$MSIF" "$3" >> "$d/.github/workflows/release.yml"
+    printf '  modern-smoke:\n    needs: [vm-test, version-check]\n    if: %s\n    runs-on: %s\n    steps:\n      - run: true\n' "$MSIF" "$3" >> "$d/.github/workflows/release.yml"
   fi
   add "$d"
 }

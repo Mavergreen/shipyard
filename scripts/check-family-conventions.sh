@@ -1109,6 +1109,143 @@ $_c39
 EOF
 fi
 
+# spec: SKILL.md "Family conventions" check 40 -- INGREDIENTS.md's "## Versioning" declares each
+#       product's scheme, in versioning.sh's grammar.
+if _v40="$(sh "$SELF/versioning.sh" 2>&1)"; then
+  [ -n "$_v40" ] \
+    || fail "INGREDIENTS.md declares no versioning scheme — every release is held to one" \
+            "add \"## Versioning\" with \"- <scheme>\" (port, self-upstream-date, semver, date-semver or counter), or \"- <short>: <scheme>\" per product (see the conventions skill, check 40)"
+else
+  while IFS= read -r _m; do
+    fail "versioning ${_m#versioning: }" \
+         "fix the entry it names (grammar: \"- <scheme>\" or \"- <short>: <scheme>\") (see the conventions skill, check 40)"
+  done <<EOF
+$_v40
+EOF
+fi
+
+# spec: SKILL.md "Family conventions" check 40b -- release.yml derives its version with
+#       release-version.sh and with no other deriver.
+_rel40="$(grep -v '^[[:space:]]*#' "$REL" || :)"
+_fix40b='derive the version once with sh "$SHIPYARD_SCRIPTS/release-version.sh" --product <short> --mode "$(sh "$SHIPYARD_SCRIPTS/release-mode.sh")" and pass it to every job (see the conventions skill, check 40b)'
+for _n in resolve-version self-upstream-version shipyard-version version; do
+  printf '%s\n' "$_rel40" | grep -qE "(^|[^-[:alnum:]_])$_n\\.sh" \
+    && fail "$REL takes its version from $_n.sh, not release-version.sh" "$_fix40b"
+done
+printf '%s\n' "$_rel40" | grep -qE '(^|[^-[:alnum:]_])release-version\.sh' \
+  || fail "$REL never calls release-version.sh" "$_fix40b"
+
+# spec: SKILL.md "Family conventions" check 40c -- release.yml has a version-check job on an ubuntu-*
+#       runner that runs check-release-version.sh --publishing, and every job on a macos-* or xcode-*
+#       runner, and the publish job, reaches it through needs:. No PyYAML already failed check 8.
+if python3 -c 'import yaml' >/dev/null 2>&1; then
+  _c40c="$(python3 - "$REL" <<'PY'
+import json, re, sys, yaml
+MAC = re.compile(r"(macos|xcode)-", re.I)
+def load(path):
+    try:
+        wf = yaml.safe_load(open(path)) or {}
+    except Exception:
+        return {}
+    return wf if isinstance(wf, dict) else {}
+def jobs_of(wf):
+    jobs = wf.get("jobs")
+    return {str(k): v for k, v in jobs.items() if isinstance(v, dict)} if isinstance(jobs, dict) else {}
+def runs(job):
+    r = json.dumps(job.get("runs-on", ""))
+    if "matrix" in r:
+        r += json.dumps((job.get("strategy") or {}).get("matrix", ""))
+    return r
+def local(job):
+    u = job.get("uses")
+    if isinstance(u, str) and u.startswith("./.github/workflows/"):
+        return jobs_of(load(u[2:]))
+    return None
+def on_mac(job):
+    if MAC.search(runs(job)):
+        return True
+    called = local(job)
+    return bool(called) and any(MAC.search(runs(b)) for b in called.values())
+def needs(job):
+    n = job.get("needs") or []
+    return [n] if isinstance(n, str) else [str(x) for x in n]
+def live(run):
+    return "\n".join(l for l in str(run).splitlines() if not l.lstrip().startswith("#"))
+jobs = jobs_of(load(sys.argv[1]))
+vc = jobs.get("version-check")
+if vc is None:
+    print("missing")
+else:
+    r = runs(vc)
+    if "ubuntu-" not in r or re.search(r"(macos|xcode|windows)-|self-hosted", r, re.I):
+        print("offlinux %s" % re.sub(r"\s+", "", r))
+    steps = vc.get("steps") if isinstance(vc.get("steps"), list) else []
+    if not any(isinstance(s, dict) and "check-release-version.sh" in live(s.get("run", ""))
+               and "--publishing" in live(s.get("run", "")) for s in steps):
+        print("nopublishing")
+pubs = [j for j, b in jobs.items() if isinstance(b.get("uses"), str) and "publish-release.yml" in b["uses"]]
+if not pubs and "publish" in jobs:
+    pubs = ["publish"]
+for name, job in jobs.items():
+    if name == "version-check":
+        continue
+    kind = "publish" if name in pubs else "mac" if on_mac(job) else None
+    if kind is None:
+        continue
+    seen, todo, ok = set(), list(needs(job)), False
+    while todo and not ok:
+        n = todo.pop()
+        if n in seen or n not in jobs:
+            continue
+        seen.add(n)
+        ok = n == "version-check"
+        todo.extend(needs(jobs[n]))
+    if not ok:
+        print("%s %s" % (kind, name))
+PY
+)" || fail "check 40c could not read $REL's jobs (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  _fix40c="add a job version-check to $REL, runs-on: ubuntu-latest, whose step runs V=\"\$(sh \"\$SHIPYARD_SCRIPTS/release-version.sh\" --product <short>)\" and sh \"\$SHIPYARD_SCRIPTS/check-release-version.sh\" --product <short> --version \"\$V\" --sha \"\$GITHUB_SHA\" --publishing <yes|no>"
+  while read -r _k _j; do
+    case "$_k" in
+      missing) fail "version-check: $REL has no job named version-check — nothing proves the release's version, and its notes, on Linux before a macOS runner or the publish spends anything" \
+                    "$_fix40c, and add it to the needs: of every macOS job and of the publish job (see the conventions skill, check 40c)" ;;
+      offlinux) fail "version-check version-check: that job runs on $_j, not an ubuntu-* runner — the check is host-agnostic and must not wait for a scarce macOS runner" \
+                     "give version-check runs-on: ubuntu-latest (see the conventions skill, check 40c)" ;;
+      nopublishing) fail "version-check version-check: no step runs check-release-version.sh with --publishing — the job checks neither the version nor, in a run that publishes, its notes" \
+                         "$_fix40c (see the conventions skill, check 40c)" ;;
+      mac) fail "version-check $_j: that job runs on a macOS runner and does not reach version-check through needs: — it can spend a scarce runner on a release whose version or notes are wrong" \
+                "add version-check to $_j's needs:, or to the needs: of a job it needs (see the conventions skill, check 40c)" ;;
+      publish) fail "version-check $_j: the publish job does not reach version-check through needs: — it can publish a version nothing checked" \
+                    "add version-check to $_j's needs: (see the conventions skill, check 40c)" ;;
+    esac
+  done <<EOF
+$_c40c
+EOF
+fi
+
+# spec: SKILL.md "Family conventions" check 40d -- no workflow triggers on a pushed tag: a release's
+#       version is derived, never hand-chosen. No PyYAML already failed check 8.
+if [ -n "$CI_FILES" ] && python3 -c 'import yaml' >/dev/null 2>&1; then
+  # shellcheck disable=SC2086  # CI_FILES is a deliberate word-split list of paths
+  _c40d="$(python3 - $CI_FILES <<'PY'
+import sys, yaml
+for path in sys.argv[1:]:
+    try:
+        wf = yaml.safe_load(open(path)) or {}
+    except Exception:
+        continue
+    on = wf.get("on", wf.get(True)) if isinstance(wf, dict) else None
+    push = on.get("push") if isinstance(on, dict) else None
+    if isinstance(push, dict) and "tags" in push:
+        print(path)
+PY
+)" || fail "check 40d could not read the workflows (python3 failed)" "run python3 -c 'import yaml' and make sure it works"
+  for _f in $_c40d; do
+    fail "$_f triggers on a pushed tag — a pushed tag is a hand-chosen version" \
+         "remove the tags: trigger; a release is a push to main or a workflow_dispatch (see the conventions skill, check 40d)"
+  done
+fi
+
 # spec: SKILL.md "Family conventions" check 27 -- superpowers working files live in the gitignored
 #       .superpowers/, and an IDE's per-user state (.idea/) is never tracked. Both dirs must be
 #       ignored AND nothing may be tracked under them or under docs/superpowers/, nor a backlog file

@@ -5,7 +5,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 . "$here/lib/conventions_fixture.sh"
 
 mkrepo "$work/r2"
-printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| Swift | `build.sh` | ❌ untracked | manual |\n' \
+printf '# Build ingredients\n\n## Versioning\n\n- port\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| Swift | `build.sh` | ❌ untracked | manual |\n' \
   > "$work/r2/INGREDIENTS.md"
 if out="$(cd "$work/r2" && sh "$S" 2>&1)"; then echo "FAIL untracked ingredient should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -qi 'customManager\|renovate' || { echo "FAIL should name the fix: $out"; exit 1; }
@@ -13,7 +13,7 @@ printf '%s\n' "$out" | grep -qi 'customManager\|renovate' || { echo "FAIL should
 # spec: scripts/check-family-conventions.sh -- but a genuinely UNTRACKABLE input (no datasource exists -- golang's CA bundle) is allowed
 #       when it says so. The rule is "wire it or explain why you cannot", not "never write ❌".
 mkrepo "$work/r3"
-printf '# Build ingredients\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| CA bundle | `vendor/cacert.pem` | ❌ **untrackable — manual refresh** (see below) | watched path |\n' \
+printf '# Build ingredients\n\n## Versioning\n\n- port\n\n| I | Pinned in | Renovate | On a bump |\n|---|---|---|---|\n| CA bundle | `vendor/cacert.pem` | ❌ **untrackable — manual refresh** (see below) | watched path |\n' \
   > "$work/r3/INGREDIENTS.md"
 (cd "$work/r3" && sh "$S" >/dev/null) || { echo "FAIL declared-untrackable should pass"; exit 1; }
 
@@ -23,9 +23,9 @@ mkrepo "$work/u1"; (cd "$work/u1" && git rm -q --cached build/upstream-release-n
 if out="$(cd "$work/u1" && sh "$S" 2>&1)"; then echo "FAIL no hook and no reason should fail"; exit 1; fi
 printf '%s\n' "$out" | grep -q 'upstream-release-notes-url.sh' || { echo "FAIL should name the hook: $out"; exit 1; }
 printf '%s\n' "$out" | grep -q 'No upstream release notes:' || { echo "FAIL should name the declaration: $out"; exit 1; }
-printf '# Build ingredients\n\nNo upstream release notes: this repo is its own upstream.\n' > "$work/u1/INGREDIENTS.md"
+printf '# Build ingredients\n\n## Versioning\n\n- port\n\nNo upstream release notes: this repo is its own upstream.\n' > "$work/u1/INGREDIENTS.md"
 (cd "$work/u1" && sh "$S" >/dev/null) || { echo "FAIL: the declaration, with a reason (a self-upstream repo; a bundle), is the other way to comply -- should pass"; exit 1; }
-printf '# Build ingredients\n\nNo upstream release notes:\n' > "$work/u1/INGREDIENTS.md"
+printf '# Build ingredients\n\n## Versioning\n\n- port\n\nNo upstream release notes:\n' > "$work/u1/INGREDIENTS.md"
 if (cd "$work/u1" && sh "$S" >/dev/null 2>&1); then echo "FAIL: an empty reason is not a reason -- a reasonless declaration should fail"; exit 1; fi
 mkrepo "$work/u2"; (cd "$work/u2" && mkdir scripts && git mv build/upstream-release-notes-url.sh scripts/) || exit 1
 [ -f "$work/u2/scripts/upstream-release-notes-url.sh" ] && [ ! -e "$work/u2/build/upstream-release-notes-url.sh" ] \
@@ -327,6 +327,7 @@ grep -v 'notes-file' "$work/g8/.github/workflows/release.yml" > "$work/g8/releas
 mv "$work/g8/release.yml" "$work/g8/.github/workflows/release.yml"
 cat >> "$work/g8/.github/workflows/release.yml" <<'YML'
   publish:
+    needs: [version-check]
     uses: Mavergreen/shipyard/.github/workflows/publish-release.yml@v1
 YML
 (cd "$work/g8" && sh "$S" >/dev/null) || { echo "FAIL a repo that stages no appcast from the notes should pass"; exit 1; }
@@ -412,7 +413,7 @@ printf '%s\n' "$out" | grep -q 'the generator does not write' || { echo "FAIL ch
 #       checks appended after it (7, 8, 9) printed "check-family-conventions: ok" and THEN failed
 #       -- the exact "output says it passed while it did not" shape these gates exist to prevent.
 mkrepo "$work/ok2"
-printf '# Build ingredients\n\n| I | P | Renovate | On a bump |\n|---|---|---|---|\n| X | `y` | ❌ untracked | manual |\n' \
+printf '# Build ingredients\n\n## Versioning\n\n- port\n\n| I | P | Renovate | On a bump |\n|---|---|---|---|\n| X | `y` | ❌ untracked | manual |\n' \
   > "$work/ok2/INGREDIENTS.md"
 out="$(cd "$work/ok2" && sh "$S" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'check-family-conventions: ok' \

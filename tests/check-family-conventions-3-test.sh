@@ -11,7 +11,7 @@ mkrepo "$work/cm4"
 mkdir -p "$work/cm4/scripts"
 printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm4/scripts/x.sh"
 printf 'platform\nspec\n' > "$work/cm4/comment-reasons"
-printf '# Build ingredients\n\n## Conformance deviations\n\n- comments: vendored verbatim from upstream, reformatting it would defeat the point of a byte-for-byte mirror\n' \
+printf '# Build ingredients\n\n## Versioning\n\n- port\n\n## Conformance deviations\n\n- comments: vendored verbatim from upstream, reformatting it would defeat the point of a byte-for-byte mirror\n' \
   > "$work/cm4/INGREDIENTS.md"
 (cd "$work/cm4" && git add -A) >/dev/null 2>&1 || exit 1
 (cd "$work/cm4" && sh "$S" >/dev/null) || { echo "FAIL: a declared deviation with a reason should pass"; exit 1; }
@@ -20,7 +20,7 @@ mkrepo "$work/cm5"
 mkdir -p "$work/cm5/scripts"
 printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm5/scripts/x.sh"
 printf 'platform\nspec\n' > "$work/cm5/comment-reasons"
-printf '# Build ingredients\n\n## Conformance deviations\n\n- comments:vendor/* upstream code, not ours to sweep\n' \
+printf '# Build ingredients\n\n## Versioning\n\n- port\n\n## Conformance deviations\n\n- comments:vendor/* upstream code, not ours to sweep\n' \
   > "$work/cm5/INGREDIENTS.md"
 (cd "$work/cm5" && git add -A) >/dev/null 2>&1 || exit 1
 if out="$(cd "$work/cm5" && sh "$S" 2>&1)"; then echo "FAIL: a scoped comments deviation was honoured -- the glob was swallowed as part of the reason and comment checking went off REPO-WIDE, which is exactly the drift nobody would ever notice: $out"; exit 1; fi
@@ -35,7 +35,7 @@ mkrepo "$work/cm6"
 mkdir -p "$work/cm6/scripts"
 printf '#!/bin/sh\n# an untagged comment\nexit 0\n' > "$work/cm6/scripts/x.sh"
 printf 'platform\nspec\n' > "$work/cm6/comment-reasons"
-printf '# Build ingredients\n\n## Conformance deviations\n\n- comments :vendor/* upstream code, not ours to sweep\n' \
+printf '# Build ingredients\n\n## Versioning\n\n- port\n\n## Conformance deviations\n\n- comments :vendor/* upstream code, not ours to sweep\n' \
   > "$work/cm6/INGREDIENTS.md"
 (cd "$work/cm6" && git add -A) >/dev/null 2>&1 || exit 1
 if out="$(cd "$work/cm6" && sh "$S" 2>&1)"; then echo "FAIL: a scoped comments deviation with a space before the colon was honoured -- the parser that accepts the deviation line tolerates that space, and the rejection must too: $out"; exit 1; fi
