@@ -145,7 +145,7 @@ macho_facts() {  # $1 = artifact name, $2 = root dir, $3 = path prefix (encoded,
   done < "$_ml"
   rm -f "$_ml"
 }
-fat_host_macho() {  # $1 = file. Zero when it is cafebabe with 1..30 slices that are each Mach-O.
+fat_host_macho() {
   case "$(od -An -tx1 -N 8 "$1" 2>/dev/null | tr -d ' \n')" in cafebabe????????) ;; *) return 1 ;; esac
   _fn="$(od -An -tx1 -j 4 -N 4 "$1" | tr -d ' \n')"; _fn=$((0x$_fn))
   [ "$_fn" -ge 1 ] && [ "$_fn" -le 30 ] || return 1

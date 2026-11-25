@@ -73,9 +73,15 @@ case "${1:-}" in
     [ -n "$_s" ] || exit 1
     printf '%s\n' "$_s" ;;
   check)
-    RET="${MAVERGREEN_RETIRING_CROSS_NAMES:-$(cd "$(dirname "$0")" && pwd)/retiring-cross-names}"
+    RET="${MAVERGREEN_RETIRING_CROSS_NAMES:-}"
+    if [ -z "$RET" ]; then
+      _here="$(cd "$(dirname "$0")" && pwd)" || { echo "product-name.sh: cannot find its own directory" >&2; exit 2; }
+      RET="$_here/retiring-cross-names"
+    fi
     [ -f "$RET" ] && [ -r "$RET" ] || { echo "product-name.sh: cannot read the retiring list $RET" >&2; exit 2; }
-    _ret="$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$RET" | tr '\n' ' ')"
+    _ret="$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$RET")" \
+      || { echo "product-name.sh: cannot read the retiring list $RET" >&2; exit 2; }
+    _ret="$(printf '%s\n' "$_ret" | tr '\n' ' ')" || exit 2
     entries | awk -v ret=" $_ret" '
       NF != 3 { print "product-names: not <name> <identifier> <repo>: " $0 > "/dev/stderr"; bad = 1; next }
       $1 !~ /^[a-z0-9][a-z0-9-]*$/ { print "product-names: bad short name: " $1 > "/dev/stderr"; bad = 1 }
