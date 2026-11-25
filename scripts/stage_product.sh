@@ -2,7 +2,7 @@
 # platform: host-agnostic -- stevedore reads the updater's identity; the generated preinstall's PlistBuddy text runs on the target
 #   usage: stage_product.sh --stage ROOT --product P --name N --version V --scripts-out DIR
 #            [--group G] [--line L] [--exclude REL]... [--replaces ABS=REL]... [--generated REL]...
-#            [--requires SHORT[>=VERSION]]... [--requires-on-host ARCH:SHORT[>=VERSION]]... [--updater-app P-updater.app] [--preinstall-hook FILE]
+#            [--requires SHORT[>=VERSION]]... [--requires-on-host ARCH:SHORT[>=VERSION]]... [--slim-keep GLOB]... [--updater-app P-updater.app] [--preinstall-hook FILE]
 #            [--postinstall-hook FILE] [--boot-kext BUNDLE_ID]...
 #          The one way a product pkg gets its install scripts and manifest. The caller has already
 #          staged its files under ROOT/usr/local/mavergreen/P/ (and anything the OS dictates elsewhere).
@@ -17,6 +17,10 @@
 #          for one host arch: the preinstall enforces it on any target volume other than /, and on /
 #          only when the host's hardware arch (sysctl hw.optional.arm64, inlined from
 #          scripts/lib/host-arch.sh) is ARCH. SHORT may not also be a plain --requires.
+#          Every postinstall ends its link step with `mavergreen slim apply P`, on the boot volume only and never
+#          fatally: a failure prints "P: could not slim; the universal tree stays" and the install succeeds.
+#          --slim-keep GLOB (repeatable) is written to the manifest's `slim-keep`: files under the tree that slim never
+#          thins. A GLOB that starts with /, has a . or .. component, or is only *, ? and / is refused with exit 2.
 #          --boot-kext BUNDLE_ID (repeatable) names an unsigned kext staged anywhere under ROOT that
 #          10.9 must load: the postinstall lists BUNDLE_ID, at the installed kext's CFBundleVersion, in
 #          the target volume's OSKextSigExceptionList and, on the boot volume, restarts kextd, before
@@ -35,7 +39,7 @@ ST=""; P=""; SCR=""; APP=""; PREH=""; POSTH=""; NAME=""; REQ=""; REQH=""; KX=""
 set -- "$@" --end
 while [ "$1" != --end ]; do
   case "$1" in
-    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--exclude|--replaces|--generated|--requires|--requires-on-host|--boot-kext)
+    --stage|--product|--scripts-out|--updater-app|--preinstall-hook|--postinstall-hook|--name|--version|--group|--line|--exclude|--replaces|--generated|--requires|--requires-on-host|--slim-keep|--boot-kext)
       [ $# -ge 2 ] && [ "$2" != --end ] || { echo "stage_product: $1 needs a value" >&2; exit 2; } ;;
   esac
   case "$1" in
@@ -48,6 +52,11 @@ while [ "$1" != --end ]; do
     --name) NAME="$2"; set -- "$@" "$1" "$2"; shift 2 ;;
     --requires) REQ="$REQ$2$nl"; set -- "$@" "$1" "$2"; shift 2 ;;
     --requires-on-host) REQH="$REQH$2$nl"; set -- "$@" "$1" "$2"; shift 2 ;;
+    --slim-keep)
+      case "$2" in ''|/*|*"$nl"*) echo "stage_product: --slim-keep wants a relative glob, got '$2'" >&2; exit 2 ;; esac
+      case "/$2/" in *"/./"*|*"/../"*) echo "stage_product: --slim-keep $2 has a . or .. component" >&2; exit 2 ;; esac
+      case "$2" in *[!*?/]*) : ;; *) echo "stage_product: --slim-keep $2 matches everything; name what to keep" >&2; exit 2 ;; esac
+      set -- "$@" "$1" "$2"; shift 2 ;;
     --boot-kext)
       case "$2" in *[!A-Za-z0-9._-]*|.*|-*) echo "stage_product: --boot-kext: bad bundle id '$2'" >&2; exit 2 ;; esac
       case "$nl$KX" in *"$nl$2 "*) echo "stage_product: --boot-kext $2 is named twice" >&2; exit 2 ;; esac
@@ -290,6 +299,7 @@ fi
 HELPERPICK
   printf '[ -n "$MG" ] && [ -x "$MG" ] || { echo "%s: no mavergreen helper on this volume" >&2; exit 1; }\n' "$P"
   printf '"$MG" --root "$ROOT/" link %s || exit 1\n' "$P"
+  printf 'if [ -z "$ROOT" ]; then "$MG" slim apply %s || echo "%s: could not slim; the universal tree stays" >&2; fi\n' "$P" "$P"
   if [ -n "$KX" ]; then
     printf '_kx="$ROOT/usr/local/mavergreen/%s/libexec/mavergreen/kext-sig-exception"\n' "$P"
     printf '_kl="$ROOT/System/Library/Extensions/AppleKextExcludeList.kext/Contents/Info.plist"\n'
