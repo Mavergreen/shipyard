@@ -482,6 +482,21 @@ sdk="$(mg sdk109)/SDKs/MacOSX10.9.sdk"
   || fail "linux_sdk: neither longboat nor an installer runs ($(cat "$w/log"))"
 unset MAVERICKS_SDK_URL MAVERICKS_SDK_SHA256 MAVERICKS_SDK_CACHE
 
+fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'sdk113 dev.mavergreen.longboat.sdk113 lbrepo' >> "$w/names"
+release a 1 sdk109 sdk113
+INSTALL_PRODUCTS_HOST=linux plan_stdout a@1
+[ "$rc" -eq 0 ] && [ "$out" = "$(lines 'provision sdk109 via fetch_sdk.sh --arch x86_64' 'provision sdk113 via fetch_sdk.sh --arch arm64' 'install a 1')" ] \
+  || fail "linux_provisions_both_sdks: sdk109 is fetched as x86_64 and sdk113 as arm64: $out"
+
+fresh; printf '%s\n' 'sdk109 dev.mavergreen.longboat.sdk109 lbrepo' 'sdk113 dev.mavergreen.sdk113 sdk113repo' 'lb dev.mavergreen.lb lbrepo' >> "$w/names"
+release lb 20261027.13; latest lb 20261027.13; release sdk113 20261027.13; latest sdk113 20261027.13
+release a 1 sdk109 sdk113; real; export INSTALL_PRODUCTS_HOST=mac
+printf '%s\n' 'sdk109 lb sdk install 10.9' > "$w/provisioners"
+plan_stdout a@1
+[ "$rc" -eq 0 ] && [ "$out" = "$(lines 'install lb 20261027.13' 'provision sdk109 via lb sdk install 10.9' 'install sdk113 20261027.13' 'install a 1')" ] \
+  || fail "mac_resolves_both_sdks: a Mac provisions sdk109 and installs sdk113 before a: $out"
+unset INSTALL_PRODUCTS_HOST
+
 stalesdk() {  # $1 = installed sdk109 version: an sdk109 whose SDK lacks SDKSettings.json, as Longboat 20261012.2 laid down
   installed sdk109 "$1"
   mkdir -p "$(mg sdk109)/SDKs/MacOSX10.9.sdk/usr/lib"; : > "$(mg sdk109)/SDKs/MacOSX10.9.sdk/usr/lib/libSystem.tbd"
