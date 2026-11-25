@@ -35,6 +35,7 @@ cat > "$T/p/mavergreen.plist" <<'PL'
 <plist version="1.0"><dict>
 <key>product</key><string>p</string><key>group</key><string>p</string>
 <key>identifier</key><string>dev.mavergreen.p</string><key>version</key><string>1.0</string>
+<key>slim-host</key><array><string>bin/*</string></array>
 </dict></plist>
 PL
 unset MAVERGREEN_HOST_ARCH MAVERGREEN_DITTO || true
