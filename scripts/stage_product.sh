@@ -95,7 +95,7 @@ for r in $REQH; do
   esac
   validate_require --requires-on-host "$r" "${r#*:}"
   case "$nl$REQ" in
-    *"$nl${r#*:}$nl"*|*"$nl${r#*:}>="*) echo "stage_product: --requires-on-host $r: ${_rs} is named by both --requires and --requires-on-host" >&2; exit 2 ;;
+    *"$nl$_rs$nl"*|*"$nl$_rs>="*) echo "stage_product: --requires-on-host $r: $_rs is named by both --requires and --requires-on-host" >&2; exit 2 ;;
   esac
   IFS="$nl"
 done

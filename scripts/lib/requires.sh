@@ -9,7 +9,7 @@
 #          x86_64: or arm64: prefix is an error.
 #          mavergreen_require_short prints the SHORT of one entry, SHORT or SHORT>=FLOOR; it returns 1,
 #          printing nothing, when the entry names no product.
-# spec: tests/install-products-test.sh, tests/check-standalone-archive-test.sh, tests/derive-pkg-tree-test.sh
+# spec: tests/requires-reader-test.sh, tests/install-products-test.sh, tests/check-standalone-archive-test.sh, tests/derive-pkg-tree-test.sh
 
 mavergreen_require_short() {
   case "${1%%>=*}" in ''|-*|*[!a-z0-9-]*) return 1 ;; esac
