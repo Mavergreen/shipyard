@@ -5,8 +5,8 @@ description: Use when creating or modifying a Mavergreen project — its release
 
 # Mavergreen project conventions
 
-Mavergreen repos (`github.com/Mavergreen/*`, checked out as `mavergreen-*`) each cross-build one upstream thing into a **Mac OS X 10.9
-(Mavericks)**-compatible `.pkg` with a **Sparkle** auto-updater, on a modern Apple-Silicon runner,
+Mavergreen repos (`github.com/Mavergreen/*`, checked out as `mavergreen-*`) each build one upstream thing into a **Mac OS X 10.9
+(Mavericks)**-compatible `.pkg` with a **Sparkle** auto-updater, on a Linux or modern-Mac runner,
 with **no 10.9 build runner anywhere**. They share a CMake/Renovate helper (`Mavergreen/shipyard`)
 and a common release/versioning shape. This skill is the family's conventions plus the judgment calls
 that copying one repo can't teach.
@@ -38,7 +38,7 @@ prompting for Rosetta on Apple Silicon.
 **x86_64 by default; arm64 only with a reason.** A product exists for Mavericks, so it ships x86_64
 only. An arm64 slice is a deviation, declared in `INGREDIENTS.md` as `- arm64:<glob>: <reason>`, and
 it is warranted only when the thing is used in CI or by developers to produce, test or investigate
-Mavericks artifacts: a cross toolchain, cmake, shipyard's own updater, the static half of a
+Mavericks artifacts: a toolchain, cmake, shipyard's own updater, the static half of a
 reverse-engineering tool. The reason names that use. A library gets an arm64 slice only for a real
 arm64 consumer, never speculatively. Parity is about *developers'* tools, not about shipping Mavericks
 products for Apple Silicon. A product spec that plans a universal build without such a reason is
@@ -80,11 +80,11 @@ The family has an older/simpler variant and a current/mature variant. **Start fr
 
   ```yaml
   - uses: Mavergreen/shipyard/.github/actions/install@v1
-  - run: shipyard-cmake --preset cross && shipyard-cmake --build --preset cross
-  - run: shipyard-ctest --preset cross
+  - run: shipyard-cmake --preset x86_64 && shipyard-cmake --build --preset x86_64
+  - run: shipyard-ctest --preset x86_64
   ```
 
-  On Linux install@v1 first checks every tool shipyard and a cross build need
+  On Linux install@v1 first checks every tool shipyard and a build need
   (`linux-prerequisites.sh`: cmake, make, curl, git, tar, gzip, cpio, xz, python3 with PyYAML, CA
   certificates), installing the missing ones with apt as root or under `sudo -n`, else failing once
   naming them all. So no product keeps an apt list for shipyard. It then lays down the pkg's own
@@ -223,7 +223,7 @@ updaters, signing, or compat checks:**
 
 | Facility (CMake fn · script) | Does | Don't hand-roll |
 |---|---|---|
-| `mavericks_build_mode` · `MavericksMode` · `mavericks_mode.sh` | selects/asserts the build MODE: native-on-10.9 vs cross-on-modern | arch/host detection |
+| `mavericks_build_mode` · `MavericksMode` · `mavericks_mode.sh` | reports the build host: `mavericks` on a 10.9.x host, `modern` anywhere else | arch/host detection |
 | `mavericks_fetch_sdk` · `fetch_sdk.sh` | the pinned, integrity-checked MacOSX10.9 SDK | fetching an SDK yourself |
 | `RequireAppleClang` | enforces Apple `/usr/bin/clang` for a configure that still declares it; every caller is a leftover, not an exception (see "The compiler: clang22 on every host") | assuming the toolchain |
 | `mavericks_assert_binary_compatible` · `MavericksCompatGuard` · `assert_binary_compatible.sh` | proves a built binary is 10.9-safe (floor + recorded SDK + symbol set; with `OBJC_STRICT`, every Objective-C send) | a bespoke compat check |
@@ -271,7 +271,7 @@ script does not.
 
 **Products build with clang22 on every host, and nothing a build needs comes from the Command Line
 Tools.** `fetch_clang22.sh` gives the host's clang22: the pinned Linux archive at `/usr/local/mavergreen/clang22` on Linux, `clang22-cross`
-on a modern Mac, the native `clang22` on 10.9. Its `clang.cfg` is part of the compiler: it places
+on a modern Mac until clang-22 merges, `clang22` on 10.9. Its `clang.cfg` is part of the compiler: it places
 `librecaulk.a` at the tail of the inputs, before the driver's `-lSystem`, so a Recaulk fix to a 10.9
 function (posix_spawn; pselect in 20261107.1) reaches every product at its next build, with no
 per-product plumbing. A link that must stay Recaulk-free (a toolchain's own test fixtures, a probe)
@@ -281,7 +281,7 @@ flags or calling the driver's `.bin` directly. clang22's `llvm-*` tools stand in
 distribution that replaces the Command Line Tools.
 
 **Linux's C++ library is built, not shipped.** clang22's Linux archive carries a libc++ for Darwin
-targets only, so a cross build's Linux-host tools (Rust's `LINUX_HOST_CXX`) take
+targets only, so a Linux build's own host tools (Rust's `LINUX_HOST_CXX`) take
 `fetch_host_libcxx.sh PIN_DIR CLANG22_PREFIX`: static `libc++.a` and `libc++abi.a` built by that clang22
 from the llvm-project release it is built from (`components/clang22/llvm-project`: `<LLVM version>
 <sha256 of llvm-project-<version>.src.tar.xz>`; it refuses a clang22 of another LLVM version), cached. It
@@ -292,11 +292,71 @@ that keeps `RequireAppleClang`, is allowed only where clang22 cannot do the job.
 reason and the shared fix that would retire it, and INGREDIENTS.md declares it. The products that use it
 today are leftovers from before this rule, queued to move, not exceptions to copy.
 
+## The toolchain: one product, default target 10.9 x86_64
+
+**With no target named, every host slice and every entry point yields 10.9 x86_64; building for the
+host needs an explicit target.** Entry points are the cfgs, the built-in default triple, go.env, rust's
+default target and swift's default, on Linux, a modern Mac and 10.9 alike. The built-in triple matches
+the cfgs, so `--no-default-config` changes nothing about the target. **Revisit when** a family
+consumer's main product is a modern-Mac binary.
+
+**An explicit target works with no extra flags on every host.** `clang --target=arm64-apple-macos11`
+(and each family's equivalent) takes its floor and SDK from the arch it names. On Apple Silicon "the
+host" means arm64 at 11.0 with the 11.3 SDK, the family's arm64, never the running macOS with Xcode's
+SDK. So a toolchain requires `sdk109` and `sdk113` on every host.
+
+**One toolchain is one product.** No product, prefix, command, archive or preset is named for the host
+it runs on. The merged product keeps the plain name's identity (`clang22`: its prefix, identifier,
+feed, updater and standalone archive name). Its host Mach-O are fat: x86_64 at 10.9 with the 10.9 SDK,
+arm64 at 11.0 with the 11.3 SDK, both configured with the same target set. The pkg's floor is the
+x86_64 slice's, 10.9.5; no arm64 Mac runs below 11.0. Download size roughly doubles, accepted.
+
+- **The merge.** Each host slice is built on its own, on Linux, and the slices are merged with
+  `lipo-merge-tree.sh --require-archs "x86_64 arm64"`. Target payload (files that are not host Mach-O,
+  and target libraries already fat) is laid down once; the merge refuses a non-Mach-O file that differs
+  between slices, and that refusal is the proof the payloads agree.
+- **The proofs a merge needs, before it ships:** a diff of the installed `bin/` between the two
+  pkgs of the family's last release; a report of what the AArch64 backend costs the x86_64 slice in build time and size (a
+  report, not a gate, unless it breaks the 6-hour job cap); and `build-equivalence.sh` comparing the
+  merged x86_64 slice with the family's last 10.9-hosted release.
+- **The pairs still registered** are listed in `scripts/retiring-cross-names` (see "Short names: the
+  registry").
+
+**A requirement can hold on one host arch only.** `stage_product.sh --requires-on-host
+ARCH:SHORT[>=V]` (repeatable; ARCH is `x86_64` or `arm64`) is `--requires` for that arch: swift's
+toolchain requires `swift-runtime` on x86_64, where 10.9 has none. The preinstall enforces it on any
+target volume other than `/`; on `/`, `hw.optional.arm64` decides the host arch, never `uname -m`,
+which Rosetta answers. A Linux install never takes a Mac host's requirement. SHORT may not also be a
+plain `--requires`. Conformance check `requires-on-host` fails an ARCH other than those two, an
+unregistered SHORT, or the product itself; a deviation can excuse it.
+
+**Slimming thins only a product's host payload.** `mavergreen slim apply <product>`, run by every
+postinstall on the boot volume and never fatally, strips the other host arch's slice from the programs
+that run on this Mac and the libraries they load. It is on by default on an x86_64 Mac and off on
+Apple Silicon; `mavergreen slim on|off|status` sets and shows it, and the setting survives updates.
+`slim off` restores nothing: reinstall a slimmed product to get its other slices back.
+
+- **A product declares its host payload** with `stage_product.sh --slim-host GLOB` (repeatable;
+  manifest array `slim-host`), and slim touches only files matching those globs. A product with none
+  is never slimmed. A glob matches one path component at a time, as many components as it has: `*`
+  and `?` never match `/`, and there is no `**`.
+- **Target libraries are never slimmed**, including a library both host programs load and output
+  links against (openssl's `lib/*.dylib`): such a product declares only its programs.
+- **Slim never touches** a file inside a signed bundle, a hard-linked file, an archive, or a non-Mach-O
+  file. It writes its marker, `var/mavergreen/slimmed/<product>`, before it changes anything. A volume
+  other than `/` never slims.
+- **Conformance check `slim-host`** fails a product with fat Mach-O under `bin/` or `libexec/` that
+  declares no `slim-host`; a deviation can excuse it.
+
+**Revisit when** a product's host and target files share paths so that no glob separates them (the
+slimming rule); GitHub changes macOS runner availability or pricing; a toolchain's slices cannot share
+a target set; or storage limits bite on per-release pkgs.
+
 ## The build must also run natively ON 10.9
 
 CI and day-to-day development happen on modern macOS, but a Mavergreen product's build must
 generally still work **natively on a real Mavericks box**, with occasional deliberate exceptions. That
-is not sentiment: a native build is the check that the cross-build's inputs and assumptions are honest,
+is not sentiment: a 10.9 build is the check that a Linux or modern-Mac build's inputs and assumptions are honest,
 and it is how the family avoids depending on a runner it can never reproduce.
 
 Practically, for anything a **native 10.9 build executes** — `versions.sh`, `version.sh`, the
@@ -327,7 +387,7 @@ of the line a script is on. When a script must work in both places, the 10.9 con
 **A family checkout may live on NFS, so never put a build directory under
 `${sourceDir}`.** `~/Documents/code` is an NFS automount on the maintainer's
 10.9 box; every `.o`, every link, and every test fixture written under the
-source tree crosses the network.
+source tree goes over the network.
 
 Measured on macho-tools, same commit, same compiler, full configure + build:
 
@@ -342,18 +402,17 @@ dozens of builds per task (one per commit, one per mutation test, one per
 verification round), and the test suites compile fixtures and dylibs on every
 run. This is the single cheapest speedup available to this family.
 
-- **shipyard's shared hidden presets (`mavericks-native` / `mavericks-cross`) declare
-  `MAVERICKS_BUILD_ROOT` in their `environment`, defaulted to `$penv{TMPDIR}/mm-build`
-  (GitHub's Linux runners leave `TMPDIR` unset, so `install@v1` exports `$RUNNER_TEMP` or `/tmp`
-  there, and the `shipyard-cmake`/`-ctest`/`-cpack` launchers give an unset or empty one `/tmp`),
-  and derive their OWN `binaryDir` from it, keyed by `${sourceDirName}`:**
+- **shipyard's shared hidden presets (`mavericks-x86_64` and `macos-arm64`) take the build root from
+  the caller's `MAVERICKS_BUILD_ROOT` and derive their OWN `binaryDir` from it, keyed by
+  `${sourceDirName}`:**
   ```json
-  "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-native"
+  "binaryDir": "$env{MAVERICKS_BUILD_ROOT}/${sourceDirName}-x86_64"
   ```
-  A consumer's preset supplies neither `MAVERICKS_BUILD_ROOT` nor `binaryDir` — it
-  just inherits:
+  `mavericks-x86_64` is 10.9 x86_64 on any host; `macos-arm64` is 11.0 arm64 on Linux or a modern
+  Mac. A consumer's presets are named `x86_64` and `arm64`, supply neither `MAVERICKS_BUILD_ROOT` nor
+  `binaryDir`, and just inherit:
   ```json
-  {"name": "native", "inherits": "mavericks-native"}
+  {"name": "x86_64", "inherits": "mavericks-x86_64"}
   ```
   `${sourceDirName}` is the name of the checkout directory, so it differs per
   checkout — this matters because shipyard itself has three checkouts in this tree
@@ -364,24 +423,31 @@ run. This is the single cheapest speedup available to this family.
   of the consumer's own preset also removes a per-repo chance to typo the path. Do
   NOT hardcode a developer's local path here, and do NOT use `${sourceDir}/build-*`
   — both put the build back inside the (possibly NFS) source tree.
+- **`shipyard-cmake`, `shipyard-ctest`, `shipyard-cpack` and `build_universal.sh` default an unset or
+  empty `MAVERICKS_BUILD_ROOT` to `$TMPDIR/mm-build`** (`/tmp` when `TMPDIR` is unset; GitHub's
+  Linux runners leave it unset, so `install@v1` exports `$RUNNER_TEMP` or `/tmp` there). An exported
+  value wins. A bare `cmake --preset` with it empty is refused: `MAVERICKS_BUILD_ROOT is unset: set
+  it, or configure through shipyard-cmake`. Presets cannot express a default, so the launchers are
+  the entry point that works everywhere.
+- **The old preset names are gone, with no stand-ins.** A consumer still inheriting
+  a preset shipyard removed on 2026-11-25 (`mavericks-native`, `mavericks-cross`) gets CMake's own "Could not find inherited preset" error;
+  inherit `mavericks-x86_64`. `MAVERICKS_EXPECTED_MODE` is gone: defining it anywhere stops the
+  configure, and a build directory from an older shipyard that cached it reconfigures with `--fresh`.
 - **A script-driven repo (no CMake presets) reads `$MAVERICKS_BUILD_ROOT` from the
   environment directly**, with the same `${TMPDIR}/mm-build` fallback if it is unset.
-- **To override the location, use `CMakeUserPresets.json`, not a shell export.** A
-  preset's `environment` overrides the real environment — exporting
-  `MAVERICKS_BUILD_ROOT` in your shell does not win against a shared preset that
-  already sets it. Gitignore the file, and have it inherit while repointing the
-  variable:
+- **To move the build, export `MAVERICKS_BUILD_ROOT`, or repoint it in a gitignored
+  `CMakeUserPresets.json`** that inherits and sets the variable:
   ```json
   {"version": 6,
    "configurePresets": [
-     {"name": "native-local", "inherits": "native",
+     {"name": "x86_64-local", "inherits": "x86_64",
       "environment": {"MAVERICKS_BUILD_ROOT": "/private/tmp/build/$env{USER}"}}]}
   ```
   Preset names must be unique across both files, so a local preset takes a new
   name rather than shadowing the shared one.
-- **Do not "fix" this with a symlink** at `${sourceDir}/build-native`. It works
+- **Do not "fix" this with a symlink** at `${sourceDir}/build-x86_64`. It works
   — CMake writes through it and the objects land locally — but a `.gitignore`
-  entry written as `build-native/` (with the trailing slash) matches a
+  entry written as `build-x86_64/` (with the trailing slash) matches a
   DIRECTORY and NOT a symlink, so the link shows up as untracked and pollutes
   `git status` for everyone. Verified, not assumed.
 - **`scripts/assert-tree-clean.sh` is what actually enforces this**, not the presets
@@ -390,14 +456,16 @@ run. This is the single cheapest speedup available to this family.
   build system nobody has invented yet. A check that named specific build mechanisms
   would exempt every new one by default; this one cannot be outgrown that way.
 
-## Build equivalence: native-10.9 ≡ modern-cross (core invariant)
+## Build equivalence: a 10.9 build ≡ a build elsewhere (core invariant)
 
-The product must run on **10.9**, but **there is no 10.9 build runner in CI** — every project cross-builds
-on a modern Mac. So each project MUST establish that its cross-build equals a native-10.9 build, via
+The product must run on **10.9**, but **there is no 10.9 build runner in CI** — every project builds
+on Linux or a modern Mac. So each project MUST establish that that build equals one made on 10.9, via
 shipyard's facilities rather than trusting the runner:
 
-- Drive the build through the **mode** machinery (`mavericks_build_mode`) so native and cross are the same
-  recipe against the same pinned 10.9 SDK and floor — not two divergent paths.
+- Build through the same preset (`mavericks-x86_64`) on every host, so a 10.9 build and a build
+  elsewhere are one recipe against the same pinned 10.9 SDK and floor — not two divergent paths.
+  `mavericks_build_mode` tells a script which host it is on (`mavericks` or `modern`), never which
+  recipe to run.
 - **Gate on the compat guard** (`mavericks_assert_binary_compatible`): fail the build if any shipped binary
   declares a floor above 10.9 or links a symbol 10.9 lacks. This is the in-CI equivalence proof — every
   project needs it (or an equivalent gate), since no 10.9 runner validates the output.
@@ -435,8 +503,8 @@ shipyard's facilities rather than trusting the runner:
     `gettimeofday`) links **no** shim and must leave `REQUIRE_DEFINED` **empty**. Copying golang's value
     into such a repo makes the guard demand a shim that isn't there (every binary fails "required symbol
     not DEFINED"). Decide it from *your* build (do you link a legacy-support shim?), not from the template.
-- Where a stronger proof fits, keep a **characterization reference**: commit a trusted native-10.9 artifact
-  and compare the cross-build against it (magic-trackpad2's kext characterization), and/or an emulated
+- Where a stronger proof fits, keep a **characterization reference**: commit a trusted 10.9-built artifact
+  and compare the CI build against it (magic-trackpad2's kext characterization), and/or an emulated
   smoke on real 10.9 in the acceptance job (see "Acceptance on real 10.9").
 - Back it with **out-of-band re-validation on real 10.9 hardware** before trusting a release.
 
@@ -527,8 +595,7 @@ waits for a green build. That only works if **your repo produces a CI status che
      printf '{"required_status_checks":{"strict":false,"contexts":["build"]},"enforce_admins":false,"required_pull_request_reviews":null,"restrictions":null}' \
        | gh api -X PUT repos/OWNER/REPO/branches/main/protection --input -
      ```
-  The context is the build **job name** (`build`, `build-macos`, or a job's `name:` string like
-  `Cross-build + compat gate (macos-26)`) — read the exact string from a real check-run first
+  The context is the build **job name** (`build`, `build-macos`, or a job's `name:` string) — read the exact string from a real check-run first
   (`gh api repos/OWNER/REPO/commits/main/check-runs --jq '[.check_runs[].name]|unique'`); a typo requires a
   check that never reports and **blocks every merge**. Without the required check, `allow_auto_merge` is
   inert and the PR merges only on Renovate's next scan (still gated, just not instant).
@@ -675,8 +742,7 @@ natural (and, for a repackaged third-party product, nominative rather than co-br
   and release notes.
 
 **A line's display names carry its line version.** Prose: "Go 1.27 for Mavericks". The updater's
-`CFBundleName` (`PRODUCT_NAME`): "Mavericks Go 1.27", with " (cross)" appended for the cross variant.
-Not gated.
+`CFBundleName` (`PRODUCT_NAME`): "Mavericks Go 1.27". Not gated.
 
 "Mavericks" here is the **OS** (10.9), so "Mavericks Tailscale" = "the Mavericks build of Tailscale" —
 which helps rather than hurts on the trademark front; keep the "unofficial community build, not affiliated
@@ -785,9 +851,9 @@ fails the build if one reappears.
 
 **The shape.** A product whose line carries a version part is **lined**, and each line is a repo
 named `<product>-<line version>`: `Mavergreen/golang-126`, `Mavergreen/clang-22`,
-`Mavergreen/nodejs-24`. A variant-only line (rust-cross's `cross`) does not make a product lined, so
-it stays in the product's repo (`Mavergreen/rust`). One line's native and cross products share its
-repo (`golang-126` ships `go126` and `go126-cross`). The line repo serves its line from the root:
+`Mavergreen/nodejs-24`. A product with no line version (`rust`) is not lined, so
+it stays in its own repo (`Mavergreen/rust`). Several products may share a line's repo
+(`clang-22` ships `clang22` and `libcxx22`). The line repo serves its line from the root:
 `UPSTREAM_VERSION` and `patches/` live there, the line is *derived* from `UPSTREAM_VERSION`, never a
 separate input, and Renovate caps the repo at the next line (`matchDepNames: ["go-126"]`,
 `allowedVersions: "<1.27"`). A lined product's pkg identifier is `dev.mavergreen.<product>.<short
@@ -825,7 +891,7 @@ a new line repo is warranted.
 **Starting a new line.**
 1. Fork the previous line's repo as `<product>-<line>` (`golang-127`).
 2. Register its short names in shipyard's `scripts/product-names` with the new repo
-   (`go127 dev.mavergreen.golang.go127 golang-127`, and the `-cross` row), and push shipyard first:
+   (`go127 dev.mavergreen.golang.go127 golang-127`), and push shipyard first:
    nothing packages, and no updater builds, for an unregistered name.
 3. Set the Renovate cap to the next line.
 4. Set the bootstrap cap, where the product has one.
@@ -1083,6 +1149,23 @@ for this: the rust archive carries no manifest, so it fetches the 200 MB pkg onl
 | the updater from `/usr/bin/clang` and RequireAppleClang | `build_updater.sh ... --clang22-pin "$SHIPYARD_SCRIPTS/../components/clang22" --arch x86_64` |
 | `codesign` | nothing: a 10.9 x86_64 binary needs no signature |
 
+**A big Rust build on `ubuntu-latest` adds swap and builds on `/mnt`.** The runner's memory is not
+enough for one (codex lost its runner to memory exhaustion), so before the build the job frees disk
+space, adds 8 GB of swap on `/mnt`, and puts the build root there:
+
+```yaml
+      - name: Room for a big Rust build
+        run: |
+          sudo fallocate -l 8G /mnt/swapfile && sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile && sudo swapon /mnt/swapfile
+          sudo mkdir -p /mnt/mm-build && sudo chown "$(id -u):$(id -g)" /mnt/mm-build
+          echo "MAVERICKS_BUILD_ROOT=/mnt/mm-build" >> "$GITHUB_ENV"
+```
+
+That replaces the "Build out of tree" step, after a step that removes what the runner preinstalls and
+the build does not use. **Revisit when** GitHub's Linux runners have enough memory for the family's
+largest Rust build, or a shared shipyard action replaces this recipe.
+
 Off macOS, shipyard's own Mach-O readers default to clang22's `llvm-*` even with none of those
 variables set, and never to the host's GNU `ar` or `nm`, which cannot read Mach-O and mangle Darwin
 archives whose members share a name. `cargo-env.sh --arch arm64` is the arm64 entry point ("arm64 is
@@ -1108,8 +1191,8 @@ the arches and an existing `--out`), and `cargo-env.sh --arch arm64` (target-sco
 variables, the 11.3 SDK, `MACOSX_DEPLOYMENT_TARGET=11.0`, `CARGO_BUILD_TARGET`, never a global
 `SDKROOT`; it refuses a rust with no `lib/rustlib/aarch64-apple-darwin`). Rust arm64 waits on rust
 shipping the aarch64 standard library: the released pin has none, so that path is unproven end to end.
-Presets cannot express a `TMPDIR` fallback, so plain `cmake --preset` fails when `TMPDIR` is unset;
-`shipyard-cmake` is the entry point that works everywhere.
+A bare `cmake --preset` with `MAVERICKS_BUILD_ROOT` unset is refused; `shipyard-cmake` is the entry
+point that works everywhere (see "Build OUT of the source tree").
 
 **arm64 must not link `/usr/lib/libc++.1.dylib` with mismatched headers.** Linux arm64 C and Objective-C
 compile with clang22 and `--no-default-config`; C++ and Objective-C++ also get `-nostdinc++ -isystem
@@ -1441,13 +1524,14 @@ ordinary commit moves no declared input, so it renders the same digest and publi
   |---|---|
     | `10.9.5` | 1password, signal-desktop, porthole (bare `10.9` until the 2026-09-22 flag day, which found it was drift), openssh, container-tools, clang, golang, macports-legacy-support, ed25519, tailscale, swift, magic-trackpad2, ca-certs, shipyard |
 
-  **Dual-variant repos (clang, golang): the notes' floor line describes the NATIVE `.pkg`, while each
-  appcast enforces its own artifact's real minimum — this split is deliberate, do not "fix" it.** Both
-  repos pass `--min-os 10.9.5` to `release-notes.sh` because that describes the native build, the
-  flagship most users install; their cross variant's own `sign_and_appcast.sh` call separately passes
-  `--min-os 11.0` for its own appcast feed, independent of what the notes say. A golang/clang cross
-  build TARGETS 10.9 but RUNS on 11.0+ (see Artifact conformance, "structure matters more than it
-  looks") — the notes describe one variant, the appcast enforces each variant's own truth, and they
+  **Dual-product repos (clang-22, golang), until each family merges: the notes' floor line describes
+  the plain product's `.pkg` (`clang22`, `go126`), while each appcast enforces its own artifact's real
+  minimum — this split is deliberate, do not "fix" it.** Both repos pass `--min-os 10.9.5` to
+  `release-notes.sh` because that describes the flagship most users install; the second product's own
+  (`clang22-cross`, `go126-cross`) `sign_and_appcast.sh` call separately passes `--min-os 11.0` for
+  its own appcast feed, independent of what the notes say. That product TARGETS 10.9 but RUNS on
+  11.0+ (see Artifact conformance, "structure matters more than it looks") — the notes describe one
+  product, the appcast enforces each product's own truth, and they
   are allowed to disagree on purpose.
 - **Every footer line gets a blank line BEFORE it, never after the line it follows.** `gen_appcast.sh`'s
   `md_to_html` joins consecutive non-blank lines into one `<p>` — correct Markdown — so a compare link
@@ -1932,8 +2016,8 @@ at the fetch, naming the pin. GitHub's generated archives have been byte-stable 
   the version is the only pin. `CL="$(sh "$SHIPYARD_SCRIPTS/fetch_clang22.sh" components/clang22)"`
   prints the toolchain root for this host, fetched, verified and cached:
   - Linux: the pinned `linux-x86_64` archive, verified against the release's `SHA256SUMS`.
-  - A Mac: the `clang22-cross` pkg, through stevedore.
-  - Mac OS X 10.9: the native `clang22` pkg, since the cross pkg does not run there and 10.9 has no
+  - A Mac: the `clang22-cross` pkg, through stevedore, until clang-22 merges.
+  - Mac OS X 10.9: the `clang22` pkg, since `clang22-cross` does not run there and 10.9 has no
     AArch64 backend, so x86_64 only.
   - Either Mac: an installed `clang22-cross` (`clang22` on 10.9) at the pinned release.
   An updater-only configure sets `MAVERICKS_REQUIRE_APPLECLANG OFF` before `include(Mavericks)`. The
@@ -2103,8 +2187,7 @@ is worse than none.
 | x86_64 | minos 10.9, sdk 10.9 | `fetch_sdk.sh` (MacOSX10.9.sdk) |
 | arm64 | minos 11.0, sdk 11.3 | `fetch_sdk.sh --arch arm64` (MacOSX11.3.sdk) |
 
-This covers cross toolchains installed on modern Macs too (clang-cross, golang-cross, the cmake product's
-arm64 slice). The pins and the rule live in exactly one place, `scripts/sdk-pins.sh`.
+This covers every toolchain's host slices too (clang22's and the cmake product's arm64 slices). The pins and the rule live in exactly one place, `scripts/sdk-pins.sh`.
 
 **Why:** a 2026-09-24 audit of every family release found builds that go through `mavericks-clang`, the
 Go wrapper or an explicit sysroot recorded 10.9, while plain CMake builds with AppleClang silently linked
@@ -2113,20 +2196,20 @@ nothing noticed: the compat guard read minos and never the SDK. Linking the runn
 declaration compile and fail only on the target, and a Linux host has no runner SDK at all. So the family
 needs one policy for both hosts.
 
-**How a build complies:** configure through the shipyard presets (`mavericks-cross` / `mavericks-native`),
+**How a build complies:** configure through the shipyard presets (`mavericks-x86_64` / `macos-arm64`),
 or pass `-DCMAKE_TOOLCHAIN_FILE=<shipyard>/MavericksToolchain.cmake`. That sets the pinned SDK, the
 arch and the deployment target **before `project()`**, one arch per configure. A build that calls the
 compiler itself passes `-isysroot "$(sh "$SHIPYARD_SCRIPTS/fetch_sdk.sh" --arch <arch>)"`. A repo that
 ships `fetch_sdk.sh` (in a toolchain's `libexec/`, e.g.) ships `sdk-pins.sh` and `mavericks_fetch.sh`
 beside it; without `sdk-pins.sh` it exits 2 naming the missing file.
-`include(Mavericks)` fails a cross configure whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
+`include(Mavericks)` fails a configure off 10.9 whose `CMAKE_OSX_SYSROOT` is not the pinned SDK.
 Linux builds both arches: the toolchain file selects Darwin and the configured arch, and the
 compiler is clang22's Linux archive with `ld64.lld` (`--target=arm64-apple-macos11.0 -fuse-ld=lld
 --ld-path=<clang22>/bin/ld64.lld` for arm64, with `--no-default-config`; arm64 C++ and Objective-C++ also
 `-nostdinc++ -isystem <SDK>/usr/include/c++/v1`, the 11.3 SDK's own libc++ headers; see "arm64 is built
 on Linux").
-Native mode (on the 10.9 box, x86_64 only) pins too, because Xcode 6.1+ defaults to the 10.10 SDK
-there: the toolchain file uses the same fetched pin and never asks xcrun, so a native build is the
+A 10.9 host (x86_64 only) pins too, because Xcode 6.1+ defaults to the 10.10 SDK
+there: the toolchain file uses the same fetched pin and never asks xcrun, so a 10.9 build is the
 same with or without the Command Line Tools (vision area 18 A; swift-gg found the old xcrun probe
 running ten times in one ninja build, 2026-10-18).
 
@@ -2216,7 +2299,7 @@ nothing executes a Mach-O, so the executing half SKIPs there too.
 
 **A build step that runs translated** (an x86_64 code generator, a host tool, a stage-0) has an
 arm64-native alternative that produces the same output; find it. A Rosetta dependency need not spell
-`arch -x86_64` anywhere: a cross build whose `make` executes x86_64 host tools it compiled runs them
+`arch -x86_64` anywhere: an Apple Silicon build whose `make` executes x86_64 host tools it compiled runs them
 translated without saying so where a gate can read. nodejs removed exactly this kind by building its
 gyp host toolset for arm64 (`CC_host`/`CXX_host` set to Apple's clang, the build machine's SDK); V8's
 `mksnapshot` does not execute target code, so its output stayed byte-identical to the native 10.9
@@ -2344,7 +2427,7 @@ equivalence.
 
 **Structure matters more than it looks.** A product archive (`Distribution`) declares an install
 floor; a component package (`PackageInfo`) cannot — a floor belongs to a product archive — so its
-minimum lives in the appcast instead. golang's cross product is exactly that: it TARGETS 10.9 but RUNS
+minimum lives in the appcast instead. `go126-cross` is exactly that: it TARGETS 10.9 but RUNS
 on 11.0+, so demanding 10.9.5 of it would be wrong.
 
 **Record what a variant was built FROM.** `sh "$SHIPYARD_SCRIPTS/build-info.sh" dist/build-info-<variant>.txt
@@ -2352,9 +2435,9 @@ key=value …` at package time, and ship it as a release asset. Conformance comp
 more than one variant, except those that are *supposed* to differ (`variant`, `arch`, `prefix`, `pkg`,
 `identifier`).
 
-This exists because **artifacts cannot answer the question**: golang's native `.pkg` carries the CA
-bundle and the legacy-support shim, its cross `.pkg` legitimately does not (cross-built apps look at
-the native prefix). "Both variants used the same shim" is a claim about *inputs*, which no payload
+This exists because **artifacts cannot answer the question**: `go126`'s `.pkg` carries the CA
+bundle and the legacy-support shim, and `go126-cross`'s legitimately does not (apps it builds look at
+`go126`'s prefix). "Both variants used the same shim" is a claim about *inputs*, which no payload
 inspection can settle — so the build writes it down rather than a checker guessing later. It also means
 a user can read what a release was made from.
 
@@ -2392,7 +2475,7 @@ belongs to a pin, the file plus its KEY; `deviations.sh` refuses a `:KEY` on any
 could never match and would excuse nothing in silence, and refuses an `unlinked` with no scope or `*`.
 
 **One C++ runtime per process (`cxxabi`).** Two copies of libc++abi in one process each keep their own
-exception and type-info state, so a throw that crosses from one to the other is not caught, or
+exception and type-info state, so a throw that passes from one to the other is not caught, or
 terminates. `artifact-facts.sh` reads every shipped Mach-O, archives member by member (a member that is not Mach-O, such as an rlib's `lib.rmeta`, is skipped), with
 `macho-cxxabi.sh`, and emits two facts: `cxxabi-defines <artifact> <path> <arch> <symbol>
 <visible|hidden>` for each C++ runtime symbol (`scripts/cxxabi-machinery.txt`) a slice defines beyond the
@@ -2417,7 +2500,7 @@ private externals, and it is still a second runtime.
   (each such program then fails until declared), or if a product needs a second runtime that no
   path-scoped declaration can describe.
 
-**A product moving its build host proves equivalence with the tool (`build-equivalence`).** Run `sh "$SHIPYARD_SCRIPTS/build-equivalence.sh" [--repo DIR] A B`, where A and B are each a flat pkg or a staged payload tree, and `--repo DIR` is the directory whose `INGREDIENTS.md` supplies the entries (default `.`). A pkg's paths are relative to `/`, and each component's install scripts compare under `.pkg/<component identifier>/scripts/`; its PackageInfo and Distribution are not compared. The readers are the pinned clang22's `llvm-nm`, `llvm-otool` and `llvm-lipo`: `NM`, `OTOOL` and `LIPO` override them, else an installed clang22 or clang22-cross, else the tool fetches shipyard's pin with `fetch_clang22.sh`. It pairs files by path and compares two levels: `bytes` (the contents or the file mode differ; a mode difference prints `mode: A <octal>, B <octal>` beneath it) and `interface` (a Mach-O or archive whose exports, imports, linked dylibs, install name, rpaths, deployment target, SDK or section names differ). A `meta` difference (a symlink target or the executable bit) and a path in only one build (`only-a`, `only-b`) are never excusable. The product declares what remains in `INGREDIENTS.md`, under `## Conformance deviations`: `- build-equivalence:<glob>: <reason; revisit: ...>` excuses `bytes` differences on the matching paths, and `- build-equivalence-interface:<glob>: <reason; revisit: ...>` excuses `interface` differences too (and `bytes`). A glob is a shell `case` pattern over the normalised path relative to the install root, with `*` crossing `/`: a `-<16 hex>.` in a file name reads `-H.` (`lib/libstd-H.rlib`), and in symbols rustc's `_rust_metadata_<crate>_<hash>` (1 to 16 hex digits, unpadded; the hash follows the last underscore) reads `_rust_metadata_<crate>_H`, LLVM's `_anon.<32 hex>.<n>` reads `_anon.H.<n>`, and LLVM's per-build `.llvm.<decimal>` suffix on any symbol reads `.llvm.N`; it cannot name a path holding a space or a colon (`deviations.sh` reads the glob as `[^ :]*`), so spell such a character `?` or `*`. A bare form, or a glob of nothing but wildcards, is refused. A broad `build-equivalence-interface:` glob excuses every interface change under it, so name the files it means. An entry that excuses nothing in the comparison **fails** as `unused`, so a fixed cause forces its entry out and each revisit trigger is mechanical. Crate-hash and legacy Rust symbol-hash normalisation can merge symbols from two versions of one crate, and `.llvm.N` two LLVM-promoted locals of one name; that is accepted. Revisit it when the weekly recurring reproduce check is designed (it calls this same tool), or when a difference arises that two levels cannot express.
+**A product moving its build host proves equivalence with the tool (`build-equivalence`).** Run `sh "$SHIPYARD_SCRIPTS/build-equivalence.sh" [--repo DIR] A B`, where A and B are each a flat pkg or a staged payload tree, and `--repo DIR` is the directory whose `INGREDIENTS.md` supplies the entries (default `.`). A pkg's paths are relative to `/`, and each component's install scripts compare under `.pkg/<component identifier>/scripts/`; its PackageInfo and Distribution are not compared. The readers are the pinned clang22's `llvm-nm`, `llvm-otool` and `llvm-lipo`: `NM`, `OTOOL` and `LIPO` override them, else an installed clang22 or clang22-cross, else the tool fetches shipyard's pin with `fetch_clang22.sh`. It pairs files by path and compares two levels: `bytes` (the contents or the file mode differ; a mode difference prints `mode: A <octal>, B <octal>` beneath it) and `interface` (a Mach-O or archive whose exports, imports, linked dylibs, install name, rpaths, deployment target, SDK or section names differ). A `meta` difference (a symlink target or the executable bit) and a path in only one build (`only-a`, `only-b`) are never excusable. The product declares what remains in `INGREDIENTS.md`, under `## Conformance deviations`: `- build-equivalence:<glob>: <reason; revisit: ...>` excuses `bytes` differences on the matching paths, and `- build-equivalence-interface:<glob>: <reason; revisit: ...>` excuses `interface` differences too (and `bytes`). A glob is a shell `case` pattern over the normalised path relative to the install root, with `*` matching `/`: a `-<16 hex>.` in a file name reads `-H.` (`lib/libstd-H.rlib`), and in symbols rustc's `_rust_metadata_<crate>_<hash>` (1 to 16 hex digits, unpadded; the hash follows the last underscore) reads `_rust_metadata_<crate>_H`, LLVM's `_anon.<32 hex>.<n>` reads `_anon.H.<n>`, and LLVM's per-build `.llvm.<decimal>` suffix on any symbol reads `.llvm.N`; it cannot name a path holding a space or a colon (`deviations.sh` reads the glob as `[^ :]*`), so spell such a character `?` or `*`. A bare form, or a glob of nothing but wildcards, is refused. A broad `build-equivalence-interface:` glob excuses every interface change under it, so name the files it means. An entry that excuses nothing in the comparison **fails** as `unused`, so a fixed cause forces its entry out and each revisit trigger is mechanical. Crate-hash and legacy Rust symbol-hash normalisation can merge symbols from two versions of one crate, and `.llvm.N` two LLVM-promoted locals of one name; that is accepted. Revisit it when the weekly recurring reproduce check is designed (it calls this same tool), or when a difference arises that two levels cannot express.
 
 **A truncated fact stream fails.** The two scripts run as a pipeline
 (`artifact-facts.sh dist "$v" | check-artifact-conformance.sh`); a pipeline's exit status is its LAST
@@ -2611,7 +2694,11 @@ a name outside `[a-z0-9-]` (it becomes a path in a preinstall's `rm -rf`), a nam
 (`var`, `bin`, `sbin`, `share`, `mavergreen`, `system-replace`, `base`), an identifier outside
 `dev.mavergreen.*`, and `dev.mavergreen.base`, which is the helper's component. The helper refuses the
 reserved names too, so a hand-made manifest cannot reach them. Many short names may
-share a repo (`golang-126` ships `go126` and `go126-cross`). `check` also refuses a row without a
+share a repo (`clang-22` ships `clang22` and `libcxx22`). `check` also refuses a name ending `-cross`
+("a product is never named *-cross; one toolchain targets every arch"), except one listed in
+`scripts/retiring-cross-names`, the registered pairs awaiting their family's merge. That list only
+shrinks: a family's merge removes its line there and in `scripts/product-names` together, and it is
+empty when zig merges. `check` also refuses a row without a
 repo, and, in a line repo (`<product>-<digits>`), an identifier other than
 `dev.mavergreen.<product>.<short name>`. Every lookup — `identifier`, `repo`, `updater-bundle-id`,
 `agent-label`, `updater-app`, `feed`, and `shorts <repo>` — refuses a reserved or malformed name even
@@ -2627,7 +2714,7 @@ is that every consumer reaches the keychain's verdict: a consumer that can read 
 its verdict, and the bundle serves those that can't.
 **Adding a product means adding its line there and pushing shipyard**:
 `render-manifest.sh` reads the registry beside it and refuses an unregistered name, so the product
-cannot package until it builds with a shipyard release that carries its line. A variant packaged separately is a product of its own (`go126-cross`).
+cannot package until it builds with a shipyard release that carries its line. Anything packaged separately is a product of its own (`libcxx22`).
 
 ### The manifest (`<product>/mavergreen.plist`)
 
@@ -2694,6 +2781,8 @@ pass Installer's target volume rather than assuming `/`; with any other root it 
 | `check` | dangling farm links, links into a directory with no manifest, a manifest whose `product` is not its directory, missing links, system-replace drift — each on stderr, non-zero on any. scripts/assert-installed-shipyard.sh runs it |
 | `uninstall <product>` | below |
 | `system-replace <product>` / `system-restore <product>` | below |
+| `slim status\|on\|off` | shows or sets whether installed products are thinned to this Mac's arch (default on for an x86_64 Mac, off on Apple Silicon); `on` slims every installed product now; `off` restores nothing and names the products to reinstall. A Mac only |
+| `slim apply <product>` | thins that product's `slim-host` files now (see "The toolchain: one product, default target 10.9 x86_64"); every postinstall calls it |
 | `version` | the helper's version |
 
 **`uninstall`** first refuses, exit 1 and nothing removed, while another installed product's tree (a directory under the prefix holding a `mavergreen.plist`) holds a symlink that resolves into this product's tree, relative or absolute and even if its target is missing; it prints why, then one `sudo mavergreen uninstall <dependent>` line per dependent product. Links inside the product's own tree never count. Then it runs the tree's `libexec/mavergreen/pre-uninstall` hook, if there is one, by its
@@ -2779,8 +2868,10 @@ scripts:
   symlink, or under a parent that resolves off the volume) is left alone. With no readable manifest,
   no bundle is removed. A bundle or tree it cannot remove is reported, never failing the install:
   files the new version dropped may linger.
-- **postinstall**: `mavergreen link <product>`, failing the install if it fails; then the updater's
-  agent load (`--updater-app`, whose place and label come from the registry); then the `--postinstall-hook`.
+- **postinstall**: `mavergreen link <product>`, failing the install if it fails; then, on the boot
+  volume only, `mavergreen slim apply <product>`, whose failure prints `<product>: could not slim; the
+  universal tree stays` and never fails the install; then the updater's agent load (`--updater-app`,
+  whose place and label come from the registry); then the `--postinstall-hook`.
 
 `--requires` replaces a hand-written "is product X installed?" or "is it new enough?" check in a
 preinstall hook: 1password once checked for Porthole and Container Tools, signal-desktop only for
@@ -2790,7 +2881,9 @@ different, registered product (`scripts/product-names`); an unregistered or self
 compared by `scripts/lib/vercmp.sh`, the family's one comparator, which the preinstall carries
 inline; a minimum it cannot order (empty, `1.0-rc1`, `abc`) fails staging (exit 2). It does no
 old-layout detection, and is stage_product-only: it never reaches `render-manifest.sh` or the
-manifest.
+manifest. `--requires-on-host ARCH:SHORT[>=VERSION]` is the same requirement for one host arch, and
+`--slim-host GLOB` names the host payload slim may thin; both are in "The toolchain: one product,
+default target 10.9 x86_64".
 
 Require what you use, at the version that has it. The 10.9 SDK is installed once, by
 `sudo longboat sdk install 10.9`, as the product `sdk109`, and each toolchain's `SDKs` links to
@@ -2877,7 +2970,7 @@ is the fact), ten checks, each excusable only by a scoped, reasoned deviation:
 | `base` | a pkg carrying a manifest lists `dev.mavergreen.base` as its first component | the pkg filename |
 | `updater` | a Sparkle updater (a top-level bundle with `SUFeedURL`) is `Library/Application Support/Mavergreen/<short>-updater.app` with bundle id `<pkg identifier>.updater`; a pkg with an updater installs the LaunchAgent `<pkg identifier>-updatecheck`; every launchd Label containing `updatecheck` is that one | the pkg filename |
 | `feed` | an updater's `SUFeedURL` is `https://github.com/Mavergreen/<repo>/releases/latest/download/<short>.xml`; the dist carries `<short>.xml` for every updater its pkgs install (a build that does not sign runs `stand-in-feeds.sh`, which stages an unsigned stand-in); a manifest's `appcast` is that feed when the pkg ships an updater and empty when not; a feed describing a product's pkg is named `<short>.xml` | the pkg filename, or the feed's filename |
-| `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus `-cross`, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
+| `line` | a product of a line repo (one whose registered repo ends in `-<number>`) declares a line; a lined product's line, minus a `-cross` suffix while `go126-cross` and its kin remain, is its repo's suffix (`golang-126`) and its version's first one or two components without the dot (`1.26.8` → `126`, `22.1.1` → `22`) | the pkg filename |
 | `repository` | with `$GITHUB_REPOSITORY` set, every product a release ships is registered to that repo (by name; the owner is not compared) | the pkg filename |
 
 Paths are relative to `/`, after each component's `install-location`; a manifest is read only from a
@@ -3117,13 +3210,13 @@ pointing back into the row below — so this table, not the script, is where a c
 | **22.** Every tracked script declares its host in its header — `# platform: host-agnostic` or `# platform: macOS-only -- <why>` — and a host-agnostic one runs no macOS-only tool at command position (`check-host-tools.sh`); **opt-in**, in a repo where at least one script declares | Nothing stopped a script that a Linux job depends on from growing an `otool` or `sw_vers`: it passed every gate and broke on the runner. `check-shell-portability.sh` cannot see it — flawless POSIX sh can still call `lipo`. An undeclared script **fails** rather than defaulting to host-agnostic, because a default makes the gate silently incomplete. Opt-in, like 15, so `@v1` reaching fourteen consumers reddens none of them |
 | **23.** A repo that builds a `.pkg` (the same test as 21) calls `stage_product.sh`, on a non-comment line of a tracked, non-test `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt`, at command position — line start, after `;` `&` `\|` or a backtick, after `$(`, `then`, `do` or `exec`, after a YAML `run:` or a CMake `COMMAND`, any of these optionally followed by `if`, `elif`, `while`, `until` or `!` — spelled `sh` or `/bin/sh` (with any option flags, `sh -e`) and a word ending `stage_product.sh`, or a word ending `/stage_product.sh` (`"$SHIPYARD_SCRIPTS"/stage_product.sh`, `./stage_product.sh`); or declares `- product-layout: <reason>`. A line whose pkg is built by a pinned build-chain library's own script (golang-127 runs golang-port's `build/package.sh`) declares `- staged-by:<library>: <reason>` instead, which the gate honours only while `components/<library>/version` is tracked and non-empty, and which excuses check 23 alone, never 24; revisit when a second library-staged line appears whose library is not a family repo with a release tarball — then teach check 23 to read the pinned library's tarball instead | Conformance enforces the install layout, and `stage_product.sh` is what produces it: the manifest, and the unlink–remove–link install scripts that make an upgrade replace the tree while keeping the selection. A hand-rolled pkg fails `manifest` only at package time; this finds it on the PR. A mention is not a call — `echo "sh stage_product.sh"` does not count, and neither does an assignment (`SP="$S/stage_product.sh"`: a word holding `=`). **Known false negatives:** a bare `stage_product.sh` found on `PATH`; `bash` or `.` instead of `sh`; a call behind a prefix command (`sudo`, `env`, `time`, `command`) or opening a `{ … }` group or a `( … )` subshell; a path with a space or `=` in it (`"$(dirname "$0")"/stage_product.sh`); and a call followed directly by `;` or `)` (`then sh "$S/stage_product.sh"; fi`, `$(sh …/stage_product.sh)`) — give the call its own line, or at least a space before the separator |
 | **24.** A repo that builds a `.pkg` (the same test as 21), where `$GITHUB_REPOSITORY` is set, is the repo of at least one short name in shipyard's `scripts/product-names` (by name, not owner); a `product-layout` deviation exempts it | Every feed URL and updater identity is derived from the registry's repo, so a repo the registry does not name publishes feeds no installed updater polls. The short names themselves are known only at package time, where conformance's `repository` check holds each to its registered repo; this finds an unregistered or renamed repo on the PR |
-| **25.** A tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt` or `*.bats` file, `tests/` included, whose content — outside a whole comment line or a trailing ` #…` remark — contains `arch -x86_64`, `arch -arch x86_64`, `/usr/bin/arch -x86_64` or `softwareupdate --install-rosetta`, carries a matching `rosetta:<path>` deviation | The family is retiring Rosetta (see "Rosetta", above) — an undeclared use is invisible until someone has to sweep every repo by hand the day macOS 28 ships. There is no exemption for `tests/`: a test that still runs the shipped x86_64 product under Rosetta runs translated, so it needs a declaration until it moves to the acceptance job. This is a text match, not a command-position check like 23's: a quoted MENTION on an otherwise-unrelated line (`echo "… arch -x86_64 …"`) still counts, because excluding quotes reliably is not practical in BWK awk/sed. **Known limits:** `arch -e VAR=… -x86_64` (something between `arch` and its flag) and `arch "-x86_64"` (the flag itself quoted) are both invisible, since the match needs the literal flag text directly after `arch`; so is a build that runs an x86_64 binary it built earlier some other way (a cross build whose `make` just executes x86_64 host tools it compiled). Both still need a declaration and rely on it alone, not on being caught |
+| **25.** A tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt` or `*.bats` file, `tests/` included, whose content — outside a whole comment line or a trailing ` #…` remark — contains `arch -x86_64`, `arch -arch x86_64`, `/usr/bin/arch -x86_64` or `softwareupdate --install-rosetta`, carries a matching `rosetta:<path>` deviation | The family is retiring Rosetta (see "Rosetta", above) — an undeclared use is invisible until someone has to sweep every repo by hand the day macOS 28 ships. There is no exemption for `tests/`: a test that still runs the shipped x86_64 product under Rosetta runs translated, so it needs a declaration until it moves to the acceptance job. This is a text match, not a command-position check like 23's: a quoted MENTION on an otherwise-unrelated line (`echo "… arch -x86_64 …"`) still counts, because excluding quotes reliably is not practical in BWK awk/sed. **Known limits:** `arch -e VAR=… -x86_64` (something between `arch` and its flag) and `arch "-x86_64"` (the flag itself quoted) are both invisible, since the match needs the literal flag text directly after `arch`; so is a build that runs an x86_64 binary it built earlier some other way (an Apple Silicon build whose `make` just executes x86_64 host tools it compiled). Both still need a declaration and rely on it alone, not on being caught |
 | **26.** No tracked Renovate config other than `.github/renovate.json` (`renovate.json`, `renovate.json5`, `.renovaterc`, `.renovaterc.json`, `.renovaterc.json5`, `.github/renovate.json5`, `.gitlab/renovate.json`, `.gitlab/renovate.json5`), alone **or** beside it; a path is excused by `- renovate-path:<path>: <reason>` | Checks 4, 4b and 13 read only `.github/renovate.json`, and shipyard's configure step scaffolds it when absent, so a config kept elsewhere exempts its repo from them without anyone deciding it should, and beside the scaffold is dead config (Renovate takes one by precedence). Fix: `git mv <path> .github/renovate.json` |
 | **27.** `.gitignore` has a line ignoring `.superpowers/` and one ignoring `.idea/` (`.superpowers/`, `/.superpowers/`, `.superpowers` or `/.superpowers`, likewise for `.idea`), no file is tracked under `.superpowers/`, `docs/superpowers/` or `.idea/`, and no backlog is tracked anywhere (a file named `BACKLOG`, `QUEUE` or `TODO`, any case, bare or `.md`, `.markdown` or `.txt`), and no tracked line cites a queue entry by number (`QUEUE #n`, `BACKLOG #n`, also when a line break splits the name from the number) | Superpowers specs, plans, ledgers and backlogs are ephemeral: a plan describes a transition, not a system, and once the transition lands the plan is wrong about the system it produced. Committed, it reads as documentation and misleads the next reader (and `docs/superpowers/` is not a place the family uses at all). An IDE's per-user state is the user's, not the project's: committed, it churns on every checkout and fights each contributor's own settings. Both belong in the working tree and out of history, and an ignore line alone is not enough, since it does nothing for a file already tracked, so the check asks git as well. A backlog is the same kind of file under another name: two repos kept theirs as a tracked `BACKLOG.md`, and a code comment cited an entry by number. A citation resolves only in the checkout that has the queue, so a reader elsewhere gets a number and no reason |
 | **28.** Nothing a build or test fetches is taken as whatever is newest: no tagless `gh release download`, no `gh release view` of another repo without a tag, no fetch command (`curl`, `wget`, `shipyard_curl`) or `gh api` on a `/releases/latest` URL, no `@latest` install (`npm install`, `npx`, `go install`, `pipx`, `cargo install`, `uvx`), no `:latest` image (`FROM`, `image:`, `docker pull/run`) — in `*.sh`, `*.yml`, `*.yaml`, `*.cmake`, `CMakeLists.txt`, `*.bats` and Dockerfiles, tests included, comments excepted — unless INGREDIENTS.md's `## Conformance deviations` declares `- unpinned:<path>: <why it must be the newest, and when to reconsider>` | A pin in a file a Renovate manager tracks makes every change a commit with CI attached; "latest" lets someone else's release change this repo's results with no commit to blame. It drifted exactly that way: python-315's CI installed longboat's latest, shipyard's on-target job python-315's latest, and `sign_and_appcast.sh` signed every family release with the latest `ed25519` pkg, unverified (all 2026-10-18). A feed URL, an install hint or an end-user `install.sh` names a newest-release URL without fetching it at build time, so only a fetch command's line counts |
 | **29.** A repo that builds a `.pkg` (the same test as 21) has a job in `release.yml` whose steps use `Mavergreen/mavericks-vm@`, or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) whose steps do (comments do not count; an uncalled job in another workflow file and a remote reusable workflow do not count), and the job calling `publish-release.yml` (else the job named `publish`) lists one such job in `needs:`, as a list or a scalar; or `INGREDIENTS.md` declares a bare `- on-target: <reason>`. A scoped `- on-target:<part>: <reason>` declares a coverage gap and exempts nothing; a glob for `<part>` is refused | A pkg nobody installed on 10.9 is the one failure every modern-host gate misses by construction: the runner that would catch a missing symbol, a postinstall that assumes a newer tool or a stale install is never 10.9. Two failures: no such job, and a publish that does not need it, since a job publish does not wait for is a report, not a gate. See "Acceptance on real 10.9", above |
 | **35.** No tracked `*.sh`, `*.yml`, `*.yaml`, `*.cmake` or `CMakeLists.txt` outside `tests/` and `test/` calls the system `pkgbuild` or `productbuild` on a non-comment line, unless the path is grandfathered or INGREDIENTS.md declares `- packager:<path>: <reason, exit>` | The pkg is built by stevedore, which runs on any host; a direct call keeps the build on a scarce macOS runner. This steers repos off the system packager one path at a time, and `@v1` moving reddens none of them while their lines stand |
-| **36.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` runner (as a string, a list, or `${{ matrix.X }}` read through the job's matrix) is grandfathered or declares `- macos-runner:<workflow file>:<job>: <reason, exit>` (`ci.yml:build`; shipyard has none, since it runs no macOS job) | macOS runners are scarce, and a job lands on one by default. The deviation names the reason it needs macOS and what would let it leave; the key is `<workflow file>:<job>`, so a new `build` job in another workflow is caught. Needs PyYAML, which check 8 already requires |
+| **36.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` runner (as a string, a list, or `${{ matrix.X }}` read through the job's matrix) is grandfathered or declares `- macos-runner:<workflow file>:<job>: <reason, exit>` (`ci.yml:build`; shipyard has none, since it runs no macOS job) | macOS runners are scarce, and a job lands on one by default, toolchain builds included. The deviation names the reason it needs macOS and what would let it leave; the key is `<workflow file>:<job>`, so a new `build` job in another workflow is caught. Needs PyYAML, which check 8 already requires |
 | **37.** `release.yml` has a job named `modern-smoke`, whose `runs-on` names a `macos-*` runner and which the publish job (the one calling `publish-release.yml`, else `publish`) lists in `needs:`, exactly when INGREDIENTS.md declares an `- arm64:<glob>: <reason>` deviation; a declaration with no such job and a job with no declaration fail with different messages. An `- arm64-pure-go:<glob>: <reason>` declaration needs no job, and a job beside only such declarations fails with a third; conformance proves each slice one covers instead ("Pure-Go arm64 slices are proven on Linux"). At package time, `check-artifact-conformance.sh` fails every pkg Mach-O with an `arm64` or `arm64e` slice whose install path no `arm64:<glob>` or `arm64-pure-go:<glob>` matches, except inside a Sparkle updater bundle (the registry's derived updater app, where the product has one). A bare `- arm64: <reason>` or `- arm64-pure-go: <reason>`, or a glob of only `*`, `?` and `/`, is refused by `deviations.sh`. A repo grandfathered as `modern-smoke` skips the job check, and conformance reports its undeclared slices as `::warning::` instead | An arm64 slice is a deviation ("x86_64 by default; arm64 only with a reason", above), and one shipped untested runs first on a developer's Apple Silicon Mac. The job is that slice's on-target acceptance, as check 29's is the x86_64 slice's on 10.9. The modern-smoke job also needs its own `macos-runner` declaration (check 36), a Linux job in its `needs:` (check 38) and the publish job's `if:` (check 39) |
 | **38.** Every job in `.github/workflows/*.yml` whose `runs-on` names a `macos-*` or `xcode-*` runner (read as check 36 reads it), or that calls a local reusable workflow (`./.github/workflows/<file>.yml`) holding one, has in its `needs:`, directly or through other jobs' `needs:`, a job on an `ubuntu-*` runner (every matrix entry `ubuntu-*`), a call to a shipyard reusable workflow (`Mavergreen/shipyard/.github/workflows/…`), or a call to a local reusable workflow whose every job runs on `ubuntu-*`. A file whose only trigger is `workflow_call` is skipped: its caller is held to the rule. A self-hosted runner or a `runs-on` expression is not Linux. Grandfathered per job as `linux-gate <repo> <workflow file>:<job>`; no deviation excuses it | A macOS job is the family's scarcest minute, and one that starts before anything cheap has run spends it failing on what Linux would have caught: macfuse's release dispatch spent 3 macOS minutes failing only on a release-note sentence's word count, and recaulk's runs failed in checks that need no Mac. See "Linux gate first", above |
 | **39.** Where `release.yml` has a `modern-smoke` job, its `if:` carries, as top-level `&&` terms, every term of the publish job's `if:` (the job calling `publish-release.yml`, else `publish`), status functions (`always()`, `success()`, `failure()`, `cancelled()`) aside and `${{ }}` and outer parentheses ignored; a publish job with no `if:` fails with its own message. Grandfathered per repo as `smoke-gate <repo> release.yml:modern-smoke`, separately from check 37's `modern-smoke` line | modern-smoke proves the arm64 slice of what will SHIP; a push, a PR or a branch run ships nothing, so a smoke there is a macOS runner spent on evidence nobody uses. An ingredient-PR merge used to spend two: the push run and repackage's dispatch. Sharing the publish job's own term, an output of the job that decides, keeps one decision instead of two copies that drift. See "Smoke only in a publishing run", above |
@@ -3339,9 +3432,7 @@ asserting before the first `mkdir` does — but it is a trade, not a freebie. A 
 declares `build/` "for one file" has handed every later change a repo-wide exemption.
 
 **20. A repo that commits `CMakePresets.json` must gitignore `CMakeUserPresets.json`.** That file
-is the per-developer build-location override, and it is the *only* thing that can override the
-shared default: a preset's own `environment` block is applied after the real process environment,
-so exporting `MAVERICKS_BUILD_ROOT` cannot redirect a `--preset` build. Left unignored it sits in
+is the per-developer build-location override, beside an exported `MAVERICKS_BUILD_ROOT`. Left unignored it sits in
 `git status` and gets committed by accident, pinning everyone to one person's paths. A repo with
 no committed presets file has no override channel and is not asked about one.
 
