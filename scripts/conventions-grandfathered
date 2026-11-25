@@ -248,8 +248,5 @@ unchecked-subshell swift package.sh
 unchecked-subshell swift tests/build-native-host-test.sh
 unchecked-subshell swift tests/pin-source-tarballs-test.sh
 unchecked-subshell swift tests/self-host-lib-test.sh
-unchecked-subshell wezterm tests/app_stage.sh
-unchecked-subshell wezterm tests/pins.sh
-unchecked-subshell wezterm tests/release_check.sh
 unchecked-subshell zig build/build-native.sh
 unchecked-subshell zig tests/lib/staged-zig.sh

@@ -273,7 +273,7 @@ MAX_CXXABI=2
 MAX_STANDALONE=33
 MAX_LINUX_GATE=22
 MAX_SMOKE_GATE=7
-MAX_UNCHECKED_SUBSHELL=151
+MAX_UNCHECKED_SUBSHELL=148
 [ -f "$GF" ] || { echo "FAIL: scripts/conventions-grandfathered is missing"; exit 1; }
 LC_ALL=C sort -c "$GF" 2>/dev/null || { echo "FAIL: scripts/conventions-grandfathered is not sorted"; exit 1; }
 [ -z "$(LC_ALL=C sort "$GF" | uniq -d)" ] || { echo "FAIL: scripts/conventions-grandfathered has duplicate lines"; exit 1; }
