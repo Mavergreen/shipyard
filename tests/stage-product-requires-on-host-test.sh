@@ -78,6 +78,9 @@ test_refusals() {
   _r 'cannot require itself' --requires-on-host x86_64:swift-toolchain
   _r 'not in shipyard' --requires-on-host x86_64:nosuch
   _r 'both --requires and --requires-on-host' --requires sdk109 --requires-on-host x86_64:sdk109
+  _r 'both --requires and --requires-on-host' --requires sdk109 --requires-on-host 'x86_64:sdk109>=1'
+  _r 'both --requires and --requires-on-host' --requires 'sdk109>=2' --requires-on-host 'x86_64:sdk109>=1'
+  _r 'both --requires and --requires-on-host' --requires 'sdk109>=2' --requires-on-host x86_64:sdk109
   _r 'not an orderable version' --requires-on-host 'x86_64:sdk109>=x.y'
 }
 test_x86_64_host_missing_runtime_refuses; test_arm64_host_skips_it; test_non_root_volume_enforces_on_arm64
