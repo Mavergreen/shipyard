@@ -127,6 +127,20 @@ check_cache_var "$bd1/CMakeCache.txt" CMAKE_OSX_SYSROOT "$sdk" "mavericks-x86_64
 if grep -q '^MAVERICKS_EXPECTED_MODE' "$bd1/CMakeCache.txt" 2>/dev/null; then
   say "mavericks-x86_64 still sets MAVERICKS_EXPECTED_MODE"
 fi
+check_cache_var "$bd1/CMakeCache.txt" MAVERICKS_PRESET_BUILD_ROOT "$broot" "mavericks-x86_64"
+
+# spec: MavericksToolchain.cmake -- a preset whose MAVERICKS_BUILD_ROOT is empty would build at /, so
+#       the toolchain file stops it; a configure that names its own -B never sets the variable.
+fixture "$work4/emptyroot" "{ \"name\": \"e\", \"inherits\": \"mavericks-x86_64\", \"binaryDir\": \"$work4/emptyroot-build\", \"environment\": { \"MAVERICKS_BUILD_ROOT\": \"\" } }"
+if oute="$(cd "$work4/emptyroot" && cmake --preset e 2>&1)"; then
+  say "a preset with an empty MAVERICKS_BUILD_ROOT configures: $oute"
+fi
+case "$(printf '%s' "$oute" | tr '\n' ' ' | tr -s ' ')" in
+  *"MAVERICKS_BUILD_ROOT is unset: set it, or configure through shipyard-cmake"*) ;;
+  *) say "a preset with an empty MAVERICKS_BUILD_ROOT is not refused by name: $oute" ;;
+esac
+outb="$(cmake -S "$work4/emptyroot" -B "$work4/plain-build" -DCMAKE_TOOLCHAIN_FILE="$installed/MavericksToolchain.cmake" 2>&1)" \
+  || say "a configure with -B and the toolchain file, and no preset, does not configure: $outb"
 
 # spec: scripts/shipyard-launcher.sh -- with MAVERICKS_BUILD_ROOT unset, shipyard-cmake supplies
 #       $TMPDIR/mm-build.
@@ -142,6 +156,10 @@ for old in mavericks-native mavericks-cross; do
   if outo="$(cd "$work4/old-$old" && cmake --preset old 2>&1)"; then
     say "a consumer inheriting $old still configures: $outo"
   fi
+  case "$outo" in
+    *"$old"*) ;;
+    *) say "a consumer inheriting $old fails without naming $old: $outo" ;;
+  esac
 done
 
 # spec: MavericksMode.cmake -- MAVERICKS_EXPECTED_MODE, whatever its value, stops the configure and
@@ -153,8 +171,8 @@ for exp in native cross modern; do
     say "MAVERICKS_EXPECTED_MODE $exp is accepted"
   fi
   case "$(printf '%s' "$outg" | tr '\n' ' ' | tr -s ' ')" in
-    *"MAVERICKS_EXPECTED_MODE is gone"*"mavericks-x86_64 or macos-arm64"*) ;;
-    *) say "MAVERICKS_EXPECTED_MODE $exp does not say it is gone and name the presets: $outg" ;;
+    *"MAVERICKS_EXPECTED_MODE is gone"*"mavericks-x86_64 or macos-arm64"*"reconfigure with --fresh)"*) ;;
+    *) say "MAVERICKS_EXPECTED_MODE $exp does not say it is gone, name the presets and suggest --fresh: $outg" ;;
   esac
 done
 outn="$(cmake -P "$work4/guard.cmake" 2>&1)" || say "MavericksMode.cmake fails with no MAVERICKS_EXPECTED_MODE: $outn"
