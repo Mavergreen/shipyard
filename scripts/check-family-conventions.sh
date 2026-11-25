@@ -683,11 +683,9 @@ if [ -n "$publishes_pkg" ] && ! ci_mentions 'check-artifact-conformance\.sh' && 
 fi
 
 # spec: SKILL.md "Family conventions" check 20 -- CMakeUserPresets.json is the per-developer
-#       build-location override. A preset's own `environment` block is applied AFTER the real
-#       process environment, so exporting MAVERICKS_BUILD_ROOT cannot redirect a --preset
-#       build and this file is the only thing that can. It must be gitignored, or it pollutes
-#       git status and gets committed by accident. Keyed on a COMMITTED CMakePresets.json: a
-#       repo with no presets has no override channel to protect.
+#       preset override. It must be gitignored, or it pollutes git status and gets committed by
+#       accident. Keyed on a COMMITTED CMakePresets.json: a repo with no presets has no override
+#       channel to protect.
 if [ -f CMakePresets.json ] && git ls-files --error-unmatch CMakePresets.json >/dev/null 2>&1; then
   git check-ignore -q CMakeUserPresets.json 2>/dev/null \
     || fail "CMakeUserPresets.json is not gitignored, and it is the per-developer build-location override" \

@@ -149,6 +149,17 @@ expect "with TMPDIR empty the launcher gives the tool /tmp" "TMPDIR=/tmp" \
   env TMPDIR= SHIPYARD_LAUNCHER_HOST=linux PATH="$tp" "$root/bin/shipyard-cmake"
 expect "a caller's TMPDIR reaches the tool unchanged" "TMPDIR=$w/mine" \
   env TMPDIR="$w/mine" SHIPYARD_LAUNCHER_HOST=linux PATH="$tp" "$root/bin/shipyard-cmake"
+# spec: tests/mavericks-presets-test.sh -- binaryDir reads MAVERICKS_BUILD_ROOT, and presets have no
+#       default.
+mkdir -p "$w/broot/bin"
+printf '#!/bin/sh\necho "MAVERICKS_BUILD_ROOT=${MAVERICKS_BUILD_ROOT-<unset>}"\n' > "$w/broot/bin/cmake"; chmod +x "$w/broot/bin/cmake"
+bp="$w/broot/bin:/usr/bin:/bin"
+expect "with MAVERICKS_BUILD_ROOT unset the launcher gives the tool TMPDIR/mm-build" "MAVERICKS_BUILD_ROOT=$w/mine/mm-build" \
+  env -u MAVERICKS_BUILD_ROOT TMPDIR="$w/mine/" SHIPYARD_LAUNCHER_HOST=linux PATH="$bp" "$root/bin/shipyard-cmake"
+expect "with MAVERICKS_BUILD_ROOT empty and TMPDIR unset the launcher gives the tool /tmp/mm-build" "MAVERICKS_BUILD_ROOT=/tmp/mm-build" \
+  env -u TMPDIR MAVERICKS_BUILD_ROOT= SHIPYARD_LAUNCHER_HOST=linux PATH="$bp" "$root/bin/shipyard-cmake"
+expect "a caller's MAVERICKS_BUILD_ROOT reaches the tool unchanged" "MAVERICKS_BUILD_ROOT=$w/elsewhere" \
+  env MAVERICKS_BUILD_ROOT="$w/elsewhere" SHIPYARD_LAUNCHER_HOST=linux PATH="$bp" "$root/bin/shipyard-cmake"
 mv "$w/cmake-aside" "$root/cmake"
 cp "$root/cmake/bin/ctest" "$w/ctest.sh"
 printf '\317\372\355\376' > "$root/cmake/bin/ctest"; chmod +x "$root/cmake/bin/ctest"

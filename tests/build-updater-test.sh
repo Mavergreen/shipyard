@@ -3,11 +3,10 @@
 #   usage: build-updater-test.sh
 #          scripts/build_updater.sh builds a registered product's updater from its inputs alone: a .app
 #          with Contents/{Info.plist,MacOS/SHORT-updater,Frameworks/Sparkle.framework,Resources}, the
-#          asked-for Mach-O arches (x86_64 at minos 10.9; also arm64 at minos 11.0 off 10.9, where
-#          the toolchain allows a cross build), an Info.plist carrying the display name, version,
-#          public key and the registry's bundle id and feed, and an executable holding the confirm
-#          strings. The strings carry ", \, %, &, < and >, which must reach both intact. Fetches
-#          clang22, the SDKs and Sparkle over the network.
+#          asked-for Mach-O arches (x86_64 at minos 10.9; also arm64 at minos 11.0 off 10.9), an
+#          Info.plist carrying the display name, version, public key and the registry's bundle id and
+#          feed, and an executable holding the confirm strings. The strings carry ", \, %, &, < and >,
+#          which must reach both intact. Fetches clang22, the SDKs and Sparkle over the network.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 case "$(uname -s):$(uname -m)" in
@@ -40,7 +39,7 @@ rc=0; build --arch x86_64 --arch x86_64 --generic-icon --out-dir "$T/u" > /dev/n
 [ "$rc" -eq 2 ] || fail "--arch x86_64 twice: exit $rc, want 2"
 
 archs="x86_64"; want='x86_64 10.9 '
-[ "$(sh "$ROOT/scripts/mavericks_mode.sh")" = native ] || { archs="x86_64 arm64"; want='arm64 11.0 x86_64 10.9 '; }
+[ "$(sh "$ROOT/scripts/mavericks_mode.sh")" = mavericks ] || { archs="x86_64 arm64"; want='arm64 11.0 x86_64 10.9 '; }
 set --
 for a in $archs; do set -- "$@" --arch "$a"; done
 out="$(build "$@" --generic-icon --out-dir "$T/out" 2> "$T/build.log")" || { cat "$T/build.log"; fail "build_updater.sh failed for$archs"; }
