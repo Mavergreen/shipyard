@@ -1272,6 +1272,22 @@ alone "manifest: a generated entry with an empty segment fails manifest" "manife
 $LAYOUT
 manifest-generated p.pkg Applications//X.app"
 
+# spec: scripts/check-artifact-conformance.sh -- a requires-on-host entry names x86_64 or arm64 and a registered product, never the manifest's own.
+ok "requires-on-host: a registered product on x86_64" "$GOOD
+manifest-requires-on-host x.pkg x86_64 swift-runtime swift"
+ok "requires-on-host: a registered product on arm64, with a floor" "$GOOD
+manifest-requires-on-host x.pkg arm64 swift-runtime>=5 swift"
+no "requires-on-host: an arch that is neither" "requires-on-host: x.pkg requires swift-runtime on ppc, which is not x86_64 or arm64" "$GOOD
+manifest-requires-on-host x.pkg ppc swift-runtime swift"
+no "requires-on-host: a product the registry lacks" "requires-on-host: x.pkg requires nosuch on x86_64, which is not in shipyard's scripts/product-names" "$GOOD
+manifest-requires-on-host x.pkg x86_64 nosuch none"
+no "requires-on-host: the manifest's own product" "requires-on-host: x.pkg requires x on x86_64, which is its own product" "$GOOD
+manifest x.pkg x dev.mavergreen.x x
+manifest-requires-on-host x.pkg x86_64 x x"
+ok "requires-on-host: a deviation excuses it" "$GOOD
+deviation requires-on-host:x.pkg upstream's own pkg names it
+manifest-requires-on-host x.pkg x86_64 nosuch none"
+
 alone "manifest: an outside entry ending in / fails manifest" "manifest" "$REL
 $LAYOUT
 manifest-outside p.pkg Applications/X.app/"
@@ -1444,10 +1460,11 @@ export STEVEDORE="$SD"
 <string>Library/LaunchAgents/dev.mavergreen.x-updatecheck.plist</string>
 </array>
 <key>generated</key><array><string>Applications/Linux X.app</string></array>
+<key>requires-on-host</key><array><string>x86_64:w&gt;=1</string><string>arm64:w</string></array>
 <key>appcast</key><string>https://github.com/Mavergreen/x/releases/latest/download/x.xml</string>
 </dict></plist>
 PLIST
-  printf 'x dev.mavergreen.x x\n' > "$_pk/product-names"
+  printf 'x dev.mavergreen.x x\nw dev.mavergreen.w wrepo\n' > "$_pk/product-names"
   "$SD" component --root "$_st" --identifier dev.mavergreen.x --version 1.0.0-mavericks.1 --install-location / \
     --mtime 1700000000 --out "$_pk/dist/x-1.0.0-mavericks.1.pkg"
   "$SD" component --root "$_st/usr/local/mavergreen/x" --identifier dev.mavergreen.y --version 1.0.0-mavericks.1 \
@@ -1499,7 +1516,9 @@ PLIST
     'sparkle x-1.0.0-mavericks.1.pkg Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
     'derived x dev.mavergreen.x.updater dev.mavergreen.x-updatecheck Library/Application%20Support/Mavergreen/x-updater.app https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
     'manifest-line x-1.0.0-mavericks.1.pkg none' \
-    'manifest-appcast x-1.0.0-mavericks.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml'
+    'manifest-appcast x-1.0.0-mavericks.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
+    'manifest-requires-on-host x-1.0.0-mavericks.1.pkg x86_64 w>=1 wrepo' \
+    'manifest-requires-on-host x-1.0.0-mavericks.1.pkg arm64 w wrepo'
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
