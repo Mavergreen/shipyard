@@ -11,7 +11,7 @@
 #            system-replace <product>     swap the manifest's :replaces system paths for links into the tree (10.9 only)
 #            system-restore <product>     put those system paths back
 #            slim status|on|off           show or set thinning of installed products to this Mac's arches
-#            slim apply <product>         thin one product now (every product's postinstall calls this)
+#            slim apply <product>         thin one product's slim-host files now (every product's postinstall calls this)
 #            version                      print the mavergreen helper's stamped version
 # spec: tests/mavergreen-helper-test.sh
 set -eu
@@ -480,9 +480,9 @@ slim_setting() {
 slim_hex() {
   od -An -tx1 -j "$2" -N "$3" "$1" 2>/dev/null | tr -d ' \n'
 }
-slim_kept_by_manifest() {
-  [ -n "$_keep" ] || return 1
-  printf '%s\n' "$_keep" | { while IFS= read -r _g; do
+slim_is_host_payload() {
+  [ -n "$_host" ] || return 1
+  printf '%s\n' "$_host" | { while IFS= read -r _g; do
     case "$1" in $_g) exit 0 ;; esac
   done; exit 1; }
 }
@@ -549,7 +549,7 @@ slim_file() {
   echo thin
 }
 slim_tree() {
-  _keep="$(mf_array "$1" slim-keep)"
+  _host="$(mf_array "$1" slim-host)"
   _lst="$(mktemp "${TMPDIR:-/tmp}/mavergreen-slim.XXXXXX")"
   _signed="$(find "$MG/$1" -type f -name CodeResources -path '*/_CodeSignature/CodeResources' 2>/dev/null \
     | while IFS= read -r _cr; do
@@ -560,7 +560,7 @@ slim_tree() {
   _cnt=0
   while IFS= read -r _f; do
     _rel="${_f#"$MG/$1/"}"
-    if slim_kept_by_manifest "$_rel"; then continue; fi
+    if ! slim_is_host_payload "$_rel"; then continue; fi
     if slim_in_signed_bundle "$_rel"; then continue; fi
     _r="$(slim_file "$_f" "$2")" || { rm -f "$_lst"; exit 1; }
     if [ -n "$_r" ]; then _cnt=$((_cnt + 1)); fi
@@ -572,6 +572,7 @@ slim_apply() {
   need_product "$1"
   _eff="$(slim_setting "$2")"; _eff="${_eff%%	*}"
   if [ "$_eff" = off ]; then rm -f "$(slim_dir)/slimmed/$1"; return 0; fi
+  if [ -z "$(mf_array "$1" slim-host)" ]; then echo "mavergreen: $1 declares no host payload; nothing to slim"; return 0; fi
   _mk="$(slim_dir)/slimmed/$1"; _had=0
   [ ! -f "$_mk" ] || _had=1
   mkdir -p "$(slim_dir)/slimmed"; printf '%s\n' "$2" > "$_mk"
