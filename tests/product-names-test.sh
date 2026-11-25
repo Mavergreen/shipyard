@@ -145,6 +145,27 @@ MAVERGREEN_PRODUCT_PROVISIONERS="$w/absent" sh "$S" provisioner sdk109 >/dev/nul
 MAVERGREEN_PRODUCT_PROVISIONERS="$w/absent" sh "$S" check >/dev/null 2>&1 \
   && fail "check must fail when the provisioner file is missing"
 
+printf 'foo-cross dev.mavergreen.foo-cross foo\n' > "$w/new-cross"
+err="$(MAVERGREEN_PRODUCT_NAMES="$w/new-cross" MAVERGREEN_PRODUCT_PROVISIONERS="$w/no-prov" sh "$S" check 2>&1 >/dev/null)" \
+  && fail "a new *-cross short name must be refused -- one toolchain targets every arch"
+case "$err" in
+  *"product-names: foo-cross: a product is never named *-cross; one toolchain targets every arch (see the conventions skill, \"The toolchain\")"*) ;;
+  *) fail "the refusal must name the product and the rule: [$err]" ;;
+esac
+printf 'rust-cross dev.mavergreen.rust.rust-cross rust\n' > "$w/listed-cross"
+MAVERGREEN_PRODUCT_NAMES="$w/listed-cross" MAVERGREEN_PRODUCT_PROVISIONERS="$w/no-prov" sh "$S" check \
+  || fail "a *-cross name the retiring list holds stays registered until its family merges"
+printf '# none\n' > "$w/empty-retiring"
+MAVERGREEN_RETIRING_CROSS_NAMES="$w/empty-retiring" MAVERGREEN_PRODUCT_NAMES="$w/listed-cross" MAVERGREEN_PRODUCT_PROVISIONERS="$w/no-prov" sh "$S" check 2>/dev/null \
+  && fail "with the retiring list empty, every *-cross name is refused"
+RET="$here/../scripts/retiring-cross-names"
+[ -f "$RET" ] || fail "scripts/retiring-cross-names must exist"
+stale=0
+for n in $(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$RET"); do
+  sh "$S" identifier "$n" >/dev/null 2>&1 || { echo "FAIL: retiring-cross-names lists $n, which is no longer registered: drop it"; stale=1; }
+done
+[ "$stale" -eq 0 ] || exit 1
+
 missing_registry() {
   err="$(MAVERGREEN_PRODUCT_NAMES="$w/absent" sh "$S" "$@" 2>&1 >/dev/null)" \
     && fail "$1 must fail when the registry is missing, not read it as empty"
