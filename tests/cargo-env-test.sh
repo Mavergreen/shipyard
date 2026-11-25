@@ -71,7 +71,7 @@ want "AR_aarch64_apple_darwin=$w/cl/bin/llvm-ar"
 want "RANLIB_aarch64_apple_darwin=$w/cl/bin/llvm-ranlib"
 want "CFLAGS_aarch64_apple_darwin=--no-default-config --target=arm64-apple-macos11.0 -isysroot $w/sdk"
 want "CXXFLAGS_aarch64_apple_darwin=--no-default-config --target=arm64-apple-macos11.0 -isysroot $w/sdk -nostdinc++ -isystem $w/sdk/usr/include/c++/v1"
-want "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS=-C link-arg=--no-default-config -C link-arg=-fuse-ld=lld -C link-arg=-isysroot -C link-arg=$w/sdk"
+want "CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS=-C link-arg=--no-default-config -C link-arg=--target=arm64-apple-macos11.0 -C link-arg=-fuse-ld=lld -C link-arg=-isysroot -C link-arg=$w/sdk"
 for p in LIPO=llvm-lipo OTOOL=llvm-otool NM=llvm-nm AR=llvm-ar STRIP=llvm-strip INSTALL_NAME_TOOL=llvm-install-name-tool STRINGS=llvm-strings; do
   want "${p%%=*}=$w/cl/bin/${p#*=}"
 done

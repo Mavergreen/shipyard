@@ -78,7 +78,7 @@ line RUSTDOC "$R/bin/rustdoc"
 if [ "$ARCH" = arm64 ]; then
   line CARGO_BUILD_TARGET aarch64-apple-darwin
   line CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER "$CL/bin/clang++"
-  line CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS "-C link-arg=--no-default-config -C link-arg=-fuse-ld=lld -C link-arg=-isysroot -C link-arg=$SDK"
+  line CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS "-C link-arg=--no-default-config -C link-arg=--target=arm64-apple-macos11.0 -C link-arg=-fuse-ld=lld -C link-arg=-isysroot -C link-arg=$SDK"
   line CC_aarch64_apple_darwin "$CL/bin/clang"
   line CXX_aarch64_apple_darwin "$CL/bin/clang++"
   line AR_aarch64_apple_darwin "$CL/bin/llvm-ar"
