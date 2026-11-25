@@ -15,6 +15,10 @@
 #               counter's line is no upstream bump); a "path:KEY" pin file from ingredient-pins.sh
 #               is a pin only when its diff changes literal KEY=VALUE lines alone.
 #            7. Prints "check-release-version: ok — D" and why it passed.
+#   usage: check-release-version.sh --shipping --product SHORT --sha SHA [--mode auto|local] [--root DIR]
+#          Prints yes when something ships changed since --previous (or there is none), else no:
+#          top-level *.md, tests/**, release-notes/** and the self-upstream-exclude globs ship nothing.
+#          A push that ships nothing does not publish.
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning"
 # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Release notes"
 # spec: tests/check-release-version-test.sh
@@ -23,11 +27,12 @@ SELF="$(cd "$(dirname "$0")" && pwd)"
 
 usage() {
   echo "usage: check-release-version.sh --product SHORT --version V --sha SHA --publishing yes|no [--mode auto|local] [--root DIR] [--notes-file FILE]" >&2
+  echo "       check-release-version.sh --shipping --product SHORT --sha SHA [--mode auto|local] [--root DIR]" >&2
   exit 2
 }
 refuse() { echo "check-release-version: $1" >&2; exit 1; }
 
-ROOT="."; MODE="auto"; PRODUCT=""; V=""; SHA=""; PUBLISHING=""; NOTES=""
+ROOT="."; MODE="auto"; PRODUCT=""; V=""; SHA=""; PUBLISHING=""; NOTES=""; SHIPPING=no
 while [ $# -gt 0 ]; do
   case "$1" in
     --product) [ $# -ge 2 ] || usage; PRODUCT="$2"; shift 2 ;;
@@ -37,11 +42,17 @@ while [ $# -gt 0 ]; do
     --mode) [ $# -ge 2 ] || usage; MODE="$2"; shift 2 ;;
     --root) [ $# -ge 2 ] || usage; ROOT="${2%/}"; shift 2 ;;
     --notes-file) [ $# -ge 2 ] || usage; NOTES="$2"; shift 2 ;;
+    --shipping) SHIPPING=yes; shift ;;
     *) echo "check-release-version: unknown option $1" >&2; usage ;;
   esac
 done
-[ -n "$PRODUCT" ] && [ -n "$V" ] && [ -n "$SHA" ] || usage
-case "$PUBLISHING" in yes|no) : ;; *) echo "check-release-version: --publishing must be yes or no, got '$PUBLISHING'" >&2; usage ;; esac
+[ -n "$PRODUCT" ] && [ -n "$SHA" ] || usage
+if [ "$SHIPPING" = yes ]; then
+  [ -z "$V$PUBLISHING$NOTES" ] || { echo "check-release-version: --shipping takes no --version, --publishing or --notes-file" >&2; usage; }
+else
+  [ -n "$V" ] || usage
+  case "$PUBLISHING" in yes|no) : ;; *) echo "check-release-version: --publishing must be yes or no, got '$PUBLISHING'" >&2; usage ;; esac
+fi
 case "$MODE" in auto|local) : ;; *) echo "check-release-version: --mode must be auto or local, got '$MODE'" >&2; usage ;; esac
 if [ -n "$NOTES" ] && [ ! -f "$NOTES" ]; then
   echo "check-release-version: --notes-file $NOTES does not exist" >&2
@@ -64,6 +75,20 @@ _tmp="${TMPDIR:-/tmp}"
 work="$(mktemp -d "${_tmp%/}/check-release-version.XXXXXX")"; trap 'rm -rf "$work"' EXIT
 
 rv() { sh "$SELF/release-version.sh" --product "$PRODUCT" --root "$ROOT" --mode "$MODE" "$@"; }
+
+if [ "$SHIPPING" = yes ]; then
+  _rc=0; rv --previous > "$work/b" 2>"$work/err" || _rc=$?
+  [ "$_rc" = 0 ] || { sed 's/^/check-release-version: /' "$work/err" >&2; exit 2; }
+  B="$(cat "$work/b")"
+  [ -n "$B" ] || { echo yes; exit 0; }
+  sh "$SELF/deviations.sh" "$ROOT" > "$work/devs" || exit 2
+  set -- . ':(exclude,glob)*.md' ':(exclude,glob)tests/**' ':(exclude,glob)release-notes/**'
+  while read -r _check _glob _; do
+    if [ "$_check" = self-upstream-exclude ]; then set -- "$@" ":(exclude,glob)$_glob"; fi
+  done < "$work/devs"
+  if [ -n "$(git -C "$ROOT" diff --no-renames --name-only "refs/tags/$B" "$sha" -- "$@")" ]; then echo yes; else echo no; fi
+  exit 0
+fi
 
 _rc=0; rv > "$work/d" 2>"$work/why" || _rc=$?
 if [ "$_rc" != 0 ]; then

@@ -250,6 +250,43 @@ chk 1 "semver release v1.2.6 has no kind — write major, minor or patch to rele
   --product x --version v1.2.6 --sha HEAD --publishing yes
 chk 0 "" "semverkind, not publishing" --product x --version v1.2.6 --sha HEAD --publishing no
 
+ships() {   # $1 = yes or no, $2 = what it proves; further args, run in $R
+  _want="$1"; _why="$2"; shift 2
+  _rc=0; (cd "$R" && sh "$C" --shipping --product x --sha HEAD "$@") >"$w/out" 2>&1 || _rc=$?
+  [ "$_rc" = 0 ] && [ "$(cat "$w/out")" = "$_want" ] || { echo "FAIL: $_why: want '$_want' and exit 0, got exit $_rc"; sed 's/^/    | /' "$w/out"; exit 1; }
+}
+
+counter_repo shipreadme
+at 2026-10-13T12:00:00Z README.md
+ships no "a README-only push does not ship"
+at 2026-10-13T13:00:00Z tests/a-test.sh release-notes/v1.0.921/changes/x
+ships no "tests and release notes do not ship"
+at 2026-10-13T14:00:00Z src/main.c
+ships yes "own code ships"
+
+counter_repo shipworkflow
+at 2026-10-13T12:00:00Z .github/workflows/ci.yml
+ships yes "a workflow ships: consumers run it"
+
+counter_repo shippin
+at 2026-10-13T12:00:00Z components/zlib/version
+ships yes "a pin ships"
+
+counter_repo shipexclude
+printf '# Ingredients\n\n## Versioning\n\n- counter\n\n## Conformance deviations\n\n- self-upstream-exclude:docs/**: prose\n' > "$R/INGREDIENTS.md"
+at 2026-10-13T12:00:00Z docs/guide.txt
+ships no "a self-upstream-exclude glob does not ship"
+
+empty shipfirst
+at 2026-10-12T12:00:00Z README.md
+decl "- counter"
+upstream UPSTREAM_VERSION 1.0
+ships yes "a first release ships"
+
+R="$w/shipreadme"
+_rc=0; (cd "$R" && sh "$C" --shipping --product x --sha HEAD~1) >"$w/out" 2>&1 || _rc=$?
+[ "$_rc" = 2 ] || { echo "FAIL: --shipping checks the checkout is SHA, got exit $_rc"; cat "$w/out"; exit 1; }
+
 empty first
 at 2026-10-12T12:00:00Z src/main.c
 decl "- port"

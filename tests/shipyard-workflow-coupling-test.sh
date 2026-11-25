@@ -222,4 +222,26 @@ echo "ok: no job in .github runs on a macos-* runner"
 vm="$(grep -rnE 'Mavergreen/mavericks-vm@|MAVERICKS_VM_KEY' "$here/../.github" || :)"
 [ -z "$vm" ] || { printf '%s\n' "$vm"; echo "FAIL: shipyard's CI and release run no 10.9 VM job; its on-target tests are in tests/maintainer-tests, run by hand"; exit 1; }
 echo "ok: no 10.9 VM job and no MAVERICKS_VM_KEY in .github"
+# spec: SKILL.md "Versioning" -- a push that ships nothing (a README) builds and tests, and does not publish.
+python3 - "$wf/release.yml" <<'PY'
+import sys, yaml
+jobs = yaml.safe_load(open(sys.argv[1])).get("jobs") or {}
+vc = jobs.get("version-check") or {}
+run = "\n".join(str(s.get("run", "")) for s in vc.get("steps") or [])
+bad = []
+if "check-release-version.sh --shipping" not in run or '--publishing "$p"' not in run:
+    bad.append("version-check does not take --publishing from check-release-version.sh --shipping")
+if "publishing" not in (vc.get("outputs") or {}):
+    bad.append("version-check has no publishing output")
+for j in ("publish", "major-tag"):
+    if "needs.version-check.outputs.publishing == 'yes'" not in str((jobs.get(j) or {}).get("if", "")):
+        bad.append("%s runs when the push ships nothing" % j)
+for j in ("build", "linux"):
+    if "publishing" in str((jobs.get(j) or {}).get("if", "")):
+        bad.append("%s is skipped when the push ships nothing, so a README push gets no feedback" % j)
+for b in bad:
+    print("FAIL:", b)
+sys.exit(1 if bad else 0)
+PY
+echo "ok: a push that ships nothing builds and tests, and does not publish"
 echo "PASS: shipyard-workflow-coupling"

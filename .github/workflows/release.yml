@@ -21,17 +21,21 @@ jobs:
       contents: read
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
+      publishing: ${{ steps.tag.outputs.publishing }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # spec: claude-plugins/mavergreen/skills/mavergreen-conventions/SKILL.md "Versioning" -- a push that ships nothing does not publish.
       - name: Derive and check the version
         id: tag
         run: |
           set -eu
           t="$(sh scripts/release-version.sh --product shipyard)"
-          sh scripts/check-release-version.sh --product shipyard --version "$t" --sha "$GITHUB_SHA" --publishing yes
+          p="$(sh scripts/check-release-version.sh --shipping --product shipyard --sha "$GITHUB_SHA")"
+          sh scripts/check-release-version.sh --product shipyard --version "$t" --sha "$GITHUB_SHA" --publishing "$p"
           echo "tag=$t" >> "$GITHUB_OUTPUT"
+          echo "publishing=$p" >> "$GITHUB_OUTPUT"
 
   build:
     needs: version-check
@@ -189,6 +193,7 @@ jobs:
 
   publish:
     needs: [version-check, build, linux, scan]
+    if: needs.version-check.outputs.publishing == 'yes'
     permissions:
       contents: write
     uses: ./.github/workflows/publish-release.yml
@@ -200,6 +205,7 @@ jobs:
 
   major-tag:
     needs: [version-check, publish]
+    if: needs.version-check.outputs.publishing == 'yes'
     runs-on: ubuntu-latest
     permissions:
       contents: write
