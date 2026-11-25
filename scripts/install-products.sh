@@ -44,13 +44,25 @@
 #          .install-products/SHORT/lock, created exclusively and holding the installer's pid (a lock
 #          whose process is gone is taken over; a live one is waited on up to SHIPYARD_LOCK_WAIT
 #          seconds, default 900), and one that finds the marker already at its version keeps the tree.
+#          A product's `requires-on-host` entries (ARCH:SHORT[>=FLOOR]) join its requires by where the
+#          install lands: on a Mac, every entry when DIR is not /, else those for the host's hardware arch
+#          (hw.optional.arm64, never uname -m, which Rosetta translates; MAVERGREEN_HOST_ARCH replaces it);
+#          on Linux, none.
 #          INSTALL_PRODUCTS_HOST (linux or mac) replaces the host's own answer from uname -s.
 set -eu
 SELF="$(cd "$(dirname "$0")" && pwd)"
 . "$SELF/mavericks_fetch.sh"
 . "$SELF/lib/vercmp.sh"
 . "$SELF/lib/requires.sh"
+. "$SELF/lib/host-arch.sh"
 . "$SELF/sdk-pins.sh"
+# spec: tests/install-products-test.sh -- which requires-on-host entries a run takes: none on Linux,
+#       every one for a volume other than /, else the entries for the host's hardware arch.
+requires_arch() {  # $1 = root, $2 = host (linux or mac); prints mavergreen_requires's ARCH argument, or nothing
+  [ "$2" != linux ] || return 0
+  case "$1" in ''|/) mavergreen_host_arch ;; *) echo all ;; esac
+}
+[ -z "${INSTALL_PRODUCTS_SOURCE_ONLY:-}" ] || return 0
 usage() { echo "usage: install-products.sh [--root DIR] [--dry-run] SHORT@TAG..." >&2; exit 2; }
 die() { echo "install-products: $*" >&2; exit 1; }
 ROOT=/; DRY=""
@@ -269,7 +281,8 @@ resolve() {
     act=install
   fi
   if [ -n "$src" ]; then
-    mavergreen_requires "$STEVEDORE" "$src" "$T/err" > "$T/req.$s" || die "$s$(cat "$T/err")"
+    _ra="$(requires_arch "$ROOT" "$HOST")" || die "cannot tell which requires-on-host entries apply here"
+    mavergreen_requires "$STEVEDORE" "$src" "$T/err" "$_ra" > "$T/req.$s" || die "$s$(cat "$T/err")"
     while IFS= read -r r <&3; do
       rn="${r%%>=*}"; rf=""
       case "$r" in *'>='*) rf="${r#*>=}" ;; esac
