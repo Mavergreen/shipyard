@@ -1288,6 +1288,21 @@ ok "requires-on-host: a deviation excuses it" "$GOOD
 deviation requires-on-host:x.pkg upstream's own pkg names it
 manifest-requires-on-host x.pkg x86_64 nosuch none"
 
+# spec: scripts/check-artifact-conformance.sh -- a product with fat host executables under bin/ or libexec/ declares slim-host.
+no "slim-host: fat host executables and no slim-host" "slim-host: x.pkg has fat host executables under bin/ or libexec/ but declares no --slim-host; declare the paths that hold its host programs and the libraries they load" "$GOOD
+manifest-fat-host x.pkg yes"
+ok "slim-host: fat host executables with slim-host" "$GOOD
+manifest-fat-host x.pkg yes
+manifest-slim-host x.pkg bin/*"
+ok "slim-host: no fat host executables needs no slim-host" "$GOOD
+manifest-fat-host x.pkg no"
+no "slim-host: another pkg's slim-host does not count" "slim-host: x.pkg has fat host" "$GOOD
+manifest-fat-host x.pkg yes
+manifest-slim-host y.pkg bin/*"
+ok "slim-host: a deviation excuses it" "$GOOD
+deviation slim-host:x.pkg its host and target files share every path
+manifest-fat-host x.pkg yes"
+
 alone "manifest: an outside entry ending in / fails manifest" "manifest" "$REL
 $LAYOUT
 manifest-outside p.pkg Applications/X.app/"
@@ -1518,7 +1533,8 @@ PLIST
     'manifest-line x-1.0.0-mavericks.1.pkg none' \
     'manifest-appcast x-1.0.0-mavericks.1.pkg https://github.com/Mavergreen/x/releases/latest/download/x.xml' \
     'manifest-requires-on-host x-1.0.0-mavericks.1.pkg x86_64 w>=1 wrepo' \
-    'manifest-requires-on-host x-1.0.0-mavericks.1.pkg arm64 w wrepo'
+    'manifest-requires-on-host x-1.0.0-mavericks.1.pkg arm64 w wrepo' \
+    'manifest-fat-host x-1.0.0-mavericks.1.pkg no'
   do
     printf '%s\n' "$_f" | grep -qxF "$want" || { echo "FAIL: payload facts should include: $want -- got: $_f"; exit 1; }
   done
@@ -1561,6 +1577,43 @@ PLIST
     && printf "%s\n" "$_fu" | grep -qxF end-of-facts && ! printf "%s\n" "$_fu" | grep -q "^abort" \
     && printf "%s\n" "$_fu" | grep -q "^pkg good.pkg 1 none dev.mavergreen.ok$" \
     || { echo "FAIL: unreadable pkg is a fact, not an abort: $_fu"; exit 1; }
+}
+
+{
+  _fh="$(mktemp -d "${TMPDIR:-/tmp}/conformance-fathost.XXXXXX")"   # template: 10.9 BSD mktemp requires one
+  _fh="$(cd -P "$_fh" && pwd)"
+  mkdir -p "$_fh/dist" "$_fh/bin"
+  printf '#!/bin/sh\nexit 1\n' > "$_fh/bin/lipo"; cp "$_fh/bin/lipo" "$_fh/bin/otool"; chmod +x "$_fh/bin/lipo" "$_fh/bin/otool"
+  _fatbytes() { printf '\312\376\272\276\000\000\000\002\001\000\000\007\000\000\000\000\000\000\000\100\000\000\000\010\000\000\000\014\001\000\000\014\000\000\000\000\000\000\000\110\000\000\000\010\000\000\000\014'
+    dd if=/dev/zero bs=16 count=1 2>/dev/null; printf '\317\372\355\376\007\000\000\001\317\372\355\376\014\000\000\001'; }
+  _fhplist() {
+    { printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>\n<key>product</key><string>%s</string>\n<key>identifier</key><string>dev.mavergreen.%s</string>\n' "$1" "$1"
+      shift
+      if [ $# -gt 0 ]; then printf '<key>slim-host</key><array>'; for _g in "$@"; do printf '<string>%s</string>' "$_g"; done; printf '</array>\n'; fi
+      printf '</dict></plist>\n'; }
+  }
+  for _p in fa fb; do mkdir -p "$_fh/$_p/usr/local/mavergreen/$_p/bin" "$_fh/$_p/usr/local/mavergreen/$_p/libexec" "$_fh/$_p/usr/local/mavergreen/$_p/lib"; done
+  _fatbytes > "$_fh/fa/usr/local/mavergreen/fa/libexec/tool"
+  _fhplist fa 'bin/*' 'lib/a b' > "$_fh/fa/usr/local/mavergreen/fa/mavergreen.plist"
+  _fatbytes > "$_fh/fb/usr/local/mavergreen/fb/lib/libx.dylib"
+  { printf '\312\376\272\276\000\000\000\064'; dd if=/dev/zero bs=64 count=1 2>/dev/null; } > "$_fh/fb/usr/local/mavergreen/fb/bin/A.class"
+  _fhplist fb > "$_fh/fb/usr/local/mavergreen/fb/mavergreen.plist"
+  printf 'fa dev.mavergreen.fa fa\nfb dev.mavergreen.fb fb\n' > "$_fh/product-names"
+  for _p in fa fb; do
+    "$SD" component --root "$_fh/$_p" --identifier "dev.mavergreen.$_p" --version 1.0.0-mavericks.1 --install-location / \
+      --mtime 1700000000 --out "$_fh/dist/$_p-1.0.0-mavericks.1.pkg" >/dev/null
+  done
+  _ff="$(LIPO="$_fh/bin/lipo" OTOOL="$_fh/bin/otool" MAVERGREEN_PRODUCT_NAMES="$_fh/product-names" sh "$AF" "$_fh/dist" 1.0.0-mavericks.1 "$_fh")"
+  rm -rf "$_fh"
+  for want in \
+    'manifest-slim-host fa-1.0.0-mavericks.1.pkg bin/*' \
+    'manifest-slim-host fa-1.0.0-mavericks.1.pkg lib/a%20b' \
+    'manifest-fat-host fa-1.0.0-mavericks.1.pkg yes' \
+    'manifest-fat-host fb-1.0.0-mavericks.1.pkg no'
+  do
+    printf '%s\n' "$_ff" | grep -qxF "$want" || { echo "FAIL: fat-host payload facts should include: $want -- got: $_ff"; exit 1; }
+  done
+  printf '%s\n' "$_ff" | grep -q '^manifest-slim-host fb' && { echo "FAIL: a manifest with no slim-host yields no slim-host fact: $_ff"; exit 1; }
 }
 
 echo "PASS: artifact-conformance"
