@@ -23,15 +23,16 @@ hexbytes() {
     printf "\\$(printf %03o "$((0x$_b))")"
   done
 }
-cpu_be() { case "$1" in x86_64) echo 01000007 ;; i386) echo 00000007 ;; arm64) echo 0100000c ;; esac; }
+cpu_sub() { case "$1" in x86_64h) echo 00000008 ;; *) echo 00000000 ;; esac; }
+cpu_be() { case "$1" in x86_64|x86_64h) echo 01000007 ;; i386) echo 00000007 ;; arm64) echo 0100000c ;; esac; }
 cpu_le() { case "$1" in x86_64) echo 07000001 ;; i386) echo 07000000 ;; arm64) echo 0c000001 ;; esac; }
-mkfat_with() {  # $1 slice magic hex  $2 file  $3.. cpus
+mkfat_with() {
   _m="$1"; _f="$2"; shift 2
   mkdir -p "$(dirname "$_f")"
   { hexbytes cafebabe; hexbytes "$(printf %08x $#)"
     _i=0
     for _c in "$@"; do
-      hexbytes "$(cpu_be "$_c")"; hexbytes 00000000
+      hexbytes "$(cpu_be "$_c")"; hexbytes "$(cpu_sub "$_c")"
       hexbytes "$(printf %08x $((4096 * (_i + 1))))"; hexbytes 00000008; hexbytes 0000000c
       _i=$((_i + 1))
     done; } > "$_f"
@@ -71,7 +72,7 @@ chmod +x "$w/ditto"
 MAVERGREEN_DITTO="$w/ditto"; DITTO_LOG="$LOG"; DITTO_FX="$w/fx.sh"; export MAVERGREEN_DITTO DITTO_LOG DITTO_FX
 
 mg() { sh "$MGS" --root "$V" "$@"; }
-mkproduct() {  # $1 product  $2.. slim-keep globs
+mkproduct() {
   _p="$1"; shift
   mkdir -p "$T/$_p"
   { echo '<?xml version="1.0" encoding="UTF-8"?>'
@@ -197,4 +198,18 @@ for harch in x86_64 arm64; do
   grep -Fq "X.app" "$LOG" && fail "a signed bundle's files are never thinned ($harch)"
   grep -Fq "$T/p/bin/free" "$LOG" || fail "a file outside the bundle is thinned ($harch)"
 done
+fresh; mkproduct p
+mkfat "$T/p/bin/h" x86_64 x86_64h
+mkfat "$T/p/bin/h2" x86_64 x86_64h arm64
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "two slices of one cputype must not fail the apply"
+[ ! -s "$LOG" ] || [ "$(wc -l < "$LOG" | tr -d ' ')" = 1 ] || fail "only the file with an arm64 slice is thinned"
+grep -Fq "$T/p/bin/h2" "$LOG" || fail "x86_64, x86_64h and arm64 is thinned"
+grep -Fq "$T/p/bin/h " "$LOG" && fail "x86_64 with x86_64h has nothing to drop"
+
+fresh; mkproduct p
+mkfat "$T/p/bin/x" x86_64 arm64
+mkthin "$T/p/lib/armonly" arm64
+mkdir -p "$T/p/_CodeSignature"; : > "$T/p/_CodeSignature/CodeResources"
+MAVERGREEN_HOST_ARCH=x86_64 mg slim apply p >/dev/null || fail "apply must succeed"
+[ ! -s "$LOG" ] && [ -f "$T/p/lib/armonly" ] || fail "a _CodeSignature at the product root protects the whole product"
 echo "PASS: mavergreen-slim"
