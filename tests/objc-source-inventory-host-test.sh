@@ -44,6 +44,11 @@ printf '%s\n' receipt --clang-prefix "$T/clang" --sdk "$floor" --output "$T/stub
   --unit provider-body.m --unit provider-register.c >"$T/want"
 [ "$rc" = 0 ] && cmp -s "$T/want" "$T/argv" && pass 'drydock-objc receipt gets the named clang, the floor SDK and the options in order' ||
   { fail "the stub receipt: exit $rc"; diff "$T/want" "$T/argv" | head -10; }
+stubbed 0 --unit-flags provider-body.m
+printf '%s\n' receipt --clang-prefix "$T/clang" --sdk "$floor" --unit-flags provider-body.m --output "$T/stub.receipt" \
+  --inputs "$T/inputs" --root "$T/src" --unit provider-body.m --unit provider-register.c >"$T/want"
+[ "$rc" = 0 ] && cmp -s "$T/want" "$T/argv" && pass 'drydock-objc receipt gets --unit-flags unchanged, in order' ||
+  { fail "the stub receipt with --unit-flags: exit $rc"; diff "$T/want" "$T/argv" | head -10; }
 for c in 2:2 4:4 3:4 1:4 signal:4; do
   stubbed "${c%%:*}"
   [ "$rc" = "${c#*:}" ] && pass "drydock-objc's ${c%%:*} is the wrapper's ${c#*:}" || fail "drydock-objc's ${c%%:*}: exit $rc, want ${c#*:}"
