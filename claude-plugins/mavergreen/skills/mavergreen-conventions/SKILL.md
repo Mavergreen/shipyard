@@ -3458,7 +3458,10 @@ through `scripts/setup-family-repo.sh`, so every repo starts with the same setti
    repo, so a private product's `vm-test` gets an empty `MAVERICKS_VM_KEY` and its publish has no
    `SPARKLE_PRIVATE_KEY` (python-315 and make, 2026-10-18).
 2. Push the history to a branch first and let CI go green there (see "Propose a branch when only CI
-   can prove it"), then push `main`.
+   can prove it"), then push `main`. A workflow whose triggers all name `main` runs on no other
+   branch, and GitHub lists no workflow until one has run: so `actions/workflows` counting 0 and
+   `workflow_dispatch` returning 404 before `main` exists is expected, not a stuck repo (dmg-codecs,
+   2026-11-26). Only a workflow that triggers on the first-push branch can go green there.
 3. `sh scripts/setup-family-repo.sh settle NAME` again: with `main` there, it moves the open PRs based
    on the first-push branch to `main`, makes `main` the default branch and protects it, requiring what
    `scripts/required-checks.sh` prints for `main`'s workflow files: each PR workflow's
