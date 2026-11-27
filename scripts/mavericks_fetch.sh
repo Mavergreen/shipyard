@@ -50,7 +50,7 @@
 #          shipyard_latest_tag prints the tag https://github.com/Mavergreen/REPO/releases/latest redirects to,
 #          read from the redirect's Location with no API call. MAVERGREEN_RELEASES replaces https://github.com;
 #          a file:// root is read as ROOT/Mavergreen/REPO/releases/latest, one line holding the tag.
-#          The https read retries like shipyard_curl (same curl exits, SHIPYARD_FETCH_TRIES, backoff) and
+#          The https read retries like shipyard_curl (same curl exits, HTTP 429 and 5xx, SHIPYARD_FETCH_TRIES, backoff) and
 #          gives up after 60s per attempt. It returns 1 when the tag is empty or cannot be found.
 #          shipyard_lock_take holds LOCK, a regular file, once this call creates it; it tries again once a
 #          second for up to SECONDS seconds, then returns 1. $shipyard_lock_waited is the seconds it waited.
@@ -218,15 +218,21 @@ shipyard_latest_tag() {
   _lt_url="$_lt_root/Mavergreen/$1/releases/latest"
   case "$_lt_root" in
     file://*) _lt_tag="$(head -n 1 "${_lt_url#file://}" 2>/dev/null)" || _lt_tag="" ;;
-    *) _lt_loc=""; _lt_n=1; _lt_wait=2
+    *) _lt_loc=""; _lt_http=""; _lt_n=1; _lt_wait=2
        while :; do
          _lt_rc=0
-         _lt_loc="$(curl -sS --connect-timeout 20 --max-time 60 -o /dev/null -w '%{redirect_url}' "$_lt_url")" || _lt_rc=$?
-         [ "$_lt_rc" -ne 0 ] || break
+         _lt_loc="$(curl -sS --connect-timeout 20 --max-time 60 -o /dev/null -w '%{http_code} %{redirect_url}' "$_lt_url")" || _lt_rc=$?
+         _lt_http="${_lt_loc%% *}"; _lt_loc="${_lt_loc#* }"
+         if [ "$_lt_rc" -eq 0 ]; then
+           case "$_lt_http" in 429|5??) _lt_why="HTTP $_lt_http" ;; *) break ;; esac
+         else
+           case "$_lt_rc" in 6|7|18|28|35|52|55|56) _lt_why="curl exit $_lt_rc" ;; *) break ;; esac
+         fi
          _lt_loc=""
-         case "$_lt_rc" in 6|7|18|28|35|52|55|56) ;; *) break ;; esac
-         [ "$_lt_n" -lt "${SHIPYARD_FETCH_TRIES:-5}" ] || break
-         echo "shipyard_latest_tag: $_lt_url: curl exit $_lt_rc; retry $_lt_n of ${SHIPYARD_FETCH_TRIES:-5} in ${_lt_wait}s" >&2
+         if [ "$_lt_n" -ge "${SHIPYARD_FETCH_TRIES:-5}" ]; then
+           echo "shipyard_latest_tag: $_lt_url: $_lt_why; giving up after $_lt_n tries" >&2; break
+         fi
+         echo "shipyard_latest_tag: $_lt_url: $_lt_why; retry $_lt_n of ${SHIPYARD_FETCH_TRIES:-5} in ${_lt_wait}s" >&2
          [ "${SHIPYARD_FETCH_BACKOFF:-}" = 0 ] || sleep "$_lt_wait"
          _lt_n=$((_lt_n + 1))
          [ "$_lt_wait" -ge 16 ] || _lt_wait=$((_lt_wait * 2))
@@ -235,7 +241,7 @@ shipyard_latest_tag() {
        [ "$_lt_tag" != "$_lt_loc" ] || _lt_tag="" ;;
   esac
   case "$_lt_tag" in
-    ''|*[!A-Za-z0-9._+-]*) echo "shipyard_latest_tag: no latest release tag for $1 at $_lt_url" >&2; return 1 ;;
+    ''|*[!A-Za-z0-9._+-]*) echo "shipyard_latest_tag: no latest release tag for $1 at $_lt_url${_lt_http:+ (HTTP $_lt_http)}" >&2; return 1 ;;
   esac
   printf '%s\n' "$_lt_tag"
 }

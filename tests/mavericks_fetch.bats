@@ -520,3 +520,23 @@ bare_path() {  # $1 = dir: the tools a fetch uses, without shasum or sha256sum
   MAVERGREEN_RELEASES="file://$WORK/rel" run shipyard_latest_tag longboat
   [ "$status" -eq 1 ]
 }
+
+@test "shipyard_latest_tag: retries an https 429 or 5xx, then reads the redirect" {
+  mkdir -p "$WORK/bin"
+  cat > "$WORK/bin/curl" <<'SH'
+#!/bin/sh
+n=$(cat "$CURL_N" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$CURL_N"
+case "$n" in 1) printf '429 ' ;; 2) printf '503 ' ;; *) printf '302 https://github.com/Mavergreen/longboat/releases/tag/20261027.15' ;; esac
+SH
+  chmod +x "$WORK/bin/curl"
+  SHIPYARD_FETCH_BACKOFF=0 CURL_N="$WORK/n" PATH="$WORK/bin:$PATH" MAVERGREEN_RELEASES=https://github.com run shipyard_latest_tag longboat
+  [ "$status" -eq 0 ]; [ "${lines[${#lines[@]}-1]}" = 20261027.15 ]
+  [ "$(cat "$WORK/n")" = 3 ]
+}
+
+@test "shipyard_latest_tag: an https 429 that never clears names the status" {
+  mkdir -p "$WORK/bin"
+  printf '#!/bin/sh\nprintf "429 "\n' > "$WORK/bin/curl"; chmod +x "$WORK/bin/curl"
+  SHIPYARD_FETCH_BACKOFF=0 SHIPYARD_FETCH_TRIES=2 PATH="$WORK/bin:$PATH" MAVERGREEN_RELEASES=https://github.com run shipyard_latest_tag longboat
+  [ "$status" -eq 1 ]; [[ "$output" == *"HTTP 429"* ]]
+}
