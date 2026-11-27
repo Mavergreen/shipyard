@@ -245,7 +245,6 @@ unchecked-subshell stevedore tests/xar-test.sh
 unchecked-subshell swift .github/workflows/release.yml
 unchecked-subshell swift make-selftest.sh
 unchecked-subshell swift package.sh
-unchecked-subshell swift tests/build-native-host-test.sh
 unchecked-subshell swift tests/pin-source-tarballs-test.sh
 unchecked-subshell swift tests/self-host-lib-test.sh
 unchecked-subshell zig build/build-native.sh
