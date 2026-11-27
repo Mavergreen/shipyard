@@ -52,3 +52,4 @@ macfuse dev.mavergreen.macfuse macfuse
 alacritty dev.mavergreen.alacritty alacritty
 linuxfs dev.mavergreen.linuxfs linuxfs
 dmg-codecs dev.mavergreen.dmg-codecs dmg-codecs
+vintagefs dev.mavergreen.vintagefs vintagefs
